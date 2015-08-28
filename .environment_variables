@@ -1,0 +1,12 @@
+
+export JAVA_HOME=~/software/jdk
+export JRE_HOME=$JAVA_HOME/jre
+export OM_HOME=/opt/openmarket
+export MVN_HOME=~/software/maven
+export M2_HOME="$MVN_HOME"
+export M2="$MVN_HOME"/bin
+export MYSQL_HOME=/usr/local/mysql/bin
+export CATALINA_HOME=/home/brianb/software/tomcat
+export PATH="$PATH":/home/brianb/bin:$JAVA_HOME:$JRE_HOME:$JRE_HOME/bin:$JAVA_HOME/bin:$M2:$MYSQL_HOME
+export CLASSPATH="$PATH":.
+export INSTALL4J_JAVA_HOME="$PATH"
