@@ -26,9 +26,12 @@ function! EnterCheck()
     let charone = getline(".")[col(".")-2]
     let chartwo = getline(".")[col(".")-1]
     if charone == '{' && chartwo == '}'
-        return "\n\<BS>\<BS>\<BS>\<BS>\<Esc>kA\n"
+        return "\<CR>\<Esc>\<\<kA\<CR>"
+    elseif  charone == '(' && chartwo == ')' ||
+          \ charone == '[' && chartwo == ']' 
+        return "\<CR>\<Esc>kA\<CR>\<Tab>"
     else
-        return "\n"
+        return "\<CR>"
     endif
 endfunction
     
