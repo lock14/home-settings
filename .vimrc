@@ -1,3 +1,8 @@
+execute pathogen#infect()
+let g:UltiSnipsExpandTrigger="<tab>"
+let g:UltiSnipsJumpForwardTrigger="<c-j>"
+let g:UltiSnipsJumpBackwardTrigger="<c-k>"
+
 set smartindent
 set tabstop=4
 set shiftwidth=4
