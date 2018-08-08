@@ -1,12 +1,15 @@
 
-export JAVA_HOME=~/software/jdk
+export SOFTWARE_DIR=/home/brianb/software
+export JAVA_HOME="$SOFTWARE_DIR"/jdk
 export JRE_HOME=$JAVA_HOME/jre
+export JMETER_HOME="$SOFTWARE_DIR"/jmeter
+export GROOVY_HOME="$SOFTWARE_DIR"/groovy
 export OM_HOME=/opt/openmarket
-export MVN_HOME=~/software/maven
+export MVN_HOME="$SOFTWARE_DIR"/maven
 export M2_HOME="$MVN_HOME"
 export M2="$MVN_HOME"/bin
 export MYSQL_HOME=/usr/local/mysql/bin
-export CATALINA_HOME=/home/brianb/software/tomcat
-export PATH="$PATH":/home/brianb/bin:$JAVA_HOME:$JRE_HOME:$JRE_HOME/bin:$JAVA_HOME/bin:$M2:$MYSQL_HOME
+export CATALINA_HOME="$SOFTWARE_DIR"/tomcat
+export PATH="$PATH":$JRE_HOME:$JRE_HOME/bin:$JAVA_HOME:$JAVA_HOME/bin:$MVN_HOME/bin:$MYSQL_HOME/bin:$GROOVY_HOME:$GROOVY_HOME/bin:$JMETER_HOME:$JMETER_HOME/bin:$GRADLE_HOME/bin
 export CLASSPATH="$PATH":.
 export INSTALL4J_JAVA_HOME="$PATH"

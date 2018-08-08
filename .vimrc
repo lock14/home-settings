@@ -39,48 +39,48 @@ function! EnterCheck()
         return "\<CR>"
     endif
 endfunction
-    
+
 function! BC_AddChar(schar)
-    if exists("b:robstack")
-        let b:robstack = b:robstack . a:schar
-    else
-        let b:robstack = a:schar
-    endif
+ if exists("b:robstack")
+ let b:robstack = b:robstack . a:schar
+ else
+ let b:robstack = a:schar
+ endif
 endfunction
 
 function! BC_GetChar()
-    let l:char = b:robstack[strlen(b:robstack)-1]
-    let b:robstack = strpart(b:robstack, 0, strlen(b:robstack)-1)
-    return l:char
+ let l:char = b:robstack[strlen(b:robstack)-1]
+ let b:robstack = strpart(b:robstack, 0, strlen(b:robstack)-1)
+ return l:char
 endfunction
 
 function ClosePair(char)
-    if getline('.')[col('.') - 1] == a:char
-        return "\<Right>"
-    else
-        return a:char
-    endif
+ if getline('.')[col('.') - 1] == a:char
+ return "\<Right>"
+ else
+ return a:char
+ endif
 endf
 
 function CloseBracket()
-    if match(getline(line('.') + 1), '\s*}') < 0
-        return "\<CR>}"
-    else
-        return "\<Esc>j0f}a"
-    endif
+ if match(getline(line('.') + 1), '\s*}') < 0
+ return "\<CR>}"
+ else
+ return "\<Esc>j0f}a"
+ endif
 endf
 
 function QuoteDelim(char)
-    let line = getline('.')
-    let col = col('.')
-    if line[col - 2] == "\\"
-        "Inserting a quoted quotation mark into the string
-        return a:char
-    elseif line[col - 1] == a:char
-        "Escaping out of the string
-        return "\<Right>"
-    else
-        "Starting a string
-        return a:char.a:char."\<Esc>i"
-    endif
+ let line = getline('.')
+ let col = col('.')
+ if line[col - 2] == "\\"
+ "Inserting a quoted quotation mark into the string
+ return a:char
+ elseif line[col - 1] == a:char
+ "Escaping out of the string
+ return "\<Right>"
+ else
+ "Starting a string
+ return a:char.a:char."\<Esc>i"
+ endif
 endf

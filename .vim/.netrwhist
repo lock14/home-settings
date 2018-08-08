@@ -1,6 +1,8 @@
 let g:netrw_dirhistmax  =10
-let g:netrw_dirhist_cnt =4
-let g:netrw_dirhist_1='/home/brianb/workspace/smpp-gateway/src/main/resources/META-INF'
-let g:netrw_dirhist_2='/home/brianb/ut-austin/cs-314/assignment-7'
-let g:netrw_dirhist_3='/home/brianb/ut-austin/cs-429'
-let g:netrw_dirhist_4='/home/brianb/ut-austin/cs-429/lab-5'
+let g:netrw_dirhist_cnt =6
+let g:netrw_dirhist_1='/home/brianb/.vim/UltiSnips'
+let g:netrw_dirhist_2='/home/brianb/.vim/bundle/supertab'
+let g:netrw_dirhist_3='/home/brianb/ut-austin/cs-314/assignment-5'
+let g:netrw_dirhist_4='/home/brianb/musings/sum'
+let g:netrw_dirhist_5='/home/brianb/workspace/spark-boilerplate/.git'
+let g:netrw_dirhist_6='/home/brianb/workspace/spark-boilerplate/bin'
