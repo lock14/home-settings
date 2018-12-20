@@ -8,6 +8,10 @@ set tabstop=4
 set shiftwidth=4
 set expandtab
 
+syntax enable
+set background=dark
+colorscheme solarized
+
 highlight DiffAdd term=reverse cterm=bold ctermbg=green ctermfg=white 
 highlight DiffChange term=reverse cterm=bold ctermbg=cyan ctermfg=black 
 highlight DiffText term=reverse cterm=bold ctermbg=gray ctermfg=black 
