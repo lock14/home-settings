@@ -1,0 +1,10 @@
+[Desktop Entry]
+Encoding=UTF-8
+Version=1.0
+Type=Application
+Name=DbVisualizer
+Icon=/opt/DbVisualizer/.install4j/i4j_extf_5_1bd0g0g_137cql0.icns
+Exec=/opt/DbVisualizer/dbvis
+StartupNotify=false
+StartupWMClass=com-install4j-runtime-launcher-UnixLauncher
+Terminal=false
