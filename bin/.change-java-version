@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# need to run as root
+if [ "$EUID" -ne 0 ]; then
+    echo "No root permission. Please run using 'sudo'"
+    exit 1
+fi
+
+while getopts ":j:l" opt; do
+  case ${opt} in
+    l )
+      update-java-alternatives --list
+      exit 0
+      ;;
+    j )
+      JDK_PACKAGE=$OPTARG
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      exit 1
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+if [ "$JDK_PACKAGE" = "" ]; then
+    echo "no jdk specified"
+    echo "usage: change-java-version [-j <jdk-name> | -l]"
+    exit 2
+fi
+
+if [ "$JDK_PACKAGE" != "oracle-8-jdk" ] && [ "$JDK_PACKAGE" != "openjdk-8-jdk" ] && [ "$JDK_PACKAGE" != "openjdk-11-jdk" ]; then
+    echo "$JDK_PACKAGE is not a supported jdk package. Choose from: oracle-8-jdk, openjdk-8-jdk, or openjdk-11-jdk"
+    exit 3
+fi
+
+if [ "$JDK_PACKAGE" = "oracle-8-jdk" ]; then
+    # install oracle jdk 8
+    update-java-alternatives -s java-8-oracle
+    rm /usr/lib/jvm/default-jdk
+    ln -s /usr/lib/jvm/java-8-oracle /usr/lib/jvm/default-jdk
+else # its an openjdk package
+    version_num=${JDK_PACKAGE#openjdk-}
+    version_num=${version_num%-jdk}
+    # this next command sets all the appropriate sym links (e.g java, javac, etc.)
+    update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
+    rm /usr/lib/jvm/default-jdk
+    ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
+fi
+
+
