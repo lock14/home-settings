@@ -92,3 +92,5 @@ snap install postman
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
 
+echo "rebooting..."
+systemctl reboot
