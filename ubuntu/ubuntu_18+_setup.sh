@@ -38,40 +38,40 @@ fi
 
 # get everything up to date
 echo "upgrading packages"
-apt update
-apt full-upgrade
+apt --yes update
+apt --yes full-upgrade
 # auto remove uneeded things
-apt autoremove
+apt --yes autoremove
 
 # install git
 echo "installing git"
-apt install git
+apt --yes install git
 
 # install vim
 echo "installing vim"
-apt install vim
+apt --yes install vim
 
 # install curl
 echo "installing curl"
-apt install curl
+apt --yes install curl
 
 # install mariadb
 echo "installing mariadb"
-apt install mariadb-server mariadb-client
+apt --yes install mariadb-server mariadb-client
 
 # install the specified jdk
 echo "installing jdk"
 if [ "$JDK_PACKAGE" = "oracle-8-jdk" ]; then
     # add oracle-jdk ppa
     add-apt-repository ppa:webupd8team/java
-    apt update 
+    apt --yes update 
     # install oracle jdk 8
-    apt install oracle-java8-installer
+    apt --yes install oracle-java8-installer
     ln -s /usr/lib/jvm/java-8-oracle /usr/lib/jvm/default-jdk
 else # its an openjdk package
     version_num=${JDK_PACKAGE#openjdk-}
     version_num=${version_num%jdk-}
-    apt install $JDK_PACKAGE
+    apt --yes install $JDK_PACKAGE
     # this next command sets all the appropriate sym links (e.g java, javac, etc.)
     update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
     ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
@@ -79,7 +79,7 @@ fi
 
 # install maven
 echo "installing maven"
-apt install maven
+apt --yes install maven
 
 # install intellij
 echo "intalling intellij-idea-ultimate"
