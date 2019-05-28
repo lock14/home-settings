@@ -82,7 +82,7 @@ apt --yes install mariadb-server mariadb-client
 echo "installing jdk"
 if [ "$JDK_PACKAGE" = "oracle-8-jdk" ]; then
     # add oracle-jdk ppa
-    add-apt --yes-repository ppa:webupd8team/java
+    add-apt-repository --yes ppa:webupd8team/java
     apt --yes update 
     # install oracle jdk 8
     apt --yes install oracle-java8-installer
@@ -126,3 +126,5 @@ snap install slack --classic
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
 
+echo "rebooting..."	
+systemctl reboot
