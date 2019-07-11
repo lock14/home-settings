@@ -116,5 +116,5 @@ echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
 
 echo "system restarting in 30 seconds..."
 sleep 30
-systectl reboot
+systemctl reboot
 
