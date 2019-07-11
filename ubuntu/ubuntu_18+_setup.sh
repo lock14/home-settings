@@ -90,7 +90,7 @@ if [ "$JDK_PACKAGE" = "oracle-8-jdk" ]; then
 else # its an openjdk package
     version_num=${JDK_PACKAGE#openjdk-}
     version_num=${version_num%jdk-}
-    apt --yes install $JDK_PACKAGE
+    apt --yes install $JDK_PACKAGE $JDK_PACKAGE-source
     # this next command sets all the appropriate sym links (e.g java, javac, etc.)
     update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
     ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
