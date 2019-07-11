@@ -36,7 +36,7 @@ git tag $ARTIFACT_ID-$VERSION
 echo "pushing $ARTIFACT_ID-$VERSION to remote repository"
 git push origin $ARTIFACT_ID-$VERSION
 echo "deploying release $VERSION to maven repository"
-mvn clean source:jar javadoc:jar deploy -Dmaven.test.skip=true
+mvn clean source:jar javadoc:jar deploy -DskipTests
 
 # increment snapshot version and commit
 echo "checking out git branch $CURRENT_BRANCH"
