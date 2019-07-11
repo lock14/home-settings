@@ -16,4 +16,4 @@ echo "PATH=$PATH:/var/lib/snapd/snap/bin" >> /etc/bashrc
 
 echo "system restarting in 30 seconds..."
 sleep 30
-systectl reboot
+systemctl reboot
