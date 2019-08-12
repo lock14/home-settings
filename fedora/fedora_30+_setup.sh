@@ -40,9 +40,8 @@ done
 shift $((OPTIND -1))
 
 # if no package provided, default to openjdk-8
-# TODO: change to default to openjdk-11 once we migrate our projects to jdk-11 
 if [ "$JDK_PACKAGE" = "" ]; then
-    JDK_PACKAGE="openjdk-8-jdk"
+    JDK_PACKAGE="openjdk-11-jdk"
 fi
 
 # if no ide provided, default to intellij
