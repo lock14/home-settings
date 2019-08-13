@@ -64,6 +64,9 @@ fi
 echo "upgrading packages"
 dnf upgrade --refresh
 
+# install gnome-tweak tool
+dnf -y install gnome-tweak-tool
+
 # install vim
 echo "installing vim"
 dnf -y install vim
@@ -93,6 +96,7 @@ dnf -y install maven
 dnf -y install fedora-workstation-repositories
 dnf config-manager --set-enabled google-chrome
 dnf -y install google-chrome-stable
+dnf -y install chrome-gnome-shell
 
 if [ "$IDE" = "intellij" ]; then
     echo "intalling intellij-idea-community"
