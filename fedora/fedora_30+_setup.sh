@@ -89,6 +89,11 @@ fi
 echo "installing maven"
 dnf -y install maven
 
+# install google chrome
+dnf -y install fedora-workstation-repositories
+dnf config-manager --set-enabled google-chrome
+dnf -y install google-chrome-stable
+
 if [ "$IDE" = "intellij" ]; then
     echo "intalling intellij-idea-community"
     snap install intellij-idea-community --classic
