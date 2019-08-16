@@ -89,6 +89,7 @@ elif [ "$JDK_PACKAGE" = "openjdk-11-jdk" ]; then
     update-alternatives --set java java-11-openjdk.x86_64
     update-alternatives --set javac java-11-openjdk.x86_64
 fi
+echo "export JAVA_HOME=/usr/lib/java" >> ~/.bashrc
 
 # install maven
 echo "installing maven"
