@@ -128,7 +128,7 @@ echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
 
 # locat user stuff
 mkdir -p ~/bin
-cp -R ./bin/* ~/bin
+rsync -av ./bin ~/bin
 
 cat bashrc_addendum >> ~/.bashrc
 mv environment_variables ~/.environment_variables
