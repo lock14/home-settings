@@ -1,0 +1,50 @@
+#!/bin/bash
+CMD="$1"
+INCREMENTAL=\${parsedVersion.incrementalVersion}
+MINOR=\${parsedVersion.minorVersion}
+MAJOR=\${parsedVersion.majorVersion}
+
+if [ "$CMD" == "incremental" ] || [ "$CMD" == "" ]; then
+  INCREMENTAL=\${parsedVersion.nextIncrementalVersion}
+elif [ "$CMD" == "minor" ]; then
+  MINOR=\${parsedVersion.nextMinorVersion}
+elif [ "$CMD" == "major" ]; then
+  MAJOR=\${parsedVersion.nextMajorVersion}
+fi
+NEW_VERSION=$MAJOR.$MINOR.$INCREMENTAL
+
+CURRENT_BRANCH=$(git branch | grep \* | cut -d ' ' -f2)
+if [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
+  echo "the current branch must be set to 'master' or 'develop'"
+  exit 1
+fi
+ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId | grep -v INFO)
+VERSION=$(mvn help:evaluate -Dexpression=project.version | grep -v INFO)
+VERSION=${VERSION%"-SNAPSHOT"}
+
+echo "creating and checking out git branch: release-$VERSION"
+git branch release-$VERSION
+git checkout release-$VERSION
+
+# change version, tag, and deploy to maven repo
+echo "release version: $VERSION"
+mvn versions:set -DnewVersion=$VERSION versions:commit
+git add pom.xml
+git commit -m "Release $VERSION"
+echo "creating git tag: $ARTIFACT_ID-$VERSION"
+git tag $ARTIFACT_ID-$VERSION
+echo "pushing $ARTIFACT_ID-$VERSION to remote repository"
+git push origin $ARTIFACT_ID-$VERSION
+echo "deploying release $VERSION to maven repository"
+mvn clean source:jar javadoc:jar deploy -DskipTests
+
+# increment snapshot version and commit
+echo "checking out git branch $CURRENT_BRANCH"
+git checkout $CURRENT_BRANCH
+echo "incrementing SNAPSHOT version"
+mvn build-helper:parse-version versions:set \
+-DnewVersion=$NEW_VERSION-SNAPSHOT versions:commit
+git add pom.xml
+git commit -m "Next Development Iteration"
+echo "pushing branch $CURRENT_BRANCH to remote repository"
+git push origin $CURRENT_BRANCH

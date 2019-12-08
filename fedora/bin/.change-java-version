@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# need to run as root
+if [ "$EUID" -ne 0 ]; then
+    echo "No root permission. Please run using 'sudo'"
+    exit 1
+fi
+
+while getopts ":j:l" opt; do
+  case ${opt} in
+    l )
+      update-alternatives --diplay java
+      exit 0
+      ;;
+    j )
+      JDK_PACKAGE=$OPTARG
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      exit 1
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+if [ "$JDK_PACKAGE" = "" ]; then
+    echo "no jdk specified"
+    echo "usage: change-java-version [-j <jdk-name> | -l]"
+    exit 2
+fi
+
+if [ "$JDK_PACKAGE" != "oracle-8-jdk" ] && [ "$JDK_PACKAGE" != "openjdk-8-jdk" ] && [ "$JDK_PACKAGE" != "openjdk-11-jdk" ]; then
+    echo "$JDK_PACKAGE is not a supported jdk package. Choose from: oracle-8-jdk, openjdk-8-jdk, or openjdk-11-jdk"
+    exit 3
+fi
+
+# install the specified jdkdnf
+if [ "$JDK_PACKAGE" = "openjdk-8-jdk" ]; then
+    dnf -y install java-1.8.0-openjdk-devel
+    update-alternatives --set java java-1.8.0-openjdk.x86_64
+    update-alternatives --set javac java-1.8.0-openjdk.x86_64
+elif [ "$JDK_PACKAGE" = "openjdk-11-jdk" ]; then
+    dnf -y install java-11-openjdk-devel
+    update-alternatives --set java java-11-openjdk.x86_64
+    update-alternatives --set javac java-11-openjdk.x86_64
+fi

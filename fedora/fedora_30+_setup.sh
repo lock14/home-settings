@@ -89,7 +89,6 @@ elif [ "$JDK_PACKAGE" = "openjdk-11-jdk" ]; then
     update-alternatives --set java java-11-openjdk.x86_64
     update-alternatives --set javac java-11-openjdk.x86_64
 fi
-echo "export JAVA_HOME=/usr/lib/java" >> ~/.bashrc
 
 # install maven
 echo "installing maven"
@@ -126,6 +125,13 @@ snap install slack --classic
 
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
+
+# locat user stuff
+mkdir -p ~/bin
+cp -R ./bin/* ~/bin
+
+cat bashrc_addendum >> ~/.bashrc
+mv environment_variables ~/.environment_variables
 
 echo "system restarting in 30 seconds..."
 sleep 30
