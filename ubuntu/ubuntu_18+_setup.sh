@@ -66,6 +66,10 @@ apt --yes full-upgrade
 # auto remove uneeded things
 apt --yes autoremove
 
+# install chrome
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -P ~/Downloads
+dpkg -i ~/Downloads/google-chrome-stable_current_amd64.deb
+
 # install vim
 echo "installing vim"
 apt --yes install vim
