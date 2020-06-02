@@ -21,6 +21,9 @@ while getopts ":j:i:u:p:h" opt; do
     i )
       IDE=$OPTARG
       ;;
+    u )
+      USR=$OPTARG
+      ;;
     h )
       usage
       exit 0
@@ -39,6 +42,12 @@ while getopts ":j:i:u:p:h" opt; do
 done
 shift $((OPTIND -1))
 
+if [ "$USR" = "" ]; then
+    echo "-u flag not supplied. usage: sudo -u \$USER $0"
+    exit 1
+fi
+
+
 # if no package provided, default to openjdk-8
 if [ "$JDK_PACKAGE" = "" ]; then
     JDK_PACKAGE="openjdk-11-jdk"
@@ -46,7 +55,7 @@ fi
 
 # if no ide provided, default to intellij
 if [ "$IDE" = "" ]; then
-    IDE="intellij"
+    IDE="intellij-ultimate"
 fi
 
 # validate choice of jdk package
@@ -126,6 +135,9 @@ snap install slack --classic
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
 
+# on fedora 'sudo' resets $HOME to be '/root', this undoes that and sets it back to user's home directory
+HOME=$(cat /etc/passwd | grep $USR | cut -d ":" -f6)
+
 # locat user stuff
 mkdir -p ~/bin
 rsync -av ./bin ~/bin
@@ -136,4 +148,3 @@ mv environment_variables ~/.environment_variables
 echo "system restarting in 30 seconds..."
 sleep 30
 systemctl reboot
-
