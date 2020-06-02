@@ -12,7 +12,7 @@ dnf -y upgrade --refresh
 echo "installing snapd"
 dnf -y install snapd
 ln -s /var/lib/snapd/snap /snap
-echo "PATH=$PATH:/var/lib/snapd/snap/bin" >> /etc/bashrc
+echo "PATH=\$PATH:/var/lib/snapd/snap/bin" >> /etc/bashrc
 
 echo "system restarting in 30 seconds..."
 sleep 30
