@@ -96,26 +96,26 @@ sudo dnf -y install chrome-gnome-shell
 
 if [ "$IDE" = "intellij" ]; then
     echo "intalling intellij-idea-community"
-    snap install intellij-idea-community --classic
+    sudo snap install intellij-idea-community --classic
 elif [ "$IDE" = "intellij-ultimate" ]; then
     # install intellij ultimate
     echo "intalling intellij-idea-ultimate"
-    snap install intellij-idea-ultimate --classic
+    sudo snap install intellij-idea-ultimate --classic
 elif [ "$IDE" = "eclipse" ]; then
     # install eclipse 
     echo "installing eclipse"
-    snap install eclipse --classic
+    sudo snap install eclipse --classic
 elif [ "$IDE" = "netbeans" ]; then
     echo "installing netbeans"
-    snap install netbeans --classic
+    sudo snap install netbeans --classic
 fi
 
 # install postman
 echo "intalling postman"
-snap install postman
+sudo snap install postman
 
 echo "installing slack"
-snap install slack --classic
+sudo snap install slack --classic
 
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
