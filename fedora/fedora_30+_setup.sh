@@ -94,6 +94,8 @@ sudo dnf config-manager --set-enabled google-chrome
 sudo dnf -y install google-chrome-stable
 sudo dnf -y install chrome-gnome-shell
 
+sudo snap install emacs --classic
+
 if [ "$IDE" = "intellij" ]; then
     echo "intalling intellij-idea-community"
     sudo snap install intellij-idea-community --classic
