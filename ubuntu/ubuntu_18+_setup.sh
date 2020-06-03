@@ -118,5 +118,6 @@ sudo snap install slack --classic
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
 
-echo "system restarting in 30 seconds..."	
+echo "system restarting in 10 seconds..."
+sleep 10
 systemctl reboot
