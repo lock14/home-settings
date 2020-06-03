@@ -114,7 +114,7 @@ fi
 
 # install postman
 echo "intalling postman"
-sudo snap install postman
+sudo snap install postman --classic
 
 echo "installing slack"
 sudo snap install slack --classic
