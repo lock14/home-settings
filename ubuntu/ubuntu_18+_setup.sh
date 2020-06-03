@@ -39,7 +39,7 @@ fi
 
 # if no ide provided, default to intellij
 if [ "$IDE" = "" ]; then
-    IDE="intellij"
+    IDE="intellij-ultimate"
 fi
 
 # validate choice of jdk package
