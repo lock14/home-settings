@@ -82,7 +82,6 @@ version_num=${JDK_PACKAGE#openjdk-}
 sudo apt --yes install $JDK_PACKAGE-jdk $JDK_PACKAGE-source
 # this next command sets all the appropriate sym links (e.g java, javac, etc.)
 sudo update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
-sudo ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
 
 # install maven
 echo "installing maven"
