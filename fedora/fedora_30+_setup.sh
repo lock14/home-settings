@@ -7,12 +7,6 @@ usage() {
     echo "usage: $(basename $0) -j [openjdk-8-jdk | openjdk-11-jdk] -i [intellij | intellij-ultimate | eclipse | netbeans]"
 }
 
-# need to run as root
-if [ "$EUID" -ne 0 ]; then
-    echo "No root permission. Please run using 'sudo'"
-    exit 1
-fi
-
 while getopts ":j:i:u:p:h" opt; do
   case ${opt} in
     j )
@@ -71,43 +65,43 @@ fi
 
 # get everything up to date
 echo "upgrading packages"
-dnf upgrade --refresh
+sudo dnf upgrade --refresh
 
 # install gnome-tweak tool
-dnf -y install gnome-tweak-tool
+sudo dnf -y install gnome-tweak-tool
 
 # install vim
 echo "installing vim"
-dnf -y install vim
+sudo dnf -y install vim
 
 # install curl
 echo "installing curl"
-dnf -y install curl
+sudo dnf -y install curl
 
 # install mariadb
 echo "installing mariadb"
-dnf -y install mariadb-server mariadb
+sudo dnf -y install mariadb-server mariadb
 
 # install the specified jdkdnf
 if [ "$JDK_PACKAGE" = "openjdk-8-jdk" ]; then
-    dnf -y install java-1.8.0-openjdk-devel
-    update-alternatives --set java java-1.8.0-openjdk.x86_64
-    update-alternatives --set javac java-1.8.0-openjdk.x86_64
+    sudo dnf -y install java-1.8.0-openjdk-devel
+    sudo update-alternatives --set java java-1.8.0-openjdk.x86_64
+    sudo update-alternatives --set javac java-1.8.0-openjdk.x86_64
 elif [ "$JDK_PACKAGE" = "openjdk-11-jdk" ]; then
-    dnf -y install java-11-openjdk-devel
-    update-alternatives --set java java-11-openjdk.x86_64
-    update-alternatives --set javac java-11-openjdk.x86_64
+    sudo dnf -y install java-11-openjdk-devel
+    sudo update-alternatives --set java java-11-openjdk.x86_64
+    sudo update-alternatives --set javac java-11-openjdk.x86_64
 fi
 
 # install maven
 echo "installing maven"
-dnf -y install maven
+sudo dnf -y install maven
 
 # install google chrome
-dnf -y install fedora-workstation-repositories
-dnf config-manager --set-enabled google-chrome
-dnf -y install google-chrome-stable
-dnf -y install chrome-gnome-shell
+sudo dnf -y install fedora-workstation-repositories
+sudo dnf config-manager --set-enabled google-chrome
+sudo dnf -y install google-chrome-stable
+sudo dnf -y install chrome-gnome-shell
 
 if [ "$IDE" = "intellij" ]; then
     echo "intalling intellij-idea-community"
@@ -134,9 +128,6 @@ snap install slack --classic
 
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
-
-# on fedora 'sudo' resets $HOME to be '/root', this undoes that and sets it back to user's home directory
-HOME=$(cat /etc/passwd | grep $USR | cut -d ":" -f6)
 
 # locat user stuff
 mkdir -p ~/bin
