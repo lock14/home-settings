@@ -15,9 +15,6 @@ while getopts ":j:i:u:p:h" opt; do
     i )
       IDE=$OPTARG
       ;;
-    u )
-      USR=$OPTARG
-      ;;
     h )
       usage
       exit 0
@@ -35,12 +32,6 @@ while getopts ":j:i:u:p:h" opt; do
   esac
 done
 shift $((OPTIND -1))
-
-if [ "$USR" = "" ]; then
-    echo "-u flag not supplied. usage: sudo -u \$USER $0"
-    exit 1
-fi
-
 
 # if no package provided, default to openjdk-8
 if [ "$JDK_PACKAGE" = "" ]; then
