@@ -6,12 +6,6 @@ usage() {
     echo "usage: $(basename $0) -j [openjdk-8 | openjdk-11] -i [intellij | intellij-ultimate | eclipse | netbeans]"
 }
 
-# need to run as root
-if [ "$EUID" -ne 0 ]; then
-    echo "No root permission. Please run using 'sudo'"
-    exit 1
-fi
-
 while getopts ":j:i:h" opt; do
   case ${opt} in
     j )
@@ -61,54 +55,54 @@ fi
 
 # get everything up to date
 echo "upgrading packages"
-apt --yes update
-apt --yes full-upgrade
+sudo apt --yes update
+sudo apt --yes full-upgrade
 # auto remove uneeded things
-apt --yes autoremove
+sudo apt --yes autoremove
 
 # install chrome
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -P ~/Downloads
-dpkg -i ~/Downloads/google-chrome-stable_current_amd64.deb
+sudo dpkg -i ~/Downloads/google-chrome-stable_current_amd64.deb
 
 # install vim
 echo "installing vim"
-apt --yes install vim
+sudo apt --yes install vim
 
 # install curl
 echo "installing curl"
-apt --yes install curl
+sudo apt --yes install curl
 
 # install mariadb
 echo "installing mariadb"
-apt --yes install mariadb-server mariadb-client
+sudo apt --yes install mariadb-server mariadb-client
 
 # install the specified jdk
 echo "installing jdk"
 version_num=${JDK_PACKAGE#openjdk-}
-apt --yes install $JDK_PACKAGE-jdk $JDK_PACKAGE-source
+sudo apt --yes install $JDK_PACKAGE-jdk $JDK_PACKAGE-source
 # this next command sets all the appropriate sym links (e.g java, javac, etc.)
-update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
-ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
+sudo update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
+sudo ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
 
 # install maven
 echo "installing maven"
-apt --yes install maven
+sudo apt --yes install maven
 
 # install chosen IDE
 if [ "$IDE" = "intellij" ]; then
     echo "intalling intellij-idea-community"
-    snap install intellij-idea-community --classic
+    sudo snap install intellij-idea-community --classic
 elif [ "$IDE" = "intellij-ultimate" ]; then
     # install intellij ultimate
     echo "intalling intellij-idea-ultimate"
-    snap install intellij-idea-ultimate --classic
+    sudo snap install intellij-idea-ultimate --classic
 elif [ "$IDE" = "eclipse" ]; then
     # install eclipse 
     echo "installing eclipse"
-    snap install eclipse --classic
+    sudo snap install eclipse --classic
 elif [ "$IDE" = "netbeans" ]; then
     echo "installing netbeans"
-    snap install netbeans --classic
+    sudo snap install netbeans --classic
 fi
 
 # install vs-code as well for a lightweight IDE
@@ -116,10 +110,10 @@ sudo snap install --classic code
 
 # install postman
 echo "intalling postman"
-snap install postman
+sudo snap install postman
 
 echo "installing slack"
-snap install slack --classic
+sudo snap install slack --classic
 
 echo "Recommended Tools"
 echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
