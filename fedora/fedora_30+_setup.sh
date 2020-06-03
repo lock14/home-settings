@@ -129,6 +129,6 @@ rsync -av ./bin ~/bin
 cat bashrc_addendum >> ~/.bashrc
 mv environment_variables ~/.environment_variables
 
-echo "system restarting in 30 seconds..."
-sleep 30
+echo "system restarting in 10 seconds..."
+sleep 10
 systemctl reboot
