@@ -1,6 +1,6 @@
 # Ubuntu Setup Script
 The script ubuntu\_18.04+\_setup.sh does the following:
-- Updates Ubuntu to the latest pakackages
+- Updates Ubuntu to the latest packages
 - installs git
 - installs vim
 - installs curl
