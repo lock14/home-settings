@@ -5,10 +5,10 @@ The script ubuntu\_18.04+\_setup.sh does the following:
 - installs vim
 - installs curl
 - installs Google Chrome
-- installs the JDK (JDK 11 by default)
+- installs a JDK (JDK 11 by default)
 - installs maven
 - installs mariadb
-- installs IntelliJ Idea
+- installs a Java IDE (IntelliJ Idea Ultiamte by default)
 - installs VS Code
 - installs Postman
 - installs Slack
