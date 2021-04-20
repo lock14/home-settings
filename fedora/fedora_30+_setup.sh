@@ -119,9 +119,6 @@ sudo snap install postman --classic
 echo "installing slack"
 sudo snap install slack --classic
 
-echo "Recommended Tools"
-echo "Database Management - DbVisualizer: https://www.dbvis.com/download/10.0"
-
 # locat user stuff
 mkdir -p ~/bin
 rsync -av ./bin ~/bin
