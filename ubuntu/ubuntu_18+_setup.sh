@@ -60,6 +60,9 @@ sudo apt --yes full-upgrade
 # auto remove uneeded things
 sudo apt --yes autoremove
 
+# dconf-cli
+sudo apt --yes install dconf-cli
+
 # install chrome
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -P ~/Downloads
 sudo dpkg -i ~/Downloads/google-chrome-stable_current_amd64.deb
@@ -113,13 +116,6 @@ sudo snap install postman
 
 echo "installing slack"
 sudo snap install slack --classic
-
-# user stuff
-mkdir -p ~/bin
-rsync -av ./bin ~/bin
-
-cat bashrc_addendum >> ~/.bashrc
-mv environment_variables ~/.environment_variables
 
 echo "system restarting in 10 seconds..."
 sleep 10

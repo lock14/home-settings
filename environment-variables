@@ -1,0 +1,8 @@
+###############################################################################
+# put environment variables here
+###############################################################################
+
+# set svn editor to vim
+export EDITOR=vim
+export SVN_EDITOR=$EDITOR
+

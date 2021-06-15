@@ -1,5 +1,0 @@
-# set environment variables if present
-if [ -f ~/.environment_variables ]; then
-    . ~/.environment_variables
-fi
-

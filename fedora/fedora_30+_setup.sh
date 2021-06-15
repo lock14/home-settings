@@ -58,6 +58,9 @@ fi
 echo "upgrading packages"
 sudo dnf upgrade --refresh
 
+# install dconf-cli
+sudo dnf -y install dconf
+
 # install gnome-tweak tool
 sudo dnf -y install gnome-tweak-tool
 
@@ -114,17 +117,10 @@ fi
 
 # install postman
 echo "intalling postman"
-sudo snap install postman --classic
+sudo snap install postman
 
 echo "installing slack"
 sudo snap install slack --classic
-
-# locat user stuff
-mkdir -p ~/bin
-rsync -av ./bin ~/bin
-
-cat bashrc_addendum >> ~/.bashrc
-mv environment_variables ~/.environment_variables
 
 echo "system restarting in 10 seconds..."
 sleep 10
