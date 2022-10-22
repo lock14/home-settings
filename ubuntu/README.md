@@ -8,7 +8,7 @@ The script ubuntu\_18.04+\_setup.sh is intended to get a java workflow setup on 
 - installs a JDK (JDK 11 by default)
 - installs maven
 - installs mariadb
-- installs a Java IDE (IntelliJ Idea Ultiamte by default)
+- installs a Java IDE (IntelliJ Idea Ultimate by default)
 - installs VS Code
 - installs Postman
 - installs Slack
