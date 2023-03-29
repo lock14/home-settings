@@ -24,7 +24,7 @@ popd || exit
 # we want this to output without expansion
 # shellcheck disable=SC2016
 echo '
-GO_HOME=$HOME/software/sdk/go/bin
-export PATH=$GO_HOME:$PATH
-export PATH=$(go env GOPATH)/bin:$PATH
+export GOROOT="$HOME/software/sdk/go/bin"
+export PATH="$GOROOT:$PATH"
+export PATH="$(go env GOPATH)/bin:$PATH"
 ' >> "$ENV_FILE"
