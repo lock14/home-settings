@@ -28,3 +28,15 @@ export GOROOT="$HOME/software/sdk/go/bin"
 export PATH="$GOROOT:$PATH"
 export PATH="$(go env GOPATH)/bin:$PATH"
 ' >> "$ENV_FILE"
+
+echo "
+if [ -f $ENV_FILE ]; then
+    . $ENV_FILE
+fi
+" >> $HOME/.bashrc
+
+echo "
+if [ -f $ENV_FILE ]; then
+    . $ENV_FILE
+fi
+" >> $HOME/.zshrc
