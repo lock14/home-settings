@@ -1,23 +1,30 @@
 #!/bin/bash
 
-ALPHA_NUMERIC="A-Za-z0-9"
-ALPHA_NUMERIC_PLUS_SYMBOLS="A-Za-z0-9\.\!\?\$#%@^&"
+UPPER="A-Z"
+LOWER="a-z"
+NUMBERS="0-9"
+SYMBOLS="^*@#&%\$\!"
 
-LENGTH="20"
-CHARACTER_SET="$ALPHA_NUMERIC"
+LENGTH="16"
+CHARACTER_SET=""
 
 usage() {
-    echo "usage: $(basename $0) [-l <length>]"
+    echo "usage: $(basename "$0") [-u -l -n -s] <length>"
 }
 
-
-while getopts ":l:sh" opt; do
+while getopts ":ulnsh" opt; do
   case ${opt} in
+    u )
+      CHARACTER_SET="$CHARACTER_SET$UPPER"
+      ;;
     l )
-      LENGTH="$OPTARG"
+      CHARACTER_SET="$CHARACTER_SET$LOWER"
+      ;;
+    n )
+      CHARACTER_SET="$CHARACTER_SET$NUMBERS"
       ;;
     s )
-      CHARACTER_SET="$ALPHA_NUMERIC_PLUS_SYMBOLS"
+      CHARACTER_SET="$CHARACTER_SET$SYMBOLS"
       ;;
     h )
       usage
@@ -37,4 +44,16 @@ while getopts ":l:sh" opt; do
 done
 shift $((OPTIND -1))
 
-< /dev/urandom tr -dc $CHARACTER_SET | head -c$LENGTH; echo
+LENGTH="$1"
+
+if [ "$LENGTH" = "" ]; then
+  echo "a length must be provided"
+  usage
+  exit 1
+fi
+
+if [ "$CHARACTER_SET" = "" ]; then
+  CHARACTER_SET="$UPPER$LOWER$NUMBERS"
+fi
+
+< /dev/urandom tr -dc "$CHARACTER_SET" | head -c "$LENGTH"; echo
