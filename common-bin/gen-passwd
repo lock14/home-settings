@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 UPPER="A-Z"
 LOWER="a-z"
@@ -50,6 +50,12 @@ if [ "$LENGTH" = "" ]; then
   echo "a length must be provided"
   usage
   exit 1
+fi
+
+INTEGER='^[0-9]+$'
+if ! [[ $LENGTH =~ $INTEGER ]] ; then
+   echo "error: $LENGTH is not a number"
+   exit 1
 fi
 
 if [ "$CHARACTER_SET" = "" ]; then
