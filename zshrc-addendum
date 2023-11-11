@@ -1,0 +1,6 @@
+
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
+
+[ -f $HOME/.environment_variables ] && source $HOME/.environment_variables
+[ -f $HOME/.zsh_aliases ] && source $HOME/.zsh_aliases
+[ -f $HOME/.dir_colors/dircolors ] && eval `dircolors $HOME/.dir_colors/dircolors`

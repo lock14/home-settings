@@ -1,0 +1,12 @@
+#git aliases
+alias gcommit='git add * && git commit'
+alias gamend='git add * && git commit --amend'
+alias gpush='git push origin $(git rev-parse --abbrev-ref HEAD)'
+alias gpull='git pull origin $(git rev-parse --abbrev-ref HEAD)'
+alias gprune='git branch | grep -E -v "main|master" | xargs git branch -D'
+
+# golang stuff
+alias go_lint='golangci-lint run --path-prefix=. --config ~/.golangci.yml'
+alias go_testall='go test ./...'
+alias go_buildall='go build ./...'
+
