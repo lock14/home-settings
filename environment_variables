@@ -1,0 +1,16 @@
+###############################################################################
+# put environment variables here
+###############################################################################
+
+# set svn editor to vim
+export EDITOR=vim
+export SVN_EDITOR=$EDITOR
+
+# add bin dir to PATH
+export PATH=$HOME/software/bin:$PATH
+
+# GO related env vars
+GO_HOME=~/software/sdk/go/bin
+export PATH=$GO_HOME:$PATH
+export PATH=$(go env GOPATH)/bin:$PATH
+
