@@ -1,7 +1,8 @@
 #git aliases
-alias gcommit='git add * && git commit'
-alias gamend='git add * && git commit --amend'
+alias gcommit='git add -A && git commit'
+alias gamend='git add -A && git commit --amend'
 alias gpush='git push origin $(git rev-parse --abbrev-ref HEAD)'
+alias gpushf='git push -f origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpull='git pull origin $(git rev-parse --abbrev-ref HEAD)'
 alias gprune='git branch | grep -E -v "main|master" | xargs git branch -D'
 
