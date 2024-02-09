@@ -1,6 +1,7 @@
 #git aliases
 alias gcommit='git add -A && git commit'
-alias gamend='git add -A && git commit --amend'
+alias gamend='git add -A && git commit --amend --no-edit'
+alias gfetch='git fetch'
 alias gpush='git push origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpushf='git push -f origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpull='git pull origin $(git rev-parse --abbrev-ref HEAD)'
@@ -10,4 +11,3 @@ alias gprune='git branch | grep -E -v "main|master" | xargs git branch -D'
 alias go_lint='golangci-lint run --path-prefix=. --config ~/.golangci.yml'
 alias go_testall='go test ./...'
 alias go_buildall='go build ./...'
-
