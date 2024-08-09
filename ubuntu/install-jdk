@@ -1,0 +1,33 @@
+#!/bin/bash
+
+while getopts ":v:h" opt; do
+  case ${opt} in
+    v )
+      JDK_PACKAGE=$OPTARG
+      ;;
+    h )
+      usage
+      exit 0
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      usage
+      exit 1
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+# install the specified jdk
+echo "installing jdk"
+version_num=${JDK_PACKAGE#openjdk-}
+sudo apt --yes install $JDK_PACKAGE-jdk $JDK_PACKAGE-source
+# this next command sets all the appropriate sym links (e.g java, javac, etc.)
+sudo update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
+
+

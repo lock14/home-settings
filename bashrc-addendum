@@ -1,3 +1,5 @@
 # custom env variables
-[ -f ~/.environment-variables ] && source ~/.environment-variables
+[ -f $HOME/.environment_variables ] && source $HOME/.environment_variables
+[ -f $HOME/.dir_colors/dircolors ] && eval `dircolors $HOME/.dir_colors/dircolors`
+
 
