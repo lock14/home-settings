@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 UPPER="A-Z"
 LOWER="a-z"
