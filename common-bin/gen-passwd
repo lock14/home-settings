@@ -59,7 +59,10 @@ if ! [[ $LENGTH =~ $INTEGER ]] ; then
 fi
 
 if [ "$CHARACTER_SET" = "" ]; then
-  CHARACTER_SET="$UPPER$LOWER$NUMBERS"
+  CHARACTER_SET="$UPPER$LOWER$NUMBERS$SYMBOLS"
 fi
 
+# consider replacing with something like:
+# < /dev/urandom tr -dc 'A-Za-z0-9^*@#&%$\!' | fold -w 8 | grep '.*[0-9]' | grep '.*[a-z]' | grep '.*[A-Z]' | head -n 1
+# in order to ensure there is one letter from each character set. Still Need to figure out symbols
 < /dev/urandom tr -dc "$CHARACTER_SET" | head -c "$LENGTH"; echo
