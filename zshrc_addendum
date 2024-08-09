@@ -1,6 +1,11 @@
+#!/bin/zsh
 
+# fix autosuggestion color for solarized dark
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
 
+# source other config files if present
 [ -f $HOME/.environment_variables ] && source $HOME/.environment_variables
+[ -f $HOME/.zsh_functions ] && source $HOME/.zsh_functions
 [ -f $HOME/.zsh_aliases ] && source $HOME/.zsh_aliases
 [ -f $HOME/.dir_colors/dircolors ] && eval `dircolors $HOME/.dir_colors/dircolors`
+

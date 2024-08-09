@@ -19,9 +19,6 @@ git clone https://github.com/unixorn/fzf-zsh-plugin.git ${ZSH_CUSTOM:-~/.oh-my-z
 sed -i s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"powerlevel10k/powerlevel10k\"/g ~/.zshrc
 sed -i s/plugins=(git)/plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)/g ~/.zshrc
 
-# fix autosuggestion color for solarized dark
-echo "ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'" >> ~/.zshrc
-
 # switch shell to zsh
 chsh -s $(which zsh)
 
