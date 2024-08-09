@@ -1,9 +1,8 @@
 #!/bin/bash
 
-SDK_DIR="$HOME/software/sdk"
 VERSION_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 
-GO_VERSION=""
+TF_VERSION=""
 
 usage() {
     echo "usage: $(basename "$0") [-v]"
@@ -12,7 +11,7 @@ usage() {
 while getopts ":v:h" opt; do
   case ${opt} in
     v )
-      GO_VERSION="$OPTARG"
+      TF_VERSION="$OPTARG"
       ;;
     h )
       usage
@@ -32,16 +31,16 @@ while getopts ":v:h" opt; do
 done
 shift $((OPTIND -1))
 
-if ! [[ "$GO_VERSION" =~ $VERSION_REGEX ]]; then
-    echo "malformed version. '$GO_VERSION' is not  a semantic version number" 1>&2
+if ! [[ "$TF_VERSION" =~ $VERSION_REGEX ]]; then
+    echo "malformed version. '$TF_VERSION' is not  a semantic version number" 1>&2
     exit 1
 fi
 
-if [ -d "$SDK_DIR/go$GO_VERSION" ]; then
-    echo "go$GO_VERSION is already installed"
+if [ -d "$SDK_DIR/go$TF_VERSION" ]; then
+    echo "go$TF_VERSION is already installed"
     exit 0
 fi
 
-wget "https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz" -P /tmp
-tar -xzvf "/tmp/go$GO_VERSION.linux-amd64.tar.gz" -C /tmp
-mv /tmp/go "$SDK_DIR/go$GO_VERSION"
+wget "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -P /tmp
+unzip -o -d /tmp "/tmp/terraform_${TF_VERSION}_linux_amd64.zip"
+mv /tmp/terraform "$HOME/bin"

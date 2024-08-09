@@ -9,10 +9,14 @@ usage() {
     echo "usage: $(basename "$0") [-u -l -n -s] <length>"
 }
 
-while getopts ":v:h" opt; do
+while getopts ":v:lh" opt; do
   case ${opt} in
     v )
       GO_VERSION="$OPTARG"
+      ;;
+    l )
+      ls $SDK_DIR 
+      exit 0
       ;;
     h )
       usage
@@ -42,7 +46,5 @@ if ! [ -d "$SDK_DIR/go$GO_VERSION" ]; then
     exit 1
 fi
 
-if [ -f "$SDK_DIR/go" ]; then
-    rm "$SDK_DIR/go"
-fi
+rm "$SDK_DIR/go"
 ln -s "$SDK_DIR/go$GO_VERSION" "$SDK_DIR/go"
