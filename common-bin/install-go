@@ -9,13 +9,26 @@ usage() {
     echo "usage: $(basename "$0") [-v]"
 }
 
-while getopts ":v:h" opt; do
+listVersions() {
+  git -c 'versionsort.suffix=-' ls-remote \
+    --exit-code \
+    --refs --sort='version:refname' \
+    --tags https://go.googlesource.com/go 'go*.*.*' \
+    | cut --delimiter='/' --fields=3 \
+    | cut -c 3-
+}
+
+while getopts ":v:hl" opt; do
   case ${opt} in
     v )
       GO_VERSION="$OPTARG"
       ;;
     h )
       usage
+      exit 0
+      ;;
+    l )
+      listVersions 
       exit 0
       ;;
     \? )
