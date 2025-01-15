@@ -1,15 +1,17 @@
 #!/bin/zsh
 
 # general functions
+
 fs() {
-    fd ${@} | tree --fromfile
+    fd --no-ignore-vcs ${@} | tree --fromfile
 }
 
 # git functions
+
 gsync() {
     branch_name=$(git rev-parse --abbrev-ref HEAD)
-    git branch | grep -E "main|master" | xargs git checkout
+    git branch | grep -E "^\*?\s+(main|master)$" | xargs git checkout
     git fetch && git pull
     git checkout $branch_name
-    git branch | grep -E "main|master" | xargs git rebase
+    git branch | grep -E "^\*?\s+(main|master)$" | xargs git rebase
 }

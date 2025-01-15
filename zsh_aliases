@@ -7,11 +7,12 @@ alias gfetch='git fetch'
 alias gpush='git push origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpushf='git push -f origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpull='git pull origin $(git rev-parse --abbrev-ref HEAD)'
-alias gprune='git branch | grep -E -v "main|master" | xargs git branch -D'
+alias gprune='git branch | grep -E -v "^\*?\s+(main|master)$" | xargs git branch -D'
 alias gup='gfetch && gpull --rebase'
+alias fix-abcxyz-branch-name='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD)"'
 
 # golang
-alias go_lint='golangci-lint run --path-prefix=. --config ~/.golangci.yml'
+alias go_lint='if [ ! -f /tmp/golangci.yml ]; then curl -s https://raw.githubusercontent.com/abcxyz/pkg/main/.golangci.yml > /tmp/golangci.yml; fi; golangci-lint run -c /tmp/golangci.yml'
 alias go_testall='go test ./...'
 alias go_buildall='go build ./...'
 
@@ -19,3 +20,5 @@ alias go_buildall='go build ./...'
 alias terrafrom='terraform'
 alias tf='terraform'
 
+# Aux
+alias yaml_lint='yamllint -c ~/.yamllint.yml'
