@@ -8,7 +8,7 @@ alias gpush='git push origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpushf='git push -f origin $(git rev-parse --abbrev-ref HEAD)'
 alias gpull='git pull --rebase origin $(git rev-parse --abbrev-ref HEAD)'
 alias gprune='git branch | grep -E -v "^\*?\s+(main|master)$" | xargs -r git branch -D'
-alias gup='gfetch && gpull --rebase'
+alias gup='gfetch && gpull'
 alias fix-abcxyz-branch-name='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD)"'
 
 # golang
