@@ -9,9 +9,17 @@ fs() {
 # git functions
 
 gsync() {
+    set -o errexit   # abort on nonzero exitstatus.
+    set -o nounset   # abort on unbound variable.
+    set -o pipefail  # don't hide errors within pipes
+
     branch_name=$(git rev-parse --abbrev-ref HEAD)
     git branch | grep -E "^\*?\s+(main|master)$" | xargs -r git checkout
-    git fetch && git pull
+    git fetch && git pull origin $(git rev-parse --abbrev-ref HEAD)
     git checkout $branch_name
     git branch | grep -E "^\*?\s+(main|master)$" | xargs -r git rebase
+
+    set +o errexit   # undo option
+    set +o nounset   # undo option
+    set +o pipefail  # undo option
 }
