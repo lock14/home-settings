@@ -7,21 +7,14 @@ set -o pipefail  # don't hide errors within pipes
 # Uncomment below line when debugging to get trace output
 # set -o xtrace    # print trace
 
-MAX_ATTEMPTS="10"
-SLEEP_SECONDS=30
-
 usage() {
-    echo "usage: $(basename "$0") -n MAX_ATTEMPT cmd" 
+    echo "usage: $(basename "$0")"
 }
 
-while getopts ":n:s:h" opt; do
+# to add a flag that is a toggle just add a letter, e.g 'a'
+# to add a flag with an argument just add a letter followed by a colon, e.g. 'a:'
+while getopts ":hl" opt; do
   case ${opt} in
-    n )
-      MAX_ATTEMPTS=$OPTARG
-      ;;
-    s )
-      SLEEP_SECONDS=$OPTARG
-      ;;
     h )
       usage
       exit 0
@@ -40,16 +33,3 @@ while getopts ":n:s:h" opt; do
 done
 shift $((OPTIND -1))
 
-for ((i=0;i<MAX_ATTEMPTS;i++)); do
-    echo "attempting cmd: $*"
-    "${@}"
-    exit_code="$?"
-    if [ $exit_code -eq 0 ]; then
-        echo "cmd suceeded"
-        exit 0
-    fi
-    echo "cmd failed with status $exit_code, retrying in $SLEEP_SECONDS seconds"
-    sleep "$SLEEP_SECONDS"
-done
-echo "max retries limit of $MAX_ATTEMPTS has been reached"
-exit 1
