@@ -1,4 +1,4 @@
 #!/bin/bash
 
-cat ../bashrc-addendum >> ~/.bashrc
-cp ../environment-variables ~/.environment-variables
+cat ./bashrc-addendum >> ~/.bashrc
+cp ./environment_variables ~/.environment_variables

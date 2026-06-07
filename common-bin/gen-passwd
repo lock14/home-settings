@@ -12,7 +12,7 @@ LOWER="a-z"
 NUMBERS="0-9"
 SYMBOLS="^*@#&%\$\!"
 
-LENGTH="16"
+LENGTH=""
 CHARACTER_SET=""
 
 usage() {
@@ -51,13 +51,7 @@ while getopts ":ulnsh" opt; do
 done
 shift $((OPTIND -1))
 
-LENGTH="$1"
-
-if [ "$LENGTH" = "" ]; then
-  echo "a length must be provided"
-  usage
-  exit 1
-fi
+LENGTH="${1:-16}"
 
 INTEGER='^[0-9]+$'
 if ! [[ $LENGTH =~ $INTEGER ]] ; then

@@ -7,6 +7,7 @@ set -o pipefail  # don't hide errors within pipes
 # Uncomment below line when debugging to get trace output
 # set -o xtrace    # print trace
 
+
 CMD="$1"
 INCREMENTAL=\${parsedVersion.incrementalVersion}
 MINOR=\${parsedVersion.minorVersion}
@@ -21,9 +22,9 @@ elif [ "$CMD" == "major" ]; then
 fi
 NEW_VERSION=$MAJOR.$MINOR.$INCREMENTAL
 
-CURRENT_BRANCH=$(git branch | grep \* | cut -d ' ' -f2)
-if [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
-  echo "the current branch must be set to 'master' or 'develop'"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
+  echo "the current branch must be set to 'master', 'main', or 'develop'"
   exit 1
 fi
 ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId | grep -v INFO)

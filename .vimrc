@@ -22,7 +22,6 @@ imap <Home> <Esc>^i
 inoremap ( ()<Esc>:call BC_AddChar(")")<CR>i
 inoremap { {}<Esc>:call BC_AddChar("}")<CR>i
 inoremap [ []<Esc>:call BC_AddChar("]")<CR>i
-inoremap " ""<Esc>:call BC_AddChar("\"")<CR>i
 inoremap <C-j> <Esc>:call search(BC_GetChar(), "W")<CR>a
 inoremap ) <c-r>=ClosePair(')')<CR>
 inoremap ] <c-r>=ClosePair(']')<CR>
