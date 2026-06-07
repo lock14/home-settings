@@ -61,7 +61,14 @@ if [ -d "$SDK_DIR/$GO_VERSION" ]; then
     exit 0
 fi
 
-wget "https://go.dev/dl/$GO_VERSION.linux-amd64.tar.gz" -P /tmp
-tar -xzvf "/tmp/$GO_VERSION.linux-amd64.tar.gz" -C /tmp
+ARCH=$(uname -m)
+case "$ARCH" in
+  x86_64)  GOARCH="amd64" ;;
+  aarch64|arm64) GOARCH="arm64" ;;
+  *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+esac
+
+wget "https://go.dev/dl/$GO_VERSION.linux-${GOARCH}.tar.gz" -P /tmp
+tar -xzvf "/tmp/$GO_VERSION.linux-${GOARCH}.tar.gz" -C /tmp
 mv /tmp/go "$SDK_DIR/$GO_VERSION"
 

@@ -52,6 +52,7 @@ fi
 # validate choice of ide
 if [ "$IDE" != "intellij" ] && [ "$IDE" != "intellij-ultimate" ] && [ "$IDE" != "eclipse" ] && [ "$IDE" != "netbeans" ]; then
     echo "$IDE is not a supported IDE. Chose from: intellij, intellij-ultimate, eclipse, or netbeans"
+    exit 1
 fi
 
 # get everything up to date

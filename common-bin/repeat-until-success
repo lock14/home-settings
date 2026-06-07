@@ -42,10 +42,12 @@ shift $((OPTIND -1))
 
 for ((i=0;i<MAX_ATTEMPTS;i++)); do
     echo "attempting cmd: $*"
+    set +o errexit
     "${@}"
     exit_code="$?"
+    set -o errexit
     if [ $exit_code -eq 0 ]; then
-        echo "cmd suceeded"
+        echo "cmd succeeded"
         exit 0
     fi
     echo "cmd failed with status $exit_code, retrying in $SLEEP_SECONDS seconds"

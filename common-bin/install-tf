@@ -43,8 +43,8 @@ if ! [[ "$TF_VERSION" =~ $VERSION_REGEX ]]; then
     exit 1
 fi
 
-if [ -d "$SDK_DIR/go$TF_VERSION" ]; then
-    echo "go$TF_VERSION is already installed"
+if [ -f "$HOME/bin/terraform" ] && [ "$("$HOME/bin/terraform" version -json 2>/dev/null | grep -o '"terraform_version":"[^"]*"' | cut -d'"' -f4)" = "$TF_VERSION" ]; then
+    echo "terraform $TF_VERSION is already installed"
     exit 0
 fi
 

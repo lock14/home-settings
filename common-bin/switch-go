@@ -13,7 +13,7 @@ VERSION_REGEX="^go[0-9]+\.[0-9]+\.[0-9]+$"
 GO_VERSION=""
 
 usage() {
-    echo "usage: $(basename "$0") [-u -l -n -s] <length>"
+    echo "usage: $(basename "$0") -v <go-version>"
 }
 
 while getopts ":v:lh" opt; do

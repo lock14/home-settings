@@ -17,7 +17,6 @@ alias go_testall='go test ./...'
 alias go_buildall='go build ./...'
 
 # terraform
-alias terrafrom='terraform'
 alias tf='terraform'
 
 # Aux

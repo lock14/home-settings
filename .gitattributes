@@ -1,0 +1,14 @@
+# Enforce LF line endings for all files, since these scripts target Linux/macOS.
+# Checked-out files will use LF regardless of the OS doing the checkout.
+* text=auto eol=lf
+
+# Shell scripts must always be LF
+*.sh text eol=lf
+
+# Vim config
+.vimrc text eol=lf
+
+# Text/config files
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
