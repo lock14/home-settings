@@ -3,8 +3,18 @@ name: Integration Tests
 on:
   push:
     branches: [master, main]
+    paths:
+      - 'ubuntu/ubuntu_18+_setup.sh'
+      - 'fedora/fedora_30+_setup.sh'
+      - 'zsh-setup.sh'
+      - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [master, main]
+    paths:
+      - 'ubuntu/ubuntu_18+_setup.sh'
+      - 'fedora/fedora_30+_setup.sh'
+      - 'zsh-setup.sh'
+      - '.github/workflows/integration-tests.yml'
 
 jobs:
   test-ubuntu:
