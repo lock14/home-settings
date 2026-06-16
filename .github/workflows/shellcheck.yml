@@ -1,0 +1,46 @@
+name: ShellCheck
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck static analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      # Bash scripts with .sh extension
+      - name: ShellCheck — .sh files
+        run: |
+          find . -name "*.sh" -not -path "./.git/*" \
+            | sort \
+            | xargs shellcheck --severity=warning
+
+      # Shell scripts in common-bin/ (no .sh extension, bash shebang)
+      - name: ShellCheck — common-bin scripts
+        run: |
+          shellcheck --severity=warning \
+            common-bin/gen-passwd \
+            common-bin/install-go \
+            common-bin/install-tf \
+            common-bin/mvn-release \
+            common-bin/repeat-until-success \
+            common-bin/sum \
+            common-bin/switch-go
+
+      # Shell scripts in ubuntu/bin/ and fedora/bin/
+      - name: ShellCheck — distro bin scripts
+        run: |
+          shellcheck --severity=warning \
+            ubuntu/bin/.switch-java-version \
+            ubuntu/install-jdk \
+            fedora/bin/.change-java-version

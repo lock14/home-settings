@@ -9,16 +9,16 @@ set -o pipefail  # don't hide errors within pipes
 
 
 CMD="$1"
-INCREMENTAL=\${parsedVersion.incrementalVersion}
-MINOR=\${parsedVersion.minorVersion}
-MAJOR=\${parsedVersion.majorVersion}
+INCREMENTAL='${parsedVersion.incrementalVersion}'
+MINOR='${parsedVersion.minorVersion}'
+MAJOR='${parsedVersion.majorVersion}'
 
 if [ "$CMD" == "incremental" ] || [ "$CMD" == "" ]; then
-  INCREMENTAL=\${parsedVersion.nextIncrementalVersion}
+  INCREMENTAL='${parsedVersion.nextIncrementalVersion}'
 elif [ "$CMD" == "minor" ]; then
-  MINOR=\${parsedVersion.nextMinorVersion}
+  MINOR='${parsedVersion.nextMinorVersion}'
 elif [ "$CMD" == "major" ]; then
-  MAJOR=\${parsedVersion.nextMajorVersion}
+  MAJOR='${parsedVersion.nextMajorVersion}'
 fi
 NEW_VERSION=$MAJOR.$MINOR.$INCREMENTAL
 

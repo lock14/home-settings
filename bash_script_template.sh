@@ -13,7 +13,7 @@ usage() {
 
 # to add a flag that is a toggle just add a letter, e.g 'a'
 # to add a flag with an argument just add a letter followed by a colon, e.g. 'a:'
-while getopts ":hl" opt; do
+while getopts ":h" opt; do
   case ${opt} in
     h )
       usage
