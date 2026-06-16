@@ -61,6 +61,6 @@ jobs:
       - name: Run Zsh Setup
         run: |
           # It detects apt and installs zsh, omz, etc.
-          sudo ./zsh-setup.sh
+          ./zsh-setup.sh
           # Verify powerlevel10k was installed
           ls -la ~/.oh-my-zsh/custom/themes/powerlevel10k
