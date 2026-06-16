@@ -22,7 +22,11 @@ while getopts ":v:lh" opt; do
       GO_VERSION="$OPTARG"
       ;;
     l )
-      ls $SDK_DIR | grep -v '^go$' 
+      for d in "$SDK_DIR"/*; do
+        [ -e "$d" ] || continue
+        base=$(basename "$d")
+        [ "$base" != "go" ] && echo "$base"
+      done
       exit 0
       ;;
     h )
