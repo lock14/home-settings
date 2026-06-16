@@ -7,7 +7,7 @@ usage() {
     echo "usage: $(basename $0) -j [openjdk-8-jdk | openjdk-11-jdk] -i [intellij | intellij-ultimate | eclipse | netbeans]"
 }
 
-while getopts ":j:i:u:p:h" opt; do
+while getopts ":j:i:h" opt; do
   case ${opt} in
     j )
       JDK_PACKAGE=$OPTARG
