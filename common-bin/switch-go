@@ -53,5 +53,5 @@ if ! [ -d "$SDK_DIR/$GO_VERSION" ]; then
     exit 1
 fi
 
-rm "$SDK_DIR/go"
+rm -f "$SDK_DIR/go"
 ln -s "$SDK_DIR/$GO_VERSION" "$SDK_DIR/go"

@@ -32,5 +32,5 @@ sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' ~/
 sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|g' ~/.zshrc
 
 # switch shell to zsh
-chsh -s $(which zsh)
+chsh -s "$(which zsh)"
 
