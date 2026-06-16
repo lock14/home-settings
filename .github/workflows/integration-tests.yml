@@ -1,0 +1,66 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test-ubuntu:
+    name: Ubuntu Setup Script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disable Reboot
+        run: |
+          sed -i 's/systemctl reboot/echo "skipping reboot"/g' ubuntu/ubuntu_18+_setup.sh
+
+      - name: Run Ubuntu Setup (Default args)
+        run: |
+          # Run non-interactively. We use the default JDK and IDE
+          # apt-get might prompt, but the script uses 'sudo apt --yes'
+          sudo ./ubuntu/ubuntu_18+_setup.sh
+
+  test-fedora:
+    name: Fedora Setup Script
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Mocks and Disable Reboot
+        run: |
+          dnf -y install sudo curl wget findutils
+          # The script attempts to use snap which needs systemd.
+          # We mock snap for the docker container environment.
+          echo '#!/bin/bash' > /usr/bin/snap
+          echo 'echo "Mocking snap command: $@"' >> /usr/bin/snap
+          chmod +x /usr/bin/snap
+          
+          # Disable reboot
+          sed -i 's/systemctl reboot/echo "skipping reboot"/g' fedora/fedora_30+_setup.sh
+
+      - name: Run Fedora Setup (Default args)
+        run: |
+          # dnf works fine non-interactively
+          sudo ./fedora/fedora_30+_setup.sh
+
+  test-zsh-setup:
+    name: Zsh Setup Script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disable chsh (requires password/interactive)
+        run: |
+          sed -i 's/chsh -s/echo "skipping chsh -s"/g' zsh-setup.sh
+
+      - name: Run Zsh Setup
+        run: |
+          # It detects apt and installs zsh, omz, etc.
+          sudo ./zsh-setup.sh
+          # Verify powerlevel10k was installed
+          ls -la ~/.oh-my-zsh/custom/themes/powerlevel10k
