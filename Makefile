@@ -12,7 +12,9 @@ install:
 	ln -sf "$(REPO_DIR)/zshrc_addendum"       "$(HOME)/.zshrc_addendum"
 	ln -sf "$(REPO_DIR)/bashrc-addendum"      "$(HOME)/.bashrc-addendum"
 	ln -sf "$(REPO_DIR)/environment_variables" "$(HOME)/.environment_variables"
+	mkdir -p "$(HOME)/.dir_colors"
 	ln -sf "$(REPO_DIR)/LS_COLORS"            "$(HOME)/.dir_colors/dircolors"
+
 	@# Append zshrc_addendum source line to ~/.zshrc if not already present
 	@grep -qxF 'source ~/.zshrc_addendum' "$(HOME)/.zshrc" 2>/dev/null || \
 	    echo '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum' >> "$(HOME)/.zshrc"
