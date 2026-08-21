@@ -1,59 +1,58 @@
 #!/bin/bash
-      
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
-set -o pipefail  # don't hide errors within pipes
+set -euo pipefail
 
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
-
-
-CMD="$1"
+CMD="${1:-}"
+# shellcheck disable=SC2016
 INCREMENTAL='${parsedVersion.incrementalVersion}'
+# shellcheck disable=SC2016
 MINOR='${parsedVersion.minorVersion}'
+# shellcheck disable=SC2016
 MAJOR='${parsedVersion.majorVersion}'
 
-if [ "$CMD" == "incremental" ] || [ "$CMD" == "" ]; then
+if [ "$CMD" = "incremental" ] || [ "$CMD" = "" ]; then
+  # shellcheck disable=SC2016
   INCREMENTAL='${parsedVersion.nextIncrementalVersion}'
-elif [ "$CMD" == "minor" ]; then
+elif [ "$CMD" = "minor" ]; then
+  # shellcheck disable=SC2016
   MINOR='${parsedVersion.nextMinorVersion}'
-elif [ "$CMD" == "major" ]; then
+elif [ "$CMD" = "major" ]; then
+  # shellcheck disable=SC2016
   MAJOR='${parsedVersion.nextMajorVersion}'
 fi
-NEW_VERSION=$MAJOR.$MINOR.$INCREMENTAL
+NEW_VERSION="$MAJOR.$MINOR.$INCREMENTAL"
 
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
-  echo "the current branch must be set to 'master', 'main', or 'develop'"
+CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD)"
+if [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
+  echo "the current branch must be set to 'master' or 'develop'" >&2
   exit 1
 fi
-ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId | grep -v INFO)
-VERSION=$(mvn help:evaluate -Dexpression=project.version | grep -v INFO)
-VERSION=${VERSION%"-SNAPSHOT"}
+ARTIFACT_ID="$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)"
+VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+VERSION="${VERSION%"-SNAPSHOT"}"
 
 echo "creating and checking out git branch: release-$VERSION"
-git branch release-$VERSION
-git checkout release-$VERSION
+git checkout -b "release-$VERSION"
 
 # change version, tag, and deploy to maven repo
 echo "release version: $VERSION"
-mvn versions:set -DnewVersion=$VERSION versions:commit
+mvn versions:set "-DnewVersion=$VERSION" versions:commit
 git add pom.xml
 git commit -m "Release $VERSION"
 echo "creating git tag: $ARTIFACT_ID-$VERSION"
-git tag $ARTIFACT_ID-$VERSION
+git tag "$ARTIFACT_ID-$VERSION"
 echo "pushing $ARTIFACT_ID-$VERSION to remote repository"
-git push origin $ARTIFACT_ID-$VERSION
+git push origin "$ARTIFACT_ID-$VERSION"
 echo "deploying release $VERSION to maven repository"
 mvn clean source:jar javadoc:jar deploy -DskipTests
 
 # increment snapshot version and commit
 echo "checking out git branch $CURRENT_BRANCH"
-git checkout $CURRENT_BRANCH
+git checkout "$CURRENT_BRANCH"
 echo "incrementing SNAPSHOT version"
 mvn build-helper:parse-version versions:set \
--DnewVersion=$NEW_VERSION-SNAPSHOT versions:commit
+  "-DnewVersion=$NEW_VERSION-SNAPSHOT" versions:commit
 git add pom.xml
 git commit -m "Next Development Iteration"
 echo "pushing branch $CURRENT_BRANCH to remote repository"
-git push origin $CURRENT_BRANCH
+git push origin "$CURRENT_BRANCH"
+

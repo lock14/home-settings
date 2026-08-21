@@ -1,11 +1,8 @@
 #!/bin/bash
 
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
+set -o errexit   # abort on nonzero exitstatus
+set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
-
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
 
 SDK_DIR="$HOME/software/sdk"
 VERSION_REGEX='^go[0-9]+\.[0-9]+\.[0-9]+$'
@@ -24,18 +21,21 @@ listVersions() {
     | cut --delimiter='/' --fields=3
 }
 
-while getopts ":v:hl" opt; do
+while getopts ":v:lht" opt; do
   case ${opt} in
     v )
       GO_VERSION="$OPTARG"
+      ;;
+    l )
+      listVersions 
+      exit 0
       ;;
     h )
       usage
       exit 0
       ;;
-    l )
-      listVersions 
-      exit 0
+    t )
+      set -o xtrace # toggle trace
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -56,19 +56,24 @@ if ! [[ "$GO_VERSION" =~ $VERSION_REGEX ]]; then
     exit 1
 fi
 
+mkdir -p "$SDK_DIR"
+
 if [ -d "$SDK_DIR/$GO_VERSION" ]; then
     echo "$GO_VERSION is already installed"
     exit 0
 fi
 
-ARCH=$(uname -m)
-case "$ARCH" in
-  x86_64)  GOARCH="amd64" ;;
-  aarch64|arm64) GOARCH="arm64" ;;
-  *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+ARCH="amd64"
+case "$(uname -m)" in
+    x86_64) ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
 esac
 
-wget "https://go.dev/dl/$GO_VERSION.linux-${GOARCH}.tar.gz" -P /tmp
-tar -xzvf "/tmp/$GO_VERSION.linux-${GOARCH}.tar.gz" -C /tmp
-mv /tmp/go "$SDK_DIR/$GO_VERSION"
+TARBALL="$TMP_DIR/$GO_VERSION.linux-$ARCH.tar.gz"
+wget "https://go.dev/dl/$GO_VERSION.linux-$ARCH.tar.gz" -O "$TARBALL"
+tar -xzf "$TARBALL" -C "$TMP_DIR"
+mv "$TMP_DIR/go" "$SDK_DIR/$GO_VERSION"
 

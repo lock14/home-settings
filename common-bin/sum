@@ -1,10 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
-set -o pipefail  # don't hide errors within pipes
+awk '{s+=$1} END {print s+0}'
 
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
-
-cat | paste -sd+ | sed 's/+$//g' | bc
