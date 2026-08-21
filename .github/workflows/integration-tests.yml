@@ -66,6 +66,16 @@ jobs:
           [ -x "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd missing"; exit 1; }
           echo "PASS: bin-setup.sh populated ~/bin"
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 📦 Dotfiles & Makefile Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **\`make install\` / \`make uninstall\` and \`bin-setup.sh\` passed.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Dotfiles test failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Ubuntu Setup Script
   # ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +105,16 @@ jobs:
       - name: Run Ubuntu Setup (Default args)
         run: |
           sudo ./ubuntu/ubuntu_18+_setup.sh
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🐧 Ubuntu Setup Script Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Ubuntu setup executed successfully with no errors.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Ubuntu setup script failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Fedora Setup Script
@@ -133,6 +153,16 @@ jobs:
         run: |
           sudo ./fedora/fedora_30+_setup.sh
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🎩 Fedora Setup Script Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Fedora setup executed successfully with no errors.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Fedora setup script failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Zsh Setup Script
   # ─────────────────────────────────────────────────────────────────────────────
@@ -151,4 +181,15 @@ jobs:
           ./zsh-setup.sh
           # Verify powerlevel10k was installed
           ls -la ~/.oh-my-zsh/custom/themes/powerlevel10k
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🐚 Zsh Setup Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Zsh, Oh-My-Zsh, and Powerlevel10k installed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Zsh setup failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
 

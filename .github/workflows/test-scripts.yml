@@ -69,6 +69,16 @@ jobs:
         run: |
           common-bin/gen-passwd abc && { echo "FAIL: should have exited non-zero"; exit 1; } || echo "PASS: non-numeric length rejected"
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`gen-passwd\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # ─────────────────────────────────────────────────────────────────────────────
   # repeat-until-success
   # ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +119,16 @@ jobs:
           final=$(cat "$COUNT_FILE")
           [ "$final" -eq 3 ] || { echo "FAIL: expected 3 attempts, got $final"; exit 1; }
           echo "PASS: succeeded on attempt $final"
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`repeat-until-success\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ─────────────────────────────────────────────────────────────────────────────
   # sum
@@ -187,7 +207,15 @@ jobs:
           echo "$output" | grep -q "sum: 50" || { echo "FAIL sum"; exit 1; }
           echo "PASS: summary statistics"
 
-
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`sum\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ─────────────────────────────────────────────────────────────────────────────
   # install-go  (download + install a real Go release)
@@ -225,6 +253,16 @@ jobs:
           common-bin/install-go -v 1.22.4 \
             && { echo "FAIL: should reject version missing 'go' prefix"; exit 1; } \
             || echo "PASS: malformed version rejected"
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`install-go\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ─────────────────────────────────────────────────────────────────────────────
   # switch-go
@@ -271,6 +309,16 @@ jobs:
             && { echo "FAIL: should reject uninstalled version"; exit 1; } \
             || echo "PASS: uninstalled version rejected"
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`switch-go\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # ─────────────────────────────────────────────────────────────────────────────
   # install-tf
   # ─────────────────────────────────────────────────────────────────────────────
@@ -301,6 +349,16 @@ jobs:
           [ -x "$HOME/bin/terraform" ] || { echo "FAIL: terraform binary not executable"; exit 1; }
           "$HOME/bin/terraform" version
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`install-tf\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # ─────────────────────────────────────────────────────────────────────────────
   # mvn-release
   # ─────────────────────────────────────────────────────────────────────────────
@@ -325,4 +383,15 @@ jobs:
           "$GITHUB_WORKSPACE/common-bin/mvn-release" \
             && { echo "FAIL: should reject non-master/develop branch"; exit 1; } \
             || echo "PASS: disallowed branch rejected"
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🧪 \`mvn-release\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
 
