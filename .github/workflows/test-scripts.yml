@@ -146,11 +146,52 @@ jobs:
           [ "$result" -eq 10 ] || { echo "FAIL: expected 10, got $result"; exit 1; }
           echo "PASS: sum 1 2 3 4 = $result"
 
-      - name: Sum positional arguments with negatives and decimals
+      - name: Sum comma-separated values
         run: |
-          result=$(common-bin/sum 10 -3 7 1.5 2.5)
-          [ "$result" = "18" ] || { echo "FAIL: expected 18, got $result"; exit 1; }
-          echo "PASS: sum with negatives and decimals = $result"
+          result=$(common-bin/sum 1,2,3,4,5)
+          [ "$result" -eq 15 ] || { echo "FAIL: expected 15, got $result"; exit 1; }
+          echo "PASS: comma-separated values = $result"
+
+      - name: Sum delimited column (-d and -k)
+        run: |
+          result=$(printf "item1:100:foo\nitem2:250:bar\nitem3:50:baz\n" | common-bin/sum -d ':' -k 2)
+          [ "$result" -eq 400 ] || { echo "FAIL: expected 400, got $result"; exit 1; }
+          echo "PASS: delimited column sum = $result"
+
+      - name: Sum multiple file arguments
+        run: |
+          FILE1=$(mktemp)
+          FILE2=$(mktemp)
+          echo "10 20" > "$FILE1"
+          echo "30 40" > "$FILE2"
+          result=$(common-bin/sum "$FILE1" "$FILE2")
+          rm -f "$FILE1" "$FILE2"
+          [ "$result" -eq 100 ] || { echo "FAIL: expected 100, got $result"; exit 1; }
+          echo "PASS: file argument sum = $result"
+
+      - name: Sum human-readable byte units (-H)
+        run: |
+          result=$(common-bin/sum -H 10K 5M 2G)
+          # 10*1024 + 5*1048576 + 2*1073741824 = 10240 + 5242880 + 2147483648 = 2152736768
+          [ "$result" = "2.15274e+09" ] || [ "$result" = "2152736768" ] || { echo "FAIL: got $result"; exit 1; }
+          echo "PASS: human-readable units = $result"
+
+      - name: Compute average (-a) and formatted output (-f)
+        run: |
+          result=$(common-bin/sum -a -f "%.2f" 10 20 30 40)
+          [ "$result" = "25.00" ] || { echo "FAIL: expected 25.00, got $result"; exit 1; }
+          echo "PASS: average formatted = $result"
+
+      - name: Output summary statistics (-s)
+        run: |
+          output=$(common-bin/sum -s 5 10 15 20)
+          echo "$output" | grep -q "count: 4" || { echo "FAIL count"; exit 1; }
+          echo "$output" | grep -q "min: 5" || { echo "FAIL min"; exit 1; }
+          echo "$output" | grep -q "max: 20" || { echo "FAIL max"; exit 1; }
+          echo "$output" | grep -q "mean: 12.5" || { echo "FAIL mean"; exit 1; }
+          echo "$output" | grep -q "sum: 50" || { echo "FAIL sum"; exit 1; }
+          echo "PASS: summary statistics"
+
 
 
   # ─────────────────────────────────────────────────────────────────────────────
