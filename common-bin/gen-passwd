@@ -1,25 +1,22 @@
 #!/bin/bash
 
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
+set -o errexit   # abort on nonzero exitstatus
+set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
-
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
 
 UPPER="A-Z"
 LOWER="a-z"
 NUMBERS="0-9"
-SYMBOLS="^*@#&%\$\!"
+SYMBOLS="^*@#&%$\!"
 
-LENGTH=""
+LENGTH="16"
 CHARACTER_SET=""
 
 usage() {
     echo "usage: $(basename "$0") [-u -l -n -s] <length>"
 }
 
-while getopts ":ulnsh" opt; do
+while getopts ":ulnsht" opt; do
   case ${opt} in
     u )
       CHARACTER_SET="$CHARACTER_SET$UPPER"
@@ -37,6 +34,9 @@ while getopts ":ulnsh" opt; do
       usage
       exit 0
       ;;
+    t )
+      set -o xtrace # toggle trace
+      ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       usage
@@ -51,7 +51,15 @@ while getopts ":ulnsh" opt; do
 done
 shift $((OPTIND -1))
 
-LENGTH="${1:-16}"
+if [ "${1:-}" != "" ]; then
+  LENGTH="$1"
+fi
+
+if [ "$LENGTH" = "" ]; then
+  echo "a length must be provided"
+  usage
+  exit 1
+fi
 
 INTEGER='^[0-9]+$'
 if ! [[ $LENGTH =~ $INTEGER ]] ; then
@@ -63,9 +71,9 @@ if [ "$CHARACTER_SET" = "" ]; then
   CHARACTER_SET="$UPPER$LOWER$NUMBERS$SYMBOLS"
 fi
 
-# consider replacing with something like:
-# < /dev/urandom tr -dc 'A-Za-z0-9^*@#&%$\!' | fold -w 8 | grep '.*[0-9]' | grep '.*[a-z]' | grep '.*[A-Z]' | head -n 1
-# in order to ensure there is one letter from each character set. Still Need to figure out symbols
+# Disable pipefail because head -c closes the pipe early, causing tr to receive SIGPIPE (Broken pipe)
 set +o pipefail
-< /dev/urandom tr -dc "$CHARACTER_SET" | head -c "$LENGTH"; echo
+< /dev/urandom tr -dc "$CHARACTER_SET" | head -c "$LENGTH"
 set -o pipefail
+echo
+

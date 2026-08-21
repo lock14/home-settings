@@ -1,11 +1,8 @@
 #!/bin/bash
 
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
+set -o errexit   # abort on nonzero exitstatus
+set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
-
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
 
 VERSION_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 
@@ -15,7 +12,7 @@ usage() {
     echo "usage: $(basename "$0") [-v]"
 }
 
-while getopts ":v:h" opt; do
+while getopts ":v:ht" opt; do
   case ${opt} in
     v )
       TF_VERSION="$OPTARG"
@@ -23,6 +20,9 @@ while getopts ":v:h" opt; do
     h )
       usage
       exit 0
+      ;;
+    t )
+      set -o xtrace # toggle trace
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -43,11 +43,21 @@ if ! [[ "$TF_VERSION" =~ $VERSION_REGEX ]]; then
     exit 1
 fi
 
-if [ -f "$HOME/bin/terraform" ] && [ "$("$HOME/bin/terraform" version -json 2>/dev/null | grep -o '"terraform_version":"[^"]*"' | cut -d'"' -f4)" = "$TF_VERSION" ]; then
-    echo "terraform $TF_VERSION is already installed"
-    exit 0
-fi
+BIN_DIR="$HOME/bin"
+mkdir -p "$BIN_DIR"
 
-wget "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -P /tmp
-unzip -o -d /tmp "/tmp/terraform_${TF_VERSION}_linux_amd64.zip"
-mv /tmp/terraform "$HOME/bin"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+ARCH="amd64"
+case "$(uname -m)" in
+    x86_64) ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+esac
+
+ZIP_FILE="$TMP_DIR/terraform_${TF_VERSION}_linux_${ARCH}.zip"
+wget "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_${ARCH}.zip" -O "$ZIP_FILE"
+unzip -o -d "$TMP_DIR" "$ZIP_FILE"
+chmod +x "$TMP_DIR/terraform"
+mv "$TMP_DIR/terraform" "$BIN_DIR/terraform"
+

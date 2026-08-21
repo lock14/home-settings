@@ -1,11 +1,8 @@
 #!/bin/bash
 
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
+set -o errexit   # abort on nonzero exitstatus
+set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
-
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
 
 MAX_ATTEMPTS="10"
 SLEEP_SECONDS=30
@@ -14,7 +11,7 @@ usage() {
     echo "usage: $(basename "$0") -n MAX_ATTEMPT cmd" 
 }
 
-while getopts ":n:s:h" opt; do
+while getopts ":n:s:ht" opt; do
   case ${opt} in
     n )
       MAX_ATTEMPTS=$OPTARG
@@ -25,6 +22,9 @@ while getopts ":n:s:h" opt; do
     h )
       usage
       exit 0
+      ;;
+    t )
+      set -o xtrace # toggle trace
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -40,18 +40,27 @@ while getopts ":n:s:h" opt; do
 done
 shift $((OPTIND -1))
 
-for ((i=0;i<MAX_ATTEMPTS;i++)); do
-    echo "attempting cmd: $*"
-    set +o errexit
-    "${@}"
-    exit_code="$?"
-    set -o errexit
-    if [ $exit_code -eq 0 ]; then
+if [ "$#" -eq 0 ]; then
+    echo "error: no command specified" 1>&2
+    usage
+    exit 1
+fi
+
+for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+    echo "attempting (attempt $i/$MAX_ATTEMPTS) cmd: $*"
+    if "$@"; then
         echo "cmd succeeded"
         exit 0
+    else
+        exit_code="$?"
+        echo "cmd failed with status $exit_code"
+        if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+            echo "retrying in $SLEEP_SECONDS seconds..."
+            sleep "$SLEEP_SECONDS"
+        fi
     fi
-    echo "cmd failed with status $exit_code, retrying in $SLEEP_SECONDS seconds"
-    sleep "$SLEEP_SECONDS"
 done
-echo "max retries limit of $MAX_ATTEMPTS has been reached"
+
+echo "max retries limit of $MAX_ATTEMPTS has been reached" 1>&2
 exit 1
+

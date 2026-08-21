@@ -1,11 +1,8 @@
 #!/bin/bash
 
-set -o errexit   # abort on nonzero exitstatus. Same as 'set -e'
-set -o nounset   # abort on unbound variable. Same as 'set -u'
+set -o errexit   # abort on nonzero exitstatus
+set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
-
-# Uncomment below line when debugging to get trace output
-# set -o xtrace    # print trace
 
 SDK_DIR="$HOME/software/sdk"
 VERSION_REGEX="^go[0-9]+\.[0-9]+\.[0-9]+$"
@@ -13,25 +10,30 @@ VERSION_REGEX="^go[0-9]+\.[0-9]+\.[0-9]+$"
 GO_VERSION=""
 
 usage() {
-    echo "usage: $(basename "$0") -v <go-version>"
+    echo "usage: $(basename "$0") [-v <version>] [-l] [-t]"
 }
 
-while getopts ":v:lh" opt; do
+list_versions() {
+  if [ -d "$SDK_DIR" ]; then
+    find "$SDK_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | grep -v '^go$' | sort -V || true
+  fi
+}
+
+while getopts ":v:lht" opt; do
   case ${opt} in
     v )
       GO_VERSION="$OPTARG"
       ;;
     l )
-      for d in "$SDK_DIR"/*; do
-        [ -e "$d" ] || continue
-        base=$(basename "$d")
-        [ "$base" != "go" ] && echo "$base"
-      done
+      list_versions
       exit 0
       ;;
     h )
       usage
       exit 0
+      ;;
+    t )
+      set -o xtrace # toggle trace
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -53,9 +55,9 @@ if ! [[ "$GO_VERSION" =~ $VERSION_REGEX ]]; then
 fi
 
 if ! [ -d "$SDK_DIR/$GO_VERSION" ]; then
-    echo "$GO_VERSION is not installed"
+    echo "$GO_VERSION is not installed" 1>&2
     exit 1
 fi
 
-rm -f "$SDK_DIR/go"
-ln -s "$SDK_DIR/$GO_VERSION" "$SDK_DIR/go"
+ln -sfn "$SDK_DIR/$GO_VERSION" "$SDK_DIR/go"
+
