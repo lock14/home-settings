@@ -3,8 +3,14 @@ name: Test Scripts
 on:
   push:
     branches: [master, main]
+    paths:
+      - 'common-bin/**'
+      - '.github/workflows/test-scripts.yml'
   pull_request:
     branches: [master, main]
+    paths:
+      - 'common-bin/**'
+      - '.github/workflows/test-scripts.yml'
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
@@ -178,12 +184,11 @@ jobs:
             || echo "PASS: malformed version rejected"
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # switch-go  (requires install-go to have run first; uses a matrix)
+  # switch-go
   # ─────────────────────────────────────────────────────────────────────────────
   test-switch-go:
     name: Test switch-go
     runs-on: ubuntu-latest
-    needs: test-install-go   # re-run install so SDK dir is populated
 
     steps:
       - uses: actions/checkout@v4
@@ -222,3 +227,59 @@ jobs:
           common-bin/switch-go -v go9.9.9 \
             && { echo "FAIL: should reject uninstalled version"; exit 1; } \
             || echo "PASS: uninstalled version rejected"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # install-tf
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-install-tf:
+    name: Test install-tf
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make executable
+        run: chmod +x common-bin/install-tf
+
+      - name: Show usage (-h flag)
+        run: common-bin/install-tf -h
+
+      - name: Rejects malformed version
+        run: |
+          common-bin/install-tf -v abc \
+            && { echo "FAIL: should reject malformed version"; exit 1; } \
+            || echo "PASS: malformed version rejected"
+
+      - name: Install Terraform 1.8.5
+        run: common-bin/install-tf -v 1.8.5
+
+      - name: Verify Terraform binary
+        run: |
+          [ -x "$HOME/bin/terraform" ] || { echo "FAIL: terraform binary not executable"; exit 1; }
+          "$HOME/bin/terraform" version
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # mvn-release
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-mvn-release:
+    name: Test mvn-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make executable
+        run: chmod +x common-bin/mvn-release
+
+      - name: Rejects invalid branch
+        run: |
+          TMP_REPO=$(mktemp -d)
+          git init "$TMP_REPO"
+          cd "$TMP_REPO"
+          git config user.email "ci@example.com"
+          git config user.name "CI Runner"
+          git checkout -b feature-branch
+          "$GITHUB_WORKSPACE/common-bin/mvn-release" \
+            && { echo "FAIL: should reject non-master/develop branch"; exit 1; } \
+            || echo "PASS: disallowed branch rejected"
+
