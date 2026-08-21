@@ -1,5 +1,183 @@
 #!/bin/bash
 set -euo pipefail
 
-awk '{s+=$1} END {print s+0}'
+usage() {
+    cat << 'HELP'
+usage: sum [options] [numbers... | files...]
 
+Sum numbers from command line arguments, standard input, or files.
+
+Options:
+  -d <delim>   Field delimiter (default: whitespace, auto-splits commas if -d not set)
+  -k <col>     Sum only the specified column number (1-indexed)
+  -H           Parse human-readable byte unit suffixes (K/KiB, M/MiB, G/GiB, T/TiB, P/PiB, E/EiB)
+  -a           Output average (mean) instead of sum
+  -s           Output summary statistics (count, min, max, mean, sum)
+  -f <fmt>     printf format specifier for output numbers (e.g. '%.2f', '%d')
+  -t           Enable trace output (xtrace)
+  -h           Show this help message
+
+Examples:
+  sum 1 2 3 4 5
+  sum 1,2,3,4,5
+  sum -k 5 <(ls -l)
+  sum -H 10K 5M 2G
+  sum -a 10 20 30
+  cat data.csv | sum -d ',' -k 3
+  sum data1.txt data2.txt
+HELP
+}
+
+DELIM=""
+COL=0
+HUMAN=0
+AVG=0
+STATS=0
+FMT=""
+
+while getopts ":d:k:Hf:asth" opt; do
+  case ${opt} in
+    d )
+      DELIM="$OPTARG"
+      ;;
+    k )
+      COL="$OPTARG"
+      if ! [[ "$COL" =~ ^[0-9]+$ ]] || [ "$COL" -le 0 ]; then
+        echo "error: column (-k) must be a positive integer" >&2
+        exit 1
+      fi
+      ;;
+    H )
+      HUMAN=1
+      ;;
+    a )
+      AVG=1
+      ;;
+    s )
+      STATS=1
+      ;;
+    f )
+      FMT="$OPTARG"
+      ;;
+    t )
+      set -o xtrace
+      ;;
+    h )
+      usage
+      exit 0
+      ;;
+    \? )
+      echo "Invalid option: -$OPTARG" >&2
+      usage >&2
+      exit 1
+      ;;
+    : )
+      echo "Invalid option: -$OPTARG requires an argument" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+awk_script='
+function parse_val(val,  num, suf) {
+    if (HUMAN && val ~ /^[+-]?[0-9]*\.?[0-9]+([kKmMgGtTpPeE]i?[bB]?)$/) {
+        match(val, /[a-zA-Z]+/)
+        suf = toupper(substr(val, RSTART))
+        num = substr(val, 1, RSTART-1) + 0
+        if (suf ~ /^K/) return num * 1024
+        if (suf ~ /^M/) return num * (1024^2)
+        if (suf ~ /^G/) return num * (1024^3)
+        if (suf ~ /^T/) return num * (1024^4)
+        if (suf ~ /^P/) return num * (1024^5)
+        if (suf ~ /^E/) return num * (1024^6)
+    }
+    return val + 0
+}
+
+function process_item(item,  val) {
+    if (item ~ /^[+-]?[0-9]*\.?[0-9]+([eE][+-]?[0-9]+)?([kKmMgGtTpPeE]i?[bB]?)?$/) {
+        val = parse_val(item)
+        sum += val
+        count++
+        if (count == 1 || val < min) min = val
+        if (count == 1 || val > max) max = val
+    }
+}
+
+BEGIN {
+    if (DELIM != "") {
+        FS = DELIM
+    }
+    count = 0
+    sum = 0
+}
+
+{
+    if (COL > 0) {
+        if (COL <= NF) {
+            process_item($COL)
+        }
+    } else {
+        for (i = 1; i <= NF; i++) {
+            if (DELIM == "" && index($i, ",") > 0) {
+                n = split($i, parts, ",")
+                for (j = 1; j <= n; j++) {
+                    process_item(parts[j])
+                }
+            } else {
+                process_item($i)
+            }
+        }
+    }
+}
+
+END {
+    if (count == 0) {
+        min = 0
+        max = 0
+        mean = 0
+    } else {
+        mean = sum / count
+    }
+
+    if (STATS) {
+        if (FMT != "") {
+            printf "count: %d\nmin: " FMT "\nmax: " FMT "\nmean: " FMT "\nsum: " FMT "\n", count, min, max, mean, sum
+        } else {
+            printf "count: %d\nmin: %g\nmax: %g\nmean: %g\nsum: %g\n", count, min, max, mean, sum
+        }
+    } else if (AVG) {
+        if (FMT != "") {
+            printf FMT "\n", mean
+        } else {
+            printf "%g\n", mean
+        }
+    } else {
+        if (FMT != "") {
+            printf FMT "\n", sum
+        } else {
+            printf "%g\n", sum
+        }
+    }
+}
+'
+
+if [ "$#" -gt 0 ]; then
+  HAS_FILES=0
+  for arg in "$@"; do
+    if [ -f "$arg" ]; then
+      HAS_FILES=1
+      break
+    fi
+  done
+
+  if [ "$HAS_FILES" -eq 1 ]; then
+    awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script" "$@"
+  else
+    printf '%s\n' "$@" | awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script"
+  fi
+else
+  awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script"
+fi
