@@ -140,11 +140,18 @@ jobs:
           [ "$result" -eq 14 ] || { echo "FAIL: expected 14, got $result"; exit 1; }
           echo "PASS: 10+(-3)+7 = $result"
 
-      - name: Sum a single number
+      - name: Sum positional arguments
         run: |
-          result=$(echo 42 | common-bin/sum)
-          [ "$result" -eq 42 ] || { echo "FAIL: expected 42, got $result"; exit 1; }
-          echo "PASS: sum(42) = $result"
+          result=$(common-bin/sum 1 2 3 4)
+          [ "$result" -eq 10 ] || { echo "FAIL: expected 10, got $result"; exit 1; }
+          echo "PASS: sum 1 2 3 4 = $result"
+
+      - name: Sum positional arguments with negatives and decimals
+        run: |
+          result=$(common-bin/sum 10 -3 7 1.5 2.5)
+          [ "$result" = "18" ] || { echo "FAIL: expected 18, got $result"; exit 1; }
+          echo "PASS: sum with negatives and decimals = $result"
+
 
   # ─────────────────────────────────────────────────────────────────────────────
   # install-go  (download + install a real Go release)

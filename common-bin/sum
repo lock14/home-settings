@@ -1,5 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-awk '{s+=$1} END {print s+0}'
+if [ "$#" -gt 0 ]; then
+  printf '%s\n' "$@" | awk '{for(i=1; i<=NF; i++) s+=$i} END {print s+0}'
+else
+  awk '{for(i=1; i<=NF; i++) s+=$i} END {print s+0}'
+fi
+
 
