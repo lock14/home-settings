@@ -15,32 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ShellCheck
-        run: sudo apt-get install -y shellcheck
-
-      # Bash scripts with .sh extension
-      - name: ShellCheck — .sh files
+      - name: Run ShellCheck on all shell scripts
         run: |
-          find . -name "*.sh" -not -path "./.git/*" \
-            | sort \
-            | xargs shellcheck --severity=warning
+          # Discover all .sh files and any extensionless files with a bash/sh shebang
+          mapfile -t SCRIPTS < <(
+            {
+              find . -not -path './.git/*' -not -path './.vim/*' -name "*.sh"
+              find . -not -path './.git/*' -not -path './.vim/*' -type f -exec grep -lE '^#!.*([ /]bash|[ /]sh)' {} +
+            } | sort -u
+          )
 
-      # Shell scripts in common-bin/ (no .sh extension, bash shebang)
-      - name: ShellCheck — common-bin scripts
-        run: |
-          shellcheck --severity=warning \
-            common-bin/gen-passwd \
-            common-bin/install-go \
-            common-bin/install-tf \
-            common-bin/mvn-release \
-            common-bin/repeat-until-success \
-            common-bin/sum \
-            common-bin/switch-go
+          echo "Linting ${#SCRIPTS[@]} scripts with ShellCheck:"
+          printf ' - %s\n' "${SCRIPTS[@]}"
 
-      # Shell scripts in ubuntu/bin/ and fedora/bin/
-      - name: ShellCheck — distro bin scripts
-        run: |
-          shellcheck --severity=warning \
-            ubuntu/bin/.switch-java-version \
-            ubuntu/install-jdk \
-            fedora/bin/.change-java-version
+          shellcheck --severity=warning --format=gcc "${SCRIPTS[@]}"

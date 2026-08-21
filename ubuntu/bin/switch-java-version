@@ -1,3 +1,5 @@
 #! /bin/bash
 
-sudo $(which .switch-java-version) $@
+target="$(which .switch-java-version)"
+sudo "$target" "$@"
+
