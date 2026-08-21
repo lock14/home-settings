@@ -3,14 +3,9 @@ name: Test Scripts
 on:
   push:
     branches: [master, main]
-    paths:
-      - 'common-bin/**'
-      - '.github/workflows/test-scripts.yml'
   pull_request:
     branches: [master, main]
-    paths:
-      - 'common-bin/**'
-      - '.github/workflows/test-scripts.yml'
+
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
