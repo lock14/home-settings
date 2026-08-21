@@ -4,35 +4,121 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'ubuntu/ubuntu_18+_setup.sh'
-      - 'fedora/fedora_30+_setup.sh'
+      - 'ubuntu/**'
+      - 'fedora/**'
       - 'zsh-setup.sh'
+      - 'bash-setup.sh'
+      - 'vim-setup.sh'
+      - 'bin-setup.sh'
+      - 'user-setup.sh'
+      - 'Makefile'
       - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [master, main]
     paths:
-      - 'ubuntu/ubuntu_18+_setup.sh'
-      - 'fedora/fedora_30+_setup.sh'
+      - 'ubuntu/**'
+      - 'fedora/**'
       - 'zsh-setup.sh'
+      - 'bash-setup.sh'
+      - 'vim-setup.sh'
+      - 'bin-setup.sh'
+      - 'user-setup.sh'
+      - 'Makefile'
       - '.github/workflows/integration-tests.yml'
 
 jobs:
-  test-ubuntu:
-    name: Ubuntu Setup Script
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Dotfiles & Makefile Setup
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-dotfiles-makefile:
+    name: Dotfiles Makefile & Scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Disable Reboot
+      - name: Test Makefile install
+        run: |
+          make install
+          # Verify dotfile symlinks exist and point to repository
+          [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
+          [ -L "$HOME/.vim" ] || { echo "FAIL: ~/.vim symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh_functions" ] || { echo "FAIL: ~/.zsh_functions symlink missing"; exit 1; }
+          [ -L "$HOME/.zshrc_addendum" ] || { echo "FAIL: ~/.zshrc_addendum symlink missing"; exit 1; }
+          [ -L "$HOME/.bashrc-addendum" ] || { echo "FAIL: ~/.bashrc-addendum symlink missing"; exit 1; }
+          [ -L "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables symlink missing"; exit 1; }
+          [ -L "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: ~/.dir_colors/dircolors symlink missing"; exit 1; }
+          echo "PASS: make install created all symlinks"
+
+      - name: Test Makefile uninstall
+        run: |
+          make uninstall
+          [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
+          [ ! -e "$HOME/.vim" ] || { echo "FAIL: ~/.vim still exists"; exit 1; }
+          [ ! -e "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases still exists"; exit 1; }
+          [ ! -e "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables still exists"; exit 1; }
+          echo "PASS: make uninstall cleaned all symlinks"
+
+      - name: Test bin-setup.sh
+        run: |
+          ./bin-setup.sh
+          [ -d "$HOME/bin" ] || { echo "FAIL: ~/bin directory missing"; exit 1; }
+          [ -x "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd missing"; exit 1; }
+          echo "PASS: bin-setup.sh populated ~/bin"
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 📦 Dotfiles & Makefile Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **\`make install\` / \`make uninstall\` and \`bin-setup.sh\` passed.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Dotfiles test failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Ubuntu Setup Script
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-ubuntu:
+    name: Ubuntu Setup Script
+    runs-on: ubuntu-latest
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test CLI help and argument validation
+        run: |
+          chmod +x ubuntu/ubuntu_18+_setup.sh
+          # Show help
+          ./ubuntu/ubuntu_18+_setup.sh -h
+          # Reject invalid JDK
+          ./ubuntu/ubuntu_18+_setup.sh -j openjdk-99 && { echo "FAIL: should reject invalid JDK"; exit 1; } || echo "PASS: invalid JDK rejected"
+          # Reject invalid IDE
+          ./ubuntu/ubuntu_18+_setup.sh -i invalid-ide && { echo "FAIL: should reject invalid IDE"; exit 1; } || echo "PASS: invalid IDE rejected"
+
+      - name: Disable Reboot & Sleep
         run: |
           sed -i 's/systemctl reboot/echo "skipping reboot"/g' ubuntu/ubuntu_18+_setup.sh
+          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' ubuntu/ubuntu_18+_setup.sh
 
       - name: Run Ubuntu Setup (Default args)
         run: |
-          # Run non-interactively. We use the default JDK and IDE
-          # apt-get might prompt, but the script uses 'sudo apt --yes'
           sudo ./ubuntu/ubuntu_18+_setup.sh
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🐧 Ubuntu Setup Script Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Ubuntu setup executed successfully with no errors.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Ubuntu setup script failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Fedora Setup Script
+  # ─────────────────────────────────────────────────────────────────────────────
   test-fedora:
     name: Fedora Setup Script
     runs-on: ubuntu-latest
@@ -44,20 +130,42 @@ jobs:
       - name: Setup Mocks and Disable Reboot
         run: |
           dnf -y install sudo curl wget findutils
-          # The script attempts to use snap which needs systemd.
-          # We mock snap for the docker container environment.
+          # Mock snap for docker container environment
           echo '#!/bin/bash' > /usr/bin/snap
           echo 'echo "Mocking snap command: $@"' >> /usr/bin/snap
           chmod +x /usr/bin/snap
           
-          # Disable reboot
+          # Disable reboot and sleep
           sed -i 's/systemctl reboot/echo "skipping reboot"/g' fedora/fedora_30+_setup.sh
+          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' fedora/fedora_30+_setup.sh
+
+      - name: Test CLI help and argument validation
+        run: |
+          chmod +x fedora/fedora_30+_setup.sh
+          # Show help
+          ./fedora/fedora_30+_setup.sh -h
+          # Reject invalid JDK
+          ./fedora/fedora_30+_setup.sh -j openjdk-99 && { echo "FAIL: should reject invalid JDK"; exit 1; } || echo "PASS: invalid JDK rejected"
+          # Reject invalid IDE
+          ./fedora/fedora_30+_setup.sh -i invalid-ide && { echo "FAIL: should reject invalid IDE"; exit 1; } || echo "PASS: invalid IDE rejected"
 
       - name: Run Fedora Setup (Default args)
         run: |
-          # dnf works fine non-interactively
           sudo ./fedora/fedora_30+_setup.sh
 
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🎩 Fedora Setup Script Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Fedora setup executed successfully with no errors.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Fedora setup script failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Zsh Setup Script
+  # ─────────────────────────────────────────────────────────────────────────────
   test-zsh-setup:
     name: Zsh Setup Script
     runs-on: ubuntu-latest
@@ -70,7 +178,18 @@ jobs:
 
       - name: Run Zsh Setup
         run: |
-          # It detects apt and installs zsh, omz, etc.
           ./zsh-setup.sh
           # Verify powerlevel10k was installed
           ls -la ~/.oh-my-zsh/custom/themes/powerlevel10k
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🐚 Zsh Setup Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Zsh, Oh-My-Zsh, and Powerlevel10k installed successfully.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Zsh setup failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+

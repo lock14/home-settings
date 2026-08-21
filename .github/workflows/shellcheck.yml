@@ -25,7 +25,19 @@ jobs:
             } | sort -u
           )
 
+          echo "### 🔍 ShellCheck Static Analysis" >> "$GITHUB_STEP_SUMMARY"
+          echo "Scanned **${#SCRIPTS[@]}** shell scripts." >> "$GITHUB_STEP_SUMMARY"
+
           echo "Linting ${#SCRIPTS[@]} scripts with ShellCheck:"
           printf ' - %s\n' "${SCRIPTS[@]}"
 
-          shellcheck --severity=warning --format=gcc "${SCRIPTS[@]}"
+          if output=$(shellcheck --severity=warning --format=gcc "${SCRIPTS[@]}" 2>&1); then
+            echo "✅ **All ${#SCRIPTS[@]} scripts passed ShellCheck with 0 warnings!**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **ShellCheck found warnings or errors:**" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$output" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
