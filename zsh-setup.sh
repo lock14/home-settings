@@ -23,6 +23,10 @@ fi
 ln -sf "$SCRIPT_DIR/zsh_aliases" "$HOME/.zsh_aliases"
 ln -sf "$SCRIPT_DIR/zsh_functions" "$HOME/.zsh_functions"
 ln -sf "$SCRIPT_DIR/zshrc_addendum" "$HOME/.zshrc_addendum"
+if [ -f "$SCRIPT_DIR/p10k.zsh" ]; then
+    ln -sf "$SCRIPT_DIR/p10k.zsh" "$HOME/.p10k.zsh"
+fi
+
 
 # Install oh-my-zsh (unattended) if not already installed
 ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"

@@ -59,6 +59,8 @@ uninstall-zsh:
 	rm -f "$(HOME)/.zsh_aliases"
 	rm -f "$(HOME)/.zsh_functions"
 	rm -f "$(HOME)/.zshrc_addendum"
+	rm -f "$(HOME)/.p10k.zsh"
+
 
 ## install-bash: Symlink Bash addendum and register source line in ~/.bashrc.
 install-bash:
