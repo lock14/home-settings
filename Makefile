@@ -1,6 +1,12 @@
 REPO_DIR := $(shell pwd)
 
-.PHONY: install uninstall test lint help
+.PHONY: install uninstall \
+        install-env uninstall-env \
+        install-zsh uninstall-zsh \
+        install-bash uninstall-bash \
+        install-vim uninstall-vim \
+        install-bin uninstall-bin \
+        test lint help
 
 ## test: Run unit and integration tests for shell and editor configurations.
 test:
@@ -17,40 +23,82 @@ lint:
 	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
 	@echo "All lint checks passed."
 
-## install: Symlink all dotfiles into $HOME so edits in the repo are live immediately.
-install:
-	@echo "Symlinking dotfiles from $(REPO_DIR) into $(HOME)..."
-	ln -sf "$(REPO_DIR)/.vimrc"               "$(HOME)/.vimrc"
-	ln -sf "$(REPO_DIR)/.vim"                 "$(HOME)/.vim"
-	ln -sf "$(REPO_DIR)/zsh_aliases"          "$(HOME)/.zsh_aliases"
-	ln -sf "$(REPO_DIR)/zsh_functions"        "$(HOME)/.zsh_functions"
-	ln -sf "$(REPO_DIR)/zshrc_addendum"       "$(HOME)/.zshrc_addendum"
-	ln -sf "$(REPO_DIR)/bashrc-addendum"      "$(HOME)/.bashrc-addendum"
+## install: Install all dotfiles, shell configs, vim settings, and user bin tools.
+install: install-env install-zsh install-bash install-vim install-bin
+	@echo "All home settings installed. Restart your shell or run: exec zsh"
+
+## uninstall: Uninstall all dotfiles, shell configs, vim settings, and user bin tools.
+uninstall: uninstall-bin uninstall-vim uninstall-bash uninstall-zsh uninstall-env
+	@echo "All home settings uninstalled."
+
+## install-env: Symlink environment variables and LS_COLORS/dircolors.
+install-env:
+	@echo "Installing environment and color settings..."
 	ln -sf "$(REPO_DIR)/environment_variables" "$(HOME)/.environment_variables"
 	mkdir -p "$(HOME)/.dir_colors"
 	ln -sf "$(REPO_DIR)/LS_COLORS"            "$(HOME)/.dir_colors/dircolors"
 
-	@# Append zshrc_addendum source line to ~/.zshrc if not already present
+## uninstall-env: Remove environment variables and dircolors symlinks.
+uninstall-env:
+	@echo "Removing environment and color symlinks..."
+	rm -f "$(HOME)/.environment_variables"
+	rm -f "$(HOME)/.dir_colors/dircolors"
+
+## install-zsh: Symlink Zsh aliases, functions, addendum and register source line in ~/.zshrc.
+install-zsh:
+	@echo "Installing Zsh configuration..."
+	ln -sf "$(REPO_DIR)/zsh_aliases"          "$(HOME)/.zsh_aliases"
+	ln -sf "$(REPO_DIR)/zsh_functions"        "$(HOME)/.zsh_functions"
+	ln -sf "$(REPO_DIR)/zshrc_addendum"       "$(HOME)/.zshrc_addendum"
 	@grep -qxF 'source ~/.zshrc_addendum' "$(HOME)/.zshrc" 2>/dev/null || \
 	    echo '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum' >> "$(HOME)/.zshrc"
-	@# Append bashrc-addendum source line to ~/.bashrc if not already present
-	@grep -qxF 'source ~/.bashrc-addendum' "$(HOME)/.bashrc" 2>/dev/null || \
-	    echo '\n# home-settings\n[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum' >> "$(HOME)/.bashrc"
-	@echo "Done. Restart your shell or run: exec zsh"
 
-## uninstall: Remove the symlinks created by 'make install'.
-uninstall:
-	@echo "Removing dotfile symlinks..."
-	rm -f "$(HOME)/.vimrc"
-	rm -f "$(HOME)/.vim"
+## uninstall-zsh: Remove Zsh symlinks.
+uninstall-zsh:
+	@echo "Removing Zsh symlinks..."
 	rm -f "$(HOME)/.zsh_aliases"
 	rm -f "$(HOME)/.zsh_functions"
 	rm -f "$(HOME)/.zshrc_addendum"
+
+## install-bash: Symlink Bash addendum and register source line in ~/.bashrc.
+install-bash:
+	@echo "Installing Bash configuration..."
+	ln -sf "$(REPO_DIR)/bashrc-addendum"      "$(HOME)/.bashrc-addendum"
+	@grep -qxF 'source ~/.bashrc-addendum' "$(HOME)/.bashrc" 2>/dev/null || \
+	    echo '\n# home-settings\n[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum' >> "$(HOME)/.bashrc"
+
+## uninstall-bash: Remove Bash addendum symlink.
+uninstall-bash:
+	@echo "Removing Bash symlinks..."
 	rm -f "$(HOME)/.bashrc-addendum"
-	rm -f "$(HOME)/.environment_variables"
-	rm -f "$(HOME)/.dir_colors/dircolors"
-	@echo "Done."
+
+## install-vim: Symlink .vimrc and .vim configuration directory.
+install-vim:
+	@echo "Installing Vim configuration..."
+	ln -sf "$(REPO_DIR)/.vimrc"               "$(HOME)/.vimrc"
+	ln -sf "$(REPO_DIR)/.vim"                 "$(HOME)/.vim"
+
+## uninstall-vim: Remove Vim symlinks.
+uninstall-vim:
+	@echo "Removing Vim symlinks..."
+	rm -f "$(HOME)/.vimrc"
+	rm -f "$(HOME)/.vim"
+
+## install-bin: Populate ~/bin with common-bin utility scripts.
+install-bin:
+	@echo "Installing common-bin utilities to $(HOME)/bin..."
+	./bin-setup.sh
+
+## uninstall-bin: Remove installed common-bin utilities from ~/bin.
+uninstall-bin:
+	@echo "Removing common-bin utilities from $(HOME)/bin..."
+	@if [ -d "$(HOME)/bin" ]; then \
+	    for f in $(REPO_DIR)/common-bin/*; do \
+	        rm -f "$(HOME)/bin/$$(basename "$$f")"; \
+	    done; \
+	fi
 
 ## help: Show available make targets.
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //'
+
