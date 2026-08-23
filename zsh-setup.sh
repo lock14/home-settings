@@ -33,10 +33,11 @@ if [ -x "$SCRIPT_DIR/font-setup.sh" ]; then
     "$SCRIPT_DIR/font-setup.sh"
 fi
 
-# Install and configure completions (zsh-completions, gh, kubectl, helm, gcloud)
+# Install and configure completions (zsh-completions, gh, kubectl, helm)
 if [ -x "$SCRIPT_DIR/completions-setup.sh" ]; then
     "$SCRIPT_DIR/completions-setup.sh"
 fi
+
 
 # Install oh-my-zsh (unattended) if not already installed
 ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
