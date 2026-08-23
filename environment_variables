@@ -14,6 +14,10 @@ export PATH="$HOME/bin:$HOME/software/bin:$PATH"
 # GO related env vars
 export GO_HOME="$HOME/software/sdk/go/bin"
 export PATH="$GO_HOME:$PATH"
-[ -x "$(command -v go)" ] && export PATH="$(go env GOPATH)/bin:$PATH"
+if command -v go >/dev/null 2>&1; then
+    GOPATH="$(go env GOPATH 2>/dev/null)"
+    export PATH="$GOPATH/bin:$PATH"
+fi
+
 
 

@@ -74,9 +74,9 @@ jobs:
 
           # Test vim module
           make install-vim
-          [ -L "$HOME/.vimrc" ] && [ -L "$HOME/.vim" ] || { echo "FAIL: install-vim"; exit 1; }
+          [ -L "$HOME/.vimrc" ] && [ -L "$HOME/.vim/UltiSnips" ] || { echo "FAIL: install-vim"; exit 1; }
           make uninstall-vim
-          [ ! -e "$HOME/.vimrc" ] && [ ! -e "$HOME/.vim" ] || { echo "FAIL: uninstall-vim"; exit 1; }
+          [ ! -e "$HOME/.vimrc" ] && [ ! -e "$HOME/.vim/UltiSnips" ] || { echo "FAIL: uninstall-vim"; exit 1; }
 
           # Test bin module
           make install-bin
@@ -91,7 +91,7 @@ jobs:
           make install
           # Verify dotfile symlinks exist and point to repository
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
-          [ -L "$HOME/.vim" ] || { echo "FAIL: ~/.vim symlink missing"; exit 1; }
+          [ -L "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips symlink missing"; exit 1; }
           [ -L "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases symlink missing"; exit 1; }
           [ -L "$HOME/.zsh_functions" ] || { echo "FAIL: ~/.zsh_functions symlink missing"; exit 1; }
           [ -L "$HOME/.zshrc_addendum" ] || { echo "FAIL: ~/.zshrc_addendum symlink missing"; exit 1; }
@@ -103,7 +103,7 @@ jobs:
 
           make uninstall
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
-          [ ! -e "$HOME/.vim" ] || { echo "FAIL: ~/.vim still exists"; exit 1; }
+          [ ! -e "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips still exists"; exit 1; }
           [ ! -e "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases still exists"; exit 1; }
           [ ! -e "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables still exists"; exit 1; }
           [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd still exists"; exit 1; }
