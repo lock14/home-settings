@@ -23,6 +23,7 @@ fi
 ln -sf "$SCRIPT_DIR/zsh_aliases" "$HOME/.zsh_aliases"
 ln -sf "$SCRIPT_DIR/zsh_functions" "$HOME/.zsh_functions"
 ln -sf "$SCRIPT_DIR/zshrc_addendum" "$HOME/.zshrc_addendum"
+ln -sf "$SCRIPT_DIR/zsh_completions" "$HOME/.zsh_completions"
 if [ -f "$SCRIPT_DIR/p10k.zsh" ]; then
     ln -sf "$SCRIPT_DIR/p10k.zsh" "$HOME/.p10k.zsh"
 fi
@@ -32,7 +33,10 @@ if [ -x "$SCRIPT_DIR/font-setup.sh" ]; then
     "$SCRIPT_DIR/font-setup.sh"
 fi
 
-
+# Install and configure completions (zsh-completions, gh, kubectl, helm, gcloud)
+if [ -x "$SCRIPT_DIR/completions-setup.sh" ]; then
+    "$SCRIPT_DIR/completions-setup.sh"
+fi
 
 # Install oh-my-zsh (unattended) if not already installed
 ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
@@ -58,12 +62,14 @@ clone_or_update() {
 clone_or_update "https://github.com/romkatv/powerlevel10k.git" "$ZSH_CUSTOM_DIR/themes/powerlevel10k"
 clone_or_update "https://github.com/zsh-users/zsh-autosuggestions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions"
 clone_or_update "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting"
+clone_or_update "https://github.com/zsh-users/zsh-completions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-completions"
 clone_or_update "https://github.com/unixorn/fzf-zsh-plugin.git" "$ZSH_CUSTOM_DIR/plugins/fzf-zsh-plugin"
 
 # Configure ~/.zshrc if present
 if [ -f "$HOME/.zshrc" ]; then
     sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
-    sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|g' "$HOME/.zshrc"
+    sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting zsh-completions fzf-zsh-plugin)|g' "$HOME/.zshrc"
+    sed -i 's|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting zsh-completions fzf-zsh-plugin)|g' "$HOME/.zshrc"
     grep -qxF 'source ~/.zshrc_addendum' "$HOME/.zshrc" 2>/dev/null || \
         printf '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum\n' >> "$HOME/.zshrc"
 fi

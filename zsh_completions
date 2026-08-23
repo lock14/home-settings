@@ -1,0 +1,20 @@
+#!/bin/zsh
+# Modular autocompletions loader for Zsh
+
+# Add custom completion definitions directory to fpath (if present)
+if [ -d "$HOME/.zsh/completions" ]; then
+    fpath=("$HOME/.zsh/completions" $fpath)
+fi
+
+# Google Cloud SDK completions (dynamic path discovery)
+for gcloud_completion in \
+    "/usr/share/google-cloud-sdk/completion.zsh.inc" \
+    "/usr/lib/google-cloud-sdk/completion.zsh.inc" \
+    "$HOME/google-cloud-sdk/completion.zsh.inc" \
+    "$HOME/software/google-cloud-sdk/completion.zsh.inc" \
+    "/snap/google-cloud-cli/current/completion.zsh.inc"; do
+    if [ -f "$gcloud_completion" ]; then
+        source "$gcloud_completion"
+        break
+    fi
+done
