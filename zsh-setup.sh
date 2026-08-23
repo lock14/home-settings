@@ -27,6 +27,12 @@ if [ -f "$SCRIPT_DIR/p10k.zsh" ]; then
     ln -sf "$SCRIPT_DIR/p10k.zsh" "$HOME/.p10k.zsh"
 fi
 
+# Install MesloLGS NF fonts for Powerlevel10k
+if [ -x "$SCRIPT_DIR/font-setup.sh" ]; then
+    "$SCRIPT_DIR/font-setup.sh"
+fi
+
+
 
 # Install oh-my-zsh (unattended) if not already installed
 ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
