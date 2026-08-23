@@ -71,9 +71,14 @@ if [ "$CHARACTER_SET" = "" ]; then
   CHARACTER_SET="$UPPER$LOWER$NUMBERS$SYMBOLS"
 fi
 
-# Disable pipefail because head -c closes the pipe early, causing tr to receive SIGPIPE (Broken pipe)
-set +o pipefail
-LC_ALL=C tr -dc "$CHARACTER_SET" < /dev/urandom | head -c "$LENGTH"
-set -o pipefail
-echo
+PASSWORD=""
+while [ "${#PASSWORD}" -lt "$LENGTH" ]; do
+    NEEDED=$((LENGTH - ${#PASSWORD}))
+    BYTES=$((NEEDED * 256))
+    [ "$BYTES" -lt 512 ] && BYTES=512
+    CHUNK=$(dd if=/dev/urandom bs="$BYTES" count=1 2>/dev/null | LC_ALL=C tr -dc "$CHARACTER_SET" 2>/dev/null || true)
+    PASSWORD="${PASSWORD}${CHUNK}"
+done
+
+printf '%s\n' "${PASSWORD:0:$LENGTH}"
 
