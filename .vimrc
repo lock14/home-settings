@@ -3,6 +3,10 @@ if filereadable(expand('~/.vim/autoload/pathogen.vim'))
     execute pathogen#infect()
 endif
 
+" Suppress Python 3.12+ syntax/deprecation warnings from interrupting Vim
+let $PYTHONWARNINGS = "ignore"
+
+
 " UltiSnips snippet triggers
 let g:UltiSnipsExpandTrigger = "<tab>"
 let g:UltiSnipsJumpForwardTrigger = "<c-j>"

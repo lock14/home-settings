@@ -21,8 +21,9 @@ def nl(snip):
         snip.rv += " "
 def getArgs(group):
     import re
-    word = re.compile('[a-zA-Z><.]+ \w+')
+    word = re.compile(r'[a-zA-Z><.]+ \w+')
     return [i.split(" ") for i in word.findall(group) ]
+
 
 def camel(word):
     if not word: return ''
@@ -259,7 +260,7 @@ public `!p snip.rv = snip.basename or "untitled"`(${1:}) {
 }
 endsnippet
 
-snippet cn "constructor, \w fields + assigments" b
+snippet cn "constructor, with fields + assignments" b
     `!p
 args = getArgs(t[1])
 for i in args:
