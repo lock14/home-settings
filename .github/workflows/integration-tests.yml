@@ -11,6 +11,7 @@ on:
       - 'zsh_functions'
       - 'zshrc_addendum'
       - 'p10k.zsh'
+      - 'font-setup.sh'
       - '.vimrc'
       - 'vim-setup.sh'
       - 'bash-setup.sh'
@@ -32,6 +33,7 @@ on:
       - 'zsh_functions'
       - 'zshrc_addendum'
       - 'p10k.zsh'
+      - 'font-setup.sh'
       - '.vimrc'
       - 'vim-setup.sh'
       - 'bash-setup.sh'
@@ -62,6 +64,12 @@ jobs:
           make uninstall-env
           [ ! -e "$HOME/.environment_variables" ] && [ ! -e "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: uninstall-env"; exit 1; }
 
+          # Test fonts module
+          make install-fonts
+          [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: install-fonts"; exit 1; }
+          make uninstall-fonts
+          [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: uninstall-fonts"; exit 1; }
+
           # Test zsh module
           make install-zsh
           [ -L "$HOME/.zsh_aliases" ] && [ -L "$HOME/.zsh_functions" ] && [ -L "$HOME/.zshrc_addendum" ] && [ -L "$HOME/.p10k.zsh" ] || { echo "FAIL: install-zsh"; exit 1; }
@@ -91,7 +99,8 @@ jobs:
       - name: Test Full Makefile install & uninstall
         run: |
           make install
-          # Verify dotfile symlinks exist and point to repository
+          # Verify dotfile symlinks and fonts exist
+          [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
           [ -L "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips symlink missing"; exit 1; }
           [ -L "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases symlink missing"; exit 1; }
@@ -102,16 +111,17 @@ jobs:
           [ -L "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables symlink missing"; exit 1; }
           [ -L "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: ~/.dir_colors/dircolors symlink missing"; exit 1; }
           [ -x "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd missing"; exit 1; }
-          echo "PASS: make install created all symlinks and bin tools"
+          echo "PASS: make install created all symlinks, fonts, and bin tools"
 
           make uninstall
+          [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
           [ ! -e "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips still exists"; exit 1; }
           [ ! -e "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases still exists"; exit 1; }
           [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh still exists"; exit 1; }
           [ ! -e "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables still exists"; exit 1; }
           [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd still exists"; exit 1; }
-          echo "PASS: make uninstall cleaned all symlinks and bin tools"
+          echo "PASS: make uninstall cleaned all symlinks, fonts, and bin tools"
 
       - name: Report Summary
         if: always()

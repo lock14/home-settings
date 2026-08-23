@@ -2,6 +2,7 @@ REPO_DIR := $(shell pwd)
 
 .PHONY: install uninstall \
         install-env uninstall-env \
+        install-fonts uninstall-fonts \
         install-zsh uninstall-zsh \
         install-bash uninstall-bash \
         install-vim uninstall-vim \
@@ -16,22 +17,24 @@ test:
 	@zsh tests/test_zsh.zsh
 	@echo "Running Vim tests..."
 	@bash tests/test_vim.sh
+	@echo "Running Font tests..."
+	@bash tests/test_fonts.sh
 
 
 ## lint: Run shellcheck and shell syntax validation.
 lint:
 	@echo "Checking zsh syntax..."
-	@zsh -n zsh_aliases zsh_functions zshrc_addendum
+	@zsh -n zsh_aliases zsh_functions zshrc_addendum p10k.zsh
 	@echo "Running shellcheck on bash/sh scripts..."
-	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
+	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
 	@echo "All lint checks passed."
 
 ## install: Install all dotfiles, shell configs, vim settings, and user bin tools.
-install: install-env install-zsh install-bash install-vim install-bin
+install: install-env install-fonts install-zsh install-bash install-vim install-bin
 	@echo "All home settings installed. Restart your shell or run: exec zsh"
 
 ## uninstall: Uninstall all dotfiles, shell configs, vim settings, and user bin tools.
-uninstall: uninstall-bin uninstall-vim uninstall-bash uninstall-zsh uninstall-env
+uninstall: uninstall-bin uninstall-vim uninstall-bash uninstall-zsh uninstall-fonts uninstall-env
 	@echo "All home settings uninstalled."
 
 ## install-env: Symlink environment variables and LS_COLORS/dircolors.
@@ -46,6 +49,20 @@ uninstall-env:
 	@echo "Removing environment and color symlinks..."
 	rm -f "$(HOME)/.environment_variables"
 	rm -f "$(HOME)/.dir_colors/dircolors"
+
+## install-fonts: Install MesloLGS NF Powerlevel10k patched fonts.
+install-fonts:
+	@echo "Installing MesloLGS NF fonts..."
+	./font-setup.sh
+
+## uninstall-fonts: Remove MesloLGS NF fonts from ~/.local/share/fonts.
+uninstall-fonts:
+	@echo "Removing MesloLGS NF fonts..."
+	rm -f "$(HOME)/.local/share/fonts/MesloLGS NF"*.ttf
+	@if command -v fc-cache >/dev/null 2>&1; then \
+	    fc-cache -f "$(HOME)/.local/share/fonts" >/dev/null 2>&1 || true; \
+	fi
+
 
 ## install-zsh: Symlink Zsh dotfiles and provision Oh-My-Zsh themes & plugins.
 install-zsh:
