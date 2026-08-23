@@ -24,13 +24,16 @@ echo "========================================"
 
 # Test 1: Syntax check with zsh -n
 echo "\n[1/5] Checking Zsh file syntax with 'zsh -n'..."
-for f in "$SCRIPT_DIR/zsh_aliases" "$SCRIPT_DIR/zsh_functions" "$SCRIPT_DIR/zshrc_addendum"; do
-    if zsh -n "$f"; then
-        pass "Syntax valid: $(basename "$f")"
-    else
-        fail "Syntax check failed: $(basename "$f")" "zsh -n returned non-zero"
+for f in "$SCRIPT_DIR/zsh_aliases" "$SCRIPT_DIR/zsh_functions" "$SCRIPT_DIR/zshrc_addendum" "$SCRIPT_DIR/p10k.zsh"; do
+    if [ -f "$f" ]; then
+        if zsh -n "$f"; then
+            pass "Syntax valid: $(basename "$f")"
+        else
+            fail "Syntax check failed: $(basename "$f")" "zsh -n returned non-zero"
+        fi
     fi
 done
+
 
 # Test 2: Source zsh_aliases and verify aliases
 echo "\n[2/5] Testing zsh_aliases..."

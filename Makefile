@@ -47,14 +47,11 @@ uninstall-env:
 	rm -f "$(HOME)/.environment_variables"
 	rm -f "$(HOME)/.dir_colors/dircolors"
 
-## install-zsh: Symlink Zsh aliases, functions, addendum and register source line in ~/.zshrc.
+## install-zsh: Symlink Zsh dotfiles and provision Oh-My-Zsh themes & plugins.
 install-zsh:
-	@echo "Installing Zsh configuration..."
-	ln -sf "$(REPO_DIR)/zsh_aliases"          "$(HOME)/.zsh_aliases"
-	ln -sf "$(REPO_DIR)/zsh_functions"        "$(HOME)/.zsh_functions"
-	ln -sf "$(REPO_DIR)/zshrc_addendum"       "$(HOME)/.zshrc_addendum"
-	@grep -qxF 'source ~/.zshrc_addendum' "$(HOME)/.zshrc" 2>/dev/null || \
-	    echo '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum' >> "$(HOME)/.zshrc"
+	@echo "Installing Zsh configuration and plugins..."
+	./zsh-setup.sh
+
 
 ## uninstall-zsh: Remove Zsh symlinks.
 uninstall-zsh:
@@ -62,6 +59,8 @@ uninstall-zsh:
 	rm -f "$(HOME)/.zsh_aliases"
 	rm -f "$(HOME)/.zsh_functions"
 	rm -f "$(HOME)/.zshrc_addendum"
+	rm -f "$(HOME)/.p10k.zsh"
+
 
 ## install-bash: Symlink Bash addendum and register source line in ~/.bashrc.
 install-bash:

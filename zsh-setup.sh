@@ -4,26 +4,31 @@ set -o errexit   # abort on nonzero exitstatus.
 set -o nounset   # abort on unbound variable.
 set -o pipefail  # don't hide errors within pipes
 
-# Detect package manager (apt for Ubuntu/Debian, dnf for Fedora)
-if command -v apt &>/dev/null; then
-    PKG_INSTALL="sudo apt --yes install"
-elif command -v dnf &>/dev/null; then
-    PKG_INSTALL="sudo dnf -y install"
-else
-    echo "Unsupported package manager. Only apt and dnf are supported." >&2
-    exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Install packages if missing and package manager with sudo is available
+if ! command -v zsh &>/dev/null || ! command -v fzf &>/dev/null; then
+    if command -v sudo &>/dev/null && command -v apt &>/dev/null; then
+        sudo apt --yes install zsh fzf || true
+        sudo apt --yes install command-not-found || true
+    elif command -v sudo &>/dev/null && command -v dnf &>/dev/null; then
+        sudo dnf -y install zsh fzf || true
+        sudo dnf -y install PackageKit-command-not-found || true
+    else
+        echo "Note: zsh or fzf is missing, and automatic installation was skipped." >&2
+    fi
 fi
 
-# install necessary packages
-$PKG_INSTALL zsh
-$PKG_INSTALL fzf
-if command -v apt &>/dev/null; then
-    $PKG_INSTALL command-not-found || true
-elif command -v dnf &>/dev/null; then
-    $PKG_INSTALL PackageKit-command-not-found || true
+# Symlink Zsh dotfiles
+ln -sf "$SCRIPT_DIR/zsh_aliases" "$HOME/.zsh_aliases"
+ln -sf "$SCRIPT_DIR/zsh_functions" "$HOME/.zsh_functions"
+ln -sf "$SCRIPT_DIR/zshrc_addendum" "$HOME/.zshrc_addendum"
+if [ -f "$SCRIPT_DIR/p10k.zsh" ]; then
+    ln -sf "$SCRIPT_DIR/p10k.zsh" "$HOME/.p10k.zsh"
 fi
 
-# install oh-my-zsh (unattended) if not already installed
+
+# Install oh-my-zsh (unattended) if not already installed
 ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
 if [ ! -d "$ZSH_DIR" ]; then
     RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
@@ -43,20 +48,23 @@ clone_or_update() {
     fi
 }
 
-# install desired themes and plugins
+# Install desired themes and plugins
 clone_or_update "https://github.com/romkatv/powerlevel10k.git" "$ZSH_CUSTOM_DIR/themes/powerlevel10k"
 clone_or_update "https://github.com/zsh-users/zsh-autosuggestions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions"
 clone_or_update "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting"
 clone_or_update "https://github.com/unixorn/fzf-zsh-plugin.git" "$ZSH_CUSTOM_DIR/plugins/fzf-zsh-plugin"
 
-# configure ~/.zshrc if present
+# Configure ~/.zshrc if present
 if [ -f "$HOME/.zshrc" ]; then
     sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
     sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|g' "$HOME/.zshrc"
+    grep -qxF 'source ~/.zshrc_addendum' "$HOME/.zshrc" 2>/dev/null || \
+        printf '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum\n' >> "$HOME/.zshrc"
 fi
 
-# switch shell to zsh
-if command -v chsh &>/dev/null && [ "${SHELL:-}" != "$(command -v zsh)" ]; then
-    chsh -s "$(command -v zsh)"
+# Switch shell to zsh if interactive and not already zsh
+if [ -t 0 ] && command -v chsh &>/dev/null && command -v zsh &>/dev/null && [ "${SHELL:-}" != "$(command -v zsh)" ]; then
+    chsh -s "$(command -v zsh)" || true
 fi
+
 
