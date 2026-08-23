@@ -3,23 +3,29 @@
 # general functions
 
 fs() {
-    fd --no-ignore-vcs ${@} | tree --fromfile
+    fd --no-ignore-vcs "$@" | tree --fromfile
 }
 
 # git functions
 
 gsync() {
-    set -o errexit   # abort on nonzero exitstatus.
-    set -o nounset   # abort on unbound variable.
-    set -o pipefail  # don't hide errors within pipes
+    local current_branch target_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || {
+        echo "Error: not in a git repository" >&2
+        return 1
+    }
 
-    branch_name=$(git rev-parse --abbrev-ref HEAD)
-    git branch | grep -E "^\*?\s+(main|master)$" | xargs -r git checkout
-    git fetch && git pull origin $(git rev-parse --abbrev-ref HEAD)
-    git checkout $branch_name
-    git branch | grep -E "^\*?\s+(main|master)$" | xargs -r git rebase
+    if git show-ref --verify --quiet refs/heads/main; then
+        target_branch="main"
+    elif git show-ref --verify --quiet refs/heads/master; then
+        target_branch="master"
+    else
+        echo "Error: neither 'main' nor 'master' branch found locally." >&2
+        return 1
+    fi
 
-    set +o errexit   # undo option
-    set +o nounset   # undo option
-    set +o pipefail  # undo option
+    git checkout "$target_branch" && \
+    git pull --rebase origin "$target_branch" && \
+    git checkout "$current_branch" && \
+    git rebase "$target_branch"
 }

@@ -7,6 +7,10 @@ on:
       - 'ubuntu/**'
       - 'fedora/**'
       - 'zsh-setup.sh'
+      - 'zsh_aliases'
+      - 'zsh_functions'
+      - 'zshrc_addendum'
+      - 'tests/**'
       - 'bash-setup.sh'
       - 'vim-setup.sh'
       - 'bin-setup.sh'
@@ -19,6 +23,10 @@ on:
       - 'ubuntu/**'
       - 'fedora/**'
       - 'zsh-setup.sh'
+      - 'zsh_aliases'
+      - 'zsh_functions'
+      - 'zshrc_addendum'
+      - 'tests/**'
       - 'bash-setup.sh'
       - 'vim-setup.sh'
       - 'bin-setup.sh'
@@ -191,5 +199,38 @@ jobs:
           else
             echo "❌ **Zsh setup failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Zsh Dotfiles & Unit Tests
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-zsh-dotfiles:
+    name: Zsh Dotfiles & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh git tree fd-find shellcheck
+          if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
+            sudo ln -s "$(which fdfind)" /usr/local/bin/fd
+          fi
+
+      - name: Run lint & unit tests
+        run: |
+          make lint
+          make test
+
+      - name: Report Summary
+        if: always()
+        run: |
+          echo "### 🐚 Zsh Configuration & Dotfiles Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **All Zsh unit tests, alias checks, and syntax validations passed.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Zsh tests failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
 
 

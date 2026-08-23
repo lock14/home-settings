@@ -16,21 +16,47 @@ fi
 
 # install necessary packages
 $PKG_INSTALL zsh
-$PKG_INSTALL zsh-syntax-highlighting
 $PKG_INSTALL fzf
-$PKG_INSTALL command-not-found
+if command -v apt &>/dev/null; then
+    $PKG_INSTALL command-not-found || true
+elif command -v dnf &>/dev/null; then
+    $PKG_INSTALL PackageKit-command-not-found || true
+fi
 
-# intstall oh-my-zsh and desired plugins
-sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
-git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-git clone https://github.com/unixorn/fzf-zsh-plugin.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/fzf-zsh-plugin
+# install oh-my-zsh (unattended) if not already installed
+ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
+if [ ! -d "$ZSH_DIR" ]; then
+    RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+fi
 
-# set theme to powerlevel10k and add desired plugins to plugins list
-sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' ~/.zshrc
-sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|g' ~/.zshrc
+ZSH_CUSTOM_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+
+clone_or_update() {
+    local repo="$1"
+    local dest="$2"
+    if [ -d "$dest/.git" ]; then
+        echo "Updating $(basename "$dest")..."
+        git -C "$dest" pull --ff-only || true
+    else
+        echo "Cloning $(basename "$dest")..."
+        git clone --depth=1 "$repo" "$dest"
+    fi
+}
+
+# install desired themes and plugins
+clone_or_update "https://github.com/romkatv/powerlevel10k.git" "$ZSH_CUSTOM_DIR/themes/powerlevel10k"
+clone_or_update "https://github.com/zsh-users/zsh-autosuggestions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions"
+clone_or_update "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting"
+clone_or_update "https://github.com/unixorn/fzf-zsh-plugin.git" "$ZSH_CUSTOM_DIR/plugins/fzf-zsh-plugin"
+
+# configure ~/.zshrc if present
+if [ -f "$HOME/.zshrc" ]; then
+    sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
+    sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|g' "$HOME/.zshrc"
+fi
 
 # switch shell to zsh
-chsh -s "$(which zsh)"
+if command -v chsh &>/dev/null && [ "${SHELL:-}" != "$(command -v zsh)" ]; then
+    chsh -s "$(command -v zsh)"
+fi
 
