@@ -4,8 +4,21 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Ensure pathogen autoload and bundle directories exist
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Clean up accidental nested .vim/.vim if present
+[ -L "$HOME/.vim/.vim" ] && rm -f "$HOME/.vim/.vim"
+
+# Ensure pathogen autoload, bundle, and snippet directories exist
 mkdir -p "$HOME/.vim/autoload" "$HOME/.vim/bundle"
+
+# Symlink .vimrc
+ln -sf "$SCRIPT_DIR/.vimrc" "$HOME/.vimrc"
+
+# Symlink UltiSnips directory so snippet files are active
+if [ -d "$SCRIPT_DIR/.vim/UltiSnips" ]; then
+    ln -sfn "$SCRIPT_DIR/.vim/UltiSnips" "$HOME/.vim/UltiSnips"
+fi
 
 # Install Pathogen
 if [ ! -f "$HOME/.vim/autoload/pathogen.vim" ]; then
@@ -31,7 +44,3 @@ clone_or_update "https://github.com/jiangmiao/auto-pairs.git" "$HOME/.vim/bundle
 clone_or_update "https://github.com/SirVer/ultisnips.git" "$HOME/.vim/bundle/ultisnips"
 clone_or_update "https://github.com/ervandew/supertab.git" "$HOME/.vim/bundle/supertab"
 
-# Copy or symlink .vimrc if not managed via Makefile
-if [ ! -f "$HOME/.vimrc" ] && [ -f ".vimrc" ]; then
-    cp .vimrc "$HOME/.vimrc"
-fi

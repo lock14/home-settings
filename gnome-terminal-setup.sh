@@ -1,8 +1,14 @@
 #!/bin/bash
+set -euo pipefail
 
-cd ~ || exit 1
-git clone https://github.com/aruhier/gnome-terminal-colors-solarized.git
-cd - || exit 1
-cd ~/gnome-terminal-colors-solarized || exit 1
-./install.sh
-cd - || exit 1
+DEST="$HOME/gnome-terminal-colors-solarized"
+if [ ! -d "$DEST" ]; then
+    git clone https://github.com/aruhier/gnome-terminal-colors-solarized.git "$DEST"
+else
+    git -C "$DEST" pull --ff-only || true
+fi
+
+if [ -f "$DEST/install.sh" ]; then
+    "$DEST/install.sh"
+fi
+

@@ -10,10 +10,13 @@ REPO_DIR := $(shell pwd)
 
 ## test: Run unit and integration tests for shell and editor configurations.
 test:
+	@echo "Running Environment & Bash tests..."
+	@bash tests/test_env.sh
 	@echo "Running Zsh tests..."
 	@zsh tests/test_zsh.zsh
 	@echo "Running Vim tests..."
 	@bash tests/test_vim.sh
+
 
 ## lint: Run shellcheck and shell syntax validation.
 lint:
@@ -72,17 +75,17 @@ uninstall-bash:
 	@echo "Removing Bash symlinks..."
 	rm -f "$(HOME)/.bashrc-addendum"
 
-## install-vim: Symlink .vimrc and .vim configuration directory.
+## install-vim: Symlink .vimrc, UltiSnips snippets, and provision Vim plugins.
 install-vim:
-	@echo "Installing Vim configuration..."
-	ln -sf "$(REPO_DIR)/.vimrc"               "$(HOME)/.vimrc"
-	ln -sf "$(REPO_DIR)/.vim"                 "$(HOME)/.vim"
+	@echo "Installing Vim configuration and plugins..."
+	./vim-setup.sh
 
 ## uninstall-vim: Remove Vim symlinks.
 uninstall-vim:
 	@echo "Removing Vim symlinks..."
 	rm -f "$(HOME)/.vimrc"
-	rm -f "$(HOME)/.vim"
+	rm -f "$(HOME)/.vim/UltiSnips"
+
 
 ## install-bin: Populate ~/bin with common-bin utility scripts.
 install-bin:
