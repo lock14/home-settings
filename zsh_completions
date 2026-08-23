@@ -1,0 +1,8 @@
+#!/bin/zsh
+# Modular autocompletions loader for Zsh
+
+# Add custom completion definitions directory to fpath (if present)
+if [ -d "$HOME/.zsh/completions" ]; then
+    fpath=("$HOME/.zsh/completions" $fpath)
+fi
+

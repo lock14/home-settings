@@ -3,6 +3,7 @@ REPO_DIR := $(shell pwd)
 .PHONY: install uninstall \
         install-env uninstall-env \
         install-fonts uninstall-fonts \
+        install-completions uninstall-completions \
         install-zsh uninstall-zsh \
         install-bash uninstall-bash \
         install-vim uninstall-vim \
@@ -15,6 +16,8 @@ test:
 	@bash tests/test_env.sh
 	@echo "Running Zsh tests..."
 	@zsh tests/test_zsh.zsh
+	@echo "Running Completions tests..."
+	@bash tests/test_completions.sh
 	@echo "Running Vim tests..."
 	@bash tests/test_vim.sh
 	@echo "Running Font tests..."
@@ -24,17 +27,17 @@ test:
 ## lint: Run shellcheck and shell syntax validation.
 lint:
 	@echo "Checking zsh syntax..."
-	@zsh -n zsh_aliases zsh_functions zshrc_addendum p10k.zsh
+	@zsh -n zsh_aliases zsh_functions zshrc_addendum zsh_completions p10k.zsh
 	@echo "Running shellcheck on bash/sh scripts..."
-	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
+	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
 	@echo "All lint checks passed."
 
 ## install: Install all dotfiles, shell configs, vim settings, and user bin tools.
-install: install-env install-fonts install-zsh install-bash install-vim install-bin
+install: install-env install-fonts install-completions install-zsh install-bash install-vim install-bin
 	@echo "All home settings installed. Restart your shell or run: exec zsh"
 
 ## uninstall: Uninstall all dotfiles, shell configs, vim settings, and user bin tools.
-uninstall: uninstall-bin uninstall-vim uninstall-bash uninstall-zsh uninstall-fonts uninstall-env
+uninstall: uninstall-bin uninstall-vim uninstall-bash uninstall-zsh uninstall-completions uninstall-fonts uninstall-env
 	@echo "All home settings uninstalled."
 
 ## install-env: Symlink environment variables and LS_COLORS/dircolors.
@@ -63,6 +66,16 @@ uninstall-fonts:
 	    fc-cache -f "$(HOME)/.local/share/fonts" >/dev/null 2>&1 || true; \
 	fi
 
+## install-completions: Symlink completions and generate CLI completions for gh, kubectl, helm.
+install-completions:
+	@echo "Installing Zsh completions..."
+	./completions-setup.sh
+
+## uninstall-completions: Remove generated completions and symlinks.
+uninstall-completions:
+	@echo "Removing Zsh completions..."
+	rm -f "$(HOME)/.zsh_completions"
+	rm -rf "$(HOME)/.zsh/completions"
 
 ## install-zsh: Symlink Zsh dotfiles and provision Oh-My-Zsh themes & plugins.
 install-zsh:
@@ -76,7 +89,9 @@ uninstall-zsh:
 	rm -f "$(HOME)/.zsh_aliases"
 	rm -f "$(HOME)/.zsh_functions"
 	rm -f "$(HOME)/.zshrc_addendum"
+	rm -f "$(HOME)/.zsh_completions"
 	rm -f "$(HOME)/.p10k.zsh"
+
 
 
 ## install-bash: Symlink Bash addendum and register source line in ~/.bashrc.

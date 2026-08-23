@@ -10,6 +10,8 @@ on:
       - 'zsh_aliases'
       - 'zsh_functions'
       - 'zshrc_addendum'
+      - 'zsh_completions'
+      - 'completions-setup.sh'
       - 'p10k.zsh'
       - 'font-setup.sh'
       - '.vimrc'
@@ -32,6 +34,8 @@ on:
       - 'zsh_aliases'
       - 'zsh_functions'
       - 'zshrc_addendum'
+      - 'zsh_completions'
+      - 'completions-setup.sh'
       - 'p10k.zsh'
       - 'font-setup.sh'
       - '.vimrc'
@@ -70,11 +74,17 @@ jobs:
           make uninstall-fonts
           [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: uninstall-fonts"; exit 1; }
 
+          # Test completions module
+          make install-completions
+          [ -L "$HOME/.zsh_completions" ] && [ -d "$HOME/.zsh/completions" ] || { echo "FAIL: install-completions"; exit 1; }
+          make uninstall-completions
+          [ ! -e "$HOME/.zsh_completions" ] && [ ! -e "$HOME/.zsh/completions" ] || { echo "FAIL: uninstall-completions"; exit 1; }
+
           # Test zsh module
           make install-zsh
-          [ -L "$HOME/.zsh_aliases" ] && [ -L "$HOME/.zsh_functions" ] && [ -L "$HOME/.zshrc_addendum" ] && [ -L "$HOME/.p10k.zsh" ] || { echo "FAIL: install-zsh"; exit 1; }
+          [ -L "$HOME/.zsh_aliases" ] && [ -L "$HOME/.zsh_functions" ] && [ -L "$HOME/.zshrc_addendum" ] && [ -L "$HOME/.zsh_completions" ] && [ -L "$HOME/.p10k.zsh" ] || { echo "FAIL: install-zsh"; exit 1; }
           make uninstall-zsh
-          [ ! -e "$HOME/.zsh_aliases" ] && [ ! -e "$HOME/.zsh_functions" ] && [ ! -e "$HOME/.zshrc_addendum" ] && [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: uninstall-zsh"; exit 1; }
+          [ ! -e "$HOME/.zsh_aliases" ] && [ ! -e "$HOME/.zsh_functions" ] && [ ! -e "$HOME/.zshrc_addendum" ] && [ ! -e "$HOME/.zsh_completions" ] && [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: uninstall-zsh"; exit 1; }
 
           # Test bash module
           make install-bash
@@ -106,6 +116,7 @@ jobs:
           [ -L "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases symlink missing"; exit 1; }
           [ -L "$HOME/.zsh_functions" ] || { echo "FAIL: ~/.zsh_functions symlink missing"; exit 1; }
           [ -L "$HOME/.zshrc_addendum" ] || { echo "FAIL: ~/.zshrc_addendum symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh_completions" ] || { echo "FAIL: ~/.zsh_completions symlink missing"; exit 1; }
           [ -L "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh symlink missing"; exit 1; }
           [ -L "$HOME/.bashrc-addendum" ] || { echo "FAIL: ~/.bashrc-addendum symlink missing"; exit 1; }
           [ -L "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables symlink missing"; exit 1; }
@@ -118,6 +129,7 @@ jobs:
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
           [ ! -e "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips still exists"; exit 1; }
           [ ! -e "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases still exists"; exit 1; }
+          [ ! -e "$HOME/.zsh_completions" ] || { echo "FAIL: ~/.zsh_completions still exists"; exit 1; }
           [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh still exists"; exit 1; }
           [ ! -e "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables still exists"; exit 1; }
           [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd still exists"; exit 1; }
