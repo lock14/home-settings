@@ -7,7 +7,7 @@ alias gfetch='git fetch'
 alias gpush='git push origin HEAD'
 alias gpushf='git push --force-with-lease origin HEAD'
 alias gpull='git pull --rebase origin HEAD'
-alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | xargs -r git branch -D'
+alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
 alias gup='gfetch && gpull'
 alias fix-abcxyz-branch-name='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD)"'
 

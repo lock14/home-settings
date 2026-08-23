@@ -30,42 +30,82 @@ else
     fail "Syntax check failed: font-setup.sh" "bash -n returned non-zero"
 fi
 
-# Test 2: Font download & installation in temp directory
-echo -e "\n[2/2] Testing font-setup.sh execution and file verification..."
-TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"' EXIT
+# Test 2: Font download & installation in Linux environment
+echo -e "\n[2/3] Testing font-setup.sh on Linux paths..."
+(
+    TEMP_HOME=$(mktemp -d)
+    trap 'rm -rf "$TEMP_HOME"' EXIT
 
-OLD_HOME="$HOME"
-export HOME="$TEMP_HOME"
-export XDG_DATA_HOME="$TEMP_HOME/.local/share"
+    export HOME="$TEMP_HOME"
+    export XDG_DATA_HOME="$TEMP_HOME/.local/share"
 
-# Run installer
-"$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1
+    # Run installer
+    "$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1
 
-expected_fonts=(
-    "MesloLGS NF Regular.ttf"
-    "MesloLGS NF Bold.ttf"
-    "MesloLGS NF Italic.ttf"
-    "MesloLGS NF Bold Italic.ttf"
+    expected_fonts=(
+        "MesloLGS NF Regular.ttf"
+        "MesloLGS NF Bold.ttf"
+        "MesloLGS NF Italic.ttf"
+        "MesloLGS NF Bold Italic.ttf"
+    )
+
+    for font in "${expected_fonts[@]}"; do
+        font_path="$TEMP_HOME/.local/share/fonts/$font"
+        if [ -f "$font_path" ] && [ -s "$font_path" ]; then
+            pass "Linux Font installed: $font ($(du -h "$font_path" | cut -f1))"
+        else
+            fail "Linux Font missing or empty: $font" "Expected file at $font_path"
+        fi
+    done
+
+    # Test idempotency
+    if "$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1; then
+        pass "font-setup.sh is idempotent on Linux"
+    else
+        fail "font-setup.sh idempotency" "Second run failed"
+    fi
 )
 
-for font in "${expected_fonts[@]}"; do
-    font_path="$TEMP_HOME/.local/share/fonts/$font"
-    if [ -f "$font_path" ] && [ -s "$font_path" ]; then
-        pass "Font installed: $font ($(du -h "$font_path" | cut -f1))"
-    else
-        fail "Font missing or empty: $font" "Expected file at $font_path"
-    fi
-done
+# Test 3: Font download & installation on macOS Darwin paths (mocking uname)
+echo -e "\n[3/3] Testing font-setup.sh on macOS Darwin paths..."
+(
+    TEMP_HOME=$(mktemp -d)
+    BIN_MOCK="$TEMP_HOME/bin"
+    mkdir -p "$BIN_MOCK"
+    trap 'rm -rf "$TEMP_HOME"' EXIT
 
-# Test idempotency (should run cleanly without error)
-if "$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1; then
-    pass "font-setup.sh is idempotent"
+    # Mock uname -s to return Darwin
+    cat > "$BIN_MOCK/uname" << 'EOF'
+#!/bin/bash
+if [ "${1:-}" = "-s" ]; then
+    echo "Darwin"
 else
-    fail "font-setup.sh idempotency" "Second run failed"
+    command uname "$@"
 fi
+EOF
+    chmod +x "$BIN_MOCK/uname"
 
-export HOME="$OLD_HOME"
+    export PATH="$BIN_MOCK:$PATH"
+    export HOME="$TEMP_HOME"
+
+    "$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1
+
+    expected_fonts=(
+        "MesloLGS NF Regular.ttf"
+        "MesloLGS NF Bold.ttf"
+        "MesloLGS NF Italic.ttf"
+        "MesloLGS NF Bold Italic.ttf"
+    )
+
+    for font in "${expected_fonts[@]}"; do
+        font_path="$TEMP_HOME/Library/Fonts/$font"
+        if [ -f "$font_path" ] && [ -s "$font_path" ]; then
+            pass "macOS Font installed: $font ($(du -h "$font_path" | cut -f1))"
+        else
+            fail "macOS Font missing or empty: $font" "Expected file at $font_path"
+        fi
+    done
+)
 
 
 echo -e "\n========================================"

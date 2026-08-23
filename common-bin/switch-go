@@ -15,7 +15,9 @@ usage() {
 
 list_versions() {
   if [ -d "$SDK_DIR" ]; then
-    find "$SDK_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | grep -v '^go$' | sort -V || true
+    for d in "$SDK_DIR"/*; do
+      [ -d "$d" ] && basename "$d"
+    done | grep -v '^go$' | sort -V || true
   fi
 }
 

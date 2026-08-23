@@ -78,8 +78,40 @@ echo -e "\n[3/3] Testing bashrc-addendum..."
     fi
 )
 
-# Test 4: Verify LS_COLORS / dircolors configuration
-echo -e "\n[4/4] Testing LS_COLORS dircolors validity..."
+# Test 4: Verify Homebrew path initialization in environment_variables
+echo -e "\n[4/5] Testing Homebrew shellenv evaluation in environment_variables..."
+(
+    TEMP_HOME=$(mktemp -d)
+    MOCK_OPT="$TEMP_HOME/opt/homebrew/bin"
+    mkdir -p "$MOCK_OPT"
+    trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
+
+    # Create mock brew executable
+    cat > "$MOCK_OPT/brew" << 'EOF'
+#!/bin/bash
+if [ "${1:-}" = "shellenv" ]; then
+    echo "export HOMEBREW_PREFIX=/opt/homebrew"
+fi
+EOF
+    chmod +x "$MOCK_OPT/brew"
+
+    export HOME="$TEMP_HOME"
+    
+    # Temporarily source environment_variables simulating Apple Silicon brew location
+    MOCK_ENV=$(mktemp)
+    sed "s|/opt/homebrew/bin/brew|$MOCK_OPT/brew|g" "$SCRIPT_DIR/environment_variables" > "$MOCK_ENV"
+    source "$MOCK_ENV"
+    rm -f "$MOCK_ENV"
+
+    if [ "${HOMEBREW_PREFIX:-}" = "/opt/homebrew" ]; then
+        pass "Homebrew shellenv successfully evaluated"
+    else
+        fail "Homebrew shellenv evaluation" "Expected HOMEBREW_PREFIX=/opt/homebrew, got '${HOMEBREW_PREFIX:-}'"
+    fi
+)
+
+# Test 5: Verify LS_COLORS / dircolors configuration
+echo -e "\n[5/5] Testing LS_COLORS dircolors validity..."
 if command -v dircolors >/dev/null 2>&1; then
     if dircolors_out=$(dircolors -b "$SCRIPT_DIR/LS_COLORS" 2>&1); then
         pass "LS_COLORS is valid dircolors database"

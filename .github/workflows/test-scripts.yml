@@ -13,7 +13,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-gen-passwd:
     name: Test gen-passwd
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +87,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-repeat-until-success:
     name: Test repeat-until-success
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -135,7 +141,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-sum:
     name: Test sum
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -222,7 +231,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-install-go:
     name: Test install-go
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -269,7 +281,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-switch-go:
     name: Test switch-go
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -324,7 +339,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-install-tf:
     name: Test install-tf
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -364,7 +382,10 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-mvn-release:
     name: Test mvn-release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4

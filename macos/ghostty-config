@@ -1,0 +1,10 @@
+# Ghostty Configuration - Home Settings
+theme = "solarized-dark"
+font-family = "MesloLGS NF"
+font-size = 13
+window-padding-x = 8
+window-padding-y = 8
+window-padding-balance = true
+background-opacity = 0.95
+macos-titlebar-style = "tabs"
+auto-update = "off"

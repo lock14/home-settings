@@ -1,7 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
+if [ "$(uname -s)" = "Darwin" ]; then
+    FONT_DIR="${HOME}/Library/Fonts"
+else
+    FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
+fi
 mkdir -p "$FONT_DIR"
 
 BASE_URL="https://github.com/romkatv/powerlevel10k-media/raw/master"

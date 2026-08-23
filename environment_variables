@@ -8,6 +8,15 @@
 export EDITOR=vim
 export SVN_EDITOR="$EDITOR"
 
+# Homebrew environment setup (Apple Silicon / Intel macOS / Linuxbrew)
+if [ -x "/opt/homebrew/bin/brew" ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -x "/usr/local/bin/brew" ]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
+    eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+fi
+
 # add user bin and software bin to PATH
 export PATH="$HOME/bin:$HOME/software/bin:$PATH"
 

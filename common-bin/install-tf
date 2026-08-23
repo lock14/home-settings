@@ -49,14 +49,25 @@ mkdir -p "$BIN_DIR"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="amd64"
 case "$(uname -m)" in
     x86_64) ARCH="amd64" ;;
     aarch64|arm64) ARCH="arm64" ;;
 esac
 
-ZIP_FILE="$TMP_DIR/terraform_${TF_VERSION}_linux_${ARCH}.zip"
-wget "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_${ARCH}.zip" -O "$ZIP_FILE"
+ZIP_FILE="$TMP_DIR/terraform_${TF_VERSION}_${OS}_${ARCH}.zip"
+DOWNLOAD_URL="https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_${OS}_${ARCH}.zip"
+
+if command -v curl &>/dev/null; then
+    curl -fsSL "$DOWNLOAD_URL" -o "$ZIP_FILE"
+elif command -v wget &>/dev/null; then
+    wget "$DOWNLOAD_URL" -O "$ZIP_FILE"
+else
+    echo "error: neither curl nor wget found" >&2
+    exit 1
+fi
+
 unzip -o -d "$TMP_DIR" "$ZIP_FILE"
 chmod +x "$TMP_DIR/terraform"
 mv "$TMP_DIR/terraform" "$BIN_DIR/terraform"

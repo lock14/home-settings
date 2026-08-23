@@ -14,8 +14,16 @@ zstyle ':omz:update' mode auto 2>/dev/null || true
 [ -f "$HOME/.zsh_functions" ] && source "$HOME/.zsh_functions"
 [ -f "$HOME/.zsh_aliases" ] && source "$HOME/.zsh_aliases"
 [ -f "$HOME/.p10k.zsh" ] && source "$HOME/.p10k.zsh"
-if command -v dircolors &>/dev/null && [ -f "$HOME/.dir_colors/dircolors" ]; then
-    eval "$(dircolors "$HOME/.dir_colors/dircolors")"
+if [ "$(uname -s)" = "Darwin" ]; then
+    export CLICOLOR=1
+    # Solarized Dark-friendly BSD LSCOLORS
+    export LSCOLORS="gxfxbEaEBxxEhEhBaDaCaD"
+    alias ls='ls -G'
+else
+    if command -v dircolors &>/dev/null && [ -f "$HOME/.dir_colors/dircolors" ]; then
+        eval "$(dircolors "$HOME/.dir_colors/dircolors")"
+    fi
+    alias ls='ls --color=auto'
 fi
 
 

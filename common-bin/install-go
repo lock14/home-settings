@@ -66,14 +66,25 @@ fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="amd64"
 case "$(uname -m)" in
     x86_64) ARCH="amd64" ;;
     aarch64|arm64) ARCH="arm64" ;;
 esac
 
-TARBALL="$TMP_DIR/$GO_VERSION.linux-$ARCH.tar.gz"
-wget "https://go.dev/dl/$GO_VERSION.linux-$ARCH.tar.gz" -O "$TARBALL"
+TARBALL="$TMP_DIR/$GO_VERSION.$OS-$ARCH.tar.gz"
+DOWNLOAD_URL="https://go.dev/dl/$GO_VERSION.$OS-$ARCH.tar.gz"
+
+if command -v curl &>/dev/null; then
+    curl -fsSL "$DOWNLOAD_URL" -o "$TARBALL"
+elif command -v wget &>/dev/null; then
+    wget "$DOWNLOAD_URL" -O "$TARBALL"
+else
+    echo "error: neither curl nor wget found" >&2
+    exit 1
+fi
+
 tar -xzf "$TARBALL" -C "$TMP_DIR"
 mv "$TMP_DIR/go" "$SDK_DIR/$GO_VERSION"
 

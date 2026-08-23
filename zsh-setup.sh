@@ -6,9 +6,11 @@ set -o pipefail  # don't hide errors within pipes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Install packages if missing and package manager with sudo is available
+# Install packages if missing and package manager is available
 if ! command -v zsh &>/dev/null || ! command -v fzf &>/dev/null; then
-    if command -v sudo &>/dev/null && command -v apt &>/dev/null; then
+    if command -v brew &>/dev/null; then
+        brew install zsh fzf || true
+    elif command -v sudo &>/dev/null && command -v apt &>/dev/null; then
         sudo apt --yes install zsh fzf || true
         sudo apt --yes install command-not-found || true
     elif command -v sudo &>/dev/null && command -v dnf &>/dev/null; then
@@ -66,11 +68,21 @@ clone_or_update "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH
 clone_or_update "https://github.com/zsh-users/zsh-completions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-completions"
 clone_or_update "https://github.com/unixorn/fzf-zsh-plugin.git" "$ZSH_CUSTOM_DIR/plugins/fzf-zsh-plugin"
 
+portable_sed_i() {
+    local pattern="$1"
+    local file="$2"
+    if sed --version >/dev/null 2>&1; then
+        sed -i "$pattern" "$file"
+    else
+        sed -i '' "$pattern" "$file"
+    fi
+}
+
 # Configure ~/.zshrc if present
 if [ -f "$HOME/.zshrc" ]; then
-    sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
-    sed -i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting zsh-completions fzf-zsh-plugin)|g' "$HOME/.zshrc"
-    sed -i 's|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting zsh-completions fzf-zsh-plugin)|g' "$HOME/.zshrc"
+    portable_sed_i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
+    portable_sed_i 's|plugins=(git)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting zsh-completions fzf-zsh-plugin)|g' "$HOME/.zshrc"
+    portable_sed_i 's|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting fzf-zsh-plugin)|plugins=(git command-not-found zsh-autosuggestions zsh-syntax-highlighting zsh-completions fzf-zsh-plugin)|g' "$HOME/.zshrc"
     grep -qxF 'source ~/.zshrc_addendum' "$HOME/.zshrc" 2>/dev/null || \
         printf '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum\n' >> "$HOME/.zshrc"
 fi

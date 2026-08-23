@@ -36,7 +36,17 @@ cd home-settings
 ./user-setup.sh                        # install dotfiles, vim, zsh
 ```
 
-### Dotfiles only (any distro)
+### macOS (Darwin)
+
+```bash
+git clone https://github.com/<you>/home-settings.git
+cd home-settings
+./macos/macos_setup.sh                  # install Homebrew packages, IDEs, fonts, terminals
+# Or with optional emulators:
+./macos/macos_setup.sh --iterm2 --ghostty
+```
+
+### Dotfiles only (any OS)
 
 ```bash
 make install    # symlinks all dotfiles into $HOME
@@ -67,6 +77,7 @@ make install    # symlinks all dotfiles into $HOME
 | `code-style/` | Eclipse Java formatter XML profiles (Google style, AOSP style, custom) |
 | `ubuntu/` | Ubuntu-specific setup and bin scripts |
 | `fedora/` | Fedora-specific setup and bin scripts |
+| `macos/` | macOS-specific setup, Brewfile, and terminal profiles (Terminal.app, iTerm2, Ghostty) |
 | `bash_script_template.sh` | Template for new bash scripts with `set -euo pipefail` + getopts |
 
 ### `common-bin/` Scripts

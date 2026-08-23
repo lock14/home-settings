@@ -1,0 +1,32 @@
+# Homebrew Bundle for macOS Development Environment
+
+# CLI Essentials & Shell
+brew "git"
+brew "zsh"
+brew "fzf"
+brew "curl"
+brew "wget"
+brew "tree"
+brew "shellcheck"
+brew "yamllint"
+
+# Cloud & DevOps CLIs
+brew "gh"
+brew "kubectl"
+brew "helm"
+brew "terraform"
+
+# Languages & Runtimes
+brew "go"
+brew "maven"
+
+# Recommended Terminal Emulators (installed via cask when requested)
+# cask "iterm2"
+# cask "ghostty"
+
+# Development & Productivity Applications
+# cask "visual-studio-code"
+# cask "intellij-idea"
+# cask "google-chrome"
+# cask "slack"
+# cask "postman"
