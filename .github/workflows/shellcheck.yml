@@ -20,8 +20,8 @@ jobs:
           # Discover all .sh files and any extensionless files with a bash/sh shebang
           mapfile -t SCRIPTS < <(
             {
-              find . -not -path './.git/*' -not -path './.vim/*' -name "*.sh"
-              find . -not -path './.git/*' -not -path './.vim/*' -type f -exec grep -lE '^#!.*([ /]bash|[ /]sh)' {} +
+              find . -path './.git' -prune -o -path './.vim' -prune -o -type f -name "*.sh" -print
+              find . -path './.git' -prune -o -path './.vim' -prune -o -type f ! -name "*.*" -exec grep -lE '^#!.*([ /]bash|[ /]sh)' {} +
             } | sort -u
           )
 

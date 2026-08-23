@@ -100,6 +100,7 @@ EOF
     # Temporarily source environment_variables simulating Apple Silicon brew location
     MOCK_ENV=$(mktemp)
     sed "s|/opt/homebrew/bin/brew|$MOCK_OPT/brew|g" "$SCRIPT_DIR/environment_variables" > "$MOCK_ENV"
+    # shellcheck disable=SC1090
     source "$MOCK_ENV"
     rm -f "$MOCK_ENV"
 

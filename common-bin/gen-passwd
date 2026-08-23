@@ -73,7 +73,7 @@ fi
 
 # Disable pipefail because head -c closes the pipe early, causing tr to receive SIGPIPE (Broken pipe)
 set +o pipefail
-< /dev/urandom tr -dc "$CHARACTER_SET" | head -c "$LENGTH"
+LC_ALL=C tr -dc "$CHARACTER_SET" < /dev/urandom | head -c "$LENGTH"
 set -o pipefail
 echo
 
