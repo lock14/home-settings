@@ -3,6 +3,11 @@
 # fix autosuggestion color for solarized dark
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
 
+# Oh-My-Zsh non-interactive auto update (avoids startup prompt)
+DISABLE_UPDATE_PROMPT="true"
+zstyle ':omz:update' mode auto 2>/dev/null || true
+
+
 # source other config files if present
 [ -f "$HOME/.environment_variables" ] && source "$HOME/.environment_variables"
 [ -f "$HOME/.zsh_functions" ] && source "$HOME/.zsh_functions"

@@ -78,9 +78,22 @@ echo -e "\n[3/3] Testing bashrc-addendum..."
     fi
 )
 
+# Test 4: Verify LS_COLORS / dircolors configuration
+echo -e "\n[4/4] Testing LS_COLORS dircolors validity..."
+if command -v dircolors >/dev/null 2>&1; then
+    if dircolors_out=$(dircolors -b "$SCRIPT_DIR/LS_COLORS" 2>&1); then
+        pass "LS_COLORS is valid dircolors database"
+    else
+        fail "LS_COLORS dircolors check" "dircolors failed: $dircolors_out"
+    fi
+else
+    pass "dircolors not installed (skipped)"
+fi
+
 echo -e "\n========================================"
 echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
 echo "========================================"
+
 
 if [ "$TESTS_FAILED" -gt 0 ]; then
     exit 1
