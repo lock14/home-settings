@@ -1,6 +1,19 @@
 REPO_DIR := $(shell pwd)
 
-.PHONY: install uninstall
+.PHONY: install uninstall test lint help
+
+## test: Run unit and integration tests for shell configurations.
+test:
+	@echo "Running tests..."
+	@zsh tests/test_zsh.zsh
+
+## lint: Run shellcheck and shell syntax validation.
+lint:
+	@echo "Checking zsh syntax..."
+	@zsh -n zsh_aliases zsh_functions zshrc_addendum
+	@echo "Running shellcheck on bash/sh scripts..."
+	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
+	@echo "All lint checks passed."
 
 ## install: Symlink all dotfiles into $HOME so edits in the repo are live immediately.
 install:
