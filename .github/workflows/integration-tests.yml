@@ -10,9 +10,10 @@ on:
       - 'zsh_aliases'
       - 'zsh_functions'
       - 'zshrc_addendum'
+      - '.vimrc'
+      - 'vim-setup.sh'
       - 'tests/**'
       - 'bash-setup.sh'
-      - 'vim-setup.sh'
       - 'bin-setup.sh'
       - 'user-setup.sh'
       - 'Makefile'
@@ -26,9 +27,10 @@ on:
       - 'zsh_aliases'
       - 'zsh_functions'
       - 'zshrc_addendum'
+      - '.vimrc'
+      - 'vim-setup.sh'
       - 'tests/**'
       - 'bash-setup.sh'
-      - 'vim-setup.sh'
       - 'bin-setup.sh'
       - 'user-setup.sh'
       - 'Makefile'
@@ -201,10 +203,10 @@ jobs:
           fi
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Zsh Dotfiles & Unit Tests
+  # Shell & Vim Dotfiles Unit Tests
   # ─────────────────────────────────────────────────────────────────────────────
-  test-zsh-dotfiles:
-    name: Zsh Dotfiles & Unit Tests
+  test-dotfiles-and-configs:
+    name: Shell & Vim Dotfiles Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -212,7 +214,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zsh git tree fd-find shellcheck
+          sudo apt-get install -y zsh vim git tree fd-find shellcheck
           if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
             sudo ln -s "$(which fdfind)" /usr/local/bin/fd
           fi
@@ -225,11 +227,11 @@ jobs:
       - name: Report Summary
         if: always()
         run: |
-          echo "### 🐚 Zsh Configuration & Dotfiles Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "### ⚙️ Shell & Vim Configuration Test Summary" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **All Zsh unit tests, alias checks, and syntax validations passed.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ **All Zsh and Vim unit tests, alias checks, and syntax validations passed.**" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ **Zsh tests failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ **Dotfile configuration tests failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 
 

@@ -2,10 +2,12 @@ REPO_DIR := $(shell pwd)
 
 .PHONY: install uninstall test lint help
 
-## test: Run unit and integration tests for shell configurations.
+## test: Run unit and integration tests for shell and editor configurations.
 test:
-	@echo "Running tests..."
+	@echo "Running Zsh tests..."
 	@zsh tests/test_zsh.zsh
+	@echo "Running Vim tests..."
+	@bash tests/test_vim.sh
 
 ## lint: Run shellcheck and shell syntax validation.
 lint:
