@@ -9,7 +9,7 @@ fi
 while getopts ":j:l" opt; do
   case ${opt} in
     l )
-      update-alternatives --diplay java
+      update-alternatives --display java
       exit 0
       ;;
     j )
