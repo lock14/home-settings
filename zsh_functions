@@ -3,7 +3,11 @@
 # general functions
 
 fs() {
-    fd --no-ignore-vcs "$@" | tree --fromfile
+    local fd_cmd="fd"
+    if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
+        fd_cmd="fdfind"
+    fi
+    "$fd_cmd" --no-ignore-vcs "$@" | tree --fromfile
 }
 
 # git functions
