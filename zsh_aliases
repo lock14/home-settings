@@ -21,3 +21,6 @@ alias tf='terraform'
 
 # Aux
 alias yaml_lint='yamllint -c ~/.yamllint.yml'
+if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
+    alias fd='fdfind'
+fi
