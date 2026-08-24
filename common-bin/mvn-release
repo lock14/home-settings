@@ -22,8 +22,8 @@ fi
 NEW_VERSION="$MAJOR.$MINOR.$INCREMENTAL"
 
 CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD)"
-if [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
-  echo "the current branch must be set to 'master' or 'develop'" >&2
+if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ] && [ "$CURRENT_BRANCH" != "develop" ]; then
+  echo "the current branch must be set to 'main', 'master', or 'develop'" >&2
   exit 1
 fi
 ARTIFACT_ID="$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)"
