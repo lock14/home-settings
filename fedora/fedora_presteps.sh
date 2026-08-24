@@ -1,16 +1,15 @@
 #!/bin/bash
 
-if [ "$PASS" = "" ]; then
-    printf "[password]: "
-    read -s PASS
-    echo ""
-fi
+set -euo pipefail
+
+# Ensure sudo credentials are valid
+sudo -v
 
 echo "updating system"
-echo $PASS | sudo -S dnf -y upgrade --refresh
+sudo dnf -y upgrade --refresh
 
 echo "installing snapd"
-echo $PASS | sudo -S dnf -y install snapd
-echo $PASS | sudo -S ln -s /var/lib/snapd/snap /snap
+sudo dnf -y install snapd
+sudo ln -sf /var/lib/snapd/snap /snap
 
 echo "Pre-steps complete! A system restart is recommended to ensure snapd is active."
