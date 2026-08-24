@@ -64,9 +64,22 @@ sudo apt --yes autoremove
 # dconf-cli
 sudo apt --yes install dconf-cli
 
-# install chrome
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -P ~/Downloads
-sudo dpkg -i ~/Downloads/google-chrome-stable_current_amd64.deb
+# determine system architecture
+UBUNTU_ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
+if [ -z "$UBUNTU_ARCH" ]; then
+    case "$(uname -m)" in
+        x86_64) UBUNTU_ARCH="amd64" ;;
+        aarch64|arm64) UBUNTU_ARCH="arm64" ;;
+        *) UBUNTU_ARCH="$(uname -m)" ;;
+    esac
+fi
+
+# install chrome if on amd64
+if [ "$UBUNTU_ARCH" = "amd64" ]; then
+    echo "installing google chrome"
+    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -P ~/Downloads
+    sudo dpkg -i ~/Downloads/google-chrome-stable_current_amd64.deb
+fi
 
 # install vim
 echo "installing vim"
@@ -88,7 +101,7 @@ echo "installing jdk"
 version_num=${JDK_PACKAGE#openjdk-}
 sudo apt --yes install $JDK_PACKAGE-jdk $JDK_PACKAGE-source
 # this next command sets all the appropriate sym links (e.g java, javac, etc.)
-sudo update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
+sudo update-java-alternatives -s "java-1.$version_num.0-openjdk-${UBUNTU_ARCH}"
 
 # install maven
 echo "installing maven"
@@ -121,6 +134,4 @@ sudo snap install postman
 echo "installing slack"
 sudo snap install slack --classic
 
-echo "system restarting in 10 seconds..."
-sleep 10
-systemctl reboot
+echo "Ubuntu setup complete! A system restart is recommended."

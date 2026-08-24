@@ -38,18 +38,27 @@ if [ "$JDK_PACKAGE" != "oracle-8-jdk" ] && [ "$JDK_PACKAGE" != "openjdk-8-jdk" ]
     exit 3
 fi
 
+UBUNTU_ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
+if [ -z "$UBUNTU_ARCH" ]; then
+    case "$(uname -m)" in
+        x86_64) UBUNTU_ARCH="amd64" ;;
+        aarch64|arm64) UBUNTU_ARCH="arm64" ;;
+        *) UBUNTU_ARCH="$(uname -m)" ;;
+    esac
+fi
+
 if [ "$JDK_PACKAGE" = "oracle-8-jdk" ]; then
     # install oracle jdk 8
     update-java-alternatives -s java-8-oracle
-    rm /usr/lib/jvm/default-jdk
+    rm -f /usr/lib/jvm/default-jdk
     ln -s /usr/lib/jvm/java-8-oracle /usr/lib/jvm/default-jdk
 else # its an openjdk package
     version_num=${JDK_PACKAGE#openjdk-}
     version_num=${version_num%-jdk}
     # this next command sets all the appropriate sym links (e.g java, javac, etc.)
-    update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
-    rm /usr/lib/jvm/default-jdk
-    ln -s /usr/lib/jvm/java-1.$version_num.0-openjdk-amd64 /usr/lib/jvm/default-jdk
+    update-java-alternatives -s "java-1.$version_num.0-openjdk-${UBUNTU_ARCH}"
+    rm -f /usr/lib/jvm/default-jdk
+    ln -s "/usr/lib/jvm/java-1.$version_num.0-openjdk-${UBUNTU_ARCH}" /usr/lib/jvm/default-jdk
 fi
 
 
