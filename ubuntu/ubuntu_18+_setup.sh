@@ -75,9 +75,6 @@ sudo apt --yes install vim
 echo "installing shellcheck"
 sudo apt --yes install shellcheck
 
-echo "installing haskell"
-sudo apt --yes install haskell-platform
-
 # install curl
 echo "installing curl"
 sudo apt --yes install curl
