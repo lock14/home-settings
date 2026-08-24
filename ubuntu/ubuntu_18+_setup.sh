@@ -124,6 +124,4 @@ sudo snap install postman
 echo "installing slack"
 sudo snap install slack --classic
 
-echo "system restarting in 10 seconds..."
-sleep 10
-systemctl reboot
+echo "Ubuntu setup complete! A system restart is recommended."
