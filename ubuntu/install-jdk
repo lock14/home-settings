@@ -1,5 +1,16 @@
 #!/bin/bash
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
+usage() {
+    echo "Usage: $(basename "$0") -v <jdk-package>"
+    echo "Example: $(basename "$0") -v openjdk-11"
+}
+
+JDK_PACKAGE=""
+
 while getopts ":v:h" opt; do
   case ${opt} in
     v )
@@ -22,6 +33,12 @@ while getopts ":v:h" opt; do
   esac
 done
 shift $((OPTIND -1))
+
+if [ -z "$JDK_PACKAGE" ]; then
+    echo "Error: -v <jdk-package> is required." 1>&2
+    usage
+    exit 1
+fi
 
 # install the specified jdk
 echo "installing jdk"
