@@ -78,14 +78,15 @@ echo "installing mariadb"
 sudo dnf -y install mariadb-server mariadb
 
 # install the specified jdkdnf
+ARCH="$(uname -m)"
 if [ "$JDK_PACKAGE" = "openjdk-8-jdk" ]; then
     sudo dnf -y install java-1.8.0-openjdk-devel
-    sudo update-alternatives --set java java-1.8.0-openjdk.x86_64
-    sudo update-alternatives --set javac java-1.8.0-openjdk.x86_64
+    sudo update-alternatives --set java "java-1.8.0-openjdk.${ARCH}"
+    sudo update-alternatives --set javac "java-1.8.0-openjdk.${ARCH}"
 elif [ "$JDK_PACKAGE" = "openjdk-11-jdk" ]; then
     sudo dnf -y install java-11-openjdk-devel
-    sudo update-alternatives --set java java-11-openjdk.x86_64
-    sudo update-alternatives --set javac java-11-openjdk.x86_64
+    sudo update-alternatives --set java "java-11-openjdk.${ARCH}"
+    sudo update-alternatives --set javac "java-11-openjdk.${ARCH}"
 fi
 
 # install maven
@@ -123,6 +124,4 @@ sudo snap install postman
 echo "installing slack"
 sudo snap install slack --classic
 
-echo "system restarting in 10 seconds..."
-sleep 10
-systemctl reboot
+echo "Fedora setup complete! A system restart is recommended."

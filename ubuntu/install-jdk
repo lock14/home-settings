@@ -1,5 +1,16 @@
 #!/bin/bash
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
+usage() {
+    echo "Usage: $(basename "$0") -v <jdk-package>"
+    echo "Example: $(basename "$0") -v openjdk-11"
+}
+
+JDK_PACKAGE=""
+
 while getopts ":v:h" opt; do
   case ${opt} in
     v )
@@ -23,11 +34,26 @@ while getopts ":v:h" opt; do
 done
 shift $((OPTIND -1))
 
+if [ -z "$JDK_PACKAGE" ]; then
+    echo "Error: -v <jdk-package> is required." 1>&2
+    usage
+    exit 1
+fi
+
 # install the specified jdk
 echo "installing jdk"
+UBUNTU_ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
+if [ -z "$UBUNTU_ARCH" ]; then
+    case "$(uname -m)" in
+        x86_64) UBUNTU_ARCH="amd64" ;;
+        aarch64|arm64) UBUNTU_ARCH="arm64" ;;
+        *) UBUNTU_ARCH="$(uname -m)" ;;
+    esac
+fi
+
 version_num=${JDK_PACKAGE#openjdk-}
 sudo apt --yes install $JDK_PACKAGE-jdk $JDK_PACKAGE-source
 # this next command sets all the appropriate sym links (e.g java, javac, etc.)
-sudo update-java-alternatives -s java-1.$version_num.0-openjdk-amd64
+sudo update-java-alternatives -s "java-1.$version_num.0-openjdk-${UBUNTU_ARCH}"
 
 
