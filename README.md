@@ -18,25 +18,23 @@ The following tools must be available before running any setup scripts:
 
 ## Quick Start
 
-### Ubuntu 18+
+### Single-Command Setup (Recommended for new machines)
+
+On a fresh Linux or macOS machine:
 
 ```bash
-git clone https://github.com/<you>/home-settings.git
+git clone https://github.com/lock14/home-settings.git
 cd home-settings
-./ubuntu/ubuntu_18+_setup.sh          # install system packages & IDEs
-./user-setup.sh                        # install dotfiles, vim, zsh
+./bootstrap.sh
 ```
 
-### Fedora 30+
+`./bootstrap.sh` will:
+1. Request sudo privileges once up front.
+2. Refresh package manager indexes and install missing prerequisites (`make`, `git`, `curl`, `zsh`, `fzf`, `vim`, `fontconfig`).
+3. Set your default login shell to Zsh.
+4. Symlink all dotfiles, install MesloLGS NF fonts, and set up Oh-My-Zsh plugins and themes via `make install`.
 
-```bash
-git clone https://github.com/<you>/home-settings.git
-cd home-settings
-./fedora/fedora_30+_setup.sh          # install system packages & IDEs
-./user-setup.sh                        # install dotfiles, vim, zsh
-```
-
-### Dotfiles only (any distro)
+### Dotfiles only (if base packages are already installed)
 
 ```bash
 make install    # symlinks all dotfiles into $HOME
@@ -48,8 +46,9 @@ make install    # symlinks all dotfiles into $HOME
 
 | Path | Description |
 |------|-------------|
+| `bootstrap.sh` | Turnkey setup script: installs base packages, sets default shell, runs `make install` |
 | `Makefile` | Symlink-based dotfile installer (`make install`) |
-| `user-setup.sh` | Top-level orchestrator: runs bin, bash, zsh, vim, and gnome-terminal setup |
+| `user-setup.sh` | User-level orchestrator: runs `make install` and GNOME terminal setup |
 | `bash-setup.sh` | Appends `bashrc-addendum` to `~/.bashrc`, copies `environment_variables` |
 | `zsh-setup.sh` | Installs zsh, oh-my-zsh, powerlevel10k, and plugins; detects apt/dnf |
 | `vim-setup.sh` | Installs pathogen + solarized colorscheme, symlinks `.vimrc` |
@@ -85,10 +84,13 @@ make install    # symlinks all dotfiles into $HOME
 
 ## Adding a New Machine
 
-1. Clone this repo.
-2. Run the distro-specific setup script for your OS.
-3. Run `./user-setup.sh` (or `make install` for dotfiles only).
-4. Log out and back in (or `exec zsh`) to pick up the new shell.
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/lock14/home-settings.git && cd home-settings
+   ```
+2. Run `./bootstrap.sh` to install base packages, set default shell, and configure dotfiles.
+3. (Optional) Run the distro-specific script (e.g. `./ubuntu/ubuntu_18+_setup.sh`) if you wish to install desktop IDEs and dev tools.
+4. Restart your shell or run `exec zsh`.
 
 ---
 

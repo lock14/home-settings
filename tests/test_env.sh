@@ -24,7 +24,7 @@ echo "========================================"
 
 # Test 1: Bash syntax checks
 echo -e "\n[1/3] Checking script syntax with 'bash -n'..."
-for f in "$SCRIPT_DIR/bashrc-addendum" "$SCRIPT_DIR/bash-setup.sh" "$SCRIPT_DIR/user-setup.sh" "$SCRIPT_DIR/gnome-terminal-setup.sh"; do
+for f in "$SCRIPT_DIR/bootstrap.sh" "$SCRIPT_DIR/bashrc-addendum" "$SCRIPT_DIR/bash-setup.sh" "$SCRIPT_DIR/user-setup.sh" "$SCRIPT_DIR/gnome-terminal-setup.sh"; do
     if bash -n "$f"; then
         pass "Syntax valid: $(basename "$f")"
     else
@@ -45,6 +45,12 @@ echo -e "\n[2/3] Testing environment_variables exports..."
         pass "\$HOME/bin present in PATH"
     else
         fail "\$HOME/bin in PATH" "Expected $HOME/bin in PATH, got: $PATH"
+    fi
+
+    if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
+        pass "\$HOME/.local/bin present in PATH"
+    else
+        fail "\$HOME/.local/bin in PATH" "Expected $HOME/.local/bin in PATH, got: $PATH"
     fi
 
     if [[ ":$PATH:" == *":$HOME/software/bin:"* ]]; then
