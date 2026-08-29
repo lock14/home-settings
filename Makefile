@@ -28,12 +28,18 @@ test:
 lint:
 	@echo "Checking zsh syntax..."
 	@zsh -n zsh_aliases zsh_functions zshrc_addendum zsh_completions p10k.zsh
-	@echo "Running shellcheck on bash/sh scripts..."
-	@shellcheck zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
+	@echo "Checking bash/sh script syntax..."
+	@bash -n bootstrap.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
+	@if command -v shellcheck >/dev/null 2>&1; then \
+	    echo "Running shellcheck on bash/sh scripts..."; \
+	    shellcheck bootstrap.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh; \
+	else \
+	    echo "Note: shellcheck not installed, skipped shellcheck analysis."; \
+	fi
 	@echo "All lint checks passed."
 
 ## install: Install all dotfiles, shell configs, vim settings, and user bin tools.
-install: install-env install-fonts install-completions install-zsh install-bash install-vim install-bin
+install: install-env install-fonts install-zsh install-completions install-bash install-vim install-bin
 	@echo "All home settings installed. Restart your shell or run: exec zsh"
 
 ## uninstall: Uninstall all dotfiles, shell configs, vim settings, and user bin tools.

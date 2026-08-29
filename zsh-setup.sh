@@ -6,17 +6,35 @@ set -o pipefail  # don't hide errors within pipes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Install packages if missing and package manager with sudo is available
-if ! command -v zsh &>/dev/null || ! command -v fzf &>/dev/null; then
+# Install zsh and dependencies if missing and package manager with sudo is available
+if ! command -v zsh &>/dev/null; then
     if command -v sudo &>/dev/null && command -v apt &>/dev/null; then
-        sudo apt --yes install zsh fzf || true
-        sudo apt --yes install command-not-found || true
+        sudo apt update -y 2>/dev/null || true
+        sudo apt install -y zsh || true
+    elif [ "${EUID:-$(id -u)}" -eq 0 ] && command -v apt &>/dev/null; then
+        apt update -y 2>/dev/null || true
+        apt install -y zsh || true
     elif command -v sudo &>/dev/null && command -v dnf &>/dev/null; then
-        sudo dnf -y install zsh fzf || true
-        sudo dnf -y install PackageKit-command-not-found || true
-    else
-        echo "Note: zsh or fzf is missing, and automatic installation was skipped." >&2
+        sudo dnf -y install zsh || true
+    elif [ "${EUID:-$(id -u)}" -eq 0 ] && command -v dnf &>/dev/null; then
+        dnf -y install zsh || true
     fi
+fi
+
+if ! command -v fzf &>/dev/null; then
+    if command -v sudo &>/dev/null && command -v apt &>/dev/null; then
+        sudo apt install -y fzf 2>/dev/null || true
+        sudo apt install -y command-not-found 2>/dev/null || true
+    elif command -v sudo &>/dev/null && command -v dnf &>/dev/null; then
+        sudo dnf -y install fzf 2>/dev/null || true
+        sudo dnf -y install PackageKit-command-not-found 2>/dev/null || true
+    fi
+fi
+
+# Check that zsh is installed
+if ! command -v zsh &>/dev/null; then
+    echo "Error: zsh is not installed. Please run ./bootstrap.sh or install zsh first." >&2
+    exit 1
 fi
 
 # Symlink Zsh dotfiles
@@ -26,16 +44,6 @@ ln -sf "$SCRIPT_DIR/zshrc_addendum" "$HOME/.zshrc_addendum"
 ln -sf "$SCRIPT_DIR/zsh_completions" "$HOME/.zsh_completions"
 if [ -f "$SCRIPT_DIR/p10k.zsh" ]; then
     ln -sf "$SCRIPT_DIR/p10k.zsh" "$HOME/.p10k.zsh"
-fi
-
-# Install MesloLGS NF fonts for Powerlevel10k
-if [ -x "$SCRIPT_DIR/font-setup.sh" ]; then
-    "$SCRIPT_DIR/font-setup.sh"
-fi
-
-# Install and configure completions (zsh-completions, gh, kubectl, helm)
-if [ -x "$SCRIPT_DIR/completions-setup.sh" ]; then
-    "$SCRIPT_DIR/completions-setup.sh"
 fi
 
 
@@ -76,7 +84,8 @@ if [ -f "$HOME/.zshrc" ]; then
 fi
 
 # Switch shell to zsh if interactive and not already zsh
-if [ -t 0 ] && command -v chsh &>/dev/null && command -v zsh &>/dev/null && [ "${SHELL:-}" != "$(command -v zsh)" ]; then
+CURRENT_SHELL="$(getent passwd "${USER:-$(whoami)}" 2>/dev/null | cut -d: -f7 || echo "${SHELL:-}")"
+if [ -t 0 ] && command -v chsh &>/dev/null && command -v zsh &>/dev/null && [ "$CURRENT_SHELL" != "$(command -v zsh)" ]; then
     chsh -s "$(command -v zsh)" || true
 fi
 
