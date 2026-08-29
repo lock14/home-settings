@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test suite for Vim configuration (dotfiles/.vimrc, .vim/UltiSnips)
+# Test suite for Vim configuration (dotfiles/.vimrc, vim-snippets integration)
 
 set -euo pipefail
 
@@ -59,12 +59,12 @@ echo -e "\n[4/5] Testing key mappings..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 
-# Test 5: Verify UltiSnips Snippets validity
-echo -e "\n[5/5] Testing UltiSnips snippets..."
-if [ -f "$SCRIPT_DIR/.vim/UltiSnips/java.snippets" ] && grep -q 'SuppressWarnings' "$SCRIPT_DIR/.vim/UltiSnips/java.snippets"; then
-    pass "java.snippets contains valid @SuppressWarnings annotation snippet"
+# Test 5: Verify setup.sh configures honza/vim-snippets
+echo -e "\n[5/5] Testing Vim bundle provisioning in setup.sh..."
+if grep -q 'honza/vim-snippets' "$SCRIPT_DIR/setup.sh"; then
+    pass "setup.sh provisions curated honza/vim-snippets bundle"
 else
-    fail "java.snippets" "Expected @SuppressWarnings snippet in java.snippets"
+    fail "setup.sh vim-snippets" "Expected honza/vim-snippets in setup.sh"
 fi
 
 echo -e "\n========================================"

@@ -31,10 +31,6 @@ install-dotfiles:
 	ln -sf "$(REPO_DIR)/dotfiles/.vimrc"                "$(HOME)/.vimrc"
 	mkdir -p "$(HOME)/.dir_colors"
 	ln -sf "$(REPO_DIR)/dotfiles/.dir_colors/dircolors" "$(HOME)/.dir_colors/dircolors"
-	@if [ -d "$(REPO_DIR)/.vim/UltiSnips" ]; then \
-	    mkdir -p "$(HOME)/.vim"; \
-	    ln -sfn "$(REPO_DIR)/.vim/UltiSnips" "$(HOME)/.vim/UltiSnips"; \
-	fi
 
 ## uninstall-dotfiles: Remove managed dotfile symlinks.
 uninstall-dotfiles:
@@ -47,7 +43,6 @@ uninstall-dotfiles:
 	rm -f "$(HOME)/.zsh_completions"
 	rm -f "$(HOME)/.p10k.zsh"
 	rm -f "$(HOME)/.vimrc"
-	rm -f "$(HOME)/.vim/UltiSnips"
 	rm -f "$(HOME)/.dir_colors/dircolors"
 
 ## install-fonts: Install MesloLGS NF Powerlevel10k patched fonts.

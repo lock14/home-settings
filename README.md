@@ -120,7 +120,7 @@ home-settings/
 │
 ├── code-style/                      # Eclipse Java code formatting XML profiles
 │
-├── .vim/                            # UltiSnips snippets (C, Java) & Pathogen autoload
+├── .vim/                            # Pathogen autoload runtime
 │
 └── tests/                           # Automated test suites
     ├── test_system_setup.sh         # Cross-platform CLI validation & dry-run tests

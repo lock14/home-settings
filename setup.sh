@@ -492,12 +492,9 @@ if [ "$SKIP_USER" = false ]; then
     if [ "$SKIP_VIM" = false ]; then
         echo "  Configuring Vim plugins..."
         if [ "$DRY_RUN" = true ]; then
-            echo "  [DryRun] Setting up Vim UltiSnips and Pathogen bundles (solarized, auto-pairs, ultisnips, supertab)"
+            echo "  [DryRun] Setting up Vim configuration and Pathogen bundles (solarized, auto-pairs, ultisnips, supertab, vim-snippets)"
         else
             mkdir -p "$HOME/.vim/autoload" "$HOME/.vim/bundle"
-            if [ -d "$SCRIPT_DIR/.vim/UltiSnips" ]; then
-                ln -sfn "$SCRIPT_DIR/.vim/UltiSnips" "$HOME/.vim/UltiSnips"
-            fi
             if [ ! -f "$HOME/.vim/autoload/pathogen.vim" ]; then
                 curl -LSso "$HOME/.vim/autoload/pathogen.vim" https://tpo.pe/pathogen.vim 2>/dev/null || true
             fi
@@ -516,6 +513,7 @@ if [ "$SKIP_USER" = false ]; then
             clone_bundle "https://github.com/jiangmiao/auto-pairs.git" "$HOME/.vim/bundle/auto-pairs" &
             clone_bundle "https://github.com/SirVer/ultisnips.git" "$HOME/.vim/bundle/ultisnips" &
             clone_bundle "https://github.com/ervandew/supertab.git" "$HOME/.vim/bundle/supertab" &
+            clone_bundle "https://github.com/honza/vim-snippets.git" "$HOME/.vim/bundle/vim-snippets" &
             wait
         fi
     fi
