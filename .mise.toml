@@ -1,0 +1,7 @@
+# Mise cross-platform polyglot toolchain configuration
+# Works identically across Ubuntu, Fedora, and macOS (Apple Silicon + Intel)
+
+[tools]
+java = "temurin-21"
+go = "latest"
+terraform = "latest"

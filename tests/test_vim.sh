@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test suite for Vim configuration (.vimrc, vim-setup.sh)
+# Test suite for Vim configuration (dotfiles/.vimrc, .vim/UltiSnips)
 
 set -euo pipefail
 
@@ -23,19 +23,19 @@ echo "Running Vim Configuration Tests"
 echo "========================================"
 
 # Test 1: Vimrc loads without errors
-echo -e "\n[1/4] Testing .vimrc loading without syntax errors..."
-if vim -u "$SCRIPT_DIR/.vimrc" -N -es -c "q" >/dev/null 2>&1; then
+echo -e "\n[1/5] Testing dotfiles/.vimrc loading without syntax errors..."
+if vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "q" >/dev/null 2>&1; then
     pass ".vimrc loaded cleanly without errors"
 else
-    fail ".vimrc load" "Vim reported errors when loading .vimrc"
+    fail ".vimrc load" "Vim reported errors when loading dotfiles/.vimrc"
 fi
 
 # Test 2: Indentation and tab settings
-echo -e "\n[2/4] Testing Vim indentation & formatting options..."
+echo -e "\n[2/5] Testing Vim indentation & formatting options..."
 check_option() {
     local opt_expr="$1"
     local desc="$2"
-    if vim -u "$SCRIPT_DIR/.vimrc" -N -es -c "if $opt_expr | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+    if vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if $opt_expr | q | else | cquit 1 | endif" >/dev/null 2>&1; then
         pass "$desc"
     else
         fail "$desc" "Option check failed: $opt_expr"
@@ -48,16 +48,24 @@ check_option "&expandtab == 1" "expandtab is enabled"
 check_option "&background == 'dark'" "background is set to dark"
 
 # Test 3: UltiSnips and AutoPairs variables
-echo -e "\n[3/4] Testing UltiSnips and plugin settings..."
+echo -e "\n[3/5] Testing UltiSnips and plugin settings..."
 check_option "g:UltiSnipsExpandTrigger == '<tab>'" "UltiSnipsExpandTrigger is <tab>"
 check_option "g:UltiSnipsJumpForwardTrigger == '<c-j>'" "UltiSnipsJumpForwardTrigger is <c-j>"
 check_option "g:UltiSnipsJumpBackwardTrigger == '<c-k>'" "UltiSnipsJumpBackwardTrigger is <c-k>"
 check_option "g:AutoPairsShortcutJump == '<c-l>'" "AutoPairsShortcutJump is <c-l>"
 
 # Test 4: Verify Home key mapping
-echo -e "\n[4/4] Testing key mappings..."
+echo -e "\n[4/5] Testing key mappings..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
+
+# Test 5: Verify UltiSnips Snippets validity
+echo -e "\n[5/5] Testing UltiSnips snippets..."
+if [ -f "$SCRIPT_DIR/.vim/UltiSnips/java.snippets" ] && grep -q 'SuppressWarnings' "$SCRIPT_DIR/.vim/UltiSnips/java.snippets"; then
+    pass "java.snippets contains valid @SuppressWarnings annotation snippet"
+else
+    fail "java.snippets" "Expected @SuppressWarnings snippet in java.snippets"
+fi
 
 echo -e "\n========================================"
 echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"

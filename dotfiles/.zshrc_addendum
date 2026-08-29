@@ -1,22 +1,25 @@
 #!/bin/zsh
 
-# fix autosuggestion color for solarized dark
+# Fix autosuggestion color for Solarized Dark (base01 fg=10)
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
 
 # Oh-My-Zsh non-interactive auto update (avoids startup prompt)
 DISABLE_UPDATE_PROMPT="true"
 zstyle ':omz:update' mode auto 2>/dev/null || true
 
-
-# source other config files if present
+# Source modular config files
 [ -f "$HOME/.environment_variables" ] && source "$HOME/.environment_variables"
 [ -f "$HOME/.zsh_completions" ] && source "$HOME/.zsh_completions"
 [ -f "$HOME/.zsh_functions" ] && source "$HOME/.zsh_functions"
 [ -f "$HOME/.zsh_aliases" ] && source "$HOME/.zsh_aliases"
 [ -f "$HOME/.p10k.zsh" ] && source "$HOME/.p10k.zsh"
-if command -v dircolors &>/dev/null && [ -f "$HOME/.dir_colors/dircolors" ]; then
+
+# LS_COLORS dircolors integration
+if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir_colors/dircolors" ]; then
     eval "$(dircolors "$HOME/.dir_colors/dircolors")"
 fi
 
-
-
+# Mise runtime manager hook
+if command -v mise >/dev/null 2>&1; then
+    eval "$(mise activate zsh)"
+fi

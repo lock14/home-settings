@@ -1,26 +1,30 @@
 # home-settings
 
-Home directory configuration files, prompt themes, developer toolchains, and setup automation for modern \*nix systems (**Ubuntu 22.04+ / 24.04+ LTS**, **Fedora 38+**). Provides visual and functional parity with [`windows-settings`](https://github.com/lock14/windows-settings) (PowerShell 7+ / Windows Terminal / Solarized Dark).
+Workstation setup automation, prompt themes, developer toolchains, and dotfiles for modern Unix systems (**Ubuntu 22.04+ / 24.04+ LTS**, **Fedora 38+ / 40+**, and **macOS** Apple Silicon / Intel).
 
 ---
 
 ## Prerequisites
 
-The following tools must be available before running any setup scripts:
+The following tools should be available on the host machine:
 
-- `bash` (5+)
+- `bash` (4+)
 - `git`
 - `curl`
-- `wget`
-- `sudo` access
+- `wget` (on Linux)
+- `sudo` (or Administrator privileges for system provisioning)
 
 ---
 
-## Supported Platforms & Java Versions
+## Supported Platforms & Toolchains
 
 - **Ubuntu**: Ubuntu 22.04+ LTS (Jammy), Ubuntu 24.04+ LTS (Noble)
 - **Fedora**: Fedora 38+ / 40+
-- **Java**: Actively supported, non-EOL LTS releases only (**OpenJDK 17 LTS**, **OpenJDK 21 LTS**; default: **21**)
+- **macOS**: Modern macOS releases (Apple Silicon `arm64` and Intel `x86_64`)
+- **Polyglot Toolchains**: Managed via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`):
+  - **Java**: Non-EOL LTS releases only (**Temurin / OpenJDK 21 LTS** default, **17 LTS**)
+  - **Go**: Latest Go runtime
+  - **Terraform**: Latest Terraform binary
 
 ---
 
@@ -28,7 +32,7 @@ The following tools must be available before running any setup scripts:
 
 ### 1. Automated Master Setup (All-in-One)
 
-The master `setup.sh` orchestrator auto-detects your distribution (Ubuntu or Fedora) and configures both system packages and user dotfiles:
+The master `setup.sh` orchestrator auto-detects your platform (**Ubuntu**, **Fedora**, or **macOS**) and provisions system packages, desktop tools, and user dotfiles:
 
 ```bash
 git clone https://github.com/lock14/home-settings.git
@@ -38,37 +42,26 @@ cd home-settings
 
 ### 2. Turnkey Bootstrap (New Machines)
 
-For a fresh install requiring base dependencies and default shell configuration upfront:
+For a fresh install requiring base dependencies, shell switching, and full dotfiles setup:
 
 ```bash
-./bootstrap.sh
+./setup.sh --bootstrap
 ```
 
-### 3. Selective & Modular Invocations
+### 3. User Dotfiles Only (No `sudo` Required)
+
+To install dotfiles, fonts, user bin tools, and editor plugins without modifying system packages:
 
 ```bash
-# Preview actions without making changes
-./setup.sh --dry-run
-
-# System package provisioning only (apt/dnf, Chrome, Java 21 LTS, Snap IDEs)
-./setup.sh --system-only --jdk 21 --ide intellij-ultimate
-
-# Dotfiles and user configuration only (no sudo required)
 ./setup.sh --dotfiles-only
 # or
 make install
 ```
 
-### 4. Distro-Specific Setup Commands
-
-You can run distro-specific workflows directly or pass `--os`:
+### 4. Preview Changes (Dry Run)
 
 ```bash
-# Ubuntu (22.04+ / 24.04+ LTS)
-./ubuntu/ubuntu_18+_setup.sh -j 21 -i intellij-ultimate
-
-# Fedora (38+)
-./fedora/fedora_30+_setup.sh -j 21 -i intellij-ultimate
+./setup.sh --dry-run
 ```
 
 ---
@@ -77,24 +70,25 @@ You can run distro-specific workflows directly or pass `--os`:
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
-| `-j, --jdk <ver>` | `21` | Active Java LTS version to install (`17`, `21`) |
-| `-i, --ide <name>` | `intellij-ultimate` | IDE to install (`intellij`, `intellij-ultimate`, `eclipse`, `netbeans`, `code`, `none`) |
-| `--os <distro>` | *auto* | Override OS adapter (`ubuntu`, `fedora`) |
-| `--dry-run` | *disabled* | Print commands without making modifications |
-| `--skip-system` | *disabled* | Skip entire system provisioning (apt/dnf, Chrome, JDK, Snap apps) |
-| `--dotfiles-only` | *disabled* | Alias for `--skip-system` |
-| `--skip-packages` | *disabled* | Skip OS package manager updates and core CLI tools |
+| `--bootstrap` | *disabled* | Full new machine bootstrap (base packages, shell switch, tools, dotfiles) |
+| `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (no root required) |
+| `--system-only` | *disabled* | Provision OS packages, desktop apps, and CLI tools only |
+| `--dry-run` | *disabled* | Preview actions without making system changes |
+| `--os <distro>` | *auto* | Override OS target (`ubuntu`, `fedora`, `macos`) |
+| `-j, --jdk <ver>` | `21` | Active Java LTS version (`17`, `21`) |
+| `-i, --ide <name>` | `intellij-ultimate` | IDE to install (`intellij`, `intellij-ultimate`, `code`, `eclipse`, `netbeans`, `none`) |
+| `--skip-system` | *disabled* | Skip system package updates and application provisioning |
+| `--skip-packages` | *disabled* | Skip core system package manager installs |
 | `--skip-chrome` | *disabled* | Skip Google Chrome installation |
-| `--skip-jdk` | *disabled* | Skip OpenJDK installation and alternatives configuration |
-| `--skip-snaps` | *disabled* | Skip Snap desktop application provisioning |
-| `--skip-user` | *disabled* | Skip user environment and dotfiles configuration |
-| `--system-only` | *disabled* | Alias for `--skip-user` |
+| `--skip-apps` | *disabled* | Skip desktop applications (VS Code, Postman, Slack, IDE) |
+| `--skip-user` | *disabled* | Skip user dotfiles and environment configuration |
 | `--skip-fonts` | *disabled* | Skip MesloLGS NF font installation |
-| `--skip-vim` | *disabled* | Skip Vim configuration and Pathogen plugins |
+| `--skip-tools` | *disabled* | Skip Mise polyglot toolchain runtime installation |
+| `--skip-vim` | *disabled* | Skip Vim configuration and plugins |
 | `--skip-zsh` | *disabled* | Skip Zsh dotfiles, Oh-My-Zsh, plugins, and Powerlevel10k |
 | `--skip-bash` | *disabled* | Skip Bash configuration and environment variables |
-| `--skip-bin` | *disabled* | Skip `~/bin` utility synchronization |
-| `--skip-completions`| *disabled* | Skip CLI tab completions setup |
+| `--skip-bin` | *disabled* | Skip `~/bin` utility symlinks |
+| `--skip-completions`| *disabled* | Skip CLI tab completions generation |
 
 ---
 
@@ -102,75 +96,60 @@ You can run distro-specific workflows directly or pass `--os`:
 
 ```text
 home-settings/
-├── setup.sh                         # Master orchestrator (auto-detects OS or accepts --os)
-├── bootstrap.sh                     # Turnkey installer (base packages, shell, make install)
-├── user-setup.sh                    # User dotfiles orchestrator (make install, zsh, vim, fonts)
-├── Makefile                         # Dotfiles symlinks & test targets
-├── AGENTS.md                        # Architecture guidelines & agent directives
+├── setup.sh                         # Master cross-platform setup & bootstrap engine
+├── Makefile                         # Lifecycle targets (install, uninstall, test, lint)
+├── .mise.toml                       # Mise polyglot runtime toolchain (Java 21, Go, Terraform)
+├── AGENTS.md                        # Architecture principles & agent directives
 │
-├── system/                          # Common system provisioning modules
-│   ├── system-setup.sh              # Common OS setup engine (CLI validation, dispatch)
-│   ├── snap-packages.sh             # Shared Snap installer (IntelliJ, VS Code, Slack, Postman)
-│   └── java-common.sh               # Shared Java validation & architecture normalization
+├── dotfiles/                        # Centralized, portable dotfile tree
+│   ├── .environment_variables       # Sub-millisecond environment & PATH exports
+│   ├── .bashrc-addendum             # Bash integration hook
+│   ├── .zshrc_addendum              # Zsh integration hook & plugin loader
+│   ├── .zsh_aliases                 # Git, Golang, and Terraform shortcuts
+│   ├── .zsh_functions               # Git synchronization (gsync) & search (fs)
+│   ├── .zsh_completions             # Fpath completion registration
+│   ├── .p10k.zsh                    # Powerlevel10k prompt configuration
+│   ├── .vimrc                       # Solarized Dark Vim configuration
+│   └── .dir_colors/dircolors        # Solarized Dark dircolors database
 │
-├── ubuntu/                          # Ubuntu-specific adapter (22.04+ / 24.04+ LTS)
-│   ├── os-packages.sh               # APT updates, core packages (vim, curl, mariadb, dconf)
-│   ├── install-chrome.sh            # Ubuntu Chrome installer
-│   ├── install-jdk.sh               # Ubuntu JDK install (17, 21) & update-java-alternatives
-│   ├── ubuntu_18+_setup.sh          # Legacy backwards-compatible entrypoint
-│   └── bin/
-│       └── switch-java-version      # Distro wrapper delegating to common switcher
+├── common-bin/                      # Standalone Unix utilities (symlinked to ~/bin/)
+│   ├── gen-passwd                   # Password generator with custom character sets
+│   ├── sum                          # High-performance AWK number summation & stats
+│   ├── repeat-until-success         # Command retry loop with configurable delay
+│   └── mvn-release                  # Automated Maven release branching and tagging
 │
-├── fedora/                          # Fedora-specific adapter (38+)
-│   ├── os-packages.sh               # DNF updates, core packages, snapd initialization
-│   ├── install-chrome.sh            # Fedora Chrome repository & package install
-│   ├── install-jdk.sh               # Fedora JDK install (17, 21) & update-alternatives
-│   ├── fedora_30+_setup.sh          # Legacy backwards-compatible entrypoint
-│   └── bin/
-│       └── change-java-version      # Distro wrapper delegating to common switcher
+├── code-style/                      # Eclipse Java code formatting XML profiles
 │
-├── common-bin/                      # Common utilities deployed to ~/bin/
-│   ├── gen-passwd                   # Password generator
-│   ├── install-go                   # Go SDK version installer
-│   ├── switch-go                    # Go SDK version switcher
-│   ├── install-tf                   # Terraform version installer
-│   ├── mvn-release                  # Maven release automation
-│   ├── repeat-until-success         # Command retry helper
-│   ├── sum                          # Number sum utility
-│   └── switch-java-version          # Distro-aware Java SDK switcher (Java 17, 21 LTS)
+├── .vim/                            # UltiSnips snippets (C, Java) & Pathogen autoload
 │
-└── tests/
-    ├── test_system_setup.sh         # System setup CLI validation & dry-run tests
+└── tests/                           # Automated test suites
+    ├── test_system_setup.sh         # Cross-platform CLI validation & dry-run tests
     ├── test_env.sh                  # Environment variables and bash tests
     ├── test_zsh.zsh                 # Zsh aliases, functions, git helpers tests
     ├── test_completions.sh          # Completion symlinks & generator tests
-    ├── test_vim.sh                  # Vim configuration & plugin tests
-    └── test_fonts.sh                # Font installation & idempotency tests
+    ├── test_vim.sh                  # Vim configuration & snippet tests
+    └── test_fonts.sh                # Cross-platform font installation tests
 ```
 
 ---
 
-## Utility Scripts (`common-bin/`)
+## Standalone Utilities (`common-bin/`)
 
 | Script | Description |
 |---|---|
-| `gen-passwd` | Generate random passwords with configurable character sets and lengths |
-| `install-go` | Download and install a specific Go version (multi-arch `amd64`/`arm64`) |
-| `switch-go` | Switch active Go version via symlink in `~/software/sdk/go` |
-| `install-tf` | Download and install a specific Terraform version |
-| `mvn-release` | Cut a Maven release: branch, tag, deploy, bump SNAPSHOT |
+| `gen-passwd` | Generate random passwords with configurable character sets (`-u`, `-l`, `-n`, `-s`) and lengths |
+| `sum` | Sum numbers from stdin/args with CSV parsing, column filtering (`-k`), human byte units (`-H`), averages (`-a`), and stats (`-s`) |
 | `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
-| `sum` | Sum numbers from stdin |
-| `switch-java-version` | Switch or list active Java LTS versions (17, 21) across Ubuntu and Fedora |
+| `mvn-release` | Cut a Maven release: branch, tag, deploy, bump `SNAPSHOT` |
 
 ---
 
 ## Development & Testing
 
-All scripts use `set -euo pipefail` to ensure fail-fast safety.
+All scripts enforce `set -euo pipefail` for fail-fast safety.
 
 ```bash
-# Run full test suite
+# Run full automated test suite
 make test
 
 # Run syntax & lint validation

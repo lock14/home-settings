@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Test suite for environment variables and bash configurations
 
+# shellcheck disable=SC2030,SC2031
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,7 +25,7 @@ echo "========================================"
 
 # Test 1: Bash syntax checks
 echo -e "\n[1/3] Checking script syntax with 'bash -n'..."
-for f in "$SCRIPT_DIR/bootstrap.sh" "$SCRIPT_DIR/bashrc-addendum" "$SCRIPT_DIR/bash-setup.sh" "$SCRIPT_DIR/user-setup.sh" "$SCRIPT_DIR/gnome-terminal-setup.sh"; do
+for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment_variables"; do
     if bash -n "$f"; then
         pass "Syntax valid: $(basename "$f")"
     else
@@ -33,13 +34,14 @@ for f in "$SCRIPT_DIR/bootstrap.sh" "$SCRIPT_DIR/bashrc-addendum" "$SCRIPT_DIR/b
 done
 
 # Test 2: Verify environment_variables PATH configuration
-echo -e "\n[2/3] Testing environment_variables exports..."
+echo -e "\n[2/3] Testing dotfiles/.environment_variables exports..."
 (
     TEMP_HOME=$(mktemp -d)
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
-    source "$SCRIPT_DIR/environment_variables"
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/dotfiles/.environment_variables"
 
     if [[ ":$PATH:" == *":$HOME/bin:"* ]]; then
         pass "\$HOME/bin present in PATH"
@@ -64,18 +66,25 @@ echo -e "\n[2/3] Testing environment_variables exports..."
     else
         fail "EDITOR export" "Expected vim, got: ${EDITOR:-}"
     fi
+
+    if [ "${GOPATH:-}" = "$HOME/go" ]; then
+        pass "GOPATH default is set cleanly ($GOPATH)"
+    else
+        fail "GOPATH export" "Expected $HOME/go, got: ${GOPATH:-}"
+    fi
 )
 
 # Test 3: Verify bashrc-addendum sourcing
-echo -e "\n[3/3] Testing bashrc-addendum..."
+echo -e "\n[3/3] Testing dotfiles/.bashrc-addendum..."
 (
     TEMP_HOME=$(mktemp -d)
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
-    cp "$SCRIPT_DIR/environment_variables" "$HOME/.environment_variables"
+    cp "$SCRIPT_DIR/dotfiles/.environment_variables" "$HOME/.environment_variables"
 
-    source "$SCRIPT_DIR/bashrc-addendum"
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
 
     if [ "${EDITOR:-}" = "vim" ]; then
         pass "bashrc-addendum sourced .environment_variables"
@@ -85,12 +94,12 @@ echo -e "\n[3/3] Testing bashrc-addendum..."
 )
 
 # Test 4: Verify LS_COLORS / dircolors configuration
-echo -e "\n[4/4] Testing LS_COLORS dircolors validity..."
+echo -e "\n[4/4] Testing dircolors validity..."
 if command -v dircolors >/dev/null 2>&1; then
-    if dircolors_out=$(dircolors -b "$SCRIPT_DIR/LS_COLORS" 2>&1); then
-        pass "LS_COLORS is valid dircolors database"
+    if dircolors_out=$(dircolors -b "$SCRIPT_DIR/dotfiles/.dir_colors/dircolors" 2>&1); then
+        pass "dircolors database is valid"
     else
-        fail "LS_COLORS dircolors check" "dircolors failed: $dircolors_out"
+        fail "dircolors check" "dircolors failed: $dircolors_out"
     fi
 else
     pass "dircolors not installed (skipped)"
@@ -99,7 +108,6 @@ fi
 echo -e "\n========================================"
 echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
 echo "========================================"
-
 
 if [ "$TESTS_FAILED" -gt 0 ]; then
     exit 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Test suite for zsh dotfiles (zsh_aliases, zsh_functions, zshrc_addendum)
+# Test suite for zsh dotfiles (dotfiles/.zsh_aliases, dotfiles/.zsh_functions, dotfiles/.zshrc_addendum)
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ echo "========================================"
 
 # Test 1: Syntax check with zsh -n
 echo "\n[1/5] Checking Zsh file syntax with 'zsh -n'..."
-for f in "$SCRIPT_DIR/zsh_aliases" "$SCRIPT_DIR/zsh_functions" "$SCRIPT_DIR/zshrc_addendum" "$SCRIPT_DIR/zsh_completions" "$SCRIPT_DIR/p10k.zsh"; do
+for f in "$SCRIPT_DIR/dotfiles/.zsh_aliases" "$SCRIPT_DIR/dotfiles/.zsh_functions" "$SCRIPT_DIR/dotfiles/.zshrc_addendum" "$SCRIPT_DIR/dotfiles/.zsh_completions" "$SCRIPT_DIR/dotfiles/.p10k.zsh"; do
     if [ -f "$f" ]; then
         if zsh -n "$f"; then
             pass "Syntax valid: $(basename "$f")"
@@ -34,13 +34,11 @@ for f in "$SCRIPT_DIR/zsh_aliases" "$SCRIPT_DIR/zsh_functions" "$SCRIPT_DIR/zshr
     fi
 done
 
-
-
 # Test 2: Source zsh_aliases and verify aliases
-echo "\n[2/5] Testing zsh_aliases..."
+echo "\n[2/5] Testing dotfiles/.zsh_aliases..."
 test_aliases() {
     setopt aliases
-    source "$SCRIPT_DIR/zsh_aliases"
+    source "$SCRIPT_DIR/dotfiles/.zsh_aliases"
 
     for expected_alias in gcommit gamend gfetch gpush gpushf gpull gprune gup fix-abcxyz-branch-name go_lint go_testall go_buildall tf yaml_lint; do
         if alias "$expected_alias" >/dev/null 2>&1; then
@@ -60,9 +58,9 @@ while IFS= read -r line; do
 done < <(test_aliases)
 
 # Test 3: Source zsh_functions and verify functions
-echo "\n[3/5] Testing zsh_functions..."
+echo "\n[3/5] Testing dotfiles/.zsh_functions..."
 test_functions() {
-    source "$SCRIPT_DIR/zsh_functions"
+    source "$SCRIPT_DIR/dotfiles/.zsh_functions"
 
     for expected_func in fs gsync; do
         if typeset -f "$expected_func" >/dev/null 2>&1; then
@@ -105,8 +103,8 @@ test_git_integration() {
 
     # Source functions and aliases
     setopt aliases
-    source "$SCRIPT_DIR/zsh_functions"
-    source "$SCRIPT_DIR/zsh_aliases"
+    source "$SCRIPT_DIR/dotfiles/.zsh_functions"
+    source "$SCRIPT_DIR/dotfiles/.zsh_aliases"
 
     # Test gsync outside git repo
     (
@@ -168,17 +166,17 @@ while IFS= read -r line; do
 done < <(test_git_integration)
 
 # Test 5: Test zshrc_addendum sourcing
-echo "\n[5/5] Testing zshrc_addendum..."
+echo "\n[5/5] Testing dotfiles/.zshrc_addendum..."
 test_addendum() {
     TEMP_HOME=$(mktemp -d)
     trap 'rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
-    cp "$SCRIPT_DIR/zsh_aliases" "$HOME/.zsh_aliases"
-    cp "$SCRIPT_DIR/zsh_functions" "$HOME/.zsh_functions"
+    cp "$SCRIPT_DIR/dotfiles/.zsh_aliases" "$HOME/.zsh_aliases"
+    cp "$SCRIPT_DIR/dotfiles/.zsh_functions" "$HOME/.zsh_functions"
     touch "$HOME/.environment_variables"
 
-    source "$SCRIPT_DIR/zshrc_addendum"
+    source "$SCRIPT_DIR/dotfiles/.zshrc_addendum"
 
     if [ "${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}" = "fg=10" ]; then
         echo "PASS:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE set correctly"

@@ -80,6 +80,7 @@ while getopts ":d:k:Hf:asth" opt; do
 done
 shift $((OPTIND - 1))
 
+# shellcheck disable=SC2016
 awk_script='
 function parse_val(val,  num, suf) {
     if (HUMAN && val ~ /^[+-]?[0-9]*\.?[0-9]+([kKmMgGtTpPeE]i?[bB]?)$/) {
