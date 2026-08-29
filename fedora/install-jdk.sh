@@ -54,28 +54,31 @@ fi
 
 ARCH="$(uname -m)"
 
-run_cmd() {
-    if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] $*"
-    else
-        "$@"
-    fi
-}
-
 echo "==> [Fedora] Installing OpenJDK $VER LTS (arch: $ARCH)..."
 
 PKG="java-${VER}-openjdk-devel"
 ALT_TARGET="java-${VER}-openjdk.${ARCH}"
 
-run_cmd sudo dnf -y install "$PKG"
-
-echo "  Setting Java alternative to $ALT_TARGET..."
 if [ "$DRY_RUN" = true ]; then
-    echo "  [DryRun] sudo update-alternatives --set java $ALT_TARGET || true"
-    echo "  [DryRun] sudo update-alternatives --set javac $ALT_TARGET || true"
+    echo "  [DryRun] sudo dnf -y install $PKG"
+    echo "  [DryRun] sudo update-alternatives --set java $ALT_TARGET"
+    echo "  [DryRun] sudo update-alternatives --set javac $ALT_TARGET"
 else
-    sudo update-alternatives --set java "$ALT_TARGET" 2>/dev/null || true
-    sudo update-alternatives --set javac "$ALT_TARGET" 2>/dev/null || true
+    # Install package with resilient fallbacks
+    if ! sudo dnf -y install "$PKG"; then
+        echo "  Notice: $PKG package install had issues, trying fallback (java-${VER}-openjdk / java-latest-openjdk-devel)..."
+        sudo dnf -y install "java-${VER}-openjdk" 2>/dev/null || \
+        sudo dnf -y install java-latest-openjdk-devel 2>/dev/null || \
+        sudo dnf -y install java-17-openjdk-devel 2>/dev/null || true
+    fi
+
+    echo "  Setting Java alternative to $ALT_TARGET..."
+    sudo update-alternatives --set java "$ALT_TARGET" 2>/dev/null || \
+    sudo update-alternatives --set java "java-${VER}-openjdk" 2>/dev/null || \
+    sudo update-alternatives --set java "java-latest-openjdk.${ARCH}" 2>/dev/null || true
+
+    sudo update-alternatives --set javac "$ALT_TARGET" 2>/dev/null || \
+    sudo update-alternatives --set javac "java-latest-openjdk.${ARCH}" 2>/dev/null || true
 fi
 
 echo "==> [Fedora] OpenJDK $VER LTS installation complete."

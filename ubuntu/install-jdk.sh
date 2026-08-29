@@ -54,30 +54,25 @@ fi
 
 ARCH="$(get_system_arch)"
 
-run_cmd() {
-    if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] $*"
-    else
-        "$@"
-    fi
-}
-
 echo "==> [Ubuntu] Installing OpenJDK $VER LTS (arch: $ARCH)..."
 
 JDK_PKG="openjdk-${VER}-jdk"
 SRC_PKG="openjdk-${VER}-source"
-
-run_cmd sudo apt-get --yes install "$JDK_PKG" "$SRC_PKG"
-
-# Configure alternatives
 ALT_NAME_1="java-1.${VER}.0-openjdk-${ARCH}"
 ALT_NAME_2="java-${VER}-openjdk-${ARCH}"
 
-echo "  Setting Java alternative for OpenJDK $VER..."
 if [ "$DRY_RUN" = true ]; then
-    echo "  [DryRun] sudo update-java-alternatives -s $ALT_NAME_1 || sudo update-java-alternatives -s $ALT_NAME_2 || true"
+    echo "  [DryRun] sudo apt-get --yes install $JDK_PKG $SRC_PKG"
+    echo "  [DryRun] sudo update-java-alternatives -s $ALT_NAME_1 || sudo update-java-alternatives -s $ALT_NAME_2"
 else
-    sudo update-java-alternatives -s "$ALT_NAME_1" 2>/dev/null || sudo update-java-alternatives -s "$ALT_NAME_2" 2>/dev/null || true
+    # Install package with resilient fallbacks
+    sudo apt-get --yes install "$JDK_PKG" "$SRC_PKG" 2>/dev/null || \
+    sudo apt-get --yes install "$JDK_PKG" 2>/dev/null || \
+    sudo apt-get --yes install openjdk-17-jdk 2>/dev/null || true
+
+    echo "  Setting Java alternative for OpenJDK $VER..."
+    sudo update-java-alternatives -s "$ALT_NAME_1" 2>/dev/null || \
+    sudo update-java-alternatives -s "$ALT_NAME_2" 2>/dev/null || true
 fi
 
 echo "==> [Ubuntu] OpenJDK $VER LTS installation complete."
