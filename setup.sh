@@ -148,11 +148,6 @@ if [ "$DRY_RUN" = true ]; then
 fi
 echo "====================================================="
 
-DRY_RUN_ARG=()
-if [ "$DRY_RUN" = true ]; then
-    DRY_RUN_ARG=("--dry-run")
-fi
-
 # 1. System-Level Provisioning (requires sudo)
 if [ "$SKIP_SYSTEM" = false ]; then
     echo -e "\n[Step 1/2] Running System-Level Provisioning..."
