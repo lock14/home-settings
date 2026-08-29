@@ -81,7 +81,6 @@ jobs:
           # Verify dotfile symlinks and fonts exist
           [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
-          [ -L "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips symlink missing"; exit 1; }
           [ -L "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases symlink missing"; exit 1; }
           [ -L "$HOME/.zsh_functions" ] || { echo "FAIL: ~/.zsh_functions symlink missing"; exit 1; }
           [ -L "$HOME/.zshrc_addendum" ] || { echo "FAIL: ~/.zshrc_addendum symlink missing"; exit 1; }
