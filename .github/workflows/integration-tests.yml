@@ -4,6 +4,9 @@ on:
   push:
     branches: [master, main]
     paths:
+      - 'setup.sh'
+      - 'system/**'
+      - 'common-bin/**'
       - 'ubuntu/**'
       - 'fedora/**'
       - 'zsh-setup.sh'
@@ -24,10 +27,14 @@ on:
       - 'environment_variables'
       - 'tests/**'
       - 'Makefile'
+      - 'AGENTS.md'
       - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [master, main]
     paths:
+      - 'setup.sh'
+      - 'system/**'
+      - 'common-bin/**'
       - 'ubuntu/**'
       - 'fedora/**'
       - 'zsh-setup.sh'
@@ -48,6 +55,7 @@ on:
       - 'environment_variables'
       - 'tests/**'
       - 'Makefile'
+      - 'AGENTS.md'
       - '.github/workflows/integration-tests.yml'
 
 jobs:
@@ -168,8 +176,8 @@ jobs:
 
       - name: Disable Reboot & Sleep
         run: |
-          sed -i 's/systemctl reboot/echo "skipping reboot"/g' ubuntu/ubuntu_18+_setup.sh
-          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' ubuntu/ubuntu_18+_setup.sh
+          sed -i 's/systemctl reboot/echo "skipping reboot"/g' ubuntu/ubuntu_18+_setup.sh || true
+          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' ubuntu/ubuntu_18+_setup.sh || true
 
       - name: Run Ubuntu Setup (Default args)
         run: |
@@ -205,8 +213,8 @@ jobs:
           chmod +x /usr/bin/snap
           
           # Disable reboot and sleep
-          sed -i 's/systemctl reboot/echo "skipping reboot"/g' fedora/fedora_30+_setup.sh
-          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' fedora/fedora_30+_setup.sh
+          sed -i 's/systemctl reboot/echo "skipping reboot"/g' fedora/fedora_30+_setup.sh || true
+          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' fedora/fedora_30+_setup.sh || true
 
       - name: Test CLI help and argument validation
         run: |
@@ -292,6 +300,3 @@ jobs:
           else
             echo "❌ **Dotfile configuration tests failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-
-

@@ -1,15 +1,8 @@
 #!/bin/bash
+# Pre-steps for Fedora workstations (snapd and package manager setup)
+# Delegates to fedora/os-packages.sh
 
 set -euo pipefail
 
-# Ensure sudo credentials are valid
-sudo -v
-
-echo "updating system"
-sudo dnf -y upgrade --refresh
-
-echo "installing snapd"
-sudo dnf -y install snapd
-sudo ln -sf /var/lib/snapd/snap /snap
-
-echo "Pre-steps complete! A system restart is recommended to ensure snapd is active."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/os-packages.sh" "$@"

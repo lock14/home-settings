@@ -1,5 +1,4 @@
-#! /bin/bash
-
-target="$(which .switch-java-version)"
-sudo "$target" "$@"
-
+#!/bin/bash
+# Backward-compatible wrapper delegating to common-bin/switch-java-version
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/../../common-bin/switch-java-version" "$@"

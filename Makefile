@@ -1,6 +1,6 @@
 REPO_DIR := $(shell pwd)
 
-.PHONY: install uninstall \
+.PHONY: setup system-setup install uninstall \
         install-env uninstall-env \
         install-fonts uninstall-fonts \
         install-completions uninstall-completions \
@@ -10,8 +10,18 @@ REPO_DIR := $(shell pwd)
         install-bin uninstall-bin \
         test lint help
 
-## test: Run unit and integration tests for shell and editor configurations.
+## setup: Run full master setup (system packages, apps, dotfiles, vim, zsh).
+setup:
+	@./setup.sh
+
+## system-setup: Run system-level package and application provisioning.
+system-setup:
+	@./system/system-setup.sh
+
+## test: Run unit and integration tests for system setup, shell, and editor configurations.
 test:
+	@echo "Running System & Distro Setup tests..."
+	@bash tests/test_system_setup.sh
 	@echo "Running Environment & Bash tests..."
 	@bash tests/test_env.sh
 	@echo "Running Zsh tests..."
@@ -22,24 +32,32 @@ test:
 	@bash tests/test_vim.sh
 	@echo "Running Font tests..."
 	@bash tests/test_fonts.sh
+	@echo "All tests passed successfully."
 
-
-## lint: Run shellcheck and shell syntax validation.
+## lint: Run syntax validation and shellcheck (if available).
 lint:
 	@echo "Checking zsh syntax..."
 	@zsh -n zsh_aliases zsh_functions zshrc_addendum zsh_completions p10k.zsh
-	@echo "Checking bash/sh script syntax..."
-	@bash -n bootstrap.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh
+	@echo "Checking bash script syntax with 'bash -n'..."
+	@bash -n setup.sh bootstrap.sh user-setup.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh vim-setup.sh \
+		system/system-setup.sh system/snap-packages.sh system/java-common.sh \
+		ubuntu/ubuntu_18+_setup.sh ubuntu/os-packages.sh ubuntu/install-chrome.sh ubuntu/install-jdk.sh ubuntu/install-jdk ubuntu/bin/* \
+		fedora/fedora_30+_setup.sh fedora/fedora_presteps.sh fedora/os-packages.sh fedora/install-chrome.sh fedora/install-jdk.sh fedora/bin/* \
+		common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
-	    echo "Running shellcheck on bash/sh scripts..."; \
-	    shellcheck bootstrap.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh user-setup.sh vim-setup.sh; \
+		echo "Running shellcheck on bash/sh scripts..."; \
+		shellcheck setup.sh bootstrap.sh user-setup.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh vim-setup.sh \
+			system/system-setup.sh system/snap-packages.sh system/java-common.sh \
+			ubuntu/os-packages.sh ubuntu/install-chrome.sh ubuntu/install-jdk.sh \
+			fedora/os-packages.sh fedora/install-chrome.sh fedora/install-jdk.sh \
+			common-bin/switch-java-version; \
 	else \
-	    echo "Note: shellcheck not installed, skipped shellcheck analysis."; \
+		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi
 	@echo "All lint checks passed."
 
 ## install: Install all dotfiles, shell configs, vim settings, and user bin tools.
-install: install-env install-fonts install-zsh install-completions install-bash install-vim install-bin
+install: install-env install-fonts install-completions install-zsh install-bash install-vim install-bin
 	@echo "All home settings installed. Restart your shell or run: exec zsh"
 
 ## uninstall: Uninstall all dotfiles, shell configs, vim settings, and user bin tools.
@@ -88,7 +106,6 @@ install-zsh:
 	@echo "Installing Zsh configuration and plugins..."
 	./zsh-setup.sh
 
-
 ## uninstall-zsh: Remove Zsh symlinks.
 uninstall-zsh:
 	@echo "Removing Zsh symlinks..."
@@ -97,8 +114,6 @@ uninstall-zsh:
 	rm -f "$(HOME)/.zshrc_addendum"
 	rm -f "$(HOME)/.zsh_completions"
 	rm -f "$(HOME)/.p10k.zsh"
-
-
 
 ## install-bash: Symlink Bash addendum and register source line in ~/.bashrc.
 install-bash:
@@ -123,7 +138,6 @@ uninstall-vim:
 	rm -f "$(HOME)/.vimrc"
 	rm -f "$(HOME)/.vim/UltiSnips"
 
-
 ## install-bin: Populate ~/bin with common-bin utility scripts.
 install-bin:
 	@echo "Installing common-bin utilities to $(HOME)/bin..."
@@ -141,4 +155,3 @@ uninstall-bin:
 ## help: Show available make targets.
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //'
-
