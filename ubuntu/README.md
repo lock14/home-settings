@@ -1,18 +1,25 @@
-# Ubuntu Setup Script
-The script ubuntu\_18.04+\_setup.sh is intended to get a java workflow setup on a fresh ubuntu intall. The script does the following:
-- Updates Ubuntu to the latest packages
-- installs git
-- installs vim
-- installs curl
-- installs Google Chrome
-- installs a JDK (JDK 11 by default)
-- installs maven
-- installs mariadb
-- installs a Java IDE (IntelliJ Idea Ultimate by default)
-- installs VS Code
-- installs Postman
-- installs Slack
+# Ubuntu Setup
 
-## Script Options
-* -j: specify the JDK you would like, valid choices are: 'openjdk-8', 'openjdk-11'. If none is selected then 'openjdk-11' is chosen by default.
-* -i: specify the Java IDE you would like, valid choices are: 'intellij', 'intellij-ultimate', 'eclipse', 'netbeans'. If none is selected then 'intellij-ultimate' is chosen by default.
+Setup automation for **Ubuntu (22.04+ / 24.04+ LTS)** workstations.
+
+The system setup module configures:
+- System package updates via APT
+- Core developer CLI tools (`git`, `vim`, `curl`, `wget`, `maven`, `mariadb`, `dconf-cli`, `shellcheck`)
+- Google Chrome (amd64)
+- Modern OpenJDK LTS (`17` or `21`, default: `21`) and alternatives configuration
+- Java IDE (IntelliJ IDEA Ultimate/Community, Eclipse, NetBeans, or VS Code) via Snap
+- Developer desktop tools (Postman, Slack, VS Code) via Snap
+
+## Usage
+
+```bash
+# Run via master setup orchestrator
+./setup.sh --os ubuntu --jdk 21 --ide intellij-ultimate
+
+# Or directly via Ubuntu adapter
+./ubuntu/ubuntu_18+_setup.sh -j 21 -i intellij-ultimate
+```
+
+## Options
+- `-j, --jdk`: Active Java LTS version (`17` or `21`, default: `21`). Note: EOL versions (8, 11) are rejected.
+- `-i, --ide`: Developer IDE (`intellij`, `intellij-ultimate`, `eclipse`, `netbeans`, `code`, `none`).
