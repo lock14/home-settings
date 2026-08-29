@@ -5,57 +5,23 @@ on:
     branches: [master, main]
     paths:
       - 'setup.sh'
-      - 'system/**'
-      - 'common-bin/**'
-      - 'ubuntu/**'
-      - 'fedora/**'
-      - 'zsh-setup.sh'
-      - 'zsh_aliases'
-      - 'zsh_functions'
-      - 'zshrc_addendum'
-      - 'zsh_completions'
-      - 'completions-setup.sh'
-      - 'p10k.zsh'
-      - 'font-setup.sh'
-      - '.vimrc'
-      - 'vim-setup.sh'
-      - 'bash-setup.sh'
-      - 'bashrc-addendum'
-      - 'bin-setup.sh'
-      - 'user-setup.sh'
-      - 'gnome-terminal-setup.sh'
-      - 'environment_variables'
-      - 'tests/**'
       - 'Makefile'
-      - 'AGENTS.md'
+      - '.mise.toml'
+      - 'dotfiles/**'
+      - 'common-bin/**'
+      - '.vim/**'
+      - 'tests/**'
       - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [master, main]
     paths:
       - 'setup.sh'
-      - 'system/**'
-      - 'common-bin/**'
-      - 'ubuntu/**'
-      - 'fedora/**'
-      - 'zsh-setup.sh'
-      - 'zsh_aliases'
-      - 'zsh_functions'
-      - 'zshrc_addendum'
-      - 'zsh_completions'
-      - 'completions-setup.sh'
-      - 'p10k.zsh'
-      - 'font-setup.sh'
-      - '.vimrc'
-      - 'vim-setup.sh'
-      - 'bash-setup.sh'
-      - 'bashrc-addendum'
-      - 'bin-setup.sh'
-      - 'user-setup.sh'
-      - 'gnome-terminal-setup.sh'
-      - 'environment_variables'
-      - 'tests/**'
       - 'Makefile'
-      - 'AGENTS.md'
+      - '.mise.toml'
+      - 'dotfiles/**'
+      - 'common-bin/**'
+      - '.vim/**'
+      - 'tests/**'
       - '.github/workflows/integration-tests.yml'
 
 jobs:
@@ -63,54 +29,30 @@ jobs:
   # Dotfiles & Makefile Setup
   # ─────────────────────────────────────────────────────────────────────────────
   test-dotfiles-makefile:
-    name: Dotfiles Makefile & Scripts
+    name: Dotfiles & Makefile Lifecycle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Test modular Makefile targets
         run: |
-          # Test env module
-          make install-env
-          [ -L "$HOME/.environment_variables" ] && [ -L "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: install-env"; exit 1; }
-          make uninstall-env
-          [ ! -e "$HOME/.environment_variables" ] && [ ! -e "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: uninstall-env"; exit 1; }
+          # Test dotfiles install & uninstall
+          make install-dotfiles
+          [ -L "$HOME/.environment_variables" ] && [ -L "$HOME/.dir_colors/dircolors" ] && [ -L "$HOME/.vimrc" ] || { echo "FAIL: install-dotfiles"; exit 1; }
+          make uninstall-dotfiles
+          [ ! -e "$HOME/.environment_variables" ] && [ ! -e "$HOME/.dir_colors/dircolors" ] && [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: uninstall-dotfiles"; exit 1; }
+
+          # Test bin module
+          make install-bin
+          [ -L "$HOME/bin/gen-passwd" ] || { echo "FAIL: install-bin (expected symlink)"; exit 1; }
+          make uninstall-bin
+          [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: uninstall-bin"; exit 1; }
 
           # Test fonts module
           make install-fonts
           [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: install-fonts"; exit 1; }
           make uninstall-fonts
           [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: uninstall-fonts"; exit 1; }
-
-          # Test completions module
-          make install-completions
-          [ -L "$HOME/.zsh_completions" ] && [ -d "$HOME/.zsh/completions" ] || { echo "FAIL: install-completions"; exit 1; }
-          make uninstall-completions
-          [ ! -e "$HOME/.zsh_completions" ] && [ ! -e "$HOME/.zsh/completions" ] || { echo "FAIL: uninstall-completions"; exit 1; }
-
-          # Test zsh module
-          make install-zsh
-          [ -L "$HOME/.zsh_aliases" ] && [ -L "$HOME/.zsh_functions" ] && [ -L "$HOME/.zshrc_addendum" ] && [ -L "$HOME/.zsh_completions" ] && [ -L "$HOME/.p10k.zsh" ] || { echo "FAIL: install-zsh"; exit 1; }
-          make uninstall-zsh
-          [ ! -e "$HOME/.zsh_aliases" ] && [ ! -e "$HOME/.zsh_functions" ] && [ ! -e "$HOME/.zshrc_addendum" ] && [ ! -e "$HOME/.zsh_completions" ] && [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: uninstall-zsh"; exit 1; }
-
-          # Test bash module
-          make install-bash
-          [ -L "$HOME/.bashrc-addendum" ] || { echo "FAIL: install-bash"; exit 1; }
-          make uninstall-bash
-          [ ! -e "$HOME/.bashrc-addendum" ] || { echo "FAIL: uninstall-bash"; exit 1; }
-
-          # Test vim module
-          make install-vim
-          [ -L "$HOME/.vimrc" ] && [ -L "$HOME/.vim/UltiSnips" ] || { echo "FAIL: install-vim"; exit 1; }
-          make uninstall-vim
-          [ ! -e "$HOME/.vimrc" ] && [ ! -e "$HOME/.vim/UltiSnips" ] || { echo "FAIL: uninstall-vim"; exit 1; }
-
-          # Test bin module
-          make install-bin
-          [ -x "$HOME/bin/gen-passwd" ] || { echo "FAIL: install-bin"; exit 1; }
-          make uninstall-bin
-          [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: uninstall-bin"; exit 1; }
 
           echo "PASS: All modular make targets installed and uninstalled cleanly"
 
@@ -129,13 +71,12 @@ jobs:
           [ -L "$HOME/.bashrc-addendum" ] || { echo "FAIL: ~/.bashrc-addendum symlink missing"; exit 1; }
           [ -L "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables symlink missing"; exit 1; }
           [ -L "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: ~/.dir_colors/dircolors symlink missing"; exit 1; }
-          [ -x "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd missing"; exit 1; }
+          [ -L "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd symlink missing"; exit 1; }
           echo "PASS: make install created all symlinks, fonts, and bin tools"
 
           make uninstall
           [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
-          [ ! -e "$HOME/.vim/UltiSnips" ] || { echo "FAIL: ~/.vim/UltiSnips still exists"; exit 1; }
           [ ! -e "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases still exists"; exit 1; }
           [ ! -e "$HOME/.zsh_completions" ] || { echo "FAIL: ~/.zsh_completions still exists"; exit 1; }
           [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh still exists"; exit 1; }
@@ -148,133 +89,94 @@ jobs:
         run: |
           echo "### 📦 Dotfiles & Makefile Test Summary" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **\`make install\` / \`make uninstall\` and \`bin-setup.sh\` passed.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ **\`make install\` / \`make uninstall\` passed.**" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "❌ **Dotfiles test failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Ubuntu Setup Script
+  # Cross-Platform Setup (Ubuntu & macOS)
   # ─────────────────────────────────────────────────────────────────────────────
-  test-ubuntu:
-    name: Ubuntu Setup Script
-    runs-on: ubuntu-latest
-    env:
-      DEBIAN_FRONTEND: noninteractive
+  test-cross-platform-setup:
+    name: Setup on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test CLI help and argument validation
+      - name: Test CLI Validation
         run: |
-          chmod +x ubuntu/ubuntu_18+_setup.sh
-          # Show help
-          ./ubuntu/ubuntu_18+_setup.sh -h
-          # Reject invalid JDK
-          ./ubuntu/ubuntu_18+_setup.sh -j openjdk-99 && { echo "FAIL: should reject invalid JDK"; exit 1; } || echo "PASS: invalid JDK rejected"
-          # Reject invalid IDE
-          ./ubuntu/ubuntu_18+_setup.sh -i invalid-ide && { echo "FAIL: should reject invalid IDE"; exit 1; } || echo "PASS: invalid IDE rejected"
+          chmod +x setup.sh
+          ./setup.sh --help
+          ./setup.sh --jdk 99 && { echo "FAIL: invalid JDK should fail"; exit 1; } || echo "PASS"
+          ./setup.sh --ide invalid && { echo "FAIL: invalid IDE should fail"; exit 1; } || echo "PASS"
 
-      - name: Disable Reboot & Sleep
+      - name: Run Dry-Run
         run: |
-          sed -i 's/systemctl reboot/echo "skipping reboot"/g' ubuntu/ubuntu_18+_setup.sh || true
-          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' ubuntu/ubuntu_18+_setup.sh || true
+          ./setup.sh --dry-run
+          ./setup.sh --bootstrap --dry-run
+          ./setup.sh --dotfiles-only --dry-run
 
-      - name: Run Ubuntu Setup (Default args)
+      - name: Run User Dotfiles Installation
         run: |
-          sudo ./ubuntu/ubuntu_18+_setup.sh
+          ./setup.sh --dotfiles-only
 
       - name: Report Summary
         if: always()
         run: |
-          echo "### 🐧 Ubuntu Setup Script Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 🚀 Setup on ${{ matrix.os }} Summary" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **Ubuntu setup executed successfully with no errors.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ **Setup on ${{ matrix.os }} executed successfully.**" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ **Ubuntu setup script failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ **Setup failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Fedora Setup Script
+  # Fedora Setup Script (Container)
   # ─────────────────────────────────────────────────────────────────────────────
   test-fedora:
-    name: Fedora Setup Script
+    name: Fedora Container Setup
     runs-on: ubuntu-latest
     container:
       image: fedora:latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Mocks and Disable Reboot
+      - name: Install base container prerequisites
         run: |
-          dnf -y install sudo curl wget findutils
-          # Mock snap in /usr/local/bin for docker container environment
+          dnf -y install sudo curl wget findutils git
           mkdir -p /usr/local/bin
           echo '#!/bin/bash' > /usr/local/bin/snap
-          echo 'echo "Mocking snap command: $@"' >> /usr/local/bin/snap
+          echo 'echo "Mock snap: $@"' >> /usr/local/bin/snap
           chmod +x /usr/local/bin/snap
-          
-          # Disable reboot and sleep
-          sed -i 's/systemctl reboot/echo "skipping reboot"/g' fedora/fedora_30+_setup.sh || true
-          sed -i 's/sleep [0-9]*/echo "skipping sleep"/g' fedora/fedora_30+_setup.sh || true
 
-      - name: Test CLI help and argument validation
+      - name: Test CLI help and validation
         run: |
-          chmod +x fedora/fedora_30+_setup.sh
-          # Show help
-          ./fedora/fedora_30+_setup.sh -h
-          # Reject invalid JDK
-          ./fedora/fedora_30+_setup.sh -j openjdk-99 && { echo "FAIL: should reject invalid JDK"; exit 1; } || echo "PASS: invalid JDK rejected"
-          # Reject invalid IDE
-          ./fedora/fedora_30+_setup.sh -i invalid-ide && { echo "FAIL: should reject invalid IDE"; exit 1; } || echo "PASS: invalid IDE rejected"
+          chmod +x setup.sh
+          ./setup.sh --os fedora --help
+          ./setup.sh --os fedora --dry-run
 
-      - name: Run Fedora Setup (Default args)
+      - name: Run User Dotfiles Setup
         run: |
-          sudo ./fedora/fedora_30+_setup.sh
+          ./setup.sh --os fedora --dotfiles-only
 
       - name: Report Summary
         if: always()
         run: |
-          echo "### 🎩 Fedora Setup Script Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 🎩 Fedora Setup Summary" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
             echo "✅ **Fedora setup executed successfully with no errors.**" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ **Fedora setup script failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ **Fedora setup failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Zsh Setup Script
+  # Shell & Vim Unit Tests & Lint
   # ─────────────────────────────────────────────────────────────────────────────
-  test-zsh-setup:
-    name: Zsh Setup Script
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Disable chsh (requires password/interactive)
-        run: |
-          sed -i 's/chsh -s/echo "skipping chsh -s"/g' zsh-setup.sh
-
-      - name: Run Zsh Setup
-        run: |
-          ./zsh-setup.sh
-          # Verify powerlevel10k was installed
-          ls -la ~/.oh-my-zsh/custom/themes/powerlevel10k
-
-      - name: Report Summary
-        if: always()
-        run: |
-          echo "### 🐚 Zsh Setup Summary" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **Zsh, Oh-My-Zsh, and Powerlevel10k installed successfully.**" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ **Zsh setup failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Shell & Vim Dotfiles Unit Tests
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-dotfiles-and-configs:
-    name: Shell & Vim Dotfiles Unit Tests
+  test-unit-and-lint:
+    name: Lint & Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -287,7 +189,7 @@ jobs:
             sudo ln -s "$(which fdfind)" /usr/local/bin/fd
           fi
 
-      - name: Run lint & unit tests
+      - name: Run lint & test suite
         run: |
           make lint
           make test
@@ -295,9 +197,9 @@ jobs:
       - name: Report Summary
         if: always()
         run: |
-          echo "### ⚙️ Shell & Vim Configuration Test Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "### ⚙️ Unit Test & Lint Summary" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **All Zsh and Vim unit tests, alias checks, and syntax validations passed.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ **All unit tests and lint checks passed.**" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ **Dotfile configuration tests failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ **Unit tests or lint failed! Check step logs for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi

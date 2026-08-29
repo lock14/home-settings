@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test suite for font-setup.sh and MesloLGS NF fonts
+# Test suite for font setup and MesloLGS NF fonts across Linux and macOS
 
 set -euo pipefail
 
@@ -23,15 +23,15 @@ echo "Running Font Setup Tests"
 echo "========================================"
 
 # Test 1: Bash syntax check
-echo -e "\n[1/2] Checking font-setup.sh syntax..."
-if bash -n "$SCRIPT_DIR/font-setup.sh"; then
-    pass "Syntax valid: font-setup.sh"
+echo -e "\n[1/3] Checking setup.sh syntax..."
+if bash -n "$SCRIPT_DIR/setup.sh"; then
+    pass "Syntax valid: setup.sh"
 else
-    fail "Syntax check failed: font-setup.sh" "bash -n returned non-zero"
+    fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
 fi
 
-# Test 2: Font download & installation in temp directory
-echo -e "\n[2/2] Testing font-setup.sh execution and file verification..."
+# Test 2: Font download & installation in temp directory (Linux)
+echo -e "\n[2/3] Testing font installation on Linux target..."
 TEMP_HOME=$(mktemp -d)
 trap 'rm -rf "$TEMP_HOME"' EXIT
 
@@ -39,8 +39,8 @@ OLD_HOME="$HOME"
 export HOME="$TEMP_HOME"
 export XDG_DATA_HOME="$TEMP_HOME/.local/share"
 
-# Run installer
-"$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1
+# Run installer (fonts only)
+"$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-zsh --skip-bash --skip-bin --skip-completions >/dev/null 2>&1
 
 expected_fonts=(
     "MesloLGS NF Regular.ttf"
@@ -59,14 +59,30 @@ for font in "${expected_fonts[@]}"; do
 done
 
 # Test idempotency (should run cleanly without error)
-if "$SCRIPT_DIR/font-setup.sh" >/dev/null 2>&1; then
-    pass "font-setup.sh is idempotent"
+if "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-zsh --skip-bash --skip-bin --skip-completions >/dev/null 2>&1; then
+    pass "Font installation is idempotent"
 else
-    fail "font-setup.sh idempotency" "Second run failed"
+    fail "Font setup idempotency" "Second run failed"
 fi
 
-export HOME="$OLD_HOME"
+# Test 3: Font installation on macOS target
+echo -e "\n[3/3] Testing font installation on macOS target..."
+MAC_TEMP_HOME=$(mktemp -d)
+trap 'rm -rf "$TEMP_HOME" "$MAC_TEMP_HOME"' EXIT
 
+export HOME="$MAC_TEMP_HOME"
+"$SCRIPT_DIR/setup.sh" --os macos --dotfiles-only --skip-tools --skip-vim --skip-zsh --skip-bash --skip-bin --skip-completions >/dev/null 2>&1
+
+for font in "${expected_fonts[@]}"; do
+    mac_font_path="$MAC_TEMP_HOME/Library/Fonts/$font"
+    if [ -f "$mac_font_path" ] && [ -s "$mac_font_path" ]; then
+        pass "macOS Font installed: $font ($(du -h "$mac_font_path" | cut -f1))"
+    else
+        fail "macOS Font missing: $font" "Expected file at $mac_font_path"
+    fi
+done
+
+export HOME="$OLD_HOME"
 
 echo -e "\n========================================"
 echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"

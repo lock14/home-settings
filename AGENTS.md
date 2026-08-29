@@ -1,20 +1,20 @@
 # Agent Guidelines for home-settings
 
-This repository contains workstation configuration files, dotfiles, prompt themes, shell configurations, CLI tab completions, and setup automation for **modern Linux (*nix) systems (Ubuntu 22.04+ / 24.04+ LTS, Fedora 38+)**. It is the reference repository providing visual and functional parity with [`windows-settings`](https://github.com/lock14/windows-settings) (PowerShell 7+ / Windows Terminal / Solarized Dark).
+This repository contains workstation setup automation, dotfiles, prompt themes, shell configurations, CLI tab completions, and developer toolchains for **modern Unix systems (Ubuntu 22.04+ / 24.04+ LTS, Fedora 38+ / 40+, and macOS)**.
 
-Any agent modifying this repository must follow these core principles.
+Any agent modifying this repository must follow these core architectural principles.
 
 ---
 
 ## 1. Supported Platform & Toolchain Invariants
 
 - **Supported Operating Systems**:
-  - **Ubuntu**: Modern LTS releases only (**Ubuntu 22.04+ LTS Jammy**, **Ubuntu 24.04+ LTS Noble**).
+  - **Ubuntu**: Modern LTS releases (**Ubuntu 22.04+ LTS Jammy**, **Ubuntu 24.04+ LTS Noble**).
   - **Fedora**: Actively maintained releases (**Fedora 38+ / 40+**).
-- **Supported Java Versions**:
-  - Only actively supported, non-EOL Java LTS releases are permitted (**Java 17 LTS**, **Java 21 LTS**).
-  - Deprecated / End-of-Life versions (Java 8, Java 11) must be rejected with informative error messages.
-  - The default JDK version across the repository is **Java 21 LTS**.
+  - **macOS**: Modern macOS releases (Apple Silicon `arm64` and Intel `x86_64`).
+- **Toolchain & Runtime Management**:
+  - Language runtimes (Java, Go, Terraform) are managed declaratively via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`).
+  - **Supported Java Versions**: Only actively supported, non-EOL Java LTS releases are permitted (**Java 17 LTS**, **Java 21 LTS**; default: **Java 21 LTS**). Deprecated / EOL versions (Java 8, Java 11) must be rejected with informative error messages.
 - **Never Commit Personal User Paths**:
   - Never hardcode personal paths like `/home/brianb/`, `/home/<username>/`, `/Users/<username>/`, or `C:\Users\<username>\` into scripts, configuration files, or tests.
 - **Use Canonical Shell & Environment Variables**:
@@ -22,14 +22,20 @@ Any agent modifying this repository must follow these core principles.
   - XDG Data Home: `${XDG_DATA_HOME:-$HOME/.local/share}`
   - XDG Config Home: `${XDG_CONFIG_HOME:-$HOME/.config}`
   - XDG Cache Home: `${XDG_CACHE_HOME:-$HOME/.cache}`
+  - Fonts: `$HOME/Library/Fonts` on macOS, `${XDG_DATA_HOME:-$HOME/.local/share}/fonts` on Linux.
   - Script Directory: Always resolve dynamically via `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`.
-- **Standard Target Directory Structures**:
-  - **Zsh Dotfiles**: `$HOME/.zshrc`, `$HOME/.zsh_aliases`, `$HOME/.zsh_functions`, `$HOME/.zshrc_addendum`, `$HOME/.zsh_completions`
-  - **Bash Dotfiles**: `$HOME/.bashrc`, `$HOME/.bashrc-addendum`, `$HOME/.environment_variables`
-  - **Powerlevel10k Theme**: `$HOME/.p10k.zsh`
-  - **Vim Runtime & Configuration**: `$HOME/.vimrc`, `$HOME/.vim/`
-  - **User Fonts**: `${XDG_DATA_HOME:-$HOME/.local/share}/fonts/`
-  - **User Binaries**: `$HOME/bin/` and `$HOME/software/bin/` (registered in `$PATH`)
+- **Target Directory Structures (`dotfiles/`)**:
+  - All portable dotfiles live in `dotfiles/` and are symlinked into `$HOME/`:
+    - `dotfiles/.environment_variables` $\to$ `$HOME/.environment_variables`
+    - `dotfiles/.bashrc-addendum` $\to$ `$HOME/.bashrc-addendum`
+    - `dotfiles/.zshrc_addendum` $\to$ `$HOME/.zshrc_addendum`
+    - `dotfiles/.zsh_aliases` $\to$ `$HOME/.zsh_aliases`
+    - `dotfiles/.zsh_functions` $\to$ `$HOME/.zsh_functions`
+    - `dotfiles/.zsh_completions` $\to$ `$HOME/.zsh_completions`
+    - `dotfiles/.p10k.zsh` $\to$ `$HOME/.p10k.zsh`
+    - `dotfiles/.vimrc` $\to$ `$HOME/.vimrc`
+    - `dotfiles/.dir_colors/dircolors` $\to$ `$HOME/.dir_colors/dircolors`
+  - User Binaries: `common-bin/*` symlinked into `$HOME/bin/`.
 - **Multi-Architecture Support**:
   - Normalize architecture detection across scripts (`x86_64` -> `amd64`, `aarch64` / `arm64` -> `arm64`).
 
@@ -41,70 +47,50 @@ Any agent modifying this repository must follow these core principles.
   - Symlinking must use `ln -sf` (or `ln -sfn` for directories) to prevent creating nested directory symlinks on re-runs.
   - Sourcing blocks added to `~/.bashrc` or `~/.zshrc` must be guarded by `grep -qxF` to prevent duplicate configuration blocks.
 - **Idempotency Requirement**:
-  - Running setup scripts (`setup.sh`, `user-setup.sh`, `zsh-setup.sh`, `system-setup.sh`) repeatedly must be completely safe, non-destructive, and not create redundant backups or corrupted states.
+  - Running setup scripts (`setup.sh`, `Makefile` targets) repeatedly must be completely safe, non-destructive, and not create redundant backups or corrupted states.
 - **Support `--dry-run` and Selective Flags**:
-  - All provisioning and setup scripts must support `--dry-run` where applicable and provide granular skip switches (`--skip-packages`, `--skip-snaps`, `--skip-chrome`, `--skip-fonts`, etc.).
+  - All provisioning and setup logic in `setup.sh` must support `--dry-run` and provide granular skip switches (`--skip-packages`, `--skip-chrome`, `--skip-apps`, `--skip-fonts`, `--skip-tools`, `--skip-vim`, `--skip-zsh`, `--skip-bash`, `--skip-bin`, `--skip-completions`).
 - **Fail-Fast Shell Scripting**:
   - All Bash scripts must begin with `set -euo pipefail` (or `set -o errexit -o nounset -o pipefail`).
   - Validate prerequisites gracefully and report informative errors.
 
 ---
 
-## 3. Modular Architecture: Common vs. Distro-Specific
+## 3. Architecture: Unified Cross-Platform Engine
 
-- **Maximize Shared Common Logic**:
-  - Generic CLI parsing, validation, logging, and distro-agnostic package installers (such as Snap apps: IntelliJ, VS Code, Postman, Slack) live in `system/` or `common-bin/`.
-- **Relegate Distro Differences to Adapter Directories**:
-  - Package manager commands (`apt` vs `dnf`), package name variations (`dconf-cli` vs `dconf`), distro repository setup (Chrome), and alternative link managers (`update-java-alternatives` vs `update-alternatives`) must reside in `ubuntu/` and `fedora/`.
-- **Top-Level Orchestration**:
-  - Top-level [`setup.sh`](file:///home/brianb/home-settings/setup.sh) auto-detects the operating system (`/etc/os-release`) and delegates to the appropriate adapters while maintaining backward compatibility with legacy entrypoints (`ubuntu/ubuntu_18+_setup.sh`, `fedora/fedora_30+_setup.sh`).
+- **Single Master Orchestrator**:
+  - [`setup.sh`](file:///home/brianb/home-settings/setup.sh) serves as the unified entrypoint for both new machine bootstrapping (`--bootstrap`), system package provisioning (`--system-only`), and user dotfile configuration (`--dotfiles-only`).
+- **Declarative Package Matrix**:
+  - Package manager dispatch (`apt` for Ubuntu, `dnf` for Fedora, `brew` / `brew --cask` for macOS) is handled declaratively in `setup.sh`.
+- **Parallel Asset & Plugin Fetching**:
+  - Font downloads and Vim/Zsh plugin git clones are executed asynchronously in background jobs to maximize performance.
 
 ---
 
 ## 4. Shell Performance, Code Quality & Theme Hygiene
 
-- **High-Speed Shell Startup**:
-  - Keep `zshrc_addendum` and `bashrc-addendum` lightweight. Heavy operations should be lazy-loaded or cached.
+- **High-Speed Shell Startup (< 10ms)**:
+  - Keep `.environment_variables`, `zshrc_addendum`, and `bashrc-addendum` lightweight. Never run expensive synchronous CLI subcommands (like `go env GOPATH`) on shell startup.
 - **Syntax and Lint Compliance**:
   - All bash and sh scripts must pass `bash -n` and `shellcheck` with zero errors.
   - All zsh scripts must pass `zsh -n`.
 - **Solarized Dark & Powerline Theme Integrity**:
   - Terminal color schemes, LS_COLORS/dircolors, Zsh autosuggestion highlight styles (`fg=10` / Solarized base01), and Vim Solarized Dark settings must strictly adhere to the Solarized Dark palette and MesloLGS NF typography.
-  - In Vim, `highlight Normal ctermbg=NONE` and `highlight NonText ctermbg=NONE` ensure seamless integration with the terminal background.
 
 ---
 
-## 5. Cross-Platform Parity with `windows-settings`
+## 5. Developer Shortcuts & Standalone Utilities
 
-- **Maintain Alias & Shortcut Parity**:
-  - Git shortcuts: `gco`, `gcb`, `gcm`, `ga`, `gst`, `gcommit`, `gamend`, `gfetch`, `gpush`, `gpushf`, `gpull`, `gup`, `gprune`, `gsync`, `fix-abcxyz-branch-name`.
-  - Developer shortcuts: `go_testall`, `go_buildall`, `go_lint`, `yaml_lint`, `tf`, `fs`, `ll`, `la`.
-- **Native Utility Parity in `common-bin/`**:
-  - Keep utility tools in `common-bin/` (`gen-passwd`, `repeat-until-success`, `sum`, `install-go`, `switch-go`, `install-tf`, `mvn-release`, `switch-java-version`) matching the behavior and flags of their PowerShell equivalents in `windows-settings/bin/`.
-- **Vim Plugins & Snippets**:
-  - Pathogen bundle parity: `vim-colors-solarized`, `auto-pairs`, `ultisnips`, `supertab`.
-
----
-
-## 6. Documentation Boundaries & Mandatory Updates
-
-- **Mandatory Documentation Synchronization**:
-  - Whenever new aliases, functions, CLI utilities, setup parameters, or distro modules are added or modified, update `README.md` in the same commit/PR.
-- **`README.md` is for Users**:
-  - Focus on user-facing instructions: prerequisites, quick start, directory structure, CLI flags, shortcuts, and utility examples.
-- **`AGENTS.md` is for Agents & Contributors**:
-  - Architectural principles, path invariants, lint rules, testing workflows, and agent directives belong exclusively in `AGENTS.md`.
+- **Git Shortcuts**:
+  - `gco`, `gcb`, `gcm`, `ga`, `gst`, `gcommit`, `gamend`, `gfetch`, `gpush`, `gpushf`, `gpull`, `gup`, `gprune`, `gsync`, `fix-abcxyz-branch-name`.
+- **Developer Shortcuts**:
+  - `go_testall`, `go_buildall`, `go_lint`, `yaml_lint`, `tf`, `fs`, `ll`, `la`.
+- **Standalone Tools in `common-bin/`**:
+  - `gen-passwd`, `sum`, `repeat-until-success`, `mvn-release`.
 
 ---
 
-## 7. Continuous Learning & Principle Encoding
-
-- **Persist User Corrections**:
-  - Whenever an agent receives feedback, corrections, or instructions regarding repository conventions, it **must immediately encode the underlying principle into `AGENTS.md`** before concluding the task.
-
----
-
-## 8. Verification Checklist for Agents
+## 6. Verification Checklist for Agents
 
 Before completing any task:
 1. **Run Static Analysis & Lint Checks**:
@@ -117,12 +103,12 @@ Before completing any task:
    make test
    ```
    Ensure all test suites in `tests/` pass cleanly:
-   - `test_system_setup.sh` (Modular system setup CLI flags, Java LTS enforcement, dry-run, OS dispatching)
-   - `test_env.sh` (Environment variables, PATH, dircolors)
-   - `test_zsh.zsh` (Aliases, functions, git helpers, zshrc addendum)
-   - `test_completions.sh` (Completions symlinks, generators)
-   - `test_vim.sh` (Vimrc parsing, mappings, options)
-   - `test_fonts.sh` (Font downloads and font-setup idempotency)
+   - `test_system_setup.sh` (Cross-platform CLI validation, Java LTS enforcement, dry-run, OS dispatching, mise definition)
+   - `test_env.sh` (Environment variables, PATH, dircolors, GOPATH instant startup)
+   - `test_zsh.zsh` (Aliases, functions, live git integration test, zshrc addendum)
+   - `test_completions.sh` (Completions symlinks, generators, idempotency)
+   - `test_vim.sh` (Vimrc parsing, mappings, snippet validation)
+   - `test_fonts.sh` (Font downloads for Linux and macOS, font idempotency)
 3. **Verify Path Invariants**:
    Inspect `git diff` to confirm no hardcoded personal usernames or machine-specific paths were introduced.
 4. **Update Documentation**:

@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [master, main]
 
-
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # gen-passwd
@@ -187,7 +186,6 @@ jobs:
       - name: Sum human-readable byte units (-H)
         run: |
           result=$(common-bin/sum -H 10K 5M 2G)
-          # 10*1024 + 5*1048576 + 2*1073741824 = 10240 + 5242880 + 2147483648 = 2152736768
           [ "$result" = "2.15274e+09" ] || [ "$result" = "2152736768" ] || { echo "FAIL: got $result"; exit 1; }
           echo "PASS: human-readable units = $result"
 
@@ -211,148 +209,6 @@ jobs:
         if: always()
         run: |
           echo "### 🧪 \`sum\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # install-go  (download + install a real Go release)
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-install-go:
-    name: Test install-go
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Make executable
-        run: chmod +x common-bin/install-go
-
-      - name: Create SDK directory
-        run: mkdir -p "$HOME/software/sdk"
-
-      - name: List available versions (-l flag)
-        run: common-bin/install-go -l | tail -5
-
-      - name: Install Go 1.22.4
-        run: common-bin/install-go -v go1.22.4
-
-      - name: Verify installation directory exists
-        run: |
-          [ -d "$HOME/software/sdk/go1.22.4" ] \
-            || { echo "FAIL: sdk dir not found"; exit 1; }
-          echo "PASS: go1.22.4 installed at $HOME/software/sdk/go1.22.4"
-
-      - name: Already-installed short-circuits cleanly
-        run: common-bin/install-go -v go1.22.4
-
-      - name: Rejects malformed version
-        run: |
-          common-bin/install-go -v 1.22.4 \
-            && { echo "FAIL: should reject version missing 'go' prefix"; exit 1; } \
-            || echo "PASS: malformed version rejected"
-
-      - name: Report Summary
-        if: always()
-        run: |
-          echo "### 🧪 \`install-go\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # switch-go
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-switch-go:
-    name: Test switch-go
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Make executables
-        run: chmod +x common-bin/install-go common-bin/switch-go
-
-      - name: Set up SDK dir and install two Go versions
-        run: |
-          mkdir -p "$HOME/software/sdk"
-          common-bin/install-go -v go1.22.4
-          common-bin/install-go -v go1.21.12
-
-      - name: List installed versions (-l flag)
-        run: common-bin/switch-go -l
-
-      - name: Switch to go1.21.12
-        run: |
-          common-bin/switch-go -v go1.21.12
-          target=$(readlink "$HOME/software/sdk/go")
-          echo "Symlink points to: $target"
-          echo "$target" | grep -q "go1.21.12" \
-            || { echo "FAIL: symlink should point to go1.21.12"; exit 1; }
-          echo "PASS"
-
-      - name: Switch to go1.22.4
-        run: |
-          common-bin/switch-go -v go1.22.4
-          target=$(readlink "$HOME/software/sdk/go")
-          echo "$target" | grep -q "go1.22.4" \
-            || { echo "FAIL: symlink should point to go1.22.4"; exit 1; }
-          echo "PASS"
-
-      - name: Rejects uninstalled version
-        run: |
-          common-bin/switch-go -v go9.9.9 \
-            && { echo "FAIL: should reject uninstalled version"; exit 1; } \
-            || echo "PASS: uninstalled version rejected"
-
-      - name: Report Summary
-        if: always()
-        run: |
-          echo "### 🧪 \`switch-go\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # install-tf
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-install-tf:
-    name: Test install-tf
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Make executable
-        run: chmod +x common-bin/install-tf
-
-      - name: Show usage (-h flag)
-        run: common-bin/install-tf -h
-
-      - name: Rejects malformed version
-        run: |
-          common-bin/install-tf -v abc \
-            && { echo "FAIL: should reject malformed version"; exit 1; } \
-            || echo "PASS: malformed version rejected"
-
-      - name: Install Terraform 1.8.5
-        run: common-bin/install-tf -v 1.8.5
-
-      - name: Verify Terraform binary
-        run: |
-          [ -x "$HOME/bin/terraform" ] || { echo "FAIL: terraform binary not executable"; exit 1; }
-          "$HOME/bin/terraform" version
-
-      - name: Report Summary
-        if: always()
-        run: |
-          echo "### 🧪 \`install-tf\` Test Summary" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
             echo "✅ **All test assertions passed successfully.**" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -393,5 +249,3 @@ jobs:
           else
             echo "❌ **Test failed! Check step logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-

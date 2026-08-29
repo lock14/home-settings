@@ -1,26 +1,91 @@
 REPO_DIR := $(shell pwd)
 
-.PHONY: setup system-setup install uninstall \
-        install-env uninstall-env \
+.PHONY: setup install uninstall \
+        install-dotfiles uninstall-dotfiles \
         install-fonts uninstall-fonts \
-        install-completions uninstall-completions \
-        install-zsh uninstall-zsh \
-        install-bash uninstall-bash \
-        install-vim uninstall-vim \
         install-bin uninstall-bin \
         test lint help
 
-## setup: Run full master setup (system packages, apps, dotfiles, vim, zsh).
+## setup: Run full master setup (system packages, apps, dotfiles, vim, zsh, mise).
 setup:
 	@./setup.sh
 
-## system-setup: Run system-level package and application provisioning.
-system-setup:
-	@./system/system-setup.sh
+## install: Install all dotfiles, fonts, plugins, and user bin tools (user-space, no sudo).
+install:
+	@./setup.sh --dotfiles-only
 
-## test: Run unit and integration tests for system setup, shell, and editor configurations.
+## uninstall: Uninstall all managed dotfiles, fonts, and user bin symlinks.
+uninstall: uninstall-bin uninstall-fonts uninstall-dotfiles
+	@echo "All home settings uninstalled."
+
+## install-dotfiles: Symlink dotfiles into HOME directory.
+install-dotfiles:
+	@echo "Installing dotfiles..."
+	ln -sf "$(REPO_DIR)/dotfiles/.environment_variables" "$(HOME)/.environment_variables"
+	ln -sf "$(REPO_DIR)/dotfiles/.bashrc-addendum"       "$(HOME)/.bashrc-addendum"
+	ln -sf "$(REPO_DIR)/dotfiles/.zshrc_addendum"       "$(HOME)/.zshrc_addendum"
+	ln -sf "$(REPO_DIR)/dotfiles/.zsh_aliases"          "$(HOME)/.zsh_aliases"
+	ln -sf "$(REPO_DIR)/dotfiles/.zsh_functions"        "$(HOME)/.zsh_functions"
+	ln -sf "$(REPO_DIR)/dotfiles/.zsh_completions"      "$(HOME)/.zsh_completions"
+	ln -sf "$(REPO_DIR)/dotfiles/.p10k.zsh"             "$(HOME)/.p10k.zsh"
+	ln -sf "$(REPO_DIR)/dotfiles/.vimrc"                "$(HOME)/.vimrc"
+	mkdir -p "$(HOME)/.dir_colors"
+	ln -sf "$(REPO_DIR)/dotfiles/.dir_colors/dircolors" "$(HOME)/.dir_colors/dircolors"
+	@if [ -d "$(REPO_DIR)/.vim/UltiSnips" ]; then \
+	    mkdir -p "$(HOME)/.vim"; \
+	    ln -sfn "$(REPO_DIR)/.vim/UltiSnips" "$(HOME)/.vim/UltiSnips"; \
+	fi
+
+## uninstall-dotfiles: Remove managed dotfile symlinks.
+uninstall-dotfiles:
+	@echo "Removing dotfile symlinks..."
+	rm -f "$(HOME)/.environment_variables"
+	rm -f "$(HOME)/.bashrc-addendum"
+	rm -f "$(HOME)/.zshrc_addendum"
+	rm -f "$(HOME)/.zsh_aliases"
+	rm -f "$(HOME)/.zsh_functions"
+	rm -f "$(HOME)/.zsh_completions"
+	rm -f "$(HOME)/.p10k.zsh"
+	rm -f "$(HOME)/.vimrc"
+	rm -f "$(HOME)/.vim/UltiSnips"
+	rm -f "$(HOME)/.dir_colors/dircolors"
+
+## install-fonts: Install MesloLGS NF Powerlevel10k patched fonts.
+install-fonts:
+	@./setup.sh --dotfiles-only --skip-tools --skip-vim --skip-zsh --skip-bash --skip-bin --skip-completions
+
+## uninstall-fonts: Remove MesloLGS NF fonts.
+uninstall-fonts:
+	@echo "Removing MesloLGS NF fonts..."
+	@rm -f "$(HOME)/Library/Fonts/MesloLGS NF"*.ttf 2>/dev/null || true
+	@rm -f "$${XDG_DATA_HOME:-$(HOME)/.local/share}/fonts/MesloLGS NF"*.ttf 2>/dev/null || true
+	@if command -v fc-cache >/dev/null 2>&1; then \
+	    fc-cache -f "$${XDG_DATA_HOME:-$(HOME)/.local/share}/fonts" >/dev/null 2>&1 || true; \
+	fi
+
+## install-bin: Symlink common-bin utilities to ~/bin.
+install-bin:
+	@echo "Symlinking common-bin utilities to $(HOME)/bin..."
+	@mkdir -p "$(HOME)/bin"
+	@for f in $(REPO_DIR)/common-bin/*; do \
+	    if [ -f "$$f" ]; then \
+	        chmod +x "$$f"; \
+	        ln -sf "$$f" "$(HOME)/bin/$$(basename "$$f")"; \
+	    fi; \
+	done
+
+## uninstall-bin: Remove installed common-bin utilities from ~/bin.
+uninstall-bin:
+	@echo "Removing common-bin utilities from $(HOME)/bin..."
+	@if [ -d "$(HOME)/bin" ]; then \
+	    for f in $(REPO_DIR)/common-bin/*; do \
+	        rm -f "$(HOME)/bin/$$(basename "$$f")"; \
+	    done; \
+	fi
+
+## test: Run unit and integration test suites.
 test:
-	@echo "Running System & Distro Setup tests..."
+	@echo "Running System & Cross-Platform Engine tests..."
 	@bash tests/test_system_setup.sh
 	@echo "Running Environment & Bash tests..."
 	@bash tests/test_env.sh
@@ -34,123 +99,19 @@ test:
 	@bash tests/test_fonts.sh
 	@echo "All tests passed successfully."
 
-## lint: Run syntax validation and shellcheck (if available).
+## lint: Run syntax validation and shellcheck.
 lint:
 	@echo "Checking zsh syntax..."
-	@zsh -n zsh_aliases zsh_functions zshrc_addendum zsh_completions p10k.zsh
+	@zsh -n dotfiles/.zsh_aliases dotfiles/.zsh_functions dotfiles/.zshrc_addendum dotfiles/.zsh_completions dotfiles/.p10k.zsh
 	@echo "Checking bash script syntax with 'bash -n'..."
-	@bash -n setup.sh bootstrap.sh user-setup.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh vim-setup.sh \
-		system/system-setup.sh system/snap-packages.sh system/java-common.sh \
-		ubuntu/ubuntu_18+_setup.sh ubuntu/os-packages.sh ubuntu/install-chrome.sh ubuntu/install-jdk.sh ubuntu/install-jdk ubuntu/bin/* \
-		fedora/fedora_30+_setup.sh fedora/fedora_presteps.sh fedora/os-packages.sh fedora/install-chrome.sh fedora/install-jdk.sh fedora/bin/* \
-		common-bin/* tests/*.sh
+	@bash -n setup.sh common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck setup.sh bootstrap.sh user-setup.sh zsh-setup.sh bash-setup.sh bin-setup.sh font-setup.sh completions-setup.sh gnome-terminal-setup.sh vim-setup.sh \
-			system/system-setup.sh system/snap-packages.sh system/java-common.sh \
-			ubuntu/os-packages.sh ubuntu/install-chrome.sh ubuntu/install-jdk.sh \
-			fedora/os-packages.sh fedora/install-chrome.sh fedora/install-jdk.sh \
-			common-bin/switch-java-version; \
+		shellcheck setup.sh common-bin/* tests/*.sh; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi
 	@echo "All lint checks passed."
-
-## install: Install all dotfiles, shell configs, vim settings, and user bin tools.
-install: install-env install-fonts install-completions install-zsh install-bash install-vim install-bin
-	@echo "All home settings installed. Restart your shell or run: exec zsh"
-
-## uninstall: Uninstall all dotfiles, shell configs, vim settings, and user bin tools.
-uninstall: uninstall-bin uninstall-vim uninstall-bash uninstall-zsh uninstall-completions uninstall-fonts uninstall-env
-	@echo "All home settings uninstalled."
-
-## install-env: Symlink environment variables and LS_COLORS/dircolors.
-install-env:
-	@echo "Installing environment and color settings..."
-	ln -sf "$(REPO_DIR)/environment_variables" "$(HOME)/.environment_variables"
-	mkdir -p "$(HOME)/.dir_colors"
-	ln -sf "$(REPO_DIR)/LS_COLORS"            "$(HOME)/.dir_colors/dircolors"
-
-## uninstall-env: Remove environment variables and dircolors symlinks.
-uninstall-env:
-	@echo "Removing environment and color symlinks..."
-	rm -f "$(HOME)/.environment_variables"
-	rm -f "$(HOME)/.dir_colors/dircolors"
-
-## install-fonts: Install MesloLGS NF Powerlevel10k patched fonts.
-install-fonts:
-	@echo "Installing MesloLGS NF fonts..."
-	./font-setup.sh
-
-## uninstall-fonts: Remove MesloLGS NF fonts from ~/.local/share/fonts.
-uninstall-fonts:
-	@echo "Removing MesloLGS NF fonts..."
-	rm -f "$(HOME)/.local/share/fonts/MesloLGS NF"*.ttf
-	@if command -v fc-cache >/dev/null 2>&1; then \
-	    fc-cache -f "$(HOME)/.local/share/fonts" >/dev/null 2>&1 || true; \
-	fi
-
-## install-completions: Symlink completions and generate CLI completions for gh, kubectl, helm.
-install-completions:
-	@echo "Installing Zsh completions..."
-	./completions-setup.sh
-
-## uninstall-completions: Remove generated completions and symlinks.
-uninstall-completions:
-	@echo "Removing Zsh completions..."
-	rm -f "$(HOME)/.zsh_completions"
-	rm -rf "$(HOME)/.zsh/completions"
-
-## install-zsh: Symlink Zsh dotfiles and provision Oh-My-Zsh themes & plugins.
-install-zsh:
-	@echo "Installing Zsh configuration and plugins..."
-	./zsh-setup.sh
-
-## uninstall-zsh: Remove Zsh symlinks.
-uninstall-zsh:
-	@echo "Removing Zsh symlinks..."
-	rm -f "$(HOME)/.zsh_aliases"
-	rm -f "$(HOME)/.zsh_functions"
-	rm -f "$(HOME)/.zshrc_addendum"
-	rm -f "$(HOME)/.zsh_completions"
-	rm -f "$(HOME)/.p10k.zsh"
-
-## install-bash: Symlink Bash addendum and register source line in ~/.bashrc.
-install-bash:
-	@echo "Installing Bash configuration..."
-	ln -sf "$(REPO_DIR)/bashrc-addendum"      "$(HOME)/.bashrc-addendum"
-	@grep -qxF 'source ~/.bashrc-addendum' "$(HOME)/.bashrc" 2>/dev/null || \
-	    echo '\n# home-settings\n[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum' >> "$(HOME)/.bashrc"
-
-## uninstall-bash: Remove Bash addendum symlink.
-uninstall-bash:
-	@echo "Removing Bash symlinks..."
-	rm -f "$(HOME)/.bashrc-addendum"
-
-## install-vim: Symlink .vimrc, UltiSnips snippets, and provision Vim plugins.
-install-vim:
-	@echo "Installing Vim configuration and plugins..."
-	./vim-setup.sh
-
-## uninstall-vim: Remove Vim symlinks.
-uninstall-vim:
-	@echo "Removing Vim symlinks..."
-	rm -f "$(HOME)/.vimrc"
-	rm -f "$(HOME)/.vim/UltiSnips"
-
-## install-bin: Populate ~/bin with common-bin utility scripts.
-install-bin:
-	@echo "Installing common-bin utilities to $(HOME)/bin..."
-	./bin-setup.sh
-
-## uninstall-bin: Remove installed common-bin utilities from ~/bin.
-uninstall-bin:
-	@echo "Removing common-bin utilities from $(HOME)/bin..."
-	@if [ -d "$(HOME)/bin" ]; then \
-	    for f in $(REPO_DIR)/common-bin/*; do \
-	        rm -f "$(HOME)/bin/$$(basename "$$f")"; \
-	    done; \
-	fi
 
 ## help: Show available make targets.
 help:

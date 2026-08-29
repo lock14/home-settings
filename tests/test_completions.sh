@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test suite for Zsh completions (zsh_completions, completions-setup.sh)
+# Test suite for Zsh completions (dotfiles/.zsh_completions, setup.sh)
 
 set -euo pipefail
 
@@ -24,28 +24,28 @@ echo "========================================"
 
 # Test 1: Syntax validation
 echo -e "\n[1/3] Checking script and completion syntax..."
-if bash -n "$SCRIPT_DIR/completions-setup.sh"; then
-    pass "Syntax valid: completions-setup.sh"
+if bash -n "$SCRIPT_DIR/setup.sh"; then
+    pass "Syntax valid: setup.sh"
 else
-    fail "Syntax check failed: completions-setup.sh" "bash -n returned non-zero"
+    fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
 fi
 
-if zsh -n "$SCRIPT_DIR/zsh_completions"; then
-    pass "Syntax valid: zsh_completions"
+if zsh -n "$SCRIPT_DIR/dotfiles/.zsh_completions"; then
+    pass "Syntax valid: dotfiles/.zsh_completions"
 else
-    fail "Syntax check failed: zsh_completions" "zsh -n returned non-zero"
+    fail "Syntax check failed: dotfiles/.zsh_completions" "zsh -n returned non-zero"
 fi
 
 # Test 2: Execution in temporary environment
-echo -e "\n[2/3] Testing completions-setup.sh execution..."
+echo -e "\n[2/3] Testing dotfiles installation..."
 TEMP_HOME=$(mktemp -d)
 trap 'rm -rf "$TEMP_HOME"' EXIT
 
 OLD_HOME="$HOME"
 export HOME="$TEMP_HOME"
 
-# Run setup
-"$SCRIPT_DIR/completions-setup.sh" >/dev/null 2>&1
+# Run setup (dotfiles only)
+"$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1
 
 if [ -L "$TEMP_HOME/.zsh_completions" ]; then
     pass "Symlink created: ~/.zsh_completions"
@@ -72,7 +72,7 @@ fi
 EOF
 chmod +x "$MOCK_BIN/gh"
 
-PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/completions-setup.sh" >/dev/null 2>&1
+PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1
 
 if [ -f "$TEMP_HOME/.zsh/completions/_gh" ] && grep -q "mock gh completion" "$TEMP_HOME/.zsh/completions/_gh"; then
     pass "Generated completion: ~/.zsh/completions/_gh"
@@ -81,10 +81,10 @@ else
 fi
 
 # Idempotency check
-if PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/completions-setup.sh" >/dev/null 2>&1; then
-    pass "completions-setup.sh is idempotent"
+if PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1; then
+    pass "setup.sh completions are idempotent"
 else
-    fail "completions-setup.sh idempotency" "Second run failed"
+    fail "setup.sh idempotency" "Second run failed"
 fi
 
 export HOME="$OLD_HOME"
