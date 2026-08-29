@@ -60,11 +60,14 @@ if ! validate_ide_name "$IDE"; then
     exit 1
 fi
 
-run_cmd() {
+snap_install() {
+    local args=("$@")
     if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] $*"
+        echo "  [DryRun] sudo snap install ${args[*]}"
     else
-        "$@"
+        if ! sudo snap install "${args[@]}"; then
+            echo "  Notice: snap install '${args[0]}' failed. Note: snapd service must be running." >&2
+        fi
     fi
 }
 
@@ -81,23 +84,23 @@ if [ "$SKIP_IDE" = false ] && [ "$IDE" != "none" ]; then
     case "$IDE" in
         intellij)
             echo "  Installing IntelliJ IDEA Community..."
-            run_cmd sudo snap install intellij-idea-community --classic
+            snap_install intellij-idea-community --classic
             ;;
         intellij-ultimate)
             echo "  Installing IntelliJ IDEA Ultimate..."
-            run_cmd sudo snap install intellij-idea-ultimate --classic
+            snap_install intellij-idea-ultimate --classic
             ;;
         eclipse)
             echo "  Installing Eclipse..."
-            run_cmd sudo snap install eclipse --classic
+            snap_install eclipse --classic
             ;;
         netbeans)
             echo "  Installing Apache NetBeans..."
-            run_cmd sudo snap install netbeans --classic
+            snap_install netbeans --classic
             ;;
         code)
             echo "  Installing VS Code..."
-            run_cmd sudo snap install code --classic
+            snap_install code --classic
             ;;
     esac
 fi
@@ -105,13 +108,13 @@ fi
 # Install developer desktop applications
 if [ "$SKIP_APPS" = false ]; then
     echo "  Installing VS Code..."
-    run_cmd sudo snap install code --classic
+    snap_install code --classic
 
     echo "  Installing Postman..."
-    run_cmd sudo snap install postman
+    snap_install postman
 
     echo "  Installing Slack..."
-    run_cmd sudo snap install slack --classic
+    snap_install slack --classic
 fi
 
 echo "==> Snap provisioning completed."

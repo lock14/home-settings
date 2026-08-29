@@ -207,10 +207,11 @@ jobs:
       - name: Setup Mocks and Disable Reboot
         run: |
           dnf -y install sudo curl wget findutils
-          # Mock snap for docker container environment
-          echo '#!/bin/bash' > /usr/bin/snap
-          echo 'echo "Mocking snap command: $@"' >> /usr/bin/snap
-          chmod +x /usr/bin/snap
+          # Mock snap in /usr/local/bin for docker container environment
+          mkdir -p /usr/local/bin
+          echo '#!/bin/bash' > /usr/local/bin/snap
+          echo 'echo "Mocking snap command: $@"' >> /usr/local/bin/snap
+          chmod +x /usr/local/bin/snap
           
           # Disable reboot and sleep
           sed -i 's/systemctl reboot/echo "skipping reboot"/g' fedora/fedora_30+_setup.sh || true
