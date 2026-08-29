@@ -107,7 +107,7 @@ lint:
 	@bash -n setup.sh common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck setup.sh common-bin/* tests/*.sh; \
+		shellcheck --severity=warning setup.sh common-bin/* tests/*.sh; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi

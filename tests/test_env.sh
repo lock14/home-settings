@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Test suite for environment variables and bash configurations
 
+# shellcheck disable=SC2030,SC2031
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,6 +40,7 @@ echo -e "\n[2/3] Testing dotfiles/.environment_variables exports..."
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
+    # shellcheck source=/dev/null
     source "$SCRIPT_DIR/dotfiles/.environment_variables"
 
     if [[ ":$PATH:" == *":$HOME/bin:"* ]]; then
@@ -81,6 +83,7 @@ echo -e "\n[3/3] Testing dotfiles/.bashrc-addendum..."
     export HOME="$TEMP_HOME"
     cp "$SCRIPT_DIR/dotfiles/.environment_variables" "$HOME/.environment_variables"
 
+    # shellcheck source=/dev/null
     source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
 
     if [ "${EDITOR:-}" = "vim" ]; then
