@@ -6,6 +6,31 @@ set -o pipefail  # don't hide errors within pipes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Install zsh and dependencies if missing and package manager with sudo is available
+if ! command -v zsh &>/dev/null; then
+    if command -v sudo &>/dev/null && command -v apt &>/dev/null; then
+        sudo apt update -y 2>/dev/null || true
+        sudo apt install -y zsh || true
+    elif [ "${EUID:-$(id -u)}" -eq 0 ] && command -v apt &>/dev/null; then
+        apt update -y 2>/dev/null || true
+        apt install -y zsh || true
+    elif command -v sudo &>/dev/null && command -v dnf &>/dev/null; then
+        sudo dnf -y install zsh || true
+    elif [ "${EUID:-$(id -u)}" -eq 0 ] && command -v dnf &>/dev/null; then
+        dnf -y install zsh || true
+    fi
+fi
+
+if ! command -v fzf &>/dev/null; then
+    if command -v sudo &>/dev/null && command -v apt &>/dev/null; then
+        sudo apt install -y fzf 2>/dev/null || true
+        sudo apt install -y command-not-found 2>/dev/null || true
+    elif command -v sudo &>/dev/null && command -v dnf &>/dev/null; then
+        sudo dnf -y install fzf 2>/dev/null || true
+        sudo dnf -y install PackageKit-command-not-found 2>/dev/null || true
+    fi
+fi
+
 # Check that zsh is installed
 if ! command -v zsh &>/dev/null; then
     echo "Error: zsh is not installed. Please run ./bootstrap.sh or install zsh first." >&2
