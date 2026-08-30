@@ -9,7 +9,7 @@ export EDITOR=vim
 export SVN_EDITOR="$EDITOR"
 
 # Standard user binaries
-export PATH="$HOME/bin:$HOME/.local/bin:$HOME/software/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/software/bin:$PATH"
 
 # Go workspace and SDK paths (instant shell startup, zero subprocesses)
 export GOPATH="${GOPATH:-$HOME/go}"

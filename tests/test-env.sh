@@ -25,7 +25,7 @@ echo "========================================"
 
 # Test 1: Bash syntax checks
 echo -e "\n[1/3] Checking script syntax with 'bash -n'..."
-for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment_variables"; do
+for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment-variables"; do
     if bash -n "$f"; then
         pass "Syntax valid: $(basename "$f")"
     else
@@ -33,21 +33,15 @@ for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT
     fi
 done
 
-# Test 2: Verify environment_variables PATH configuration
-echo -e "\n[2/3] Testing dotfiles/.environment_variables exports..."
+# Test 2: Verify environment-variables PATH configuration
+echo -e "\n[2/3] Testing dotfiles/.environment-variables exports..."
 (
     TEMP_HOME=$(mktemp -d)
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
     # shellcheck source=/dev/null
-    source "$SCRIPT_DIR/dotfiles/.environment_variables"
-
-    if [[ ":$PATH:" == *":$HOME/bin:"* ]]; then
-        pass "\$HOME/bin present in PATH"
-    else
-        fail "\$HOME/bin in PATH" "Expected $HOME/bin in PATH, got: $PATH"
-    fi
+    source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
     if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
         pass "\$HOME/.local/bin present in PATH"
@@ -81,22 +75,22 @@ echo -e "\n[3/3] Testing dotfiles/.bashrc-addendum..."
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
-    cp "$SCRIPT_DIR/dotfiles/.environment_variables" "$HOME/.environment_variables"
+    cp "$SCRIPT_DIR/dotfiles/.environment-variables" "$HOME/.environment-variables"
 
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
 
     if [ "${EDITOR:-}" = "vim" ]; then
-        pass "bashrc-addendum sourced .environment_variables"
+        pass "bashrc-addendum sourced .environment-variables"
     else
-        fail "bashrc-addendum sourcing" ".environment_variables was not sourced"
+        fail "bashrc-addendum sourcing" ".environment-variables was not sourced"
     fi
 )
 
 # Test 4: Verify LS_COLORS / dircolors configuration
 echo -e "\n[4/4] Testing dircolors validity..."
 if command -v dircolors >/dev/null 2>&1; then
-    if dircolors_out=$(dircolors -b "$SCRIPT_DIR/dotfiles/.dir_colors/dircolors" 2>&1); then
+    if dircolors_out=$(dircolors -b "$SCRIPT_DIR/dotfiles/.dir-colors/dircolors" 2>&1); then
         pass "dircolors database is valid"
     else
         fail "dircolors check" "dircolors failed: $dircolors_out"

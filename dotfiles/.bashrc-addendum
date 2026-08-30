@@ -1,7 +1,7 @@
 # custom env variables
-[ -f "$HOME/.environment_variables" ] && source "$HOME/.environment_variables"
-if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir_colors/dircolors" ]; then
-    eval "$(dircolors "$HOME/.dir_colors/dircolors")"
+[ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
+if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ]; then
+    eval "$(dircolors "$HOME/.dir-colors/dircolors")"
 fi
 if command -v mise >/dev/null 2>&1; then
     eval "$(mise activate bash)"

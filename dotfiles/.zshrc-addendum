@@ -8,15 +8,15 @@ DISABLE_UPDATE_PROMPT="true"
 zstyle ':omz:update' mode auto 2>/dev/null || true
 
 # Source modular config files
-[ -f "$HOME/.environment_variables" ] && source "$HOME/.environment_variables"
-[ -f "$HOME/.zsh_completions" ] && source "$HOME/.zsh_completions"
-[ -f "$HOME/.zsh_functions" ] && source "$HOME/.zsh_functions"
-[ -f "$HOME/.zsh_aliases" ] && source "$HOME/.zsh_aliases"
+[ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
+[ -f "$HOME/.zsh-completions" ] && source "$HOME/.zsh-completions"
+[ -f "$HOME/.zsh-functions" ] && source "$HOME/.zsh-functions"
+[ -f "$HOME/.zsh-aliases" ] && source "$HOME/.zsh-aliases"
 [ -f "$HOME/.p10k.zsh" ] && source "$HOME/.p10k.zsh"
 
 # LS_COLORS dircolors integration
-if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir_colors/dircolors" ]; then
-    eval "$(dircolors "$HOME/.dir_colors/dircolors")"
+if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ]; then
+    eval "$(dircolors "$HOME/.dir-colors/dircolors")"
 fi
 
 # Mise runtime manager hook

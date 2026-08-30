@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test suite for Zsh completions (dotfiles/.zsh_completions, setup.sh)
+# Test suite for Zsh completions (dotfiles/.zsh-completions, setup.sh)
 
 set -euo pipefail
 
@@ -30,10 +30,10 @@ else
     fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
 fi
 
-if zsh -n "$SCRIPT_DIR/dotfiles/.zsh_completions"; then
-    pass "Syntax valid: dotfiles/.zsh_completions"
+if zsh -n "$SCRIPT_DIR/dotfiles/.zsh-completions"; then
+    pass "Syntax valid: dotfiles/.zsh-completions"
 else
-    fail "Syntax check failed: dotfiles/.zsh_completions" "zsh -n returned non-zero"
+    fail "Syntax check failed: dotfiles/.zsh-completions" "zsh -n returned non-zero"
 fi
 
 # Test 2: Execution in temporary environment
@@ -47,10 +47,10 @@ export HOME="$TEMP_HOME"
 # Run setup (dotfiles only)
 "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1
 
-if [ -L "$TEMP_HOME/.zsh_completions" ]; then
-    pass "Symlink created: ~/.zsh_completions"
+if [ -L "$TEMP_HOME/.zsh-completions" ]; then
+    pass "Symlink created: ~/.zsh-completions"
 else
-    fail "Symlink missing" "Expected ~/.zsh_completions symlink"
+    fail "Symlink missing" "Expected ~/.zsh-completions symlink"
 fi
 
 if [ -d "$TEMP_HOME/.zsh/completions" ]; then

@@ -23,6 +23,7 @@ The following tools should be available on the host machine:
 - **macOS**: Modern macOS releases (Apple Silicon `arm64` and Intel `x86_64`)
 - **Polyglot Toolchains**: Managed via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`):
   - **Java**: Non-EOL LTS releases only (**Temurin / OpenJDK 21 LTS** default, **17 LTS**)
+  - **Maven**: Modern Maven build toolchain
   - **Go**: Latest Go runtime
   - **Terraform**: Latest Terraform binary
 
@@ -87,7 +88,7 @@ make install
 | `--skip-vim` | *disabled* | Skip Vim configuration and plugins |
 | `--skip-zsh` | *disabled* | Skip Zsh dotfiles, Oh-My-Zsh, plugins, and Powerlevel10k |
 | `--skip-bash` | *disabled* | Skip Bash configuration and environment variables |
-| `--skip-bin` | *disabled* | Skip `~/bin` utility symlinks |
+| `--skip-bin` | *disabled* | Skip `~/.local/bin` utility symlinks |
 | `--skip-completions`| *disabled* | Skip CLI tab completions generation |
 
 ---
@@ -102,17 +103,17 @@ home-settings/
 ├── AGENTS.md                        # Architecture principles & agent directives
 │
 ├── dotfiles/                        # Centralized, portable dotfile tree
-│   ├── .environment_variables       # Sub-millisecond environment & PATH exports
+│   ├── .environment-variables       # Sub-millisecond environment & PATH exports
 │   ├── .bashrc-addendum             # Bash integration hook
-│   ├── .zshrc_addendum              # Zsh integration hook & plugin loader
-│   ├── .zsh_aliases                 # Git, Golang, and Terraform shortcuts
-│   ├── .zsh_functions               # Git synchronization (gsync) & search (fs)
-│   ├── .zsh_completions             # Fpath completion registration
+│   ├── .zshrc-addendum              # Zsh integration hook & plugin loader
+│   ├── .zsh-aliases                 # Git, Golang, and Terraform shortcuts
+│   ├── .zsh-functions               # Git synchronization (gsync) & search (fs)
+│   ├── .zsh-completions             # Fpath completion registration
 │   ├── .p10k.zsh                    # Powerlevel10k prompt configuration
 │   ├── .vimrc                       # Solarized Dark Vim configuration
-│   └── .dir_colors/dircolors        # Solarized Dark dircolors database
+│   └── .dir-colors/dircolors        # Solarized Dark dircolors database
 │
-├── common-bin/                      # Standalone Unix utilities (symlinked to ~/bin/)
+├── common-bin/                      # Standalone Unix utilities (symlinked to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
 │   ├── sum                          # High-performance AWK number summation & stats
 │   ├── repeat-until-success         # Command retry loop with configurable delay
@@ -123,12 +124,12 @@ home-settings/
 ├── .vim/                            # Pathogen autoload runtime
 │
 └── tests/                           # Automated test suites
-    ├── test_system_setup.sh         # Cross-platform CLI validation & dry-run tests
-    ├── test_env.sh                  # Environment variables and bash tests
-    ├── test_zsh.zsh                 # Zsh aliases, functions, git helpers tests
-    ├── test_completions.sh          # Completion symlinks & generator tests
-    ├── test_vim.sh                  # Vim configuration & snippet tests
-    └── test_fonts.sh                # Cross-platform font installation tests
+    ├── test-system-setup.sh         # Cross-platform CLI validation & dry-run tests
+    ├── test-env.sh                  # Environment variables and bash tests
+    ├── test-zsh.zsh                 # Zsh aliases, functions, git helpers tests
+    ├── test-completions.sh          # Completion symlinks & generator tests
+    ├── test-vim.sh                  # Vim configuration & snippet tests
+    └── test-fonts.sh                # Cross-platform font installation tests
 ```
 
 ---
