@@ -92,18 +92,28 @@ fi
 echo -e "\n[3/4] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]]; then
-        pass "setup.sh --os ubuntu --dry-run executes cleanly with Ubuntu packages"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]]; then
+        pass "setup.sh --os ubuntu --dry-run executes cleanly and skips GUI apps by default"
     else
-        fail "setup.sh ubuntu dry-run output" "Missing expected output markers: $output"
+        fail "setup.sh ubuntu dry-run output" "GUI apps should be skipped by default: $output"
     fi
 else
     fail "setup.sh ubuntu dry-run" "Command failed: $output"
 fi
 
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2>&1); then
+    if [[ "$output" == *"google-chrome"* ]] && [[ "$output" == *"snap install code"* ]]; then
+        pass "setup.sh --with-gui enables Chrome and desktop applications"
+    else
+        fail "setup.sh with-gui dry-run output" "Missing expected GUI application commands: $output"
+    fi
+else
+    fail "setup.sh with-gui dry-run" "Command failed: $output"
+fi
+
 if output=$("$SCRIPT_DIR/setup.sh" --os fedora --jdk 17 --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" == *"Java 17"* ]]; then
-        pass "setup.sh --os fedora --jdk 17 --dry-run executes cleanly with Fedora packages"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" == *"Java 17"* ]] && [[ "$output" != *"google-chrome"* ]]; then
+        pass "setup.sh --os fedora --jdk 17 --dry-run executes cleanly with Fedora packages (no GUI apps)"
     else
         fail "setup.sh fedora dry-run output" "Missing expected output markers: $output"
     fi
@@ -112,13 +122,23 @@ else
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os macos --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : macos"* ]] && [[ "$output" == *"brew install"* ]]; then
-        pass "setup.sh --os macos --dry-run executes cleanly with Homebrew packages"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : macos"* ]] && [[ "$output" == *"brew install"* ]] && [[ "$output" != *"--cask"* ]]; then
+        pass "setup.sh --os macos --dry-run executes cleanly with Homebrew packages (no GUI casks)"
     else
         fail "setup.sh macos dry-run output" "Missing expected output markers: $output"
     fi
 else
     fail "setup.sh macos dry-run" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --os macos --with-chrome --dry-run 2>&1); then
+    if [[ "$output" == *"brew install --cask google-chrome"* ]]; then
+        pass "setup.sh --os macos --with-chrome installs Chrome cask"
+    else
+        fail "setup.sh macos with-chrome output" "Missing Chrome cask: $output"
+    fi
+else
+    fail "setup.sh macos with-chrome" "Command failed: $output"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --bootstrap --dry-run 2>&1); then
