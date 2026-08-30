@@ -77,10 +77,10 @@ make install
 | `--dry-run` | *disabled* | Preview actions without making system changes |
 | `--os <distro>` | *auto* | Override OS target (`ubuntu`, `fedora`, `macos`) |
 | `-j, --jdk <ver>` | `21` | Active Java LTS version (`17`, `21`) |
-| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, IDE, Postman, Slack) |
+| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, IDE/VS Code) |
 | `--with-chrome` | *disabled* | Install Google Chrome |
-| `--with-apps` | *disabled* | Install desktop apps (Postman, Slack, VS Code, IDE) |
-| `-i, --ide <name>` | `none` | IDE to install (`intellij`, `intellij-ultimate`, `code`, `eclipse`, `netbeans`, `none`) |
+| `--with-apps` | *disabled* | Install desktop apps (VS Code / IDE) |
+| `-i, --ide <name>` | `none` | IDE to install (`intellij`, `intellij-ultimate`, `code`, `none`) |
 | `--skip-system` | *disabled* | Skip system package updates and system provisioning |
 | `--skip-packages` | *disabled* | Skip core system package manager installs |
 | `--skip-user` | *disabled* | Skip user dotfiles and environment configuration |

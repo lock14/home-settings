@@ -46,10 +46,10 @@ System Options:
   --skip-packages         Skip core system package manager installs
 
 GUI & Desktop Options (Optional, disabled by default):
-  --with-gui              Install all GUI desktop applications (Chrome, IDE, Postman, Slack)
+  --with-gui              Install all GUI desktop applications (Chrome, IDE/VS Code)
   --with-chrome           Install Google Chrome
-  --with-apps             Install desktop apps (Postman, Slack, VS Code, IDE)
-  -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, eclipse, netbeans, none (default: none)
+  --with-apps             Install desktop apps (VS Code / IDE)
+  -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
 
 User Environment Options:
   --skip-user             Skip user dotfiles and environment configuration
@@ -261,9 +261,9 @@ fi
 
 # Validate IDE
 case "$IDE_NAME" in
-    intellij|intellij-ultimate|code|eclipse|netbeans|none) ;;
+    intellij|intellij-ultimate|code|none) ;;
     *)
-        echo "Error: '$IDE_NAME' is not a supported IDE. Choose from: intellij, intellij-ultimate, code, eclipse, netbeans, none" >&2
+        echo "Error: '$IDE_NAME' is not a supported IDE. Choose from: intellij, intellij-ultimate, code, none" >&2
         exit 1
         ;;
 esac
@@ -374,16 +374,11 @@ if [ "$SKIP_SYSTEM" = false ]; then
                             intellij) run_cmd sudo snap install intellij-idea-community --classic ;;
                             intellij-ultimate) run_cmd sudo snap install intellij-idea-ultimate --classic ;;
                             code) run_cmd sudo snap install code --classic ;;
-                            eclipse) run_cmd sudo snap install eclipse --classic ;;
-                            netbeans) run_cmd sudo snap install netbeans --classic ;;
                         esac
-                    fi
-                    # Auxiliary desktop tools
-                    if [ "$IDE_NAME" != "code" ]; then
+                    else
+                        # Default editor application when --with-apps is passed without explicit --ide
                         run_cmd sudo snap install code --classic
                     fi
-                    run_cmd sudo snap install postman
-                    run_cmd sudo snap install slack --classic
                 else
                     echo "  Notice: snap command not found. Skipping Snap applications."
                 fi
@@ -394,13 +389,11 @@ if [ "$SKIP_SYSTEM" = false ]; then
                         intellij) run_cmd brew install --cask intellij-idea-ce ;;
                         intellij-ultimate) run_cmd brew install --cask intellij-idea ;;
                         code) run_cmd brew install --cask visual-studio-code ;;
-                        eclipse) run_cmd brew install --cask eclipse-ide ;;
                     esac
-                fi
-                if [ "$IDE_NAME" != "code" ]; then
+                else
+                    # Default editor application when --with-apps is passed without explicit --ide
                     run_cmd brew install --cask visual-studio-code
                 fi
-                run_cmd brew install --cask postman slack
                 ;;
         esac
     fi
