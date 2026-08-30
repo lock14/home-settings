@@ -57,15 +57,15 @@ jobs:
         run: |
           # Test dotfiles install & uninstall
           make install-dotfiles
-          [ -L "$HOME/.environment_variables" ] && [ -L "$HOME/.dir_colors/dircolors" ] && [ -L "$HOME/.vimrc" ] || { echo "FAIL: install-dotfiles"; exit 1; }
+          [ -L "$HOME/.environment-variables" ] && [ -L "$HOME/.dir-colors/dircolors" ] && [ -L "$HOME/.vimrc" ] || { echo "FAIL: install-dotfiles"; exit 1; }
           make uninstall-dotfiles
-          [ ! -e "$HOME/.environment_variables" ] && [ ! -e "$HOME/.dir_colors/dircolors" ] && [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: uninstall-dotfiles"; exit 1; }
+          [ ! -e "$HOME/.environment-variables" ] && [ ! -e "$HOME/.dir-colors/dircolors" ] && [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: uninstall-dotfiles"; exit 1; }
 
           # Test bin module
           make install-bin
-          [ -L "$HOME/bin/gen-passwd" ] || { echo "FAIL: install-bin (expected symlink)"; exit 1; }
+          [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: install-bin (expected symlink)"; exit 1; }
           make uninstall-bin
-          [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: uninstall-bin"; exit 1; }
+          [ ! -e "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: uninstall-bin"; exit 1; }
 
           # Test fonts module
           make install-fonts
@@ -81,25 +81,25 @@ jobs:
           # Verify dotfile symlinks and fonts exist
           [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
-          [ -L "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases symlink missing"; exit 1; }
-          [ -L "$HOME/.zsh_functions" ] || { echo "FAIL: ~/.zsh_functions symlink missing"; exit 1; }
-          [ -L "$HOME/.zshrc_addendum" ] || { echo "FAIL: ~/.zshrc_addendum symlink missing"; exit 1; }
-          [ -L "$HOME/.zsh_completions" ] || { echo "FAIL: ~/.zsh_completions symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh-functions" ] || { echo "FAIL: ~/.zsh-functions symlink missing"; exit 1; }
+          [ -L "$HOME/.zshrc-addendum" ] || { echo "FAIL: ~/.zshrc-addendum symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh-completions" ] || { echo "FAIL: ~/.zsh-completions symlink missing"; exit 1; }
           [ -L "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh symlink missing"; exit 1; }
           [ -L "$HOME/.bashrc-addendum" ] || { echo "FAIL: ~/.bashrc-addendum symlink missing"; exit 1; }
-          [ -L "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables symlink missing"; exit 1; }
-          [ -L "$HOME/.dir_colors/dircolors" ] || { echo "FAIL: ~/.dir_colors/dircolors symlink missing"; exit 1; }
-          [ -L "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd symlink missing"; exit 1; }
+          [ -L "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables symlink missing"; exit 1; }
+          [ -L "$HOME/.dir-colors/dircolors" ] || { echo "FAIL: ~/.dir-colors/dircolors symlink missing"; exit 1; }
+          [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd symlink missing"; exit 1; }
           echo "PASS: make install created all symlinks, fonts, and bin tools"
 
           make uninstall
           [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
-          [ ! -e "$HOME/.zsh_aliases" ] || { echo "FAIL: ~/.zsh_aliases still exists"; exit 1; }
-          [ ! -e "$HOME/.zsh_completions" ] || { echo "FAIL: ~/.zsh_completions still exists"; exit 1; }
+          [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases still exists"; exit 1; }
+          [ ! -e "$HOME/.zsh-completions" ] || { echo "FAIL: ~/.zsh-completions still exists"; exit 1; }
           [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh still exists"; exit 1; }
-          [ ! -e "$HOME/.environment_variables" ] || { echo "FAIL: ~/.environment_variables still exists"; exit 1; }
-          [ ! -e "$HOME/bin/gen-passwd" ] || { echo "FAIL: ~/bin/gen-passwd still exists"; exit 1; }
+          [ ! -e "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables still exists"; exit 1; }
+          [ ! -e "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd still exists"; exit 1; }
           echo "PASS: make uninstall cleaned all symlinks, fonts, and bin tools"
 
   # ─────────────────────────────────────────────────────────────────────────────
