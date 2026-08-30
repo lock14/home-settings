@@ -11,12 +11,18 @@ export SVN_EDITOR="$EDITOR"
 # Standard user binaries
 export PATH="$HOME/.local/bin:$HOME/software/bin:$PATH"
 
-# Go workspace path (instant shell startup, zero subprocesses)
-GOPATH_DEFAULT="$HOME/go"
-export GOPATH="${GOPATH:-$GOPATH_DEFAULT}"
-export PATH="$GOPATH/bin:$PATH"
-
 # Mise runtime manager shims
 if [ -d "$HOME/.local/share/mise/shims" ]; then
     export PATH="$HOME/.local/share/mise/shims:$PATH"
+fi
+
+# Go workspace path (if go is present)
+if command -v go >/dev/null 2>&1; then
+    GOPATH="$(go env GOPATH 2>/dev/null)"
+    if [ -n "$GOPATH" ]; then
+        export GOPATH
+        export PATH="$GOPATH/bin:$PATH"
+    fi
+elif [ -n "${GOPATH:-}" ]; then
+    export PATH="$GOPATH/bin:$PATH"
 fi

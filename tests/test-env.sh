@@ -24,7 +24,7 @@ echo "Running Environment & Bash Tests"
 echo "========================================"
 
 # Test 1: Bash syntax checks
-echo -e "\n[1/3] Checking script syntax with 'bash -n'..."
+echo -e "\n[1/4] Checking script syntax with 'bash -n'..."
 for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment-variables"; do
     if bash -n "$f"; then
         pass "Syntax valid: $(basename "$f")"
@@ -34,7 +34,7 @@ for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT
 done
 
 # Test 2: Verify environment-variables PATH configuration
-echo -e "\n[2/3] Testing dotfiles/.environment-variables exports..."
+echo -e "\n[2/4] Testing dotfiles/.environment-variables exports..."
 (
     TEMP_HOME=$(mktemp -d)
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
@@ -62,15 +62,55 @@ echo -e "\n[2/3] Testing dotfiles/.environment-variables exports..."
         fail "EDITOR export" "Expected vim, got: ${EDITOR:-}"
     fi
 
-    if [ "${GOPATH:-}" = "$TEMP_HOME/go" ]; then
-        pass "GOPATH default is set cleanly ($GOPATH)"
-    else
-        fail "GOPATH export" "Expected $TEMP_HOME/go, got: ${GOPATH:-}"
+    if command -v go >/dev/null 2>&1; then
+        if [ -n "${GOPATH:-}" ] && [[ ":$PATH:" == *":$GOPATH/bin:"* ]]; then
+            pass "GOPATH and \$GOPATH/bin set cleanly when go is present ($GOPATH)"
+        else
+            fail "GOPATH export" "Expected GOPATH/bin in PATH, got GOPATH=${GOPATH:-}, PATH=$PATH"
+        fi
     fi
+
+    # Test dynamic go env GOPATH resolution with mock go binary
+    MOCK_BIN="$TEMP_HOME/mock-bin"
+    mkdir -p "$MOCK_BIN"
+    cat <<'MOCK' > "$MOCK_BIN/go"
+#!/bin/sh
+if [ "$1" = "env" ] && [ "$2" = "GOPATH" ]; then
+    echo "/custom/test-gopath"
+fi
+MOCK
+    chmod +x "$MOCK_BIN/go"
+
+    (
+        export HOME="$TEMP_HOME"
+        export PATH="$MOCK_BIN:/usr/bin:/bin"
+        unset GOPATH
+        # shellcheck source=/dev/null
+        source "$SCRIPT_DIR/dotfiles/.environment-variables"
+        if [ "${GOPATH:-}" = "/custom/test-gopath" ] && [[ ":$PATH:" == *":/custom/test-gopath/bin:"* ]]; then
+            pass "go env GOPATH dynamically added to PATH when go is present"
+        else
+            fail "go env GOPATH dynamic resolution" "Expected /custom/test-gopath in GOPATH and PATH, got GOPATH=${GOPATH:-}, PATH=$PATH"
+        fi
+    )
+
+    # Test behavior when go is not present
+    (
+        export HOME="$TEMP_HOME"
+        export PATH="/usr/bin:/bin"
+        unset GOPATH
+        # shellcheck source=/dev/null
+        source "$SCRIPT_DIR/dotfiles/.environment-variables"
+        if [ -z "${GOPATH:-}" ]; then
+            pass "GOPATH is not set when go is absent"
+        else
+            fail "GOPATH absence test" "Expected unset GOPATH when go is absent, got GOPATH=${GOPATH:-}"
+        fi
+    )
 )
 
 # Test 3: Verify bashrc-addendum sourcing
-echo -e "\n[3/3] Testing dotfiles/.bashrc-addendum..."
+echo -e "\n[3/4] Testing dotfiles/.bashrc-addendum..."
 (
     TEMP_HOME=$(mktemp -d)
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT

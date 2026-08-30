@@ -70,7 +70,7 @@ Any agent modifying this repository must follow these core architectural princip
 ## 4. Shell Performance, Code Quality & Theme Hygiene
 
 - **High-Speed Shell Startup (< 10ms)**:
-  - Keep `.environment-variables`, `zshrc-addendum`, and `bashrc-addendum` lightweight. Never run expensive synchronous CLI subcommands (like `go env GOPATH`) on shell startup.
+  - Keep `.environment-variables`, `zshrc-addendum`, and `bashrc-addendum` lightweight. Guard dynamic lookups (such as `go env GOPATH`) so they only evaluate when the tool is present.
 - **Syntax and Lint Compliance**:
   - All bash and sh scripts must pass `bash -n` and `shellcheck` with zero errors.
   - All zsh scripts must pass `zsh -n`.
@@ -104,7 +104,7 @@ Before completing any task:
    ```
    Ensure all test suites in `tests/` pass cleanly:
    - `test-system-setup.sh` (Cross-platform CLI validation, Java LTS enforcement, dry-run, OS dispatching, mise definition)
-   - `test-env.sh` (Environment variables, PATH, dircolors, GOPATH instant startup)
+   - `test-env.sh` (Environment variables, PATH, dircolors, GOPATH dynamic discovery)
    - `test-zsh.zsh` (Aliases, functions, live git integration test, zshrc addendum)
    - `test-completions.sh` (Completions symlinks, generators, idempotency)
    - `test-vim.sh` (Vimrc parsing, mappings, snippet validation)
