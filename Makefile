@@ -21,29 +21,29 @@ uninstall: uninstall-bin uninstall-fonts uninstall-dotfiles
 ## install-dotfiles: Symlink dotfiles into HOME directory.
 install-dotfiles:
 	@echo "Installing dotfiles..."
-	ln -sf "$(REPO_DIR)/dotfiles/.environment_variables" "$(HOME)/.environment_variables"
+	ln -sf "$(REPO_DIR)/dotfiles/.environment-variables" "$(HOME)/.environment-variables"
 	ln -sf "$(REPO_DIR)/dotfiles/.bashrc-addendum"       "$(HOME)/.bashrc-addendum"
-	ln -sf "$(REPO_DIR)/dotfiles/.zshrc_addendum"       "$(HOME)/.zshrc_addendum"
-	ln -sf "$(REPO_DIR)/dotfiles/.zsh_aliases"          "$(HOME)/.zsh_aliases"
-	ln -sf "$(REPO_DIR)/dotfiles/.zsh_functions"        "$(HOME)/.zsh_functions"
-	ln -sf "$(REPO_DIR)/dotfiles/.zsh_completions"      "$(HOME)/.zsh_completions"
-	ln -sf "$(REPO_DIR)/dotfiles/.p10k.zsh"             "$(HOME)/.p10k.zsh"
+	ln -sf "$(REPO_DIR)/dotfiles/.zshrc-addendum"        "$(HOME)/.zshrc-addendum"
+	ln -sf "$(REPO_DIR)/dotfiles/.zsh-aliases"           "$(HOME)/.zsh-aliases"
+	ln -sf "$(REPO_DIR)/dotfiles/.zsh-functions"         "$(HOME)/.zsh-functions"
+	ln -sf "$(REPO_DIR)/dotfiles/.zsh-completions"       "$(HOME)/.zsh-completions"
+	ln -sf "$(REPO_DIR)/dotfiles/.p10k.zsh"              "$(HOME)/.p10k.zsh"
 	ln -sf "$(REPO_DIR)/dotfiles/.vimrc"                "$(HOME)/.vimrc"
-	mkdir -p "$(HOME)/.dir_colors"
-	ln -sf "$(REPO_DIR)/dotfiles/.dir_colors/dircolors" "$(HOME)/.dir_colors/dircolors"
+	mkdir -p "$(HOME)/.dir-colors"
+	ln -sf "$(REPO_DIR)/dotfiles/.dir-colors/dircolors"  "$(HOME)/.dir-colors/dircolors"
 
 ## uninstall-dotfiles: Remove managed dotfile symlinks.
 uninstall-dotfiles:
 	@echo "Removing dotfile symlinks..."
-	rm -f "$(HOME)/.environment_variables"
+	rm -f "$(HOME)/.environment-variables"
 	rm -f "$(HOME)/.bashrc-addendum"
-	rm -f "$(HOME)/.zshrc_addendum"
-	rm -f "$(HOME)/.zsh_aliases"
-	rm -f "$(HOME)/.zsh_functions"
-	rm -f "$(HOME)/.zsh_completions"
+	rm -f "$(HOME)/.zshrc-addendum"
+	rm -f "$(HOME)/.zsh-aliases"
+	rm -f "$(HOME)/.zsh-functions"
+	rm -f "$(HOME)/.zsh-completions"
 	rm -f "$(HOME)/.p10k.zsh"
 	rm -f "$(HOME)/.vimrc"
-	rm -f "$(HOME)/.dir_colors/dircolors"
+	rm -f "$(HOME)/.dir-colors/dircolors"
 
 ## install-fonts: Install MesloLGS NF Powerlevel10k patched fonts.
 install-fonts:
@@ -58,46 +58,46 @@ uninstall-fonts:
 	    fc-cache -f "$${XDG_DATA_HOME:-$(HOME)/.local/share}/fonts" >/dev/null 2>&1 || true; \
 	fi
 
-## install-bin: Symlink common-bin utilities to ~/bin.
+## install-bin: Symlink common-bin utilities to ~/.local/bin.
 install-bin:
-	@echo "Symlinking common-bin utilities to $(HOME)/bin..."
-	@mkdir -p "$(HOME)/bin"
+	@echo "Symlinking common-bin utilities to $(HOME)/.local/bin..."
+	@mkdir -p "$(HOME)/.local/bin"
 	@for f in $(REPO_DIR)/common-bin/*; do \
 	    if [ -f "$$f" ]; then \
 	        chmod +x "$$f"; \
-	        ln -sf "$$f" "$(HOME)/bin/$$(basename "$$f")"; \
+	        ln -sf "$$f" "$(HOME)/.local/bin/$$(basename "$$f")"; \
 	    fi; \
 	done
 
-## uninstall-bin: Remove installed common-bin utilities from ~/bin.
+## uninstall-bin: Remove installed common-bin utilities from ~/.local/bin.
 uninstall-bin:
-	@echo "Removing common-bin utilities from $(HOME)/bin..."
-	@if [ -d "$(HOME)/bin" ]; then \
+	@echo "Removing common-bin utilities from $(HOME)/.local/bin..."
+	@if [ -d "$(HOME)/.local/bin" ]; then \
 	    for f in $(REPO_DIR)/common-bin/*; do \
-	        rm -f "$(HOME)/bin/$$(basename "$$f")"; \
+	        rm -f "$(HOME)/.local/bin/$$(basename "$$f")"; \
 	    done; \
 	fi
 
 ## test: Run unit and integration test suites.
 test:
 	@echo "Running System & Cross-Platform Engine tests..."
-	@bash tests/test_system_setup.sh
+	@bash tests/test-system-setup.sh
 	@echo "Running Environment & Bash tests..."
-	@bash tests/test_env.sh
+	@bash tests/test-env.sh
 	@echo "Running Zsh tests..."
-	@zsh tests/test_zsh.zsh
+	@zsh tests/test-zsh.zsh
 	@echo "Running Completions tests..."
-	@bash tests/test_completions.sh
+	@bash tests/test-completions.sh
 	@echo "Running Vim tests..."
-	@bash tests/test_vim.sh
+	@bash tests/test-vim.sh
 	@echo "Running Font tests..."
-	@bash tests/test_fonts.sh
+	@bash tests/test-fonts.sh
 	@echo "All tests passed successfully."
 
 ## lint: Run syntax validation and shellcheck.
 lint:
 	@echo "Checking zsh syntax..."
-	@zsh -n dotfiles/.zsh_aliases dotfiles/.zsh_functions dotfiles/.zshrc_addendum dotfiles/.zsh_completions dotfiles/.p10k.zsh
+	@zsh -n dotfiles/.zsh-aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh
 	@echo "Checking bash script syntax with 'bash -n'..."
 	@bash -n setup.sh common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \

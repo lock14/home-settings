@@ -13,7 +13,7 @@ Any agent modifying this repository must follow these core architectural princip
   - **Fedora**: Actively maintained releases (**Fedora 38+ / 40+**).
   - **macOS**: Modern macOS releases (Apple Silicon `arm64` and Intel `x86_64`).
 - **Toolchain & Runtime Management**:
-  - Language runtimes (Java, Go, Terraform) are managed declaratively via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`).
+  - Language runtimes and build tools (Java, Maven, Go, Terraform) are managed declaratively via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`).
   - **Supported Java Versions**: Only actively supported, non-EOL Java LTS releases are permitted (**Java 17 LTS**, **Java 21 LTS**; default: **Java 21 LTS**). Deprecated / EOL versions (Java 8, Java 11) must be rejected with informative error messages.
 - **Never Commit Personal User Paths**:
   - Never hardcode personal paths like `/home/brianb/`, `/home/<username>/`, `/Users/<username>/`, or `C:\Users\<username>\` into scripts, configuration files, or tests.
@@ -26,16 +26,16 @@ Any agent modifying this repository must follow these core architectural princip
   - Script Directory: Always resolve dynamically via `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`.
 - **Target Directory Structures (`dotfiles/`)**:
   - All portable dotfiles live in `dotfiles/` and are symlinked into `$HOME/`:
-    - `dotfiles/.environment_variables` $\to$ `$HOME/.environment_variables`
+    - `dotfiles/.environment-variables` $\to$ `$HOME/.environment-variables`
     - `dotfiles/.bashrc-addendum` $\to$ `$HOME/.bashrc-addendum`
-    - `dotfiles/.zshrc_addendum` $\to$ `$HOME/.zshrc_addendum`
-    - `dotfiles/.zsh_aliases` $\to$ `$HOME/.zsh_aliases`
-    - `dotfiles/.zsh_functions` $\to$ `$HOME/.zsh_functions`
-    - `dotfiles/.zsh_completions` $\to$ `$HOME/.zsh_completions`
+    - `dotfiles/.zshrc-addendum` $\to$ `$HOME/.zshrc-addendum`
+    - `dotfiles/.zsh-aliases` $\to$ `$HOME/.zsh-aliases`
+    - `dotfiles/.zsh-functions` $\to$ `$HOME/.zsh-functions`
+    - `dotfiles/.zsh-completions` $\to$ `$HOME/.zsh-completions`
     - `dotfiles/.p10k.zsh` $\to$ `$HOME/.p10k.zsh`
     - `dotfiles/.vimrc` $\to$ `$HOME/.vimrc`
-    - `dotfiles/.dir_colors/dircolors` $\to$ `$HOME/.dir_colors/dircolors`
-  - User Binaries: `common-bin/*` symlinked into `$HOME/bin/`.
+    - `dotfiles/.dir-colors/dircolors` $\to$ `$HOME/.dir-colors/dircolors`
+  - User Binaries: `common-bin/*` symlinked into `${XDG_DATA_HOME:-$HOME/.local}/bin/` (`$HOME/.local/bin/`).
 - **Multi-Architecture Support**:
   - Normalize architecture detection across scripts (`x86_64` -> `amd64`, `aarch64` / `arm64` -> `arm64`).
 
@@ -70,7 +70,7 @@ Any agent modifying this repository must follow these core architectural princip
 ## 4. Shell Performance, Code Quality & Theme Hygiene
 
 - **High-Speed Shell Startup (< 10ms)**:
-  - Keep `.environment_variables`, `zshrc_addendum`, and `bashrc-addendum` lightweight. Never run expensive synchronous CLI subcommands (like `go env GOPATH`) on shell startup.
+  - Keep `.environment-variables`, `zshrc-addendum`, and `bashrc-addendum` lightweight. Never run expensive synchronous CLI subcommands (like `go env GOPATH`) on shell startup.
 - **Syntax and Lint Compliance**:
   - All bash and sh scripts must pass `bash -n` and `shellcheck` with zero errors.
   - All zsh scripts must pass `zsh -n`.
@@ -103,12 +103,12 @@ Before completing any task:
    make test
    ```
    Ensure all test suites in `tests/` pass cleanly:
-   - `test_system_setup.sh` (Cross-platform CLI validation, Java LTS enforcement, dry-run, OS dispatching, mise definition)
-   - `test_env.sh` (Environment variables, PATH, dircolors, GOPATH instant startup)
-   - `test_zsh.zsh` (Aliases, functions, live git integration test, zshrc addendum)
-   - `test_completions.sh` (Completions symlinks, generators, idempotency)
-   - `test_vim.sh` (Vimrc parsing, mappings, snippet validation)
-   - `test_fonts.sh` (Font downloads for Linux and macOS, font idempotency)
+   - `test-system-setup.sh` (Cross-platform CLI validation, Java LTS enforcement, dry-run, OS dispatching, mise definition)
+   - `test-env.sh` (Environment variables, PATH, dircolors, GOPATH instant startup)
+   - `test-zsh.zsh` (Aliases, functions, live git integration test, zshrc addendum)
+   - `test-completions.sh` (Completions symlinks, generators, idempotency)
+   - `test-vim.sh` (Vimrc parsing, mappings, snippet validation)
+   - `test-fonts.sh` (Font downloads for Linux and macOS, font idempotency)
 3. **Verify Path Invariants**:
    Inspect `git diff` to confirm no hardcoded personal usernames or machine-specific paths were introduced.
 4. **Update Documentation**:

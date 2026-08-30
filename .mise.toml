@@ -5,3 +5,4 @@
 java = "temurin-21"
 go = "latest"
 terraform = "latest"
+maven = "latest"

@@ -55,7 +55,7 @@ User Environment Options:
   --skip-vim              Skip Vim configuration and plugins
   --skip-zsh              Skip Zsh dotfiles, Oh-My-Zsh, plugins, and Powerlevel10k
   --skip-bash             Skip Bash configuration and environment variables
-  --skip-bin              Skip ~/bin user utilities synchronization
+  --skip-bin              Skip ~/.local/bin user utilities synchronization
   --skip-completions      Skip CLI tab completions generation
 
 General Options:
@@ -397,36 +397,36 @@ fi
 if [ "$SKIP_USER" = false ]; then
     echo -e "\n[2/2] Running User Dotfiles & Environment Setup..."
 
-    mkdir -p "$HOME/bin" "$HOME/.local/bin"
+    mkdir -p "$HOME/.local/bin"
 
     # 1. Atomic Dotfile Symlinking
     DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
     echo "  Symlinking dotfiles from $DOTFILES_DIR to $HOME..."
     if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] Symlinking .environment_variables, .bashrc-addendum, .zshrc_addendum, .zsh_aliases, .zsh_functions, .zsh_completions, .p10k.zsh, .vimrc, .dir_colors/dircolors"
+        echo "  [DryRun] Symlinking .environment-variables, .bashrc-addendum, .zshrc-addendum, .zsh-aliases, .zsh-functions, .zsh-completions, .p10k.zsh, .vimrc, .dir-colors/dircolors"
     else
-        ln -sf "$DOTFILES_DIR/.environment_variables" "$HOME/.environment_variables"
+        ln -sf "$DOTFILES_DIR/.environment-variables" "$HOME/.environment-variables"
         ln -sf "$DOTFILES_DIR/.bashrc-addendum"       "$HOME/.bashrc-addendum"
-        ln -sf "$DOTFILES_DIR/.zshrc_addendum"       "$HOME/.zshrc_addendum"
-        ln -sf "$DOTFILES_DIR/.zsh_aliases"          "$HOME/.zsh_aliases"
-        ln -sf "$DOTFILES_DIR/.zsh_functions"        "$HOME/.zsh_functions"
-        ln -sf "$DOTFILES_DIR/.zsh_completions"      "$HOME/.zsh_completions"
-        ln -sf "$DOTFILES_DIR/.p10k.zsh"             "$HOME/.p10k.zsh"
-        ln -sf "$DOTFILES_DIR/.vimrc"                "$HOME/.vimrc"
-        mkdir -p "$HOME/.dir_colors"
-        ln -sf "$DOTFILES_DIR/.dir_colors/dircolors" "$HOME/.dir_colors/dircolors"
+        ln -sf "$DOTFILES_DIR/.zshrc-addendum"        "$HOME/.zshrc-addendum"
+        ln -sf "$DOTFILES_DIR/.zsh-aliases"           "$HOME/.zsh-aliases"
+        ln -sf "$DOTFILES_DIR/.zsh-functions"         "$HOME/.zsh-functions"
+        ln -sf "$DOTFILES_DIR/.zsh-completions"       "$HOME/.zsh-completions"
+        ln -sf "$DOTFILES_DIR/.p10k.zsh"              "$HOME/.p10k.zsh"
+        ln -sf "$DOTFILES_DIR/.vimrc"                 "$HOME/.vimrc"
+        mkdir -p "$HOME/.dir-colors"
+        ln -sf "$DOTFILES_DIR/.dir-colors/dircolors"  "$HOME/.dir-colors/dircolors"
     fi
 
     # 2. User Binaries Symlinks
     if [ "$SKIP_BIN" = false ]; then
-        echo "  Symlinking common-bin utilities to ~/bin..."
+        echo "  Symlinking common-bin utilities to ~/.local/bin..."
         if [ "$DRY_RUN" = true ]; then
-            echo "  [DryRun] Symlinking common-bin/* into $HOME/bin"
+            echo "  [DryRun] Symlinking common-bin/* into $HOME/.local/bin"
         else
             for f in "$SCRIPT_DIR/common-bin"/*; do
                 if [ -f "$f" ]; then
                     chmod +x "$f"
-                    ln -sf "$f" "$HOME/bin/$(basename "$f")"
+                    ln -sf "$f" "$HOME/.local/bin/$(basename "$f")"
                 fi
             done
         fi
@@ -551,8 +551,8 @@ if [ "$SKIP_USER" = false ]; then
 
             if [ -f "$HOME/.zshrc" ]; then
                 sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
-                grep -qxF '[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum' "$HOME/.zshrc" 2>/dev/null || \
-                    printf '\n# home-settings\n[ -f ~/.zshrc_addendum ] && source ~/.zshrc_addendum\n' >> "$HOME/.zshrc"
+                grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" 2>/dev/null || \
+                    printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"
             fi
         fi
     fi

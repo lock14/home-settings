@@ -144,8 +144,8 @@ fi
 # Test 4: Mise Configuration Validity
 echo -e "\n[4/4] Testing .mise.toml toolchain definition..."
 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
-    if grep -q 'java = "temurin-21"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml"; then
-        pass ".mise.toml contains valid Java 21 LTS and Go tool definitions"
+    if grep -q 'java = "temurin-21"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml"; then
+        pass ".mise.toml contains valid Java 21 LTS, Go, and Maven tool definitions"
     else
         fail ".mise.toml definition" "Missing expected tool configurations"
     fi
