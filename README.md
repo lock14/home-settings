@@ -73,15 +73,16 @@ make install
 | :--- | :--- | :--- |
 | `--bootstrap` | *disabled* | Full new machine bootstrap (base packages, shell switch, tools, dotfiles) |
 | `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (no root required) |
-| `--system-only` | *disabled* | Provision OS packages, desktop apps, and CLI tools only |
+| `--system-only` | *disabled* | Provision OS packages and CLI tools only |
 | `--dry-run` | *disabled* | Preview actions without making system changes |
 | `--os <distro>` | *auto* | Override OS target (`ubuntu`, `fedora`, `macos`) |
 | `-j, --jdk <ver>` | `21` | Active Java LTS version (`17`, `21`) |
-| `-i, --ide <name>` | `intellij-ultimate` | IDE to install (`intellij`, `intellij-ultimate`, `code`, `eclipse`, `netbeans`, `none`) |
-| `--skip-system` | *disabled* | Skip system package updates and application provisioning |
+| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, IDE/VS Code) |
+| `--with-chrome` | *disabled* | Install Google Chrome |
+| `--with-apps` | *disabled* | Install desktop apps (VS Code / IDE) |
+| `-i, --ide <name>` | `none` | IDE to install (`intellij`, `intellij-ultimate`, `code`, `none`) |
+| `--skip-system` | *disabled* | Skip system package updates and system provisioning |
 | `--skip-packages` | *disabled* | Skip core system package manager installs |
-| `--skip-chrome` | *disabled* | Skip Google Chrome installation |
-| `--skip-apps` | *disabled* | Skip desktop applications (VS Code, Postman, Slack, IDE) |
 | `--skip-user` | *disabled* | Skip user dotfiles and environment configuration |
 | `--skip-fonts` | *disabled* | Skip MesloLGS NF font installation |
 | `--skip-tools` | *disabled* | Skip Mise polyglot toolchain runtime installation |

@@ -49,7 +49,7 @@ Any agent modifying this repository must follow these core architectural princip
 - **Idempotency Requirement**:
   - Running setup scripts (`setup.sh`, `Makefile` targets) repeatedly must be completely safe, non-destructive, and not create redundant backups or corrupted states.
 - **Support `--dry-run` and Selective Flags**:
-  - All provisioning and setup logic in `setup.sh` must support `--dry-run` and provide granular skip switches (`--skip-packages`, `--skip-chrome`, `--skip-apps`, `--skip-fonts`, `--skip-tools`, `--skip-vim`, `--skip-zsh`, `--skip-bash`, `--skip-bin`, `--skip-completions`).
+  - All provisioning and setup logic in `setup.sh` must support `--dry-run` and provide granular feature / skip switches (`--with-gui`, `--with-chrome`, `--with-apps`, `--skip-packages`, `--skip-fonts`, `--skip-tools`, `--skip-vim`, `--skip-zsh`, `--skip-bash`, `--skip-bin`, `--skip-completions`). GUI applications must never be installed by default.
 - **Fail-Fast Shell Scripting**:
   - All Bash scripts must begin with `set -euo pipefail` (or `set -o errexit -o nounset -o pipefail`).
   - Validate prerequisites gracefully and report informative errors.

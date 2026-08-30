@@ -8,16 +8,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default configurations
 JDK_VERSION="21"
-IDE_NAME="intellij-ultimate"
+IDE_NAME="none"
 TARGET_OS=""
 DRY_RUN=false
 BOOTSTRAP_MODE=false
 
-# Granular skip flags
+# Granular skip and feature flags
 SKIP_SYSTEM=false
 SKIP_PACKAGES=false
-SKIP_CHROME=false
-SKIP_APPS=false
+INSTALL_CHROME=false
+INSTALL_APPS=false
 SKIP_USER=false
 SKIP_FONTS=false
 SKIP_TOOLS=false
@@ -36,17 +36,20 @@ Cross-Platform Master Setup Engine (Ubuntu, Fedora, macOS).
 Execution Modes:
   --bootstrap             Full new machine bootstrap (base packages, shell, tools, dotfiles)
   --dotfiles-only         Configure user dotfiles, fonts, and tools only (no sudo required)
-  --system-only           Provision OS packages, desktop apps, and CLI runtimes only
+  --system-only           Provision OS packages and CLI runtimes only
   --dry-run               Preview actions without modifying the system
 
 System Options:
   --os <distro>           Target OS override: ubuntu, fedora, macos (auto-detected by default)
   -j, --jdk <ver>         Active Java LTS version: 17, 21 (default: 21)
-  -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, eclipse, netbeans, none
-  --skip-system           Skip OS package updates and application provisioning
+  --skip-system           Skip OS package updates and system provisioning
   --skip-packages         Skip core system package manager installs
-  --skip-chrome           Skip Google Chrome installation
-  --skip-apps             Skip desktop applications (VS Code, Postman, Slack, IDE)
+
+GUI & Desktop Options (Optional, disabled by default):
+  --with-gui              Install all GUI desktop applications (Chrome, IDE/VS Code)
+  --with-chrome           Install Google Chrome
+  --with-apps             Install desktop apps (VS Code / IDE)
+  -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
 
 User Environment Options:
   --skip-user             Skip user dotfiles and environment configuration
@@ -92,18 +95,32 @@ while [ $# -gt 0 ]; do
             ;;
         -i|--ide)
             IDE_NAME="$2"
+            INSTALL_APPS=true
             shift 2
             ;;
-        --skip-packages)
-            SKIP_PACKAGES=true
+        --with-gui)
+            INSTALL_CHROME=true
+            INSTALL_APPS=true
+            shift
+            ;;
+        --with-chrome)
+            INSTALL_CHROME=true
+            shift
+            ;;
+        --with-apps)
+            INSTALL_APPS=true
             shift
             ;;
         --skip-chrome)
-            SKIP_CHROME=true
+            INSTALL_CHROME=false
             shift
             ;;
         --skip-apps)
-            SKIP_APPS=true
+            INSTALL_APPS=false
+            shift
+            ;;
+        --skip-packages)
+            SKIP_PACKAGES=true
             shift
             ;;
         --skip-fonts)
@@ -244,9 +261,9 @@ fi
 
 # Validate IDE
 case "$IDE_NAME" in
-    intellij|intellij-ultimate|code|eclipse|netbeans|none) ;;
+    intellij|intellij-ultimate|code|none) ;;
     *)
-        echo "Error: '$IDE_NAME' is not a supported IDE. Choose from: intellij, intellij-ultimate, code, eclipse, netbeans, none" >&2
+        echo "Error: '$IDE_NAME' is not a supported IDE. Choose from: intellij, intellij-ultimate, code, none" >&2
         exit 1
         ;;
 esac
@@ -308,8 +325,8 @@ if [ "$SKIP_SYSTEM" = false ]; then
         esac
     fi
 
-    # Google Chrome installation
-    if [ "$SKIP_CHROME" = false ]; then
+    # Google Chrome installation (Opt-in)
+    if [ "$INSTALL_CHROME" = true ]; then
         echo "  Installing Google Chrome on $OS..."
         case "$OS" in
             ubuntu)
@@ -345,8 +362,8 @@ if [ "$SKIP_SYSTEM" = false ]; then
         esac
     fi
 
-    # Desktop applications
-    if [ "$SKIP_APPS" = false ]; then
+    # Desktop applications (Opt-in)
+    if [ "$INSTALL_APPS" = true ]; then
         echo "  Installing developer desktop applications..."
         case "$OS" in
             ubuntu|fedora)
@@ -357,16 +374,11 @@ if [ "$SKIP_SYSTEM" = false ]; then
                             intellij) run_cmd sudo snap install intellij-idea-community --classic ;;
                             intellij-ultimate) run_cmd sudo snap install intellij-idea-ultimate --classic ;;
                             code) run_cmd sudo snap install code --classic ;;
-                            eclipse) run_cmd sudo snap install eclipse --classic ;;
-                            netbeans) run_cmd sudo snap install netbeans --classic ;;
                         esac
-                    fi
-                    # Auxiliary desktop tools
-                    if [ "$IDE_NAME" != "code" ]; then
+                    else
+                        # Default editor application when --with-apps is passed without explicit --ide
                         run_cmd sudo snap install code --classic
                     fi
-                    run_cmd sudo snap install postman
-                    run_cmd sudo snap install slack --classic
                 else
                     echo "  Notice: snap command not found. Skipping Snap applications."
                 fi
@@ -377,13 +389,11 @@ if [ "$SKIP_SYSTEM" = false ]; then
                         intellij) run_cmd brew install --cask intellij-idea-ce ;;
                         intellij-ultimate) run_cmd brew install --cask intellij-idea ;;
                         code) run_cmd brew install --cask visual-studio-code ;;
-                        eclipse) run_cmd brew install --cask eclipse-ide ;;
                     esac
-                fi
-                if [ "$IDE_NAME" != "code" ]; then
+                else
+                    # Default editor application when --with-apps is passed without explicit --ide
                     run_cmd brew install --cask visual-studio-code
                 fi
-                run_cmd brew install --cask postman slack
                 ;;
         esac
     fi
