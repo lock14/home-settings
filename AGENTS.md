@@ -82,9 +82,9 @@ Any agent modifying this repository must follow these core architectural princip
 ## 5. Developer Shortcuts & Standalone Utilities
 
 - **Git Shortcuts**:
-  - `gco`, `gcb`, `gcm`, `ga`, `gst`, `gcommit`, `gamend`, `gfetch`, `gpush`, `gpushf`, `gpull`, `gup`, `gprune`, `gsync`, `fix-abcxyz-branch-name`.
+  - `gco`, `gcb`, `gcm`, `ga`, `gst`, `gcommit`, `gamend`, `gfetch`, `gpush`, `gpushf`, `gpull`, `gup`, `gprune`, `gsync`, `guser-branch`.
 - **Developer Shortcuts**:
-  - `go_testall`, `go_buildall`, `go_lint`, `yaml_lint`, `tf`, `fs`, `ll`, `la`.
+  - `go-testall`, `go-buildall`, `go-lint`, `yaml-lint`, `tf`, `fs`, `ll`, `la`.
 - **Standalone Tools in `common-bin/`**:
   - `gen-passwd`, `sum`, `repeat-until-success`, `mvn-release`.
 

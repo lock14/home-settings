@@ -40,7 +40,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.zsh-aliases"
 
-    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gprune gup fix-abcxyz-branch-name go_lint go_testall go_buildall tf yaml_lint; do
+    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gprune gup guser-branch go-lint go-testall go-buildall tf yaml-lint; do
         if alias "$expected_alias" >/dev/null 2>&1; then
             echo "PASS:$expected_alias"
         else
@@ -137,13 +137,22 @@ test_git_integration() {
         echo "FAIL:gsync branch preservation:Expected feature-1, got $current"
     fi
 
-    # Test fix-abcxyz-branch-name alias
-    eval "$(alias fix-abcxyz-branch-name | sed 's/^fix-abcxyz-branch-name=//' | sed "s/^'//" | sed "s/'$//")"
+    # Test guser-branch alias
+    eval "$(alias guser-branch | sed 's/^guser-branch=//' | sed "s/^'//" | sed "s/'$//")"
     renamed_branch=$(git rev-parse --abbrev-ref HEAD)
     if [ "$renamed_branch" = "$USER/feature-1" ]; then
-        echo "PASS:fix-abcxyz-branch-name successfully renamed branch"
+        echo "PASS:guser-branch successfully renamed branch"
     else
-        echo "FAIL:fix-abcxyz-branch-name:Expected $USER/feature-1, got $renamed_branch"
+        echo "FAIL:guser-branch:Expected $USER/feature-1, got $renamed_branch"
+    fi
+
+    # Test guser-branch idempotency (running again should not duplicate $USER/)
+    eval "$(alias guser-branch | sed 's/^guser-branch=//' | sed "s/^'//" | sed "s/'$//")"
+    renamed_branch_again=$(git rev-parse --abbrev-ref HEAD)
+    if [ "$renamed_branch_again" = "$USER/feature-1" ]; then
+        echo "PASS:guser-branch is idempotent"
+    else
+        echo "FAIL:guser-branch idempotency:Expected $USER/feature-1, got $renamed_branch_again"
     fi
 
     # Test gprune alias
