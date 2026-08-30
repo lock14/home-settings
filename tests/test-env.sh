@@ -40,6 +40,7 @@ echo -e "\n[2/3] Testing dotfiles/.environment-variables exports..."
     trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
+    unset GOPATH
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
@@ -61,10 +62,10 @@ echo -e "\n[2/3] Testing dotfiles/.environment-variables exports..."
         fail "EDITOR export" "Expected vim, got: ${EDITOR:-}"
     fi
 
-    if [ "${GOPATH:-}" = "$HOME/go" ]; then
+    if [ "${GOPATH:-}" = "$TEMP_HOME/go" ]; then
         pass "GOPATH default is set cleanly ($GOPATH)"
     else
-        fail "GOPATH export" "Expected $HOME/go, got: ${GOPATH:-}"
+        fail "GOPATH export" "Expected $TEMP_HOME/go, got: ${GOPATH:-}"
     fi
 )
 
