@@ -9,18 +9,18 @@ alias gpushf='git push --force-with-lease origin HEAD'
 alias gpull='git pull --rebase origin HEAD'
 alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | xargs -r git branch -D'
 alias gup='gfetch && gpull'
-alias fix-abcxyz-branch-name='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD)"'
+alias guser-branch='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD | sed -E "s|^($USER/)+||")"'
 
 # golang
-alias go_lint='CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"; mkdir -p "$CACHE_DIR"; if [ ! -f "$CACHE_DIR/golangci.yml" ]; then curl -fsSL https://raw.githubusercontent.com/abcxyz/pkg/main/.golangci.yml > "$CACHE_DIR/golangci.yml"; fi; golangci-lint run -c "$CACHE_DIR/golangci.yml"'
-alias go_testall='go test ./...'
-alias go_buildall='go build ./...'
+alias go-lint='golangci-lint run'
+alias go-testall='go test ./...'
+alias go-buildall='go build ./...'
 
 # terraform
 alias tf='terraform'
 
 # Aux
-alias yaml_lint='yamllint -c ~/.yamllint.yml'
+alias yaml-lint='yamllint -d relaxed'
 if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
     alias fd='fdfind'
 fi
