@@ -2,7 +2,17 @@
 # Works identically across Ubuntu, Fedora, and macOS (Apple Silicon + Intel)
 
 [tools]
-java = "temurin-21"
-go = "latest"
-terraform = "latest"
+java = "lts"
 maven = "latest"
+go = "latest"
+python = "latest"
+node = "lts"
+terraform = "latest"
+rust = "latest"
+neovim = "latest"
+eza = "latest"
+bat = "latest"
+
+[settings]
+legacy_version_file = true
+experimental = true

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>name</key>
+	<string>Solarized-Dark-TrueColor</string>
+	<key>settings</key>
+	<array>
+		<dict>
+			<key>settings</key>
+			<dict>
+				<key>background</key>
+				<string>#002B36</string>
+				<key>caret</key>
+				<string>#839496</string>
+				<key>foreground</key>
+				<string>#839496</string>
+				<key>invisibles</key>
+				<string>#586E75</string>
+				<key>lineHighlight</key>
+				<string>#073642</string>
+				<key>selection</key>
+				<string>#073642</string>
+				<key>gutter</key>
+				<string>#002B36</string>
+				<key>gutterForeground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Comments (Solarized Base01 italic) -->
+		<dict>
+			<key>name</key>
+			<string>Comment</string>
+			<key>scope</key>
+			<string>comment, punctuation.definition.comment</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>italic</string>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Strings (Solarized Cyan) -->
+		<dict>
+			<key>name</key>
+			<string>String</string>
+			<key>scope</key>
+			<string>string, punctuation.definition.string</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- Numbers & Constants (Solarized Magenta) -->
+		<dict>
+			<key>name</key>
+			<string>Number</string>
+			<key>scope</key>
+			<string>constant.numeric</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Built-in Constant</string>
+			<key>scope</key>
+			<string>constant.language, constant.character, constant.other</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Keywords & Declarations (Solarized Green) -->
+		<dict>
+			<key>name</key>
+			<string>Keyword</string>
+			<key>scope</key>
+			<string>keyword, storage.type, storage.modifier</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Operators (Base0, matching Neovim) -->
+		<dict>
+			<key>name</key>
+			<string>Operator</string>
+			<key>scope</key>
+			<string>keyword.operator, punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Built-in Primitive Types (Solarized Yellow) -->
+		<dict>
+			<key>name</key>
+			<string>Built-in Type</string>
+			<key>scope</key>
+			<string>support.type.builtin, support.type.primitive, support.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Custom Types & Struct Names (Base0, matching Neovim) -->
+		<dict>
+			<key>name</key>
+			<string>Custom Type</string>
+			<key>scope</key>
+			<string>entity.name.type, entity.name.class, entity.name.struct, entity.name.type.parameter, variable.other.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Functions (Solarized Blue) -->
+		<dict>
+			<key>name</key>
+			<string>Function name</string>
+			<key>scope</key>
+			<string>entity.name.function, support.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+	</array>
+	<key>uuid</key>
+	<string>76629E86-143D-11E2-BE98-1B2F6188709B</string>
+</dict>
+</plist>

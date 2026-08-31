@@ -40,7 +40,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.zsh-aliases"
 
-    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gprune gup guser-branch go-lint go-testall go-buildall tf yaml-lint; do
+    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gup gprune guser-branch go-lint go-testall go-buildall tf yaml-lint vi v; do
         if alias "$expected_alias" >/dev/null 2>&1; then
             echo "PASS:$expected_alias"
         else

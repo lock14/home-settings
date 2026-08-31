@@ -31,6 +31,15 @@ install-dotfiles:
 	ln -sf "$(REPO_DIR)/dotfiles/.vimrc"                "$(HOME)/.vimrc"
 	mkdir -p "$(HOME)/.dir-colors"
 	ln -sf "$(REPO_DIR)/dotfiles/.dir-colors/dircolors"  "$(HOME)/.dir-colors/dircolors"
+	mkdir -p "$${XDG_CONFIG_HOME:-$(HOME)/.config}"
+	@if [ -d "$${XDG_CONFIG_HOME:-$(HOME)/.config}/nvim" ] && [ ! -L "$${XDG_CONFIG_HOME:-$(HOME)/.config}/nvim" ]; then \
+		mv "$${XDG_CONFIG_HOME:-$(HOME)/.config}/nvim" "$${XDG_CONFIG_HOME:-$(HOME)/.config}/nvim.bak.$$(date +%s)"; \
+	fi
+	ln -sfn "$(REPO_DIR)/dotfiles/.config/nvim"          "$${XDG_CONFIG_HOME:-$(HOME)/.config}/nvim"
+	mkdir -p "$${XDG_CONFIG_HOME:-$(HOME)/.config}/bat/themes"
+	ln -sf "$(REPO_DIR)/colors/Solarized-Dark-TrueColor.tmTheme" "$${XDG_CONFIG_HOME:-$(HOME)/.config}/bat/themes/Solarized-Dark-TrueColor.tmTheme"
+	@if command -v bat >/dev/null 2>&1; then bat cache --build >/dev/null 2>&1 || true; fi
+	@if command -v batcat >/dev/null 2>&1; then batcat cache --build >/dev/null 2>&1 || true; fi
 
 ## uninstall-dotfiles: Remove managed dotfile symlinks.
 uninstall-dotfiles:
@@ -44,10 +53,12 @@ uninstall-dotfiles:
 	rm -f "$(HOME)/.p10k.zsh"
 	rm -f "$(HOME)/.vimrc"
 	rm -f "$(HOME)/.dir-colors/dircolors"
+	rm -f "$${XDG_CONFIG_HOME:-$(HOME)/.config}/nvim"
+	rm -f "$${XDG_CONFIG_HOME:-$(HOME)/.config}/bat/themes/Solarized-Dark-TrueColor.tmTheme"
 
 ## install-fonts: Install MesloLGS NF Powerlevel10k patched fonts.
 install-fonts:
-	@./setup.sh --dotfiles-only --skip-tools --skip-vim --skip-zsh --skip-bash --skip-bin --skip-completions
+	@./setup.sh --dotfiles-only --skip-tools --skip-nvim --skip-vim --skip-zsh --skip-bash --skip-bin --skip-completions
 
 ## uninstall-fonts: Remove MesloLGS NF fonts.
 uninstall-fonts:
@@ -88,7 +99,7 @@ test:
 	@zsh tests/test-zsh.zsh
 	@echo "Running Completions tests..."
 	@bash tests/test-completions.sh
-	@echo "Running Vim tests..."
+	@echo "Running Vim & Neovim tests..."
 	@bash tests/test-vim.sh
 	@echo "Running Font tests..."
 	@bash tests/test-fonts.sh
@@ -99,10 +110,10 @@ lint:
 	@echo "Checking zsh syntax..."
 	@zsh -n dotfiles/.zsh-aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh
 	@echo "Checking bash script syntax with 'bash -n'..."
-	@bash -n setup.sh common-bin/* tests/*.sh
+	@bash -n setup.sh bootstrap.sh common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck --severity=warning setup.sh common-bin/* tests/*.sh; \
+		shellcheck --severity=warning setup.sh bootstrap.sh common-bin/* tests/*.sh; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi
