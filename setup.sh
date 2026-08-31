@@ -683,6 +683,13 @@ if [ "$SKIP_USER" = false ]; then
                     ln -sf "$f" "$HOME/.local/bin/$(basename "$f")"
                 fi
             done
+            # Compatibility shims for Debian-family tool naming
+            if [ ! -e "$HOME/.local/bin/fd" ] && command -v fdfind >/dev/null 2>&1; then
+                ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
+            fi
+            if [ ! -e "$HOME/.local/bin/bat" ] && command -v batcat >/dev/null 2>&1; then
+                ln -sf "$(command -v batcat)" "$HOME/.local/bin/bat"
+            fi
         fi
     fi
 

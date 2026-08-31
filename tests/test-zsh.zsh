@@ -60,6 +60,7 @@ done < <(test_aliases)
 # Test 3: Source zsh-functions and verify functions
 echo "\n[3/5] Testing dotfiles/.zsh-functions..."
 test_functions() {
+    source "$SCRIPT_DIR/dotfiles/.aliases"
     source "$SCRIPT_DIR/dotfiles/.zsh-functions"
 
     for expected_func in fs gsync; do
@@ -69,6 +70,15 @@ test_functions() {
             echo "FAIL:$expected_func:function not found"
         fi
     done
+
+    # Test fs execution with aliases active
+    if command -v tree >/dev/null 2>&1 && (command -v fd >/dev/null 2>&1 || command -v fdfind >/dev/null 2>&1); then
+        if (cd "$SCRIPT_DIR/dotfiles" && fs >/dev/null 2>&1); then
+            echo "PASS:fs function runs cleanly on dotfiles directory"
+        else
+            echo "FAIL:fs execution:fs failed to list directory"
+        fi
+    fi
 }
 
 while IFS= read -r line; do
