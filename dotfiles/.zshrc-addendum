@@ -19,7 +19,26 @@ if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ];
     eval "$(dircolors "$HOME/.dir-colors/dircolors")"
 fi
 
+# Zoxide smart directory jumping (z)
+if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+fi
+
 # Mise runtime manager hook
 if command -v mise >/dev/null 2>&1; then
     eval "$(mise activate zsh)"
 fi
+
+# FZF fuzzy finder integration (Ctrl+R history, Ctrl+T files, Alt+C cd)
+if [[ -o interactive ]] && command -v fzf >/dev/null 2>&1; then
+    if [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+        source /usr/share/doc/fzf/examples/key-bindings.zsh
+        [ -f /usr/share/doc/fzf/examples/completion.zsh ] && source /usr/share/doc/fzf/examples/completion.zsh || true
+    elif [ -f /usr/share/fzf/key-bindings.zsh ]; then
+        source /usr/share/fzf/key-bindings.zsh
+        [ -f /usr/share/fzf/completion.zsh ] && source /usr/share/fzf/completion.zsh || true
+    elif fzf --zsh >/dev/null 2>&1; then
+        eval "$(fzf --zsh)"
+    fi
+fi
+

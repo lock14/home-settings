@@ -7,11 +7,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default configurations
+# Default configurations
 JDK_VERSION="21"
 IDE_NAME="none"
 TARGET_OS=""
 DRY_RUN=false
 BOOTSTRAP_MODE=false
+DB_CHOICE="none"
+SKIP_DB=false
 
 # Granular skip and feature flags
 SKIP_SYSTEM=false
@@ -21,6 +24,7 @@ INSTALL_APPS=false
 SKIP_USER=false
 SKIP_FONTS=false
 SKIP_TOOLS=false
+SKIP_NVIM=false
 SKIP_VIM=false
 SKIP_ZSH=false
 SKIP_BASH=false
@@ -45,6 +49,12 @@ System Options:
   --skip-system           Skip OS package updates and system provisioning
   --skip-packages         Skip core system package manager installs
 
+Database Options (Optional, client tools installed by default):
+  --db <engine>           Database server engine to install: postgres, mariadb, all, none (default: none)
+  --with-postgres         Install PostgreSQL server & client tools
+  --with-mariadb          Install MariaDB server & client tools
+  --skip-db               Skip all database client and server installations
+
 GUI & Desktop Options (Optional, disabled by default):
   --with-gui              Install all GUI desktop applications (Chrome, IDE/VS Code)
   --with-chrome           Install Google Chrome
@@ -55,6 +65,7 @@ User Environment Options:
   --skip-user             Skip user dotfiles and environment configuration
   --skip-fonts            Skip MesloLGS NF font installation
   --skip-tools            Skip Mise polyglot toolchain runtime installation
+  --skip-nvim             Skip Neovim configuration and plugins
   --skip-vim              Skip Vim configuration and plugins
   --skip-zsh              Skip Zsh dotfiles, Oh-My-Zsh, plugins, and Powerlevel10k
   --skip-bash             Skip Bash configuration and environment variables
@@ -98,6 +109,23 @@ while [ $# -gt 0 ]; do
             INSTALL_APPS=true
             shift 2
             ;;
+        --db)
+            DB_CHOICE="$2"
+            shift 2
+            ;;
+        --with-postgres|--with-postgresql)
+            DB_CHOICE="postgres"
+            shift
+            ;;
+        --with-mariadb)
+            DB_CHOICE="mariadb"
+            shift
+            ;;
+        --skip-db)
+            SKIP_DB=true
+            DB_CHOICE="none"
+            shift
+            ;;
         --with-gui)
             INSTALL_CHROME=true
             INSTALL_APPS=true
@@ -129,6 +157,10 @@ while [ $# -gt 0 ]; do
             ;;
         --skip-tools)
             SKIP_TOOLS=true
+            shift
+            ;;
+        --skip-nvim)
+            SKIP_NVIM=true
             shift
             ;;
         --skip-vim)
@@ -268,6 +300,16 @@ case "$IDE_NAME" in
         ;;
 esac
 
+# Validate Database Engine
+case "$DB_CHOICE" in
+    postgres|postgresql) DB_CHOICE="postgres" ;;
+    mariadb|all|none) ;;
+    *)
+        echo "Error: '$DB_CHOICE' is not a supported database engine. Choose from: postgres, mariadb, all, none" >&2
+        exit 1
+        ;;
+esac
+
 echo "====================================================="
 echo "       Home-Settings Cross-Platform Setup            "
 echo "====================================================="
@@ -275,6 +317,7 @@ echo "Target OS : $OS"
 echo "Arch      : $ARCH"
 echo "JDK Choice: OpenJDK / Temurin $JDK_CLEAN (LTS)"
 echo "IDE Choice: $IDE_NAME"
+echo "Database  : Server: $DB_CHOICE (Clients: $([ "$SKIP_DB" = true ] && echo "skipped" || echo "enabled"))"
 if [ "$BOOTSTRAP_MODE" = true ]; then
     echo "Mode      : BOOTSTRAP (Full turnkey machine setup)"
 fi
@@ -292,7 +335,7 @@ run_cmd() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. System Provisioning (OS packages, Chrome, Apps)
+# 1. System Provisioning (OS packages, Database, Chrome, Apps)
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$SKIP_SYSTEM" = false ]; then
     echo -e "\n[1/2] Running System-Level Provisioning..."
@@ -301,12 +344,22 @@ if [ "$SKIP_SYSTEM" = false ]; then
         echo "  Installing core system packages for $OS..."
         case "$OS" in
             ubuntu)
+                pkgs="git curl wget vim neovim zsh fzf fontconfig dconf-cli shellcheck command-not-found bat fd-find ripgrep zoxide"
+                if [ "$SKIP_DB" = false ]; then
+                    pkgs="$pkgs postgresql-client mariadb-client"
+                fi
                 run_cmd sudo apt-get update -y
-                run_cmd sudo apt-get install -y git curl wget vim zsh fzf fontconfig dconf-cli mariadb-server mariadb-client shellcheck command-not-found
+                # shellcheck disable=SC2086
+                run_cmd sudo apt-get install -y $pkgs
                 ;;
             fedora)
+                pkgs="git curl wget vim neovim zsh fzf fontconfig dconf snapd util-linux-user bat fd-find ripgrep zoxide eza"
+                if [ "$SKIP_DB" = false ]; then
+                    pkgs="$pkgs postgresql mariadb"
+                fi
                 run_cmd sudo dnf -y upgrade --refresh
-                run_cmd sudo dnf -y install git curl wget vim zsh fzf fontconfig dconf mariadb-server mariadb snapd util-linux-user
+                # shellcheck disable=SC2086
+                run_cmd sudo dnf -y install $pkgs
                 if [ "$DRY_RUN" = true ]; then
                     echo "  [DryRun] sudo ln -sf /var/lib/snapd/snap /snap"
                 else
@@ -320,7 +373,43 @@ if [ "$SKIP_SYSTEM" = false ]; then
                         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
                     fi
                 fi
-                run_cmd brew install git curl wget vim zsh fzf fontconfig shellcheck
+                pkgs="git curl wget vim neovim zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza"
+                if [ "$SKIP_DB" = false ]; then
+                    pkgs="$pkgs libpq"
+                fi
+                # shellcheck disable=SC2086
+                run_cmd brew install $pkgs
+                ;;
+        esac
+    fi
+
+    # Database Server Provisioning (Opt-in)
+    if [ "$SKIP_DB" = false ] && [ "$DB_CHOICE" != "none" ]; then
+        echo "  Provisioning database server ($DB_CHOICE) on $OS..."
+        case "$OS" in
+            ubuntu)
+                if [ "$DB_CHOICE" = "postgres" ] || [ "$DB_CHOICE" = "all" ]; then
+                    run_cmd sudo apt-get install -y postgresql postgresql-contrib
+                fi
+                if [ "$DB_CHOICE" = "mariadb" ] || [ "$DB_CHOICE" = "all" ]; then
+                    run_cmd sudo apt-get install -y mariadb-server mariadb-client
+                fi
+                ;;
+            fedora)
+                if [ "$DB_CHOICE" = "postgres" ] || [ "$DB_CHOICE" = "all" ]; then
+                    run_cmd sudo dnf -y install postgresql-server postgresql-contrib
+                fi
+                if [ "$DB_CHOICE" = "mariadb" ] || [ "$DB_CHOICE" = "all" ]; then
+                    run_cmd sudo dnf -y install mariadb-server mariadb
+                fi
+                ;;
+            macos)
+                if [ "$DB_CHOICE" = "postgres" ] || [ "$DB_CHOICE" = "all" ]; then
+                    run_cmd brew install postgresql@16
+                fi
+                if [ "$DB_CHOICE" = "mariadb" ] || [ "$DB_CHOICE" = "all" ]; then
+                    run_cmd brew install mariadb
+                fi
                 ;;
         esac
     fi
@@ -491,14 +580,53 @@ if [ "$SKIP_USER" = false ]; then
                 mkdir -p "$HOME/.config/mise"
                 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
                     ln -sf "$SCRIPT_DIR/.mise.toml" "$HOME/.config/mise/config.toml"
+                    "$MISE_BIN" trust "$SCRIPT_DIR/.mise.toml" >/dev/null 2>&1 || true
+                    "$MISE_BIN" trust "$HOME/.config/mise/config.toml" >/dev/null 2>&1 || true
                 fi
                 # Install runtimes
-                "$MISE_BIN" install -y 2>/dev/null || true
+                echo "  Installing Mise toolchains from .mise.toml..."
+                "$MISE_BIN" install -y || true
             fi
         fi
     fi
 
-    # 5. Vim Configuration & Plugins
+    # 5. Neovim Configuration (init.lua)
+    if [ "$SKIP_NVIM" = false ]; then
+        echo "  Configuring Neovim (init.lua)..."
+        nvim_target="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
+        if [ "$DRY_RUN" = true ]; then
+            echo "  [DryRun] Symlinking dotfiles/.config/nvim to $nvim_target"
+        else
+            mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}"
+            if [ -d "$nvim_target" ] && [ ! -L "$nvim_target" ]; then
+                bak="${nvim_target}.bak.$(date +%s)"
+                echo "  Backing up pre-existing Neovim directory to $bak"
+                mv "$nvim_target" "$bak"
+            fi
+            if [ -d "$DOTFILES_DIR/.config/nvim" ]; then
+                ln -sfn "$DOTFILES_DIR/.config/nvim" "$nvim_target"
+            fi
+        fi
+    fi
+
+    # 6. Bat TrueColor Syntax Highlighting Theme
+    BAT_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/bat"
+    echo "  Configuring Bat TrueColor theme..."
+    if [ "$DRY_RUN" = true ]; then
+        echo "  [DryRun] Deploying Solarized-Dark-TrueColor.tmTheme to $BAT_CONFIG_DIR/themes/ and building bat cache"
+    else
+        mkdir -p "$BAT_CONFIG_DIR/themes"
+        if [ -f "$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme" ]; then
+            ln -sf "$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme" "$BAT_CONFIG_DIR/themes/Solarized-Dark-TrueColor.tmTheme"
+        fi
+        if command -v bat >/dev/null 2>&1; then
+            bat cache --build >/dev/null 2>&1 || true
+        elif command -v batcat >/dev/null 2>&1; then
+            batcat cache --build >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # 7. Legacy Vim Configuration & Plugins
     if [ "$SKIP_VIM" = false ]; then
         echo "  Configuring Vim plugins..."
         if [ "$DRY_RUN" = true ]; then
@@ -528,7 +656,7 @@ if [ "$SKIP_USER" = false ]; then
         fi
     fi
 
-    # 6. Zsh, Oh-My-Zsh & Powerlevel10k
+    # 8. Zsh, Oh-My-Zsh & Powerlevel10k
     if [ "$SKIP_ZSH" = false ]; then
         echo "  Configuring Zsh, Oh-My-Zsh, plugins, and Powerlevel10k..."
         if [ "$DRY_RUN" = true ]; then
@@ -567,7 +695,7 @@ if [ "$SKIP_USER" = false ]; then
         fi
     fi
 
-    # 7. Bash Configuration
+    # 9. Bash Configuration
     if [ "$SKIP_BASH" = false ]; then
         if [ "$DRY_RUN" = true ]; then
             echo "  [DryRun] Adding source ~/.bashrc-addendum to ~/.bashrc"
@@ -579,7 +707,7 @@ if [ "$SKIP_USER" = false ]; then
         fi
     fi
 
-    # 8. CLI Completions (gh, kubectl, helm)
+    # 10. CLI Completions (gh, kubectl, helm)
     if [ "$SKIP_COMPLETIONS" = false ]; then
         COMPLETIONS_DIR="$HOME/.zsh/completions"
         if [ "$DRY_RUN" = true ]; then
@@ -592,7 +720,7 @@ if [ "$SKIP_USER" = false ]; then
         fi
     fi
 
-    # 9. Default Login Shell
+    # 11. Default Login Shell
     CURRENT_SHELL="$(getent passwd "${USER:-$(whoami)}" 2>/dev/null | cut -d: -f7 || echo "${SHELL:-}")"
     ZSH_BIN="$(command -v zsh 2>/dev/null || true)"
     if [ -n "$ZSH_BIN" ] && [ "$CURRENT_SHELL" != "$ZSH_BIN" ] && [ -t 0 ] && command -v chsh &>/dev/null; then

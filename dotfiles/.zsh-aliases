@@ -1,15 +1,41 @@
 #!/bin/zsh
 
-# git
+# git custom workflows
 alias gcommit='git add -A && git commit'
 alias gamend='git add -A && git commit --amend --no-edit'
 alias gfetch='git fetch'
 alias gpush='git push origin HEAD'
 alias gpushf='git push --force-with-lease origin HEAD'
 alias gpull='git pull --rebase origin HEAD'
-alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | xargs -r git branch -D'
 alias gup='gfetch && gpull'
+alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | xargs -r git branch -D'
 alias guser-branch='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD | sed -E "s|^($USER/)+||")"'
+
+
+# editor shortcuts (Neovim default with Vim fallback)
+if command -v nvim >/dev/null 2>&1; then
+    alias vi='nvim'
+    alias vim='nvim'
+    alias v='nvim'
+else
+    alias vi='vim'
+    alias v='vim'
+fi
+
+# modern file viewing (bat with TrueColor Solarized Dark)
+if command -v bat >/dev/null 2>&1; then
+    alias cat='bat --theme="Solarized-Dark-TrueColor" --paging=auto'
+elif command -v batcat >/dev/null 2>&1; then
+    alias cat='batcat --theme="Solarized-Dark-TrueColor" --paging=auto'
+fi
+
+# modern directory listing (eza)
+if command -v eza >/dev/null 2>&1; then
+    alias ls='eza --icons=auto'
+    alias ll='eza -la --git --group-directories-first'
+    alias la='eza -a --icons=auto'
+    alias lt='eza --tree --level=2 --icons=auto'
+fi
 
 # golang
 alias go-lint='golangci-lint run'
@@ -24,3 +50,4 @@ alias yaml-lint='yamllint -d relaxed'
 if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
     alias fd='fdfind'
 fi
+

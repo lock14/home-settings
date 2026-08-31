@@ -30,6 +30,12 @@ else
     fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
 fi
 
+if bash -n "$SCRIPT_DIR/bootstrap.sh"; then
+    pass "Syntax valid: bootstrap.sh"
+else
+    fail "Syntax check failed: bootstrap.sh" "bash -n returned non-zero"
+fi
+
 for f in "$SCRIPT_DIR"/common-bin/*; do
     if [ -f "$f" ]; then
         if bash -n "$f"; then
@@ -88,17 +94,53 @@ else
     pass "setup.sh rejects invalid IDE"
 fi
 
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db invalid_engine 2>&1); then
+    fail "setup.sh invalid DB" "Expected error on invalid DB engine, got success: $output"
+else
+    pass "setup.sh rejects invalid DB engine"
+fi
+
 # Test 3: Dry-run Execution across Platforms
 echo -e "\n[3/4] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]]; then
-        pass "setup.sh --os ubuntu --dry-run executes cleanly and skips GUI apps by default"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
+        pass "setup.sh --os ubuntu --dry-run executes cleanly with client DB tools and skips GUI apps"
     else
-        fail "setup.sh ubuntu dry-run output" "GUI apps should be skipped by default: $output"
+        fail "setup.sh ubuntu dry-run output" "Unexpected output: $output"
     fi
 else
     fail "setup.sh ubuntu dry-run" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-postgres --dry-run 2>&1); then
+    if [[ "$output" == *"postgresql postgresql-contrib"* ]]; then
+        pass "setup.sh --with-postgres provisions PostgreSQL server and contrib"
+    else
+        fail "setup.sh with-postgres output" "Missing PostgreSQL server commands: $output"
+    fi
+else
+    fail "setup.sh with-postgres" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-mariadb --dry-run 2>&1); then
+    if [[ "$output" == *"mariadb-server mariadb-client"* ]]; then
+        pass "setup.sh --with-mariadb provisions MariaDB server"
+    else
+        fail "setup.sh with-mariadb output" "Missing MariaDB server commands: $output"
+    fi
+else
+    fail "setup.sh with-mariadb" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-db --dry-run 2>&1); then
+    if [[ "$output" != *"postgresql-client"* ]] && [[ "$output" != *"mariadb-client"* ]]; then
+        pass "setup.sh --skip-db skips all database clients and servers"
+    else
+        fail "setup.sh skip-db output" "Database packages should be skipped: $output"
+    fi
+else
+    fail "setup.sh skip-db" "Command failed: $output"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2>&1); then
@@ -161,11 +203,21 @@ else
     fail "setup.sh dotfiles-only" "Command failed: $output"
 fi
 
+if output=$("$SCRIPT_DIR/bootstrap.sh" --dry-run 2>&1); then
+    if [[ "$output" == *"Turnkey Bootstrapper"* ]] && [[ "$output" == *"[DryRun]"* ]]; then
+        pass "bootstrap.sh --dry-run works"
+    else
+        fail "bootstrap.sh dry-run output" "Missing expected bootstrapper output: $output"
+    fi
+else
+    fail "bootstrap.sh dry-run" "Command failed: $output"
+fi
+
 # Test 4: Mise Configuration Validity
 echo -e "\n[4/4] Testing .mise.toml toolchain definition..."
 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
-    if grep -q 'java = "temurin-21"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml"; then
-        pass ".mise.toml contains valid Java 21 LTS, Go, and Maven tool definitions"
+    if grep -q 'java = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'node = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'python = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'neovim = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'eza = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'bat = "latest"' "$SCRIPT_DIR/.mise.toml"; then
+        pass ".mise.toml defaults to LTS for Java/Node, and latest stable for Go, Python, Maven, Neovim, Eza, Bat"
     else
         fail ".mise.toml definition" "Missing expected tool configurations"
     fi

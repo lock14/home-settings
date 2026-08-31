@@ -23,7 +23,7 @@ echo "Running Vim Configuration Tests"
 echo "========================================"
 
 # Test 1: Vimrc loads without errors
-echo -e "\n[1/5] Testing dotfiles/.vimrc loading without syntax errors..."
+echo -e "\n[1/6] Testing dotfiles/.vimrc loading without syntax errors..."
 if vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "q" >/dev/null 2>&1; then
     pass ".vimrc loaded cleanly without errors"
 else
@@ -31,7 +31,7 @@ else
 fi
 
 # Test 2: Indentation and tab settings
-echo -e "\n[2/5] Testing Vim indentation & formatting options..."
+echo -e "\n[2/6] Testing Vim indentation & formatting options..."
 check_option() {
     local opt_expr="$1"
     local desc="$2"
@@ -48,23 +48,58 @@ check_option "&expandtab == 1" "expandtab is enabled"
 check_option "&background == 'dark'" "background is set to dark"
 
 # Test 3: UltiSnips and AutoPairs variables
-echo -e "\n[3/5] Testing UltiSnips and plugin settings..."
+echo -e "\n[3/6] Testing UltiSnips and plugin settings..."
 check_option "g:UltiSnipsExpandTrigger == '<tab>'" "UltiSnipsExpandTrigger is <tab>"
 check_option "g:UltiSnipsJumpForwardTrigger == '<c-j>'" "UltiSnipsJumpForwardTrigger is <c-j>"
 check_option "g:UltiSnipsJumpBackwardTrigger == '<c-k>'" "UltiSnipsJumpBackwardTrigger is <c-k>"
 check_option "g:AutoPairsShortcutJump == '<c-l>'" "AutoPairsShortcutJump is <c-l>"
 
 # Test 4: Verify Home key mapping
-echo -e "\n[4/5] Testing key mappings..."
+echo -e "\n[4/6] Testing key mappings..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 
 # Test 5: Verify setup.sh configures honza/vim-snippets
-echo -e "\n[5/5] Testing Vim bundle provisioning in setup.sh..."
+echo -e "\n[5/6] Testing Vim bundle provisioning in setup.sh..."
 if grep -q 'honza/vim-snippets' "$SCRIPT_DIR/setup.sh"; then
     pass "setup.sh provisions curated honza/vim-snippets bundle"
 else
     fail "setup.sh vim-snippets" "Expected honza/vim-snippets in setup.sh"
+fi
+
+# Test 6: Verify Neovim init.lua configuration
+echo -e "\n[6/6] Testing Neovim init.lua configuration..."
+NVIM_CONFIG="$SCRIPT_DIR/dotfiles/.config/nvim/init.lua"
+if [ -f "$NVIM_CONFIG" ]; then
+    pass "Neovim init.lua exists at dotfiles/.config/nvim/init.lua"
+
+    if grep -q 'maxmx03/solarized.nvim' "$NVIM_CONFIG" && grep -q 'nvim-treesitter' "$NVIM_CONFIG" && grep -q 'nvim-telescope/telescope.nvim' "$NVIM_CONFIG" && grep -q 'mason-lspconfig' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua contains Solarized, Treesitter, Telescope, and Mason LSP"
+    else
+        fail "Neovim plugins" "Missing expected plugin declarations in init.lua"
+    fi
+
+    if command -v nvim >/dev/null 2>&1; then
+        if nvim --headless -u NONE -c "lua local f, err = loadfile('$NVIM_CONFIG'); if not f then error(err) end" +qall >/dev/null 2>&1; then
+            pass "Neovim verified init.lua syntax cleanly"
+        else
+            fail "Neovim init.lua syntax" "Neovim reported errors when parsing init.lua"
+        fi
+    elif command -v luajit >/dev/null 2>&1; then
+        if luajit -bl "$NVIM_CONFIG" >/dev/null 2>&1; then
+            pass "Lua syntax valid: init.lua"
+        else
+            fail "Lua syntax error" "init.lua failed syntax check"
+        fi
+    elif command -v lua >/dev/null 2>&1; then
+        if lua -e "assert(loadfile('$NVIM_CONFIG'))" >/dev/null 2>&1; then
+            pass "Lua syntax valid: init.lua"
+        else
+            fail "Lua syntax error" "init.lua failed syntax check"
+        fi
+    fi
+else
+    fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"
 fi
 
 echo -e "\n========================================"
@@ -74,3 +109,4 @@ echo "========================================"
 if [ "$TESTS_FAILED" -gt 0 ]; then
     exit 1
 fi
+
