@@ -1,6 +1,9 @@
 # home-settings
 
-Workstation setup automation, prompt themes, developer toolchains, and dotfiles for modern Unix systems (**Ubuntu 22.04+ / 24.04+ LTS**, **Fedora 38+ / 40+**, and **macOS** Apple Silicon / Intel).
+Workstation setup automation, prompt themes, developer toolchains, and dotfiles for modern Unix environments:
+- **Debian-based Linux** (Ubuntu 22.04+ / 24.04+ LTS, Debian 12+, Pop!_OS, Linux Mint)
+- **RHEL-based Linux** (Fedora 38+ / 40+, RHEL 9+, CentOS Stream, Rocky Linux, AlmaLinux)
+- **macOS** (Sonoma, Sequoia; Apple Silicon & Intel)
 
 ---
 
@@ -119,7 +122,7 @@ cd home-settings
 | `--uninstall-dotfiles` | *disabled* | Remove managed dotfile symlinks only |
 | `--uninstall-fonts` | *disabled* | Remove MesloLGS NF fonts only |
 | `--uninstall-bin` | *disabled* | Remove symlinked user utilities from `~/.local/bin` only |
-| `--os <distro>` | *auto* | Target OS override: `ubuntu`, `fedora`, `macos` (auto-detected by default) |
+| `--os <distro>` | *auto* | Target OS family override: `ubuntu` (Debian/apt), `fedora` (RHEL/dnf), `macos` (Homebrew) |
 | `-j, --jdk <ver>` | `21` | Active Java LTS version: `17`, `21` (default: 21) |
 | `--db <engine>` | `none` | Database server engine to install: `postgres`, `mariadb`, `all`, `none` |
 | `--with-postgres` | *disabled* | Install PostgreSQL server and client tools |
