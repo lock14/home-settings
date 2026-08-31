@@ -1,6 +1,6 @@
 # Agent Guidelines & Repository Architecture for home-settings
 
-This repository provides automated workstation provisioning, dotfiles, shell environments, and developer toolchains for **modern Unix systems (Ubuntu 22.04+ / 24.04+ LTS, Fedora 38+ / 40+, and macOS)**.
+This repository provides automated workstation provisioning, dotfiles, shell environments, and developer toolchains for **modern Unix systems: Debian-based Linux (Ubuntu, Debian, Pop!_OS), RHEL-based Linux (Fedora, RHEL, CentOS Stream, Rocky Linux), and macOS**.
 
 Any AI agent interacting with or modifying this repository **MUST** strictly adhere to the instructions and invariants below.
 

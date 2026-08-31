@@ -69,7 +69,7 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Cross-Platform Master Setup Engine (Ubuntu, Fedora, macOS).
+Cross-Platform Master Setup Engine (Debian/Ubuntu, Fedora/RHEL, macOS).
 
 Execution Modes:
   --bootstrap             Full new machine bootstrap (base packages, shell, tools, dotfiles)
@@ -84,7 +84,7 @@ Uninstallation Modes:
   --uninstall-bin         Remove symlinked user utilities from ~/.local/bin only
 
 System Options:
-  --os <distro>           Target OS override: ubuntu, fedora, macos (auto-detected by default)
+  --os <distro>           Target OS override: ubuntu (Debian/apt), fedora (RHEL/dnf), macos (Homebrew)
   -j, --jdk <ver>         Active Java LTS version: 17, 21 (default: 21)
   --skip-system           Skip OS package updates and system provisioning
   --skip-packages         Skip core system package manager installs
