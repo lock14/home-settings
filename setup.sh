@@ -4,10 +4,44 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)"
+REPO_URL="https://github.com/lock14/home-settings.git"
+
+# Self-bootstrapping: If piped through curl or run without repository assets, clone and re-exec
+if [ ! -d "$SCRIPT_DIR/dotfiles" ]; then
+    TARGET_DIR="$HOME/home-settings"
+    echo "====================================================="
+    echo "       home-settings Master Setup & Provisioner      "
+    echo "====================================================="
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo "  Git not found. Installing git prerequisite..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update -y && sudo apt-get install -y git curl
+        elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf -y install git curl
+        elif command -v brew >/dev/null 2>&1; then
+            brew install git curl
+        else
+            echo "Error: git is required to clone home-settings." >&2
+            exit 1
+        fi
+    fi
+
+    if [ ! -d "$TARGET_DIR" ]; then
+        echo "  Cloning repository to $TARGET_DIR..."
+        git clone "$REPO_URL" "$TARGET_DIR"
+    else
+        echo "  Updating repository at $TARGET_DIR..."
+        git -C "$TARGET_DIR" pull --rebase origin main 2>/dev/null || true
+    fi
+
+    chmod +x "$TARGET_DIR/setup.sh"
+    exec "$TARGET_DIR/setup.sh" "$@"
+fi
 
 # Default configurations
-# Default configurations
+ACTION="install"
 JDK_VERSION="21"
 IDE_NAME="none"
 TARGET_OS=""
@@ -42,6 +76,12 @@ Execution Modes:
   --dotfiles-only         Configure user dotfiles, fonts, and tools only (no sudo required)
   --system-only           Provision OS packages and CLI runtimes only
   --dry-run               Preview actions without modifying the system
+
+Uninstallation Modes:
+  --uninstall             Uninstall all managed dotfiles, fonts, and user binaries
+  --uninstall-dotfiles    Remove managed dotfile symlinks only
+  --uninstall-fonts       Remove MesloLGS NF fonts only
+  --uninstall-bin         Remove symlinked user utilities from ~/.local/bin only
 
 System Options:
   --os <distro>           Target OS override: ubuntu, fedora, macos (auto-detected by default)
@@ -80,6 +120,22 @@ EOF
 # Parse CLI arguments
 while [ $# -gt 0 ]; do
     case "$1" in
+        --uninstall)
+            ACTION="uninstall"
+            shift
+            ;;
+        --uninstall-dotfiles)
+            ACTION="uninstall-dotfiles"
+            shift
+            ;;
+        --uninstall-fonts)
+            ACTION="uninstall-fonts"
+            shift
+            ;;
+        --uninstall-bin)
+            ACTION="uninstall-bin"
+            shift
+            ;;
         --bootstrap)
             BOOTSTRAP_MODE=true
             shift
@@ -261,6 +317,99 @@ detect_arch() {
     esac
 }
 ARCH="$(detect_arch)"
+
+uninstall_dotfiles() {
+    echo "  Removing managed dotfile symlinks..."
+    local dotfiles=(
+        "$HOME/.environment-variables"
+        "$HOME/.bashrc-addendum"
+        "$HOME/.zshrc-addendum"
+        "$HOME/.aliases"
+        "$HOME/.zsh-aliases"
+        "$HOME/.zsh-functions"
+        "$HOME/.zsh-completions"
+        "$HOME/.p10k.zsh"
+        "$HOME/.vimrc"
+        "$HOME/.dir-colors/dircolors"
+        "${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/Solarized-Dark-TrueColor.tmTheme"
+    )
+    for f in "${dotfiles[@]}"; do
+        if [ -L "$f" ]; then
+            if [ "$DRY_RUN" = true ]; then
+                echo "  [DryRun] rm -f $f"
+            else
+                rm -f "$f"
+            fi
+        fi
+    done
+    local nvim_target="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
+    if [ -L "$nvim_target" ]; then
+        if [ "$DRY_RUN" = true ]; then
+            echo "  [DryRun] rm -f $nvim_target"
+        else
+            rm -f "$nvim_target"
+        fi
+    fi
+    echo "  Dotfile symlinks uninstalled."
+}
+
+uninstall_bin() {
+    echo "  Removing common-bin utilities from $HOME/.local/bin..."
+    if [ -d "$HOME/.local/bin" ]; then
+        for f in "$SCRIPT_DIR/common-bin"/*; do
+            local bin_dest
+            bin_dest="$HOME/.local/bin/$(basename "$f")"
+            if [ -L "$bin_dest" ]; then
+                if [ "$DRY_RUN" = true ]; then
+                    echo "  [DryRun] rm -f $bin_dest"
+                else
+                    rm -f "$bin_dest"
+                fi
+            fi
+        done
+    fi
+    echo "  User binaries uninstalled."
+}
+
+uninstall_fonts() {
+    local font_dir
+    if [ "$OS" = "macos" ]; then
+        font_dir="$HOME/Library/Fonts"
+    else
+        font_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
+    fi
+    echo "  Removing MesloLGS NF fonts from $font_dir..."
+    if [ "$DRY_RUN" = true ]; then
+        echo "  [DryRun] rm -f $font_dir/MesloLGS NF*.ttf"
+    else
+        rm -f "$font_dir/MesloLGS NF"*.ttf 2>/dev/null || true
+        if command -v fc-cache >/dev/null 2>&1; then
+            fc-cache -f "$font_dir" >/dev/null 2>&1 || true
+        fi
+    fi
+    echo "  MesloLGS NF fonts uninstalled."
+}
+
+uninstall_all() {
+    echo -e "\nUninstalling all home-settings components..."
+    uninstall_dotfiles
+    uninstall_bin
+    uninstall_fonts
+    echo -e "\n====================================================="
+    echo " Uninstallation complete! "
+    echo "====================================================="
+}
+
+# Handle uninstallation actions if requested
+if [ "$ACTION" != "install" ]; then
+    case "$ACTION" in
+        uninstall) uninstall_all ;;
+        uninstall-dotfiles) uninstall_dotfiles ;;
+        uninstall-fonts) uninstall_fonts ;;
+        uninstall-bin) uninstall_bin ;;
+    esac
+    exit 0
+fi
 
 # Validate Java version
 normalize_jdk_version() {
@@ -501,19 +650,25 @@ if [ "$SKIP_USER" = false ]; then
     # 1. Atomic Dotfile Symlinking
     DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
     echo "  Symlinking dotfiles from $DOTFILES_DIR to $HOME..."
+    DOTFILES=(
+        ".environment-variables"
+        ".bashrc-addendum"
+        ".zshrc-addendum"
+        ".aliases"
+        ".zsh-functions"
+        ".zsh-completions"
+        ".p10k.zsh"
+        ".vimrc"
+    )
     if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] Symlinking .environment-variables, .bashrc-addendum, .zshrc-addendum, .zsh-aliases, .zsh-functions, .zsh-completions, .p10k.zsh, .vimrc, .dir-colors/dircolors"
+        echo "  [DryRun] Symlinking ${DOTFILES[*]}, .zsh-aliases, .dir-colors/dircolors"
     else
-        ln -sf "$DOTFILES_DIR/.environment-variables" "$HOME/.environment-variables"
-        ln -sf "$DOTFILES_DIR/.bashrc-addendum"       "$HOME/.bashrc-addendum"
-        ln -sf "$DOTFILES_DIR/.zshrc-addendum"        "$HOME/.zshrc-addendum"
-        ln -sf "$DOTFILES_DIR/.zsh-aliases"           "$HOME/.zsh-aliases"
-        ln -sf "$DOTFILES_DIR/.zsh-functions"         "$HOME/.zsh-functions"
-        ln -sf "$DOTFILES_DIR/.zsh-completions"       "$HOME/.zsh-completions"
-        ln -sf "$DOTFILES_DIR/.p10k.zsh"              "$HOME/.p10k.zsh"
-        ln -sf "$DOTFILES_DIR/.vimrc"                 "$HOME/.vimrc"
+        for df in "${DOTFILES[@]}"; do
+            ln -sf "$DOTFILES_DIR/$df" "$HOME/$df"
+        done
+        ln -sf "$HOME/.aliases" "$HOME/.zsh-aliases"
         mkdir -p "$HOME/.dir-colors"
-        ln -sf "$DOTFILES_DIR/.dir-colors/dircolors"  "$HOME/.dir-colors/dircolors"
+        ln -sf "$DOTFILES_DIR/.dir-colors/dircolors" "$HOME/.dir-colors/dircolors"
     fi
 
     # 2. User Binaries Symlinks

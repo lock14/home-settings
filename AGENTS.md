@@ -13,14 +13,14 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | 🚫 **NEVER** | **No Hardcoded Personal Paths** | Never commit paths containing personal usernames like `/home/brianb/`, `/Users/username/`, or Windows user profiles. Always use `$HOME`, `${XDG_DATA_HOME:-$HOME/.local/share}`, `${XDG_CONFIG_HOME:-$HOME/.config}`, or `${XDG_CACHE_HOME:-$HOME/.cache}`. |
 | 🚫 **NEVER** | **No Blind Error Suppression** | Never redirect `stderr` to `/dev/null` or use blanket quiet flags (`MISE_QUIET=1`, etc.) in startup files (`.zshrc-addendum`, `.bashrc-addendum`) or orchestrators. Always resolve the root cause (e.g. trusting configs, installing missing toolchains). |
 | 🚫 **NEVER** | **No Default Heavy Daemons / GUI Apps** | Heavyweight database server daemons (PostgreSQL, MariaDB) and GUI applications (Chrome, VS Code) must **never** be installed by default. Only lightweight client CLI tools (`psql`, `mariadb-client`) are installed unless opted into via `--with-postgres`, `--with-mariadb`, `--db <engine>`, or `--with-gui`. |
-| 🚫 **NEVER** | **No Redundant Standard Git Aliases** | Standard Git aliases (`ga`, `gst`, `gco`, `gd`, `gb`, `gl`, `gp`) are provided directly by Oh-My-Zsh's `git` plugin. Keep `.zsh-aliases` pruned to custom workflows (`gcommit`, `gamend`, `gsync`, `guser-branch`, `gprune`, etc.). |
+| 🚫 **NEVER** | **No Redundant Standard Git Aliases** | Standard Git aliases (`ga`, `gst`, `gco`, `gd`, `gb`, `gl`, `gp`) are provided directly by Oh-My-Zsh's `git` plugin. Keep `.aliases` pruned to custom workflows (`gcommit`, `gamend`, `gsync`, `guser-branch`, `gprune`, etc.). |
 | 🚫 **NEVER** | **No Starship Prompt** | The shell prompt is strictly single-line **Powerlevel10k Solarized Dark**. Never re-introduce `starship`. |
 | 🚫 **NEVER** | **No EOL Java Releases** | Only actively supported Java LTS releases are allowed (**Java 17 LTS**, **Java 21 LTS**; default: **Java 21 LTS**). Deprecated/EOL versions (Java 8, Java 11) must be rejected with informative error messages. |
 | 🚫 **NEVER** | **No Nested Directory Symlinks** | When symlinking directory trees (e.g. `${XDG_CONFIG_HOME:-$HOME/.config}/nvim`), always check if the target is an existing physical directory. If so, back it up (`nvim.bak.<timestamp>`) before calling `ln -sfn` to prevent creating nested links (`~/.config/nvim/nvim`). |
 | ✅ **ALWAYS** | **LTS Preference for Mise Tools** | For all tools defined in `.mise.toml`, specify `lts` whenever supported by the tool's ecosystem (`java = "lts"`, `node = "lts"`). For tools without an official LTS channel (Go, Python, Maven, Terraform, Rust, Neovim), default to `latest` stable. |
 | ✅ **ALWAYS** | **Modern Neovim via Mise** | Modern Neovim (0.11+ / 0.12+) is provisioned via `mise` (`neovim = "latest"`), avoiding obsolete distro packages (such as Ubuntu's default 0.9.5). |
 | ✅ **ALWAYS** | **XDG Base Directory Compliance** | Keep `$HOME` clean of language runtime workspaces and cache clutter. Go workspace and cache must strictly point to XDG paths: `export GOPATH="${XDG_DATA_HOME:-$HOME/.local/share}/go"` and `export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/go-build"`. |
-| ✅ **ALWAYS** | **Idempotent & Fail-Fast Scripts** | All Bash scripts must begin with `set -euo pipefail`. Re-running `setup.sh`, `bootstrap.sh`, or `Makefile` targets must be completely safe, non-destructive, and produce identical results. |
+| ✅ **ALWAYS** | **Idempotent & Fail-Fast Scripts** | All Bash scripts must begin with `set -euo pipefail`. Re-running `setup.sh` or `Makefile` targets must be completely safe, non-destructive, and produce identical results. |
 
 ---
 
@@ -28,12 +28,11 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 
 | Component | Repository Source | Target System Location | Associated Test File |
 | :--- | :--- | :--- | :--- |
-| **Streaming Bootstrapper** | `bootstrap.sh` | Entrypoint (via `curl \| bash`) | `tests/test-system-setup.sh` |
-| **Master Orchestrator** | `setup.sh` | System & Dotfiles Provisioner | `tests/test-system-setup.sh` |
+| **Unified Setup & Bootstrapper** | `setup.sh` | Orchestrator (Local & `curl \| bash`) | `tests/test-system-setup.sh` |
 | **Environment Variables** | `dotfiles/.environment-variables` | `$HOME/.environment-variables` | `tests/test-env.sh` |
 | **Zsh Addendum & Hooks** | `dotfiles/.zshrc-addendum` | `$HOME/.zshrc-addendum` | `tests/test-zsh.zsh` |
 | **Bash Addendum & Hooks** | `dotfiles/.bashrc-addendum` | `$HOME/.bashrc-addendum` | `tests/test-env.sh` |
-| **Shortcuts & Aliases** | `dotfiles/.zsh-aliases` | `$HOME/.zsh-aliases` | `tests/test-zsh.zsh` |
+| **Shortcuts & Aliases** | `dotfiles/.aliases` | `$HOME/.aliases` (and `$HOME/.zsh-aliases`) | `tests/test-zsh.zsh` |
 | **Shell Functions** | `dotfiles/.zsh-functions` | `$HOME/.zsh-functions` | `tests/test-zsh.zsh` |
 | **CLI Completions** | `dotfiles/.zsh-completions` | `$HOME/.zsh-completions` | `tests/test-completions.sh` |
 | **Powerlevel10k Theme** | `dotfiles/.p10k.zsh` | `$HOME/.p10k.zsh` | `tests/test-zsh.zsh` |
@@ -69,7 +68,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 
 ### Integration Rules
 1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`). `cat` is aliased to `bat --theme="Solarized-Dark-TrueColor" --paging=auto`.
-2. **`eza`**: `EZA_COLORS` and `EXA_COLORS` are configured with `xx=38;5;10` (Solarized Base01) for clean tree branch connectors (`lt` / `eza --tree`).
+2. **`eza`**: Available via `el` and `et` (`eza --tree`), with `EZA_COLORS` and `EXA_COLORS` configured with Solarized Dark palette. Native `ls` and `ll` use standard GNU/BSD `ls` with Solarized `dircolors`.
 3. **Neovim Lua**: Uses `maxmx03/solarized.nvim` with `variant = "spring"` matching `bat` 1:1, integrated with Native Neovim 0.11+ LSP (`vim.lsp.config`, `LspAttach`).
 4. **Zsh Autosuggestions**: Highlight style is pinned to `fg=10` (Solarized Base01).
 
@@ -94,7 +93,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 6. Run `make test` and `make lint`.
 
 ### Recipe C: Adding a Custom Git Workflow or Developer Shortcut
-1. Add the alias to `dotfiles/.zsh-aliases` (or function to `dotfiles/.zsh-functions` if multi-line).
+1. Add the alias to `dotfiles/.aliases` (or function to `dotfiles/.zsh-functions` if multi-line).
 2. Ensure no standard Oh-My-Zsh git aliases are duplicated.
 3. Add the alias/function name to the assertion list in `tests/test-zsh.zsh`.
 4. Run `make test` and `make lint`.

@@ -11,7 +11,8 @@ zstyle ':omz:update' mode auto 2>/dev/null || true
 [ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
 [ -f "$HOME/.zsh-completions" ] && source "$HOME/.zsh-completions"
 [ -f "$HOME/.zsh-functions" ] && source "$HOME/.zsh-functions"
-[ -f "$HOME/.zsh-aliases" ] && source "$HOME/.zsh-aliases"
+[ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
+[ -f "$HOME/.zsh-aliases" ] && [ ! -f "$HOME/.aliases" ] && source "$HOME/.zsh-aliases"
 [ -f "$HOME/.p10k.zsh" ] && source "$HOME/.p10k.zsh"
 
 # LS_COLORS dircolors integration

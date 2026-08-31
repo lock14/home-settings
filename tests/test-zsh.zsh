@@ -24,7 +24,7 @@ echo "========================================"
 
 # Test 1: Syntax check with zsh -n
 echo "\n[1/5] Checking Zsh file syntax with 'zsh -n'..."
-for f in "$SCRIPT_DIR/dotfiles/.zsh-aliases" "$SCRIPT_DIR/dotfiles/.zsh-functions" "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SCRIPT_DIR/dotfiles/.p10k.zsh"; do
+for f in "$SCRIPT_DIR/dotfiles/.aliases" "$SCRIPT_DIR/dotfiles/.zsh-functions" "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SCRIPT_DIR/dotfiles/.p10k.zsh"; do
     if [ -f "$f" ]; then
         if zsh -n "$f"; then
             pass "Syntax valid: $(basename "$f")"
@@ -34,13 +34,13 @@ for f in "$SCRIPT_DIR/dotfiles/.zsh-aliases" "$SCRIPT_DIR/dotfiles/.zsh-function
     fi
 done
 
-# Test 2: Source zsh-aliases and verify aliases
-echo "\n[2/5] Testing dotfiles/.zsh-aliases..."
+# Test 2: Source .aliases and verify aliases
+echo "\n[2/5] Testing dotfiles/.aliases..."
 test_aliases() {
     setopt aliases
-    source "$SCRIPT_DIR/dotfiles/.zsh-aliases"
+    source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gup gprune guser-branch go-lint go-testall go-buildall tf yaml-lint vi v; do
+    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gup gprune guser-branch go-lint go-testall go-buildall tf yaml-lint vi v ls ll la l el et ea; do
         if alias "$expected_alias" >/dev/null 2>&1; then
             echo "PASS:$expected_alias"
         else
@@ -104,7 +104,7 @@ test_git_integration() {
     # Source functions and aliases
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.zsh-functions"
-    source "$SCRIPT_DIR/dotfiles/.zsh-aliases"
+    source "$SCRIPT_DIR/dotfiles/.aliases"
 
     # Test gsync outside git repo
     (
@@ -181,7 +181,7 @@ test_addendum() {
     trap 'rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
-    cp "$SCRIPT_DIR/dotfiles/.zsh-aliases" "$HOME/.zsh-aliases"
+    cp "$SCRIPT_DIR/dotfiles/.aliases" "$HOME/.aliases"
     cp "$SCRIPT_DIR/dotfiles/.zsh-functions" "$HOME/.zsh-functions"
     touch "$HOME/.environment-variables"
 
