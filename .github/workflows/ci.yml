@@ -53,27 +53,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test modular Makefile targets
+      - name: Test setup.sh uninstallation and modular flags
         run: |
-          # Test dotfiles install & uninstall
-          make install-dotfiles
-          [ -L "$HOME/.environment-variables" ] && [ -L "$HOME/.dir-colors/dircolors" ] && [ -L "$HOME/.vimrc" ] || { echo "FAIL: install-dotfiles"; exit 1; }
-          make uninstall-dotfiles
-          [ ! -e "$HOME/.environment-variables" ] && [ ! -e "$HOME/.dir-colors/dircolors" ] && [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: uninstall-dotfiles"; exit 1; }
+          chmod +x setup.sh
 
-          # Test bin module
-          make install-bin
-          [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: install-bin (expected symlink)"; exit 1; }
-          make uninstall-bin
-          [ ! -e "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: uninstall-bin"; exit 1; }
+          # Test dotfiles-only installation & uninstallation
+          ./setup.sh --dotfiles-only
+          [ -L "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases symlink missing"; exit 1; }
+          [ -L "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases symlink missing"; exit 1; }
+          [ -L "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables symlink missing"; exit 1; }
+          [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
+          [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd missing"; exit 1; }
+          [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
 
-          # Test fonts module
-          make install-fonts
-          [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: install-fonts"; exit 1; }
-          make uninstall-fonts
-          [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: uninstall-fonts"; exit 1; }
+          ./setup.sh --uninstall-dotfiles
+          [ ! -e "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases still exists"; exit 1; }
+          [ ! -e "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables still exists"; exit 1; }
 
-          echo "PASS: All modular make targets installed and uninstalled cleanly"
+          ./setup.sh --uninstall-bin
+          [ ! -e "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd still exists"; exit 1; }
+
+          ./setup.sh --uninstall-fonts
+          [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
+
+          echo "PASS: setup.sh modular uninstallation succeeded"
 
       - name: Test Full Makefile install & uninstall
         run: |
@@ -81,6 +84,7 @@ jobs:
           # Verify dotfile symlinks and fonts exist
           [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
+          [ -L "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases symlink missing"; exit 1; }
           [ -L "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases symlink missing"; exit 1; }
           [ -L "$HOME/.zsh-functions" ] || { echo "FAIL: ~/.zsh-functions symlink missing"; exit 1; }
           [ -L "$HOME/.zshrc-addendum" ] || { echo "FAIL: ~/.zshrc-addendum symlink missing"; exit 1; }
@@ -95,6 +99,7 @@ jobs:
           make uninstall
           [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
+          [ ! -e "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases still exists"; exit 1; }
           [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases still exists"; exit 1; }
           [ ! -e "$HOME/.zsh-completions" ] || { echo "FAIL: ~/.zsh-completions still exists"; exit 1; }
           [ ! -e "$HOME/.p10k.zsh" ] || { echo "FAIL: ~/.p10k.zsh still exists"; exit 1; }
