@@ -3,10 +3,29 @@
 # general functions
 
 fs() {
-    local fd_cmd="fd"
-    if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
+    local fd_cmd=""
+    if (( $+commands[fd] )); then
+        fd_cmd="fd"
+    elif (( $+commands[fdfind] )); then
         fd_cmd="fdfind"
+    elif type -p fd >/dev/null 2>&1; then
+        fd_cmd="fd"
+    elif type -p fdfind >/dev/null 2>&1; then
+        fd_cmd="fdfind"
+    elif command -v fdfind >/dev/null 2>&1; then
+        fd_cmd="fdfind"
+    elif command -v fd >/dev/null 2>&1; then
+        fd_cmd="fd"
+    else
+        echo "Error: 'fd' (or 'fdfind') is not installed." >&2
+        return 1
     fi
+
+    if ! (( $+commands[tree] )) && ! type -p tree >/dev/null 2>&1 && ! command -v tree >/dev/null 2>&1; then
+        echo "Error: 'tree' is not installed." >&2
+        return 1
+    fi
+
     "$fd_cmd" --no-ignore-vcs "$@" | tree --fromfile
 }
 
