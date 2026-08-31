@@ -8,8 +8,7 @@ Workstation setup automation, prompt themes, developer toolchains, and dotfiles 
 
 ```text
 home-settings/
-├── bootstrap.sh                     # Turnkey zero-dependency streaming bootstrapper
-├── setup.sh                         # Master cross-platform setup & provisioning engine
+├── setup.sh                         # Self-bootstrapping master setup & dotfiles engine
 ├── Makefile                         # Lifecycle targets (install, uninstall, test, lint)
 ├── .mise.toml                       # Mise polyglot toolchains (Java 21, Go, Python, Node, Terraform, Rust)
 ├── AGENTS.md                        # Architecture principles & agent directives
@@ -21,7 +20,7 @@ home-settings/
 │   ├── .environment-variables       # Sub-millisecond environment, COLORTERM, and PATH exports
 │   ├── .bashrc-addendum             # Bash integration hook & zoxide
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
-│   ├── .zsh-aliases                 # Full Git suite, Golang, Terraform, and modern CLI shortcuts
+│   ├── .aliases                     # Full Git suite, Golang, Terraform, and modern CLI shortcuts (Zsh & Bash)
 │   ├── .zsh-functions               # Git synchronization (gsync) & tree search (fs)
 │   ├── .zsh-completions             # Fpath completion registration
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
@@ -37,11 +36,9 @@ home-settings/
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   └── mvn-release                  # Automated Maven release branching and tagging
 │
-├── code-style/                      # Eclipse Java code formatting XML profiles
-│
 ├── .vim/                            # Pathogen autoload runtime (legacy Vim fallback)
 │
-└── tests/                           # Automated test suites (109 tests across 6 modules)
+└── tests/                           # Automated test suites (91+ tests across 6 modules)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests
     ├── test-env.sh                  # Environment variables, TrueColor, and bash tests
     ├── test-zsh.zsh                 # Zsh aliases, functions, live git integration tests
@@ -87,7 +84,7 @@ The following tools should be available on the host machine:
 Stream and run directly in Bash without pre-cloning:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lock14/home-settings/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lock14/home-settings/main/setup.sh | bash
 ```
 
 ### 2. Automated Master Setup (Existing Clone)
@@ -118,6 +115,10 @@ cd home-settings
 | `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (no sudo required) |
 | `--system-only` | *disabled* | Provision OS packages and CLI runtimes only |
 | `--dry-run` | *disabled* | Preview actions without modifying the system |
+| `--uninstall` | *disabled* | Uninstall all managed dotfiles, fonts, and user binaries |
+| `--uninstall-dotfiles` | *disabled* | Remove managed dotfile symlinks only |
+| `--uninstall-fonts` | *disabled* | Remove MesloLGS NF fonts only |
+| `--uninstall-bin` | *disabled* | Remove symlinked user utilities from `~/.local/bin` only |
 | `--os <distro>` | *auto* | Target OS override: `ubuntu`, `fedora`, `macos` (auto-detected by default) |
 | `-j, --jdk <ver>` | `21` | Active Java LTS version: `17`, `21` (default: 21) |
 | `--db <engine>` | `none` | Database server engine to install: `postgres`, `mariadb`, `all`, `none` |
@@ -153,7 +154,8 @@ cd home-settings
 
 ### 2. Modern Rust Developer CLI Suite
 - **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers (`cat <file>`).
-- **`eza`**: Modern directory listing with file-type icons, Git status indicators, and tree views (`ls`, `ll`, `la`, `lt`).
+- **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
+- **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
 - **`fd` / `fs`**: Lightning-fast file and directory tree search.
 
@@ -174,10 +176,13 @@ cd home-settings
 | `z <dir>` | Smart jump to directory via `zoxide` |
 | `cat <file>` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark |
 | `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`) |
-| `ls` | Modern directory listing (`eza --icons=auto`) |
-| `ll` | Detailed directory listing with Git status (`eza -la --git`) |
-| `la` | List all files including hidden (`eza -a`) |
-| `lt` | Tree view listing (`eza --tree --level=2`) |
+| `ls` | Standard directory listing with color (`ls --color=auto`) |
+| `ll` | Standard long directory listing with hidden files (`ls -alF`) |
+| `la` | List almost all files (`ls -A`) |
+| `l` | Compact column listing (`ls -CF`) |
+| `el` | Detailed eza listing with Git status (`eza -la --git`) |
+| `et` | Eza tree view listing (`eza --tree --level=2`) |
+| `ea` | Eza list all files (`eza -a`) |
 | `fs` | Fast recursive directory tree search (`fd` + `tree --fromfile`) |
 | `gcommit` | `git add -A && git commit` |
 | `gamend` | `git add -A && git commit --amend --no-edit` |

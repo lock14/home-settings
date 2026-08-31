@@ -30,12 +30,6 @@ else
     fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
 fi
 
-if bash -n "$SCRIPT_DIR/bootstrap.sh"; then
-    pass "Syntax valid: bootstrap.sh"
-else
-    fail "Syntax check failed: bootstrap.sh" "bash -n returned non-zero"
-fi
-
 for f in "$SCRIPT_DIR"/common-bin/*; do
     if [ -f "$f" ]; then
         if bash -n "$f"; then
@@ -203,14 +197,24 @@ else
     fail "setup.sh dotfiles-only" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/bootstrap.sh" --dry-run 2>&1); then
-    if [[ "$output" == *"Turnkey Bootstrapper"* ]] && [[ "$output" == *"[DryRun]"* ]]; then
-        pass "bootstrap.sh --dry-run works"
+if output=$("$SCRIPT_DIR/setup.sh" --uninstall --dry-run 2>&1); then
+    if [[ "$output" == *"Uninstalling all home-settings components"* ]] && [[ "$output" == *"[DryRun]"* ]]; then
+        pass "setup.sh --uninstall --dry-run works"
     else
-        fail "bootstrap.sh dry-run output" "Missing expected bootstrapper output: $output"
+        fail "setup.sh uninstall dry-run output" "Missing expected uninstallation output: $output"
     fi
 else
-    fail "bootstrap.sh dry-run" "Command failed: $output"
+    fail "setup.sh uninstall dry-run" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1); then
+    if [[ "$output" == *"Removing managed dotfile symlinks"* ]]; then
+        pass "setup.sh --uninstall-dotfiles --dry-run works"
+    else
+        fail "setup.sh uninstall-dotfiles dry-run output" "Missing expected output: $output"
+    fi
+else
+    fail "setup.sh uninstall-dotfiles dry-run" "Command failed: $output"
 fi
 
 # Test 4: Mise Configuration Validity

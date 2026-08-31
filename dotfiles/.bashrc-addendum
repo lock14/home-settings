@@ -1,6 +1,7 @@
 # custom env variables
 [ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
-[ -f "$HOME/.zsh-aliases" ] && source "$HOME/.zsh-aliases"
+[ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
+[ -f "$HOME/.zsh-aliases" ] && [ ! -f "$HOME/.aliases" ] && source "$HOME/.zsh-aliases"
 
 if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ]; then
     eval "$(dircolors "$HOME/.dir-colors/dircolors")"

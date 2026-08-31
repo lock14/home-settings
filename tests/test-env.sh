@@ -26,7 +26,7 @@ echo "========================================"
 
 # Test 1: Bash syntax checks
 echo -e "\n[1/4] Checking script syntax with 'bash -n'..."
-for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment-variables"; do
+for f in "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment-variables" "$SCRIPT_DIR/dotfiles/.aliases"; do
     if bash -n "$f"; then
         pass "Syntax valid: $(basename "$f")"
     else

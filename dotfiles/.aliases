@@ -1,4 +1,4 @@
-#!/bin/zsh
+# Unified Shell Aliases (Zsh & Bash)
 
 # git custom workflows
 alias gcommit='git add -A && git commit'
@@ -29,12 +29,24 @@ elif command -v batcat >/dev/null 2>&1; then
     alias cat='batcat --theme="Solarized-Dark-TrueColor" --paging=auto'
 fi
 
-# modern directory listing (eza)
+# standard directory listing (GNU ls / BSD ls defaults)
+if [ "$(uname -s)" = "Darwin" ]; then
+    alias ls='ls -G'
+    alias ll='ls -alFG'
+    alias la='ls -AG'
+    alias l='ls -CFG'
+else
+    alias ls='ls --color=auto'
+    alias ll='ls -alF'
+    alias la='ls -A'
+    alias l='ls -CF'
+fi
+
+# optional modern directory listing (eza shortcuts)
 if command -v eza >/dev/null 2>&1; then
-    alias ls='eza --icons=auto'
-    alias ll='eza -la --git --group-directories-first'
-    alias la='eza -a --icons=auto'
-    alias lt='eza --tree --level=2 --icons=auto'
+    alias el='eza -la --git --group-directories-first'
+    alias et='eza --tree --level=2'
+    alias ea='eza -a'
 fi
 
 # golang
