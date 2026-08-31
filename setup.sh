@@ -748,6 +748,9 @@ if [ "$SKIP_USER" = false ]; then
                 # Install runtimes
                 echo "  Installing Mise toolchains from .mise.toml..."
                 "$MISE_BIN" install -y || true
+                if [ -d "$HOME/.local/share/mise/shims" ]; then
+                    export PATH="$HOME/.local/share/mise/shims:$PATH"
+                fi
             fi
         fi
     fi
@@ -782,8 +785,10 @@ if [ "$SKIP_USER" = false ]; then
             ln -sf "$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme" "$BAT_CONFIG_DIR/themes/Solarized-Dark-TrueColor.tmTheme"
         fi
         if command -v bat >/dev/null 2>&1; then
+            bat cache --clear >/dev/null 2>&1 || true
             bat cache --build >/dev/null 2>&1 || true
         elif command -v batcat >/dev/null 2>&1; then
+            batcat cache --clear >/dev/null 2>&1 || true
             batcat cache --build >/dev/null 2>&1 || true
         fi
     fi
