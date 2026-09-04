@@ -8,7 +8,7 @@ alias gpush='git push origin HEAD'
 alias gpushf='git push --force-with-lease origin HEAD'
 alias gpull='git pull --rebase origin HEAD'
 alias gup='gfetch && gpull'
-alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | xargs -r git branch -D'
+alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master)$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
 alias guser-branch='git branch -m "$USER/$(git rev-parse --abbrev-ref HEAD | sed -E "s|^($USER/)+||")"'
 
 

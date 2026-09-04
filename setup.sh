@@ -332,6 +332,7 @@ uninstall_dotfiles() {
         "$HOME/.vimrc"
         "$HOME/.dir-colors/dircolors"
         "${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/Solarized-Dark-TrueColor.tmTheme"
+        "${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml"
     )
     for f in "${dotfiles[@]}"; do
         if [ -L "$f" ]; then
@@ -493,7 +494,7 @@ if [ "$SKIP_SYSTEM" = false ]; then
         echo "  Installing core system packages for $OS..."
         case "$OS" in
             ubuntu)
-                pkgs="git curl wget vim neovim zsh fzf fontconfig dconf-cli shellcheck command-not-found bat fd-find ripgrep zoxide"
+                pkgs="git curl wget vim neovim zsh fzf fontconfig dconf-cli shellcheck command-not-found bat fd-find ripgrep zoxide tree"
                 if [ "$SKIP_DB" = false ]; then
                     pkgs="$pkgs postgresql-client mariadb-client"
                 fi
@@ -502,11 +503,11 @@ if [ "$SKIP_SYSTEM" = false ]; then
                 run_cmd sudo apt-get install -y $pkgs
                 ;;
             fedora)
-                pkgs="git curl wget vim neovim zsh fzf fontconfig dconf snapd util-linux-user bat fd-find ripgrep zoxide eza"
+                pkgs="git curl wget vim neovim zsh fzf fontconfig dconf snapd util-linux-user bat fd-find ripgrep zoxide eza tree"
                 if [ "$SKIP_DB" = false ]; then
                     pkgs="$pkgs postgresql mariadb"
                 fi
-                run_cmd sudo dnf -y upgrade --refresh
+                run_cmd sudo dnf makecache
                 # shellcheck disable=SC2086
                 run_cmd sudo dnf -y install $pkgs
                 if [ "$DRY_RUN" = true ]; then
@@ -522,7 +523,7 @@ if [ "$SKIP_SYSTEM" = false ]; then
                         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
                     fi
                 fi
-                pkgs="git curl wget vim neovim zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza"
+                pkgs="git curl wget vim neovim zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza tree"
                 if [ "$SKIP_DB" = false ]; then
                     pkgs="$pkgs libpq"
                 fi
@@ -714,7 +715,7 @@ if [ "$SKIP_USER" = false ]; then
             )
             for font in "${FONTS[@]}"; do
                 target="$FONT_DIR/$font"
-                if [ ! -f "$target" ]; then
+                if [ ! -s "$target" ]; then
                     encoded_font="${font// /%20}"
                     curl -fsSL "$BASE_FONT_URL/$encoded_font" -o "$target" &
                 fi
@@ -739,11 +740,12 @@ if [ "$SKIP_USER" = false ]; then
             MISE_BIN="$(command -v mise || echo "$HOME/.local/bin/mise")"
             if [ -x "$MISE_BIN" ]; then
                 # Link repository config into XDG config if not present
-                mkdir -p "$HOME/.config/mise"
+                mise_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mise"
+                mkdir -p "$mise_config_dir"
                 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
-                    ln -sf "$SCRIPT_DIR/.mise.toml" "$HOME/.config/mise/config.toml"
+                    ln -sf "$SCRIPT_DIR/.mise.toml" "$mise_config_dir/config.toml"
                     "$MISE_BIN" trust "$SCRIPT_DIR/.mise.toml" >/dev/null 2>&1 || true
-                    "$MISE_BIN" trust "$HOME/.config/mise/config.toml" >/dev/null 2>&1 || true
+                    "$MISE_BIN" trust "$mise_config_dir/config.toml" >/dev/null 2>&1 || true
                 fi
                 # Install runtimes
                 echo "  Installing Mise toolchains from .mise.toml..."
@@ -810,6 +812,9 @@ if [ "$SKIP_USER" = false ]; then
                 if [ -d "$dest/.git" ]; then
                     git -C "$dest" pull --ff-only 2>/dev/null || true
                 else
+                    if [ -d "$dest" ]; then
+                        rm -rf "$dest"
+                    fi
                     git clone --depth=1 "$repo" "$dest" 2>/dev/null || true
                 fi
             }
@@ -843,6 +848,9 @@ if [ "$SKIP_USER" = false ]; then
                 if [ -d "$dest/.git" ]; then
                     git -C "$dest" pull --ff-only 2>/dev/null || true
                 else
+                    if [ -d "$dest" ]; then
+                        rm -rf "$dest"
+                    fi
                     git clone --depth=1 "$repo" "$dest" 2>/dev/null || true
                 fi
             }
@@ -855,7 +863,11 @@ if [ "$SKIP_USER" = false ]; then
             wait
 
             if [ -f "$HOME/.zshrc" ]; then
-                sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+                if [ "$OS" = "macos" ]; then
+                    sed -i '' 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+                else
+                    sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+                fi
                 grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" 2>/dev/null || \
                     printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"
             fi

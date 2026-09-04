@@ -30,6 +30,12 @@ else
     fail ".vimrc load" "Vim reported errors when loading dotfiles/.vimrc"
 fi
 
+if ! grep -E '^highlight Diff[A-Za-z]+.*[ \t]+$' "$SCRIPT_DIR/dotfiles/.vimrc" >/dev/null 2>&1; then
+    pass "dotfiles/.vimrc diff highlight definitions contain no trailing whitespace"
+else
+    fail "dotfiles/.vimrc trailing whitespace" "Trailing whitespace found in Diff highlight definitions"
+fi
+
 # Test 2: Indentation and tab settings
 echo -e "\n[2/6] Testing Vim indentation & formatting options..."
 check_option() {

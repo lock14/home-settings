@@ -41,7 +41,7 @@ home-settings/
 │
 ├── .vim/                            # Pathogen autoload runtime (legacy Vim fallback)
 │
-└── tests/                           # Automated test suites (91+ tests across 6 modules)
+└── tests/                           # Automated test suites (100+ tests across 6 modules)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests
     ├── test-env.sh                  # Environment variables, TrueColor, and bash tests
     ├── test-zsh.zsh                 # Zsh aliases, functions, live git integration tests
@@ -220,7 +220,7 @@ cd home-settings
 All scripts enforce `set -euo pipefail` for fail-fast safety.
 
 ```bash
-# Run full automated test suite (109 tests across 6 test modules)
+# Run full automated test suite (100+ tests across 6 test modules)
 make test
 
 # Run syntax & lint validation

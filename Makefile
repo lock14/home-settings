@@ -37,10 +37,10 @@ lint:
 	@echo "Checking zsh syntax..."
 	@zsh -n dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh
 	@echo "Checking bash script syntax with 'bash -n'..."
-	@bash -n dotfiles/.aliases setup.sh common-bin/* tests/*.sh
+	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck --severity=warning setup.sh common-bin/* tests/*.sh; \
+		shellcheck --severity=warning dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh common-bin/* tests/*.sh; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi

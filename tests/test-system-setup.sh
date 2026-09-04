@@ -23,7 +23,7 @@ echo "Running System & Cross-Platform Engine Tests"
 echo "========================================"
 
 # Test 1: Bash syntax checks
-echo -e "\n[1/4] Checking syntax with 'bash -n'..."
+echo -e "\n[1/5] Checking syntax with 'bash -n'..."
 if bash -n "$SCRIPT_DIR/setup.sh"; then
     pass "Syntax valid: setup.sh"
 else
@@ -41,7 +41,7 @@ for f in "$SCRIPT_DIR"/common-bin/*; do
 done
 
 # Test 2: CLI Validation on setup.sh
-echo -e "\n[2/4] Testing parameter validation in setup.sh..."
+echo -e "\n[2/5] Testing parameter validation in setup.sh..."
 
 if "$SCRIPT_DIR/setup.sh" --help >/dev/null 2>&1; then
     pass "setup.sh --help exits cleanly"
@@ -95,7 +95,7 @@ else
 fi
 
 # Test 3: Dry-run Execution across Platforms
-echo -e "\n[3/4] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
+echo -e "\n[3/5] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --dry-run 2>&1); then
     if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
@@ -208,8 +208,8 @@ else
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1); then
-    if [[ "$output" == *"Removing managed dotfile symlinks"* ]]; then
-        pass "setup.sh --uninstall-dotfiles --dry-run works"
+    if [[ "$output" == *"Removing managed dotfile symlinks"* ]] && [[ "$output" == *"mise/config.toml"* ]]; then
+        pass "setup.sh --uninstall-dotfiles --dry-run includes ~/.config/mise/config.toml"
     else
         fail "setup.sh uninstall-dotfiles dry-run output" "Missing expected output: $output"
     fi
@@ -218,7 +218,7 @@ else
 fi
 
 # Test 4: Mise Configuration Validity
-echo -e "\n[4/4] Testing .mise.toml toolchain definition..."
+echo -e "\n[4/5] Testing .mise.toml toolchain definition..."
 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
     if grep -q 'java = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'node = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'python = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'neovim = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'eza = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'bat = "latest"' "$SCRIPT_DIR/.mise.toml"; then
         pass ".mise.toml defaults to LTS for Java/Node, and latest stable for Go, Python, Maven, Neovim, Eza, Bat"
@@ -228,6 +228,28 @@ if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
 else
     fail ".mise.toml missing" "Expected .mise.toml at repository root"
 fi
+
+# Test 5: Utilities validation (gen-passwd, sum)
+echo -e "\n[5/5] Testing standalone utilities edge cases..."
+passwd_symbols=$("$SCRIPT_DIR/common-bin/gen-passwd" -s 32)
+if [ "${#passwd_symbols}" -eq 32 ] && [[ ! "$passwd_symbols" =~ [0-9a-zA-Z[:space:]] ]]; then
+    pass "gen-passwd -s generates pure symbols without numbers or letters"
+else
+    fail "gen-passwd -s symbol generation" "Generated unexpected characters: $passwd_symbols"
+fi
+
+TEMP_SUM_DIR=$(mktemp -d)
+(
+    cd "$TEMP_SUM_DIR"
+    touch 1
+    sum_out=$("$SCRIPT_DIR/common-bin/sum" 1 2 3)
+    if [ "$sum_out" = "6" ]; then
+        pass "sum correctly treats numeric args as numbers even when matching file exists"
+    else
+        fail "sum numeric file collision" "Expected 6, got $sum_out"
+    fi
+)
+rm -rf "$TEMP_SUM_DIR"
 
 echo -e "\n========================================"
 echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"

@@ -81,11 +81,17 @@ echo -e "\n[2/4] Testing dotfiles/.environment-variables exports..."
         else
             fail "EDITOR export" "Expected nvim, got: ${EDITOR:-}"
         fi
-    else
+    elif command -v vim >/dev/null 2>&1; then
         if [ "${EDITOR:-}" = "vim" ]; then
             pass "EDITOR is set to vim (fallback when nvim is absent)"
         else
             fail "EDITOR export" "Expected vim, got: ${EDITOR:-}"
+        fi
+    else
+        if [ "${EDITOR:-}" = "vi" ]; then
+            pass "EDITOR is set to vi (fallback when nvim and vim are absent)"
+        else
+            fail "EDITOR export" "Expected vi, got: ${EDITOR:-}"
         fi
     fi
 
@@ -106,6 +112,21 @@ echo -e "\n[2/4] Testing dotfiles/.environment-variables exports..."
     else
         fail "FZF_DEFAULT_OPTS export" "Expected Solarized Dark palette in FZF_DEFAULT_OPTS, got: ${FZF_DEFAULT_OPTS:-}"
     fi
+
+    # Test fallback to vi when nvim and vim are absent
+    (
+        MOCK_BIN=$(mktemp -d)
+        trap '/bin/rm -rf "$MOCK_BIN"' EXIT
+        touch "$MOCK_BIN/vi" && chmod +x "$MOCK_BIN/vi"
+        export PATH="$MOCK_BIN"
+        # shellcheck source=/dev/null
+        . "$SCRIPT_DIR/dotfiles/.environment-variables"
+        if [ "${EDITOR:-}" = "vi" ]; then
+            pass "EDITOR falls back to vi when nvim and vim are absent"
+        else
+            fail "EDITOR fallback to vi" "Expected vi, got ${EDITOR:-}"
+        fi
+    )
 )
 
 # Test 3: Verify bashrc-addendum sourcing
@@ -120,7 +141,7 @@ echo -e "\n[3/4] Testing dotfiles/.bashrc-addendum..."
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
 
-    if [ "${EDITOR:-}" = "vim" ] || [ "${EDITOR:-}" = "nvim" ]; then
+    if [ "${EDITOR:-}" = "vim" ] || [ "${EDITOR:-}" = "nvim" ] || [ "${EDITOR:-}" = "vi" ]; then
         pass "bashrc-addendum sourced .environment-variables"
     else
         fail "bashrc-addendum sourcing" ".environment-variables was not sourced (EDITOR=${EDITOR:-})"
