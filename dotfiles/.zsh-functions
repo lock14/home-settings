@@ -61,3 +61,12 @@ gsync() {
         git rebase "$target_branch"
     fi
 }
+
+# Source custom function drop-ins (~/.zsh-functions.d/*.zsh)
+if [ -d "$HOME/.zsh-functions.d" ]; then
+    for f in "$HOME/.zsh-functions.d"/*.zsh(N); do
+        if [ -r "$f" ]; then
+            source "$f"
+        fi
+    done
+fi

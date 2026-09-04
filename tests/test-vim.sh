@@ -4,19 +4,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-pass() {
-    echo -e "  \033[32m✔ PASS:\033[0m $1"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-}
-
-fail() {
-    echo -e "  \033[31m✘ FAIL:\033[0m $1"
-    echo "    $2"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-}
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/tests/test-helper.sh"
 
 echo "========================================"
 echo "Running Vim Configuration Tests"
@@ -66,12 +55,12 @@ echo -e "\n[4/6] Testing key mappings..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 
-# Test 5: Verify setup.sh configures honza/vim-snippets
-echo -e "\n[5/6] Testing Vim bundle provisioning in setup.sh..."
-if grep -q 'honza/vim-snippets' "$SCRIPT_DIR/setup.sh"; then
+# Test 5: Verify Vim bundle provisioning
+echo -e "\n[5/6] Testing Vim bundle provisioning..."
+if grep -q 'honza/vim-snippets' "$SCRIPT_DIR/setup.sh" || grep -q 'honza/vim-snippets' "$SCRIPT_DIR/modules/50-vim.sh"; then
     pass "setup.sh provisions curated honza/vim-snippets bundle"
 else
-    fail "setup.sh vim-snippets" "Expected honza/vim-snippets in setup.sh"
+    fail "setup.sh vim-snippets" "Expected honza/vim-snippets in setup.sh or modules/50-vim.sh"
 fi
 
 # Test 6: Verify Neovim init.lua configuration
@@ -109,11 +98,5 @@ else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"
 fi
 
-echo -e "\n========================================"
-echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
-echo "========================================"
-
-if [ "$TESTS_FAILED" -gt 0 ]; then
-    exit 1
-fi
+test_summary
 

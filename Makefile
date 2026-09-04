@@ -1,14 +1,18 @@
 .DEFAULT_GOAL := help
-.PHONY: setup bootstrap install uninstall test lint check all help
+.PHONY: setup bootstrap install system uninstall test lint check all help
 
 ## setup: Run full machine setup (packages, apps, dotfiles, tools).
 setup:
-	@./setup.sh
+	@./setup.sh --system
 
-## bootstrap: Alias for setup (full machine bootstrap).
+## system: Full machine provisioning with native OS packages (requires sudo).
+system:
+	@./setup.sh --system
+
+## bootstrap: Alias for system setup (full machine bootstrap).
 bootstrap: setup
 
-## install: Install dotfiles, fonts, plugins, and user tools (user-space, no sudo).
+## install: Install dotfiles, bin utilities, fonts, plugins, and user tools (user-space, no sudo).
 install:
 	@./setup.sh --dotfiles-only
 
@@ -20,6 +24,10 @@ uninstall:
 test:
 	@echo "Running System & Cross-Platform Engine tests..."
 	@bash tests/test-system-setup.sh
+	@echo "Running Declarative Dotfiles tests..."
+	@bash tests/test-dotfiles.sh
+	@echo "Running User Binaries tests..."
+	@bash tests/test-bin.sh
 	@echo "Running Environment & Bash tests..."
 	@bash tests/test-env.sh
 	@echo "Running Zsh tests..."
@@ -37,10 +45,10 @@ lint:
 	@echo "Checking zsh syntax..."
 	@zsh -n dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh tests/test-zsh.zsh
 	@echo "Checking bash script syntax with 'bash -n'..."
-	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh common-bin/* tests/*.sh
+	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck --severity=warning dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh common-bin/* tests/*.sh; \
+		shellcheck --severity=warning dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi

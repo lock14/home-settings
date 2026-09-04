@@ -40,7 +40,7 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | **Legacy Vim Config** | `dotfiles/.vimrc` | `$HOME/.vimrc` | `tests/test-vim.sh` |
 | **Bat TrueColor Theme** | `colors/Solarized-Dark-TrueColor.tmTheme` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh` |
 | **Dircolors Database** | `dotfiles/.dir-colors/dircolors` | `$HOME/.dir-colors/dircolors` | `tests/test-env.sh` |
-| **Standalone Binaries** | `common-bin/*` | `${XDG_DATA_HOME:-$HOME/.local}/bin/` | `tests/test-system-setup.sh` |
+| **Standalone Binaries** | `bin/*` (with `common-bin/` symlink) | `${XDG_DATA_HOME:-$HOME/.local}/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | **Polyglot Toolchains** | `.mise.toml` | `${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml` | `tests/test-system-setup.sh` |
 | **Meslo Nerd Fonts** | Downloaded dynamically | `${XDG_DATA_HOME:-$HOME/.local/share}/fonts/` or macOS Fonts | `tests/test-fonts.sh` |
 
@@ -132,8 +132,10 @@ Before concluding any turn or marking any task complete:
    ```bash
    make test
    ```
-   Ensures all 100+ validation tests across all 6 test modules pass with 0 failures:
+   Ensures all 160+ validation tests across all 8 test modules pass with 0 failures:
    - `test-system-setup.sh`: Cross-platform CLI, dry-run, OS dispatching, Mise definitions, bootstrapper.
+   - `test-dotfiles.sh`: Declarative dotfiles auto-discovery, physical directory backup, drop-ins, uninstallation.
+   - `test-bin.sh`: User binaries symlinking, compatibility shims (fd, bat), uninstallation.
    - `test-env.sh`: Environment variables, PATH, COLORTERM, BAT_THEME, EZA_COLORS, dircolors, XDG GOPATH/GOCACHE.
    - `test-zsh.zsh`: Git aliases, functions, live git repo integration, zshrc addendum.
    - `test-completions.sh`: Completions symlinks, generators, idempotency.
