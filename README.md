@@ -21,7 +21,6 @@ home-settings/
 │   ├── mvn-release                  # Automated Maven release branching and tagging
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   └── sum                          # High-performance AWK number summation & stats
-├── common-bin -> bin                # Backward-compatibility symlink
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, Golang, Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
@@ -233,19 +232,21 @@ The redesigned repository is built for frictionless extension:
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
 | `la` | List almost all files (`ls -A`) |
 | `l` | Compact column listing (`ls -CF`) |
-| `el` | Detailed eza listing with Git status (`eza -la --git`) |
-| `et` | Eza tree view listing (`eza --tree --level=2`) |
-| `ea` | Eza list all files (`eza -a`) |
+| `e` | Modern grid listing with Nerd Font icons (`eza --icons=auto`) |
+| `el` | Detailed eza listing with table headers, Git status, and icons (`eza -la --icons=auto --git --header`) |
+| `et` | Eza tree view listing with icons (`eza --tree --level=2 --icons=auto`) |
+| `elt` | Detailed eza tree view with Git status and metadata (`eza -la --tree --level=2 --icons=auto --git`) |
 | `fs` | Fast recursive directory tree search (`fd` + `tree --fromfile`) |
 | `gcommit` | `git add -A && git commit` |
 | `gamend` | `git add -A && git commit --amend --no-edit` |
 | `gfetch` | `git fetch` |
 | `gpush` / `gpushf` | `git push origin HEAD` / `--force-with-lease` |
-| `gpull` | `git pull --rebase origin HEAD` |
-| `gup` | `git fetch && git pull --rebase origin HEAD` |
-| `gprune` | Delete local branches except `main`/`master` |
+| `gpull` | `git pull --rebase --autostash` |
+| `gup` | `git fetch && git pull --rebase --autostash` |
+| `gprune` | Safely delete merged local branches |
+| `gpurge` | Nuclear force-delete (`-D`) local branches except `main`/`master` |
 | `gsync` | Rebase current branch onto latest `main`/`master` |
-| `guser-branch` | Prefix branch with `$USER/` (stripping redundant prefixes) |
+| `guser-branch` | Prefix branch with `$USER/` (refusing `main`/`master`) |
 | `go-testall` | `go test ./...` |
 | `go-buildall` | `go build ./...` |
 | `go-lint` | `golangci-lint run` |

@@ -6,10 +6,11 @@ alias gamend='git add -A && git commit --amend --no-edit'
 alias gfetch='git fetch'
 alias gpush='git push origin HEAD'
 alias gpushf='git push --force-with-lease origin HEAD'
-alias gpull='git pull --rebase origin HEAD'
+alias gpull='git pull --rebase --autostash'
 alias gup='gfetch && gpull'
-alias gprune='git branch --format="%(refname:short)" | grep -E -v "^(main|master|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
-alias guser-branch='git branch -m "${USER:-$(whoami)}/$(git rev-parse --abbrev-ref HEAD | sed -E "s|^(${USER:-$(whoami)}/)+||")"'
+alias gprune='git fetch --prune 2>/dev/null; target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --merged "$target" | sed "s/^[ *]*//" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -d "$b"; done'
+alias gpurge='target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --format="%(refname:short)" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
+alias guser-branch='b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -z "$b" ] || [ "$b" = "HEAD" ]; then echo "Error: not on a valid branch" >&2; false; elif [ "$b" = "main" ] || [ "$b" = "master" ] || [ "$b" = "trunk" ]; then echo "Error: refusing to prefix $b branch" >&2; false; else git branch -m "${USER:-$(whoami)}/$(echo "$b" | sed -E "s|^(${USER:-$(whoami)}/)+||")"; fi'
 
 
 # editor shortcuts (Neovim default with Vim fallback)
@@ -45,9 +46,10 @@ fi
 
 # optional modern directory listing (eza shortcuts)
 if command -v eza >/dev/null 2>&1; then
-    alias el='eza -la --git --group-directories-first'
-    alias et='eza --tree --level=2'
-    alias ea='eza -a'
+    alias e='eza --icons=auto --group-directories-first'
+    alias el='eza -la --icons=auto --git --header --group-directories-first'
+    alias et='eza --tree --level=2 --icons=auto'
+    alias elt='eza -la --tree --level=2 --icons=auto --git'
 fi
 
 # golang
