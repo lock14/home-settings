@@ -7,7 +7,7 @@ set -o pipefail  # don't hide errors within pipes
 UPPER="A-Z"
 LOWER="a-z"
 NUMBERS="0-9"
-SYMBOLS="^*@#&%$\!"
+SYMBOLS='!@#$%^&*()_+=[]{}|:,.<>?-'
 
 LENGTH="16"
 CHARACTER_SET=""
@@ -73,7 +73,7 @@ fi
 
 # Disable pipefail because head -c closes the pipe early, causing tr to receive SIGPIPE (Broken pipe)
 set +o pipefail
-< /dev/urandom tr -dc "$CHARACTER_SET" | head -c "$LENGTH"
+< /dev/urandom LC_ALL=C tr -dc "$CHARACTER_SET" 2>/dev/null | head -c "$LENGTH"
 set -o pipefail
 echo
 

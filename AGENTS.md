@@ -132,7 +132,7 @@ Before concluding any turn or marking any task complete:
    ```bash
    make test
    ```
-   Ensures all 91+ validation tests across all 6 test modules pass with 0 failures:
+   Ensures all 100+ validation tests across all 6 test modules pass with 0 failures:
    - `test-system-setup.sh`: Cross-platform CLI, Java LTS validation, dry-run, OS dispatching, Mise definitions, bootstrapper.
    - `test-env.sh`: Environment variables, PATH, COLORTERM, BAT_THEME, EZA_COLORS, dircolors, XDG GOPATH/GOCACHE.
    - `test-zsh.zsh`: Git aliases, functions, live git repo integration, zshrc addendum.

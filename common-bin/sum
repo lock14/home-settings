@@ -168,7 +168,7 @@ END {
 if [ "$#" -gt 0 ]; then
   HAS_FILES=0
   for arg in "$@"; do
-    if [ -f "$arg" ]; then
+    if [[ ! "$arg" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] && [ -f "$arg" ]; then
       HAS_FILES=1
       break
     fi

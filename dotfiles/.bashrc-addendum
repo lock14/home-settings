@@ -1,3 +1,4 @@
+#!/bin/bash
 # custom env variables
 [ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
