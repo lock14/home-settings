@@ -241,11 +241,12 @@ The redesigned repository is built for frictionless extension:
 | `gamend` | `git add -A && git commit --amend --no-edit` |
 | `gfetch` | `git fetch` |
 | `gpush` / `gpushf` | `git push origin HEAD` / `--force-with-lease` |
-| `gpull` | `git pull --rebase origin HEAD` |
-| `gup` | `git fetch && git pull --rebase origin HEAD` |
-| `gprune` | Delete local branches except `main`/`master` |
+| `gpull` | `git pull --rebase --autostash` |
+| `gup` | `git fetch && git pull --rebase --autostash` |
+| `gprune` | Safely delete merged local branches |
+| `gpurge` | Nuclear force-delete (`-D`) local branches except `main`/`master` |
 | `gsync` | Rebase current branch onto latest `main`/`master` |
-| `guser-branch` | Prefix branch with `$USER/` (stripping redundant prefixes) |
+| `guser-branch` | Prefix branch with `$USER/` (refusing `main`/`master`) |
 | `go-testall` | `go test ./...` |
 | `go-buildall` | `go build ./...` |
 | `go-lint` | `golangci-lint run` |

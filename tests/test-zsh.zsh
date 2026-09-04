@@ -40,7 +40,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gup gprune guser-branch go-lint go-testall go-buildall tf yaml-lint vi v ls ll la l el et ea; do
+    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf yaml-lint vi v ls ll la l el et ea; do
         if alias "$expected_alias" >/dev/null 2>&1; then
             echo "PASS:$expected_alias"
         else
@@ -165,14 +165,40 @@ test_git_integration() {
         echo "FAIL:guser-branch idempotency:Expected $USER/feature-1, got $renamed_branch_again"
     fi
 
-    # Test gprune alias
+    # Test guser-branch refusal on main
     git checkout main >/dev/null 2>&1
+    eval "$(alias guser-branch | sed 's/^guser-branch=//' | sed "s/^'//" | sed "s/'$//")" >/dev/null 2>&1 || true
+    if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+        echo "PASS:guser-branch safely refuses to rename main"
+    else
+        echo "FAIL:guser-branch on main:Renamed main to $(git rev-parse --abbrev-ref HEAD)"
+    fi
+
+    # Test gprune alias (safe prune: deletes merged branch, preserves unmerged branch)
     git branch test-to-delete >/dev/null 2>&1
+    git checkout -b test-unmerged >/dev/null 2>&1
+    echo "unmerged work" >> file.txt
+    git commit -am "unmerged commit" >/dev/null 2>&1
+    git checkout main >/dev/null 2>&1
+
     eval "$(alias gprune | sed 's/^gprune=//' | sed "s/^'//" | sed "s/'$//")" >/dev/null 2>&1
     if ! git show-ref --verify --quiet refs/heads/test-to-delete; then
-        echo "PASS:gprune successfully pruned non-main branch"
+        echo "PASS:gprune successfully pruned merged branch"
     else
-        echo "FAIL:gprune:Branch test-to-delete was not pruned"
+        echo "FAIL:gprune:Merged branch test-to-delete was not pruned"
+    fi
+    if git show-ref --verify --quiet refs/heads/test-unmerged; then
+        echo "PASS:gprune preserved unmerged branch"
+    else
+        echo "FAIL:gprune:Unmerged branch test-unmerged was unexpectedly deleted"
+    fi
+
+    # Test gpurge alias (nuclear prune: deletes unmerged branch too)
+    eval "$(alias gpurge | sed 's/^gpurge=//' | sed "s/^'//" | sed "s/'$//")" >/dev/null 2>&1
+    if ! git show-ref --verify --quiet refs/heads/test-unmerged; then
+        echo "PASS:gpurge successfully pruned unmerged branch"
+    else
+        echo "FAIL:gpurge:Branch test-unmerged was not pruned by gpurge"
     fi
 }
 
