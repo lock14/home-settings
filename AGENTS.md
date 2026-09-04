@@ -73,7 +73,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 | **Errors & Diagnostics** | `red` | `#DC322F` | Syntax errors, diagnostic warnings |
 
 ### Integration Rules
-1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`). `cat` is aliased to `bat --theme="Solarized-Dark-TrueColor" --paging=auto`.
+1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`). Available via `bat` or `b`; `cat` strictly remains standard Unix coreutils.
 2. **`eza`**: Available via `e`, `el`, `et`, and `elt` (`eza --tree`), with `EZA_COLORS` and `EXA_COLORS` configured with Solarized Dark palette. Native `ls` and `ll` use standard GNU/BSD `ls` with Solarized `dircolors`.
 3. **Neovim Lua**: Uses `maxmx03/solarized.nvim` with `variant = "spring"` matching `bat` 1:1, integrated with Native Neovim 0.11+ LSP (`vim.lsp.config`, `LspAttach`).
 4. **Zsh Autosuggestions**: Highlight style is pinned to `fg=10` (Solarized Base01).

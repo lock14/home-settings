@@ -205,7 +205,7 @@ The redesigned repository is built for frictionless extension:
 - **`zoxide` (`z`)** frecency-based smart directory jumping.
 
 ### 2. Modern Rust Developer CLI Suite
-- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers (`cat <file>`).
+- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers (`bat <file>` or `b <file>`; `cat` remains coreutils).
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
@@ -226,7 +226,7 @@ The redesigned repository is built for frictionless extension:
 | :--- | :--- |
 | `Ctrl+R` | Interactive fuzzy search command history via `fzf` |
 | `z <dir>` | Smart jump to directory via `zoxide` |
-| `cat <file>` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark |
+| `b <file>` / `bat` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark (`cat` remains pure coreutils) |
 | `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`) |
 | `ls` | Standard directory listing with color (`ls --color=auto`) |
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
