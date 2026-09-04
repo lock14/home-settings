@@ -15,7 +15,7 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | 🚫 **NEVER** | **No Default Heavy Daemons / GUI Apps** | Heavyweight database server daemons (PostgreSQL, MariaDB) and GUI applications (Chrome, VS Code) must **never** be installed by default. Only lightweight client CLI tools (`psql`, `mariadb-client`) are installed unless opted into via `--with-postgres`, `--with-mariadb`, `--db <engine>`, or `--with-gui`. |
 | 🚫 **NEVER** | **No Redundant Standard Git Aliases** | Standard Git aliases (`ga`, `gst`, `gco`, `gd`, `gb`, `gl`, `gp`) are provided directly by Oh-My-Zsh's `git` plugin. Keep `.aliases` pruned to custom workflows (`gcommit`, `gamend`, `gsync`, `guser-branch`, `gprune`, etc.). |
 | 🚫 **NEVER** | **No Starship Prompt** | The shell prompt is strictly single-line **Powerlevel10k Solarized Dark**. Never re-introduce `starship`. |
-| 🚫 **NEVER** | **No EOL Java Releases** | Only actively supported Java LTS releases are allowed (**Java 17 LTS**, **Java 21 LTS**; default: **Java 21 LTS**). Deprecated/EOL versions (Java 8, Java 11) must be rejected with informative error messages. |
+| 🚫 **NEVER** | **No EOL Java Releases** | Only actively supported Java LTS releases are allowed (**Java 17 LTS**, **Java 21 LTS**). Deprecated/EOL versions (Java 8, Java 11) must never be used. Runtimes are managed declaratively via `.mise.toml` (`java = "lts"`). |
 | 🚫 **NEVER** | **No Nested Directory Symlinks** | When symlinking directory trees (e.g. `${XDG_CONFIG_HOME:-$HOME/.config}/nvim`), always check if the target is an existing physical directory. If so, back it up (`nvim.bak.<timestamp>`) before calling `ln -sfn` to prevent creating nested links (`~/.config/nvim/nvim`). |
 | ✅ **ALWAYS** | **LTS Preference for Mise Tools** | For all tools defined in `.mise.toml`, specify `lts` whenever supported by the tool's ecosystem (`java = "lts"`, `node = "lts"`). For tools without an official LTS channel (Go, Python, Maven, Terraform, Rust, Neovim), default to `latest` stable. |
 | ✅ **ALWAYS** | **Modern Neovim via Mise** | Modern Neovim (0.11+ / 0.12+) is provisioned via `mise` (`neovim = "latest"`), avoiding obsolete distro packages (such as Ubuntu's default 0.9.5). |
@@ -133,7 +133,7 @@ Before concluding any turn or marking any task complete:
    make test
    ```
    Ensures all 100+ validation tests across all 6 test modules pass with 0 failures:
-   - `test-system-setup.sh`: Cross-platform CLI, Java LTS validation, dry-run, OS dispatching, Mise definitions, bootstrapper.
+   - `test-system-setup.sh`: Cross-platform CLI, dry-run, OS dispatching, Mise definitions, bootstrapper.
    - `test-env.sh`: Environment variables, PATH, COLORTERM, BAT_THEME, EZA_COLORS, dircolors, XDG GOPATH/GOCACHE.
    - `test-zsh.zsh`: Git aliases, functions, live git repo integration, zshrc addendum.
    - `test-completions.sh`: Completions symlinks, generators, idempotency.

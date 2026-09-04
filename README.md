@@ -123,7 +123,6 @@ cd home-settings
 | `--uninstall-fonts` | *disabled* | Remove MesloLGS NF fonts only |
 | `--uninstall-bin` | *disabled* | Remove symlinked user utilities from `~/.local/bin` only |
 | `--os <distro>` | *auto* | Target OS family override: `ubuntu` (Debian/apt), `fedora` (RHEL/dnf), `macos` (Homebrew) |
-| `-j, --jdk <ver>` | `21` | Active Java LTS version: `17`, `21` (default: 21) |
 | `--db <engine>` | `none` | Database server engine to install: `postgres`, `mariadb`, `all`, `none` |
 | `--with-postgres` | *disabled* | Install PostgreSQL server and client tools |
 | `--with-mariadb` | *disabled* | Install MariaDB server and client tools |
