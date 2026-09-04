@@ -67,11 +67,11 @@ if [ -f "$BAT_THEME_SRC" ]; then
     echo "  Configuring Bat TrueColor theme..."
     link_file "$BAT_THEME_SRC" "$XDG_CONFIG/bat/themes/Solarized-Dark-TrueColor.tmTheme"
     if [ "$DRY_RUN" = false ]; then
-        if command -v bat >/dev/null 2>&1; then
-            bat cache --clear >/dev/null 2>&1 || true
+        if command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
+            mise exec -- bat cache --build >/dev/null 2>&1 || true
+        elif command -v bat >/dev/null 2>&1; then
             bat cache --build >/dev/null 2>&1 || true
         elif command -v batcat >/dev/null 2>&1; then
-            batcat cache --clear >/dev/null 2>&1 || true
             batcat cache --build >/dev/null 2>&1 || true
         fi
     fi

@@ -23,12 +23,12 @@ else
     alias v='vim'
 fi
 
-# modern file viewing (bat with TrueColor Solarized Dark)
+# modern file viewing (bat with TrueColor Solarized Dark; cat remains coreutils)
 if command -v bat >/dev/null 2>&1; then
-    alias cat='bat --theme="Solarized-Dark-TrueColor" --paging=auto'
+    alias b='bat'
 elif command -v batcat >/dev/null 2>&1; then
-    alias cat='batcat --theme="Solarized-Dark-TrueColor" --paging=auto'
     alias bat='batcat'
+    alias b='batcat'
 fi
 
 # standard directory listing (GNU ls / BSD ls defaults)

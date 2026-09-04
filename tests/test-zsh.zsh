@@ -45,6 +45,10 @@ test_aliases() {
         expected_aliases+=(e el et elt)
     fi
 
+    if command -v bat >/dev/null 2>&1 || command -v batcat >/dev/null 2>&1; then
+        expected_aliases+=(b)
+    fi
+
     for expected_alias in "${expected_aliases[@]}"; do
         if alias "$expected_alias" >/dev/null 2>&1; then
             echo "PASS:$expected_alias"
@@ -52,6 +56,12 @@ test_aliases() {
             echo "FAIL:$expected_alias:alias not found"
         fi
     done
+
+    if alias cat >/dev/null 2>&1; then
+        echo "FAIL:cat:cat should not be aliased (should use coreutils cat)"
+    else
+        echo "PASS:cat is not aliased (coreutils cat)"
+    fi
 }
 
 while IFS= read -r line; do
