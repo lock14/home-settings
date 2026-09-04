@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test suite for unified cross-platform setup engine (Ubuntu, Fedora, macOS, Mise, Java LTS 17/21)
+# Test suite for unified cross-platform setup engine (Ubuntu, Fedora, macOS, Mise, Java LTS)
 
 set -euo pipefail
 
@@ -53,33 +53,6 @@ if output=$("$SCRIPT_DIR/setup.sh" --os unsupported_distro 2>&1); then
     fail "setup.sh invalid OS" "Expected error on invalid OS, got success: $output"
 else
     pass "setup.sh rejects invalid OS"
-fi
-
-# Reject EOL Java versions
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --jdk 8 2>&1); then
-    fail "setup.sh EOL JDK 8" "Expected error on EOL JDK 8, got success: $output"
-else
-    if [[ "$output" == *"End-of-Life"* ]] || [[ "$output" == *"EOL"* ]]; then
-        pass "setup.sh rejects EOL Java 8"
-    else
-        fail "setup.sh EOL Java 8 message" "Expected EOL message, got: $output"
-    fi
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --jdk openjdk-11 2>&1); then
-    fail "setup.sh EOL JDK 11" "Expected error on EOL JDK 11, got success: $output"
-else
-    if [[ "$output" == *"End-of-Life"* ]] || [[ "$output" == *"EOL"* ]]; then
-        pass "setup.sh rejects EOL Java 11"
-    else
-        fail "setup.sh EOL Java 11 message" "Expected EOL message, got: $output"
-    fi
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --jdk 999 2>&1); then
-    fail "setup.sh invalid JDK" "Expected error on invalid JDK, got success: $output"
-else
-    pass "setup.sh rejects invalid JDK version"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide invalid_ide 2>&1); then
@@ -147,9 +120,9 @@ else
     fail "setup.sh with-gui dry-run" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os fedora --jdk 17 --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" == *"Java 17"* ]] && [[ "$output" != *"google-chrome"* ]]; then
-        pass "setup.sh --os fedora --jdk 17 --dry-run executes cleanly with Fedora packages (no GUI apps)"
+if output=$("$SCRIPT_DIR/setup.sh" --os fedora --dry-run 2>&1); then
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" != *"google-chrome"* ]]; then
+        pass "setup.sh --os fedora --dry-run executes cleanly with Fedora packages (no GUI apps)"
     else
         fail "setup.sh fedora dry-run output" "Missing expected output markers: $output"
     fi

@@ -42,7 +42,6 @@ fi
 
 # Default configurations
 ACTION="install"
-JDK_VERSION="21"
 IDE_NAME="none"
 TARGET_OS=""
 DRY_RUN=false
@@ -85,7 +84,6 @@ Uninstallation Modes:
 
 System Options:
   --os <distro>           Target OS override: ubuntu (Debian/apt), fedora (RHEL/dnf), macos (Homebrew)
-  -j, --jdk <ver>         Active Java LTS version: 17, 21 (default: 21)
   --skip-system           Skip OS package updates and system provisioning
   --skip-packages         Skip core system package manager installs
 
@@ -154,10 +152,6 @@ while [ $# -gt 0 ]; do
             ;;
         --os)
             TARGET_OS="$2"
-            shift 2
-            ;;
-        -j|--jdk)
-            JDK_VERSION="$2"
             shift 2
             ;;
         -i|--ide)
@@ -412,35 +406,6 @@ if [ "$ACTION" != "install" ]; then
     exit 0
 fi
 
-# Validate Java version
-normalize_jdk_version() {
-    local input="$1"
-    local ver="$input"
-    ver="${ver#openjdk-}"
-    ver="${ver#java-}"
-    ver="${ver#temurin-}"
-    ver="${ver#1.}"
-    ver="${ver%.0}"
-    ver="${ver%-jdk}"
-    ver="${ver%-openjdk}"
-    ver="${ver%-devel}"
-
-    case "$ver" in
-        17|21|25) echo "$ver" ;;
-        8|11) echo "eol" ;;
-        *) echo "unsupported" ;;
-    esac
-}
-
-JDK_CLEAN="$(normalize_jdk_version "$JDK_VERSION")"
-if [ "$JDK_CLEAN" = "eol" ]; then
-    echo "Error: JDK version '$JDK_VERSION' is End-of-Life (EOL). Only actively supported LTS versions (17, 21) are supported." >&2
-    exit 1
-elif [ "$JDK_CLEAN" = "unsupported" ]; then
-    echo "Error: '$JDK_VERSION' is not a supported Java LTS version. Choose from: 17, 21" >&2
-    exit 1
-fi
-
 # Validate IDE
 case "$IDE_NAME" in
     intellij|intellij-ultimate|code|none) ;;
@@ -465,7 +430,6 @@ echo "       Home-Settings Cross-Platform Setup            "
 echo "====================================================="
 echo "Target OS : $OS"
 echo "Arch      : $ARCH"
-echo "JDK Choice: OpenJDK / Temurin $JDK_CLEAN (LTS)"
 echo "IDE Choice: $IDE_NAME"
 echo "Database  : Server: $DB_CHOICE (Clients: $([ "$SKIP_DB" = true ] && echo "skipped" || echo "enabled"))"
 if [ "$BOOTSTRAP_MODE" = true ]; then
@@ -729,7 +693,7 @@ if [ "$SKIP_USER" = false ]; then
 
     # 4. Mise Polyglot Toolchain Manager
     if [ "$SKIP_TOOLS" = false ]; then
-        echo "  Configuring Mise runtime manager (Java $JDK_CLEAN, Go, Terraform)..."
+        echo "  Configuring Mise runtime manager (Java LTS, Go, Terraform)..."
         if [ "$DRY_RUN" = true ]; then
             echo "  [DryRun] Installing mise and provisioning runtimes from .mise.toml"
         else
