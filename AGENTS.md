@@ -45,7 +45,7 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | **Legacy Vim Config** | `dotfiles/.vimrc` | `$HOME/.vimrc` | `tests/test-vim.sh` |
 | **Bat TrueColor Theme** | `colors/Solarized-Dark-TrueColor.tmTheme` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
 | **Dircolors Database** | `dotfiles/.dir-colors/dircolors` | `$HOME/.dir-colors/dircolors` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
-| **Standalone Binaries** | `bin/*` (with `common-bin/` symlink) | `${XDG_DATA_HOME:-$HOME/.local}/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
+| **Standalone Binaries** | `bin/*` | `${XDG_DATA_HOME:-$HOME/.local}/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | **Polyglot Toolchains** | `.mise.toml` | `${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml` | `tests/test-system-setup.sh` |
 | **Meslo Nerd Fonts** | Downloaded dynamically | `${XDG_DATA_HOME:-$HOME/.local/share}/fonts/` or macOS Fonts | `tests/test-fonts.sh` |
 | **Shared Test Harness** | `tests/test-helper.sh` | Internal test assertion library | All `tests/*.sh` and `tests/*.zsh` |

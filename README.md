@@ -21,7 +21,6 @@ home-settings/
 │   ├── mvn-release                  # Automated Maven release branching and tagging
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   └── sum                          # High-performance AWK number summation & stats
-├── common-bin -> bin                # Backward-compatibility symlink
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, Golang, Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
