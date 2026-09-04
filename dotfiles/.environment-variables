@@ -7,6 +7,20 @@
 # Force 24-bit TrueColor across terminal tools (bat, eza, delta)
 export COLORTERM=truecolor
 
+# Standard user binaries
+export PATH="$HOME/.local/bin:$HOME/software/bin:$PATH"
+
+# Mise runtime manager shims
+export MISE_YES=1
+if [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" ]; then
+    export PATH="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims:$PATH"
+fi
+
+# Go workspace & build cache (XDG Base Directory compliant)
+export GOPATH="${XDG_DATA_HOME:-$HOME/.local/share}/go"
+export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
+export PATH="$GOPATH/bin:$PATH"
+
 # Default editor (prefer nvim if available, fallback to vim then vi)
 if command -v nvim >/dev/null 2>&1; then
     export EDITOR=nvim
@@ -24,20 +38,6 @@ export BAT_THEME="Solarized-Dark-TrueColor"
 # eza / exa uniform high-contrast Solarized Dark TrueColor metadata (Base0 #839496)
 export EZA_COLORS="xx=38;2;88;110;117:da=38;2;131;148;150:uu=38;2;131;148;150:un=38;2;131;148;150:gu=38;2;131;148;150:gn=38;2;131;148;150:sn=38;2;181;137;0:sb=38;2;131;148;150:df=38;2;131;148;150:ga=38;2;133;153;0:gm=38;2;181;137;0:gd=38;2;220;50;47:gv=38;2;131;148;150:gt=38;2;131;148;150:ur=38;2;131;148;150:uw=38;2;131;148;150:ux=38;2;131;148;150:ue=38;2;131;148;150:gr=38;2;131;148;150:gw=38;2;131;148;150:gx=38;2;131;148;150:tr=38;2;131;148;150:tw=38;2;131;148;150:tx=38;2;131;148;150:su=38;2;131;148;150:sf=38;2;131;148;150:xa=38;2;131;148;150"
 export EXA_COLORS="$EZA_COLORS"
-
-# Standard user binaries
-export PATH="$HOME/.local/bin:$HOME/software/bin:$PATH"
-
-# Mise runtime manager shims
-export MISE_YES=1
-if [ -d "$HOME/.local/share/mise/shims" ]; then
-    export PATH="$HOME/.local/share/mise/shims:$PATH"
-fi
-
-# Go workspace & build cache (XDG Base Directory compliant)
-export GOPATH="${XDG_DATA_HOME:-$HOME/.local/share}/go"
-export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
-export PATH="$GOPATH/bin:$PATH"
 
 # FZF Solarized Dark theme & ripgrep integration
 export FZF_DEFAULT_OPTS='--color=bg+:#073642,bg:#002B36,spinner:#859900,hl:#586E75 --color=fg:#839496,header:#586E75,info:#B58900,pointer:#859900 --color=marker:#859900,fg+:#93A1A1,prompt:#B58900,hl+:#268BD2 --layout=reverse --border=rounded --info=inline'

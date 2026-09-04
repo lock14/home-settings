@@ -7,10 +7,11 @@ endif
 let $PYTHONWARNINGS = "ignore"
 
 
-" UltiSnips snippet triggers
+" UltiSnips snippet triggers & SuperTab integration
 let g:UltiSnipsExpandTrigger = "<tab>"
 let g:UltiSnipsJumpForwardTrigger = "<c-j>"
 let g:UltiSnipsJumpBackwardTrigger = "<c-k>"
+let g:SuperTabDefaultCompletionType = "<c-n>"
 
 " Auto-Pairs configuration
 let g:AutoPairsShortcutJump = '<c-l>'

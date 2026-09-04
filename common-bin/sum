@@ -98,7 +98,7 @@ function parse_val(val,  num, suf) {
 }
 
 function process_item(item,  val) {
-    if (item ~ /^[+-]?[0-9]*\.?[0-9]+([eE][+-]?[0-9]+)?([kKmMgGtTpPeE]i?[bB]?)?$/) {
+    if ((HUMAN && item ~ /^[+-]?[0-9]*\.?[0-9]+([kKmMgGtTpPeE]i?[bB]?)$/) || item ~ /^[+-]?[0-9]*\.?[0-9]+([eE][+-]?[0-9]+)?$/) {
         val = parse_val(item)
         sum += val
         count++
@@ -168,7 +168,16 @@ END {
 if [ "$#" -gt 0 ]; then
   HAS_FILES=0
   for arg in "$@"; do
-    if [[ ! "$arg" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] && [ -f "$arg" ]; then
+    is_num=0
+    if [ "$DELIM" = "" ] && [[ "$arg" == *,* ]]; then
+      is_num=1
+    elif [[ "$arg" =~ ^[+-]?[0-9]*\.?[0-9]+([eE][+-]?[0-9]+)?$ ]]; then
+      is_num=1
+    elif [ "$HUMAN" -eq 1 ] && [[ "$arg" =~ ^[+-]?[0-9]*\.?[0-9]+([kKmMgGtTpPeE]i?[bB]?)$ ]]; then
+      is_num=1
+    fi
+
+    if [ "$is_num" -eq 0 ] && [ -f "$arg" ]; then
       HAS_FILES=1
       break
     fi

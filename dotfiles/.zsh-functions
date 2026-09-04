@@ -38,6 +38,11 @@ gsync() {
         return 1
     }
 
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        echo "Error: working directory has uncommitted changes. Please stash or commit before running gsync." >&2
+        return 1
+    fi
+
     if git show-ref --verify --quiet refs/heads/main; then
         target_branch="main"
     elif git show-ref --verify --quiet refs/heads/master; then
@@ -47,8 +52,12 @@ gsync() {
         return 1
     fi
 
-    git checkout "$target_branch" && \
-    git pull --rebase origin "$target_branch" && \
-    git checkout "$current_branch" && \
-    git rebase "$target_branch"
+    if [ "$current_branch" = "$target_branch" ]; then
+        git pull --rebase origin "$target_branch"
+    else
+        git checkout "$target_branch" && \
+        git pull --rebase origin "$target_branch" && \
+        git checkout "$current_branch" && \
+        git rebase "$target_branch"
+    fi
 }

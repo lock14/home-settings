@@ -40,6 +40,18 @@ while getopts ":n:s:ht" opt; do
 done
 shift $((OPTIND -1))
 
+if ! [[ "$MAX_ATTEMPTS" =~ ^[0-9]+$ ]] || [ "$MAX_ATTEMPTS" -le 0 ]; then
+    echo "error: -n MAX_ATTEMPTS must be a positive integer" >&2
+    usage >&2
+    exit 1
+fi
+
+if ! [[ "$SLEEP_SECONDS" =~ ^[0-9]+$ ]]; then
+    echo "error: -s SLEEP_SECONDS must be a non-negative integer" >&2
+    usage >&2
+    exit 1
+fi
+
 if [ "$#" -eq 0 ]; then
     echo "error: no command specified" 1>&2
     usage
