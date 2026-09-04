@@ -38,12 +38,12 @@ uninstall_dotfiles() {
 
     # Dynamically find any additional top-level dotfiles from repository
     if [ -d "$REPO_DIR/dotfiles" ]; then
-        for src in "$REPO_DIR/dotfiles"/.*; do
+        for src in "$REPO_DIR/dotfiles"/.* "$REPO_DIR/dotfiles"/*; do
             [ -e "$src" ] || continue
             local name
             name="$(basename "$src")"
             case "$name" in
-                .|..|.git|.gitignore|.config|.dir-colors) continue ;;
+                .|..|.git|.gitignore|.config|.dir-colors|'*') continue ;;
             esac
             if [ -f "$src" ]; then
                 dotfiles+=("$HOME/$name")
@@ -55,8 +55,15 @@ uninstall_dotfiles() {
         unlink_path "$f"
     done
 
+    # Unlink any managed .config entries dynamically
     local nvim_target="$xdg_config/nvim"
     unlink_path "$nvim_target"
+    if [ -d "$REPO_DIR/dotfiles/.config" ]; then
+        for item in "$REPO_DIR/dotfiles/.config"/*; do
+            [ -e "$item" ] || continue
+            unlink_path "$xdg_config/$(basename "$item")"
+        done
+    fi
 
     echo "  Dotfile symlinks uninstalled."
 }

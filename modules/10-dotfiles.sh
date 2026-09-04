@@ -19,11 +19,11 @@ XDG_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 echo "  Symlinking dotfiles from $DOTFILES_DIR to $HOME..."
 
 # 1. Discover and link all top-level files in dotfiles/
-for src in "$DOTFILES_DIR"/.*; do
+for src in "$DOTFILES_DIR"/.* "$DOTFILES_DIR"/*; do
     [ -e "$src" ] || continue
     name="$(basename "$src")"
     case "$name" in
-        .|..|.git|.gitignore|.config|.dir-colors)
+        .|..|.git|.gitignore|.config|.dir-colors|'*')
             continue
             ;;
     esac
@@ -75,4 +75,9 @@ if [ -f "$BAT_THEME_SRC" ]; then
             batcat cache --build >/dev/null 2>&1 || true
         fi
     fi
+fi
+
+# 6. Polyglot Toolchains Configuration (Mise)
+if [ -f "$REPO_DIR/.mise.toml" ]; then
+    link_file "$REPO_DIR/.mise.toml" "$XDG_CONFIG/mise/config.toml"
 fi

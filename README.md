@@ -149,10 +149,10 @@ make lint
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
-| `(default)` | *enabled* | User-space setup: dotfiles, bins, fonts, Mise runtimes, shell, vim (no `sudo`) |
-| `--system` | *disabled* | Full setup: native OS packages via apt/dnf/brew + user environment (requires `sudo`) |
+| `(default)` | *enabled* | Full machine setup: native OS packages via apt/dnf/brew + user environment (requires `sudo`) |
+| `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (no `sudo` required) |
+| `--system` | *disabled* | Full turnkey setup with native packages (alias for default) |
 | `--bootstrap` | *disabled* | Full new machine bootstrap (base packages, shell, tools, dotfiles) |
-| `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (alias for user-space setup) |
 | `--system-only` | *disabled* | Provision OS packages and CLI runtimes only |
 | `--dry-run` | *disabled* | Preview actions without modifying the system |
 | `--uninstall` | *disabled* | Uninstall all managed dotfiles, fonts, and user binaries |

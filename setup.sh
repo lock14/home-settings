@@ -79,10 +79,10 @@ Usage: $(basename "$0") [OPTIONS]
 Modular Cross-Platform Workstation Provisioner & Dotfiles Engine.
 
 Primary Workflows:
-  (default)               User-space setup (dotfiles, bin, fonts, tools, shell) [No sudo]
-  --system                Full turnkey setup (native OS packages + user environment)
+  (default)               Full machine setup (native packages + user environment)
+  --dotfiles-only         Configure user dotfiles, fonts, and tools only (no sudo required)
+  --system                Full turnkey setup with native packages (alias for default)
   --bootstrap             Full new machine bootstrap (base packages, shell, tools, dotfiles)
-  --dotfiles-only         Configure user dotfiles, fonts, and tools only (alias for default)
   --system-only           Provision OS packages and CLI runtimes only
   --dry-run               Preview actions without modifying the system
   --uninstall             Uninstall all managed dotfiles, fonts, and user binaries
