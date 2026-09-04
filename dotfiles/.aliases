@@ -46,9 +46,10 @@ fi
 
 # optional modern directory listing (eza shortcuts)
 if command -v eza >/dev/null 2>&1; then
-    alias el='eza -la --git --group-directories-first'
-    alias et='eza --tree --level=2'
-    alias ea='eza -a'
+    alias e='eza --icons=auto --group-directories-first'
+    alias el='eza -la --icons=auto --git --header --group-directories-first'
+    alias et='eza --tree --level=2 --icons=auto'
+    alias elt='eza -la --tree --level=2 --icons=auto --git'
 fi
 
 # golang

@@ -40,7 +40,12 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    for expected_alias in gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf yaml-lint vi v ls ll la l el et ea; do
+    local expected_aliases=(gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf yaml-lint vi v ls ll la l)
+    if command -v eza >/dev/null 2>&1; then
+        expected_aliases+=(e el et elt)
+    fi
+
+    for expected_alias in "${expected_aliases[@]}"; do
         if alias "$expected_alias" >/dev/null 2>&1; then
             echo "PASS:$expected_alias"
         else

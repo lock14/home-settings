@@ -232,9 +232,10 @@ The redesigned repository is built for frictionless extension:
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
 | `la` | List almost all files (`ls -A`) |
 | `l` | Compact column listing (`ls -CF`) |
-| `el` | Detailed eza listing with Git status (`eza -la --git`) |
-| `et` | Eza tree view listing (`eza --tree --level=2`) |
-| `ea` | Eza list all files (`eza -a`) |
+| `e` | Modern grid listing with Nerd Font icons (`eza --icons=auto`) |
+| `el` | Detailed eza listing with table headers, Git status, and icons (`eza -la --icons=auto --git --header`) |
+| `et` | Eza tree view listing with icons (`eza --tree --level=2 --icons=auto`) |
+| `elt` | Detailed eza tree view with Git status and metadata (`eza -la --tree --level=2 --icons=auto --git`) |
 | `fs` | Fast recursive directory tree search (`fd` + `tree --fromfile`) |
 | `gcommit` | `git add -A && git commit` |
 | `gamend` | `git add -A && git commit --amend --no-edit` |
