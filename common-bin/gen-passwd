@@ -7,10 +7,13 @@ set -o pipefail  # don't hide errors within pipes
 UPPER="A-Z"
 LOWER="a-z"
 NUMBERS="0-9"
-SYMBOLS='!@#$%^&*()_+=[]{}|:,.<>?-'
+SYMBOLS='!@#$%^&*()_+=[]{}|:,.<>?'
 
 LENGTH="16"
-CHARACTER_SET=""
+USE_UPPER=0
+USE_LOWER=0
+USE_NUMBERS=0
+USE_SYMBOLS=0
 
 usage() {
     echo "usage: $(basename "$0") [-u -l -n -s] <length>"
@@ -19,16 +22,16 @@ usage() {
 while getopts ":ulnsht" opt; do
   case ${opt} in
     u )
-      CHARACTER_SET="$CHARACTER_SET$UPPER"
+      USE_UPPER=1
       ;;
     l )
-      CHARACTER_SET="$CHARACTER_SET$LOWER"
+      USE_LOWER=1
       ;;
     n )
-      CHARACTER_SET="$CHARACTER_SET$NUMBERS"
+      USE_NUMBERS=1
       ;;
     s )
-      CHARACTER_SET="$CHARACTER_SET$SYMBOLS"
+      USE_SYMBOLS=1
       ;;
     h )
       usage
@@ -56,24 +59,36 @@ if [ "${1:-}" != "" ]; then
 fi
 
 if [ "$LENGTH" = "" ]; then
-  echo "a length must be provided"
-  usage
+  echo "error: a length must be provided" >&2
+  usage >&2
   exit 1
 fi
 
 INTEGER='^[0-9]+$'
-if ! [[ $LENGTH =~ $INTEGER ]] ; then
-   echo "error: $LENGTH is not a number"
+if ! [[ $LENGTH =~ $INTEGER ]] || [ "$LENGTH" -le 0 ]; then
+   echo "error: $LENGTH is not a valid positive length" >&2
+   usage >&2
    exit 1
 fi
 
-if [ "$CHARACTER_SET" = "" ]; then
-  CHARACTER_SET="$UPPER$LOWER$NUMBERS$SYMBOLS"
+if [ "$USE_UPPER" -eq 0 ] && [ "$USE_LOWER" -eq 0 ] && [ "$USE_NUMBERS" -eq 0 ] && [ "$USE_SYMBOLS" -eq 0 ]; then
+  USE_UPPER=1
+  USE_LOWER=1
+  USE_NUMBERS=1
+  USE_SYMBOLS=1
 fi
+
+CHARACTER_SET=""
+[ "$USE_UPPER" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$UPPER"
+[ "$USE_LOWER" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$LOWER"
+[ "$USE_NUMBERS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$NUMBERS"
+[ "$USE_SYMBOLS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$SYMBOLS"
+# Place hyphen strictly at the end of the character set so tr treats it as a literal rather than a range
+[ "$USE_SYMBOLS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}-"
 
 # Disable pipefail because head -c closes the pipe early, causing tr to receive SIGPIPE (Broken pipe)
 set +o pipefail
-< /dev/urandom LC_ALL=C tr -dc "$CHARACTER_SET" 2>/dev/null | head -c "$LENGTH"
+< /dev/urandom LC_ALL=C tr -dc -- "$CHARACTER_SET" | head -c "$LENGTH"
 set -o pipefail
 echo
 

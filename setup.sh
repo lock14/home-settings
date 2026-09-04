@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)
 REPO_URL="https://github.com/lock14/home-settings.git"
 
 # Self-bootstrapping: If piped through curl or run without repository assets, clone and re-exec
-if [ ! -d "$SCRIPT_DIR/dotfiles" ]; then
+if [ ! -d "$SCRIPT_DIR/dotfiles" ] || [ ! -f "$SCRIPT_DIR/.mise.toml" ]; then
     TARGET_DIR="$HOME/home-settings"
     echo "====================================================="
     echo "       home-settings Master Setup & Provisioner      "
@@ -33,7 +33,7 @@ if [ ! -d "$SCRIPT_DIR/dotfiles" ]; then
         git clone "$REPO_URL" "$TARGET_DIR"
     else
         echo "  Updating repository at $TARGET_DIR..."
-        git -C "$TARGET_DIR" pull --rebase origin main 2>/dev/null || true
+        git -C "$TARGET_DIR" pull --rebase origin main || true
     fi
 
     chmod +x "$TARGET_DIR/setup.sh"
@@ -151,15 +151,27 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --os)
+            if [ $# -lt 2 ]; then
+                echo "Error: --os requires an argument (e.g. ubuntu, fedora, macos)" >&2
+                exit 1
+            fi
             TARGET_OS="$2"
             shift 2
             ;;
         -i|--ide)
+            if [ $# -lt 2 ]; then
+                echo "Error: $1 requires an argument (e.g. intellij, intellij-ultimate, code, none)" >&2
+                exit 1
+            fi
             IDE_NAME="$2"
             INSTALL_APPS=true
             shift 2
             ;;
         --db)
+            if [ $# -lt 2 ]; then
+                echo "Error: --db requires an argument (e.g. postgres, mariadb, all, none)" >&2
+                exit 1
+            fi
             DB_CHOICE="$2"
             shift 2
             ;;
@@ -362,6 +374,19 @@ uninstall_bin() {
                 fi
             fi
         done
+        for shim in "$HOME/.local/bin/fd" "$HOME/.local/bin/bat"; do
+            if [ -L "$shim" ]; then
+                local shim_target
+                shim_target="$(readlink "$shim" 2>/dev/null || true)"
+                if [[ "$shim_target" == *"fdfind"* ]] || [[ "$shim_target" == *"batcat"* ]]; then
+                    if [ "$DRY_RUN" = true ]; then
+                        echo "  [DryRun] rm -f $shim"
+                    else
+                        rm -f "$shim"
+                    fi
+                fi
+            fi
+        done
     fi
     echo "  User binaries uninstalled."
 }
@@ -377,7 +402,7 @@ uninstall_fonts() {
     if [ "$DRY_RUN" = true ]; then
         echo "  [DryRun] rm -f $font_dir/MesloLGS NF*.ttf"
     else
-        rm -f "$font_dir/MesloLGS NF"*.ttf 2>/dev/null || true
+        rm -f "$font_dir/MesloLGS NF"*.ttf || true
         if command -v fc-cache >/dev/null 2>&1; then
             fc-cache -f "$font_dir" >/dev/null 2>&1 || true
         fi
@@ -439,6 +464,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "Mode      : DRY RUN (preview only, no modifications)"
 fi
 echo "====================================================="
+export PATH="$HOME/.local/bin:$PATH"
 
 run_cmd() {
     if [ "$DRY_RUN" = true ]; then
@@ -478,6 +504,9 @@ if [ "$SKIP_SYSTEM" = false ]; then
                     echo "  [DryRun] sudo ln -sf /var/lib/snapd/snap /snap"
                 else
                     sudo ln -sf /var/lib/snapd/snap /snap 2>/dev/null || true
+                    if command -v systemctl >/dev/null 2>&1; then
+                        sudo systemctl enable --now snapd.socket 2>/dev/null || true
+                    fi
                 fi
                 ;;
             macos)
@@ -485,6 +514,11 @@ if [ "$SKIP_SYSTEM" = false ]; then
                     echo "  Homebrew not found. Installing Homebrew..."
                     if [ "$DRY_RUN" = false ]; then
                         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                        if [ -x "/opt/homebrew/bin/brew" ]; then
+                            eval "$(/opt/homebrew/bin/brew shellenv)"
+                        elif [ -x "/usr/local/bin/brew" ]; then
+                            eval "$(/usr/local/bin/brew shellenv)"
+                        fi
                     fi
                 fi
                 pkgs="git curl wget vim neovim zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza tree"
@@ -553,10 +587,10 @@ if [ "$SKIP_SYSTEM" = false ]; then
                     echo "  [DryRun] sudo dnf config-manager enable google-chrome"
                     echo "  [DryRun] sudo dnf -y install google-chrome-stable"
                 else
-                    sudo dnf -y install fedora-workstation-repositories 2>/dev/null || true
-                    sudo dnf config-manager setopt google-chrome.enabled=1 2>/dev/null || \
-                    sudo dnf config-manager --enable google-chrome 2>/dev/null || true
-                    sudo dnf -y install google-chrome-stable 2>/dev/null || true
+                    sudo dnf -y install fedora-workstation-repositories || true
+                    sudo dnf config-manager setopt google-chrome.enabled=1 || \
+                    sudo dnf config-manager --enable google-chrome || true
+                    sudo dnf -y install google-chrome-stable || true
                 fi
                 ;;
             macos)
@@ -670,6 +704,8 @@ if [ "$SKIP_USER" = false ]; then
             echo "  [DryRun] Downloading MesloLGS NF (Regular, Bold, Italic, Bold Italic) to $FONT_DIR"
         else
             mkdir -p "$FONT_DIR"
+            CACHE_DIR="${HOME_SETTINGS_FONT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/home-settings/fonts}"
+            mkdir -p "$CACHE_DIR"
             BASE_FONT_URL="https://github.com/romkatv/powerlevel10k-media/raw/master"
             FONTS=(
                 "MesloLGS NF Regular.ttf"
@@ -677,14 +713,25 @@ if [ "$SKIP_USER" = false ]; then
                 "MesloLGS NF Italic.ttf"
                 "MesloLGS NF Bold Italic.ttf"
             )
+            pids=()
             for font in "${FONTS[@]}"; do
                 target="$FONT_DIR/$font"
+                cached="$CACHE_DIR/$font"
                 if [ ! -s "$target" ]; then
-                    encoded_font="${font// /%20}"
-                    curl -fsSL "$BASE_FONT_URL/$encoded_font" -o "$target" &
+                    if [ -s "$cached" ]; then
+                        cp "$cached" "$target"
+                    else
+                        encoded_font="${font// /%20}"
+                        ( curl -fsSL "$BASE_FONT_URL/$encoded_font" -o "$cached.tmp.$$" && mv -f "$cached.tmp.$$" "$cached" && cp "$cached" "$target" ) &
+                        pids+=($!)
+                    fi
                 fi
             done
-            wait
+            if [ ${#pids[@]} -gt 0 ]; then
+                for pid in "${pids[@]}"; do
+                    wait "$pid"
+                done
+            fi
             if command -v fc-cache &>/dev/null; then
                 fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
             fi
@@ -714,8 +761,8 @@ if [ "$SKIP_USER" = false ]; then
                 # Install runtimes
                 echo "  Installing Mise toolchains from .mise.toml..."
                 "$MISE_BIN" install -y || true
-                if [ -d "$HOME/.local/share/mise/shims" ]; then
-                    export PATH="$HOME/.local/share/mise/shims:$PATH"
+                if [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" ]; then
+                    export PATH="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims:$PATH"
                 fi
             fi
         fi
@@ -767,19 +814,23 @@ if [ "$SKIP_USER" = false ]; then
         else
             mkdir -p "$HOME/.vim/autoload" "$HOME/.vim/bundle"
             if [ ! -f "$HOME/.vim/autoload/pathogen.vim" ]; then
-                curl -LSso "$HOME/.vim/autoload/pathogen.vim" https://tpo.pe/pathogen.vim 2>/dev/null || true
+                if [ -f "$SCRIPT_DIR/.vim/autoload/pathogen.vim" ]; then
+                    cp "$SCRIPT_DIR/.vim/autoload/pathogen.vim" "$HOME/.vim/autoload/pathogen.vim"
+                else
+                    curl -LSsfo "$HOME/.vim/autoload/pathogen.vim" https://tpo.pe/pathogen.vim || true
+                fi
             fi
 
             clone_bundle() {
                 local repo="$1"
                 local dest="$2"
                 if [ -d "$dest/.git" ]; then
-                    git -C "$dest" pull --ff-only 2>/dev/null || true
+                    git -C "$dest" pull --ff-only || true
                 else
                     if [ -d "$dest" ]; then
                         rm -rf "$dest"
                     fi
-                    git clone --depth=1 "$repo" "$dest" 2>/dev/null || true
+                    git clone --depth=1 "$repo" "$dest" || true
                 fi
             }
 
@@ -800,7 +851,7 @@ if [ "$SKIP_USER" = false ]; then
         else
             ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
             if [ ! -d "$ZSH_DIR" ]; then
-                RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended 2>/dev/null || true
+                RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
             fi
 
             ZSH_CUSTOM_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
@@ -810,12 +861,12 @@ if [ "$SKIP_USER" = false ]; then
                 local repo="$1"
                 local dest="$2"
                 if [ -d "$dest/.git" ]; then
-                    git -C "$dest" pull --ff-only 2>/dev/null || true
+                    git -C "$dest" pull --ff-only || true
                 else
                     if [ -d "$dest" ]; then
                         rm -rf "$dest"
                     fi
-                    git clone --depth=1 "$repo" "$dest" 2>/dev/null || true
+                    git clone --depth=1 "$repo" "$dest" || true
                 fi
             }
 
@@ -826,15 +877,23 @@ if [ "$SKIP_USER" = false ]; then
             clone_zsh "https://github.com/unixorn/fzf-zsh-plugin.git" "$ZSH_CUSTOM_DIR/plugins/fzf-zsh-plugin" &
             wait
 
-            if [ -f "$HOME/.zshrc" ]; then
-                if [ "$OS" = "macos" ]; then
-                    sed -i '' 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+            if [ ! -f "$HOME/.zshrc" ]; then
+                if [ -f "$ZSH_DIR/templates/zshrc.zsh-template" ]; then
+                    cp "$ZSH_DIR/templates/zshrc.zsh-template" "$HOME/.zshrc"
                 else
-                    sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+                    touch "$HOME/.zshrc"
                 fi
-                grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" 2>/dev/null || \
-                    printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"
             fi
+
+            if [ "$OS" = "macos" ]; then
+                sed -i '' 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+                sed -i '' 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc" 2>/dev/null || true
+            else
+                sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
+                sed -i 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc" 2>/dev/null || true
+            fi
+            grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" || \
+                printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"
         fi
     fi
 
@@ -843,10 +902,11 @@ if [ "$SKIP_USER" = false ]; then
         if [ "$DRY_RUN" = true ]; then
             echo "  [DryRun] Adding source ~/.bashrc-addendum to ~/.bashrc"
         else
-            if [ -f "$HOME/.bashrc" ]; then
-                grep -qxF '[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum' "$HOME/.bashrc" 2>/dev/null || \
-                    printf '\n# home-settings\n[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum\n' >> "$HOME/.bashrc"
+            if [ ! -f "$HOME/.bashrc" ]; then
+                touch "$HOME/.bashrc"
             fi
+            grep -qxF '[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum' "$HOME/.bashrc" || \
+                printf '\n# home-settings\n[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum\n' >> "$HOME/.bashrc"
         fi
     fi
 
@@ -857,9 +917,9 @@ if [ "$SKIP_USER" = false ]; then
             echo "  [DryRun] Generating CLI tab completions in $COMPLETIONS_DIR"
         else
             mkdir -p "$COMPLETIONS_DIR"
-            if command -v gh &>/dev/null; then gh completion -s zsh > "$COMPLETIONS_DIR/_gh" 2>/dev/null || true; fi
-            if command -v kubectl &>/dev/null; then kubectl completion zsh > "$COMPLETIONS_DIR/_kubectl" 2>/dev/null || true; fi
-            if command -v helm &>/dev/null; then helm completion zsh > "$COMPLETIONS_DIR/_helm" 2>/dev/null || true; fi
+            if command -v gh &>/dev/null; then gh completion -s zsh > "$COMPLETIONS_DIR/_gh" || true; fi
+            if command -v kubectl &>/dev/null; then kubectl completion zsh > "$COMPLETIONS_DIR/_kubectl" || true; fi
+            if command -v helm &>/dev/null; then helm completion zsh > "$COMPLETIONS_DIR/_helm" || true; fi
         fi
     fi
 
@@ -871,7 +931,7 @@ if [ "$SKIP_USER" = false ]; then
         if [ "$DRY_RUN" = true ]; then
             echo "  [DryRun] chsh -s $ZSH_BIN"
         else
-            chsh -s "$ZSH_BIN" 2>/dev/null || true
+            chsh -s "$ZSH_BIN" || true
         fi
     fi
 fi

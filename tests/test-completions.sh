@@ -45,7 +45,11 @@ OLD_HOME="$HOME"
 export HOME="$TEMP_HOME"
 
 # Run setup (dotfiles only)
-"$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1
+if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh 2>&1); then
+    :
+else
+    fail "setup.sh dotfiles-only" "Execution failed: $output"
+fi
 
 if [ -L "$TEMP_HOME/.zsh-completions" ]; then
     pass "Symlink created: ~/.zsh-completions"
@@ -72,7 +76,11 @@ fi
 EOF
 chmod +x "$MOCK_BIN/gh"
 
-PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1
+if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh 2>&1); then
+    :
+else
+    fail "setup.sh completions generation" "Execution failed: $output"
+fi
 
 if [ -f "$TEMP_HOME/.zsh/completions/_gh" ] && grep -q "mock gh completion" "$TEMP_HOME/.zsh/completions/_gh"; then
     pass "Generated completion: ~/.zsh/completions/_gh"
@@ -81,10 +89,10 @@ else
 fi
 
 # Idempotency check
-if PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh >/dev/null 2>&1; then
+if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh 2>&1); then
     pass "setup.sh completions are idempotent"
 else
-    fail "setup.sh idempotency" "Second run failed"
+    fail "setup.sh idempotency" "Second run failed: $output"
 fi
 
 export HOME="$OLD_HOME"

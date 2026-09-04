@@ -5,7 +5,7 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
 
 # Oh-My-Zsh non-interactive auto update (avoids startup prompt)
 DISABLE_UPDATE_PROMPT="true"
-zstyle ':omz:update' mode auto 2>/dev/null || true
+zstyle ':omz:update' mode auto
 
 # Source modular config files
 [ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
@@ -41,5 +41,14 @@ if [[ -o interactive ]] && command -v fzf >/dev/null 2>&1; then
     elif fzf --zsh >/dev/null 2>&1; then
         eval "$(fzf --zsh)"
     fi
+fi
+
+# Ensure Oh-My-Zsh custom plugins are active if installed on disk
+ZSH_CUSTOM_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+if [ -f "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && ! (( $+functions[_zsh_autosuggest_suggest] )); then
+    source "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+fi
+if [ -f "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] && ! (( $+functions[_zsh_highlight] )); then
+    source "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
 

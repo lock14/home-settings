@@ -36,117 +36,125 @@ done
 
 # Test 2: Verify environment-variables PATH configuration
 echo -e "\n[2/4] Testing dotfiles/.environment-variables exports..."
-(
-    TEMP_HOME=$(mktemp -d)
-    trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
+OLD_HOME="$HOME"
+OLD_PATH="$PATH"
+OLD_XDG_DATA_HOME="${XDG_DATA_HOME:-}"
+OLD_XDG_CACHE_HOME="${XDG_CACHE_HOME:-}"
+TEMP_HOME=$(mktemp -d)
 
-    export HOME="$TEMP_HOME"
-    unset GOPATH
-    # shellcheck source=/dev/null
-    source "$SCRIPT_DIR/dotfiles/.environment-variables"
+cleanup_env_test() {
+    chmod -R u+w "$TEMP_HOME" 2>/dev/null || true
+    rm -rf "$TEMP_HOME"
+    export HOME="$OLD_HOME"
+    export PATH="$OLD_PATH"
+    if [ -n "$OLD_XDG_DATA_HOME" ]; then export XDG_DATA_HOME="$OLD_XDG_DATA_HOME"; else unset XDG_DATA_HOME; fi
+    if [ -n "$OLD_XDG_CACHE_HOME" ]; then export XDG_CACHE_HOME="$OLD_XDG_CACHE_HOME"; else unset XDG_CACHE_HOME; fi
+}
+trap cleanup_env_test EXIT
 
-    if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
-        pass "\$HOME/.local/bin present in PATH"
+export HOME="$TEMP_HOME"
+unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/dotfiles/.environment-variables"
+
+if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
+    pass "\$HOME/.local/bin present in PATH"
+else
+    fail "\$HOME/.local/bin in PATH" "Expected $HOME/.local/bin in PATH, got: $PATH"
+fi
+
+if [[ ":$PATH:" == *":$HOME/software/bin:"* ]]; then
+    pass "\$HOME/software/bin present in PATH"
+else
+    fail "\$HOME/software/bin in PATH" "Expected $HOME/software/bin in PATH, got: $PATH"
+fi
+
+if [ "${COLORTERM:-}" = "truecolor" ]; then
+    pass "COLORTERM is set to truecolor"
+else
+    fail "COLORTERM export" "Expected truecolor, got: ${COLORTERM:-}"
+fi
+
+if [ "${BAT_THEME:-}" = "Solarized-Dark-TrueColor" ]; then
+    pass "BAT_THEME is set to Solarized-Dark-TrueColor"
+else
+    fail "BAT_THEME export" "Expected Solarized-Dark-TrueColor, got: ${BAT_THEME:-}"
+fi
+
+if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ]; then
+    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette"
+else
+    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS, got: ${EZA_COLORS:-}"
+fi
+
+if command -v nvim >/dev/null 2>&1; then
+    if [ "${EDITOR:-}" = "nvim" ]; then
+        pass "EDITOR is set to nvim (nvim detected)"
     else
-        fail "\$HOME/.local/bin in PATH" "Expected $HOME/.local/bin in PATH, got: $PATH"
+        fail "EDITOR export" "Expected nvim, got: ${EDITOR:-}"
     fi
-
-    if [[ ":$PATH:" == *":$HOME/software/bin:"* ]]; then
-        pass "\$HOME/software/bin present in PATH"
+elif command -v vim >/dev/null 2>&1; then
+    if [ "${EDITOR:-}" = "vim" ]; then
+        pass "EDITOR is set to vim (fallback when nvim is absent)"
     else
-        fail "\$HOME/software/bin in PATH" "Expected $HOME/software/bin in PATH, got: $PATH"
+        fail "EDITOR export" "Expected vim, got: ${EDITOR:-}"
     fi
-
-    if [ "${COLORTERM:-}" = "truecolor" ]; then
-        pass "COLORTERM is set to truecolor"
+else
+    if [ "${EDITOR:-}" = "vi" ]; then
+        pass "EDITOR is set to vi (fallback when nvim and vim are absent)"
     else
-        fail "COLORTERM export" "Expected truecolor, got: ${COLORTERM:-}"
+        fail "EDITOR export" "Expected vi, got: ${EDITOR:-}"
     fi
+fi
 
-    if [ "${BAT_THEME:-}" = "Solarized-Dark-TrueColor" ]; then
-        pass "BAT_THEME is set to Solarized-Dark-TrueColor"
-    else
-        fail "BAT_THEME export" "Expected Solarized-Dark-TrueColor, got: ${BAT_THEME:-}"
-    fi
+if [ "${GOPATH:-}" = "$TEMP_HOME/.local/share/go" ] && [[ ":$PATH:" == *":$TEMP_HOME/.local/share/go/bin:"* ]]; then
+    pass "GOPATH and \$GOPATH/bin set cleanly to XDG location ($TEMP_HOME/.local/share/go)"
+else
+    fail "GOPATH export" "Expected $TEMP_HOME/.local/share/go, got GOPATH=${GOPATH:-}, PATH=$PATH"
+fi
 
-    if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ]; then
-        pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette"
-    else
-        fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS, got: ${EZA_COLORS:-}"
-    fi
+if [ "${GOCACHE:-}" = "$TEMP_HOME/.cache/go-build" ]; then
+    pass "GOCACHE set cleanly to XDG location ($TEMP_HOME/.cache/go-build)"
+else
+    fail "GOCACHE export" "Expected $TEMP_HOME/.cache/go-build, got GOCACHE=${GOCACHE:-}"
+fi
 
-    if command -v nvim >/dev/null 2>&1; then
-        if [ "${EDITOR:-}" = "nvim" ]; then
-            pass "EDITOR is set to nvim (nvim detected)"
-        else
-            fail "EDITOR export" "Expected nvim, got: ${EDITOR:-}"
-        fi
-    elif command -v vim >/dev/null 2>&1; then
-        if [ "${EDITOR:-}" = "vim" ]; then
-            pass "EDITOR is set to vim (fallback when nvim is absent)"
-        else
-            fail "EDITOR export" "Expected vim, got: ${EDITOR:-}"
-        fi
-    else
-        if [ "${EDITOR:-}" = "vi" ]; then
-            pass "EDITOR is set to vi (fallback when nvim and vim are absent)"
-        else
-            fail "EDITOR export" "Expected vi, got: ${EDITOR:-}"
-        fi
-    fi
+if [[ "${FZF_DEFAULT_OPTS:-}" == *"#002B36"* ]] && [[ "${FZF_DEFAULT_OPTS:-}" == *"#839496"* ]]; then
+    pass "FZF_DEFAULT_OPTS configured with Solarized Dark palette"
+else
+    fail "FZF_DEFAULT_OPTS export" "Expected Solarized Dark palette in FZF_DEFAULT_OPTS, got: ${FZF_DEFAULT_OPTS:-}"
+fi
 
-    if [ "${GOPATH:-}" = "$TEMP_HOME/.local/share/go" ] && [[ ":$PATH:" == *":$TEMP_HOME/.local/share/go/bin:"* ]]; then
-        pass "GOPATH and \$GOPATH/bin set cleanly to XDG location ($TEMP_HOME/.local/share/go)"
-    else
-        fail "GOPATH export" "Expected $TEMP_HOME/.local/share/go, got GOPATH=${GOPATH:-}, PATH=$PATH"
-    fi
-
-    if [ "${GOCACHE:-}" = "$TEMP_HOME/.cache/go-build" ]; then
-        pass "GOCACHE set cleanly to XDG location ($TEMP_HOME/.cache/go-build)"
-    else
-        fail "GOCACHE export" "Expected $TEMP_HOME/.cache/go-build, got GOCACHE=${GOCACHE:-}"
-    fi
-
-    if [[ "${FZF_DEFAULT_OPTS:-}" == *"#002B36"* ]] && [[ "${FZF_DEFAULT_OPTS:-}" == *"#839496"* ]]; then
-        pass "FZF_DEFAULT_OPTS configured with Solarized Dark palette"
-    else
-        fail "FZF_DEFAULT_OPTS export" "Expected Solarized Dark palette in FZF_DEFAULT_OPTS, got: ${FZF_DEFAULT_OPTS:-}"
-    fi
-
-    # Test fallback to vi when nvim and vim are absent
-    (
-        MOCK_BIN=$(mktemp -d)
-        trap '/bin/rm -rf "$MOCK_BIN"' EXIT
-        touch "$MOCK_BIN/vi" && chmod +x "$MOCK_BIN/vi"
-        export PATH="$MOCK_BIN"
-        # shellcheck source=/dev/null
-        . "$SCRIPT_DIR/dotfiles/.environment-variables"
-        if [ "${EDITOR:-}" = "vi" ]; then
-            pass "EDITOR falls back to vi when nvim and vim are absent"
-        else
-            fail "EDITOR fallback to vi" "Expected vi, got ${EDITOR:-}"
-        fi
-    )
-)
+# Test fallback to vi when nvim and vim are absent
+MOCK_BIN=$(mktemp -d)
+touch "$MOCK_BIN/vi" && chmod +x "$MOCK_BIN/vi"
+OLD_MOCK_PATH="$PATH"
+export PATH="$MOCK_BIN"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/dotfiles/.environment-variables"
+if [ "${EDITOR:-}" = "vi" ]; then
+    pass "EDITOR falls back to vi when nvim and vim are absent"
+else
+    fail "EDITOR fallback to vi" "Expected vi, got ${EDITOR:-}"
+fi
+export PATH="$OLD_MOCK_PATH"
+rm -rf "$MOCK_BIN"
 
 # Test 3: Verify bashrc-addendum sourcing
 echo -e "\n[3/4] Testing dotfiles/.bashrc-addendum..."
-(
-    TEMP_HOME=$(mktemp -d)
-    trap 'chmod -R u+w "$TEMP_HOME" 2>/dev/null || true; rm -rf "$TEMP_HOME"' EXIT
+cp "$SCRIPT_DIR/dotfiles/.environment-variables" "$HOME/.environment-variables"
 
-    export HOME="$TEMP_HOME"
-    cp "$SCRIPT_DIR/dotfiles/.environment-variables" "$HOME/.environment-variables"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
 
-    # shellcheck source=/dev/null
-    source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
+if [ "${EDITOR:-}" = "vim" ] || [ "${EDITOR:-}" = "nvim" ] || [ "${EDITOR:-}" = "vi" ]; then
+    pass "bashrc-addendum sourced .environment-variables"
+else
+    fail "bashrc-addendum sourcing" ".environment-variables was not sourced (EDITOR=${EDITOR:-})"
+fi
 
-    if [ "${EDITOR:-}" = "vim" ] || [ "${EDITOR:-}" = "nvim" ] || [ "${EDITOR:-}" = "vi" ]; then
-        pass "bashrc-addendum sourced .environment-variables"
-    else
-        fail "bashrc-addendum sourcing" ".environment-variables was not sourced (EDITOR=${EDITOR:-})"
-    fi
-)
+cleanup_env_test
+trap - EXIT
 
 # Test 4: Verify LS_COLORS / dircolors configuration
 echo -e "\n[4/4] Testing dircolors validity..."

@@ -35,7 +35,7 @@ test:
 ## lint: Run syntax validation and shellcheck.
 lint:
 	@echo "Checking zsh syntax..."
-	@zsh -n dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh
+	@zsh -n dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh tests/test-zsh.zsh
 	@echo "Checking bash script syntax with 'bash -n'..."
 	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh common-bin/* tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
