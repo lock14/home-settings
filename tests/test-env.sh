@@ -6,19 +6,8 @@ set -euo pipefail
 export MISE_YES=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-pass() {
-    echo -e "  \033[32m✔ PASS:\033[0m $1"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-}
-
-fail() {
-    echo -e "  \033[31m✘ FAIL:\033[0m $1"
-    echo "    $2"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-}
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/tests/test-helper.sh"
 
 echo "========================================"
 echo "Running Environment & Bash Tests"
@@ -168,10 +157,4 @@ else
     pass "dircolors not installed (skipped)"
 fi
 
-echo -e "\n========================================"
-echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
-echo "========================================"
-
-if [ "$TESTS_FAILED" -gt 0 ]; then
-    exit 1
-fi
+test_summary

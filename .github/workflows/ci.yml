@@ -173,38 +173,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Make executable
-        run: chmod +x common-bin/gen-passwd
+        run: chmod +x bin/gen-passwd
       - name: Default length is 16
         run: |
-          output=$(common-bin/gen-passwd)
+          output=$(bin/gen-passwd)
           len=${#output}
           [ "$len" -eq 16 ] || { echo "FAIL: expected length 16, got $len ('$output')"; exit 1; }
       - name: Custom length (32)
         run: |
-          output=$(common-bin/gen-passwd 32)
+          output=$(bin/gen-passwd 32)
           len=${#output}
           [ "$len" -eq 32 ] || { echo "FAIL: expected length 32, got $len"; exit 1; }
       - name: Uppercase-only flag (-u)
         run: |
-          output=$(common-bin/gen-passwd -u 20)
+          output=$(bin/gen-passwd -u 20)
           echo "$output" | grep -qE '^[A-Z]+$' || { echo "FAIL: expected uppercase"; exit 1; }
       - name: Numbers-only flag (-n)
         run: |
-          output=$(common-bin/gen-passwd -n 20)
+          output=$(bin/gen-passwd -n 20)
           echo "$output" | grep -qE '^[0-9]+$' || { echo "FAIL: expected numbers"; exit 1; }
       - name: Lowercase-only flag (-l)
         run: |
-          output=$(common-bin/gen-passwd -l 20)
+          output=$(bin/gen-passwd -l 20)
           echo "$output" | grep -qE '^[a-z]+$' || { echo "FAIL: expected lowercase"; exit 1; }
       - name: Combined flags (-u -l -n)
         run: |
-          output=$(common-bin/gen-passwd -u -l -n 40)
+          output=$(bin/gen-passwd -u -l -n 40)
           len=${#output}
           [ "$len" -eq 40 ] || { echo "FAIL: expected length 40, got $len"; exit 1; }
           echo "$output" | grep -qE '^[A-Za-z0-9]+$' || { echo "FAIL: unexpected chars"; exit 1; }
       - name: Non-numeric length argument exits non-zero
         run: |
-          common-bin/gen-passwd abc && { echo "FAIL: should exit non-zero"; exit 1; } || echo "PASS"
+          bin/gen-passwd abc && { echo "FAIL: should exit non-zero"; exit 1; } || echo "PASS"
 
   script-repeat-until-success:
     name: Test repeat-until-success
@@ -212,12 +212,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Make executable
-        run: chmod +x common-bin/repeat-until-success
+        run: chmod +x bin/repeat-until-success
       - name: Succeeds immediately with 'true'
-        run: common-bin/repeat-until-success -n 3 -s 0 true
+        run: bin/repeat-until-success -n 3 -s 0 true
       - name: Fails after max retries with 'false'
         run: |
-          common-bin/repeat-until-success -n 3 -s 0 false \
+          bin/repeat-until-success -n 3 -s 0 false \
             && { echo "FAIL: should exit non-zero"; exit 1; } || echo "PASS"
       - name: Succeeds on later attempt
         run: |
@@ -232,7 +232,7 @@ jobs:
           [ "\$count" -ge 3 ]
           EOF
           chmod +x "$TRY_SCRIPT"
-          common-bin/repeat-until-success -n 5 -s 0 "$TRY_SCRIPT"
+          bin/repeat-until-success -n 5 -s 0 "$TRY_SCRIPT"
           final=$(cat "$COUNT_FILE")
           [ "$final" -eq 3 ] || { echo "FAIL: expected 3 attempts, got $final"; exit 1; }
 
@@ -242,26 +242,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Make executable
-        run: chmod +x common-bin/sum
+        run: chmod +x bin/sum
       - name: Sum a list of integers
         run: |
-          result=$(printf '1\n2\n3\n4\n5\n' | common-bin/sum)
+          result=$(printf '1\n2\n3\n4\n5\n' | bin/sum)
           [ "$result" -eq 15 ] || { echo "FAIL: expected 15, got $result"; exit 1; }
       - name: Sum with negative numbers
         run: |
-          result=$(printf '10\n-3\n7\n' | common-bin/sum)
+          result=$(printf '10\n-3\n7\n' | bin/sum)
           [ "$result" -eq 14 ] || { echo "FAIL: expected 14, got $result"; exit 1; }
       - name: Sum positional arguments
         run: |
-          result=$(common-bin/sum 1 2 3 4)
+          result=$(bin/sum 1 2 3 4)
           [ "$result" -eq 10 ] || { echo "FAIL: expected 10, got $result"; exit 1; }
       - name: Sum comma-separated values
         run: |
-          result=$(common-bin/sum 1,2,3,4,5)
+          result=$(bin/sum 1,2,3,4,5)
           [ "$result" -eq 15 ] || { echo "FAIL: expected 15, got $result"; exit 1; }
       - name: Sum delimited column (-d and -k)
         run: |
-          result=$(printf "item1:100:foo\nitem2:250:bar\nitem3:50:baz\n" | common-bin/sum -d ':' -k 2)
+          result=$(printf "item1:100:foo\nitem2:250:bar\nitem3:50:baz\n" | bin/sum -d ':' -k 2)
           [ "$result" -eq 400 ] || { echo "FAIL: expected 400, got $result"; exit 1; }
       - name: Sum multiple file arguments
         run: |
@@ -269,20 +269,20 @@ jobs:
           FILE2=$(mktemp)
           echo "10 20" > "$FILE1"
           echo "30 40" > "$FILE2"
-          result=$(common-bin/sum "$FILE1" "$FILE2")
+          result=$(bin/sum "$FILE1" "$FILE2")
           rm -f "$FILE1" "$FILE2"
           [ "$result" -eq 100 ] || { echo "FAIL: expected 100, got $result"; exit 1; }
       - name: Sum human-readable byte units (-H)
         run: |
-          result=$(common-bin/sum -H 10K 5M 2G)
+          result=$(bin/sum -H 10K 5M 2G)
           [ "$result" = "2.15274e+09" ] || [ "$result" = "2152736768" ] || { echo "FAIL: got $result"; exit 1; }
       - name: Compute average (-a) and formatted output (-f)
         run: |
-          result=$(common-bin/sum -a -f "%.2f" 10 20 30 40)
+          result=$(bin/sum -a -f "%.2f" 10 20 30 40)
           [ "$result" = "25.00" ] || { echo "FAIL: expected 25.00, got $result"; exit 1; }
       - name: Output summary statistics (-s)
         run: |
-          output=$(common-bin/sum -s 5 10 15 20)
+          output=$(bin/sum -s 5 10 15 20)
           echo "$output" | grep -q "count: 4" || { echo "FAIL count"; exit 1; }
           echo "$output" | grep -q "min: 5" || { echo "FAIL min"; exit 1; }
           echo "$output" | grep -q "max: 20" || { echo "FAIL max"; exit 1; }
@@ -295,7 +295,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Make executable
-        run: chmod +x common-bin/mvn-release
+        run: chmod +x bin/mvn-release
       - name: Rejects invalid branch
         run: |
           TMP_REPO=$(mktemp -d)
@@ -304,7 +304,7 @@ jobs:
           git config user.email "ci@example.com"
           git config user.name "CI Runner"
           git checkout -b feature-branch
-          "$GITHUB_WORKSPACE/common-bin/mvn-release" \
+          "$GITHUB_WORKSPACE/bin/mvn-release" \
             && { echo "FAIL: should reject disallowed branch"; exit 1; } || echo "PASS"
 
   # ─────────────────────────────────────────────────────────────────────────────

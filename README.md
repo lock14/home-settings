@@ -11,38 +11,56 @@ Workstation setup automation, prompt themes, developer toolchains, and dotfiles 
 
 ```text
 home-settings/
-├── setup.sh                         # Self-bootstrapping master setup & dotfiles engine
-├── Makefile                         # Lifecycle targets (install, uninstall, test, lint)
-├── .mise.toml                       # Mise polyglot toolchains (Java 21, Go, Python, Node, Terraform, Rust)
+├── setup.sh                         # Modular orchestrator CLI
+├── Makefile                         # Lifecycle targets (install, system, uninstall, test, lint)
+├── .mise.toml                       # Mise polyglot toolchains (Java LTS, Node LTS, latest Go, Python, etc.)
 ├── AGENTS.md                        # Architecture principles & agent directives
+│
+├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
+│   ├── gen-passwd                   # Password generator with custom character sets
+│   ├── mvn-release                  # Automated Maven release branching and tagging
+│   ├── repeat-until-success         # Command retry loop with configurable delay
+│   └── sum                          # High-performance AWK number summation & stats
+├── common-bin -> bin                # Backward-compatibility symlink
+│
+├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
+│   ├── .aliases                     # Full Git suite, Golang, Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
+│   ├── .bashrc-addendum             # Bash integration hook & zoxide
+│   ├── .environment-variables       # Environment, COLORTERM, PATH (+ auto-loads ~/.environment-variables.d/*.sh)
+│   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
+│   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
+│   ├── .zsh-completions             # Fpath completion registration
+│   ├── .zsh-functions               # Git synchronization (gsync), search (fs) (+ auto-loads ~/.zsh-functions.d/*.zsh)
+│   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
+│   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
+│   └── .config/
+│       └── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
+│           ├── init.lua
+│           └── lazy-lock.json
+│
+├── lib/                             # Shared helper libraries
+│   ├── log.sh                       # Terminal logging & dry-run runner
+│   ├── os.sh                        # Operating system & architecture detection
+│   └── symlink.sh                   # Safe atomic symlinking with directory backup support
+│
+├── modules/                         # Stage-based single-responsibility modules
+│   ├── 00-packages.sh               # System packages, database servers, and desktop apps
+│   ├── 10-dotfiles.sh               # Declarative dotfile auto-discovery and mirroring
+│   ├── 20-bin.sh                    # User binaries & Debian shims (fd, bat)
+│   ├── 30-fonts.sh                  # MesloLGS NF font downloader with disk cache
+│   ├── 40-mise.sh                   # Mise runtime manager & polyglot toolchains
+│   ├── 50-vim.sh                    # Legacy Vim Pathogen & plugin bundles
+│   ├── 60-shell.sh                  # Oh-My-Zsh, plugins, shellrc hooks, completions
+│   └── 99-uninstall.sh              # Clean uninstallation of managed components
 │
 ├── colors/                          # 24-bit TrueColor TextMate themes
 │   └── Solarized-Dark-TrueColor.tmTheme  # Canonical Solarized Dark theme for bat
 │
-├── dotfiles/                        # Centralized, portable dotfile tree
-│   ├── .environment-variables       # Sub-millisecond environment, COLORTERM, and PATH exports
-│   ├── .bashrc-addendum             # Bash integration hook & zoxide
-│   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
-│   ├── .aliases                     # Full Git suite, Golang, Terraform, and modern CLI shortcuts (Zsh & Bash)
-│   ├── .zsh-functions               # Git synchronization (gsync) & tree search (fs)
-│   ├── .zsh-completions             # Fpath completion registration
-│   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
-│   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
-│   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
-│   └── .config/
-│       └── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
-│           └── init.lua
-│
-├── common-bin/                      # Standalone Unix utilities (symlinked to ~/.local/bin/)
-│   ├── gen-passwd                   # Password generator with custom character sets
-│   ├── sum                          # High-performance AWK number summation & stats
-│   ├── repeat-until-success         # Command retry loop with configurable delay
-│   └── mvn-release                  # Automated Maven release branching and tagging
-│
-├── .vim/                            # Pathogen autoload runtime (legacy Vim fallback)
-│
-└── tests/                           # Automated test suites (100+ tests across 6 modules)
+└── tests/                           # Automated test suites (160+ tests across 8 modules)
+    ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests
+    ├── test-dotfiles.sh             # Declarative dotfiles auto-discovery, backup, & drop-ins
+    ├── test-bin.sh                  # User binaries symlinking & compatibility shims
     ├── test-env.sh                  # Environment variables, TrueColor, and bash tests
     ├── test-zsh.zsh                 # Zsh aliases, functions, live git integration tests
     ├── test-completions.sh          # Completion symlinks & generator tests
@@ -60,7 +78,7 @@ The following tools should be available on the host machine:
 - `git`
 - `curl`
 - `wget` (on Linux)
-- `sudo` (or Administrator privileges for system provisioning)
+- `sudo` (or Administrator privileges for system-level package provisioning)
 
 ---
 
@@ -90,18 +108,35 @@ Stream and run directly in Bash without pre-cloning:
 curl -fsSL https://raw.githubusercontent.com/lock14/home-settings/main/setup.sh | bash
 ```
 
-### 2. Automated Master Setup (Existing Clone)
-
-The master `setup.sh` orchestrator auto-detects your platform (**Ubuntu**, **Fedora**, or **macOS**) and provisions system packages, desktop tools, and user dotfiles:
+### 2. Standard Workflows (Makefile)
 
 ```bash
 git clone https://github.com/lock14/home-settings.git
 cd home-settings
 
-# Full automated bootstrap
-./setup.sh --bootstrap
+# User-space installation (dotfiles, bin, fonts, tools, shell) [No sudo]
+make install
 
-# User dotfiles only (no sudo required)
+# Full machine provisioning with native OS packages (requires sudo)
+make system
+
+# Clean uninstallation of managed dotfiles, binaries, and fonts
+make uninstall
+
+# Run complete test suite (160+ tests across 8 modules)
+make test
+
+# Run ShellCheck and shell syntax checks
+make lint
+```
+
+### 3. CLI Orchestrator (`./setup.sh`)
+
+```bash
+# Full machine provisioning
+./setup.sh --system
+
+# User-space only (equivalent to default or make install)
 ./setup.sh --dotfiles-only
 
 # Preview changes without modifying the system
@@ -114,8 +149,10 @@ cd home-settings
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
+| `(default)` | *enabled* | Full machine setup: native OS packages via apt/dnf/brew + user environment (requires `sudo`) |
+| `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (no `sudo` required) |
+| `--system` | *disabled* | Full turnkey setup with native packages (alias for default) |
 | `--bootstrap` | *disabled* | Full new machine bootstrap (base packages, shell, tools, dotfiles) |
-| `--dotfiles-only` | *disabled* | Configure user dotfiles, fonts, and tools only (no sudo required) |
 | `--system-only` | *disabled* | Provision OS packages and CLI runtimes only |
 | `--dry-run` | *disabled* | Preview actions without modifying the system |
 | `--uninstall` | *disabled* | Uninstall all managed dotfiles, fonts, and user binaries |
@@ -142,6 +179,20 @@ cd home-settings
 | `--skip-bash` | *disabled* | Skip Bash configuration and environment variables |
 | `--skip-bin` | *disabled* | Skip `~/.local/bin` user utilities synchronization |
 | `--skip-completions`| *disabled* | Skip CLI tab completions generation |
+
+---
+
+## Extensibility & Customization
+
+The redesigned repository is built for frictionless extension:
+
+1. **Add a Dotfile**: Drop any file or directory into `dotfiles/`. It is automatically discovered and mirrored to `$HOME` (e.g. `dotfiles/.gitconfig` -> `~/.gitconfig`). Pre-existing physical directories are backed up safely (`.bak.<timestamp>`) to prevent nested symlinks.
+2. **Add a CLI Utility**: Drop any script into `bin/` and make it executable. It is automatically symlinked into `~/.local/bin/`.
+3. **Drop-in Shell Extensions (`.d/`)**: Keep machine-specific or sensitive configurations in local drop-in directories without committing them to the repository:
+   - `~/.environment-variables.d/*.sh`: Custom exports and paths (sourced by `.environment-variables`).
+   - `~/.aliases.d/*.sh`: Custom aliases (sourced by `.aliases`).
+   - `~/.zsh-functions.d/*.zsh`: Custom Zsh functions (sourced by `.zsh-functions`).
+4. **Add a Provisioning Stage**: Drop a new numbered script into `modules/` (e.g. `modules/70-docker.sh`).
 
 ---
 
@@ -203,7 +254,7 @@ cd home-settings
 
 ---
 
-## Standalone Utilities (`common-bin/`)
+## Standalone Utilities (`bin/`)
 
 | Script | Description |
 |---|---|
@@ -219,7 +270,7 @@ cd home-settings
 All scripts enforce `set -euo pipefail` for fail-fast safety.
 
 ```bash
-# Run full automated test suite (100+ tests across 6 test modules)
+# Run full automated test suite (160+ tests across 8 test modules)
 make test
 
 # Run syntax & lint validation

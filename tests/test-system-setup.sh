@@ -4,19 +4,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-pass() {
-    echo -e "  \033[32m✔ PASS:\033[0m $1"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-}
-
-fail() {
-    echo -e "  \033[31m✘ FAIL:\033[0m $1"
-    echo "    $2"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-}
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/tests/test-helper.sh"
 
 echo "========================================"
 echo "Running System & Cross-Platform Engine Tests"
@@ -30,7 +19,7 @@ else
     fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
 fi
 
-for f in "$SCRIPT_DIR"/common-bin/*; do
+for f in "$SCRIPT_DIR"/bin/*; do
     if [ -f "$f" ]; then
         if bash -n "$f"; then
             pass "Syntax valid: $(basename "$f")"
@@ -220,7 +209,7 @@ fi
 rm -rf "$TEMP_UNINSTALL_HOME"
 
 if output=$("$SCRIPT_DIR/setup.sh" --uninstall-bin --dry-run 2>&1); then
-    if [[ "$output" == *"Removing common-bin utilities"* ]] && [[ "$output" == *"User binaries uninstalled"* ]]; then
+    if [[ "$output" == *"Removing bin utilities"* ]] && [[ "$output" == *"User binaries uninstalled"* ]]; then
         pass "setup.sh --uninstall-bin --dry-run works"
     else
         fail "setup.sh uninstall-bin dry-run output" "Missing expected output: $output"
@@ -254,48 +243,48 @@ fi
 
 # Test 5: Utilities validation (gen-passwd, sum)
 echo -e "\n[5/5] Testing standalone utilities edge cases..."
-passwd_symbols=$("$SCRIPT_DIR/common-bin/gen-passwd" -s 32)
+passwd_symbols=$("$SCRIPT_DIR/bin/gen-passwd" -s 32)
 if [ "${#passwd_symbols}" -eq 32 ] && [[ ! "$passwd_symbols" =~ [0-9a-zA-Z[:space:]] ]]; then
     pass "gen-passwd -s generates pure symbols without numbers or letters"
 else
     fail "gen-passwd -s symbol generation" "Generated unexpected characters: $passwd_symbols"
 fi
 
-passwd_upper=$("$SCRIPT_DIR/common-bin/gen-passwd" -u 32)
+passwd_upper=$("$SCRIPT_DIR/bin/gen-passwd" -u 32)
 if [ "${#passwd_upper}" -eq 32 ] && [[ "$passwd_upper" =~ ^[A-Z]+$ ]]; then
     pass "gen-passwd -u generates only uppercase letters"
 else
     fail "gen-passwd -u generation" "Generated unexpected characters: $passwd_upper"
 fi
 
-passwd_lower=$("$SCRIPT_DIR/common-bin/gen-passwd" -l 32)
+passwd_lower=$("$SCRIPT_DIR/bin/gen-passwd" -l 32)
 if [ "${#passwd_lower}" -eq 32 ] && [[ "$passwd_lower" =~ ^[a-z]+$ ]]; then
     pass "gen-passwd -l generates only lowercase letters"
 else
     fail "gen-passwd -l generation" "Generated unexpected characters: $passwd_lower"
 fi
 
-passwd_nums=$("$SCRIPT_DIR/common-bin/gen-passwd" -n 32)
+passwd_nums=$("$SCRIPT_DIR/bin/gen-passwd" -n 32)
 if [ "${#passwd_nums}" -eq 32 ] && [[ "$passwd_nums" =~ ^[0-9]+$ ]]; then
     pass "gen-passwd -n generates only digits"
 else
     fail "gen-passwd -n generation" "Generated unexpected characters: $passwd_nums"
 fi
 
-passwd_sym_num=$("$SCRIPT_DIR/common-bin/gen-passwd" -s -n 32)
+passwd_sym_num=$("$SCRIPT_DIR/bin/gen-passwd" -s -n 32)
 if [ "${#passwd_sym_num}" -eq 32 ] && [[ ! "$passwd_sym_num" =~ [a-zA-Z[:space:]] ]]; then
     pass "gen-passwd -s -n generates symbols and numbers without letters"
 else
     fail "gen-passwd -s -n generation" "Generated unexpected characters: $passwd_sym_num"
 fi
 
-if ! "$SCRIPT_DIR/common-bin/gen-passwd" 0 >/dev/null 2>&1; then
+if ! "$SCRIPT_DIR/bin/gen-passwd" 0 >/dev/null 2>&1; then
     pass "gen-passwd rejects non-positive length"
 else
     fail "gen-passwd 0" "Command accepted length 0"
 fi
 
-if ! "$SCRIPT_DIR/common-bin/gen-passwd" abc >/dev/null 2>&1; then
+if ! "$SCRIPT_DIR/bin/gen-passwd" abc >/dev/null 2>&1; then
     pass "gen-passwd rejects non-numeric length"
 else
     fail "gen-passwd abc" "Command accepted non-numeric length"
@@ -304,14 +293,14 @@ fi
 TEMP_SUM_DIR=$(mktemp -d)
 touch "$TEMP_SUM_DIR/1"
 touch "$TEMP_SUM_DIR/10K"
-sum_out=$(cd "$TEMP_SUM_DIR" && "$SCRIPT_DIR/common-bin/sum" 1 2 3)
+sum_out=$(cd "$TEMP_SUM_DIR" && "$SCRIPT_DIR/bin/sum" 1 2 3)
 if [ "$sum_out" = "6" ]; then
     pass "sum correctly treats numeric args as numbers even when matching file exists"
 else
     fail "sum numeric file collision" "Expected 6, got $sum_out"
 fi
 
-sum_human_out=$(cd "$TEMP_SUM_DIR" && "$SCRIPT_DIR/common-bin/sum" -H -f '%.0f' 10K 5M)
+sum_human_out=$(cd "$TEMP_SUM_DIR" && "$SCRIPT_DIR/bin/sum" -H -f '%.0f' 10K 5M)
 if [ "$sum_human_out" = "5253120" ]; then
     pass "sum -H correctly sums human-readable suffixes even when matching file exists"
 else
@@ -320,45 +309,45 @@ fi
 rm -rf "$TEMP_SUM_DIR"
 
 # Test repeat-until-success
-if "$SCRIPT_DIR/common-bin/repeat-until-success" -n 2 -s 0 true >/dev/null 2>&1; then
+if "$SCRIPT_DIR/bin/repeat-until-success" -n 2 -s 0 true >/dev/null 2>&1; then
     pass "repeat-until-success succeeds immediately when command succeeds"
 else
     fail "repeat-until-success true" "Command failed unexpectedly"
 fi
 
-if ! "$SCRIPT_DIR/common-bin/repeat-until-success" -n 2 -s 0 false >/dev/null 2>&1; then
+if ! "$SCRIPT_DIR/bin/repeat-until-success" -n 2 -s 0 false >/dev/null 2>&1; then
     pass "repeat-until-success exits non-zero when max retries are exceeded"
 else
     fail "repeat-until-success false" "Command was expected to fail"
 fi
 
-if ! "$SCRIPT_DIR/common-bin/repeat-until-success" -n 0 -s 0 true >/dev/null 2>&1; then
+if ! "$SCRIPT_DIR/bin/repeat-until-success" -n 0 -s 0 true >/dev/null 2>&1; then
     pass "repeat-until-success rejects non-positive max attempts"
 else
     fail "repeat-until-success -n 0" "Command accepted invalid attempt count"
 fi
 
-if ! "$SCRIPT_DIR/common-bin/repeat-until-success" -n 1 -s -1 true >/dev/null 2>&1; then
+if ! "$SCRIPT_DIR/bin/repeat-until-success" -n 1 -s -1 true >/dev/null 2>&1; then
     pass "repeat-until-success rejects negative sleep seconds"
 else
     fail "repeat-until-success -s -1" "Command accepted negative sleep duration"
 fi
 
 # Test mvn-release
-if "$SCRIPT_DIR/common-bin/mvn-release" --help >/dev/null 2>&1; then
+if "$SCRIPT_DIR/bin/mvn-release" --help >/dev/null 2>&1; then
     pass "mvn-release --help exits cleanly"
 else
     fail "mvn-release --help" "Help output failed"
 fi
 
-if ! "$SCRIPT_DIR/common-bin/mvn-release" invalid_type >/dev/null 2>&1; then
+if ! "$SCRIPT_DIR/bin/mvn-release" invalid_type >/dev/null 2>&1; then
     pass "mvn-release rejects invalid release type"
 else
     fail "mvn-release invalid type" "Expected error on invalid release type"
 fi
 
 TEMP_MVN_DIR=$(mktemp -d)
-mvn_out=$(cd "$TEMP_MVN_DIR" && "$SCRIPT_DIR/common-bin/mvn-release" 2>&1 || true)
+mvn_out=$(cd "$TEMP_MVN_DIR" && "$SCRIPT_DIR/bin/mvn-release" 2>&1 || true)
 if [[ "$mvn_out" == *"error: must be run inside a git repository"* ]]; then
     pass "mvn-release rejects execution outside git repository"
 else
@@ -371,7 +360,7 @@ fi
     git config user.email "test@example.com"
     git config user.name "Tester"
 )
-mvn_no_pom=$(cd "$TEMP_MVN_DIR" && "$SCRIPT_DIR/common-bin/mvn-release" 2>&1 || true)
+mvn_no_pom=$(cd "$TEMP_MVN_DIR" && "$SCRIPT_DIR/bin/mvn-release" 2>&1 || true)
 if [[ "$mvn_no_pom" == *"error: pom.xml not found in current directory"* ]]; then
     pass "mvn-release rejects execution without pom.xml"
 else
@@ -385,7 +374,7 @@ fi
     git commit -m "add pom" >/dev/null 2>&1
     git checkout -b feature-test >/dev/null 2>&1
 )
-mvn_bad_branch=$(cd "$TEMP_MVN_DIR" && "$SCRIPT_DIR/common-bin/mvn-release" 2>&1 || true)
+mvn_bad_branch=$(cd "$TEMP_MVN_DIR" && "$SCRIPT_DIR/bin/mvn-release" 2>&1 || true)
 if [[ "$mvn_bad_branch" == *"the current branch must be set to"* ]]; then
     pass "mvn-release rejects non-release branches"
 else
@@ -393,10 +382,4 @@ else
 fi
 rm -rf "$TEMP_MVN_DIR"
 
-echo -e "\n========================================"
-echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
-echo "========================================"
-
-if [ "$TESTS_FAILED" -gt 0 ]; then
-    exit 1
-fi
+test_summary

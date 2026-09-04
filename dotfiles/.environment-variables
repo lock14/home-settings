@@ -42,7 +42,15 @@ export EXA_COLORS="$EZA_COLORS"
 # FZF Solarized Dark theme & ripgrep integration
 export FZF_DEFAULT_OPTS='--color=bg+:#073642,bg:#002B36,spinner:#859900,hl:#586E75 --color=fg:#839496,header:#586E75,info:#B58900,pointer:#859900 --color=marker:#859900,fg+:#93A1A1,prompt:#B58900,hl+:#268BD2 --layout=reverse --border=rounded --info=inline'
 if command -v rg >/dev/null 2>&1; then
-    export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git/*"'
     export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 fi
 
+# Source custom environment drop-ins (~/.environment-variables.d/*.sh)
+if [ -d "$HOME/.environment-variables.d" ]; then
+    for f in "$HOME/.environment-variables.d"/*.sh; do
+        if [ -r "$f" ]; then
+            # shellcheck source=/dev/null
+            . "$f"
+        fi
+    done
+fi

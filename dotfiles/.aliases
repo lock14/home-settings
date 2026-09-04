@@ -64,3 +64,13 @@ if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
     alias fd='fdfind'
 fi
 
+# Source custom alias drop-ins (~/.aliases.d/*.sh)
+if [ -d "$HOME/.aliases.d" ]; then
+    for f in "$HOME/.aliases.d"/*.sh; do
+        if [ -r "$f" ]; then
+            # shellcheck source=/dev/null
+            . "$f"
+        fi
+    done
+fi
+
