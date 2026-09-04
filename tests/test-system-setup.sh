@@ -208,14 +208,29 @@ else
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1); then
-    if [[ "$output" == *"Removing managed dotfile symlinks"* ]] && [[ "$output" == *"mise/config.toml"* ]]; then
-        pass "setup.sh --uninstall-dotfiles --dry-run includes ~/.config/mise/config.toml"
+    if [[ "$output" == *"Removing managed dotfile symlinks"* ]] && [[ "$output" == *"Dotfile symlinks uninstalled"* ]]; then
+        pass "setup.sh --uninstall-dotfiles --dry-run works"
     else
         fail "setup.sh uninstall-dotfiles dry-run output" "Missing expected output: $output"
     fi
 else
     fail "setup.sh uninstall-dotfiles dry-run" "Command failed: $output"
 fi
+
+TEMP_UNINSTALL_HOME=$(mktemp -d)
+(
+    export HOME="$TEMP_UNINSTALL_HOME"
+    export XDG_CONFIG_HOME="$TEMP_UNINSTALL_HOME/.config"
+    mkdir -p "$XDG_CONFIG_HOME/mise"
+    ln -s "$SCRIPT_DIR/.mise.toml" "$XDG_CONFIG_HOME/mise/config.toml"
+    dry_out=$("$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1)
+    if [[ "$dry_out" == *"mise/config.toml"* ]]; then
+        pass "setup.sh --uninstall-dotfiles cleans ~/.config/mise/config.toml symlink"
+    else
+        fail "setup.sh uninstall-dotfiles mise cleanup" "Expected mise/config.toml in dry-run output: $dry_out"
+    fi
+)
+rm -rf "$TEMP_UNINSTALL_HOME"
 
 # Test 4: Mise Configuration Validity
 echo -e "\n[4/5] Testing .mise.toml toolchain definition..."
