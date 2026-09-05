@@ -1,0 +1,123 @@
+#!/bin/bash
+# Configures authentic 24-bit Solarized Dark TrueColor profile for GNOME Terminal.
+# Sets MesloLGS NF 12 font, Solarized Dark palette, base02 highlight, and block cursor.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || pwd)"
+DCONF_FILE="$REPO_DIR/colors/gnome-terminal-solarized.dconf"
+
+PROFILE_UUID="321fa646-e6ab-45a1-88d8-00aa66d158d8"
+PROFILE_NAME="Solarized Dark"
+LEGACY_BRIAN_UUID="11f5ebd6-faab-4bd3-8336-868a6b52ac0d"
+FACTORY_EMPTY_UUID="b1dcc9dd-5262-4d8d-a863-c897e6d979b9"
+
+DRY_RUN=false
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Configures authentic 24-bit Solarized Dark TrueColor profile for GNOME Terminal.
+
+Options:
+  --dry-run       Preview configuration changes without applying them
+  -h, --help      Display this help message
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Check if GNOME Terminal and dconf/gsettings tooling are available
+if ! command -v dconf >/dev/null 2>&1 || ! command -v gsettings >/dev/null 2>&1; then
+    echo "  dconf or gsettings not found; skipping GNOME Terminal configuration."
+    exit 0
+fi
+
+if ! gsettings list-schemas 2>/dev/null | grep -q "org.gnome.Terminal.ProfilesList"; then
+    echo "  GNOME Terminal schema not installed; skipping GNOME Terminal configuration."
+    exit 0
+fi
+
+echo "  Configuring GNOME Terminal with authentic Solarized Dark profile..."
+
+if [ "$DRY_RUN" = true ]; then
+    echo "  [DryRun] Apply Solarized Dark profile ($PROFILE_UUID) to /org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/"
+    echo "  [DryRun] Set /org/gnome/terminal/legacy/profiles:/default to '$PROFILE_UUID'"
+    echo "  [DryRun] Remove legacy Brian profile ($LEGACY_BRIAN_UUID) if present"
+    exit 0
+fi
+
+# Load profile configuration
+if [ -f "$DCONF_FILE" ]; then
+    dconf load "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/" < "$DCONF_FILE"
+else
+    # Fallback to direct dconf writes if asset file is not found
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/visible-name" "'$PROFILE_NAME'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-theme-colors" "false"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-theme-transparency" "false"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/background-color" "'#002B36'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/foreground-color" "'#839496'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/bold-color" "'#93A1A1'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/bold-color-same-as-fg" "false"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-colors-set" "true"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-background-color" "'#839496'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-foreground-color" "'#002B36'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-shape" "'block'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-blink-mode" "'off'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-colors-set" "true"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-background-color" "'#073642'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-foreground-color" "'#93A1A1'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-system-font" "false"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS NF 12'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/palette" "['#073642', '#DC322F', '#859900', '#B58900', '#268BD2', '#D33682', '#2AA198', '#EEE8D5', '#586E75', '#CB4B16', '#586E75', '#657B83', '#839496', '#6C71C4', '#93A1A1', '#FDF6E3']"
+fi
+
+# Clean up legacy Brian profile keys if present
+dconf reset -f "/org/gnome/terminal/legacy/profiles:/:$LEGACY_BRIAN_UUID/"
+
+# Clean up empty factory profile if it has no custom settings
+if [ -z "$(dconf dump "/org/gnome/terminal/legacy/profiles:/:$FACTORY_EMPTY_UUID/" 2>/dev/null || true)" ]; then
+    dconf reset -f "/org/gnome/terminal/legacy/profiles:/:$FACTORY_EMPTY_UUID/"
+fi
+
+# Update profiles list and set default
+CURRENT_LIST="$(dconf read /org/gnome/terminal/legacy/profiles:/list 2>/dev/null || echo "[]")"
+NEW_LIST="$(python3 -c "
+import ast, sys
+try:
+    val = sys.argv[1].strip()
+    l = ast.literal_eval(val) if val else []
+    if not isinstance(l, list):
+        l = []
+except Exception:
+    l = []
+
+# Remove legacy brian and empty factory uuid
+l = [u for u in l if u not in ('$LEGACY_BRIAN_UUID', '$FACTORY_EMPTY_UUID')]
+if '$PROFILE_UUID' not in l:
+    l.append('$PROFILE_UUID')
+print(repr(l))
+" "$CURRENT_LIST" 2>/dev/null || echo "['$PROFILE_UUID']")"
+
+dconf write /org/gnome/terminal/legacy/profiles:/list "$NEW_LIST"
+dconf write /org/gnome/terminal/legacy/profiles:/default "'$PROFILE_UUID'"
+
+echo "  GNOME Terminal profile '$PROFILE_NAME' successfully configured as default."

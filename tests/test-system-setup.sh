@@ -29,6 +29,16 @@ for f in "$SCRIPT_DIR"/bin/*; do
     fi
 done
 
+for m in "$SCRIPT_DIR"/modules/*.sh; do
+    if [ -f "$m" ]; then
+        if bash -n "$m"; then
+            pass "Syntax valid: $(basename "$m")"
+        else
+            fail "Syntax check failed: $(basename "$m")" "bash -n returned non-zero"
+        fi
+    fi
+done
+
 # Test 2: CLI Validation on setup.sh
 echo -e "\n[2/5] Testing parameter validation in setup.sh..."
 
@@ -115,6 +125,16 @@ if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-db --dry-run 2>&1); then
     fi
 else
     fail "setup.sh skip-db" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-terminal --dry-run 2>&1); then
+    if [[ "$output" != *"Configuring GNOME Terminal"* ]]; then
+        pass "setup.sh --skip-terminal skips terminal profile configuration"
+    else
+        fail "setup.sh skip-terminal output" "Terminal configuration should be skipped: $output"
+    fi
+else
+    fail "setup.sh skip-terminal" "Command failed: $output"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2>&1); then

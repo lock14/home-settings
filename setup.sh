@@ -72,6 +72,7 @@ export SKIP_ZSH=false
 export SKIP_BASH=false
 export SKIP_BIN=false
 export SKIP_COMPLETIONS=false
+export SKIP_TERMINAL=false
 
 usage() {
     cat <<EOF
@@ -121,6 +122,7 @@ User Environment Options:
   --skip-bash             Skip Bash configuration and environment variables
   --skip-bin              Skip ~/.local/bin user utilities synchronization
   --skip-completions      Skip CLI tab completions generation
+  --skip-terminal         Skip terminal emulator profile configuration (GNOME Terminal)
 
 General Options:
   -h, --help              Show this help message
@@ -271,6 +273,10 @@ while [ $# -gt 0 ]; do
             SKIP_COMPLETIONS=true
             shift
             ;;
+        --skip-terminal)
+            SKIP_TERMINAL=true
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -388,6 +394,11 @@ if [ "$SKIP_USER" = false ]; then
 
     # Shell environment (Zsh, Bash, Completions)
     "$SCRIPT_DIR/modules/60-shell.sh"
+
+    # Terminal emulator profiles (GNOME Terminal Solarized Dark)
+    if [ "$SKIP_TERMINAL" = false ]; then
+        "$SCRIPT_DIR/modules/70-terminal.sh"
+    fi
 fi
 
 echo -e "\n====================================================="
