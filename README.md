@@ -202,8 +202,8 @@ The redesigned repository is built for frictionless extension:
 ### 1. High-Speed ZSH & Powerlevel10k Prompt
 - **ZSH** as the primary interactive shell with instant startup (<10ms).
 - **Powerlevel10k** single-line prompt with dynamic Git status indicators.
-- **`zsh-syntax-highlighting`**: Authentic 24-bit TrueColor Solarized Dark command highlighting (commands in green `#859900`, options/strings in cyan `#2AA198`, numbers in magenta `#D33682`, variables in yellow `#B58900`, errors in red `#DC322F`).
-- **`zsh-autosuggestions`** with authentic Solarized Base01 (`fg=10`).
+- **`zsh-syntax-highlighting`**: Authentic 24-bit TrueColor Solarized Dark command highlighting with restrained, non-distracting colors (commands in green `#859900`, strings in cyan `#2AA198`, numbers in magenta `#D33682`, directories/paths in blue `#268BD2`, errors in red `#DC322F`, with options, parameters, assignments, and operators kept calm in neutral foreground base0 `#839496`).
+- **`zsh-autosuggestions`** with authentic Solarized Base01 (`fg=#586E75`).
 - **`ZLE`** selection (`#073642` Base02) and search highlighting.
 - **`fzf`** interactive fuzzy search (`Ctrl+R`) and tab completion.
 - **`zoxide` (`z`)** frecency-based smart directory jumping.
