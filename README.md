@@ -163,7 +163,8 @@ make lint
 | `--with-postgres` | *disabled* | Install PostgreSQL server and client tools |
 | `--with-mariadb` | *disabled* | Install MariaDB server and client tools |
 | `--skip-db` | *disabled* | Skip all database client and server installations |
-| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, IDE/VS Code) |
+| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code) |
+| `--with-ghostty` | *disabled* | Install Ghostty terminal emulator (macOS cask, Snap on Ubuntu, COPR on Fedora) |
 | `--with-chrome` | *disabled* | Install Google Chrome |
 | `--with-apps` | *disabled* | Install desktop apps (VS Code / IDE) |
 | `-i, --ide <name>` | `none` | IDE to install: `intellij`, `intellij-ultimate`, `code`, `none` |
@@ -178,6 +179,7 @@ make lint
 | `--skip-bash` | *disabled* | Skip Bash configuration and environment variables |
 | `--skip-bin` | *disabled* | Skip `~/.local/bin` user utilities synchronization |
 | `--skip-completions`| *disabled* | Skip CLI tab completions generation |
+| `--skip-terminal` | *disabled* | Skip terminal emulator profile configuration (GNOME Terminal) |
 
 ---
 
@@ -219,6 +221,24 @@ The redesigned repository is built for frictionless extension:
 - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`).
 - **Solarized Dark**: Seamless `#002B36` terminal background matching.
 - **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim`).
+
+### 4. Terminal Emulators (Ghostty, GNOME Terminal & macOS Terminal)
+- **Ghostty (`dotfiles/.config/ghostty/config`)**:
+  - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`theme = "Solarized Dark"`) with 1:1 RGB palette matching Windows Terminal.
+  - **Typography**: MesloLGS NF font (`font-family = "MesloLGS NF"`, `font-size = 12`) and supporting all Powerlevel10k and Git status glyphs.
+  - **Window & Layout**: Flush edges (zero padding, unconstrained grid) and block cursor.
+  - **Productivity**: Auto-split panes (`Ctrl+Shift+D`), navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
+  - **Cross-Platform**: Automatically symlinked to `${XDG_CONFIG_HOME:-~/.config}/ghostty/config` and macOS `~/Library/Application Support/com.mitchellh.ghostty/config`.
+- **GNOME Terminal (`colors/gnome-terminal-solarized.dconf` & `bin/gnome-terminal-solarized`)**:
+  - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile provisioned into dconf as default.
+  - **Palette**: Corrects Color 8 to `base01` (`#586E75`), fixing the common invisible dim text / autosuggestions bug.
+  - **Typography & UI**: MesloLGS NF 12 font, Solarized `base02` (`#073642`) text selection highlight, block cursor, and silent bell.
+  - **CLI Management**: Provisioned automatically during setup (`modules/70-terminal.sh`) or manually via `gnome-terminal-solarized`.
+- **macOS Terminal.app (`colors/Solarized-Dark.terminal` & `bin/macos-terminal-solarized`)**:
+  - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile configured in `com.apple.Terminal.plist` as default.
+  - **Palette**: Corrects Color 8 to `base01` (`#586E75`), with `base02` selection highlight and `base03` background.
+  - **Typography**: MesloLGS NF 12 font (`MesloLGS-NF-Regular 12pt`), antialiasing enabled.
+  - **CLI Management**: Provisioned automatically on macOS during setup (`modules/70-terminal.sh`) or manually via `macos-terminal-solarized`.
 
 ---
 

@@ -1,0 +1,20 @@
+[/]
+audible-bell=false
+background-color='#002B36'
+bold-color='#93A1A1'
+bold-color-same-as-fg=false
+cursor-background-color='#839496'
+cursor-blink-mode='off'
+cursor-colors-set=true
+cursor-foreground-color='#002B36'
+cursor-shape='block'
+font='MesloLGS NF 12'
+foreground-color='#839496'
+highlight-background-color='#073642'
+highlight-colors-set=true
+highlight-foreground-color='#93A1A1'
+palette=['#073642', '#DC322F', '#859900', '#B58900', '#268BD2', '#D33682', '#2AA198', '#EEE8D5', '#586E75', '#CB4B16', '#586E75', '#657B83', '#839496', '#6C71C4', '#93A1A1', '#FDF6E3']
+use-system-font=false
+use-theme-colors=false
+use-theme-transparency=false
+visible-name='Solarized Dark'

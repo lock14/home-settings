@@ -45,6 +45,28 @@ done
 
 assert_symlink "$TEMP_HOME/.dir-colors/dircolors" "" "Auto-discovered and symlinked: .dir-colors/dircolors"
 assert_symlink "$TEMP_HOME/.config/nvim" "" "Auto-discovered and symlinked: .config/nvim"
+assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
+
+if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme and MesloLGS NF font"
+else
+    fail "Ghostty config verification" "Ghostty config missing expected theme or font"
+fi
+
+if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then
+    pass "Ghostty themes directory contains Solarized Dark theme"
+else
+    fail "Ghostty themes verification" "Missing Solarized Dark theme in themes directory"
+fi
+
+if command -v ghostty >/dev/null 2>&1; then
+    if XDG_CONFIG_HOME="$TEMP_HOME/.config" ghostty +validate-config --config-file="$TEMP_HOME/.config/ghostty/config" >/dev/null 2>&1; then
+        pass "Ghostty config passes native ghostty +validate-config"
+    else
+        fail "Ghostty validation" "ghostty +validate-config failed on installed config"
+    fi
+fi
+
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)
@@ -123,6 +145,11 @@ for df in "${expected_top_level[@]}"; do
         fail "Unlink check" "$TEMP_HOME/$df is still linked"
     fi
 done
+
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ]; then
+    all_unlinked=false
+    fail "Unlink check" ".config subtrees still linked"
+fi
 
 if [ "$all_unlinked" = true ]; then
     pass "All managed dotfile symlinks successfully removed by uninstaller"

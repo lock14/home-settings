@@ -29,6 +29,16 @@ for f in "$SCRIPT_DIR"/bin/*; do
     fi
 done
 
+for m in "$SCRIPT_DIR"/modules/*.sh; do
+    if [ -f "$m" ]; then
+        if bash -n "$m"; then
+            pass "Syntax valid: $(basename "$m")"
+        else
+            fail "Syntax check failed: $(basename "$m")" "bash -n returned non-zero"
+        fi
+    fi
+done
+
 # Test 2: CLI Validation on setup.sh
 echo -e "\n[2/5] Testing parameter validation in setup.sh..."
 
@@ -117,9 +127,19 @@ else
     fail "setup.sh skip-db" "Command failed: $output"
 fi
 
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-terminal --dry-run 2>&1); then
+    if [[ "$output" != *"Configuring GNOME Terminal"* ]]; then
+        pass "setup.sh --skip-terminal skips terminal profile configuration"
+    else
+        fail "setup.sh skip-terminal output" "Terminal configuration should be skipped: $output"
+    fi
+else
+    fail "setup.sh skip-terminal" "Command failed: $output"
+fi
+
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2>&1); then
-    if [[ "$output" == *"google-chrome"* ]] && [[ "$output" == *"snap install code"* ]]; then
-        pass "setup.sh --with-gui enables Chrome and desktop applications"
+    if [[ "$output" == *"google-chrome"* ]] && [[ "$output" == *"snap install code"* ]] && [[ "$output" == *"snap install ghostty"* ]]; then
+        pass "setup.sh --with-gui enables Chrome, Ghostty, and desktop applications"
     else
         fail "setup.sh with-gui dry-run output" "Missing expected GUI application commands: $output"
     fi
@@ -127,8 +147,28 @@ else
     fail "setup.sh with-gui dry-run" "Command failed: $output"
 fi
 
+if output=$("$SCRIPT_DIR/setup.sh" --os macos --with-ghostty --dry-run 2>&1); then
+    if [[ "$output" == *"brew install --cask ghostty"* ]]; then
+        pass "setup.sh --os macos --with-ghostty installs Ghostty cask"
+    else
+        fail "setup.sh macos with-ghostty output" "Missing Ghostty cask: $output"
+    fi
+else
+    fail "setup.sh macos with-ghostty" "Command failed: $output"
+fi
+
+if output=$("$SCRIPT_DIR/setup.sh" --os fedora --with-ghostty --dry-run 2>&1); then
+    if [[ "$output" == *"copr enable scottames/ghostty"* ]] && [[ "$output" == *"install ghostty"* ]]; then
+        pass "setup.sh --os fedora --with-ghostty enables COPR and installs Ghostty"
+    else
+        fail "setup.sh fedora with-ghostty output" "Missing Ghostty Fedora commands: $output"
+    fi
+else
+    fail "setup.sh fedora with-ghostty" "Command failed: $output"
+fi
+
 if output=$("$SCRIPT_DIR/setup.sh" --os fedora --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" != *"google-chrome"* ]]; then
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"install ghostty"* ]]; then
         pass "setup.sh --os fedora --dry-run executes cleanly with Fedora packages (no GUI apps)"
     else
         fail "setup.sh fedora dry-run output" "Missing expected output markers: $output"

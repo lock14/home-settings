@@ -10,8 +10,11 @@ REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
 # shellcheck source=/dev/null
 . "$REPO_DIR/lib/log.sh"
 # shellcheck source=/dev/null
+. "$REPO_DIR/lib/os.sh"
+# shellcheck source=/dev/null
 . "$REPO_DIR/lib/symlink.sh"
 
+OS="${OS:-$(detect_os)}"
 DRY_RUN="${DRY_RUN:-false}"
 DOTFILES_DIR="$REPO_DIR/dotfiles"
 XDG_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -61,7 +64,17 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
     done
 fi
 
-# 5. Bat TrueColor Syntax Highlighting Theme
+# 5. Ghostty macOS Application Support compatibility symlink
+if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
+    GHOSTTY_MAC_DIR="$HOME/Library/Application Support/com.mitchellh.ghostty"
+    mkdir -p "$GHOSTTY_MAC_DIR"
+    link_file "$XDG_CONFIG/ghostty/config" "$GHOSTTY_MAC_DIR/config"
+    if [ -d "$DOTFILES_DIR/.config/ghostty/themes" ]; then
+        link_dir "$DOTFILES_DIR/.config/ghostty/themes" "$GHOSTTY_MAC_DIR/themes"
+    fi
+fi
+
+# 6. Bat TrueColor Syntax Highlighting Theme
 BAT_THEME_SRC="$REPO_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if [ -f "$BAT_THEME_SRC" ]; then
     echo "  Configuring Bat TrueColor theme..."

@@ -62,6 +62,7 @@ export SKIP_SYSTEM=false
 export SKIP_PACKAGES=false
 export INSTALL_CHROME=false
 export INSTALL_APPS=false
+export INSTALL_GHOSTTY=false
 export SKIP_USER=false
 export SKIP_FONTS=false
 export SKIP_TOOLS=false
@@ -71,6 +72,7 @@ export SKIP_ZSH=false
 export SKIP_BASH=false
 export SKIP_BIN=false
 export SKIP_COMPLETIONS=false
+export SKIP_TERMINAL=false
 
 usage() {
     cat <<EOF
@@ -104,7 +106,8 @@ Database Options (Client tools installed by default):
   --skip-db               Skip all database client and server installations
 
 GUI & Desktop Options (Optional, disabled by default):
-  --with-gui              Install all GUI desktop applications (Chrome, IDE/VS Code)
+  --with-gui              Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code)
+  --with-ghostty          Install Ghostty terminal emulator
   --with-chrome           Install Google Chrome
   --with-apps             Install desktop apps (VS Code / IDE)
   -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
@@ -119,6 +122,7 @@ User Environment Options:
   --skip-bash             Skip Bash configuration and environment variables
   --skip-bin              Skip ~/.local/bin user utilities synchronization
   --skip-completions      Skip CLI tab completions generation
+  --skip-terminal         Skip terminal emulator profile configuration (GNOME Terminal)
 
 General Options:
   -h, --help              Show this help message
@@ -206,6 +210,15 @@ while [ $# -gt 0 ]; do
         --with-gui)
             INSTALL_CHROME=true
             INSTALL_APPS=true
+            INSTALL_GHOSTTY=true
+            shift
+            ;;
+        --with-ghostty)
+            INSTALL_GHOSTTY=true
+            shift
+            ;;
+        --skip-ghostty)
+            INSTALL_GHOSTTY=false
             shift
             ;;
         --with-chrome)
@@ -258,6 +271,10 @@ while [ $# -gt 0 ]; do
             ;;
         --skip-completions)
             SKIP_COMPLETIONS=true
+            shift
+            ;;
+        --skip-terminal)
+            SKIP_TERMINAL=true
             shift
             ;;
         -h|--help)
@@ -377,6 +394,11 @@ if [ "$SKIP_USER" = false ]; then
 
     # Shell environment (Zsh, Bash, Completions)
     "$SCRIPT_DIR/modules/60-shell.sh"
+
+    # Terminal emulator profiles (GNOME Terminal Solarized Dark)
+    if [ "$SKIP_TERMINAL" = false ]; then
+        "$SCRIPT_DIR/modules/70-terminal.sh"
+    fi
 fi
 
 echo -e "\n====================================================="
