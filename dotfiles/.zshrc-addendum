@@ -52,8 +52,8 @@ if zmodload zsh/pcre >/dev/null 2>&1; then
     ZSH_HIGHLIGHT_REGEXP+=("(?<!\\S)-{0,2}[a-zA-Z_][a-zA-Z0-9_-]*\\K=(?!=)" 'fg=#6C71C4')
 fi
 
-# Paths & Existing Files (Solarized Cyan #2AA198 / Base0 #839496)
-ZSH_HIGHLIGHT_STYLES[path]='fg=#2AA198'
+# Paths & Directories (Solarized Blue #268BD2 matching dircolors/eza / Base0 #839496)
+ZSH_HIGHLIGHT_STYLES[path]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[path_prefix]='fg=#839496'
 
 # Unknown Tokens & Errors (Solarized Red #DC322F)

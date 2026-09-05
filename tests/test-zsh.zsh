@@ -268,10 +268,10 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES operators:Expected 'fg=#6C71C4', got separator='${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}', redir='${ZSH_HIGHLIGHT_STYLES[redirection]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[path]:-}" = "fg=#2AA198" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES path configured cleanly with Solarized Cyan without underline"
+    if [ "${ZSH_HIGHLIGHT_STYLES[path]:-}" = "fg=#268BD2" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES path configured cleanly with Solarized Blue matching dircolors/eza without underline"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES path:Expected 'fg=#2AA198', got '${ZSH_HIGHLIGHT_STYLES[path]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES path:Expected 'fg=#268BD2', got '${ZSH_HIGHLIGHT_STYLES[path]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F,bold" ]; then

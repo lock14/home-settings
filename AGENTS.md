@@ -80,7 +80,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 2. **`eza`**: Available via `e`, `el`, `et`, and `elt` (`eza --tree`), with `EZA_COLORS` and `EXA_COLORS` configured with Solarized Dark palette. Native `ls` and `ll` use standard GNU/BSD `ls` with Solarized `dircolors`.
 3. **Neovim Lua**: Uses `maxmx03/solarized.nvim` with `variant = "spring"` matching `bat` 1:1, integrated with Native Neovim 0.11+ LSP (`vim.lsp.config`, `LspAttach`).
 4. **Zsh Autosuggestions**: Highlight style is pinned to `fg=#586E75` (Solarized Base01).
-5. **CLI Syntax Highlighting (`zsh-syntax-highlighting` / `ZLE`)**: Explicitly configured in `.zshrc-addendum` using 24-bit TrueColor Solarized Dark (`commands` green `#859900`, `options`/`variables`/`assignments` yellow `#B58900`, `strings` cyan `#2AA198`, `operators`/`redirection`/`separators` violet `#6C71C4`, `numbers` magenta `#D33682`, `errors` red `#DC322F`, `functions` blue `#268BD2`, `selection` base02 `#073642`).
+5. **CLI Syntax Highlighting (`zsh-syntax-highlighting` / `ZLE`)**: Explicitly configured in `.zshrc-addendum` using 24-bit TrueColor Solarized Dark (`commands` green `#859900`, `options`/`variables`/`assignments` yellow `#B58900`, `strings` cyan `#2AA198`, `operators`/`redirection`/`separators` violet `#6C71C4`, `numbers` magenta `#D33682`, `errors` red `#DC322F`, `functions`/`paths` blue `#268BD2`, `selection` base02 `#073642`).
 6. **GNOME Terminal**: Configured via `colors/gnome-terminal-solarized.dconf` and `bin/gnome-terminal-solarized` with authentic TrueColor Solarized Dark, Color 8 pinned to `base01` (`#586E75`), MesloLGS NF 12 font, and base02 highlight.
 
 ---
