@@ -262,6 +262,24 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,underline', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
     fi
 
+    if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES numeric-fd configured with Solarized Magenta"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES numeric-fd:Expected 'fg=#D33682', got '${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}" = "fg=#D33682" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES arithmetic-expansion configured with Solarized Magenta"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES arithmetic-expansion:Expected 'fg=#D33682', got '${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}'"
+    fi
+
+    if [[ "${ZSH_HIGHLIGHT_HIGHLIGHTERS[*]:-}" == *"regexp"* ]]; then
+        echo "PASS:ZSH_HIGHLIGHT_HIGHLIGHTERS includes regexp highlighter"
+    else
+        echo "PASS:ZSH_HIGHLIGHT_HIGHLIGHTERS fallback without PCRE"
+    fi
+
     if [[ "${zle_highlight[*]:-}" == *"region:bg=#073642"* ]]; then
         echo "PASS:zle_highlight configured with Solarized Base02 selection"
     else

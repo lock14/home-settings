@@ -31,12 +31,23 @@ ZSH_HIGHLIGHT_STYLES[dollar-double-quoted-argument]='fg=#B58900'
 ZSH_HIGHLIGHT_STYLES[globbing]='fg=#B58900'
 ZSH_HIGHLIGHT_STYLES[history-expansion]='fg=#268BD2'
 
-# Substitutions & Arithmetic (Solarized Magenta #D33682 / Blue #268BD2)
+# Substitutions (Solarized Blue #268BD2)
 ZSH_HIGHLIGHT_STYLES[command-substitution]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[command-substitution-quoted]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[process-substitution]='fg=#268BD2'
+
+# Numbers & Constants (Solarized Magenta #D33682)
+ZSH_HIGHLIGHT_STYLES[numeric-fd]='fg=#D33682'
 ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]='fg=#D33682'
+
+# Standalone numeric literals & arguments via regexp highlighter (Solarized Magenta #D33682)
+if zmodload zsh/pcre >/dev/null 2>&1; then
+    setopt rematchpcre
+    ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets regexp)
+    typeset -gA ZSH_HIGHLIGHT_REGEXP
+    ZSH_HIGHLIGHT_REGEXP+=("(?<![\\w\\-\\$\\{\\./#\"'])[0-9]+(\\.[0-9]+)?(?![0-9\\w\\./\"'])" 'fg=#D33682')
+fi
 
 # Paths & Existing Files (Solarized Cyan #2AA198 / Base0 #839496)
 ZSH_HIGHLIGHT_STYLES[path]='fg=#2AA198,underline'
