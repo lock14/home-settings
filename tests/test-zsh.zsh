@@ -244,6 +244,30 @@ test_addendum() {
         echo "FAIL:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:Expected 'fg=10', got '${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}'"
     fi
 
+    if [ "${ZSH_HIGHLIGHT_STYLES[command]:-}" = "fg=#859900,bold" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES command configured with Solarized Green"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900,bold', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#2AA198" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES options configured with Solarized Cyan"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES options:Expected 'fg=#2AA198', got '${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F,underline" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES unknown-token configured with Solarized Red"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,underline', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
+    fi
+
+    if [[ "${zle_highlight[*]:-}" == *"region:bg=#073642"* ]]; then
+        echo "PASS:zle_highlight configured with Solarized Base02 selection"
+    else
+        echo "FAIL:zle_highlight:Expected region:bg=#073642, got '${zle_highlight[*]:-}'"
+    fi
+
     if typeset -f gsync >/dev/null 2>&1; then
         echo "PASS:zshrc-addendum sourced .zsh-functions"
     else
