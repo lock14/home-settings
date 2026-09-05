@@ -224,7 +224,7 @@ The redesigned repository is built for frictionless extension:
 ### 4. Ghostty GPU-Accelerated Terminal (`dotfiles/.config/ghostty/config`)
 - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`theme = "Solarized Dark"`) with 1:1 RGB palette matching Windows Terminal.
 - **Typography**: MesloLGS NF font (`font-family = "MesloLGS NF"`, `font-size = 12`) matching GNOME Terminal and supporting all Powerlevel10k and Git status glyphs.
-- **Window & Layout**: 10px padding, balanced geometry, and block cursor.
+- **Window & Layout**: Flush edges matching GNOME Terminal (zero padding, unconstrained grid) and block cursor.
 - **Productivity**: Auto-split panes (`Ctrl+Shift+D`), navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
 - **Cross-Platform**: Automatically symlinked to `${XDG_CONFIG_HOME:-~/.config}/ghostty/config` and macOS `~/Library/Application Support/com.mitchellh.ghostty/config`.
 

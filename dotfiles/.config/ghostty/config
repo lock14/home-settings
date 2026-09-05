@@ -45,9 +45,9 @@ font-thicken = false
 # ------------------------------------------------------------------------------
 # 3. Window Appearance & Layout
 # ------------------------------------------------------------------------------
-window-padding-x = 10
-window-padding-y = 10
-window-padding-balance = true
+window-padding-x = 0
+window-padding-y = 0
+window-padding-balance = false
 window-decoration = auto
 
 # ------------------------------------------------------------------------------
