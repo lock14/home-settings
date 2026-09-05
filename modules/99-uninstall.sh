@@ -65,6 +65,10 @@ uninstall_dotfiles() {
         done
     fi
 
+    if [ "$OS" = "macos" ]; then
+        unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+    fi
+
     echo "  Dotfile symlinks uninstalled."
 }
 

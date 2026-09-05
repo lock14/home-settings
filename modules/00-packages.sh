@@ -173,3 +173,29 @@ if [ "$INSTALL_APPS" = true ]; then
             ;;
     esac
 fi
+
+# Ghostty terminal emulator installation (Opt-in)
+if [ "${INSTALL_GHOSTTY:-false}" = true ]; then
+    echo "  Installing Ghostty terminal emulator on $OS..."
+    case "$OS" in
+        macos)
+            run_cmd brew install --cask ghostty
+            ;;
+        ubuntu)
+            if command -v snap &>/dev/null || [ "$DRY_RUN" = true ]; then
+                run_cmd sudo snap install ghostty --classic
+            else
+                echo "  Notice: snap command not found. Skipping Ghostty install."
+            fi
+            ;;
+        fedora)
+            if [ "$DRY_RUN" = true ]; then
+                echo "  [DryRun] sudo dnf -y copr enable scottames/ghostty"
+                echo "  [DryRun] sudo dnf -y install ghostty"
+            else
+                sudo dnf -y copr enable scottames/ghostty || true
+                sudo dnf -y install ghostty || true
+            fi
+            ;;
+    esac
+fi

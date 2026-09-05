@@ -62,6 +62,7 @@ export SKIP_SYSTEM=false
 export SKIP_PACKAGES=false
 export INSTALL_CHROME=false
 export INSTALL_APPS=false
+export INSTALL_GHOSTTY=false
 export SKIP_USER=false
 export SKIP_FONTS=false
 export SKIP_TOOLS=false
@@ -104,7 +105,8 @@ Database Options (Client tools installed by default):
   --skip-db               Skip all database client and server installations
 
 GUI & Desktop Options (Optional, disabled by default):
-  --with-gui              Install all GUI desktop applications (Chrome, IDE/VS Code)
+  --with-gui              Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code)
+  --with-ghostty          Install Ghostty terminal emulator
   --with-chrome           Install Google Chrome
   --with-apps             Install desktop apps (VS Code / IDE)
   -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
@@ -206,6 +208,15 @@ while [ $# -gt 0 ]; do
         --with-gui)
             INSTALL_CHROME=true
             INSTALL_APPS=true
+            INSTALL_GHOSTTY=true
+            shift
+            ;;
+        --with-ghostty)
+            INSTALL_GHOSTTY=true
+            shift
+            ;;
+        --skip-ghostty)
+            INSTALL_GHOSTTY=false
             shift
             ;;
         --with-chrome)

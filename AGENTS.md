@@ -42,6 +42,7 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | **CLI Completions** | `dotfiles/.zsh-completions` | `$HOME/.zsh-completions` | `tests/test-completions.sh` |
 | **Powerlevel10k Theme** | `dotfiles/.p10k.zsh` | `$HOME/.p10k.zsh` | `tests/test-zsh.zsh` |
 | **Neovim Configuration** | `dotfiles/.config/nvim/init.lua` | `${XDG_CONFIG_HOME:-$HOME/.config}/nvim/init.lua` | `tests/test-vim.sh`, `tests/test-dotfiles.sh` |
+| **Ghostty Terminal Config** | `dotfiles/.config/ghostty/config` | `${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config` | `tests/test-dotfiles.sh` |
 | **Legacy Vim Config** | `dotfiles/.vimrc` | `$HOME/.vimrc` | `tests/test-vim.sh` |
 | **Bat TrueColor Theme** | `colors/Solarized-Dark-TrueColor.tmTheme` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
 | **Dircolors Database** | `dotfiles/.dir-colors/dircolors` | `$HOME/.dir-colors/dircolors` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |

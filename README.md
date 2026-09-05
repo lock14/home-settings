@@ -163,7 +163,8 @@ make lint
 | `--with-postgres` | *disabled* | Install PostgreSQL server and client tools |
 | `--with-mariadb` | *disabled* | Install MariaDB server and client tools |
 | `--skip-db` | *disabled* | Skip all database client and server installations |
-| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, IDE/VS Code) |
+| `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code) |
+| `--with-ghostty` | *disabled* | Install Ghostty terminal emulator (macOS cask, Snap on Ubuntu, COPR on Fedora) |
 | `--with-chrome` | *disabled* | Install Google Chrome |
 | `--with-apps` | *disabled* | Install desktop apps (VS Code / IDE) |
 | `-i, --ide <name>` | `none` | IDE to install: `intellij`, `intellij-ultimate`, `code`, `none` |
@@ -219,6 +220,13 @@ The redesigned repository is built for frictionless extension:
 - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`).
 - **Solarized Dark**: Seamless `#002B36` terminal background matching.
 - **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim`).
+
+### 4. Ghostty GPU-Accelerated Terminal (`dotfiles/.config/ghostty/config`)
+- **Theme**: Authentic 24-bit TrueColor Solarized Dark (`theme = "Solarized Dark"`) with 1:1 RGB palette matching Windows Terminal.
+- **Typography**: MesloLGS NF font (`font-family = "MesloLGS NF"`, `font-size = 11`) supporting all Powerlevel10k and Git status glyphs.
+- **Window & Layout**: 10px padding, balanced geometry, and block cursor.
+- **Productivity**: Auto-split panes (`Ctrl+Shift+D`), navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
+- **Cross-Platform**: Automatically symlinked to `${XDG_CONFIG_HOME:-~/.config}/ghostty/config` and macOS `~/Library/Application Support/com.mitchellh.ghostty/config`.
 
 ---
 

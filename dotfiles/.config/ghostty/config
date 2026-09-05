@@ -1,0 +1,76 @@
+# ==============================================================================
+# Ghostty Terminal Emulator Configuration
+# Cross-platform developer configuration (Linux & macOS)
+# Visual theme: Authentic Ethan Schoonover Solarized Dark (24-bit TrueColor)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Color Theme & Solarized Dark Palette
+# ------------------------------------------------------------------------------
+theme = "Solarized Dark"
+
+# Canonical Ethan Schoonover Solarized Dark Colors
+background = #002B36
+foreground = #839496
+cursor-color = #839496
+cursor-text = #002B36
+selection-background = #073642
+selection-foreground = #93A1A1
+
+# 16-Color TrueColor Palette (matching windows-settings.json 1:1)
+palette = 0=#073642
+palette = 1=#DC322F
+palette = 2=#859900
+palette = 3=#B58900
+palette = 4=#268BD2
+palette = 5=#D33682
+palette = 6=#2AA198
+palette = 7=#EEE8D5
+palette = 8=#586E75
+palette = 9=#CB4B16
+palette = 10=#586E75
+palette = 11=#657B83
+palette = 12=#839496
+palette = 13=#6C71C4
+palette = 14=#93A1A1
+palette = 15=#FDF6E3
+
+# ------------------------------------------------------------------------------
+# 2. Typography & Fonts (MesloLGS NF / Powerlevel10k)
+# ------------------------------------------------------------------------------
+font-family = "MesloLGS NF"
+font-size = 11
+font-thicken = false
+
+# ------------------------------------------------------------------------------
+# 3. Window Appearance & Layout
+# ------------------------------------------------------------------------------
+window-padding-x = 10
+window-padding-y = 10
+window-padding-balance = true
+window-decoration = auto
+
+# ------------------------------------------------------------------------------
+# 4. Cursor Styling
+# ------------------------------------------------------------------------------
+cursor-style = block
+cursor-style-blink = false
+
+# ------------------------------------------------------------------------------
+# 5. Terminal Behavior & Clipboard
+# ------------------------------------------------------------------------------
+copy-on-select = clipboard
+confirm-close-surface = false
+shell-integration = detect
+mouse-hide-while-typing = true
+
+# ------------------------------------------------------------------------------
+# 6. Keybindings & Navigation (Split Panes & Tabs)
+# ------------------------------------------------------------------------------
+keybind = ctrl+shift+d=new_split:auto
+keybind = ctrl+shift+w=close_surface
+keybind = ctrl+shift+enter=toggle_split_zoom
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+j=goto_split:bottom
+keybind = ctrl+shift+k=goto_split:top
+keybind = ctrl+shift+l=goto_split:right

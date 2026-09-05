@@ -45,6 +45,14 @@ done
 
 assert_symlink "$TEMP_HOME/.dir-colors/dircolors" "" "Auto-discovered and symlinked: .dir-colors/dircolors"
 assert_symlink "$TEMP_HOME/.config/nvim" "" "Auto-discovered and symlinked: .config/nvim"
+assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
+
+if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme and MesloLGS NF font"
+else
+    fail "Ghostty config verification" "Ghostty config missing expected theme or font"
+fi
+
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)
@@ -123,6 +131,11 @@ for df in "${expected_top_level[@]}"; do
         fail "Unlink check" "$TEMP_HOME/$df is still linked"
     fi
 done
+
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ]; then
+    all_unlinked=false
+    fail "Unlink check" ".config subtrees still linked"
+fi
 
 if [ "$all_unlinked" = true ]; then
     pass "All managed dotfile symlinks successfully removed by uninstaller"
