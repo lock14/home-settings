@@ -38,9 +38,19 @@ ZSH_HIGHLIGHT_STYLES[command-substitution-quoted]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[process-substitution]='fg=#268BD2'
 
-# Numbers, Operators & Punctuation (Solarized Base0 #839496)
-ZSH_HIGHLIGHT_STYLES[numeric-fd]='fg=#839496'
-ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]='fg=#839496'
+# Numbers, Constants & Arithmetic (Solarized Magenta #D33682)
+ZSH_HIGHLIGHT_STYLES[numeric-fd]='fg=#D33682'
+ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]='fg=#D33682'
+
+# Standalone numbers & assignment numeric values outside quotes (Solarized Magenta #D33682)
+if zmodload zsh/pcre >/dev/null 2>&1; then
+    setopt rematchpcre
+    ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets regexp)
+    typeset -gA ZSH_HIGHLIGHT_REGEXP
+    ZSH_HIGHLIGHT_REGEXP+=("(?<=[=\\s]|^)[0-9]+(\\.[0-9]+)?(?=[\\s;|<>&]|$)(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^'\'']*'\''[^'\'']*'\'')*[^'\'']*$)" 'fg=#D33682')
+fi
+
+# Operators & Punctuation (Solarized Base0 #839496)
 ZSH_HIGHLIGHT_STYLES[commandseparator]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[redirection]='fg=#839496'
 

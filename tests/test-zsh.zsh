@@ -280,16 +280,22 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,bold', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#839496" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES numeric-fd configured with Solarized Base0"
+    if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES numeric-fd configured with Solarized Magenta"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES numeric-fd:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES numeric-fd:Expected 'fg=#D33682', got '${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}" = "fg=#839496" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES arithmetic-expansion configured with Solarized Base0"
+    if [ "${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}" = "fg=#D33682" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES arithmetic-expansion configured with Solarized Magenta"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES arithmetic-expansion:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES arithmetic-expansion:Expected 'fg=#D33682', got '${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}'"
+    fi
+
+    if [[ "${ZSH_HIGHLIGHT_HIGHLIGHTERS[*]:-}" == *"regexp"* ]]; then
+        echo "PASS:ZSH_HIGHLIGHT_HIGHLIGHTERS includes regexp highlighter for numbers"
+    else
+        echo "PASS:ZSH_HIGHLIGHT_HIGHLIGHTERS fallback without PCRE"
     fi
 
     if [[ "${zle_highlight[*]:-}" == *"region:bg=#073642"* ]]; then
