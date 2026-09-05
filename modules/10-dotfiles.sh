@@ -69,6 +69,9 @@ if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     GHOSTTY_MAC_DIR="$HOME/Library/Application Support/com.mitchellh.ghostty"
     mkdir -p "$GHOSTTY_MAC_DIR"
     link_file "$XDG_CONFIG/ghostty/config" "$GHOSTTY_MAC_DIR/config"
+    if [ -d "$DOTFILES_DIR/.config/ghostty/themes" ]; then
+        link_dir "$DOTFILES_DIR/.config/ghostty/themes" "$GHOSTTY_MAC_DIR/themes"
+    fi
 fi
 
 # 6. Bat TrueColor Syntax Highlighting Theme

@@ -53,6 +53,20 @@ else
     fail "Ghostty config verification" "Ghostty config missing expected theme or font"
 fi
 
+if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then
+    pass "Ghostty themes directory contains Solarized Dark theme"
+else
+    fail "Ghostty themes verification" "Missing Solarized Dark theme in themes directory"
+fi
+
+if command -v ghostty >/dev/null 2>&1; then
+    if XDG_CONFIG_HOME="$TEMP_HOME/.config" ghostty +validate-config --config-file="$TEMP_HOME/.config/ghostty/config" >/dev/null 2>&1; then
+        pass "Ghostty config passes native ghostty +validate-config"
+    else
+        fail "Ghostty validation" "ghostty +validate-config failed on installed config"
+    fi
+fi
+
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)
