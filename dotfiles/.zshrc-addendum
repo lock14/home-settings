@@ -16,9 +16,9 @@ ZSH_HIGHLIGHT_STYLES[function]='fg=#268BD2,bold'
 ZSH_HIGHLIGHT_STYLES[precommand]='fg=#268BD2,bold'
 ZSH_HIGHLIGHT_STYLES[autodirectory]='fg=#268BD2'
 
-# Options, Flags & Parameters (Solarized Yellow #B58900)
-ZSH_HIGHLIGHT_STYLES[single-hyphen-option]='fg=#B58900'
-ZSH_HIGHLIGHT_STYLES[double-hyphen-option]='fg=#B58900'
+# Options, Flags & Parameters (Solarized Base0 #839496 - restrained)
+ZSH_HIGHLIGHT_STYLES[single-hyphen-option]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[double-hyphen-option]='fg=#839496'
 
 # Strings & Quoted Arguments (Solarized Cyan #2AA198)
 ZSH_HIGHLIGHT_STYLES[single-quoted-argument]='fg=#2AA198'
@@ -26,11 +26,11 @@ ZSH_HIGHLIGHT_STYLES[double-quoted-argument]='fg=#2AA198'
 ZSH_HIGHLIGHT_STYLES[dollar-quoted-argument]='fg=#2AA198'
 ZSH_HIGHLIGHT_STYLES[back-quoted-argument]='fg=#268BD2'
 
-# Variables, Expansions & Assignments (Solarized Yellow #B58900)
-ZSH_HIGHLIGHT_STYLES[dollar-double-quoted-argument]='fg=#B58900'
-ZSH_HIGHLIGHT_STYLES[globbing]='fg=#B58900'
+# Variables, Expansions & Assignments (Solarized Base0 #839496)
+ZSH_HIGHLIGHT_STYLES[dollar-double-quoted-argument]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[globbing]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[history-expansion]='fg=#268BD2'
-ZSH_HIGHLIGHT_STYLES[assign]='fg=#B58900'
+ZSH_HIGHLIGHT_STYLES[assign]='fg=#839496'
 
 # Substitutions (Solarized Blue #268BD2)
 ZSH_HIGHLIGHT_STYLES[command-substitution]='fg=#268BD2'
@@ -38,19 +38,11 @@ ZSH_HIGHLIGHT_STYLES[command-substitution-quoted]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[process-substitution]='fg=#268BD2'
 
-# Numbers & Constants (Solarized Magenta #D33682)
-ZSH_HIGHLIGHT_STYLES[numeric-fd]='fg=#D33682'
-ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]='fg=#D33682'
-
-# Standalone numeric literals & operators via regexp highlighter (Magenta #D33682 & Violet #6C71C4)
-if zmodload zsh/pcre >/dev/null 2>&1; then
-    setopt rematchpcre
-    ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets regexp)
-    typeset -gA ZSH_HIGHLIGHT_REGEXP
-    ZSH_HIGHLIGHT_REGEXP+=("(?<![\\w\\-\\$\\{\\./#\"'])[0-9]+(\\.[0-9]+)?(?![0-9\\w\\./\"'])" 'fg=#D33682')
-    # Assignment & option '=' operators (Solarized Violet #6C71C4)
-    ZSH_HIGHLIGHT_REGEXP+=("(?<!\\S)-{0,2}[a-zA-Z_][a-zA-Z0-9_-]*\\K=(?!=)" 'fg=#6C71C4')
-fi
+# Numbers, Operators & Punctuation (Solarized Base0 #839496)
+ZSH_HIGHLIGHT_STYLES[numeric-fd]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[commandseparator]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[redirection]='fg=#839496'
 
 # Paths & Directories (Solarized Blue #268BD2 matching dircolors/eza / Base0 #839496)
 ZSH_HIGHLIGHT_STYLES[path]='fg=#268BD2'
@@ -62,17 +54,13 @@ ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=#DC322F,bold'
 # Comments (Solarized Base01 #586E75)
 ZSH_HIGHLIGHT_STYLES[comment]='fg=#586E75'
 
-# Operators, Pipes & Redirections (Solarized Violet #6C71C4)
-ZSH_HIGHLIGHT_STYLES[commandseparator]='fg=#6C71C4'
-ZSH_HIGHLIGHT_STYLES[redirection]='fg=#6C71C4'
-
 # Default Arguments (Solarized Base0 #839496)
 ZSH_HIGHLIGHT_STYLES[default]='fg=#839496'
 
-# Bracket Matching (Rainbow matching using Solarized accents)
-ZSH_HIGHLIGHT_STYLES[bracket-level-1]='fg=#268BD2,bold'
-ZSH_HIGHLIGHT_STYLES[bracket-level-2]='fg=#859900,bold'
-ZSH_HIGHLIGHT_STYLES[bracket-level-3]='fg=#B58900,bold'
+# Bracket Matching (Solarized Base0 #839496 / Error Red #DC322F)
+ZSH_HIGHLIGHT_STYLES[bracket-level-1]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[bracket-level-2]='fg=#839496'
+ZSH_HIGHLIGHT_STYLES[bracket-level-3]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[bracket-error]='fg=#DC322F,bold'
 
 # ZLE Selection, Search & Autosuggestion (Base02 #073642, Base01 #586E75)

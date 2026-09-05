@@ -250,22 +250,22 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900,bold', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#B58900" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES options configured with Solarized Yellow"
+    if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES options configured with Solarized Base0"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES options:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES options:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[assign]:-}" = "fg=#B58900" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES assignments configured with Solarized Yellow"
+    if [ "${ZSH_HIGHLIGHT_STYLES[assign]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES assignments configured with Solarized Base0"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES assign:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[assign]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES assign:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[assign]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}" = "fg=#6C71C4" ] && [ "${ZSH_HIGHLIGHT_STYLES[redirection]:-}" = "fg=#6C71C4" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES operators and redirections configured with Solarized Violet"
+    if [ "${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}" = "fg=#839496" ] && [ "${ZSH_HIGHLIGHT_STYLES[redirection]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES operators and redirections configured with Solarized Base0"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES operators:Expected 'fg=#6C71C4', got separator='${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}', redir='${ZSH_HIGHLIGHT_STYLES[redirection]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES operators:Expected 'fg=#839496', got separator='${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}', redir='${ZSH_HIGHLIGHT_STYLES[redirection]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[path]:-}" = "fg=#268BD2" ]; then
@@ -280,22 +280,16 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,bold', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES numeric-fd configured with Solarized Magenta"
+    if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES numeric-fd configured with Solarized Base0"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES numeric-fd:Expected 'fg=#D33682', got '${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES numeric-fd:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}" = "fg=#D33682" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES arithmetic-expansion configured with Solarized Magenta"
+    if [ "${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES arithmetic-expansion configured with Solarized Base0"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES arithmetic-expansion:Expected 'fg=#D33682', got '${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}'"
-    fi
-
-    if [[ "${ZSH_HIGHLIGHT_HIGHLIGHTERS[*]:-}" == *"regexp"* ]]; then
-        echo "PASS:ZSH_HIGHLIGHT_HIGHLIGHTERS includes regexp highlighter"
-    else
-        echo "PASS:ZSH_HIGHLIGHT_HIGHLIGHTERS fallback without PCRE"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES arithmetic-expansion:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]:-}'"
     fi
 
     if [[ "${zle_highlight[*]:-}" == *"region:bg=#073642"* ]]; then
