@@ -238,10 +238,10 @@ test_addendum() {
 
     source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
 
-    if [ "${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}" = "fg=10" ]; then
+    if [ "${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}" = "fg=#586E75" ]; then
         echo "PASS:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE set correctly"
     else
-        echo "FAIL:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:Expected 'fg=10', got '${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}'"
+        echo "FAIL:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:Expected 'fg=#586E75', got '${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[command]:-}" = "fg=#859900,bold" ]; then
@@ -256,10 +256,16 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES options:Expected 'fg=#2AA198', got '${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F,underline" ]; then
+    if [ "${ZSH_HIGHLIGHT_STYLES[path]:-}" = "fg=#2AA198" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES path configured cleanly with Solarized Cyan without underline"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES path:Expected 'fg=#2AA198', got '${ZSH_HIGHLIGHT_STYLES[path]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F,bold" ]; then
         echo "PASS:ZSH_HIGHLIGHT_STYLES unknown-token configured with Solarized Red"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,underline', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,bold', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
