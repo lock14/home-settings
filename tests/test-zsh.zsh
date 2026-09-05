@@ -250,10 +250,22 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900,bold', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#2AA198" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES options configured with Solarized Cyan"
+    if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#B58900" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES options configured with Solarized Yellow"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES options:Expected 'fg=#2AA198', got '${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES options:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[assign]:-}" = "fg=#B58900" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES assignments configured with Solarized Yellow"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES assign:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[assign]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}" = "fg=#6C71C4" ] && [ "${ZSH_HIGHLIGHT_STYLES[redirection]:-}" = "fg=#6C71C4" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES operators and redirections configured with Solarized Violet"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES operators:Expected 'fg=#6C71C4', got separator='${ZSH_HIGHLIGHT_STYLES[commandseparator]:-}', redir='${ZSH_HIGHLIGHT_STYLES[redirection]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[path]:-}" = "fg=#2AA198" ]; then
