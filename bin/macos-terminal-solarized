@@ -1,0 +1,103 @@
+#!/bin/bash
+# Configures authentic 24-bit Solarized Dark TrueColor profile for macOS Terminal.app.
+# Sets MesloLGS NF 12 font, Solarized Dark palette, base02 highlight, and block cursor.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || pwd)"
+TERMINAL_FILE="$REPO_DIR/colors/Solarized-Dark.terminal"
+PREFS_PLIST="$HOME/Library/Preferences/com.apple.Terminal.plist"
+
+PROFILE_NAME="Solarized Dark"
+DRY_RUN=false
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Configures authentic 24-bit Solarized Dark TrueColor profile for macOS Terminal.app.
+
+Options:
+  --dry-run       Preview configuration changes without applying them
+  -h, --help      Display this help message
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "  Not running on macOS; skipping macOS Terminal.app configuration."
+    exit 0
+fi
+
+if [ ! -f "$TERMINAL_FILE" ]; then
+    echo "Error: Theme file not found: $TERMINAL_FILE" >&2
+    exit 1
+fi
+
+echo "  Configuring macOS Terminal.app with authentic Solarized Dark profile..."
+
+if [ "$DRY_RUN" = true ]; then
+    echo "  [DryRun] Import $TERMINAL_FILE into Terminal.app Window Settings"
+    echo "  [DryRun] Set Terminal.app default and startup profile to '$PROFILE_NAME'"
+    exit 0
+fi
+
+# Configure via Python3 manipulating com.apple.Terminal.plist
+python3 -c "
+import plistlib, os, sys
+
+plist_path = sys.argv[1]
+theme_path = sys.argv[2]
+profile_name = sys.argv[3]
+
+try:
+    with open(theme_path, 'rb') as f:
+        theme_dict = plistlib.load(f)
+
+    prefs = {}
+    if os.path.exists(plist_path):
+        try:
+            with open(plist_path, 'rb') as f:
+                prefs = plistlib.load(f)
+        except Exception:
+            prefs = {}
+
+    if 'Window Settings' not in prefs:
+        prefs['Window Settings'] = {}
+
+    prefs['Window Settings'][profile_name] = theme_dict
+    prefs['Default Window Settings'] = profile_name
+    prefs['Startup Window Settings'] = profile_name
+
+    os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+    with open(plist_path, 'wb') as f:
+        plistlib.dump(prefs, f, fmt=plistlib.FMT_BINARY)
+except Exception as e:
+    sys.exit(f'Error updating Terminal preferences: {e}')
+" "$PREFS_PLIST" "$TERMINAL_FILE" "$PROFILE_NAME"
+
+# Refresh macOS preferences cache if defaults/killall is available
+if command -v defaults >/dev/null 2>&1; then
+    defaults write com.apple.Terminal "Default Window Settings" -string "$PROFILE_NAME" 2>/dev/null || true
+    defaults write com.apple.Terminal "Startup Window Settings" -string "$PROFILE_NAME" 2>/dev/null || true
+fi
+
+echo "  macOS Terminal.app profile '$PROFILE_NAME' successfully configured as default."

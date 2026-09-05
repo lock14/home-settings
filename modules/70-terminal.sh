@@ -27,6 +27,16 @@ configure_terminal() {
             fi
         fi
     fi
+
+    # macOS Terminal.app profile provisioning on macOS
+    if [ "$OS" = "macos" ]; then
+        echo "  Configuring macOS Terminal.app..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "  [DryRun] Configuring macOS Terminal.app Solarized Dark profile"
+        else
+            "$REPO_DIR/bin/macos-terminal-solarized"
+        fi
+    fi
 }
 
 configure_terminal
