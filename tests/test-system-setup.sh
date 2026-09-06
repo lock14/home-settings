@@ -272,8 +272,8 @@ rm -rf "$TEMP_BIN_HOME"
 # Test 4: Mise Configuration Validity
 echo -e "\n[4/5] Testing .mise.toml toolchain definition..."
 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
-    if grep -q 'java = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'node = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'python = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'neovim = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'eza = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'bat = "latest"' "$SCRIPT_DIR/.mise.toml"; then
-        pass ".mise.toml defaults to LTS for Java/Node, and latest stable for Go, Python, Maven, Neovim, Eza, Bat"
+    if grep -q 'java = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'node = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'python = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'neovim = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'eza = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'bat = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'glow = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go.set_gobin = false' "$SCRIPT_DIR/.mise.toml" && grep -q 'go.set_gopath = false' "$SCRIPT_DIR/.mise.toml"; then
+        pass ".mise.toml defaults to LTS for Java/Node, latest for CLI tools, and protects Go paths (gobin/gopath = false)"
     else
         fail ".mise.toml definition" "Missing expected tool configurations"
     fi
