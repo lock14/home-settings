@@ -94,6 +94,7 @@ The following tools should be available on the host machine:
   - **Maven**: Modern Maven build toolchain (`maven = "latest"`)
   - **Terraform**: Latest Terraform binary (`terraform = "latest"`)
   - **Rust**: Latest Rust toolchain (`rust = "latest"`)
+  - **Glow**: Modern terminal markdown reader (`glow = "latest"`)
 
 ---
 
@@ -254,10 +255,12 @@ The redesigned repository is built for frictionless extension:
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
 | `la` | List almost all files (`ls -A`) |
 | `l` | Compact column listing (`ls -CF`) |
-| `e` | Modern grid listing with Nerd Font icons (`eza --icons=auto`) |
-| `el` | Detailed eza listing with table headers, Git status, and icons (`eza -la --icons=auto --git --header`) |
-| `et` | Eza tree view listing with icons (`eza --tree --level=2 --icons=auto`) |
-| `elt` | Detailed eza tree view with Git status and metadata (`eza -la --tree --level=2 --icons=auto --git`) |
+| `e` | Modern grid listing with Nerd Font icons (`eza --icons=auto --group-directories-first`) |
+| `el` | Detailed eza listing with headers, Git status, group, and ISO timestamps (`eza -la --icons=auto --git --header --group --time-style=long-iso`) |
+| `elm` | Detailed eza listing sorted by modification time with newest files at bottom (`eza -la ... --sort=modified`) |
+| `et` | Safe 2-level directory tree view with icons (`eza --tree --level=2 --icons=auto`) |
+| `elt` | Detailed eza tree view with Git status, group, and ISO timestamps (`eza -la --tree --level=2 ...`) |
+| `elx` | Extended forensic listing with hard links, inodes, blocks, and extended attributes (`-H -i -S --extended`) |
 | `fs` | Fast recursive directory tree search (`fd` + `tree --fromfile`) |
 | `gcommit` | `git add -A && git commit` |
 | `gamend` | `git add -A && git commit --amend --no-edit` |

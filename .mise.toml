@@ -12,7 +12,10 @@ rust = "latest"
 neovim = "latest"
 eza = "latest"
 bat = "latest"
+glow = "latest"
 
 [settings]
 legacy_version_file = true
 experimental = true
+go.set_gobin = false
+go.set_gopath = false

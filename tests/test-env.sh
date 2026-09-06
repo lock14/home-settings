@@ -70,10 +70,13 @@ else
     fail "BAT_THEME export" "Expected Solarized-Dark-TrueColor, got: ${BAT_THEME:-}"
 fi
 
-if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ]; then
-    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette"
+if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ] && \
+   [[ "${EZA_COLORS}" == *"Su=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"ff=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"sn=38;2;131;148;150"* ]]; then
+    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette (including SELinux, BSD flags, and size fallbacks)"
 else
-    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS, got: ${EZA_COLORS:-}"
+    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS with full eza_colors(5) codes, got: ${EZA_COLORS:-}"
 fi
 
 if command -v nvim >/dev/null 2>&1; then
