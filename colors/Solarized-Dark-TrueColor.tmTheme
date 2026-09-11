@@ -81,7 +81,7 @@
 			<key>name</key>
 			<string>Keyword</string>
 			<key>scope</key>
-			<string>keyword, storage.type, storage.modifier</string>
+			<string>keyword, storage.modifier</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -105,23 +105,35 @@
 			<key>name</key>
 			<string>Built-in Type</string>
 			<key>scope</key>
-			<string>support.type.builtin, support.type.primitive, support.type</string>
+			<string>storage.type, storage.type.c, storage.type.primitive, storage.type.built-in, support.type.builtin, support.type.primitive, support.type</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
 				<string>#B58900</string>
 			</dict>
 		</dict>
-		<!-- Custom Types & Struct Names (Base0, matching Neovim) -->
+		<!-- Custom Types & Struct Names (Solarized Yellow) -->
 		<dict>
 			<key>name</key>
 			<string>Custom Type</string>
 			<key>scope</key>
-			<string>entity.name.type, entity.name.class, entity.name.struct, entity.name.type.parameter, variable.other.type</string>
+			<string>entity.name.type, entity.name.class, entity.name.struct, entity.name.enum, entity.name.interface, entity.name.type.parameter, variable.other.type, support.class</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#839496</string>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Structural Declaration Keywords (Solarized Green) -->
+		<dict>
+			<key>name</key>
+			<string>Declaration Keyword</string>
+			<key>scope</key>
+			<string>storage.type.struct, storage.type.enum, storage.type.union, storage.type.typedef, storage.type.class, storage.type.interface, storage.type.trait</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
 			</dict>
 		</dict>
 		<!-- Functions (Solarized Blue) -->
@@ -134,6 +146,350 @@
 			<dict>
 				<key>foreground</key>
 				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Preprocessors, Annotations & Directives (Solarized Orange) -->
+		<!-- ======================================================= -->
+		<dict>
+			<key>name</key>
+			<string>Preprocessor, Directive and Annotation</string>
+			<key>scope</key>
+			<string>meta.preprocessor, keyword.control.directive, keyword.control.import, keyword.control.preprocessor, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Markdown & Markup Extensions (First-Principles Hierarchy)-->
+		<!-- ======================================================= -->
+		<!-- Headings (H1: Solarized Orange, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 1</string>
+			<key>scope</key>
+			<string>markup.heading.1, markup.heading.1 entity.name.section, markup.heading.1 punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- Headings (H2: Solarized Yellow, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 2</string>
+			<key>scope</key>
+			<string>markup.heading.2, markup.heading.2 entity.name.section, markup.heading.2 punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Headings (H3: Solarized Blue, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 3</string>
+			<key>scope</key>
+			<string>markup.heading.3, markup.heading.3 entity.name.section, markup.heading.3 punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Headings (H4: Solarized Violet, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 4</string>
+			<key>scope</key>
+			<string>markup.heading.4, markup.heading.4 entity.name.section, markup.heading.4 punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- Headings (H5: Solarized Magenta, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 5</string>
+			<key>scope</key>
+			<string>markup.heading.5, markup.heading.5 entity.name.section, markup.heading.5 punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Headings (H6: Solarized Base1, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 6</string>
+			<key>scope</key>
+			<string>markup.heading.6, markup.heading.6 entity.name.section, markup.heading.6 punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#93A1A1</string>
+			</dict>
+		</dict>
+		<!-- General Section Titles & Headings Fallback (Solarized Blue, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading Generic</string>
+			<key>scope</key>
+			<string>markup.heading, markup.heading entity.name.section, markup.heading punctuation.definition.heading, entity.name.section</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Bold / Strong (Solarized Base1, Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Bold</string>
+			<key>scope</key>
+			<string>markup.bold, punctuation.definition.bold</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#93A1A1</string>
+			</dict>
+		</dict>
+		<!-- Italic / Emphasis (Solarized Base0 / Italic) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Italic</string>
+			<key>scope</key>
+			<string>markup.italic, punctuation.definition.italic</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>italic</string>
+			</dict>
+		</dict>
+		<!-- Inline Code & Code Spans (Solarized Cyan) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Inline Code</string>
+			<key>scope</key>
+			<string>markup.raw.inline</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- Inline Code Backtick Punctuation (Base01) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Code Punctuation</string>
+			<key>scope</key>
+			<string>punctuation.definition.raw</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Fenced Code Block Delimiters & Language Tags (Base01) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Code Block Fences</string>
+			<key>scope</key>
+			<string>punctuation.definition.raw.code-fence, punctuation.section.embedded</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Link Text / Label (Solarized Blue) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Link Text</string>
+			<key>scope</key>
+			<string>string.other.link.title, string.other.link.description, meta.link.inline.description, meta.image.inline.description</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Link URL / Target (Solarized Cyan, Underline) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Link URL</string>
+			<key>scope</key>
+			<string>markup.underline.link, meta.link.inline constant.other.reference.link</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>underline</string>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- Link & Image Punctuation brackets [], () (Solarized Base01) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Link Punctuation</string>
+			<key>scope</key>
+			<string>punctuation.definition.link, punctuation.definition.metadata, punctuation.definition.image</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Blockquotes (Solarized Blue, Italic) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Blockquote</string>
+			<key>scope</key>
+			<string>markup.quote</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>italic</string>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Blockquote Markers (>) (Solarized Base01) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Blockquote Marker</string>
+			<key>scope</key>
+			<string>punctuation.definition.quote</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Bullet and Numbered List Item Markers (-, *, +, 1.) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown List Markers</string>
+			<key>scope</key>
+			<string>punctuation.definition.list_item</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Horizontal Rules / Thematic Breaks (***) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Horizontal Rule</string>
+			<key>scope</key>
+			<string>meta.separator.markdown, punctuation.definition.thematic-break</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- Table Cell Delimiters (Base01) & Headers (Yellow Bold) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Table Delimiters</string>
+			<key>scope</key>
+			<string>punctuation.separator.table-cell, meta.table punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markdown Table Header</string>
+			<key>scope</key>
+			<string>markup.other.table.header</string>
+			<key>settings</key>
+			<dict>
+				<key>fontStyle</key>
+				<string>bold</string>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Diff & Patch Scopes (Green / Red / Yellow)             -->
+		<!-- ======================================================= -->
+		<dict>
+			<key>name</key>
+			<string>Markup Inserted (Diff)</string>
+			<key>scope</key>
+			<string>markup.inserted</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markup Deleted (Diff)</string>
+			<key>scope</key>
+			<string>markup.deleted</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#DC322F</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markup Changed (Diff)</string>
+			<key>scope</key>
+			<string>markup.changed</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Errors & Invalid Syntax (Solarized Red)                -->
+		<!-- ======================================================= -->
+		<dict>
+			<key>name</key>
+			<string>Invalid / Error</string>
+			<key>scope</key>
+			<string>invalid, invalid.illegal</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#DC322F</string>
 			</dict>
 		</dict>
 	</array>

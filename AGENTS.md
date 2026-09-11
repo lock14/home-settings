@@ -68,15 +68,15 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 | **Standard Foreground** | `base0` | `#839496` | Standard typed text, CLI arguments, paths, struct fields, identifiers |
 | **Emphasis Text** | `base1` | `#93A1A1` | Bright text, highlighted labels |
 | **Keywords & Control** | `green` | `#859900` | `package`, `import`, `func`, `return`, `if`, `for`, `var`, `type`, `struct` |
-| **Types & Struct Names** | `yellow` | `#B58900` | Primitive types (`int`, `string`, `bool`), CursorLineNr |
-| **Functions & Methods** | `blue` | `#268BD2` | Function declarations, method calls, directory names |
+| **Types & Struct Names** | `yellow` | `#B58900` | Primitive types (`int`, `string`, `bool`), custom types, structs, classes, interfaces, CursorLineNr |
+| **Functions & Methods** | `blue` | `#268BD2` | Function declarations, method calls, directory names, Markdown blockquotes |
 | **Strings & Paths** | `cyan` | `#2AA198` | String literals, file paths |
 | **Numbers & Constants** | `magenta` | `#D33682` | Numeric literals, `nil`, `true`, `false`, `iota` |
 | **Preprocessors & Headers**| `orange` | `#CB4B16` | Preprocessor macros, compiler directives |
 | **Errors & Diagnostics** | `red` | `#DC322F` | Syntax errors, diagnostic warnings |
 
 ### Integration Rules
-1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`). Available via `bat` or `b`; `cat` strictly remains standard Unix coreutils.
+1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`) with italic rendering (`BAT_OPTS="--italic-text=always"`) and full Solarized Dark palette coverage for Markdown markup, C/C++ preprocessors, Java annotations, and diffs. Available via `bat` or `b`; `cat` strictly remains standard Unix coreutils.
 2. **`eza`**: Available via `e`, `el`, `elm`, `et`, `elt`, and `elx`, with `EZA_COLORS` and `EXA_COLORS` configured with Solarized Dark palette. Native `ls` and `ll` use standard GNU/BSD `ls` with Solarized `dircolors`.
 3. **Neovim Lua**: Uses `maxmx03/solarized.nvim` with `variant = "spring"` matching `bat` 1:1, integrated with Native Neovim 0.11+ LSP (`vim.lsp.config`, `LspAttach`).
 4. **Zsh Autosuggestions**: Highlight style is pinned to `fg=#586E75` (Solarized Base01).

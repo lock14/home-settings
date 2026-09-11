@@ -75,6 +75,22 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim plugins" "Missing expected plugin declarations in init.lua"
     fi
 
+    if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.2.*colors\.yellow' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.3.*colors\.blue' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.4.*colors\.violet' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.5.*colors\.magenta' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.6.*colors\.base1' "$NVIM_CONFIG" && \
+       grep -q '@markup\.quote.*colors\.blue' "$NVIM_CONFIG" && \
+       grep -q '@type.*colors\.yellow' "$NVIM_CONFIG" && \
+       grep -q '@keyword\.type.*colors\.yellow' "$NVIM_CONFIG" && \
+       grep -q 'markdownH1.*colors\.orange' "$NVIM_CONFIG" && \
+       grep -q '@attribute' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua defines first-principles markup headings, blue quotes, yellow types, and fallbacks matching bat"
+    else
+        fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, or markdownH1 in init.lua"
+    fi
+
     if command -v nvim >/dev/null 2>&1; then
         if nvim --headless -u NONE -c "lua local f, err = loadfile('$NVIM_CONFIG'); if not f then error(err) end" +qall >/dev/null 2>&1; then
             pass "Neovim verified init.lua syntax cleanly"
@@ -93,6 +109,22 @@ if [ -f "$NVIM_CONFIG" ]; then
         else
             fail "Lua syntax error" "init.lua failed syntax check"
         fi
+    fi
+
+    C_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/c/highlights.scm"
+    if [ -f "$C_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$C_QUERY"; then
+        pass "Neovim defines Tree-sitter query extension for C preprocessor defined keyword"
+    else
+        fail "Neovim C query extension" "Missing or invalid after/queries/c/highlights.scm"
+    fi
+
+    PRINTF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/printf/highlights.scm"
+    if [ -f "$PRINTF_QUERY" ] && grep -q 'format.*@string.special' "$PRINTF_QUERY" && \
+       grep -q '@string\.escape.*colors\.magenta' "$NVIM_CONFIG" && \
+       grep -q '"printf"' "$NVIM_CONFIG"; then
+        pass "Neovim defines Tree-sitter printf format specifiers and string escapes in Solarized Magenta"
+    else
+        fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences in init.lua"
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"

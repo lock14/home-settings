@@ -69,6 +69,89 @@ fi
 
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 
+THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
+if grep -q "<string>markup.heading" "$THEME_FILE" && \
+   grep -q "<string>markup.bold" "$THEME_FILE" && \
+   grep -q "<string>markup.italic" "$THEME_FILE" && \
+   grep -q "<string>markup.raw.inline" "$THEME_FILE" && \
+   grep -q "<string>markup.underline.link" "$THEME_FILE" && \
+   grep -q "<string>markup.quote" "$THEME_FILE" && \
+   grep -q "<string>punctuation.definition.list_item" "$THEME_FILE" && \
+   grep -q "meta.preprocessor" "$THEME_FILE" && \
+   grep -q "storage.type.annotation" "$THEME_FILE" && \
+   grep -q "<string>markup.inserted" "$THEME_FILE" && \
+   grep -q "<string>invalid, invalid.illegal" "$THEME_FILE"; then
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, and Error scopes"
+else
+    fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
+fi
+
+BAT_BIN=""
+if command -v bat >/dev/null 2>&1; then
+    BAT_BIN="bat"
+elif command -v batcat >/dev/null 2>&1; then
+    BAT_BIN="batcat"
+fi
+
+if [ -n "$BAT_BIN" ]; then
+    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n**bold text**\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
+    ORANGE_BOLD="$(printf "\033[1;38;2;203;75;22m")"
+    YELLOW_BOLD="$(printf "\033[1;38;2;181;137;0m")"
+    BLUE_BOLD="$(printf "\033[1;38;2;38;139;210m")"
+    BASE1_BOLD="$(printf "\033[1;38;2;147;161;161m")"
+    if echo "$MD_OUT" | grep -Fq "${ORANGE_BOLD}#" && \
+       echo "$MD_OUT" | grep -Fq "${ORANGE_BOLD}Header 1" && \
+       echo "$MD_OUT" | grep -Fq "${YELLOW_BOLD}##" && \
+       echo "$MD_OUT" | grep -Fq "${YELLOW_BOLD}Header 2" && \
+       echo "$MD_OUT" | grep -Fq "${BLUE_BOLD}###" && \
+       echo "$MD_OUT" | grep -Fq "${BLUE_BOLD}Header 3" && \
+       echo "$MD_OUT" | grep -Fq "$BASE1_BOLD"; then
+        pass "bat renders Markdown headings (H1 Orange, H2 Yellow, H3 Blue with matching hashmarks) and Base1 bold text"
+    else
+        fail "bat Markdown rendering" "Expected H1 Orange, H2 Yellow, H3 Blue, and Base1 bold in bat output"
+    fi
+
+    C_OUT="$(echo -e "#include <stdio.h>" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    ORANGE_PREPROC="$(printf "\033[38;2;203;75;22m")"
+    if echo "$C_OUT" | grep -Fq "$ORANGE_PREPROC"; then
+        pass "bat renders C/C++ preprocessor directives in Solarized Orange"
+    else
+        fail "bat C preprocessor rendering" "Expected Orange preprocessor directive in bat output"
+    fi
+
+    DIFF_OUT="$(echo -e "--- a\n+++ b\n-old\n+new" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff - 2>/dev/null || true)"
+    GREEN_DIFF="$(printf "\033[38;2;133;153;0m")"
+    RED_DIFF="$(printf "\033[38;2;220;50;47m")"
+    if echo "$DIFF_OUT" | grep -Fq "$GREEN_DIFF" && echo "$DIFF_OUT" | grep -Fq "$RED_DIFF"; then
+        pass "bat renders Unified Diffs with Solarized Green additions and Red deletions"
+    else
+        fail "bat Diff rendering" "Expected Green additions and Red deletions in bat diff output"
+    fi
+
+    QUOTE_OUT="$(printf "> quote text\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
+    BLUE_QUOTE="$(printf "\033[38;2;38;139;210m")"
+    if echo "$QUOTE_OUT" | grep -Fq "$BLUE_QUOTE"; then
+        pass "bat renders Markdown blockquotes in Solarized Blue"
+    else
+        fail "bat blockquote rendering" "Expected Blue blockquote in bat output"
+    fi
+
+    GO_OUT="$(printf "type MyStruct struct {}\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go - 2>/dev/null || true)"
+    YELLOW_TYPE="$(printf "\033[38;2;181;137;0m")"
+    if echo "$GO_OUT" | grep -Fq "$YELLOW_TYPE"; then
+        pass "bat renders custom struct types in Solarized Yellow"
+    else
+        fail "bat custom type rendering" "Expected Yellow struct type in bat output"
+    fi
+
+    C_TYPE_OUT="$(printf "int x = 42;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    if echo "$C_TYPE_OUT" | grep -Fq "$YELLOW_TYPE"; then
+        pass "bat renders primitive C types (int, char, etc.) in Solarized Yellow"
+    else
+        fail "bat primitive type rendering" "Expected Yellow primitive type in bat output"
+    fi
+fi
+
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)
 echo -e "\n[3/5] Testing safe directory replacement and backup..."
 TEMP_HOME_BAK=$(mktemp -d)

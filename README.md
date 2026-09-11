@@ -210,7 +210,7 @@ The redesigned repository is built for frictionless extension:
 - **`zoxide` (`z`)** frecency-based smart directory jumping.
 
 ### 2. Modern Rust Developer CLI Suite
-- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers (`bat <file>` or `b <file>`; `cat` remains coreutils).
+- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers and italic rendering (`bat <file>` or `b <file>`; `cat` remains coreutils), featuring custom Solarized Dark styling for Markdown, C/C++, Java, Python, and Git diffs.
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.

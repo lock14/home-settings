@@ -70,6 +70,12 @@ else
     fail "BAT_THEME export" "Expected Solarized-Dark-TrueColor, got: ${BAT_THEME:-}"
 fi
 
+if [[ "${BAT_OPTS:-}" == *"--italic-text=always"* ]]; then
+    pass "BAT_OPTS is configured with --italic-text=always"
+else
+    fail "BAT_OPTS export" "Expected --italic-text=always in BAT_OPTS, got: ${BAT_OPTS:-}"
+fi
+
 if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ] && \
    [[ "${EZA_COLORS}" == *"Su=38;2;131;148;150"* ]] && \
    [[ "${EZA_COLORS}" == *"ff=38;2;131;148;150"* ]] && \

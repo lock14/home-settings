@@ -157,7 +157,7 @@ lazy.setup({
                     Conditional = { fg = colors.green },
                     Repeat = { fg = colors.green },
                     Type = { fg = colors.yellow },
-                    Structure = { fg = colors.green },
+                    Structure = { fg = colors.yellow },
                     StorageClass = { fg = colors.green },
                     Function = { fg = colors.blue },
                     Identifier = { fg = colors.base0 },
@@ -170,22 +170,27 @@ lazy.setup({
                     Operator = { fg = colors.base0 },
                     PreProc = { fg = colors.orange },
                     Include = { fg = colors.orange },
+                    Define = { fg = colors.orange },
+                    Macro = { fg = colors.blue },
                     Special = { fg = colors.violet },
-                    goConstants = { fg = colors.magenta },
-                    goExtraType = { fg = colors.magenta },
+                    Delimiter = { fg = colors.base0 },
                     -- Tree-sitter & LSP Semantic Token Overrides (Exact 1:1 Parity with Bat)
                     ["@keyword"] = { fg = colors.green },
                     ["@keyword.function"] = { fg = colors.green },
                     ["@keyword.return"] = { fg = colors.green },
                     ["@keyword.coroutine"] = { fg = colors.green },
-                    ["@type"] = { fg = colors.base0 },
+                    ["@keyword.directive"] = { fg = colors.orange },
+                    ["@keyword.directive.define"] = { fg = colors.orange },
+                    ["@keyword.type"] = { fg = colors.yellow },
+                    ["@type"] = { fg = colors.yellow },
                     ["@type.builtin"] = { fg = colors.yellow },
-                    ["@type.definition"] = { fg = colors.base0 },
+                    ["@type.definition"] = { fg = colors.yellow },
                     ["@function"] = { fg = colors.blue },
                     ["@function.call"] = { fg = colors.blue },
                     ["@function.method"] = { fg = colors.blue },
                     ["@function.method.call"] = { fg = colors.blue },
                     ["@function.builtin"] = { fg = colors.blue },
+                    ["@function.macro"] = { fg = colors.blue },
                     ["@variable"] = { fg = colors.base0 },
                     ["@variable.parameter"] = { fg = colors.base0 },
                     ["@variable.member"] = { fg = colors.base0 },
@@ -193,24 +198,50 @@ lazy.setup({
                     ["@module"] = { fg = colors.base0 },
                     ["@module.builtin"] = { fg = colors.base0 },
                     ["@string"] = { fg = colors.cyan },
-                    ["@string.special"] = { fg = colors.cyan },
+                    ["@string.documentation"] = { fg = colors.base01, italic = true },
+                    ["@string.special"] = { fg = colors.magenta },
                     ["@string.special.path"] = { fg = colors.cyan },
                     ["@string.special.url"] = { fg = colors.cyan },
                     ["@string.special.symbol"] = { fg = colors.cyan },
-                    ["@string.escape"] = { fg = colors.cyan },
+                    ["@string.escape"] = { fg = colors.magenta },
+                    ["@character.printf"] = { fg = colors.magenta },
+                    ["@character.special"] = { fg = colors.magenta },
                     ["@comment"] = { fg = colors.base01, italic = true },
+                    ["@comment.documentation"] = { fg = colors.base01, italic = true },
+                    ["@spell"] = {},
                     ["@constant"] = { fg = colors.base0 },
                     ["@constant.builtin"] = { fg = colors.magenta },
+                    ["@constant.macro"] = { fg = colors.orange },
                     ["@number"] = { fg = colors.magenta },
                     ["@boolean"] = { fg = colors.magenta },
                     ["@operator"] = { fg = colors.base0 },
+                    ["@punctuation.bracket"] = { fg = colors.base0 },
+                    ["@punctuation.delimiter"] = { fg = colors.base0 },
+                    -- Markdown & Markup Overrides (Exact 1:1 Parity with Bat - First Principles Sequence)
+                    ["@markup.heading"] = { fg = colors.orange, bold = true },
+                    ["@markup.heading.1"] = { fg = colors.orange, bold = true },
+                    ["@markup.heading.2"] = { fg = colors.yellow, bold = true },
+                    ["@markup.heading.3"] = { fg = colors.blue, bold = true },
+                    ["@markup.heading.4"] = { fg = colors.violet, bold = true },
+                    ["@markup.heading.5"] = { fg = colors.magenta, bold = true },
+                    ["@markup.heading.6"] = { fg = colors.base1, bold = true },
+                    ["@markup.strong"] = { fg = colors.base1, bold = true },
+                    ["@markup.italic"] = { italic = true },
+                    ["@markup.raw"] = { fg = colors.cyan },
+                    ["@markup.raw.block"] = { fg = colors.base0 },
+                    ["@markup.link.label"] = { fg = colors.blue },
+                    ["@markup.link.url"] = { fg = colors.cyan, underline = true },
+                    ["@markup.quote"] = { fg = colors.blue, italic = true },
+                    ["@markup.list"] = { fg = colors.green, bold = true },
+                    ["@attribute"] = { fg = colors.orange },
                     ["@lsp.type.keyword"] = { fg = colors.green },
                     ["@lsp.type.namespace"] = { fg = colors.base0 },
-                    ["@lsp.type.type"] = { fg = colors.base0 },
-                    ["@lsp.type.class"] = { fg = colors.base0 },
-                    ["@lsp.type.struct"] = { fg = colors.base0 },
-                    ["@lsp.type.interface"] = { fg = colors.base0 },
-                    ["@lsp.type.typeParameter"] = { fg = colors.base0 },
+                    ["@lsp.type.type"] = { fg = colors.yellow },
+                    ["@lsp.type.class"] = { fg = colors.yellow },
+                    ["@lsp.type.struct"] = { fg = colors.yellow },
+                    ["@lsp.type.interface"] = { fg = colors.yellow },
+                    ["@lsp.type.enum"] = { fg = colors.yellow },
+                    ["@lsp.type.typeParameter"] = { fg = colors.yellow },
                     ["@lsp.type.enumMember"] = { fg = colors.base0 },
                     ["@lsp.type.function"] = { fg = colors.blue },
                     ["@lsp.type.method"] = { fg = colors.blue },
@@ -220,6 +251,71 @@ lazy.setup({
                     ["@lsp.type.string"] = { fg = colors.cyan },
                     ["@lsp.type.comment"] = { fg = colors.base01, italic = true },
                     ["@lsp.typemod.variable.readonly"] = { fg = colors.base0 },
+                    -- Classic Vim Regex Fallbacks (Exact 1:1 Parity with Bat when Tree-sitter is offline)
+                    markdownH1 = { fg = colors.orange, bold = true },
+                    markdownH2 = { fg = colors.yellow, bold = true },
+                    markdownH3 = { fg = colors.blue, bold = true },
+                    markdownH4 = { fg = colors.violet, bold = true },
+                    markdownH5 = { fg = colors.magenta, bold = true },
+                    markdownH6 = { fg = colors.base1, bold = true },
+                    markdownHeadingDelimiter = { fg = colors.orange, bold = true },
+                    markdownBold = { fg = colors.base1, bold = true },
+                    markdownItalic = { italic = true },
+                    markdownCode = { fg = colors.cyan },
+                    markdownCodeBlock = { fg = colors.base0 },
+                    markdownCodeDelimiter = { fg = colors.base01 },
+                    markdownBlockquote = { fg = colors.blue, italic = true },
+                    markdownListMarker = { fg = colors.green, bold = true },
+                    markdownOrderedListMarker = { fg = colors.green, bold = true },
+                    markdownRule = { fg = colors.base01, bold = true },
+                    markdownLinkText = { fg = colors.blue },
+                    markdownUrl = { fg = colors.cyan, underline = true },
+                    markdownId = { fg = colors.blue },
+                    markdownIdDeclaration = { fg = colors.cyan },
+                    htmlH1 = { fg = colors.orange, bold = true },
+                    htmlH2 = { fg = colors.yellow, bold = true },
+                    htmlH3 = { fg = colors.blue, bold = true },
+                    htmlH4 = { fg = colors.violet, bold = true },
+                    htmlH5 = { fg = colors.magenta, bold = true },
+                    htmlH6 = { fg = colors.base1, bold = true },
+                    htmlBold = { fg = colors.base1, bold = true },
+                    htmlItalic = { italic = true },
+                    goPredefinedIdentifiers = { fg = colors.magenta },
+                    goConstants = { fg = colors.magenta },
+                    goExtraType = { fg = colors.yellow },
+                    goType = { fg = colors.yellow },
+                    goSignedInts = { fg = colors.yellow },
+                    goUnsignedInts = { fg = colors.yellow },
+                    goFloats = { fg = colors.yellow },
+                    goComplexes = { fg = colors.yellow },
+                    goDecimalInt = { fg = colors.magenta },
+                    goHexadecimalInt = { fg = colors.magenta },
+                    goOctalInt = { fg = colors.magenta },
+                    goFloat = { fg = colors.magenta },
+                    pythonDocstring = { fg = colors.base01, italic = true },
+                    pythonBuiltinType = { fg = colors.yellow },
+                    pythonDecorator = { fg = colors.orange },
+                    pythonDecoratorName = { fg = colors.orange },
+                    rustCommentLineDoc = { fg = colors.base01, italic = true },
+                    rustAttribute = { fg = colors.orange },
+                    rustDerive = { fg = colors.orange },
+                    rustDeriveTrait = { fg = colors.yellow },
+                    cDefine = { fg = colors.orange },
+                    cInclude = { fg = colors.orange },
+                    cPreProc = { fg = colors.orange },
+                    cPreCondit = { fg = colors.orange },
+                    cppAccess = { fg = colors.green },
+                    diffAdded = { fg = colors.green },
+                    diffRemoved = { fg = colors.red },
+                    diffChanged = { fg = colors.yellow },
+                    diffLine = { fg = colors.blue },
+                    diffFile = { fg = colors.orange },
+                    diffNewFile = { fg = colors.yellow },
+                    diffIndexLine = { fg = colors.base01 },
+                    shOption = { fg = colors.base0 },
+                    shCommandSub = { fg = colors.orange },
+                    sqlKeyword = { fg = colors.green },
+                    sqlSpecial = { fg = colors.magenta },
                 }
             end,
         },
@@ -237,24 +333,18 @@ lazy.setup({
         lazy = false,
         priority = 900,
         config = function()
-            local ts_ok, ts = pcall(require, "nvim-treesitter.configs")
-            if ts_ok then
-                ts.setup({
-                    ensure_installed = {
-                        "go",
-                        "terraform",
-                        "hcl",
-                        "lua",
-                        "vim",
-                        "vimdoc",
-                        "python",
-                        "json",
-                        "yaml",
-                        "toml",
-                        "markdown",
-                        "markdown_inline",
-                        "bash",
-                    },
+            local parsers = {
+                "c", "cpp", "go", "python", "rust", "typescript",
+                "javascript", "bash", "markdown", "markdown_inline",
+                "json", "yaml", "toml", "terraform", "sql", "lua",
+                "vim", "vimdoc", "diff", "printf"
+            }
+
+            -- Support legacy nvim-treesitter.configs if present
+            local ts_configs_ok, ts_configs = pcall(require, "nvim-treesitter.configs")
+            if ts_configs_ok then
+                ts_configs.setup({
+                    ensure_installed = parsers,
                     auto_install = true,
                     highlight = {
                         enable = true,
@@ -263,6 +353,39 @@ lazy.setup({
                     indent = { enable = true },
                 })
             end
+
+            -- Support modern nvim-treesitter rewrite API
+            local nts_ok, nts = pcall(require, "nvim-treesitter")
+            if nts_ok and nts.setup then
+                pcall(function()
+                    nts.setup({
+                        install_dir = vim.fn.stdpath("data") .. "/site",
+                    })
+                end)
+                local installed = {}
+                for _, p in ipairs(nts.get_installed()) do
+                    installed[p] = true
+                end
+                local to_install = {}
+                for _, p in ipairs(parsers) do
+                    if not installed[p] then
+                        table.insert(to_install, p)
+                    end
+                end
+                if #to_install > 0 then
+                    pcall(function()
+                        nts.install(to_install)
+                    end)
+                end
+            end
+
+            -- Autocommand to start Tree-sitter highlighting on buffer attach (Neovim 0.12+)
+            vim.api.nvim_create_autocmd("FileType", {
+                group = vim.api.nvim_create_augroup("SolarizedTreesitterHighlight", { clear = true }),
+                callback = function(args)
+                    pcall(vim.treesitter.start, args.buf)
+                end,
+            })
         end,
     },
 

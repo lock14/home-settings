@@ -32,8 +32,9 @@ fi
 export SVN_EDITOR="$EDITOR"
 export VISUAL="$EDITOR"
 
-# bat theme configuration
+# bat theme and rendering configuration
 export BAT_THEME="Solarized-Dark-TrueColor"
+export BAT_OPTS="--italic-text=always"
 
 # eza / exa Solarized Dark TrueColor theme — fully expanded per eza_colors(5)
 # Palette: base03 #002B36, base02 #073642, base01 #586E75, base00 #657B83,
