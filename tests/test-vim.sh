@@ -83,10 +83,11 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q '@markup.heading\.6.*colors\.base1' "$NVIM_CONFIG" && \
        grep -q '@markup\.quote.*colors\.blue' "$NVIM_CONFIG" && \
        grep -q '@type.*colors\.yellow' "$NVIM_CONFIG" && \
-       grep -q '@keyword\.type.*colors\.yellow' "$NVIM_CONFIG" && \
+       grep -q '@keyword\.type.*colors\.green' "$NVIM_CONFIG" && \
+       grep -q '@keyword\.conditional\.ternary.*colors\.base0' "$NVIM_CONFIG" && \
        grep -q 'markdownH1.*colors\.orange' "$NVIM_CONFIG" && \
        grep -q '@attribute' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua defines first-principles markup headings, blue quotes, yellow types, and fallbacks matching bat"
+        pass "Neovim init.lua defines first-principles markup headings, blue quotes, yellow types, green declaration keywords, and calm operators matching bat"
     else
         fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, or markdownH1 in init.lua"
     fi
@@ -120,9 +121,10 @@ if [ -f "$NVIM_CONFIG" ]; then
 
     PRINTF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/printf/highlights.scm"
     if [ -f "$PRINTF_QUERY" ] && grep -q 'format.*@string.special' "$PRINTF_QUERY" && \
-       grep -q '@string\.escape.*colors\.magenta' "$NVIM_CONFIG" && \
+       grep -q '@string\.escape.*colors\.cyan' "$NVIM_CONFIG" && \
+       grep -q '@character\.printf.*colors\.cyan' "$NVIM_CONFIG" && \
        grep -q '"printf"' "$NVIM_CONFIG"; then
-        pass "Neovim defines Tree-sitter printf format specifiers and string escapes in Solarized Magenta"
+        pass "Neovim defines Tree-sitter printf format specifiers and string escapes in Solarized Cyan"
     else
         fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences in init.lua"
     fi

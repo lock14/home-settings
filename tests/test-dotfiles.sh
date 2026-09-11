@@ -80,6 +80,7 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "meta.preprocessor" "$THEME_FILE" && \
    grep -q "storage.type.annotation" "$THEME_FILE" && \
    grep -q "<string>markup.inserted" "$THEME_FILE" && \
+   grep -q "<string>constant.character.escape, constant.other.placeholder" "$THEME_FILE" && \
    grep -q "<string>invalid, invalid.illegal" "$THEME_FILE"; then
     pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, and Error scopes"
 else
@@ -149,6 +150,14 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders primitive C types (int, char, etc.) in Solarized Yellow"
     else
         fail "bat primitive type rendering" "Expected Yellow primitive type in bat output"
+    fi
+
+    C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    CYAN_STR="$(printf "\033[38;2;42;161;152m")"
+    if echo "$C_STR_OUT" | grep -Fq "$CYAN_STR"; then
+        pass "bat renders string format specifiers and escapes in Solarized Cyan"
+    else
+        fail "bat string escape rendering" "Expected Cyan string escape in bat output"
     fi
 fi
 
