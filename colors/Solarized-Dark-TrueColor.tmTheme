@@ -67,7 +67,7 @@
 			<key>name</key>
 			<string>Built-in Constant</string>
 			<key>scope</key>
-			<string>constant.language, constant.character, constant.other, entity.name.constant</string>
+			<string>constant.language, constant.character, constant.other, entity.name.constant, variable.other.constant</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

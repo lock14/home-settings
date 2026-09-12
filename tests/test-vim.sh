@@ -161,6 +161,13 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim diff query extension" "Missing or invalid after/queries/diff/highlights.scm or init.lua diff overrides"
     fi
 
+    GO_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/go/highlights.scm"
+    if [ -f "$GO_QUERY" ] && grep -q '"package" @keyword' "$GO_QUERY" && grep -Fq '"^[nN]ew.+$"' "$GO_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Go (Green package, Blue factory function calls)"
+    else
+        fail "Neovim Go query extension" "Missing or invalid after/queries/go/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -268,6 +275,36 @@ local is_add_plus = (caps_add[#caps_add] and caps_add[#caps_add].capture == "dif
 local caps_hunk = vim.treesitter.get_captures_at_pos(diff_buf, 4, 0)
 local is_hunk_line = (caps_hunk[#caps_hunk] and caps_hunk[#caps_hunk].capture == "diff.line")
 
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.go")
+vim.cmd("redraw")
+local go_buf = vim.api.nvim_get_current_buf()
+
+local caps_pkg = vim.treesitter.get_captures_at_pos(go_buf, 6, 0)
+local is_pkg_kw = (caps_pkg[#caps_pkg] and caps_pkg[#caps_pkg].capture == "keyword")
+local hl_kw = vim.api.nvim_get_hl(0, {name = "@keyword", link = false})
+local pkg_fg = string.format("%06x", hl_kw.fg or 0)
+
+local caps_imp = vim.treesitter.get_captures_at_pos(go_buf, 8, 0)
+local is_imp_kw = (caps_imp[#caps_imp] and caps_imp[#caps_imp].capture == "keyword.import")
+local hl_imp = vim.api.nvim_get_hl(0, {name = "@keyword.import", link = false})
+local imp_fg = string.format("%06x", hl_imp.fg or 0)
+
+local caps_main = vim.treesitter.get_captures_at_pos(go_buf, 6, 8)
+local is_main_mod = (caps_main[#caps_main] and caps_main[#caps_main].capture == "module")
+
+local caps_ctx = vim.treesitter.get_captures_at_pos(go_buf, 29, 15)
+local is_ctx_mod = (caps_ctx[#caps_ctx] and caps_ctx[#caps_ctx].capture == "module")
+
+local caps_ld = vim.treesitter.get_captures_at_pos(go_buf, 20, 1)
+local is_ld_const = (caps_ld[#caps_ld] and caps_ld[#caps_ld].capture == "constant")
+
+local go_l96 = vim.api.nvim_buf_get_lines(go_buf, 95, 96, false)[1]
+local col_ncn = string.find(go_l96, "NewClusterNode") - 1
+local caps_ncn = vim.treesitter.get_captures_at_pos(go_buf, 95, col_ncn)
+local is_ncn_call = (caps_ncn[#caps_ncn] and caps_ncn[#caps_ncn].capture == "function.call")
+local hl_fcall = vim.api.nvim_get_hl(0, {name = "@function.call", link = false})
+local fcall_fg = string.format("%06x", hl_fcall.fg or 0)
+
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -290,6 +327,15 @@ local results = {
     is_del_minus = tostring(is_del_minus),
     diff_line_fg = diff_line_fg,
     is_hunk_line = tostring(is_hunk_line),
+    is_pkg_kw = tostring(is_pkg_kw),
+    pkg_fg = pkg_fg,
+    is_imp_kw = tostring(is_imp_kw),
+    imp_fg = imp_fg,
+    is_main_mod = tostring(is_main_mod),
+    is_ctx_mod = tostring(is_ctx_mod),
+    is_ld_const = tostring(is_ld_const),
+    is_ncn_call = tostring(is_ncn_call),
+    fcall_fg = fcall_fg,
 }
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
@@ -383,6 +429,36 @@ end
             pass "Neovim renders diff hunk headers (@@ ... @@) in Solarized Blue (#268bd2)"
         else
             fail "Neovim diff hunk line highlight" "Expected fg=268bd2 and capture=diff.line, got fg=${RES[diff_line_fg]} cap=${RES[is_hunk_line]}"
+        fi
+
+        if [ "${RES[is_pkg_kw]}" = "true" ] && [ "${RES[pkg_fg]}" = "859900" ]; then
+            pass "Neovim renders Go package keyword in Solarized Green (#859900)"
+        else
+            fail "Neovim Go package keyword" "Expected @keyword fg=859900, got cap=${RES[is_pkg_kw]} fg=${RES[pkg_fg]}"
+        fi
+
+        if [ "${RES[is_imp_kw]}" = "true" ] && [ "${RES[imp_fg]}" = "cb4b16" ]; then
+            pass "Neovim renders Go import keyword in Solarized Orange (#cb4b16)"
+        else
+            fail "Neovim Go import keyword" "Expected @keyword.import fg=cb4b16, got cap=${RES[is_imp_kw]} fg=${RES[imp_fg]}"
+        fi
+
+        if [ "${RES[is_main_mod]}" = "true" ] && [ "${RES[is_ctx_mod]}" = "true" ]; then
+            pass "Neovim renders Go package and qualifier identifiers (main, context) as @module (Violet)"
+        else
+            fail "Neovim Go module captures" "Expected @module for main and context, got main=${RES[is_main_mod]} ctx=${RES[is_ctx_mod]}"
+        fi
+
+        if [ "${RES[is_ld_const]}" = "true" ]; then
+            pass "Neovim renders Go enum identifiers (LevelDebug) in Solarized Magenta (@constant)"
+        else
+            fail "Neovim Go constant capture" "Expected @constant for LevelDebug, got ${RES[is_ld_const]}"
+        fi
+
+        if [ "${RES[is_ncn_call]}" = "true" ] && [ "${RES[fcall_fg]}" = "268bd2" ]; then
+            pass "Neovim renders Go factory function calls (NewClusterNode) as @function.call in Solarized Blue (#268bd2)"
+        else
+            fail "Neovim Go factory function call" "Expected @function.call fg=268bd2 for NewClusterNode, got cap=${RES[is_ncn_call]} fg=${RES[fcall_fg]}"
         fi
     fi
 else

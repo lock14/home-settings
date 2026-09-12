@@ -84,6 +84,7 @@ assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" 
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked Bat C syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Diff.sublime-syntax" "" "Symlinked Bat Diff syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Go.sublime-syntax" "" "Symlinked Bat Go syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -102,8 +103,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "entity.other.inherited-class" "$THEME_FILE" && \
    grep -q "entity.name.attribute" "$THEME_FILE" && \
    grep -q "string.special.path.diff" "$THEME_FILE" && \
-   grep -q "meta.diff.range" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Namespace, Attribute, and Error scopes"
+   grep -q "meta.diff.range" "$THEME_FILE" && \
+   grep -q "variable.other.constant" "$THEME_FILE"; then
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -321,6 +323,28 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders diff additions (Green), deletions (Red), hunk headers (Blue), paths (Cyan), and hashes (Magenta) matching Neovim"
     else
         fail "bat diff rendering" "Expected Blue diff/@@, Red ---/-, Green +++/+, Cyan path, Magenta hash in bat output"
+    fi
+
+    GO_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
+    if echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}package" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_VIOLET}main" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_ORANGE}import" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}type" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}func" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}struct" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}interface" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_VIOLET}context" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}Context" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}LevelDebug" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}MaskAll" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}ClusterNode" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}map" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}chan" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}NewClusterNode" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_CYAN}\`json:\"port\"\`"; then
+        pass "bat renders Go package (Green), main (Violet), import (Orange), declarations (Green), qualifiers (Violet), constants (Magenta), types/composite literals (Yellow), and calls (Blue) matching Neovim"
+    else
+        fail "bat Go rendering" "Expected Option A Solarized TrueColor highlights in bat sample.go output"
     fi
 fi
 
