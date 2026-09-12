@@ -238,6 +238,26 @@ if [ -n "$BAT_BIN" ]; then
     else
         fail "bat function call rendering" "Expected Blue emit_log call in bat output"
     fi
+
+    CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    YELLOW_VAL="$(printf "\033[38;2;181;137;0m")"
+    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${YELLOW_VAL}T"; then
+        pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in Solarized Yellow matching Neovim"
+    else
+        fail "bat template type parameter rendering" "Expected Yellow template type parameter in bat output"
+    fi
+
+    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${YELLOW_VAL}Printable"; then
+        pass "bat renders C++ concept names (Printable) in Solarized Yellow matching Neovim"
+    else
+        fail "bat concept name rendering" "Expected Yellow concept name in bat output"
+    fi
+
+    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${YELLOW_VAL}vector"; then
+        pass "bat renders C++ STL container types (vector, optional) in Solarized Yellow matching Neovim"
+    else
+        fail "bat STL container rendering" "Expected Yellow STL container type in bat output"
+    fi
 fi
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)

@@ -163,6 +163,12 @@ contexts:
   unique-types:
     - match: \bclass\b
       scope: keyword.declaration.class.c++
+    # C++ Standard Library (STL) Types
+    - match: '\b(vector|string|string_view|optional|variant|any|unique_ptr|shared_ptr|weak_ptr|span|array|deque|list|forward_list|map|set|multimap|multiset|unordered_map|unordered_set|unordered_multimap|unordered_multiset|queue|priority_queue|stack|pair|tuple|ostream|istream|iostream|stringstream|ifstream|ofstream)\b'
+      scope: support.type.std.c++
+    # Single uppercase type parameters in type positions or generic arguments (e.g. T metric, const T& item, T* ptr, requires(T t), vector<T>)
+    - match: '\b([A-Z])\b(?=\s*(?:[&*>]|\s*,\s*|\s+[[:alpha:]_]))'
+      scope: entity.name.type.parameter.c++
 
   unique-strings:
     - match: '((?:L|u8|u|U)?R)("([^\(\)\\ ]{0,16})\()'
@@ -844,6 +850,8 @@ contexts:
               scope: keyword.operator.variadic.c++
             - match: \b(typename|{{before_tag}})\b
               scope: keyword.declaration.c++
+            - match: '\b([A-Z]\w*)\b'
+              scope: entity.name.type.parameter.c++
             - include: template # include template here for nested templates
             - include: template-common
         - match: (?=\S)
