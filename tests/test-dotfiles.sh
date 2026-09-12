@@ -202,6 +202,13 @@ if [ -n "$BAT_BIN" ]; then
     else
         fail "bat constant rendering" "Expected Magenta named constants in bat output"
     fi
+
+    C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    if echo "$C_CUSTOM_TYPE_OUT" | grep -Fq "${YELLOW_TYPE}WorkerNode"; then
+        pass "bat renders custom PascalCase types (WorkerNode, etc.) in Solarized Yellow"
+    else
+        fail "bat custom type rendering" "Expected Yellow custom PascalCase type in bat output"
+    fi
 fi
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)

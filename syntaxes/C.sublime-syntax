@@ -342,6 +342,10 @@ contexts:
       scope: support.type.mac-classic.c
     - match: \b([A-Za-z0-9_]+_t)\b
       scope: support.type.posix-reserved.c
+    # PascalCase user-defined types (e.g. WorkerNode, SeverityLevel, MyStruct)
+    # Negative lookahead (?!\s*\() ensures PascalCase function calls remain Blue
+    - match: '\b[[:upper:]][[:alnum:]_]*[[:lower:]][[:alnum:]_]*\b(?!\s*\()'
+      scope: support.type.user-defined.c
     - include: types-parens
 
   types-parens:

@@ -114,8 +114,8 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     C_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/c/highlights.scm"
-    if [ -f "$C_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$C_QUERY"; then
-        pass "Neovim defines Tree-sitter query extension for C preprocessor defined keyword"
+    if [ -f "$C_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$C_QUERY" && grep -q 'sizeof_expression' "$C_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for C preprocessor defined keyword and sizeof custom types"
     else
         fail "Neovim C query extension" "Missing or invalid after/queries/c/highlights.scm"
     fi
@@ -143,6 +143,23 @@ if [ -f "$NVIM_CONFIG" ]; then
             pass "Neovim renders @constant in Solarized Magenta (#d33682)"
         else
             fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=$NVIM_CONST_HL"
+        fi
+
+        NVIM_SIZEOF_HL="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
+vim.cmd([[redraw]])
+local line = vim.api.nvim_buf_get_lines(0, 54, 55, false)[1]
+local col = string.find(line, "WorkerNode", 30) - 1
+local captures = vim.treesitter.get_captures_at_pos(0, 54, col)
+local is_type = false
+for _, c in ipairs(captures) do
+    if c.capture == "type" then is_type = true break end
+end
+io.write(tostring(is_type))
+' -c 'q' 2>/dev/null || true)"
+        if [ "$NVIM_SIZEOF_HL" = "true" ]; then
+            pass "Neovim Tree-sitter captures sizeof(WorkerNode) as @type (Yellow)"
+        else
+            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got $NVIM_SIZEOF_HL"
         fi
     fi
 else
