@@ -120,6 +120,13 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim C query extension" "Missing or invalid after/queries/c/highlights.scm"
     fi
 
+    CPP_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/cpp/highlights.scm"
+    if [ -f "$CPP_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$CPP_QUERY" && grep -q 'sizeof_expression' "$CPP_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for C++ preprocessor defined keyword and sizeof custom types"
+    else
+        fail "Neovim C++ query extension" "Missing or invalid after/queries/cpp/highlights.scm"
+    fi
+
     PRINTF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/printf/highlights.scm"
     if [ -f "$PRINTF_QUERY" ] && grep -q 'format.*@string.special' "$PRINTF_QUERY" && \
        grep -q '@string\.escape.*colors\.cyan' "$NVIM_CONFIG" && \
@@ -131,52 +138,57 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     if command -v nvim >/dev/null 2>&1; then
-        NVIM_PARAM_HL="$(nvim --headless -c 'lua local hl = vim.api.nvim_get_hl(0, {name = "@variable.parameter", link = false}); io.write(tostring(hl.italic))' -c 'q' 2>/dev/null || true)"
-        if [ "$NVIM_PARAM_HL" != "true" ]; then
+        NVIM_RESULTS="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
+vim.cmd([[redraw]])
+local hl_param = vim.api.nvim_get_hl(0, {name = "@variable.parameter", link = false})
+local param_italic = tostring(hl_param.italic == true)
+
+local hl_const = vim.api.nvim_get_hl(0, {name = "@constant", link = false})
+local const_fg = string.format("%06x", hl_const.fg or 0)
+
+local line = vim.api.nvim_buf_get_lines(0, 54, 55, false)[1]
+
+local col_wn = string.find(line, "WorkerNode", 30) - 1
+local caps_wn = vim.treesitter.get_captures_at_pos(0, 54, col_wn)
+local is_wn_type = false
+for _, c in ipairs(caps_wn) do
+    if c.capture == "type" then is_wn_type = true break end
+end
+
+local col_so = string.find(line, "sizeof") - 1
+local caps_so = vim.treesitter.get_captures_at_pos(0, 54, col_so)
+local is_so_kw = false
+for _, c in ipairs(caps_so) do
+    if c.capture == "keyword.operator" then is_so_kw = true break end
+end
+
+io.write(string.format("%s|%s|%s|%s", param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw)))
+' -c 'q' 2>/dev/null || true)"
+
+        IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW <<< "$NVIM_RESULTS"
+
+        if [ "$PARAM_ITALIC" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
         else
-            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=$NVIM_PARAM_HL"
+            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=$PARAM_ITALIC"
         fi
 
-        NVIM_CONST_HL="$(nvim --headless -c 'lua local hl = vim.api.nvim_get_hl(0, {name = "@constant", link = false}); io.write(string.format("%06x", hl.fg or 0))' -c 'q' 2>/dev/null || true)"
-        if [ "$NVIM_CONST_HL" = "d33682" ]; then
+        if [ "$CONST_FG" = "d33682" ]; then
             pass "Neovim renders @constant in Solarized Magenta (#d33682)"
         else
-            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=$NVIM_CONST_HL"
+            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=$CONST_FG"
         fi
 
-        NVIM_SIZEOF_HL="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
-vim.cmd([[redraw]])
-local line = vim.api.nvim_buf_get_lines(0, 54, 55, false)[1]
-local col = string.find(line, "WorkerNode", 30) - 1
-local captures = vim.treesitter.get_captures_at_pos(0, 54, col)
-local is_type = false
-for _, c in ipairs(captures) do
-    if c.capture == "type" then is_type = true break end
-end
-io.write(tostring(is_type))
-' -c 'q' 2>/dev/null || true)"
-        if [ "$NVIM_SIZEOF_HL" = "true" ]; then
+        if [ "$IS_WN_TYPE" = "true" ]; then
             pass "Neovim Tree-sitter captures sizeof(WorkerNode) as @type (Yellow)"
         else
-            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got $NVIM_SIZEOF_HL"
+            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got $IS_WN_TYPE"
         fi
 
-        NVIM_SIZEOF_KW="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
-vim.cmd([[redraw]])
-local line = vim.api.nvim_buf_get_lines(0, 54, 55, false)[1]
-local col = string.find(line, "sizeof") - 1
-local captures = vim.treesitter.get_captures_at_pos(0, 54, col)
-local is_kw_op = false
-for _, c in ipairs(captures) do
-    if c.capture == "keyword.operator" then is_kw_op = true break end
-end
-io.write(tostring(is_kw_op))
-' -c 'q' 2>/dev/null || true)"
-        if [ "$NVIM_SIZEOF_KW" = "true" ]; then
+        if [ "$IS_SO_KW" = "true" ]; then
             pass "Neovim Tree-sitter captures sizeof as @keyword.operator (Green)"
         else
-            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got $NVIM_SIZEOF_KW"
+            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got $IS_SO_KW"
         fi
     fi
 else
