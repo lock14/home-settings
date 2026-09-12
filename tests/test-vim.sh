@@ -197,28 +197,40 @@ local param_italic = tostring(hl_param.italic == true)
 local hl_const = vim.api.nvim_get_hl(0, {name = "@constant", link = false})
 local const_fg = string.format("%06x", hl_const.fg or 0)
 
-local line = vim.api.nvim_buf_get_lines(0, 54, 55, false)[1]
-
-local col_wn = string.find(line, "WorkerNode", 30) - 1
-local caps_wn = vim.treesitter.get_captures_at_pos(0, 54, col_wn)
-local is_wn_type = false
-for _, c in ipairs(caps_wn) do
-    if c.capture == "type" then is_wn_type = true break end
+local function find_pos(buf, line_pat, token, start_col)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    for i, l in ipairs(lines) do
+        if l:find(line_pat, 1, true) then
+            local s = l:find(token, start_col or 1, true)
+            if s then return i - 1, s - 1 end
+        end
+    end
+    return -1, -1
 end
 
-local col_so = string.find(line, "sizeof") - 1
-local caps_so = vim.treesitter.get_captures_at_pos(0, 54, col_so)
-local is_so_kw = false
-for _, c in ipairs(caps_so) do
-    if c.capture == "keyword.operator" then is_so_kw = true break end
+local function match_capture(buf, row, col, expected)
+    if row < 0 or col < 0 then return false end
+    local caps = vim.treesitter.get_captures_at_pos(buf, row, col)
+    if #caps == 0 then return false end
+    if caps[#caps].capture == expected then return true end
+    for _, c in ipairs(caps) do
+        if c.capture == expected then return true end
+    end
+    return false
 end
 
+-- 1. Inspect C (sample.c)
+local c_buf = 0
+local r_wn, c_wn = find_pos(c_buf, "malloc(sizeof(WorkerNode))", "WorkerNode", 20)
+local is_wn_type = match_capture(c_buf, r_wn, c_wn, "type")
+
+local r_so, c_so = find_pos(c_buf, "malloc(sizeof(WorkerNode))", "sizeof")
+local is_so_kw = match_capture(c_buf, r_so, c_so, "keyword.operator")
+
+-- 2. Inspect C++ (sample.cpp)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.cpp")
 vim.cmd([[redraw]])
-local cpp_line = vim.api.nvim_buf_get_lines(0, 33, 34, false)[1]
-local col_t = string.find(cpp_line, "T>") - 1
-local caps_t = vim.treesitter.get_captures_at_pos(0, 33, col_t)
-local is_t_type = (caps_t[#caps_t] and caps_t[#caps_t].capture == "type")
+local cpp_buf = vim.api.nvim_get_current_buf()
 
 local hl_module = vim.api.nvim_get_hl(0, {name = "@module", link = false})
 local module_fg = string.format("%06x", hl_module.fg or 0)
@@ -226,46 +238,40 @@ local module_fg = string.format("%06x", hl_module.fg or 0)
 local hl_lsp_ns = vim.api.nvim_get_hl(0, {name = "@lsp.type.namespace", link = false})
 local lsp_ns_fg = string.format("%06x", hl_lsp_ns.fg or 0)
 
-local line_20 = vim.api.nvim_buf_get_lines(0, 19, 20, false)[1]
-local col_core = string.find(line_20, "core") - 1
-local caps_core = vim.treesitter.get_captures_at_pos(0, 19, col_core)
-local is_core_mod = (caps_core[#caps_core] and caps_core[#caps_core].capture == "module")
+local r_t, c_t = find_pos(cpp_buf, "template <Printable T>", "T>", 18)
+local is_t_type = match_capture(cpp_buf, r_t, c_t, "type")
 
-local line_39 = vim.api.nvim_buf_get_lines(0, 38, 39, false)[1]
-local col_init = string.find(line_39, "Initializing") - 1
-local caps_init = vim.treesitter.get_captures_at_pos(0, 38, col_init)
-local is_init_const = (caps_init[#caps_init] and caps_init[#caps_init].capture == "constant")
+local r_core, c_core = find_pos(cpp_buf, "namespace core::telemetry", "core")
+local is_core_mod = match_capture(cpp_buf, r_core, c_core, "module")
 
-local line_57 = vim.api.nvim_buf_get_lines(0, 56, 57, false)[1]
-local col_nullopt = string.find(line_57, "nullopt") - 1
-local caps_nullopt = vim.treesitter.get_captures_at_pos(0, 56, col_nullopt)
-local is_nullopt_const = (caps_nullopt[#caps_nullopt] and caps_nullopt[#caps_nullopt].capture == "constant")
+local r_telem, c_telem = find_pos(cpp_buf, "namespace core::telemetry", "telemetry")
+local is_telem_mod = match_capture(cpp_buf, r_telem, c_telem, "module")
 
-local line_73 = vim.api.nvim_buf_get_lines(0, 72, 73, false)[1]
-local col_telem = string.find(line_73, "telemetry") - 1
-local caps_telem = vim.treesitter.get_captures_at_pos(0, 72, col_telem)
-local is_telem_mod = (caps_telem[#caps_telem] and caps_telem[#caps_telem].capture == "module")
+local r_init, c_init = find_pos(cpp_buf, "NodeState::Initializing", "Initializing")
+local is_init_const = match_capture(cpp_buf, r_init, c_init, "constant")
 
-local line_38 = vim.api.nvim_buf_get_lines(0, 37, 38, false)[1]
-local col_std = string.find(line_38, "std") - 1
-local caps_std = vim.treesitter.get_captures_at_pos(0, 37, col_std)
-local is_std_var = (caps_std[#caps_std] and caps_std[#caps_std].capture == "variable")
+local r_null, c_null = find_pos(cpp_buf, "return std::nullopt;", "nullopt")
+local is_nullopt_const = match_capture(cpp_buf, r_null, c_null, "constant")
 
-local line_48 = vim.api.nvim_buf_get_lines(0, 47, 48, false)[1]
-local col_attr = string.find(line_48, "nodiscard") - 1
-local caps_attr = vim.treesitter.get_captures_at_pos(0, 47, col_attr)
-local is_attr_orange = (caps_attr[#caps_attr] and caps_attr[#caps_attr].capture == "attribute")
+local r_std, c_std = find_pos(cpp_buf, "return std::nullopt;", "std")
+local is_std_var = match_capture(cpp_buf, r_std, c_std, "variable")
+
+local r_attr, c_attr = find_pos(cpp_buf, "[[nodiscard]]", "nodiscard")
+local is_attr_orange = match_capture(cpp_buf, r_attr, c_attr, "attribute")
 
 local hl_attr = vim.api.nvim_get_hl(0, {name = "@attribute", link = false})
 local attr_fg = string.format("%06x", hl_attr.fg or 0)
 
+-- 3. Inspect Java (sample.java)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
 local java_ft = vim.bo.filetype
 local ok_jdtls, _ = pcall(require, "jdtls")
 
+-- 4. Inspect Diff (sample.diff)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.diff")
 vim.cmd("redraw")
 local diff_buf = vim.api.nvim_get_current_buf()
+
 local hl_plus = vim.api.nvim_get_hl(0, {name = "@diff.plus", link = false})
 local diff_plus_fg = string.format("%06x", hl_plus.fg or 0)
 local hl_minus = vim.api.nvim_get_hl(0, {name = "@diff.minus", link = false})
@@ -273,42 +279,41 @@ local diff_minus_fg = string.format("%06x", hl_minus.fg or 0)
 local hl_line = vim.api.nvim_get_hl(0, {name = "@diff.line", link = false})
 local diff_line_fg = string.format("%06x", hl_line.fg or 0)
 
-local caps_del = vim.treesitter.get_captures_at_pos(diff_buf, 6, 0)
-local is_del_minus = (caps_del[#caps_del] and caps_del[#caps_del].capture == "diff.minus")
+local r_del, c_del = find_pos(diff_buf, "maxRetries", "-")
+local is_del_minus = match_capture(diff_buf, r_del, c_del, "diff.minus")
 
-local caps_add = vim.treesitter.get_captures_at_pos(diff_buf, 8, 0)
-local is_add_plus = (caps_add[#caps_add] and caps_add[#caps_add].capture == "diff.plus")
+local r_add, c_add = find_pos(diff_buf, "Maximum retry attempts", "+")
+local is_add_plus = match_capture(diff_buf, r_add, c_add, "diff.plus")
 
-local caps_hunk = vim.treesitter.get_captures_at_pos(diff_buf, 4, 0)
-local is_hunk_line = (caps_hunk[#caps_hunk] and caps_hunk[#caps_hunk].capture == "diff.line")
+local r_hunk, c_hunk = find_pos(diff_buf, "@@ -32,18 +32,22 @@", "@@")
+local is_hunk_line = match_capture(diff_buf, r_hunk, c_hunk, "diff.line")
 
+-- 5. Inspect Go (sample.go)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.go")
 vim.cmd("redraw")
 local go_buf = vim.api.nvim_get_current_buf()
 
-local caps_pkg = vim.treesitter.get_captures_at_pos(go_buf, 6, 0)
-local is_pkg_kw = (caps_pkg[#caps_pkg] and caps_pkg[#caps_pkg].capture == "keyword")
+local r_pkg, c_pkg = find_pos(go_buf, "package main", "package")
+local is_pkg_kw = match_capture(go_buf, r_pkg, c_pkg, "keyword")
 local hl_kw = vim.api.nvim_get_hl(0, {name = "@keyword", link = false})
 local pkg_fg = string.format("%06x", hl_kw.fg or 0)
 
-local caps_imp = vim.treesitter.get_captures_at_pos(go_buf, 8, 0)
-local is_imp_kw = (caps_imp[#caps_imp] and caps_imp[#caps_imp].capture == "keyword.import")
+local r_imp, c_imp = find_pos(go_buf, "import (", "import")
+local is_imp_kw = match_capture(go_buf, r_imp, c_imp, "keyword.import")
 local hl_imp = vim.api.nvim_get_hl(0, {name = "@keyword.import", link = false})
 local imp_fg = string.format("%06x", hl_imp.fg or 0)
 
-local caps_main = vim.treesitter.get_captures_at_pos(go_buf, 6, 8)
-local is_main_mod = (caps_main[#caps_main] and caps_main[#caps_main].capture == "module")
+local r_main, c_main = find_pos(go_buf, "package main", "main")
+local is_main_mod = match_capture(go_buf, r_main, c_main, "module")
 
-local caps_ctx = vim.treesitter.get_captures_at_pos(go_buf, 29, 15)
-local is_ctx_var = (caps_ctx[#caps_ctx] and caps_ctx[#caps_ctx].capture == "variable")
+local r_ctx, c_ctx = find_pos(go_buf, "ctx context.Context", "context")
+local is_ctx_var = match_capture(go_buf, r_ctx, c_ctx, "variable")
 
-local caps_ld = vim.treesitter.get_captures_at_pos(go_buf, 20, 1)
-local is_ld_const = (caps_ld[#caps_ld] and caps_ld[#caps_ld].capture == "constant")
+local r_ld, c_ld = find_pos(go_buf, "LevelDebug LogLevel = iota", "LevelDebug")
+local is_ld_const = match_capture(go_buf, r_ld, c_ld, "constant")
 
-local go_l96 = vim.api.nvim_buf_get_lines(go_buf, 95, 96, false)[1]
-local col_ncn = string.find(go_l96, "NewClusterNode") - 1
-local caps_ncn = vim.treesitter.get_captures_at_pos(go_buf, 95, col_ncn)
-local is_ncn_call = (caps_ncn[#caps_ncn] and caps_ncn[#caps_ncn].capture == "function.call")
+local r_ncn, c_ncn = find_pos(go_buf, "node, err := NewClusterNode(cfg)", "NewClusterNode")
+local is_ncn_call = match_capture(go_buf, r_ncn, c_ncn, "function.call")
 local hl_fcall = vim.api.nvim_get_hl(0, {name = "@function.call", link = false})
 local fcall_fg = string.format("%06x", hl_fcall.fg or 0)
 

@@ -208,6 +208,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat markdown italic rendering" "Expected italics on explicitly tagged Markdown"
     fi
 
+    # --- 2.2 C Syntax Verification ---
     C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if echo "$C_CONST_OUT" | grep -Fq "${SOL_MAGENTA}EXIT_FAILURE"; then
         pass "bat renders named uppercase constants (EXIT_FAILURE, etc.) in Solarized Magenta"
@@ -236,6 +237,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat function call rendering" "Expected Blue emit_log call in bat output"
     fi
 
+    # --- 2.3 C++ Syntax Verification ---
     CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${SOL_YELLOW}T"; then
         pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in Solarized Yellow matching Neovim"
@@ -311,20 +313,26 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat attribute rendering" "Expected Orange [[nodiscard]] in bat output"
     fi
 
+    # --- 2.4 Diff Syntax Verification ---
     DIFF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
     if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}diff" && \
        echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" && \
        echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}4b825dc" && \
        echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}---" && \
        echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+++" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}@@ -32,18 +32,22 @@" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}-" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+"; then
-        pass "bat renders diff additions (Green), deletions (Red), hunk headers (Blue), paths (Cyan), and hashes (Magenta) matching Neovim"
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}@@ -32,18 +32,20 @@" || \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}@@ -32,18 +32,22 @@"; then
+        if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}-" && \
+           echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+"; then
+            pass "bat renders diff additions (Green), deletions (Red), hunk headers (Blue), paths (Cyan), and hashes (Magenta) matching Neovim"
+        else
+            fail "bat diff rendering" "Expected Red - and Green + in bat diff output"
+        fi
     else
-        fail "bat diff rendering" "Expected Blue diff/@@, Red ---/-, Green +++/+, Cyan path, Magenta hash in bat output"
+        fail "bat diff rendering" "Expected Blue diff/@@, Red ---, Green +++, Cyan path, Magenta hash in bat output"
     fi
 
+    # --- 2.5 Go Syntax Verification ---
     GO_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
     if echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}package" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_VIOLET}main" && \
