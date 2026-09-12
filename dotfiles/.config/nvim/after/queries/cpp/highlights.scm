@@ -19,10 +19,24 @@
     type: (type_identifier)
     declarator: (variadic_declarator (identifier) @type)))
 
+;; Namespace declarations: namespace core::telemetry
+(namespace_definition
+  name: (nested_namespace_specifier
+    (namespace_identifier) @module))
+(namespace_definition
+  name: (namespace_identifier) @module)
+
+;; Namespace qualifiers in code (e.g. std::string, std::move, core::telemetry::foo)
+;; remain calm in neutral Base0 grey (@variable) matching Go dot qualifiers (context.Context, fmt.Sprintf).
+(qualified_identifier
+  scope: (namespace_identifier) @variable
+  (#match? @variable "^[a-z]"))
+
 ;; Using namespace declarations: using namespace core::telemetry;
 (using_declaration
   "namespace"
   (qualified_identifier
+    scope: (namespace_identifier) @module
     name: (identifier) @module))
 (using_declaration
   "namespace"

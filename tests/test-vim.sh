@@ -124,6 +124,8 @@ if [ -f "$NVIM_CONFIG" ]; then
     if [ -f "$CPP_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$CPP_QUERY" && \
        grep -q 'sizeof_expression' "$CPP_QUERY" && \
        grep -q 'template_parameter_list' "$CPP_QUERY" && \
+       grep -q 'namespace_definition' "$CPP_QUERY" && \
+       grep -q 'qualified_identifier' "$CPP_QUERY" && \
        grep -q 'using_declaration' "$CPP_QUERY" && \
        grep -q 'nullopt' "$CPP_QUERY" && \
        grep -q '@attribute' "$CPP_QUERY"; then
@@ -244,6 +246,11 @@ local col_telem = string.find(line_73, "telemetry") - 1
 local caps_telem = vim.treesitter.get_captures_at_pos(0, 72, col_telem)
 local is_telem_mod = (caps_telem[#caps_telem] and caps_telem[#caps_telem].capture == "module")
 
+local line_38 = vim.api.nvim_buf_get_lines(0, 37, 38, false)[1]
+local col_std = string.find(line_38, "std") - 1
+local caps_std = vim.treesitter.get_captures_at_pos(0, 37, col_std)
+local is_std_var = (caps_std[#caps_std] and caps_std[#caps_std].capture == "variable")
+
 local line_48 = vim.api.nvim_buf_get_lines(0, 47, 48, false)[1]
 local col_attr = string.find(line_48, "nodiscard") - 1
 local caps_attr = vim.treesitter.get_captures_at_pos(0, 47, col_attr)
@@ -319,6 +326,7 @@ local results = {
     is_init_const = tostring(is_init_const),
     is_nullopt_const = tostring(is_nullopt_const),
     is_telem_mod = tostring(is_telem_mod),
+    is_std_var = tostring(is_std_var),
     attr_fg = attr_fg,
     is_attr_orange = tostring(is_attr_orange),
     diff_plus_fg = diff_plus_fg,
@@ -387,6 +395,12 @@ end
             pass "Neovim Tree-sitter captures namespace identifiers (core, telemetry) as @module (Violet)"
         else
             fail "Neovim namespace capture" "Expected @module for core and telemetry, got core=${RES[is_core_mod]} telem=${RES[is_telem_mod]}"
+        fi
+
+        if [ "${RES[is_std_var]}" = "true" ]; then
+            pass "Neovim Tree-sitter captures C++ scope qualifiers (std::) as @variable (Base0 Grey)"
+        else
+            fail "Neovim C++ scope qualifier capture" "Expected @variable for std:: qualifier, got ${RES[is_std_var]}"
         fi
 
         if [ "${RES[is_init_const]}" = "true" ]; then

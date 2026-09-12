@@ -275,7 +275,7 @@ contexts:
     - match: '(?:(::)\s*)?\b([[:lower:]_][[:alnum:]_]*)\s*(::)\s*'
       captures:
         1: punctuation.accessor.double-colon.c++
-        2: entity.name.namespace.c++
+        2: variable.other.namespace.c++
         3: punctuation.accessor.double-colon.c++
       push: after-namespace-double-colon
     - match: '(?:(::)\s*)?{{identifier}}\s*(::)\s*'
@@ -322,7 +322,7 @@ contexts:
     - match: '(?:(::)\s*)?\b([[:lower:]_][[:alnum:]_]*)\s*(?=(<.*>)?\s*(::))\s*'
       captures:
         1: punctuation.accessor.double-colon.c++
-        2: entity.name.namespace.c++
+        2: variable.other.namespace.c++
         3: punctuation.accessor.double-colon.c++
     - match: '(?:(::)\s*)?{{identifier}}\s*(?=(<.*>)?\s*(::))\s*'
       captures:
@@ -1027,7 +1027,7 @@ contexts:
         - match: '(?:(::)\s*)?\b([[:lower:]_][[:alnum:]_]*)\s*(::)\s*'
           captures:
             1: punctuation.accessor.double-colon.c++
-            2: entity.name.namespace.c++
+            2: variable.other.namespace.c++
             3: punctuation.accessor.double-colon.c++
         - match: '(?:(::)\s*)?{{identifier}}\s*(::)\s*'
           captures:
@@ -1093,7 +1093,7 @@ contexts:
     # Namespace qualifier (e.g. std::, core::)
     - match: '\s*([[:lower:]_][[:alnum:]_]*)\s*(::)'
       captures:
-        1: entity.name.namespace.c++
+        1: variable.other.namespace.c++
         2: punctuation.accessor.double-colon.c++
       set: members-after-accessor-junction
     # Concept or type constraint after -> or :: (e.g. std::same_as, Printable)

@@ -258,10 +258,10 @@ if [ -n "$BAT_BIN" ]; then
     CPP_NS_OUT="$(printf 'namespace core::telemetry {}\nusing namespace core::telemetry;\nstd::string s;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if echo "$CPP_NS_OUT" | grep -Fq "${SOL_VIOLET}core" && \
        echo "$CPP_NS_OUT" | grep -Fq "${SOL_VIOLET}telemetry" && \
-       echo "$CPP_NS_OUT" | grep -Fq "${SOL_VIOLET}std"; then
-        pass "bat renders namespaces and qualifiers (core, telemetry, std) in Solarized Violet matching Neovim"
+       echo "$CPP_NS_OUT" | grep -Fq "${SOL_BASE0}std"; then
+        pass "bat renders namespace declarations (core, telemetry) in Solarized Violet and qualifiers (std) in calm Base0 Grey matching Neovim"
     else
-        fail "bat namespace rendering" "Expected Violet namespaces and qualifiers in bat output"
+        fail "bat namespace rendering" "Expected Violet namespace declarations and Base0 qualifiers in bat output"
     fi
 
     CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
@@ -294,12 +294,12 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     CPP_QUAL_FUNC_OUT="$(printf 'std::move(metric);\nstd::for_each(items.begin(), items.end());\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_VIOLET}std" && \
+    if echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_BASE0}std" && \
        echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_BLUE}move" && \
        echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_BLUE}for_each"; then
-        pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Violet namespace and Blue function matching Neovim"
+        pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Base0 Grey namespace and Blue function matching Neovim"
     else
-        fail "bat qualified function rendering" "Expected Violet std and Blue move/for_each in bat output"
+        fail "bat qualified function rendering" "Expected Base0 Grey std and Blue move/for_each in bat output"
     fi
 
     CPP_ATTR_OUT="$(printf '[[nodiscard]] constexpr uint64_t id();\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
