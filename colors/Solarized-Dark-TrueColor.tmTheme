@@ -139,7 +139,7 @@
 			<key>name</key>
 			<string>Custom Type</string>
 			<key>scope</key>
-			<string>entity.name.type, entity.name.class, entity.name.struct, entity.name.enum, entity.name.interface, entity.name.type.parameter, entity.name.concept, variable.other.type, support.class</string>
+			<string>entity.name.type, entity.name.class, entity.name.struct, entity.name.enum, entity.name.interface, entity.name.type.parameter, entity.name.concept, variable.other.type, support.class, entity.other.inherited-class</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

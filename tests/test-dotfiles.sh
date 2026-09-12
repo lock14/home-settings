@@ -97,7 +97,8 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "<string>markup.inserted" "$THEME_FILE" && \
    grep -q "<string>constant.character.escape, constant.other.placeholder" "$THEME_FILE" && \
    grep -q "<string>invalid, invalid.illegal" "$THEME_FILE" && \
-   grep -q "<string>entity.name.namespace, entity.name.module, support.module, entity.name.scope-resolution" "$THEME_FILE"; then
+   grep -q "<string>entity.name.namespace, entity.name.module, support.module, entity.name.scope-resolution" "$THEME_FILE" && \
+   grep -q "entity.other.inherited-class" "$THEME_FILE"; then
     pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Namespace, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
@@ -292,6 +293,23 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders standard C++20 concepts (same_as) in Solarized Yellow matching Neovim"
     else
         fail "bat C++20 concept rendering" "Expected Yellow same_as concept in bat output"
+    fi
+
+    CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if echo "$CPP_ENUM_OUT" | grep -Fq "${YELLOW_VAL}NodeState" && \
+       echo "$CPP_ENUM_OUT" | grep -Fq "${YELLOW_VAL}uint8_t"; then
+        pass "bat renders enum class types and underlying types (uint8_t) in Solarized Yellow matching Neovim"
+    else
+        fail "bat enum type rendering" "Expected Yellow enum name and underlying type in bat output"
+    fi
+
+    CPP_QUAL_FUNC_OUT="$(printf 'std::move(metric);\nstd::for_each(items.begin(), items.end());\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${VIOLET_VAL}std" && \
+       echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${BLUE_FUNC}move" && \
+       echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${BLUE_FUNC}for_each"; then
+        pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Violet namespace and Blue function matching Neovim"
+    else
+        fail "bat qualified function rendering" "Expected Violet std and Blue move/for_each in bat output"
     fi
 fi
 

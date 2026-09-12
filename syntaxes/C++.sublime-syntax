@@ -312,6 +312,18 @@ contexts:
 
   identifier-path-generic:
     - include: angle-brackets
+    # PascalCase type qualifier preceding :: (e.g. ClusterNode::, ClusterNode<T>::)
+    - match: '(?:(::)\s*)?\b([[:upper:]][[:alnum:]_]*[[:lower:]][[:alnum:]_]*)\s*(?=(<.*>)?\s*(::))\s*'
+      captures:
+        1: punctuation.accessor.double-colon.c++
+        2: support.type.user-defined.c
+        3: punctuation.accessor.double-colon.c++
+    # Namespace qualifier preceding :: (e.g. core::telemetry::)
+    - match: '(?:(::)\s*)?\b([[:lower:]_][[:alnum:]_]*)\s*(?=(<.*>)?\s*(::))\s*'
+      captures:
+        1: punctuation.accessor.double-colon.c++
+        2: entity.name.namespace.c++
+        3: punctuation.accessor.double-colon.c++
     - match: '(?:(::)\s*)?{{identifier}}\s*(?=(<.*>)?\s*(::))\s*'
       captures:
         1: punctuation.accessor.double-colon.c++
@@ -1003,6 +1015,18 @@ contexts:
       push:
         - meta_scope: meta.function-call.c++
         - include: scope:source.c#c99
+        # PascalCase type qualifier preceding :: in function call (e.g. MyClass::create())
+        - match: '(?:(::)\s*)?\b([[:upper:]][[:alnum:]_]*[[:lower:]][[:alnum:]_]*)\s*(::)\s*'
+          captures:
+            1: punctuation.accessor.double-colon.c++
+            2: support.type.user-defined.c
+            3: punctuation.accessor.double-colon.c++
+        # Namespace qualifier preceding :: in function call (e.g. std::move(), core::telemetry::foo())
+        - match: '(?:(::)\s*)?\b([[:lower:]_][[:alnum:]_]*)\s*(::)\s*'
+          captures:
+            1: punctuation.accessor.double-colon.c++
+            2: entity.name.namespace.c++
+            3: punctuation.accessor.double-colon.c++
         - match: '(?:(::)\s*)?{{identifier}}\s*(::)\s*'
           captures:
             1: punctuation.accessor.double-colon.c++
