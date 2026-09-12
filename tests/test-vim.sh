@@ -162,8 +162,8 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     GO_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/go/highlights.scm"
-    if [ -f "$GO_QUERY" ] && grep -q '"package" @keyword' "$GO_QUERY" && grep -Fq '"^[nN]ew.+$"' "$GO_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for Go (Green package, Blue factory function calls)"
+    if [ -f "$GO_QUERY" ] && grep -q '"package" @keyword' "$GO_QUERY" && grep -Fq '"^[nN]ew.+$"' "$GO_QUERY" && grep -q 'qualified_type' "$GO_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Go (Green package, Blue factory function calls, Base0 qualifiers)"
     else
         fail "Neovim Go query extension" "Missing or invalid after/queries/go/highlights.scm"
     fi
@@ -293,7 +293,7 @@ local caps_main = vim.treesitter.get_captures_at_pos(go_buf, 6, 8)
 local is_main_mod = (caps_main[#caps_main] and caps_main[#caps_main].capture == "module")
 
 local caps_ctx = vim.treesitter.get_captures_at_pos(go_buf, 29, 15)
-local is_ctx_mod = (caps_ctx[#caps_ctx] and caps_ctx[#caps_ctx].capture == "module")
+local is_ctx_var = (caps_ctx[#caps_ctx] and caps_ctx[#caps_ctx].capture == "variable")
 
 local caps_ld = vim.treesitter.get_captures_at_pos(go_buf, 20, 1)
 local is_ld_const = (caps_ld[#caps_ld] and caps_ld[#caps_ld].capture == "constant")
@@ -332,7 +332,7 @@ local results = {
     is_imp_kw = tostring(is_imp_kw),
     imp_fg = imp_fg,
     is_main_mod = tostring(is_main_mod),
-    is_ctx_mod = tostring(is_ctx_mod),
+    is_ctx_var = tostring(is_ctx_var),
     is_ld_const = tostring(is_ld_const),
     is_ncn_call = tostring(is_ncn_call),
     fcall_fg = fcall_fg,
@@ -443,10 +443,10 @@ end
             fail "Neovim Go import keyword" "Expected @keyword.import fg=cb4b16, got cap=${RES[is_imp_kw]} fg=${RES[imp_fg]}"
         fi
 
-        if [ "${RES[is_main_mod]}" = "true" ] && [ "${RES[is_ctx_mod]}" = "true" ]; then
-            pass "Neovim renders Go package and qualifier identifiers (main, context) as @module (Violet)"
+        if [ "${RES[is_main_mod]}" = "true" ] && [ "${RES[is_ctx_var]}" = "true" ]; then
+            pass "Neovim renders Go package declaration (main) as @module (Violet) and qualifiers (context.) as @variable (Base0 Grey)"
         else
-            fail "Neovim Go module captures" "Expected @module for main and context, got main=${RES[is_main_mod]} ctx=${RES[is_ctx_mod]}"
+            fail "Neovim Go module/qualifier captures" "Expected @module for main and @variable for context, got main=${RES[is_main_mod]} ctx=${RES[is_ctx_var]}"
         fi
 
         if [ "${RES[is_ld_const]}" = "true" ]; then

@@ -333,7 +333,7 @@ if [ -n "$BAT_BIN" ]; then
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}func" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}struct" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}interface" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_VIOLET}context" && \
+       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_BASE0}context" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}Context" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}LevelDebug" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}MaskAll" && \
@@ -342,9 +342,9 @@ if [ -n "$BAT_BIN" ]; then
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}chan" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}NewClusterNode" && \
        echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_CYAN}\`json:\"port\"\`"; then
-        pass "bat renders Go package (Green), main (Violet), import (Orange), declarations (Green), qualifiers (Violet), constants (Magenta), types/composite literals (Yellow), and calls (Blue) matching Neovim"
+        pass "bat renders Go package (Green), main (Violet), import (Orange), declarations (Green), qualifiers (Base0 Grey), constants (Magenta), types/composite literals (Yellow), and calls (Blue) matching Neovim"
     else
-        fail "bat Go rendering" "Expected Option A Solarized TrueColor highlights in bat sample.go output"
+        fail "bat Go rendering" "Expected Model 2 Solarized TrueColor highlights in bat sample.go output"
     fi
 fi
 

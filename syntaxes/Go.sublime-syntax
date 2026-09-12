@@ -1716,7 +1716,7 @@ contexts:
   match-namespace:
     - match: '({{ident}})\s*(\.)'
       captures:
-        1: entity.name.namespace.go entity.name.module.go
+        1: variable.other.namespace.go
         2: punctuation.accessor.dot.go
 
   meta-function-declaration:
