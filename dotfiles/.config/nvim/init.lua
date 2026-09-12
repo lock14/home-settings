@@ -415,10 +415,25 @@ lazy.setup({
         opts = {},
     },
     {
+        "mfussenegger/nvim-jdtls",
+        ft = "java",
+    },
+    {
         "williamboman/mason-lspconfig.nvim",
         dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
         opts = {
-            ensure_installed = { "gopls", "terraformls", "pyright", "yamlls" },
+            ensure_installed = {
+                "clangd",
+                "rust_analyzer",
+                "gopls",
+                "pyright",
+                "lua_ls",
+                "bashls",
+                "terraformls",
+                "yamlls",
+                "jsonls",
+                "jdtls",
+            },
             automatic_installation = true,
             automatic_enable = false,
         },
@@ -447,17 +462,61 @@ lazy.setup({
                 end,
             })
 
+            -- Server-specific configuration overrides
+            local server_configs = {
+                clangd = {
+                    cmd = {
+                        "clangd",
+                        "--background-index",
+                        "--clang-tidy",
+                        "--header-insertion=iwyu",
+                        "--completion-style=detailed",
+                        "--fallback-style=llvm",
+                    },
+                },
+                lua_ls = {
+                    settings = {
+                        Lua = {
+                            diagnostics = {
+                                globals = { "vim" },
+                            },
+                            workspace = {
+                                library = vim.api.nvim_get_runtime_file("", true),
+                                checkThirdParty = false,
+                            },
+                            telemetry = { enable = false },
+                        },
+                    },
+                },
+                rust_analyzer = {
+                    settings = {
+                        ["rust-analyzer"] = {
+                            check = {
+                                command = "check",
+                            },
+                        },
+                    },
+                },
+                gopls = {},
+                pyright = {},
+                bashls = {},
+                terraformls = {},
+                yamlls = {},
+                jsonls = {},
+            }
+
             -- Configure servers using modern vim.lsp.config (Neovim 0.11+) with legacy fallback
-            local servers = { "gopls", "terraformls", "pyright", "yamlls" }
+            -- Note: jdtls is managed on-demand via ftplugin/java.lua with nvim-jdtls
+            local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls" }
             if vim.lsp.config and vim.lsp.enable then
                 for _, s in ipairs(servers) do
-                    vim.lsp.config[s] = {}
+                    vim.lsp.config[s] = server_configs[s] or {}
                 end
                 vim.lsp.enable(servers)
             else
                 local lspconfig = require("lspconfig")
                 for _, s in ipairs(servers) do
-                    lspconfig[s].setup({})
+                    lspconfig[s].setup(server_configs[s] or {})
                 end
             end
         end,

@@ -121,8 +121,10 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     CPP_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/cpp/highlights.scm"
-    if [ -f "$CPP_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$CPP_QUERY" && grep -q 'sizeof_expression' "$CPP_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for C++ preprocessor defined keyword and sizeof custom types"
+    if [ -f "$CPP_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$CPP_QUERY" && \
+       grep -q 'sizeof_expression' "$CPP_QUERY" && \
+       grep -q 'template_parameter_list' "$CPP_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for C++ preprocessor defined keyword, sizeof custom types, and template type parameters"
     else
         fail "Neovim C++ query extension" "Missing or invalid after/queries/cpp/highlights.scm"
     fi
@@ -135,6 +137,24 @@ if [ -f "$NVIM_CONFIG" ]; then
         pass "Neovim defines Tree-sitter printf format specifiers and string escapes in Solarized Cyan"
     else
         fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences in init.lua"
+    fi
+
+    JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
+    if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
+        pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
+    else
+        fail "Neovim Java ftplugin" "Missing or invalid dotfiles/.config/nvim/ftplugin/java.lua"
+    fi
+
+    if grep -q '"clangd"' "$NVIM_CONFIG" && \
+       grep -q '"rust_analyzer"' "$NVIM_CONFIG" && \
+       grep -q '"lua_ls"' "$NVIM_CONFIG" && \
+       grep -q '"bashls"' "$NVIM_CONFIG" && \
+       grep -q '"jdtls"' "$NVIM_CONFIG" && \
+       grep -q 'nvim-jdtls' "$NVIM_CONFIG"; then
+        pass "Neovim configures Polyglot LSPs (clangd, rust_analyzer, gopls, pyright, lua_ls, bashls, jdtls) in init.lua"
+    else
+        fail "Neovim polyglot LSPs" "Missing expected polyglot LSPs in dotfiles/.config/nvim/init.lua"
     fi
 
     if command -v nvim >/dev/null 2>&1; then
@@ -162,10 +182,21 @@ for _, c in ipairs(caps_so) do
     if c.capture == "keyword.operator" then is_so_kw = true break end
 end
 
-io.write(string.format("%s|%s|%s|%s", param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw)))
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.cpp")
+vim.cmd([[redraw]])
+local cpp_line = vim.api.nvim_buf_get_lines(0, 33, 34, false)[1]
+local col_t = string.find(cpp_line, "T>") - 1
+local caps_t = vim.treesitter.get_captures_at_pos(0, 33, col_t)
+local is_t_type = (caps_t[#caps_t] and caps_t[#caps_t].capture == "type")
+
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
+local java_ft = vim.bo.filetype
+local ok_jdtls, _ = pcall(require, "jdtls")
+
+io.write(string.format("%s|%s|%s|%s|%s|%s|%s", param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw), tostring(is_t_type), java_ft, tostring(ok_jdtls)))
 ' -c 'q' 2>/dev/null || true)"
 
-        IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW <<< "$NVIM_RESULTS"
+        IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW IS_T_TYPE JAVA_FT OK_JDTLS <<< "$NVIM_RESULTS"
 
         if [ "$PARAM_ITALIC" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
@@ -189,6 +220,18 @@ io.write(string.format("%s|%s|%s|%s", param_italic, const_fg, tostring(is_wn_typ
             pass "Neovim Tree-sitter captures sizeof as @keyword.operator (Green)"
         else
             fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got $IS_SO_KW"
+        fi
+
+        if [ "$IS_T_TYPE" = "true" ]; then
+            pass "Neovim Tree-sitter captures template <Printable T> as @type (Yellow)"
+        else
+            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type, got $IS_T_TYPE"
+        fi
+
+        if [ "$JAVA_FT" = "java" ] && [ "$OK_JDTLS" = "true" ]; then
+            pass "Neovim detects Java filetype and loads nvim-jdtls cleanly"
+        else
+            fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=$JAVA_FT ok=$OK_JDTLS"
         fi
     fi
 else

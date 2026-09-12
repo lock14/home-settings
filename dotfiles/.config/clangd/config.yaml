@@ -1,0 +1,12 @@
+# Default clangd configuration for home-settings
+# Uses modern GNU dialects for full C23/C++20 language features and POSIX API access.
+
+If:
+  PathMatch: .*\.(cpp|cc|cxx|hpp|hxx)$
+CompileFlags:
+  Add: [-std=gnu++20]
+---
+If:
+  PathMatch: .*\.c$
+CompileFlags:
+  Add: [-std=gnu23]

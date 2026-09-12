@@ -45,7 +45,20 @@ done
 
 assert_symlink "$TEMP_HOME/.dir-colors/dircolors" "" "Auto-discovered and symlinked: .dir-colors/dircolors"
 assert_symlink "$TEMP_HOME/.config/nvim" "" "Auto-discovered and symlinked: .config/nvim"
+if [ -f "$TEMP_HOME/.config/nvim/ftplugin/java.lua" ] && grep -q 'jdtls' "$TEMP_HOME/.config/nvim/ftplugin/java.lua"; then
+    pass "Auto-discovered and symlinked: .config/nvim/ftplugin/java.lua"
+else
+    fail "Java ftplugin symlink" "Expected .config/nvim/ftplugin/java.lua in mirrored dotfiles"
+fi
 assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
+assert_symlink "$TEMP_HOME/.config/clangd" "" "Auto-discovered and symlinked: .config/clangd"
+if [ -f "$TEMP_HOME/.config/clangd/config.yaml" ] && \
+   grep -q 'std=gnu++20' "$TEMP_HOME/.config/clangd/config.yaml" && \
+   grep -q 'std=gnu23' "$TEMP_HOME/.config/clangd/config.yaml"; then
+    pass "clangd config contains gnu++20 and gnu23 fallback compile flags"
+else
+    fail "clangd config verification" "Missing or invalid .config/clangd/config.yaml"
+fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
     pass "Ghostty config contains Solarized Dark theme and MesloLGS NF font"

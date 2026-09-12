@@ -221,7 +221,7 @@ The redesigned repository is built for frictionless extension:
 - **`fd` / `fs`**: Lightning-fast file and directory tree search.
 
 ### 3. Modern Lua Neovim (`dotfiles/.config/nvim/init.lua`)
-- **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Auto-manages Go (`gopls`), Terraform (`terraformls`), Python (`pyright`), YAML (`yamlls`).
+- **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
 - **Treesitter**: AST-based syntax highlighting with 1:1 parity matching `bat`.
 - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`).
 - **Solarized Dark**: Seamless `#002B36` terminal background matching.
