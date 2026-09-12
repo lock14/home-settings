@@ -77,7 +77,38 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 | **Preprocessors & Headers**| `orange` | `#CB4B16` | Preprocessor macros, compiler directives |
 | **Errors & Diagnostics** | `red` | `#DC322F` | Syntax errors, diagnostic warnings |
 
-### Integration Rules & Architectural Principles
+### Universal Semantic Color Contract
+Colors across our developer workstation fulfill invariant domain roles across all languages and filetypes:
+
+| Palette Color | Hex Code | Universal Semantic Role | Manifestations Across Languages & Tools |
+| :--- | :--- | :--- | :--- |
+| **Solarized Green** | `#859900` | Control, declarations, keywords, diff additions | `if`, `return`, `typedef`, `struct`, `sizeof`, `+` added lines, `diffAdded` |
+| **Solarized Red** | `#DC322F` | Errors, deletions, invalid states | `invalid.illegal`, `-` deleted lines, `diffRemoved`, compiler diagnostics |
+| **Solarized Blue** | `#268BD2` | Invocations, callable routines, structural headers | `printf()`, `std::move()`, `diffLine`, `@@ ... @@` hunk headers, blockquotes |
+| **Solarized Yellow**| `#B58900` | Types, structs, concepts, type parameters | `int`, `uint8_t`, `WorkerNode`, `Printable`, `T`, `same_as`, `CursorLineNr` |
+| **Solarized Violet**| `#6C71C4` | Namespaces, modules, qualifiers | `namespace core::telemetry`, `using namespace`, `std::`, `@module` |
+| **Solarized Magenta**| `#D33682`| Constants, literals, hashes, sentinels | `EXIT_FAILURE`, `4b825dc`, `100644`, `std::nullopt`, `true`, `42` |
+| **Solarized Cyan**  | `#2AA198` | Strings, filesystem paths, URIs | `"Hello %s\n"`, `a/src/...`, markdown link URLs |
+| **Solarized Orange**| `#CB4B16` | Directives, preprocessor macros, attributes | `#define`, `#include`, `[[nodiscard]]`, Markdown `#` H1 |
+| **Base0 Grey**      | `#839496` | Neutral ground, operators, delimiters, context | `+`, `-`, `*`, `==`, `--git`, `activeNodes map[...]`, struct fields, parameters |
+| **Base01 Dim**      | `#586E75` | Comments, subtle metadata | `// upright comments`, bat borders, tree connectors, autosuggestions |
+
+### High-Level Architectural Principles
+1. **Lexical vs. AST Convergence (The Engine Translation Principle)**:
+   - `bat` (Syntect / Sublime Text) operates as a regex-based pushdown automaton with scope stacks, devoid of symbol tables or semantic awareness. Neovim operates on concrete syntax trees (Tree-sitter GLR parser) and compiler semantic tokens (LSP). Trying to force one engine to imitate the other's internal representation leads to fragile hacks.
+   - Parity is achieved through **canonical semantic mapping**: In `bat`, use structural conventions (`ALL_CAPS` constants, `PascalCase` types), negative lookaheads (`(?!\s*\()` to distinguish types from function invocations), and contextual scoping to approximate symbol tables. In Neovim, use Tree-sitter query predicates (`(#match? @type "^([A-Z]|.+_t$)")`, `(#any-of? @constant "nullopt" "npos")`, `(deletion "-" @diff.minus)`) to constrain ambiguous AST nodes to their true domain roles.
+2. **Gestalt Semantic Continuity (No Artificial Token Fracturing)**:
+   - Syntax engines mechanically chop code into lexical tokens. However, the human brain reads in Gestalt units (law of continuity and closure). Artificial accent switching across token boundaries causes saccadic interrupts:
+     - *Strings & Formatting*: Format specifiers (`%s`, `%d`) and escape sequences (`\n`, `\t`) are integral to the string value. Breaking them into contrasting colors produces disruptive visual checkerboarding. Unified in **Solarized Cyan (`#2AA198`)**.
+     - *Diff Lines*: The leading diff marker (`+` or `-`) and the line text form a single semantic addition or deletion. Unifying marker and line body into continuous **Solarized Green (`#859900`)** or **Solarized Red (`#DC322F`)** preserves Gestalt continuity.
+     - *Attribute Enclosures*: In `[[nodiscard]]`, both the brackets `[[`, `]]` and the attribute identifier form one syntactic construct, unified in **Solarized Orange (`#CB4B16`)**.
+3. **Domain-Specific Cognitive Roles**:
+   - Highlighting is not decoration; it is an ergonomic aid designed to reduce cognitive load during comprehension and code review. Every color represents an invariant mental category: structural framing (Green/Yellow/Blue/Violet), data values (Cyan/Magenta), and compiler directives (Orange), anchored on a calm monotone ground (Base0/Base01).
+4. **Standalone Subsystem Independence (The Dependency Trap)**:
+   - Upstream tools often attempt to embed external packages (e.g. `bat`'s built-in Diff syntax attempting to include `Packages/Git Formats/Git Diff.sublime-syntax` which is missing in standalone `bat`). When a referenced grammar or configuration is absent, the engine fails silently, falling back to unstyled text.
+   - All toolchain grammars, tree-sitter queries, and shell configurations in this repository must be **completely self-contained**. Distributing standalone grammars (`C.sublime-syntax`, `C++.sublime-syntax`, `Diff.sublime-syntax`) in `syntaxes/` ensures deterministic behavior without external dependency traps.
+
+### Integration Rules & Tooling Implementations
 1. **3-Tier Ergonomic Architecture**: All syntax highlighting across Neovim, `bat`, and shell environments strictly follows the 3-Tier cognitive hierarchy:
    - **Tier 1: Monotone Ground (70–80% screen area)**: Base0 (`#839496`) and Base01 (`#586E75`). Houses variables, field names, symbolic math/logic operators (`+`, `-`, `*`, `/`, `=`, `==`, `<`, `>`, `?`, `:`), delimiters, brackets (`()`, `{}`, `[]`), upright parameters, and upright comments. Keeps the background calm and eliminates visual vibration caused by equal-lightness accent switching.
    - **Tier 2: Structural Anchors (15–20% screen area)**: Green (`#859900`), Yellow (`#B58900`), Blue (`#268BD2`), Violet (`#6C71C4`). Frames program architecture: Green for control flow (`if`, `for`, `return`), declarations (`typedef`, `struct`), and word operators (`sizeof`, `alignof`, `static_assert`); Yellow for primitive and custom types (`int`, `char`, `WorkerNode`, `SeverityLevel`, `*_t`, concepts); Blue for function declarations, method calls, and user function invocations (`emit_log`, `printf`, `malloc`); Violet for namespaces and package qualifiers (`namespace core::telemetry`, `using namespace`, `std::`).

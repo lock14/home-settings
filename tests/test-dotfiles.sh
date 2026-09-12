@@ -134,55 +134,49 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     C_OUT="$(echo -e "#include <stdio.h>" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    ORANGE_PREPROC="$(printf "\033[38;2;203;75;22m")"
-    if echo "$C_OUT" | grep -Fq "$ORANGE_PREPROC"; then
+    if echo "$C_OUT" | grep -Fq "$SOL_ORANGE"; then
         pass "bat renders C/C++ preprocessor directives in Solarized Orange"
     else
         fail "bat C preprocessor rendering" "Expected Orange preprocessor directive in bat output"
     fi
 
     DIFF_OUT="$(echo -e "--- a\n+++ b\n-old\n+new" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff - 2>/dev/null || true)"
-    GREEN_DIFF="$(printf "\033[38;2;133;153;0m")"
-    RED_DIFF="$(printf "\033[38;2;220;50;47m")"
-    if echo "$DIFF_OUT" | grep -Fq "$GREEN_DIFF" && echo "$DIFF_OUT" | grep -Fq "$RED_DIFF"; then
+    if echo "$DIFF_OUT" | grep -Fq "$SOL_GREEN" && echo "$DIFF_OUT" | grep -Fq "$SOL_RED"; then
         pass "bat renders Unified Diffs with Solarized Green additions and Red deletions"
     else
         fail "bat Diff rendering" "Expected Green additions and Red deletions in bat diff output"
     fi
 
     QUOTE_OUT="$(printf "> quote text\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
-    if echo "$QUOTE_OUT" | grep -q "38;2;38;139;210m"; then
+    if echo "$QUOTE_OUT" | grep -Fq "$SOL_BLUE"; then
         pass "bat renders Markdown blockquotes in Solarized Blue"
     else
         fail "bat blockquote rendering" "Expected Blue blockquote in bat output"
     fi
 
     GO_OUT="$(printf "type MyStruct struct {}\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go - 2>/dev/null || true)"
-    YELLOW_TYPE="$(printf "\033[38;2;181;137;0m")"
-    if echo "$GO_OUT" | grep -Fq "$YELLOW_TYPE"; then
+    if echo "$GO_OUT" | grep -Fq "$SOL_YELLOW"; then
         pass "bat renders custom struct types in Solarized Yellow"
     else
         fail "bat custom type rendering" "Expected Yellow struct type in bat output"
     fi
 
     C_TYPE_OUT="$(printf "int x = 42;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    if echo "$C_TYPE_OUT" | grep -Fq "$YELLOW_TYPE"; then
+    if echo "$C_TYPE_OUT" | grep -Fq "$SOL_YELLOW"; then
         pass "bat renders primitive C types (int, char, etc.) in Solarized Yellow"
     else
         fail "bat primitive type rendering" "Expected Yellow primitive type in bat output"
     fi
 
     C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    CYAN_STR="$(printf "\033[38;2;42;161;152m")"
-    if echo "$C_STR_OUT" | grep -Fq "$CYAN_STR"; then
+    if echo "$C_STR_OUT" | grep -Fq "$SOL_CYAN"; then
         pass "bat renders string format specifiers and escapes in Solarized Cyan"
     else
         fail "bat string escape rendering" "Expected Cyan string escape in bat output"
     fi
 
     C_DECL_OUT="$(printf "typedef struct {\n    int x;\n} Node;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    GREEN_DECL="$(printf "\033[38;2;133;153;0m")"
-    if echo "$C_DECL_OUT" | grep -Fq "${GREEN_DECL}typedef" && echo "$C_DECL_OUT" | grep -Fq "${GREEN_DECL}struct"; then
+    if echo "$C_DECL_OUT" | grep -Fq "${SOL_GREEN}typedef" && echo "$C_DECL_OUT" | grep -Fq "${SOL_GREEN}struct"; then
         pass "bat renders C declaration keywords (typedef, struct) in Solarized Green"
     else
         fail "bat C declaration rendering" "Expected Green typedef/struct in bat output"
@@ -190,9 +184,8 @@ if [ -n "$BAT_BIN" ]; then
 
     ESC_ITALIC="$(printf "\033[3;")"
     C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    BASE0_TEXT="$(printf "\033[38;2;131;148;150m")"
-    if echo "$C_MACRO_OUT" | grep -Fq "${ORANGE_PREPROC}#define" && \
-       echo "$C_MACRO_OUT" | grep -Fq "${BASE0_TEXT}x" && \
+    if echo "$C_MACRO_OUT" | grep -Fq "${SOL_ORANGE}#define" && \
+       echo "$C_MACRO_OUT" | grep -Fq "${SOL_BASE0}x" && \
        ! echo "$C_MACRO_OUT" | grep -Fq "$ESC_ITALIC"; then
         pass "bat renders macro parameters and body expressions in upright Solarized Base0 (grey) matching Neovim"
     else
@@ -200,8 +193,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     C_COMMENT_OUT="$(printf '/* sample comment */\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    BASE01_COMMENT="$(printf "\033[38;2;88;110;117m")"
-    if echo "$C_COMMENT_OUT" | grep -Fq "$BASE01_COMMENT" && ! echo "$C_COMMENT_OUT" | grep -Fq "$ESC_ITALIC"; then
+    if echo "$C_COMMENT_OUT" | grep -Fq "$SOL_BASE01" && ! echo "$C_COMMENT_OUT" | grep -Fq "$ESC_ITALIC"; then
         pass "bat renders C comments in upright Solarized Base01 without italics"
     else
         fail "bat comment rendering" "Expected upright Base01 comment without italics in bat output"
@@ -215,131 +207,117 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    MAGENTA_CONST="$(printf "\033[38;2;211;54;130m")"
-    if echo "$C_CONST_OUT" | grep -Fq "${MAGENTA_CONST}EXIT_FAILURE"; then
+    if echo "$C_CONST_OUT" | grep -Fq "${SOL_MAGENTA}EXIT_FAILURE"; then
         pass "bat renders named uppercase constants (EXIT_FAILURE, etc.) in Solarized Magenta"
     else
         fail "bat constant rendering" "Expected Magenta named constants in bat output"
     fi
 
     C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    if echo "$C_CUSTOM_TYPE_OUT" | grep -Fq "${YELLOW_TYPE}WorkerNode"; then
+    if echo "$C_CUSTOM_TYPE_OUT" | grep -Fq "${SOL_YELLOW}WorkerNode"; then
         pass "bat renders custom PascalCase types (WorkerNode, etc.) in Solarized Yellow"
     else
         fail "bat custom type rendering" "Expected Yellow custom PascalCase type in bat output"
     fi
 
     C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    GREEN_KW="$(printf "\033[38;2;133;153;0m")"
-    if echo "$C_WORD_OP_OUT" | grep -Fq "${GREEN_KW}sizeof"; then
+    if echo "$C_WORD_OP_OUT" | grep -Fq "${SOL_GREEN}sizeof"; then
         pass "bat renders word operators (sizeof, etc.) in Solarized Green matching Neovim"
     else
         fail "bat word operator rendering" "Expected Green sizeof in bat output"
     fi
 
     C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    BLUE_FUNC="$(printf "\033[38;2;38;139;210m")"
-    if echo "$C_FUNC_CALL_OUT" | grep -Fq "${BLUE_FUNC}emit_log"; then
+    if echo "$C_FUNC_CALL_OUT" | grep -Fq "${SOL_BLUE}emit_log"; then
         pass "bat renders user function calls (emit_log, etc.) in Solarized Blue matching Neovim"
     else
         fail "bat function call rendering" "Expected Blue emit_log call in bat output"
     fi
 
     CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    YELLOW_VAL="$(printf "\033[38;2;181;137;0m")"
-    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${YELLOW_VAL}T"; then
+    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${SOL_YELLOW}T"; then
         pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in Solarized Yellow matching Neovim"
     else
         fail "bat template type parameter rendering" "Expected Yellow template type parameter in bat output"
     fi
 
-    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${YELLOW_VAL}Printable"; then
+    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${SOL_YELLOW}Printable"; then
         pass "bat renders C++ concept names (Printable) in Solarized Yellow matching Neovim"
     else
         fail "bat concept name rendering" "Expected Yellow concept name in bat output"
     fi
 
-    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${YELLOW_VAL}vector"; then
+    if echo "$CPP_TEMPLATE_OUT" | grep -Fq "${SOL_YELLOW}vector"; then
         pass "bat renders C++ STL container types (vector, optional) in Solarized Yellow matching Neovim"
     else
         fail "bat STL container rendering" "Expected Yellow STL container type in bat output"
     fi
 
-    VIOLET_VAL="$(printf "\033[38;2;108;113;196m")"
-    MAGENTA_VAL="$(printf "\033[38;2;211;54;130m")"
-    BASE0_VAL="$(printf "\033[38;2;131;148;150m")"
-
     CPP_NS_OUT="$(printf 'namespace core::telemetry {}\nusing namespace core::telemetry;\nstd::string s;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_NS_OUT" | grep -Fq "${VIOLET_VAL}core" && \
-       echo "$CPP_NS_OUT" | grep -Fq "${VIOLET_VAL}telemetry" && \
-       echo "$CPP_NS_OUT" | grep -Fq "${VIOLET_VAL}std"; then
+    if echo "$CPP_NS_OUT" | grep -Fq "${SOL_VIOLET}core" && \
+       echo "$CPP_NS_OUT" | grep -Fq "${SOL_VIOLET}telemetry" && \
+       echo "$CPP_NS_OUT" | grep -Fq "${SOL_VIOLET}std"; then
         pass "bat renders namespaces and qualifiers (core, telemetry, std) in Solarized Violet matching Neovim"
     else
         fail "bat namespace rendering" "Expected Violet namespaces and qualifiers in bat output"
     fi
 
     CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_CONST_OUT" | grep -Fq "${MAGENTA_VAL}Initializing" && \
-       echo "$CPP_CONST_OUT" | grep -Fq "${MAGENTA_VAL}nullopt"; then
+    if echo "$CPP_CONST_OUT" | grep -Fq "${SOL_MAGENTA}Initializing" && \
+       echo "$CPP_CONST_OUT" | grep -Fq "${SOL_MAGENTA}nullopt"; then
         pass "bat renders scoped enum constants (NodeState::Initializing) and sentinels (std::nullopt) in Solarized Magenta matching Neovim"
     else
         fail "bat scoped constant rendering" "Expected Magenta scoped constants and sentinels in bat output"
     fi
 
-    if echo "$CPP_CONST_OUT" | grep -Fq "${BASE0_VAL} state_" && ! echo "$CPP_CONST_OUT" | grep -Fq "${BLUE_FUNC}state_"; then
+    if echo "$CPP_CONST_OUT" | grep -Fq "${SOL_BASE0} state_" && ! echo "$CPP_CONST_OUT" | grep -Fq "${SOL_BLUE}state_"; then
         pass "bat renders member variable uniform initialization (state_{...}) in upright Solarized Base0 (grey) matching Neovim"
     else
         fail "bat uniform initialization rendering" "Expected Base0 grey variable in uniform initialization"
     fi
 
     CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_CONCEPT_OUT" | grep -Fq "${YELLOW_VAL}same_as"; then
+    if echo "$CPP_CONCEPT_OUT" | grep -Fq "${SOL_YELLOW}same_as"; then
         pass "bat renders standard C++20 concepts (same_as) in Solarized Yellow matching Neovim"
     else
         fail "bat C++20 concept rendering" "Expected Yellow same_as concept in bat output"
     fi
 
     CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_ENUM_OUT" | grep -Fq "${YELLOW_VAL}NodeState" && \
-       echo "$CPP_ENUM_OUT" | grep -Fq "${YELLOW_VAL}uint8_t"; then
+    if echo "$CPP_ENUM_OUT" | grep -Fq "${SOL_YELLOW}NodeState" && \
+       echo "$CPP_ENUM_OUT" | grep -Fq "${SOL_YELLOW}uint8_t"; then
         pass "bat renders enum class types and underlying types (uint8_t) in Solarized Yellow matching Neovim"
     else
         fail "bat enum type rendering" "Expected Yellow enum name and underlying type in bat output"
     fi
 
     CPP_QUAL_FUNC_OUT="$(printf 'std::move(metric);\nstd::for_each(items.begin(), items.end());\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${VIOLET_VAL}std" && \
-       echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${BLUE_FUNC}move" && \
-       echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${BLUE_FUNC}for_each"; then
+    if echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_VIOLET}std" && \
+       echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_BLUE}move" && \
+       echo "$CPP_QUAL_FUNC_OUT" | grep -Fq "${SOL_BLUE}for_each"; then
         pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Violet namespace and Blue function matching Neovim"
     else
         fail "bat qualified function rendering" "Expected Violet std and Blue move/for_each in bat output"
     fi
 
-    ORANGE_VAL="$(printf "\033[38;2;203;75;22m")"
     CPP_ATTR_OUT="$(printf '[[nodiscard]] constexpr uint64_t id();\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if echo "$CPP_ATTR_OUT" | grep -Fq "${ORANGE_VAL}[[" && \
-       echo "$CPP_ATTR_OUT" | grep -Fq "${ORANGE_VAL}nodiscard" && \
-       echo "$CPP_ATTR_OUT" | grep -Fq "${ORANGE_VAL}]]"; then
+    if echo "$CPP_ATTR_OUT" | grep -Fq "${SOL_ORANGE}[[" && \
+       echo "$CPP_ATTR_OUT" | grep -Fq "${SOL_ORANGE}nodiscard" && \
+       echo "$CPP_ATTR_OUT" | grep -Fq "${SOL_ORANGE}]]"; then
         pass "bat renders C++ attributes ([[nodiscard]]) in Solarized Orange matching Neovim"
     else
         fail "bat attribute rendering" "Expected Orange [[nodiscard]] in bat output"
     fi
 
-    DIFF_BLUE="$(printf "\033[38;2;38;139;210m")"
-    DIFF_CYAN="$(printf "\033[38;2;42;161;152m")"
-    DIFF_MAGENTA="$(printf "\033[38;2;211;54;130m")"
-    DIFF_RED="$(printf "\033[38;2;220;50;47m")"
-    DIFF_GREEN="$(printf "\033[38;2;133;153;0m")"
     DIFF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
-    if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_BLUE}diff" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_CYAN}a/src/service/cluster_manager.go" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_MAGENTA}4b825dc" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_RED}---" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_GREEN}+++" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_BLUE}@@ -32,18 +32,22 @@" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_RED}-" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_GREEN}+"; then
+    if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}diff" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}4b825dc" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}---" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+++" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}@@ -32,18 +32,22 @@" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}-" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+"; then
         pass "bat renders diff additions (Green), deletions (Red), hunk headers (Blue), paths (Cyan), and hashes (Magenta) matching Neovim"
     else
         fail "bat diff rendering" "Expected Blue diff/@@, Red ---/-, Green +++/+, Cyan path, Magenta hash in bat output"

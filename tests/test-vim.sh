@@ -268,101 +268,121 @@ local is_add_plus = (caps_add[#caps_add] and caps_add[#caps_add].capture == "dif
 local caps_hunk = vim.treesitter.get_captures_at_pos(diff_buf, 4, 0)
 local is_hunk_line = (caps_hunk[#caps_hunk] and caps_hunk[#caps_hunk].capture == "diff.line")
 
-io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
-    param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw), tostring(is_t_type),
-    java_ft, tostring(ok_jdtls),
-    module_fg, lsp_ns_fg, tostring(is_core_mod), tostring(is_init_const), tostring(is_nullopt_const), tostring(is_telem_mod),
-    attr_fg, tostring(is_attr_orange),
-    diff_plus_fg, tostring(is_add_plus), diff_minus_fg, tostring(is_del_minus), diff_line_fg, tostring(is_hunk_line)))
+local results = {
+    param_italic = param_italic,
+    const_fg = const_fg,
+    is_wn_type = tostring(is_wn_type),
+    is_so_kw = tostring(is_so_kw),
+    is_t_type = tostring(is_t_type),
+    java_ft = java_ft,
+    ok_jdtls = tostring(ok_jdtls),
+    module_fg = module_fg,
+    lsp_ns_fg = lsp_ns_fg,
+    is_core_mod = tostring(is_core_mod),
+    is_init_const = tostring(is_init_const),
+    is_nullopt_const = tostring(is_nullopt_const),
+    is_telem_mod = tostring(is_telem_mod),
+    attr_fg = attr_fg,
+    is_attr_orange = tostring(is_attr_orange),
+    diff_plus_fg = diff_plus_fg,
+    is_add_plus = tostring(is_add_plus),
+    diff_minus_fg = diff_minus_fg,
+    is_del_minus = tostring(is_del_minus),
+    diff_line_fg = diff_line_fg,
+    is_hunk_line = tostring(is_hunk_line),
+}
+for k, v in pairs(results) do
+    io.write(string.format("%s=%s\n", k, v))
+end
 ' -c 'q' 2>/dev/null || true)"
 
-        IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW IS_T_TYPE JAVA_FT OK_JDTLS \
-            MODULE_FG LSP_NS_FG IS_CORE_MOD IS_INIT_CONST IS_NULLOPT_CONST IS_TELEM_MOD \
-            ATTR_FG IS_ATTR_ORANGE \
-            DIFF_PLUS_FG IS_ADD_PLUS DIFF_MINUS_FG IS_DEL_MINUS DIFF_LINE_FG IS_HUNK_LINE <<< "$NVIM_RESULTS"
+        declare -A RES=()
+        while IFS='=' read -r k v; do
+            [ -n "$k" ] && RES["$k"]="$v"
+        done <<< "$NVIM_RESULTS"
 
-        if [ "$PARAM_ITALIC" != "true" ]; then
+        if [ "${RES[param_italic]}" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
         else
-            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=$PARAM_ITALIC"
+            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=${RES[param_italic]}"
         fi
 
-        if [ "$CONST_FG" = "d33682" ]; then
+        if [ "${RES[const_fg]}" = "d33682" ]; then
             pass "Neovim renders @constant in Solarized Magenta (#d33682)"
         else
-            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=$CONST_FG"
+            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=${RES[const_fg]}"
         fi
 
-        if [ "$IS_WN_TYPE" = "true" ]; then
+        if [ "${RES[is_wn_type]}" = "true" ]; then
             pass "Neovim Tree-sitter captures sizeof(WorkerNode) as @type (Yellow)"
         else
-            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got $IS_WN_TYPE"
+            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got ${RES[is_wn_type]}"
         fi
 
-        if [ "$IS_SO_KW" = "true" ]; then
+        if [ "${RES[is_so_kw]}" = "true" ]; then
             pass "Neovim Tree-sitter captures sizeof as @keyword.operator (Green)"
         else
-            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got $IS_SO_KW"
+            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got ${RES[is_so_kw]}"
         fi
 
-        if [ "$IS_T_TYPE" = "true" ]; then
+        if [ "${RES[is_t_type]}" = "true" ]; then
             pass "Neovim Tree-sitter captures template <Printable T> as @type (Yellow)"
         else
-            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type, got $IS_T_TYPE"
+            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type, got ${RES[is_t_type]}"
         fi
 
-        if [ "$MODULE_FG" = "6c71c4" ] && [ "$LSP_NS_FG" = "6c71c4" ]; then
+        if [ "${RES[module_fg]}" = "6c71c4" ] && [ "${RES[lsp_ns_fg]}" = "6c71c4" ]; then
             pass "Neovim renders @module and @lsp.type.namespace in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim module/namespace highlight" "Expected fg=6c71c4, got module=$MODULE_FG lsp_ns=$LSP_NS_FG"
+            fail "Neovim module/namespace highlight" "Expected fg=6c71c4, got module=${RES[module_fg]} lsp_ns=${RES[lsp_ns_fg]}"
         fi
 
-        if [ "$IS_CORE_MOD" = "true" ] && [ "$IS_TELEM_MOD" = "true" ]; then
+        if [ "${RES[is_core_mod]}" = "true" ] && [ "${RES[is_telem_mod]}" = "true" ]; then
             pass "Neovim Tree-sitter captures namespace identifiers (core, telemetry) as @module (Violet)"
         else
-            fail "Neovim namespace capture" "Expected @module for core and telemetry, got core=$IS_CORE_MOD telem=$IS_TELEM_MOD"
+            fail "Neovim namespace capture" "Expected @module for core and telemetry, got core=${RES[is_core_mod]} telem=${RES[is_telem_mod]}"
         fi
 
-        if [ "$IS_INIT_CONST" = "true" ]; then
+        if [ "${RES[is_init_const]}" = "true" ]; then
             pass "Neovim Tree-sitter captures scoped enum members (NodeState::Initializing) as @constant (Magenta)"
         else
-            fail "Neovim scoped enum constant capture" "Expected @constant for NodeState::Initializing, got $IS_INIT_CONST"
+            fail "Neovim scoped enum constant capture" "Expected @constant for NodeState::Initializing, got ${RES[is_init_const]}"
         fi
 
-        if [ "$IS_NULLOPT_CONST" = "true" ]; then
+        if [ "${RES[is_nullopt_const]}" = "true" ]; then
             pass "Neovim Tree-sitter captures standard sentinels (std::nullopt) as @constant (Magenta)"
         else
-            fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got $IS_NULLOPT_CONST"
+            fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got ${RES[is_nullopt_const]}"
         fi
 
-        if [ "$ATTR_FG" = "cb4b16" ] && [ "$IS_ATTR_ORANGE" = "true" ]; then
+        if [ "${RES[attr_fg]}" = "cb4b16" ] && [ "${RES[is_attr_orange]}" = "true" ]; then
             pass "Neovim renders C++ attributes ([[nodiscard]]) in Solarized Orange (#cb4b16)"
         else
-            fail "Neovim attribute highlight" "Expected fg=cb4b16 and capture=attribute, got fg=$ATTR_FG cap=$IS_ATTR_ORANGE"
+            fail "Neovim attribute highlight" "Expected fg=cb4b16 and capture=attribute, got fg=${RES[attr_fg]} cap=${RES[is_attr_orange]}"
         fi
 
-        if [ "$JAVA_FT" = "java" ] && [ "$OK_JDTLS" = "true" ]; then
+        if [ "${RES[java_ft]}" = "java" ] && [ "${RES[ok_jdtls]}" = "true" ]; then
             pass "Neovim detects Java filetype and loads nvim-jdtls cleanly"
         else
-            fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=$JAVA_FT ok=$OK_JDTLS"
+            fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=${RES[java_ft]} ok=${RES[ok_jdtls]}"
         fi
 
-        if [ "$DIFF_PLUS_FG" = "859900" ] && [ "$IS_ADD_PLUS" = "true" ]; then
+        if [ "${RES[diff_plus_fg]}" = "859900" ] && [ "${RES[is_add_plus]}" = "true" ]; then
             pass "Neovim renders diff additions (+) in Solarized Green (#859900)"
         else
-            fail "Neovim diff addition highlight" "Expected fg=859900 and capture=diff.plus, got fg=$DIFF_PLUS_FG cap=$IS_ADD_PLUS"
+            fail "Neovim diff addition highlight" "Expected fg=859900 and capture=diff.plus, got fg=${RES[diff_plus_fg]} cap=${RES[is_add_plus]}"
         fi
 
-        if [ "$DIFF_MINUS_FG" = "dc322f" ] && [ "$IS_DEL_MINUS" = "true" ]; then
+        if [ "${RES[diff_minus_fg]}" = "dc322f" ] && [ "${RES[is_del_minus]}" = "true" ]; then
             pass "Neovim renders diff deletions (-) in Solarized Red (#dc322f)"
         else
-            fail "Neovim diff deletion highlight" "Expected fg=dc322f and capture=diff.minus, got fg=$DIFF_MINUS_FG cap=$IS_DEL_MINUS"
+            fail "Neovim diff deletion highlight" "Expected fg=dc322f and capture=diff.minus, got fg=${RES[diff_minus_fg]} cap=${RES[is_del_minus]}"
         fi
 
-        if [ "$DIFF_LINE_FG" = "268bd2" ] && [ "$IS_HUNK_LINE" = "true" ]; then
+        if [ "${RES[diff_line_fg]}" = "268bd2" ] && [ "${RES[is_hunk_line]}" = "true" ]; then
             pass "Neovim renders diff hunk headers (@@ ... @@) in Solarized Blue (#268bd2)"
         else
-            fail "Neovim diff hunk line highlight" "Expected fg=268bd2 and capture=diff.line, got fg=$DIFF_LINE_FG cap=$IS_HUNK_LINE"
+            fail "Neovim diff hunk line highlight" "Expected fg=268bd2 and capture=diff.line, got fg=${RES[diff_line_fg]} cap=${RES[is_hunk_line]}"
         fi
     fi
 else
