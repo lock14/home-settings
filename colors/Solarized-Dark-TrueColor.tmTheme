@@ -146,6 +146,18 @@
 				<string>#B58900</string>
 			</dict>
 		</dict>
+		<!-- Namespaces & Modules (Solarized Violet, matching Neovim @module) -->
+		<dict>
+			<key>name</key>
+			<string>Namespace and Module</string>
+			<key>scope</key>
+			<string>entity.name.namespace, entity.name.module, support.module, entity.name.scope-resolution</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
 		<!-- Structural Declaration Keywords (Solarized Green) -->
 		<dict>
 			<key>name</key>

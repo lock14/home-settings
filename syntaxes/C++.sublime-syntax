@@ -137,7 +137,7 @@ contexts:
       scope: variable.other.readwrite.member.c++
 
   unique-constants:
-    - match: \bnullptr\b
+    - match: \b(nullptr|nullopt)\b
       scope: constant.language.c++
 
   unique-keywords:
@@ -166,6 +166,9 @@ contexts:
     # C++ Standard Library (STL) Types
     - match: '\b(vector|string|string_view|optional|variant|any|unique_ptr|shared_ptr|weak_ptr|span|array|deque|list|forward_list|map|set|multimap|multiset|unordered_map|unordered_set|unordered_multimap|unordered_multiset|queue|priority_queue|stack|pair|tuple|ostream|istream|iostream|stringstream|ifstream|ofstream)\b'
       scope: support.type.std.c++
+    # C++20 Standard Library Concepts
+    - match: '\b(same_as|derived_from|convertible_to|common_reference_with|common_with|integral|signed_integral|unsigned_integral|floating_point|assignable_from|swappable|destructible|constructible_from|default_initializable|move_constructible|copy_constructible|equality_comparable|totally_ordered|movable|copyable|semiregular|regular|invocable|regular_invocable|predicate)\b'
+      scope: support.type.concept.c++
     # Single uppercase type parameters in type positions or generic arguments (e.g. T metric, const T& item, T* ptr, requires(T t), vector<T>)
     - match: '\b([A-Z])\b(?=\s*(?:[&*>]|\s*,\s*|\s+[[:alpha:]_]))'
       scope: entity.name.type.parameter.c++
@@ -261,6 +264,20 @@ contexts:
         2: constant.numeric.suffix.c++
 
   identifiers:
+    # PascalCase type qualifier preceding :: (e.g. NodeState::, ClusterNode::)
+    - match: '(?:(::)\s*)?\b([[:upper:]][[:alnum:]_]*[[:lower:]][[:alnum:]_]*)\s*(::)\s*'
+      captures:
+        1: punctuation.accessor.double-colon.c++
+        2: support.type.user-defined.c
+        3: punctuation.accessor.double-colon.c++
+      push: after-type-double-colon
+    # Namespace qualifier preceding :: (e.g. std::, core::, telemetry::)
+    - match: '(?:(::)\s*)?\b([[:lower:]_][[:alnum:]_]*)\s*(::)\s*'
+      captures:
+        1: punctuation.accessor.double-colon.c++
+        2: entity.name.namespace.c++
+        3: punctuation.accessor.double-colon.c++
+      push: after-namespace-double-colon
     - match: '(?:(::)\s*)?{{identifier}}\s*(::)\s*'
       captures:
         1: punctuation.accessor.double-colon.c++
@@ -268,6 +285,30 @@ contexts:
     - match: '(?:(::)\s*)?{{identifier}}'
       captures:
         1: punctuation.accessor.double-colon.c++
+
+  after-type-double-colon:
+    # Another qualifier (e.g. Type::Subtype::)
+    - match: '(?=\b[[:alnum:]_]+\s*::)'
+      pop: true
+    # Scoped enum constant / PascalCase or ALL_CAPS member not followed by ( (e.g. Initializing, Active)
+    - match: '\b([[:upper:]][[:alnum:]_]*)\b(?!\s*\()'
+      scope: constant.other.enum.c++
+      pop: true
+    # Fall through
+    - match: '(?=\S)'
+      pop: true
+
+  after-namespace-double-colon:
+    # Another qualifier (e.g. telemetry:: in core::telemetry::)
+    - match: '(?=\b[[:alnum:]_]+\s*::)'
+      pop: true
+    # Standard sentinel constants after namespace (e.g. std::nullopt, std::npos)
+    - match: '\b(nullopt|npos)\b'
+      scope: constant.language.c++
+      pop: true
+    # Fall through
+    - match: '(?=\S)'
+      pop: true
 
   identifier-path-generic:
     - include: angle-brackets
@@ -677,9 +718,14 @@ contexts:
         1: keyword.control.c++
         2: keyword.control.c++
       push:
-        - include: identifiers
-        - match: ''
+        - match: ';'
+          scope: punctuation.terminator.c++
           pop: true
+        - match: '::'
+          scope: punctuation.accessor.double-colon.c++
+        - match: '{{identifier}}'
+          scope: entity.name.namespace.c++
+        - include: comments
 
   namespace:
     - match: '\b(namespace)\s+(?=({{path_lookahead}})?(?!\s*[;,]))'
@@ -882,7 +928,7 @@ contexts:
         - include: constraint
 
   generic-type:
-    - match: '(?=(?!template){{path_lookahead}}\s*{{generic_lookahead}}\s*(\(|\{))'
+    - match: '(?=(?!template){{path_lookahead}}\s*{{generic_lookahead}}\s*\()'
       push:
         - meta_scope: meta.function-call.c++
         - match: \btemplate\b
@@ -909,18 +955,6 @@ contexts:
               scope: meta.group.c++ punctuation.section.group.end.c++
               pop: true
             - include: expressions
-        - match: (?:(::)\s*)?({{identifier}})\s*(\{)
-          captures:
-            1: punctuation.accessor.double-colon.c++
-            2: variable.function.c++
-            3: punctuation.section.group.begin.c++
-          set:
-            - meta_scope: meta.function-call.c++
-            - meta_content_scope: meta.group.c++
-            - match: '\}'
-              scope: meta.group.c++ punctuation.section.group.end.c++
-              pop: true
-            - include: expressions
         - include: identifiers
         - include: angle-brackets
         - match: '\('
@@ -929,15 +963,6 @@ contexts:
             - meta_scope: meta.function-call.c++
             - meta_content_scope: meta.group.c++
             - match: '\)'
-              scope: meta.group.c++ punctuation.section.group.end.c++
-              pop: true
-            - include: expressions
-        - match: '\{'
-          scope: meta.group.c++ punctuation.section.group.begin.c++
-          set:
-            - meta_scope: meta.function-call.c++
-            - meta_content_scope: meta.group.c++
-            - match: '\}'
               scope: meta.group.c++ punctuation.section.group.end.c++
               pop: true
             - include: expressions
@@ -974,7 +999,7 @@ contexts:
         - include: statements
 
   function-call:
-    - match: (?={{path_lookahead}}\s*(\(|\{))
+    - match: (?={{path_lookahead}}\s*\()
       push:
         - meta_scope: meta.function-call.c++
         - include: scope:source.c#c99
@@ -991,14 +1016,6 @@ contexts:
           set:
             - meta_content_scope: meta.function-call.c++ meta.group.c++
             - match: '\)'
-              scope: meta.function-call.c++ meta.group.c++ punctuation.section.group.end.c++
-              pop: true
-            - include: expressions
-        - match: '\{'
-          scope: meta.group.c++ punctuation.section.group.begin.c++
-          set:
-            - meta_content_scope: meta.function-call.c++ meta.group.c++
-            - match: '\}'
               scope: meta.function-call.c++ meta.group.c++ punctuation.section.group.end.c++
               pop: true
             - include: expressions
@@ -1047,6 +1064,16 @@ contexts:
         1: variable.function.member.c++
         2: meta.group.c++ punctuation.section.group.begin.c++
       set: members-inside-function-call
+    # Namespace qualifier (e.g. std::, core::)
+    - match: '\s*([[:lower:]_][[:alnum:]_]*)\s*(::)'
+      captures:
+        1: entity.name.namespace.c++
+        2: punctuation.accessor.double-colon.c++
+      set: members-after-accessor-junction
+    # Concept or type constraint after -> or :: (e.g. std::same_as, Printable)
+    - match: '\s*(same_as|derived_from|convertible_to|common_reference_with|common_with|integral|signed_integral|unsigned_integral|floating_point|assignable_from|swappable|destructible|constructible_from|default_initializable|move_constructible|copy_constructible|equality_comparable|totally_ordered|movable|copyable|semiregular|regular|invocable|regular_invocable|predicate)\b'
+      scope: support.type.concept.c++
+      pop: true
     # Templated member function call
     - match: (~?{{identifier}})\s*(?={{generic_lookahead}})
       captures:

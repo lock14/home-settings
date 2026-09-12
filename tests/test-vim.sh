@@ -123,10 +123,19 @@ if [ -f "$NVIM_CONFIG" ]; then
     CPP_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/cpp/highlights.scm"
     if [ -f "$CPP_QUERY" ] && grep -q 'preproc_defined.*"defined".*@keyword' "$CPP_QUERY" && \
        grep -q 'sizeof_expression' "$CPP_QUERY" && \
-       grep -q 'template_parameter_list' "$CPP_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for C++ preprocessor defined keyword, sizeof custom types, and template type parameters"
+       grep -q 'template_parameter_list' "$CPP_QUERY" && \
+       grep -q 'using_declaration' "$CPP_QUERY" && \
+       grep -q 'nullopt' "$CPP_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for C++ preproc defined, sizeof types, templates, using declarations, and sentinels"
     else
         fail "Neovim C++ query extension" "Missing or invalid after/queries/cpp/highlights.scm"
+    fi
+
+    if grep -q '\["@module"\]\s*=\s*{\s*fg\s*=\s*colors\.violet' "$NVIM_CONFIG" && \
+       grep -q '\["@lsp\.type\.namespace"\]\s*=\s*{\s*fg\s*=\s*colors\.violet' "$NVIM_CONFIG"; then
+        pass "Neovim maps @module and @lsp.type.namespace to Solarized Violet (#6c71c4)"
+    else
+        fail "Neovim namespace highlights" "Missing @module or @lsp.type.namespace mapped to colors.violet in init.lua"
     fi
 
     PRINTF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/printf/highlights.scm"
@@ -189,14 +198,44 @@ local col_t = string.find(cpp_line, "T>") - 1
 local caps_t = vim.treesitter.get_captures_at_pos(0, 33, col_t)
 local is_t_type = (caps_t[#caps_t] and caps_t[#caps_t].capture == "type")
 
+local hl_module = vim.api.nvim_get_hl(0, {name = "@module", link = false})
+local module_fg = string.format("%06x", hl_module.fg or 0)
+
+local hl_lsp_ns = vim.api.nvim_get_hl(0, {name = "@lsp.type.namespace", link = false})
+local lsp_ns_fg = string.format("%06x", hl_lsp_ns.fg or 0)
+
+local line_20 = vim.api.nvim_buf_get_lines(0, 19, 20, false)[1]
+local col_core = string.find(line_20, "core") - 1
+local caps_core = vim.treesitter.get_captures_at_pos(0, 19, col_core)
+local is_core_mod = (caps_core[#caps_core] and caps_core[#caps_core].capture == "module")
+
+local line_39 = vim.api.nvim_buf_get_lines(0, 38, 39, false)[1]
+local col_init = string.find(line_39, "Initializing") - 1
+local caps_init = vim.treesitter.get_captures_at_pos(0, 38, col_init)
+local is_init_const = (caps_init[#caps_init] and caps_init[#caps_init].capture == "constant")
+
+local line_57 = vim.api.nvim_buf_get_lines(0, 56, 57, false)[1]
+local col_nullopt = string.find(line_57, "nullopt") - 1
+local caps_nullopt = vim.treesitter.get_captures_at_pos(0, 56, col_nullopt)
+local is_nullopt_const = (caps_nullopt[#caps_nullopt] and caps_nullopt[#caps_nullopt].capture == "constant")
+
+local line_73 = vim.api.nvim_buf_get_lines(0, 72, 73, false)[1]
+local col_telem = string.find(line_73, "telemetry") - 1
+local caps_telem = vim.treesitter.get_captures_at_pos(0, 72, col_telem)
+local is_telem_mod = (caps_telem[#caps_telem] and caps_telem[#caps_telem].capture == "module")
+
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
 local java_ft = vim.bo.filetype
 local ok_jdtls, _ = pcall(require, "jdtls")
 
-io.write(string.format("%s|%s|%s|%s|%s|%s|%s", param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw), tostring(is_t_type), java_ft, tostring(ok_jdtls)))
+io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+    param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw), tostring(is_t_type),
+    java_ft, tostring(ok_jdtls),
+    module_fg, lsp_ns_fg, tostring(is_core_mod), tostring(is_init_const), tostring(is_nullopt_const), tostring(is_telem_mod)))
 ' -c 'q' 2>/dev/null || true)"
 
-        IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW IS_T_TYPE JAVA_FT OK_JDTLS <<< "$NVIM_RESULTS"
+        IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW IS_T_TYPE JAVA_FT OK_JDTLS \
+            MODULE_FG LSP_NS_FG IS_CORE_MOD IS_INIT_CONST IS_NULLOPT_CONST IS_TELEM_MOD <<< "$NVIM_RESULTS"
 
         if [ "$PARAM_ITALIC" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
@@ -226,6 +265,30 @@ io.write(string.format("%s|%s|%s|%s|%s|%s|%s", param_italic, const_fg, tostring(
             pass "Neovim Tree-sitter captures template <Printable T> as @type (Yellow)"
         else
             fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type, got $IS_T_TYPE"
+        fi
+
+        if [ "$MODULE_FG" = "6c71c4" ] && [ "$LSP_NS_FG" = "6c71c4" ]; then
+            pass "Neovim renders @module and @lsp.type.namespace in Solarized Violet (#6c71c4)"
+        else
+            fail "Neovim module/namespace highlight" "Expected fg=6c71c4, got module=$MODULE_FG lsp_ns=$LSP_NS_FG"
+        fi
+
+        if [ "$IS_CORE_MOD" = "true" ] && [ "$IS_TELEM_MOD" = "true" ]; then
+            pass "Neovim Tree-sitter captures namespace identifiers (core, telemetry) as @module (Violet)"
+        else
+            fail "Neovim namespace capture" "Expected @module for core and telemetry, got core=$IS_CORE_MOD telem=$IS_TELEM_MOD"
+        fi
+
+        if [ "$IS_INIT_CONST" = "true" ]; then
+            pass "Neovim Tree-sitter captures scoped enum members (NodeState::Initializing) as @constant (Magenta)"
+        else
+            fail "Neovim scoped enum constant capture" "Expected @constant for NodeState::Initializing, got $IS_INIT_CONST"
+        fi
+
+        if [ "$IS_NULLOPT_CONST" = "true" ]; then
+            pass "Neovim Tree-sitter captures standard sentinels (std::nullopt) as @constant (Magenta)"
+        else
+            fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got $IS_NULLOPT_CONST"
         fi
 
         if [ "$JAVA_FT" = "java" ] && [ "$OK_JDTLS" = "true" ]; then

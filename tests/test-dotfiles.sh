@@ -96,8 +96,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "storage.type.annotation" "$THEME_FILE" && \
    grep -q "<string>markup.inserted" "$THEME_FILE" && \
    grep -q "<string>constant.character.escape, constant.other.placeholder" "$THEME_FILE" && \
-   grep -q "<string>invalid, invalid.illegal" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, and Error scopes"
+   grep -q "<string>invalid, invalid.illegal" "$THEME_FILE" && \
+   grep -q "<string>entity.name.namespace, entity.name.module, support.module, entity.name.scope-resolution" "$THEME_FILE"; then
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Namespace, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -257,6 +258,40 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders C++ STL container types (vector, optional) in Solarized Yellow matching Neovim"
     else
         fail "bat STL container rendering" "Expected Yellow STL container type in bat output"
+    fi
+
+    VIOLET_VAL="$(printf "\033[38;2;108;113;196m")"
+    MAGENTA_VAL="$(printf "\033[38;2;211;54;130m")"
+    BASE0_VAL="$(printf "\033[38;2;131;148;150m")"
+
+    CPP_NS_OUT="$(printf 'namespace core::telemetry {}\nusing namespace core::telemetry;\nstd::string s;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if echo "$CPP_NS_OUT" | grep -Fq "${VIOLET_VAL}core" && \
+       echo "$CPP_NS_OUT" | grep -Fq "${VIOLET_VAL}telemetry" && \
+       echo "$CPP_NS_OUT" | grep -Fq "${VIOLET_VAL}std"; then
+        pass "bat renders namespaces and qualifiers (core, telemetry, std) in Solarized Violet matching Neovim"
+    else
+        fail "bat namespace rendering" "Expected Violet namespaces and qualifiers in bat output"
+    fi
+
+    CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if echo "$CPP_CONST_OUT" | grep -Fq "${MAGENTA_VAL}Initializing" && \
+       echo "$CPP_CONST_OUT" | grep -Fq "${MAGENTA_VAL}nullopt"; then
+        pass "bat renders scoped enum constants (NodeState::Initializing) and sentinels (std::nullopt) in Solarized Magenta matching Neovim"
+    else
+        fail "bat scoped constant rendering" "Expected Magenta scoped constants and sentinels in bat output"
+    fi
+
+    if echo "$CPP_CONST_OUT" | grep -Fq "${BASE0_VAL} state_" && ! echo "$CPP_CONST_OUT" | grep -Fq "${BLUE_FUNC}state_"; then
+        pass "bat renders member variable uniform initialization (state_{...}) in upright Solarized Base0 (grey) matching Neovim"
+    else
+        fail "bat uniform initialization rendering" "Expected Base0 grey variable in uniform initialization"
+    fi
+
+    CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if echo "$CPP_CONCEPT_OUT" | grep -Fq "${YELLOW_VAL}same_as"; then
+        pass "bat renders standard C++20 concepts (same_as) in Solarized Yellow matching Neovim"
+    else
+        fail "bat C++20 concept rendering" "Expected Yellow same_as concept in bat output"
     fi
 fi
 
