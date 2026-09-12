@@ -161,6 +161,23 @@ io.write(tostring(is_type))
         else
             fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got $NVIM_SIZEOF_HL"
         fi
+
+        NVIM_SIZEOF_KW="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
+vim.cmd([[redraw]])
+local line = vim.api.nvim_buf_get_lines(0, 54, 55, false)[1]
+local col = string.find(line, "sizeof") - 1
+local captures = vim.treesitter.get_captures_at_pos(0, 54, col)
+local is_kw_op = false
+for _, c in ipairs(captures) do
+    if c.capture == "keyword.operator" then is_kw_op = true break end
+end
+io.write(tostring(is_kw_op))
+' -c 'q' 2>/dev/null || true)"
+        if [ "$NVIM_SIZEOF_KW" = "true" ]; then
+            pass "Neovim Tree-sitter captures sizeof as @keyword.operator (Green)"
+        else
+            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got $NVIM_SIZEOF_KW"
+        fi
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"

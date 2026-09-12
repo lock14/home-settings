@@ -209,6 +209,22 @@ if [ -n "$BAT_BIN" ]; then
     else
         fail "bat custom type rendering" "Expected Yellow custom PascalCase type in bat output"
     fi
+
+    C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    GREEN_KW="$(printf "\033[38;2;133;153;0m")"
+    if echo "$C_WORD_OP_OUT" | grep -Fq "${GREEN_KW}sizeof"; then
+        pass "bat renders word operators (sizeof, etc.) in Solarized Green matching Neovim"
+    else
+        fail "bat word operator rendering" "Expected Green sizeof in bat output"
+    fi
+
+    C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    BLUE_FUNC="$(printf "\033[38;2;38;139;210m")"
+    if echo "$C_FUNC_CALL_OUT" | grep -Fq "${BLUE_FUNC}emit_log"; then
+        pass "bat renders user function calls (emit_log, etc.) in Solarized Blue matching Neovim"
+    else
+        fail "bat function call rendering" "Expected Blue emit_log call in bat output"
+    fi
 fi
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)

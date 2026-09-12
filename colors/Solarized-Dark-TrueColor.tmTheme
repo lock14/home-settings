@@ -110,6 +110,18 @@
 				<string>#839496</string>
 			</dict>
 		</dict>
+		<!-- Word Operators (Solarized Green, matching Neovim @keyword.operator) -->
+		<dict>
+			<key>name</key>
+			<string>Word Operator</string>
+			<key>scope</key>
+			<string>keyword.operator.word</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
 		<!-- Built-in Primitive Types (Solarized Yellow) -->
 		<dict>
 			<key>name</key>
@@ -151,7 +163,7 @@
 			<key>name</key>
 			<string>Function name</string>
 			<key>scope</key>
-			<string>entity.name.function, support.function</string>
+			<string>entity.name.function, support.function, variable.function</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
