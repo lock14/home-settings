@@ -55,6 +55,10 @@ home-settings/
 ├── colors/                          # 24-bit TrueColor TextMate themes
 │   └── Solarized-Dark-TrueColor.tmTheme  # Canonical Solarized Dark theme for bat
 │
+├── syntaxes/                        # Enhanced Sublime syntax packages for bat
+│   ├── C.sublime-syntax             # Modern C syntax with granular declaration scopes
+│   └── C++.sublime-syntax           # Modern C++ syntax with concept/template support
+│
 └── tests/                           # Automated test suites (160+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests

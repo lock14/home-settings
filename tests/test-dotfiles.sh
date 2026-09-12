@@ -68,6 +68,8 @@ if command -v ghostty >/dev/null 2>&1; then
 fi
 
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked Bat C syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -130,8 +132,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     QUOTE_OUT="$(printf "> quote text\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
-    BLUE_QUOTE="$(printf "\033[38;2;38;139;210m")"
-    if echo "$QUOTE_OUT" | grep -Fq "$BLUE_QUOTE"; then
+    if echo "$QUOTE_OUT" | grep -q "38;2;38;139;210m"; then
         pass "bat renders Markdown blockquotes in Solarized Blue"
     else
         fail "bat blockquote rendering" "Expected Blue blockquote in bat output"
@@ -158,6 +159,14 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders string format specifiers and escapes in Solarized Cyan"
     else
         fail "bat string escape rendering" "Expected Cyan string escape in bat output"
+    fi
+
+    C_DECL_OUT="$(printf "typedef struct {\n    int x;\n} Node;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    GREEN_DECL="$(printf "\033[38;2;133;153;0m")"
+    if echo "$C_DECL_OUT" | grep -Fq "${GREEN_DECL}typedef" && echo "$C_DECL_OUT" | grep -Fq "${GREEN_DECL}struct"; then
+        pass "bat renders C declaration keywords (typedef, struct) in Solarized Green"
+    else
+        fail "bat C declaration rendering" "Expected Green typedef/struct in bat output"
     fi
 fi
 

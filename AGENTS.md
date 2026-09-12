@@ -45,6 +45,7 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | **Ghostty Terminal Config** | `dotfiles/.config/ghostty/config` | `${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config` | `tests/test-dotfiles.sh` |
 | **Legacy Vim Config** | `dotfiles/.vimrc` | `$HOME/.vimrc` | `tests/test-vim.sh` |
 | **Bat TrueColor Theme** | `colors/Solarized-Dark-TrueColor.tmTheme` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
+| **Bat Syntax Packages** | `syntaxes/*.sublime-syntax` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/syntaxes/` | `tests/test-dotfiles.sh` |
 | **GNOME Terminal Profile** | `colors/gnome-terminal-solarized.dconf` | dconf `/org/gnome/terminal/legacy/profiles:/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | **macOS Terminal Profile** | `colors/Solarized-Dark.terminal` | `~/Library/Preferences/com.apple.Terminal.plist` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | **Dircolors Database** | `dotfiles/.dir-colors/dircolors` | `$HOME/.dir-colors/dircolors` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
@@ -76,7 +77,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 | **Errors & Diagnostics** | `red` | `#DC322F` | Syntax errors, diagnostic warnings |
 
 ### Integration Rules
-1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`) with italic rendering (`BAT_OPTS="--italic-text=always"`), unbroken Cyan string escapes/placeholders, and full Solarized Dark palette coverage for Markdown markup, C/C++ preprocessors, Java annotations, and diffs. Available via `bat` or `b`; `cat` strictly remains standard Unix coreutils.
+1. **`bat`**: Uses `colors/Solarized-Dark-TrueColor.tmTheme` compiled into cache (`bat cache --build`) with italic rendering (`BAT_OPTS="--italic-text=always"`), unbroken Cyan string escapes/placeholders, modern Sublime C/C++ syntaxes in `syntaxes/`, and full Solarized Dark palette coverage for Markdown markup, C/C++ preprocessors, Java annotations, and diffs. Available via `bat` or `b`; `cat` strictly remains standard Unix coreutils.
 2. **`eza`**: Available via `e`, `el`, `elm`, `et`, `elt`, and `elx`, with `EZA_COLORS` and `EXA_COLORS` configured with Solarized Dark palette. Native `ls` and `ll` use standard GNU/BSD `ls` with Solarized `dircolors`.
 3. **Neovim Lua**: Uses `maxmx03/solarized.nvim` with `variant = "spring"` matching `bat` 1:1, integrated with Native Neovim 0.11+ LSP (`vim.lsp.config`, `LspAttach`). Employs 3-Tier Ergonomic Architecture: Tier 1 Monotone Ground (Base0 operators, ternary, brackets, and parameters), Tier 2 Structural Anchors (Green control/declaration keywords framing Yellow types, Blue functions), Tier 3 Values (unbroken Cyan strings and format specifiers, Magenta numbers/booleans, Orange directives).
 4. **Zsh Autosuggestions**: Highlight style is pinned to `fg=#586E75` (Solarized Base01).

@@ -36,6 +36,13 @@ uninstall_dotfiles() {
         "$xdg_config/mise/config.toml"
     )
 
+    if [ -d "$REPO_DIR/syntaxes" ]; then
+        for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
+            [ -e "$syn" ] || continue
+            dotfiles+=("$xdg_config/bat/syntaxes/$(basename "$syn")")
+        done
+    fi
+
     # Dynamically find any additional top-level dotfiles from repository
     if [ -d "$REPO_DIR/dotfiles" ]; then
         for src in "$REPO_DIR/dotfiles"/.* "$REPO_DIR/dotfiles"/*; do

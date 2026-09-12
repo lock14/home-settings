@@ -74,11 +74,22 @@ if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     fi
 fi
 
-# 6. Bat TrueColor Syntax Highlighting Theme
+# 6. Bat TrueColor Syntax Highlighting Theme & Granular Syntaxes
 BAT_THEME_SRC="$REPO_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if [ -f "$BAT_THEME_SRC" ]; then
     echo "  Configuring Bat TrueColor theme..."
     link_file "$BAT_THEME_SRC" "$XDG_CONFIG/bat/themes/Solarized-Dark-TrueColor.tmTheme"
+fi
+
+if [ -d "$REPO_DIR/syntaxes" ]; then
+    mkdir -p "$XDG_CONFIG/bat/syntaxes"
+    for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
+        [ -e "$syn" ] || continue
+        link_file "$syn" "$XDG_CONFIG/bat/syntaxes/$(basename "$syn")"
+    done
+fi
+
+if [ -f "$BAT_THEME_SRC" ] || [ -d "$REPO_DIR/syntaxes" ]; then
     if [ "$DRY_RUN" = false ]; then
         if command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
             mise exec -- bat cache --build >/dev/null 2>&1 || true
