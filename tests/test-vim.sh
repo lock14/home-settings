@@ -128,6 +128,15 @@ if [ -f "$NVIM_CONFIG" ]; then
     else
         fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences in init.lua"
     fi
+
+    if command -v nvim >/dev/null 2>&1; then
+        NVIM_PARAM_HL="$(nvim --headless -c 'lua local hl = vim.api.nvim_get_hl(0, {name = "@variable.parameter", link = false}); io.write(tostring(hl.italic))' -c 'q' 2>/dev/null || true)"
+        if [ "$NVIM_PARAM_HL" != "true" ]; then
+            pass "Neovim renders parameters in upright font without italics"
+        else
+            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=$NVIM_PARAM_HL"
+        fi
+    fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"
 fi
