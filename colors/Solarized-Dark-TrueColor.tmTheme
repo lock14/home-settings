@@ -160,6 +160,20 @@
 				<string>#268BD2</string>
 			</dict>
 		</dict>
+		<!-- Parameters (Base0 Italic, matching Neovim) -->
+		<dict>
+			<key>name</key>
+			<string>Parameter</string>
+			<key>scope</key>
+			<string>variable.parameter</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+				<key>fontStyle</key>
+				<string>italic</string>
+			</dict>
+		</dict>
 		<!-- ======================================================= -->
 		<!-- Preprocessors, Annotations & Directives (Solarized Orange) -->
 		<!-- ======================================================= -->
@@ -167,7 +181,7 @@
 			<key>name</key>
 			<string>Preprocessor, Directive and Annotation</string>
 			<key>scope</key>
-			<string>meta.preprocessor, keyword.control.directive, keyword.control.import, keyword.control.preprocessor, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator</string>
+			<string>meta.preprocessor keyword.control.directive, keyword.control.directive, keyword.control.import, keyword.control.preprocessor, punctuation.definition.directive, punctuation.definition.preprocessor, entity.name.constant.preprocessor, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

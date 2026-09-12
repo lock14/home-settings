@@ -168,6 +168,17 @@ if [ -n "$BAT_BIN" ]; then
     else
         fail "bat C declaration rendering" "Expected Green typedef/struct in bat output"
     fi
+
+    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    BASE0_PARAM="$(printf "\033[3;38;2;131;148;150m")"
+    BASE0_TEXT="$(printf "\033[38;2;131;148;150m")"
+    if echo "$C_MACRO_OUT" | grep -Fq "${ORANGE_PREPROC}#define" && \
+       echo "$C_MACRO_OUT" | grep -Fq "${BASE0_PARAM}x" && \
+       echo "$C_MACRO_OUT" | grep -Fq "${BASE0_TEXT}x"; then
+        pass "bat renders macro parameters and body expressions in Solarized Base0 (grey) matching Neovim"
+    else
+        fail "bat macro parameter rendering" "Expected Base0 grey parameters and body expressions in macro"
+    fi
 fi
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)
