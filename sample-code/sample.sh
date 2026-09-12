@@ -5,7 +5,8 @@
 # ==============================================================================
 set -euo pipefail
 
-readonly SCRIPT_NAME="$(basename "$0")"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
 readonly WORK_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/sample-runner"
 readonly MAX_RETRIES=5
 declare -a ACTIVE_SERVICES=("nginx" "redis" "postgresql" "app-worker")
@@ -23,16 +24,16 @@ trap cleanup EXIT
 log_status() {
     local -r level="$1"
     local -r message="$2"
-    local color="#839496"
+    local color="\033[38;2;131;148;150m"
 
     case "$level" in
-        INFO)  color="#268BD2" ;;
-        WARN)  color="#B58900" ;;
-        ERROR) color="#DC322F" ;;
-        *)     color="#859900" ;;
+        INFO)  color="\033[38;2;38;139;210m" ;;  # Solarized Blue
+        WARN)  color="\033[38;2;181;137;0m" ;;  # Solarized Yellow
+        ERROR) color="\033[38;2;220;50;47m" ;;  # Solarized Red
+        *)     color="\033[38;2;133;153;0m" ;;  # Solarized Green
     esac
 
-    printf "[%s] [%s] %s\n" "$level" "$SCRIPT_NAME" "$message"
+    printf "%b[%s]\033[0m [%s] %s\n" "$color" "$level" "$SCRIPT_NAME" "$message"
 }
 
 render_banner() {
@@ -64,7 +65,7 @@ check_services() {
 main() {
     render_banner
     mkdir -p "$WORK_DIR"
-    log_status "INFO" "Initializing workspace at: ${WORK_DIR}"
+    log_status "INFO" "Initializing workspace at: ${WORK_DIR} (max retries: ${MAX_RETRIES})"
     check_services
 }
 

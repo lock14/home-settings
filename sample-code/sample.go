@@ -1,3 +1,5 @@
+//go:build ignore
+
 /*
  * Package main demonstrates authentic Solarized Dark TrueColor syntax
  * highlighting for Go (Golang) codebases.
