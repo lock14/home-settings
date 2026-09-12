@@ -64,7 +64,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 | :--- | :--- | :--- | :--- |
 | **Base Background** | `base03` | `#002B36` | Terminal background, Neovim background, bat background |
 | **Current Line / Alt Bg** | `base02` | `#073642` | CursorLine, selection background, line highlight |
-| **Comments / Dim Borders** | `base01` | `#586E75` | Code comments (italic), eza tree connectors (`xx=38;5;10`), bat borders |
+| **Comments / Dim Borders** | `base01` | `#586E75` | Code comments (upright), eza tree connectors (`xx=38;5;10`), bat borders |
 | **Subtle Text** | `base00` | `#657B83` | Secondary text, status indicators |
 | **Standard Foreground** | `base0` | `#839496` | Standard typed text, CLI arguments, paths, struct fields, identifiers |
 | **Emphasis Text** | `base1` | `#93A1A1` | Bright text, highlighted labels |
@@ -83,6 +83,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 4. **Zsh Autosuggestions**: Highlight style is pinned to `fg=#586E75` (Solarized Base01).
 5. **CLI Syntax Highlighting (`zsh-syntax-highlighting` / `ZLE`)**: Explicitly configured in `.zshrc-addendum` using 24-bit TrueColor Solarized Dark with restrained, non-distracting syntax highlighting (`commands` green `#859900`, `strings` cyan `#2AA198`, `numbers` magenta `#D33682`, `functions`/`paths` blue `#268BD2`, `errors` red `#DC322F`, `comments`/`suggestions` base01 `#586E75`, `selection` base02 `#073642`, with options, parameters, assignments, and operators kept calm in neutral foreground base0 `#839496`).
 6. **GNOME Terminal**: Configured via `colors/gnome-terminal-solarized.dconf` and `bin/gnome-terminal-solarized` with authentic TrueColor Solarized Dark, Color 8 pinned to `base01` (`#586E75`), MesloLGS NF 12 font, and base02 highlight.
+7. **Explicit Markup Tags Only for Typography**: Italics and bold are strictly reserved for text where the author has explicitly written markup tags (e.g. Markdown `*italic*` and `**bold**`, `#` headings, or HTML `<i>`/`<b>`). All programming code tokens, parameters, and comments remain 100% upright regular monospace.
 
 ---
 

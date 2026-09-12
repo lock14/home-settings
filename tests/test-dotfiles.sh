@@ -169,15 +169,30 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat C declaration rendering" "Expected Green typedef/struct in bat output"
     fi
 
-    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    BASE0_PARAM="$(printf "\033[3;38;2;131;148;150m")"
+    ESC_ITALIC="$(printf "\033[3;")"
+    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     BASE0_TEXT="$(printf "\033[38;2;131;148;150m")"
     if echo "$C_MACRO_OUT" | grep -Fq "${ORANGE_PREPROC}#define" && \
-       echo "$C_MACRO_OUT" | grep -Fq "${BASE0_PARAM}x" && \
-       echo "$C_MACRO_OUT" | grep -Fq "${BASE0_TEXT}x"; then
-        pass "bat renders macro parameters and body expressions in Solarized Base0 (grey) matching Neovim"
+       echo "$C_MACRO_OUT" | grep -Fq "${BASE0_TEXT}x" && \
+       ! echo "$C_MACRO_OUT" | grep -Fq "$ESC_ITALIC"; then
+        pass "bat renders macro parameters and body expressions in upright Solarized Base0 (grey) matching Neovim"
     else
-        fail "bat macro parameter rendering" "Expected Base0 grey parameters and body expressions in macro"
+        fail "bat macro parameter rendering" "Expected upright Base0 grey parameters and body expressions in macro"
+    fi
+
+    C_COMMENT_OUT="$(printf '/* sample comment */\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    BASE01_COMMENT="$(printf "\033[38;2;88;110;117m")"
+    if echo "$C_COMMENT_OUT" | grep -Fq "$BASE01_COMMENT" && ! echo "$C_COMMENT_OUT" | grep -Fq "$ESC_ITALIC"; then
+        pass "bat renders C comments in upright Solarized Base01 without italics"
+    else
+        fail "bat comment rendering" "Expected upright Base01 comment without italics in bat output"
+    fi
+
+    MD_ITALIC_OUT="$(printf '*explicit italic*\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
+    if echo "$MD_ITALIC_OUT" | grep -Fq "$ESC_ITALIC"; then
+        pass "bat renders explicitly tagged Markdown *italic* with true italics"
+    else
+        fail "bat markdown italic rendering" "Expected italics on explicitly tagged Markdown"
     fi
 fi
 

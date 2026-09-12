@@ -120,7 +120,7 @@ if not status_ok then
     vim.cmd([[
         highlight Normal guibg=#002B36 guifg=#839496
         highlight CursorLine guibg=#073642
-        highlight Comment guifg=#586E75 gui=italic
+        highlight Comment guifg=#586E75
     ]])
     return
 end
@@ -137,7 +137,7 @@ lazy.setup({
                 enabled = false,
             },
             styles = {
-                comments = { italic = true },
+                comments = { italic = false },
                 keywords = { italic = false },
                 functions = { bold = false },
                 variables = {},
@@ -151,7 +151,7 @@ lazy.setup({
                     CursorLineNr = { fg = colors.yellow, bg = colors.base02, bold = true },
                     SignColumn = { bg = colors.base03 },
                     -- Canonical Syntax Highlights
-                    Comment = { fg = colors.base01, italic = true },
+                    Comment = { fg = colors.base01, italic = false },
                     Keyword = { fg = colors.green },
                     Statement = { fg = colors.green },
                     Conditional = { fg = colors.green },
@@ -199,7 +199,7 @@ lazy.setup({
                     ["@module"] = { fg = colors.base0 },
                     ["@module.builtin"] = { fg = colors.base0 },
                     ["@string"] = { fg = colors.cyan },
-                    ["@string.documentation"] = { fg = colors.base01, italic = true },
+                    ["@string.documentation"] = { fg = colors.base01, italic = false },
                     ["@string.special"] = { fg = colors.cyan },
                     ["@string.special.path"] = { fg = colors.cyan },
                     ["@string.special.url"] = { fg = colors.cyan },
@@ -207,8 +207,8 @@ lazy.setup({
                     ["@string.escape"] = { fg = colors.cyan },
                     ["@character.printf"] = { fg = colors.cyan },
                     ["@character.special"] = { fg = colors.cyan },
-                    ["@comment"] = { fg = colors.base01, italic = true },
-                    ["@comment.documentation"] = { fg = colors.base01, italic = true },
+                    ["@comment"] = { fg = colors.base01, italic = false },
+                    ["@comment.documentation"] = { fg = colors.base01, italic = false },
                     ["@spell"] = {},
                     ["@constant"] = { fg = colors.base0 },
                     ["@constant.builtin"] = { fg = colors.magenta },
@@ -232,7 +232,7 @@ lazy.setup({
                     ["@markup.raw.block"] = { fg = colors.base0 },
                     ["@markup.link.label"] = { fg = colors.blue },
                     ["@markup.link.url"] = { fg = colors.cyan, underline = true },
-                    ["@markup.quote"] = { fg = colors.blue, italic = true },
+                    ["@markup.quote"] = { fg = colors.blue, italic = false },
                     ["@markup.list"] = { fg = colors.green, bold = true },
                     ["@attribute"] = { fg = colors.orange },
                     ["@lsp.type.keyword"] = { fg = colors.green },
@@ -250,7 +250,7 @@ lazy.setup({
                     ["@lsp.type.parameter"] = { fg = colors.base0 },
                     ["@lsp.type.property"] = { fg = colors.base0 },
                     ["@lsp.type.string"] = { fg = colors.cyan },
-                    ["@lsp.type.comment"] = { fg = colors.base01, italic = true },
+                    ["@lsp.type.comment"] = { fg = colors.base01, italic = false },
                     ["@lsp.typemod.variable.readonly"] = { fg = colors.base0 },
                     -- Classic Vim Regex Fallbacks (Exact 1:1 Parity with Bat when Tree-sitter is offline)
                     markdownH1 = { fg = colors.orange, bold = true },
@@ -265,7 +265,7 @@ lazy.setup({
                     markdownCode = { fg = colors.cyan },
                     markdownCodeBlock = { fg = colors.base0 },
                     markdownCodeDelimiter = { fg = colors.base01 },
-                    markdownBlockquote = { fg = colors.blue, italic = true },
+                    markdownBlockquote = { fg = colors.blue, italic = false },
                     markdownListMarker = { fg = colors.green, bold = true },
                     markdownOrderedListMarker = { fg = colors.green, bold = true },
                     markdownRule = { fg = colors.base01, bold = true },
@@ -293,11 +293,11 @@ lazy.setup({
                     goHexadecimalInt = { fg = colors.magenta },
                     goOctalInt = { fg = colors.magenta },
                     goFloat = { fg = colors.magenta },
-                    pythonDocstring = { fg = colors.base01, italic = true },
+                    pythonDocstring = { fg = colors.base01, italic = false },
                     pythonBuiltinType = { fg = colors.yellow },
                     pythonDecorator = { fg = colors.orange },
                     pythonDecoratorName = { fg = colors.orange },
-                    rustCommentLineDoc = { fg = colors.base01, italic = true },
+                    rustCommentLineDoc = { fg = colors.base01, italic = false },
                     rustAttribute = { fg = colors.orange },
                     rustDerive = { fg = colors.orange },
                     rustDeriveTrait = { fg = colors.yellow },
