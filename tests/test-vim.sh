@@ -125,8 +125,9 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'sizeof_expression' "$CPP_QUERY" && \
        grep -q 'template_parameter_list' "$CPP_QUERY" && \
        grep -q 'using_declaration' "$CPP_QUERY" && \
-       grep -q 'nullopt' "$CPP_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for C++ preproc defined, sizeof types, templates, using declarations, and sentinels"
+       grep -q 'nullopt' "$CPP_QUERY" && \
+       grep -q '@attribute' "$CPP_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for C++ preproc defined, sizeof types, templates, using declarations, sentinels, and attributes"
     else
         fail "Neovim C++ query extension" "Missing or invalid after/queries/cpp/highlights.scm"
     fi
@@ -224,18 +225,28 @@ local col_telem = string.find(line_73, "telemetry") - 1
 local caps_telem = vim.treesitter.get_captures_at_pos(0, 72, col_telem)
 local is_telem_mod = (caps_telem[#caps_telem] and caps_telem[#caps_telem].capture == "module")
 
+local line_48 = vim.api.nvim_buf_get_lines(0, 47, 48, false)[1]
+local col_attr = string.find(line_48, "nodiscard") - 1
+local caps_attr = vim.treesitter.get_captures_at_pos(0, 47, col_attr)
+local is_attr_orange = (caps_attr[#caps_attr] and caps_attr[#caps_attr].capture == "attribute")
+
+local hl_attr = vim.api.nvim_get_hl(0, {name = "@attribute", link = false})
+local attr_fg = string.format("%06x", hl_attr.fg or 0)
+
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
 local java_ft = vim.bo.filetype
 local ok_jdtls, _ = pcall(require, "jdtls")
 
-io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
     param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw), tostring(is_t_type),
     java_ft, tostring(ok_jdtls),
-    module_fg, lsp_ns_fg, tostring(is_core_mod), tostring(is_init_const), tostring(is_nullopt_const), tostring(is_telem_mod)))
+    module_fg, lsp_ns_fg, tostring(is_core_mod), tostring(is_init_const), tostring(is_nullopt_const), tostring(is_telem_mod),
+    attr_fg, tostring(is_attr_orange)))
 ' -c 'q' 2>/dev/null || true)"
 
         IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW IS_T_TYPE JAVA_FT OK_JDTLS \
-            MODULE_FG LSP_NS_FG IS_CORE_MOD IS_INIT_CONST IS_NULLOPT_CONST IS_TELEM_MOD <<< "$NVIM_RESULTS"
+            MODULE_FG LSP_NS_FG IS_CORE_MOD IS_INIT_CONST IS_NULLOPT_CONST IS_TELEM_MOD \
+            ATTR_FG IS_ATTR_ORANGE <<< "$NVIM_RESULTS"
 
         if [ "$PARAM_ITALIC" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
@@ -289,6 +300,12 @@ io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
             pass "Neovim Tree-sitter captures standard sentinels (std::nullopt) as @constant (Magenta)"
         else
             fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got $IS_NULLOPT_CONST"
+        fi
+
+        if [ "$ATTR_FG" = "cb4b16" ] && [ "$IS_ATTR_ORANGE" = "true" ]; then
+            pass "Neovim renders C++ attributes ([[nodiscard]]) in Solarized Orange (#cb4b16)"
+        else
+            fail "Neovim attribute highlight" "Expected fg=cb4b16 and capture=attribute, got fg=$ATTR_FG cap=$IS_ATTR_ORANGE"
         fi
 
         if [ "$JAVA_FT" = "java" ] && [ "$OK_JDTLS" = "true" ]; then

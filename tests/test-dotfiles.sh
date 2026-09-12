@@ -98,8 +98,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "<string>constant.character.escape, constant.other.placeholder" "$THEME_FILE" && \
    grep -q "<string>invalid, invalid.illegal" "$THEME_FILE" && \
    grep -q "<string>entity.name.namespace, entity.name.module, support.module, entity.name.scope-resolution" "$THEME_FILE" && \
-   grep -q "entity.other.inherited-class" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Namespace, and Error scopes"
+   grep -q "entity.other.inherited-class" "$THEME_FILE" && \
+   grep -q "entity.name.attribute" "$THEME_FILE"; then
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -310,6 +311,16 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Violet namespace and Blue function matching Neovim"
     else
         fail "bat qualified function rendering" "Expected Violet std and Blue move/for_each in bat output"
+    fi
+
+    ORANGE_VAL="$(printf "\033[38;2;203;75;22m")"
+    CPP_ATTR_OUT="$(printf '[[nodiscard]] constexpr uint64_t id();\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if echo "$CPP_ATTR_OUT" | grep -Fq "${ORANGE_VAL}[[" && \
+       echo "$CPP_ATTR_OUT" | grep -Fq "${ORANGE_VAL}nodiscard" && \
+       echo "$CPP_ATTR_OUT" | grep -Fq "${ORANGE_VAL}]]"; then
+        pass "bat renders C++ attributes ([[nodiscard]]) in Solarized Orange matching Neovim"
+    else
+        fail "bat attribute rendering" "Expected Orange [[nodiscard]] in bat output"
     fi
 fi
 

@@ -550,7 +550,9 @@ contexts:
   attribute_list:
     - meta_scope: meta.attribute.c++
     - match: '\b(noreturn|carries_dependency|deprecated|fallthrough|maybe_unused|nodiscard|likely|unlikely|no_unique_address|assume|indeterminate)\b'
-      scope: storage.modifier.c++
+      scope: entity.name.attribute.c++ storage.modifier.attribute.c++
+    - match: '{{identifier}}'
+      scope: entity.name.attribute.c++
     - include: parens
     - match: ','
       scope: punctuation.separator.c++

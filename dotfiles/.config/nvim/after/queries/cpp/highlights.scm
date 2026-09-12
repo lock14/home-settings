@@ -45,3 +45,8 @@
  (#eq? @_scope "std")
  (#any-of? @constant "nullopt" "npos"))
 
+;; Standard and vendor attributes: [[nodiscard]], [[maybe_unused]], etc.
+(attribute
+  name: (identifier) @attribute)
+
+
