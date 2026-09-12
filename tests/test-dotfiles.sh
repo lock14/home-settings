@@ -194,6 +194,14 @@ if [ -n "$BAT_BIN" ]; then
     else
         fail "bat markdown italic rendering" "Expected italics on explicitly tagged Markdown"
     fi
+
+    C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    MAGENTA_CONST="$(printf "\033[38;2;211;54;130m")"
+    if echo "$C_CONST_OUT" | grep -Fq "${MAGENTA_CONST}EXIT_FAILURE"; then
+        pass "bat renders named uppercase constants (EXIT_FAILURE, etc.) in Solarized Magenta"
+    else
+        fail "bat constant rendering" "Expected Magenta named constants in bat output"
+    fi
 fi
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)

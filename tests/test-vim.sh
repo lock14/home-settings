@@ -86,10 +86,11 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q '@keyword\.type.*colors\.green' "$NVIM_CONFIG" && \
        grep -q '@keyword\.conditional\.ternary.*colors\.base0' "$NVIM_CONFIG" && \
        grep -q 'markdownH1.*colors\.orange' "$NVIM_CONFIG" && \
+       grep -q '\["@constant"\] = { fg = colors\.magenta }' "$NVIM_CONFIG" && \
        grep -q '@attribute' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua defines first-principles markup headings, blue quotes, yellow types, green declaration keywords, and calm operators matching bat"
+        pass "Neovim init.lua defines first-principles markup headings, blue quotes, yellow types, green declaration keywords, magenta constants, and calm operators matching bat"
     else
-        fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, or markdownH1 in init.lua"
+        fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, @constant, or markdownH1 in init.lua"
     fi
 
     if command -v nvim >/dev/null 2>&1; then
@@ -135,6 +136,13 @@ if [ -f "$NVIM_CONFIG" ]; then
             pass "Neovim renders parameters in upright font without italics"
         else
             fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=$NVIM_PARAM_HL"
+        fi
+
+        NVIM_CONST_HL="$(nvim --headless -c 'lua local hl = vim.api.nvim_get_hl(0, {name = "@constant", link = false}); io.write(string.format("%06x", hl.fg or 0))' -c 'q' 2>/dev/null || true)"
+        if [ "$NVIM_CONST_HL" = "d33682" ]; then
+            pass "Neovim renders @constant in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=$NVIM_CONST_HL"
         fi
     fi
 else
