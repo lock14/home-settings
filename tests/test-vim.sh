@@ -149,6 +149,18 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences in init.lua"
     fi
 
+    DIFF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/diff/highlights.scm"
+    if [ -f "$DIFF_QUERY" ] && grep -q 'deletion.*@diff.minus' "$DIFF_QUERY" && \
+       grep -q 'addition.*@diff.plus' "$DIFF_QUERY" && \
+       grep -q 'location.*@diff.line' "$DIFF_QUERY" && \
+       grep -q '\["@diff\.plus"\]\s*=\s*{\s*fg\s*=\s*colors\.green' "$NVIM_CONFIG" && \
+       grep -q '\["@diff\.minus"\]\s*=\s*{\s*fg\s*=\s*colors\.red' "$NVIM_CONFIG" && \
+       grep -q '\["@diff\.line"\]\s*=\s*{\s*fg\s*=\s*colors\.blue' "$NVIM_CONFIG"; then
+        pass "Neovim defines Tree-sitter query extensions and highlights for diff (Green additions, Red deletions, Blue hunk lines)"
+    else
+        fail "Neovim diff query extension" "Missing or invalid after/queries/diff/highlights.scm or init.lua diff overrides"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -237,16 +249,37 @@ vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
 local java_ft = vim.bo.filetype
 local ok_jdtls, _ = pcall(require, "jdtls")
 
-io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.diff")
+vim.cmd("redraw")
+local diff_buf = vim.api.nvim_get_current_buf()
+local hl_plus = vim.api.nvim_get_hl(0, {name = "@diff.plus", link = false})
+local diff_plus_fg = string.format("%06x", hl_plus.fg or 0)
+local hl_minus = vim.api.nvim_get_hl(0, {name = "@diff.minus", link = false})
+local diff_minus_fg = string.format("%06x", hl_minus.fg or 0)
+local hl_line = vim.api.nvim_get_hl(0, {name = "@diff.line", link = false})
+local diff_line_fg = string.format("%06x", hl_line.fg or 0)
+
+local caps_del = vim.treesitter.get_captures_at_pos(diff_buf, 6, 0)
+local is_del_minus = (caps_del[#caps_del] and caps_del[#caps_del].capture == "diff.minus")
+
+local caps_add = vim.treesitter.get_captures_at_pos(diff_buf, 8, 0)
+local is_add_plus = (caps_add[#caps_add] and caps_add[#caps_add].capture == "diff.plus")
+
+local caps_hunk = vim.treesitter.get_captures_at_pos(diff_buf, 4, 0)
+local is_hunk_line = (caps_hunk[#caps_hunk] and caps_hunk[#caps_hunk].capture == "diff.line")
+
+io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
     param_italic, const_fg, tostring(is_wn_type), tostring(is_so_kw), tostring(is_t_type),
     java_ft, tostring(ok_jdtls),
     module_fg, lsp_ns_fg, tostring(is_core_mod), tostring(is_init_const), tostring(is_nullopt_const), tostring(is_telem_mod),
-    attr_fg, tostring(is_attr_orange)))
+    attr_fg, tostring(is_attr_orange),
+    diff_plus_fg, tostring(is_add_plus), diff_minus_fg, tostring(is_del_minus), diff_line_fg, tostring(is_hunk_line)))
 ' -c 'q' 2>/dev/null || true)"
 
         IFS='|' read -r PARAM_ITALIC CONST_FG IS_WN_TYPE IS_SO_KW IS_T_TYPE JAVA_FT OK_JDTLS \
             MODULE_FG LSP_NS_FG IS_CORE_MOD IS_INIT_CONST IS_NULLOPT_CONST IS_TELEM_MOD \
-            ATTR_FG IS_ATTR_ORANGE <<< "$NVIM_RESULTS"
+            ATTR_FG IS_ATTR_ORANGE \
+            DIFF_PLUS_FG IS_ADD_PLUS DIFF_MINUS_FG IS_DEL_MINUS DIFF_LINE_FG IS_HUNK_LINE <<< "$NVIM_RESULTS"
 
         if [ "$PARAM_ITALIC" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
@@ -312,6 +345,24 @@ io.write(string.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
             pass "Neovim detects Java filetype and loads nvim-jdtls cleanly"
         else
             fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=$JAVA_FT ok=$OK_JDTLS"
+        fi
+
+        if [ "$DIFF_PLUS_FG" = "859900" ] && [ "$IS_ADD_PLUS" = "true" ]; then
+            pass "Neovim renders diff additions (+) in Solarized Green (#859900)"
+        else
+            fail "Neovim diff addition highlight" "Expected fg=859900 and capture=diff.plus, got fg=$DIFF_PLUS_FG cap=$IS_ADD_PLUS"
+        fi
+
+        if [ "$DIFF_MINUS_FG" = "dc322f" ] && [ "$IS_DEL_MINUS" = "true" ]; then
+            pass "Neovim renders diff deletions (-) in Solarized Red (#dc322f)"
+        else
+            fail "Neovim diff deletion highlight" "Expected fg=dc322f and capture=diff.minus, got fg=$DIFF_MINUS_FG cap=$IS_DEL_MINUS"
+        fi
+
+        if [ "$DIFF_LINE_FG" = "268bd2" ] && [ "$IS_HUNK_LINE" = "true" ]; then
+            pass "Neovim renders diff hunk headers (@@ ... @@) in Solarized Blue (#268bd2)"
+        else
+            fail "Neovim diff hunk line highlight" "Expected fg=268bd2 and capture=diff.line, got fg=$DIFF_LINE_FG cap=$IS_HUNK_LINE"
         fi
     fi
 else

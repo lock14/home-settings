@@ -493,7 +493,7 @@
 			<key>name</key>
 			<string>Markup Inserted (Diff)</string>
 			<key>scope</key>
-			<string>markup.inserted</string>
+			<string>markup.inserted, punctuation.definition.inserted, punctuation.definition.to-file.diff</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -504,7 +504,7 @@
 			<key>name</key>
 			<string>Markup Deleted (Diff)</string>
 			<key>scope</key>
-			<string>markup.deleted</string>
+			<string>markup.deleted, punctuation.definition.deleted, punctuation.definition.from-file.diff</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -520,6 +520,61 @@
 			<dict>
 				<key>foreground</key>
 				<string>#B58900</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Diff Hunk Range &amp; Section (Solarized Blue)</string>
+			<key>scope</key>
+			<string>meta.diff.range, punctuation.definition.range.diff, meta.diff.range.unified, entity.name.section.diff, keyword.control.diff, support.function.diff</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Diff File Paths (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>string.special.path.diff</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Diff Constants &amp; Hashes (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>constant.other.hash.diff, constant.numeric.integer.octal.diff, constant.numeric.integer.percent.diff</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Diff Keywords (Solarized Green)</string>
+			<key>scope</key>
+			<string>keyword.other.diff</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Diff Separators &amp; Parameters (Solarized Base0)</string>
+			<key>scope</key>
+			<string>punctuation.separator.range.diff, variable.parameter.diff, meta.diff.context</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
 			</dict>
 		</dict>
 		<!-- ======================================================= -->

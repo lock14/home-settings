@@ -57,7 +57,8 @@ home-settings/
 │
 ├── syntaxes/                        # Enhanced Sublime syntax packages for bat
 │   ├── C.sublime-syntax             # Modern C syntax with granular declaration scopes
-│   └── C++.sublime-syntax           # Modern C++ syntax with concept/template support
+│   ├── C++.sublime-syntax           # Modern C++ syntax with concept/template support
+│   └── Diff.sublime-syntax          # Standalone Git & Unified Diff syntax for bat
 │
 └── tests/                           # Automated test suites (160+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)

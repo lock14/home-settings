@@ -83,6 +83,7 @@ fi
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked Bat C syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Diff.sublime-syntax" "" "Symlinked Bat Diff syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -99,7 +100,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "<string>invalid, invalid.illegal" "$THEME_FILE" && \
    grep -q "<string>entity.name.namespace, entity.name.module, support.module, entity.name.scope-resolution" "$THEME_FILE" && \
    grep -q "entity.other.inherited-class" "$THEME_FILE" && \
-   grep -q "entity.name.attribute" "$THEME_FILE"; then
+   grep -q "entity.name.attribute" "$THEME_FILE" && \
+   grep -q "string.special.path.diff" "$THEME_FILE" && \
+   grep -q "meta.diff.range" "$THEME_FILE"; then
     pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
@@ -321,6 +324,25 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders C++ attributes ([[nodiscard]]) in Solarized Orange matching Neovim"
     else
         fail "bat attribute rendering" "Expected Orange [[nodiscard]] in bat output"
+    fi
+
+    DIFF_BLUE="$(printf "\033[38;2;38;139;210m")"
+    DIFF_CYAN="$(printf "\033[38;2;42;161;152m")"
+    DIFF_MAGENTA="$(printf "\033[38;2;211;54;130m")"
+    DIFF_RED="$(printf "\033[38;2;220;50;47m")"
+    DIFF_GREEN="$(printf "\033[38;2;133;153;0m")"
+    DIFF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
+    if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_BLUE}diff" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_CYAN}a/src/service/cluster_manager.go" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_MAGENTA}4b825dc" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_RED}---" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_GREEN}+++" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_BLUE}@@ -32,18 +32,22 @@" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_RED}-" && \
+       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${DIFF_GREEN}+"; then
+        pass "bat renders diff additions (Green), deletions (Red), hunk headers (Blue), paths (Cyan), and hashes (Magenta) matching Neovim"
+    else
+        fail "bat diff rendering" "Expected Blue diff/@@, Red ---/-, Green +++/+, Cyan path, Magenta hash in bat output"
     fi
 fi
 
