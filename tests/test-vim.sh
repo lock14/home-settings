@@ -170,6 +170,16 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Go query extension" "Missing or invalid after/queries/go/highlights.scm"
     fi
 
+    JAVA_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/java/highlights.scm"
+    if [ -f "$JAVA_QUERY" ] && grep -q '"import" @keyword\.import' "$JAVA_QUERY" && \
+       grep -q '"record" @keyword\.type' "$JAVA_QUERY" && \
+       grep -q 'record_pattern' "$JAVA_QUERY" && \
+       grep -q '"when" @keyword\.conditional' "$JAVA_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Java (Orange import, Green record/when, Yellow record patterns)"
+    else
+        fail "Neovim Java query extension" "Missing or invalid after/queries/java/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -264,8 +274,25 @@ local attr_fg = string.format("%06x", hl_attr.fg or 0)
 
 -- 3. Inspect Java (sample.java)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
+vim.cmd("redraw")
+local java_buf = vim.api.nvim_get_current_buf()
 local java_ft = vim.bo.filetype
 local ok_jdtls, _ = pcall(require, "jdtls")
+
+local r_j_imp, c_j_imp = find_pos(java_buf, "import java.time.Instant;", "import")
+local is_j_imp_kw = match_capture(java_buf, r_j_imp, c_j_imp, "keyword.import")
+
+local r_j_rec, c_j_rec = find_pos(java_buf, "record OrderRecord(", "record")
+local is_j_rec_kw = match_capture(java_buf, r_j_rec, c_j_rec, "keyword.type")
+
+local r_j_ann, c_j_ann = find_pos(java_buf, "@Service", "@Service")
+local is_j_ann = match_capture(java_buf, r_j_ann, c_j_ann, "attribute")
+
+local r_j_pat, c_j_pat = find_pos(java_buf, "case OrderRecord(", "OrderRecord")
+local is_j_pat_type = match_capture(java_buf, r_j_pat, c_j_pat, "type")
+
+local r_j_when, c_j_when = find_pos(java_buf, "when amount >=", "when")
+local is_j_when_kw = match_capture(java_buf, r_j_when, c_j_when, "keyword.conditional")
 
 -- 4. Inspect Diff (sample.diff)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.diff")
@@ -325,6 +352,11 @@ local results = {
     is_t_type = tostring(is_t_type),
     java_ft = java_ft,
     ok_jdtls = tostring(ok_jdtls),
+    is_j_imp_kw = tostring(is_j_imp_kw),
+    is_j_rec_kw = tostring(is_j_rec_kw),
+    is_j_ann = tostring(is_j_ann),
+    is_j_pat_type = tostring(is_j_pat_type),
+    is_j_when_kw = tostring(is_j_when_kw),
     module_fg = module_fg,
     lsp_ns_fg = lsp_ns_fg,
     is_core_mod = tostring(is_core_mod),
@@ -430,6 +462,24 @@ end
             pass "Neovim detects Java filetype and loads nvim-jdtls cleanly"
         else
             fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=${RES[java_ft]} ok=${RES[ok_jdtls]}"
+        fi
+
+        if [ "${RES[is_j_imp_kw]}" = "true" ]; then
+            pass "Neovim renders Java import keyword as @keyword.import (Orange)"
+        else
+            fail "Neovim Java import keyword" "Expected @keyword.import for import, got ${RES[is_j_imp_kw]}"
+        fi
+
+        if [ "${RES[is_j_rec_kw]}" = "true" ] && [ "${RES[is_j_when_kw]}" = "true" ]; then
+            pass "Neovim renders Java record declaration and pattern guard 'when' as keywords (Green)"
+        else
+            fail "Neovim Java record/when keywords" "Expected @keyword.type for record and @keyword.conditional for when, got rec=${RES[is_j_rec_kw]} when=${RES[is_j_when_kw]}"
+        fi
+
+        if [ "${RES[is_j_ann]}" = "true" ] && [ "${RES[is_j_pat_type]}" = "true" ]; then
+            pass "Neovim renders Java annotations as @attribute (Orange) and record patterns as @type (Yellow)"
+        else
+            fail "Neovim Java annotation and record pattern highlights" "Expected @attribute for annotations and @type for record patterns, got ann=${RES[is_j_ann]} pat=${RES[is_j_pat_type]}"
         fi
 
         if [ "${RES[diff_plus_fg]}" = "859900" ] && [ "${RES[is_add_plus]}" = "true" ]; then

@@ -345,7 +345,7 @@ lazy.setup({
         priority = 900,
         config = function()
             local parsers = {
-                "c", "cpp", "go", "python", "rust", "typescript",
+                "c", "cpp", "go", "java", "python", "rust", "typescript",
                 "javascript", "bash", "markdown", "markdown_inline",
                 "json", "yaml", "toml", "terraform", "sql", "lua",
                 "vim", "vimdoc", "diff", "printf"

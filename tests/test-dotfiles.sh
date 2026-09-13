@@ -85,6 +85,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked 
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Diff.sublime-syntax" "" "Symlinked Bat Diff syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Go.sublime-syntax" "" "Symlinked Bat Go syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Java.sublime-syntax" "" "Symlinked Bat Java syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -315,15 +316,15 @@ if [ -n "$BAT_BIN" ]; then
 
     # --- 2.4 Diff Syntax Verification ---
     DIFF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
-    if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}diff" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}4b825dc" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}---" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+++" && \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}@@ -32,18 +32,20 @@" || \
-       echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}@@ -32,18 +32,22 @@"; then
-        if echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_RED}-" && \
-           echo "$DIFF_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}+"; then
+    if grep -Fq "${SOL_BLUE}diff" <<< "$DIFF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" <<< "$DIFF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}4b825dc" <<< "$DIFF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_RED}---" <<< "$DIFF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}+++" <<< "$DIFF_SAMPLE_OUT" && \
+       (grep -Fq "${SOL_BLUE}@@ -32,18 +32,20 @@" <<< "$DIFF_SAMPLE_OUT" || \
+        grep -Fq "${SOL_BLUE}@@ -32,18 +32,22 @@" <<< "$DIFF_SAMPLE_OUT"); then
+        if grep -Fq "${SOL_RED}-" <<< "$DIFF_SAMPLE_OUT" && \
+           grep -Fq "${SOL_GREEN}+" <<< "$DIFF_SAMPLE_OUT"; then
             pass "bat renders diff additions (Green), deletions (Red), hunk headers (Blue), paths (Cyan), and hashes (Magenta) matching Neovim"
         else
             fail "bat diff rendering" "Expected Red - and Green + in bat diff output"
@@ -334,25 +335,46 @@ if [ -n "$BAT_BIN" ]; then
 
     # --- 2.5 Go Syntax Verification ---
     GO_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
-    if echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}package" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_VIOLET}main" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_ORANGE}import" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}type" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}func" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}struct" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_GREEN}interface" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_BASE0}context" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}Context" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}LevelDebug" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_MAGENTA}MaskAll" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}ClusterNode" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}map" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_YELLOW}chan" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_BLUE}NewClusterNode" && \
-       echo "$GO_SAMPLE_OUT" | grep -Fq "${SOL_CYAN}\`json:\"port\"\`"; then
+    if grep -Fq "${SOL_GREEN}package" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}main" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}import" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}type" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}func" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}struct" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}interface" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}context" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}Context" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}LevelDebug" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}MaskAll" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}ClusterNode" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}map" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}chan" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}NewClusterNode" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}\`json:\"port\"\`" <<< "$GO_SAMPLE_OUT"; then
         pass "bat renders Go package (Green), main (Violet), import (Orange), declarations (Green), qualifiers (Base0 Grey), constants (Magenta), types/composite literals (Yellow), and calls (Blue) matching Neovim"
     else
         fail "bat Go rendering" "Expected Model 2 Solarized TrueColor highlights in bat sample.go output"
+    fi
+
+    # --- 2.6 Java Syntax Verification ---
+    JAVA_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l java "$SCRIPT_DIR/sample-code/sample.java" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}import" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}java" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}Instant" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}@interface" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}class" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}interface" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}record" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}OrderRecord" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}1L" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@Service" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@Override" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}when" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}100.0" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}///" <<< "$JAVA_SAMPLE_OUT"; then
+        pass "bat renders Java import (Orange), paths (Base0), types (Yellow), declarations (Green class/interface/record), annotations (Orange), guards (Green when), numbers (Magenta 1L/100.0), and doc comments (Base01 ///) matching Neovim"
+    else
+        fail "bat Java rendering" "Expected Modern Java Solarized TrueColor highlights in bat sample.java output"
     fi
 fi
 

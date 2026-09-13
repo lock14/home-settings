@@ -1,0 +1,262 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Java Syntax
+# Supports Modern Java 17 / 21 / 25 LTS:
+# - Records, Sealed Classes (sealed, permits, non-sealed)
+# - Pattern Matching for switch with record patterns and 'when' guards
+# - Markdown doc comments (///) and Javadoc comments (/**)
+# - Unified numeric literals (1L, 129.50) in Solarized Magenta
+# - Calm Base0 package routing paths in import statements
+# - Declaration keywords (class, interface, record, enum, @interface) in Solarized Green
+# - Annotations (@Service, @Override, @Value) in Solarized Orange
+name: Java
+scope: source.java
+version: 2
+
+file_extensions:
+  - java
+  - bsh
+
+first_line_match: |-
+  (?xi:
+    ^ \s* // .*? -\*- .*? \bjava\b .*? -\*-  # editorconfig
+  )
+
+variables:
+  ident: '\b[[:alpha:]_$][[:alnum:]_$]*\b'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_$]*\b'
+  primitive_type: '\b(?:boolean|byte|char|double|float|int|long|short|void)\b'
+  modifier: '\b(?:public|protected|private|static|final|abstract|synchronized|native|transient|volatile|strictfp|default|sealed|non-sealed)\b'
+  control_flow: '\b(?:if|else|while|do|for|return|throw|throws|try|catch|finally|assert)\b'
+  switch_flow: '\b(?:switch|case|default|when|yield|break|continue)\b'
+  hex_digit: '[0-9a-fA-F_]'
+  dec_digit: '[0-9_]'
+
+contexts:
+  main:
+    - include: comments
+    - include: package-statement
+    - include: import-statement
+    - include: annotations
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  comments:
+    # Markdown documentation comments (Java 23+ JEP 467)
+    - match: '///.*$'
+      scope: comment.line.triple-slash.documentation.java
+    # Javadoc comments
+    - match: '/\*\*'
+      scope: punctuation.definition.comment.begin.java
+      push:
+        - meta_scope: comment.block.documentation.java
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.java
+          pop: true
+    # Standard block comments
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.java
+      push:
+        - meta_scope: comment.block.java
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.java
+          pop: true
+    # Line comments
+    - match: '//.*$'
+      scope: comment.line.double-slash.java
+
+  package-statement:
+    - match: '\b(package)\b\s*'
+      captures:
+        1: keyword.other.package.java
+      push:
+        - match: ';'
+          scope: punctuation.terminator.java
+          pop: true
+        - match: '({{ident}})'
+          captures:
+            1: entity.name.namespace.java
+        - match: '\.'
+          scope: punctuation.accessor.dot.java
+
+  import-statement:
+    - match: '\b(import)\b(?:\s+(static)\b)?\s*'
+      captures:
+        1: keyword.control.import.java
+        2: storage.modifier.java
+      push:
+        - match: ';'
+          scope: punctuation.terminator.java
+          pop: true
+        # The imported class or member before semicolon
+        - match: '({{pascal_ident}})(?=\s*;)'
+          captures:
+            1: support.type.user-defined.java
+        - match: '(\*)(?=\s*;)'
+          captures:
+            1: variable.language.wildcard.java
+        # Package path segments remain in calm Base0 grey
+        - match: '({{ident}})\s*(\.)'
+          captures:
+            1: variable.other.namespace.java
+            2: punctuation.accessor.dot.java
+        - match: '({{ident}})'
+          captures:
+            1: variable.other.namespace.java
+
+  annotations:
+    # @interface definition
+    - match: '(@interface)\b\s+({{ident}})'
+      captures:
+        1: storage.type.interface.annotation.java
+        2: entity.name.type.class.annotation.java
+    # Annotation usage (e.g. @Override, @Service, @Value("..."))
+    - match: '(@[[:alpha:]_$][[:alnum:]_$]*)'
+      scope: storage.type.annotation.java
+
+  declarations:
+    # Modifiers
+    - match: '{{modifier}}'
+      scope: storage.modifier.java
+
+    # Record Declaration: record OrderRecord(...)
+    - match: '\b(record)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.record.java
+        2: entity.name.type.class.record.java
+
+    # Class Declaration: class Name [extends ...] [implements ...] [permits ...]
+    - match: '\b(class)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.class.java
+        2: entity.name.type.class.java
+
+    # Interface Declaration: interface Name [extends ...]
+    - match: '\b(interface)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.interface.java
+        2: entity.name.type.class.interface.java
+
+    # Enum Declaration: enum Name [implements ...]
+    - match: '\b(enum)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.enum.java
+        2: entity.name.type.class.enum.java
+
+    # Inheritance & Permitted subclasses
+    - match: '\b(extends|implements|permits)\b'
+      scope: storage.modifier.extends.java
+
+  statements:
+    - match: '{{control_flow}}'
+      scope: keyword.control.java
+
+    - match: '{{switch_flow}}'
+      scope: keyword.control.switch.java
+
+    # Arrow operator in switch rules and lambdas
+    - match: '->'
+      scope: keyword.operator.arrow.java
+
+    # Operator keywords
+    - match: '\b(new|instanceof)\b'
+      scope: keyword.operator.word.java
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: constants
+    - include: types
+    - include: function-calls
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal integer or floating-point literal (e.g. 0x7F, 0x1.0p0)
+    - match: '\b0[xX]{{hex_digit}}+(?:\.{{hex_digit}}+)?(?:[pP][+-]?{{dec_digit}}+)?[fFdDlL]?\b'
+      scope: constant.numeric.hexadecimal.java
+    # Binary integer literal (e.g. 0b1010_1100L)
+    - match: '\b0[bB][01_]+[lL]?\b'
+      scope: constant.numeric.binary.java
+    # Decimal floating-point literal (e.g. 129.50, .05, 1e-3f)
+    - match: '\b(?:[0-9][0-9_]*\.[0-9][0-9_]*|\.[0-9][0-9_]*|[0-9][0-9_]*)(?:[eE][+-]?[0-9_]+)?[fFdD]?\b'
+      scope: constant.numeric.float.java
+    # Decimal integer literal (e.g. 100, 1024, 1L, 0L)
+    - match: '\b[0-9][0-9_]*[lL]?\b'
+      scope: constant.numeric.integer.decimal.java
+
+  strings:
+    # Java 15+ Text Blocks: """ ... """
+    - match: '"""'
+      scope: punctuation.definition.string.begin.java
+      push:
+        - meta_scope: string.quoted.triple.java
+        - match: '"""'
+          scope: punctuation.definition.string.end.java
+          pop: true
+        - include: string-escapes-and-formats
+
+    # Standard Double-quoted string: " ... "
+    - match: '"'
+      scope: punctuation.definition.string.begin.java
+      push:
+        - meta_scope: string.quoted.double.java
+        - match: '"'
+          scope: punctuation.definition.string.end.java
+          pop: true
+        - include: string-escapes-and-formats
+
+    # Single-quoted character literal: ' ... '
+    - match: "'"
+      scope: punctuation.definition.string.begin.java
+      push:
+        - meta_scope: string.quoted.single.java
+        - match: "'"
+          scope: punctuation.definition.string.end.java
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.java
+
+  string-escapes-and-formats:
+    # Printf format specifiers: %d, %s, %.2f, %n, %tB
+    - match: '%[-#+ 0,(]*[0-9]*(?:\.[0-9]+)?(?:[a-zA-Z%])'
+      scope: constant.other.placeholder.java
+    # Escape sequences: \n, \t, \", \\, \u0000
+    - match: '\\(?:[btnfr"''\\]|[0-7]{1,3}|u[0-9a-fA-F]{4})'
+      scope: constant.character.escape.java
+
+  constants:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.java
+    - match: '\bnull\b'
+      scope: constant.language.null.java
+    - match: '\b(this|super)\b'
+      scope: variable.language.java
+    # Named UPPERCASE constants (e.g. DEFAULT_BUFFER_SIZE, TAX_RATE_MULTIPLIER)
+    - match: '\b[[:upper:]_][[:upper:][:digit:]_]{2,}\b'
+      scope: variable.other.constant.java
+
+  types:
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.java
+
+    # Standard / Custom PascalCase types (e.g. OrderRecord, List, Optional, String)
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.java
+
+  function-calls:
+    # Method invocation: obj.method(...) or method(...)
+    - match: '\b([[:alpha:]_$][[:alnum:]_$]*)\s*(?=\()'
+      captures:
+        1: variable.function.java
+    # Method reference: Class::method
+    - match: '(::)\s*([[:alpha:]_$][[:alnum:]_$]*)'
+      captures:
+        1: punctuation.accessor.double-colon.java
+        2: variable.function.java
+
+  operators-and-delimiters:
+    - match: '==|!=|<=|>=|&&|\|\||<<|>>|>>>|\+\+|--|[+\-*/%&|^~<>=!?:;]'
+      scope: keyword.operator.java
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.java
