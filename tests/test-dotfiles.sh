@@ -87,6 +87,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Diff.sublime-syntax" "" "Symlink
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Go.sublime-syntax" "" "Symlinked Bat Go syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Java.sublime-syntax" "" "Symlinked Bat Java syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Python.sublime-syntax" "" "Symlinked Bat Python syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Rust.sublime-syntax" "" "Symlinked Bat Rust syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -108,8 +109,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "meta.diff.range" "$THEME_FILE" && \
    grep -q "variable.language" "$THEME_FILE" && \
    grep -q "storage.type.function" "$THEME_FILE" && \
+   grep -q "storage.type.impl" "$THEME_FILE" && \
    grep -q "variable.other.constant" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Namespace, Attribute, and Error scopes"
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Rust, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -406,6 +408,43 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders Python imports (Orange), modules (Violet), typing/classes (Yellow), unbroken numbers (Magenta), decorators (Orange), instance self/None/__name__ (Magenta), def/async (Green), and calls (Blue) matching Neovim"
     else
         fail "bat Python rendering" "Expected Modern Python Solarized TrueColor highlights in bat sample.py output"
+    fi
+
+    # --- 2.8 Rust Syntax Verification ---
+    RUST_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l rs "$SCRIPT_DIR/sample-code/sample.rs" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}use" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}std" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}collections" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}HashMap" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}const" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}MAX_CONNECTIONS" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}usize" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}0xCAFE_BABE" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}derive" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}Debug" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}pub" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}enum" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}NodeStatus" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}Starting" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}trait" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}Repository" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}T" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}fn" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}find_by_id" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}'a" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}self" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}struct" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}ServerNode" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}where" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}impl" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}write" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}let" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}mut" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}println" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}///" <<< "$RUST_SAMPLE_OUT"; then
+        pass "bat renders Rust imports (Orange), modules (Violet), types/traits (Yellow), keywords/lifetimes (Green), constants/variants/self (Magenta), calls/macros (Blue), and attributes (Orange) matching Neovim"
+    else
+        fail "bat Rust rendering" "Expected Modern Rust Solarized TrueColor highlights in bat sample.rs output"
     fi
 fi
 

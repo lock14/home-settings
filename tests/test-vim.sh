@@ -188,6 +188,13 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Python query extension" "Missing or invalid after/queries/python/highlights.scm"
     fi
 
+    RUST_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/rust/highlights.scm"
+    if [ -f "$RUST_QUERY" ] && grep -q 'attribute' "$RUST_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Rust (Orange attributes)"
+    else
+        fail "Neovim Rust query extension" "Missing or invalid after/queries/rust/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -392,6 +399,38 @@ local is_py_ep_ctor = match_capture(py_buf, r_py_ep, c_py_ep, "constructor")
 local r_py_name, c_py_name = find_pos(py_buf, "if __name__ == \"__main__\":", "__name__")
 local is_py_name_const = match_capture(py_buf, r_py_name, c_py_name, "constant.builtin")
 
+-- 7. Inspect Rust (sample.rs)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.rs")
+vim.cmd("redraw")
+local rs_buf = vim.api.nvim_get_current_buf()
+
+local r_rs_use, c_rs_use = find_pos(rs_buf, "use std::collections::HashMap;", "use")
+local is_rs_use_kw = match_capture(rs_buf, r_rs_use, c_rs_use, "keyword.import")
+
+local r_rs_std, c_rs_std = find_pos(rs_buf, "use std::collections::HashMap;", "std")
+local is_rs_std_mod = match_capture(rs_buf, r_rs_std, c_rs_std, "module")
+
+local r_rs_map, c_rs_map = find_pos(rs_buf, "use std::collections::HashMap;", "HashMap")
+local is_rs_map_type = match_capture(rs_buf, r_rs_map, c_rs_map, "type")
+
+local r_rs_max, c_rs_max = find_pos(rs_buf, "const MAX_CONNECTIONS: usize = 128;", "MAX_CONNECTIONS")
+local is_rs_max_const = match_capture(rs_buf, r_rs_max, c_rs_max, "constant")
+
+local r_rs_drv, c_rs_drv = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "derive")
+local is_rs_drv_attr = match_capture(rs_buf, r_rs_drv, c_rs_drv, "attribute")
+
+local r_rs_inl, c_rs_inl = find_pos(rs_buf, "#[inline]", "inline")
+local is_rs_inl_attr = match_capture(rs_buf, r_rs_inl, c_rs_inl, "attribute")
+
+local r_rs_start, c_rs_start = find_pos(rs_buf, "    Starting,", "Starting")
+local is_rs_start_const = match_capture(rs_buf, r_rs_start, c_rs_start, "constant")
+
+local r_rs_self, c_rs_self = find_pos(rs_buf, "    pub fn inspect_state(&self) ->", "self")
+local is_rs_self_var = match_capture(rs_buf, r_rs_self, c_rs_self, "variable.builtin")
+
+local r_rs_print, c_rs_print = find_pos(rs_buf, "    println!(\"Max connections:", "println")
+local is_rs_print_macro = match_capture(rs_buf, r_rs_print, c_rs_print, "function.macro")
+
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -441,6 +480,15 @@ local results = {
     is_py_init_meth = tostring(is_py_init_meth),
     is_py_ep_ctor = tostring(is_py_ep_ctor),
     is_py_name_const = tostring(is_py_name_const),
+    is_rs_use_kw = tostring(is_rs_use_kw),
+    is_rs_std_mod = tostring(is_rs_std_mod),
+    is_rs_map_type = tostring(is_rs_map_type),
+    is_rs_max_const = tostring(is_rs_max_const),
+    is_rs_drv_attr = tostring(is_rs_drv_attr),
+    is_rs_inl_attr = tostring(is_rs_inl_attr),
+    is_rs_start_const = tostring(is_rs_start_const),
+    is_rs_self_var = tostring(is_rs_self_var),
+    is_rs_print_macro = tostring(is_rs_print_macro),
 }
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
@@ -630,6 +678,36 @@ end
             pass "Neovim renders Python def __init__ as @function.method (Blue) and class instantiations as @constructor (Yellow)"
         else
             fail "Neovim Python method/constructor captures" "Expected @function.method for __init__ and @constructor for EndpointMetrics, got init=${RES[is_py_init_meth]} ep=${RES[is_py_ep_ctor]}"
+        fi
+
+        if [ "${RES[is_rs_use_kw]}" = "true" ] && [ "${RES[is_rs_std_mod]}" = "true" ]; then
+            pass "Neovim renders Rust use keyword as @keyword.import (Orange) and module path std as @module (Violet)"
+        else
+            fail "Neovim Rust import/module capture" "Expected @keyword.import for use and @module for std, got use=${RES[is_rs_use_kw]} std=${RES[is_rs_std_mod]}"
+        fi
+
+        if [ "${RES[is_rs_map_type]}" = "true" ]; then
+            pass "Neovim renders Rust types (HashMap) as @type (Yellow #b58900)"
+        else
+            fail "Neovim Rust type capture" "Expected @type for HashMap, got ${RES[is_rs_map_type]}"
+        fi
+
+        if [ "${RES[is_rs_drv_attr]}" = "true" ] && [ "${RES[is_rs_inl_attr]}" = "true" ]; then
+            pass "Neovim renders Rust attributes (derive, inline) unified as @attribute in Solarized Orange (#cb4b16)"
+        else
+            fail "Neovim Rust attribute capture" "Expected @attribute for derive and inline, got drv=${RES[is_rs_drv_attr]} inl=${RES[is_rs_inl_attr]}"
+        fi
+
+        if [ "${RES[is_rs_max_const]}" = "true" ] && [ "${RES[is_rs_start_const]}" = "true" ] && [ "${RES[is_rs_self_var]}" = "true" ]; then
+            pass "Neovim renders Rust constants (MAX_CONNECTIONS, Starting) and self receiver in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Rust constant/receiver captures" "Expected @constant and @variable.builtin, got max=${RES[is_rs_max_const]} start=${RES[is_rs_start_const]} self=${RES[is_rs_self_var]}"
+        fi
+
+        if [ "${RES[is_rs_print_macro]}" = "true" ]; then
+            pass "Neovim renders Rust macros (println) as @function.macro in Solarized Blue (#268bd2)"
+        else
+            fail "Neovim Rust macro capture" "Expected @function.macro for println, got ${RES[is_rs_print_macro]}"
         fi
     fi
 else
