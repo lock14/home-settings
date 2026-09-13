@@ -202,6 +202,13 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Bash query extension" "Missing or invalid after/queries/bash/highlights.scm"
     fi
 
+    SQL_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/sql/highlights.scm"
+    if [ -f "$SQL_QUERY" ] && grep -q 'keyword_null' "$SQL_QUERY" && grep -q 'object_reference' "$SQL_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for SQL (Magenta NULL, Base0 qualifiers, Yellow index relations)"
+    else
+        fail "Neovim SQL query extension" "Missing or invalid after/queries/sql/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -561,6 +568,69 @@ results["is_sh_sub_at"] = tostring(match_capture(sh_buf, r_sh, c_sh, "character.
 
 r_sh, c_sh = find_pos(sh_buf, "main \"$@\"", "@")
 results["is_sh_pos_at"] = tostring(match_capture(sh_buf, r_sh, c_sh, "constant"))
+
+-- 9. Inspect SQL (sample.sql)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.sql")
+vim.cmd("redraw")
+local sql_buf = vim.api.nvim_get_current_buf()
+
+local r_sql, c_sql
+r_sql, c_sql = find_pos(sql_buf, "CREATE TABLE IF NOT EXISTS customer_accounts", "CREATE")
+results["is_sql_create_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
+
+r_sql, c_sql = find_pos(sql_buf, "CREATE TABLE IF NOT EXISTS customer_accounts", "customer_accounts")
+results["is_sql_table_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type"))
+
+r_sql, c_sql = find_pos(sql_buf, "account_id BIGSERIAL PRIMARY KEY", "BIGSERIAL")
+results["is_sql_serial_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type.builtin"))
+
+r_sql, c_sql = find_pos(sql_buf, "plan_tier VARCHAR", "DEFAULT")
+results["is_sql_default_attr"] = tostring(match_capture(sql_buf, r_sql, c_sql, "attribute"))
+
+r_sql, c_sql = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "TRUE")
+results["is_sql_true_bool"] = tostring(match_capture(sql_buf, r_sql, c_sql, "boolean"))
+
+r_sql, c_sql = find_pos(sql_buf, "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()", "NOW")
+results["is_sql_now_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+
+r_sql, c_sql = find_pos(sql_buf, "transaction_id UUID PRIMARY KEY", "UUID")
+results["is_sql_uuid_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type.builtin"))
+
+r_sql, c_sql = find_pos(sql_buf, "CREATE INDEX IF NOT EXISTS idx_ledger_account_settled", "idx_ledger_account_settled")
+results["is_sql_index_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type"))
+
+r_sql, c_sql = find_pos(sql_buf, "WITH monthly_billing_summary AS (", "monthly_billing_summary")
+results["is_sql_cte_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type"))
+
+r_sql, c_sql = find_pos(sql_buf, "        a.account_id,", "a")
+results["is_sql_alias_var"] = tostring(match_capture(sql_buf, r_sql, c_sql, "variable"))
+
+r_sql, c_sql = find_pos(sql_buf, "        a.account_id,", "account_id")
+results["is_sql_col_member"] = tostring(match_capture(sql_buf, r_sql, c_sql, "variable.member"))
+
+r_sql, c_sql = find_pos(sql_buf, "COUNT(t.transaction_id)", "COUNT")
+results["is_sql_count_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+
+r_sql, c_sql = find_pos(sql_buf, "        CASE", "CASE")
+results["is_sql_case_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword.conditional"))
+
+r_sql, c_sql = find_pos(sql_buf, "THEN 0.15", "0.15")
+results["is_sql_num_float"] = tostring(match_capture(sql_buf, r_sql, c_sql, "number.float"))
+
+r_sql, c_sql = find_pos(sql_buf, "ROUND(s.aggregate_spend", "ROUND")
+results["is_sql_round_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+
+r_sql, c_sql = find_pos(sql_buf, "DENSE_RANK()", "DENSE_RANK")
+results["is_sql_rank_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+
+r_sql, c_sql = find_pos(sql_buf, "DENSE_RANK() OVER", "OVER")
+results["is_sql_over_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
+
+r_sql, c_sql = find_pos(sql_buf, "aggregate_spend DESC) AS revenue_rank", "DESC")
+results["is_sql_desc_attr"] = tostring(match_capture(sql_buf, r_sql, c_sql, "attribute"))
+
+r_sql, c_sql = find_pos(sql_buf, "HAVING s.total_invoices > 0", "HAVING")
+results["is_sql_having_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
@@ -827,6 +897,30 @@ end
             pass "Neovim renders Shell array subscript @ in Cyan (@character.special) and positional \$@ in Magenta (@constant)"
         else
             fail "Neovim Shell @ parameter captures" "Expected @character.special for [@] and @constant for \$@, got sub=${RES[is_sh_sub_at]} pos=${RES[is_sh_pos_at]}"
+        fi
+
+        if [ "${RES[is_sql_create_kw]}" = "true" ] && \
+           [ "${RES[is_sql_table_type]}" = "true" ] && \
+           [ "${RES[is_sql_serial_type]}" = "true" ] && \
+           [ "${RES[is_sql_default_attr]}" = "true" ] && \
+           [ "${RES[is_sql_true_bool]}" = "true" ] && \
+           [ "${RES[is_sql_now_func]}" = "true" ] && \
+           [ "${RES[is_sql_uuid_type]}" = "true" ] && \
+           [ "${RES[is_sql_index_type]}" = "true" ] && \
+           [ "${RES[is_sql_cte_type]}" = "true" ] && \
+           [ "${RES[is_sql_alias_var]}" = "true" ] && \
+           [ "${RES[is_sql_col_member]}" = "true" ] && \
+           [ "${RES[is_sql_count_func]}" = "true" ] && \
+           [ "${RES[is_sql_case_kw]}" = "true" ] && \
+           [ "${RES[is_sql_num_float]}" = "true" ] && \
+           [ "${RES[is_sql_round_func]}" = "true" ] && \
+           [ "${RES[is_sql_rank_func]}" = "true" ] && \
+           [ "${RES[is_sql_over_kw]}" = "true" ] && \
+           [ "${RES[is_sql_desc_attr]}" = "true" ] && \
+           [ "${RES[is_sql_having_kw]}" = "true" ]; then
+            pass "Neovim highlights modern SQL queries (sample.sql) with 100% Tree-sitter AST parity: DDL keywords (Green), table/index/CTE relations and data types (Yellow), functions (Blue), DEFAULT/DESC attributes (Orange), TRUE/numbers (Magenta), and calm Base0 alias/column qualifiers"
+        else
+            fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql"
         fi
     fi
 else

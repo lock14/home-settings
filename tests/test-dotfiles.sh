@@ -89,6 +89,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Java.sublime-syntax" "" "Symlink
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Python.sublime-syntax" "" "Symlinked Bat Python syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Rust.sublime-syntax" "" "Symlinked Bat Rust syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" "" "Symlinked Bat Bash syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/SQL.sublime-syntax" "" "Symlinked Bat SQL syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -498,6 +499,60 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders Shell shebang (Orange), keywords (Green), functions/commands (Blue), constants/numbers/signals (Magenta), redirections, case patterns, and heredocs/strings (Cyan) matching Neovim"
     else
         fail "bat Shell rendering" "Expected Modern Shell Solarized TrueColor highlights in bat sample.sh output"
+    fi
+
+    # --- 2.10 SQL Syntax Verification ---
+    SQL_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sql "$SCRIPT_DIR/sample-code/sample.sql" 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}CREATE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}TABLE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}customer_accounts" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}BIGSERIAL" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}PRIMARY KEY" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}VARCHAR" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}128" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}NOT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}NULL" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}DEFAULT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}'standard'" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}CHECK" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}IN" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}NUMERIC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}0.00" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}BOOLEAN" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}TRUE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}TIMESTAMPTZ" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}NOW" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}UUID" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}gen_random_uuid" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}BIGINT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}REFERENCES" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}CASCADE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}CHAR" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}idx_ledger_account_settled" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}DESC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}WITH" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}monthly_billing_summary" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}SELECT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}COUNT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}COALESCE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}SUM" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}100.0" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}CASE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}WHEN" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}0.15" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}DATE_TRUNC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}INTERVAL" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}ROUND" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}DENSE_RANK" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}OVER" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}HAVING" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}ASC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}LIMIT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}25" <<< "$SQL_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_MAGENTA}account_id" <<< "$SQL_SAMPLE_OUT"; then
+        pass "bat renders SQL keywords (Green), relation entities and data types (Yellow), functions (Blue), DEFAULT/ASC/DESC directives (Orange), booleans/sentinels/numbers (Magenta), and calm Base0 column qualifiers matching Neovim"
+    else
+        fail "bat SQL rendering" "Expected Modern SQL Solarized TrueColor highlights in bat sample.sql output"
     fi
 fi
 

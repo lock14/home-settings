@@ -201,7 +201,7 @@
 			<key>name</key>
 			<string>Preprocessor, Directive and Annotation</string>
 			<key>scope</key>
-			<string>meta.preprocessor keyword.control.directive, keyword.control.directive, keyword.control.import, keyword.control.preprocessor, punctuation.definition.directive, punctuation.definition.preprocessor, entity.name.constant.preprocessor, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator, entity.name.attribute, storage.modifier.attribute, punctuation.section.attribute, punctuation.definition.attribute, meta.attribute</string>
+			<string>meta.preprocessor keyword.control.directive, keyword.control.directive, keyword.control.import, keyword.control.preprocessor, punctuation.definition.directive, punctuation.definition.preprocessor, entity.name.constant.preprocessor, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator, entity.name.attribute, storage.modifier.attribute, keyword.other.attribute, punctuation.section.attribute, punctuation.definition.attribute, meta.attribute</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
