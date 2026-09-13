@@ -73,6 +73,7 @@ contexts:
     - include: heredoc
     - include: function-def
     - include: declarations
+    - include: case-statement
     - include: control-keywords
     - include: trap-command
     - include: test-brackets
@@ -80,6 +81,47 @@ contexts:
     - include: commands-and-invocations
     - include: expressions
     - include: operators-and-punctuation
+
+  case-statement:
+    # case "$var" in
+    - match: '\b(case)\b'
+      captures:
+        1: keyword.control.case.shell
+      push:
+        - match: '\b(in)\b'
+          captures:
+            1: keyword.control.case.in.shell
+          set: case-body
+        - match: '\s+'
+        - include: comments
+        - include: expressions
+
+  case-body:
+    - match: '\b(esac)\b'
+      scope: keyword.control.case.esac.shell
+      pop: true
+    - match: '\s+'
+    - include: comments
+    # Wildcard pattern: *) or ?) or *.log)
+    - match: '(\*|\?|[^\)\s]+\*|[^\)\s]+\?)\s*(\))'
+      captures:
+        1: string.regexp.case.shell
+        2: punctuation.definition.case-pattern.shell
+      push: case-item-body
+    # Word pattern: INFO) or WARN) or ERROR) or foo|bar)
+    - match: '([a-zA-Z0-9_\-\|\s]+?)(\))'
+      captures:
+        1: variable.parameter.case.shell
+        2: punctuation.definition.case-pattern.shell
+      push: case-item-body
+
+  case-item-body:
+    - match: '(;;|;&|;;&)'
+      scope: punctuation.terminator.case.shell
+      pop: true
+    - match: '(?=\b(esac)\b)'
+      pop: true
+    - include: command-line
 
   function-def:
     # function name [()] {
@@ -203,9 +245,16 @@ contexts:
     - include: heredoc
     - match: '(-[a-zA-Z0-9]+|--[a-zA-Z0-9_\-]+)'
       scope: variable.parameter.option.shell
-    - include: expressions
-    - match: '(>&[0-9]+|&>>?|>>?|<&[0-9]+|<)'
+    # Redirection to/from file descriptor: >&2, <&1, 2>&1, etc.
+    - match: '([0-9]+)?(>&|<&)([0-9]+)'
+      captures:
+        1: constant.numeric.file-descriptor.shell
+        2: keyword.operator.redirect.shell
+        3: constant.numeric.file-descriptor.shell
+    # General redirection operators
+    - match: '(&>>?|>>?|<&-|>&-|<<<|<<|>[|&]?|<)'
       scope: keyword.operator.redirect.shell
+    - include: expressions
     - match: '\b([a-zA-Z0-9_\-\./]+)\b'
       scope: variable.parameter.argument.shell
 
@@ -390,7 +439,14 @@ contexts:
       scope: punctuation.terminator.statement.shell
     - match: '(&&|\|\||\|&|\||&)'
       scope: keyword.operator.logical.shell
-    - match: '(>&[0-9]+|&>>?|>>?|<&[0-9]+|<)'
+    # Redirection to/from file descriptor: >&2, <&1, 2>&1, etc.
+    - match: '([0-9]+)?(>&|<&)([0-9]+)'
+      captures:
+        1: constant.numeric.file-descriptor.shell
+        2: keyword.operator.redirect.shell
+        3: constant.numeric.file-descriptor.shell
+    # General redirection operators
+    - match: '(&>>?|>>?|<&-|>&-|<<<|<<|>[|&]?|<)'
       scope: keyword.operator.redirect.shell
     - match: '(\+?=)'
       scope: keyword.operator.assignment.shell

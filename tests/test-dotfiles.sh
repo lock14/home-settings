@@ -490,8 +490,11 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_GREEN}done" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}mkdir" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}main" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}>&${SOL_RESET}${SOL_MAGENTA}2" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}INFO${SOL_RESET}${SOL_BASE0})" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}*${SOL_RESET}${SOL_BASE0})" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}@" <<< "$SH_SAMPLE_OUT"; then
-        pass "bat renders Shell shebang (Orange), keywords (Green), functions/commands (Blue), constants/numbers/signals (Magenta), and heredocs/strings (Cyan) matching Neovim"
+        pass "bat renders Shell shebang (Orange), keywords (Green), functions/commands (Blue), constants/numbers/signals (Magenta), redirections, case patterns, and heredocs/strings (Cyan) matching Neovim"
     else
         fail "bat Shell rendering" "Expected Modern Shell Solarized TrueColor highlights in bat sample.sh output"
     fi

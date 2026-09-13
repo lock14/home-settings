@@ -474,6 +474,16 @@ local is_sh_clean_func = match_capture(sh_buf, r_sh, c_sh, "function")
 r_sh, c_sh = find_pos(sh_buf, "local -r exit_code=$?", "exit_code")
 local is_sh_ec_var = match_capture(sh_buf, r_sh, c_sh, "variable")
 
+r_sh, c_sh = find_pos(sh_buf, ">&2", ">&2")
+local is_sh_gt_op = match_capture(sh_buf, r_sh, c_sh, "operator")
+local is_sh_fd2_num = match_capture(sh_buf, r_sh, c_sh + 2, "number")
+
+r_sh, c_sh = find_pos(sh_buf, "INFO)", "INFO")
+local is_sh_info_param = match_capture(sh_buf, r_sh, c_sh, "variable.parameter")
+
+r_sh, c_sh = find_pos(sh_buf, "*)", "*")
+local is_sh_star_regex = match_capture(sh_buf, r_sh, c_sh, "string.regexp")
+
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -542,6 +552,10 @@ local results = {
     is_sh_exit_const = tostring(is_sh_exit_const),
     is_sh_clean_func = tostring(is_sh_clean_func),
     is_sh_ec_var = tostring(is_sh_ec_var),
+    is_sh_gt_op = tostring(is_sh_gt_op),
+    is_sh_fd2_num = tostring(is_sh_fd2_num),
+    is_sh_info_param = tostring(is_sh_info_param),
+    is_sh_star_regex = tostring(is_sh_star_regex),
 }
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
@@ -791,6 +805,18 @@ end
             pass "Neovim renders Shell trap signals (EXIT) as @constant.builtin in Solarized Magenta (#d33682)"
         else
             fail "Neovim Shell signal capture" "Expected @constant.builtin for EXIT in trap, got ${RES[is_sh_exit_const]}"
+        fi
+
+        if [ "${RES[is_sh_gt_op]}" = "true" ] && [ "${RES[is_sh_fd2_num]}" = "true" ]; then
+            pass "Neovim renders Shell redirection (>&2) with operator in Base0 and file descriptor in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Shell redirection captures" "Expected @operator for >& and @number for 2, got gt=${RES[is_sh_gt_op]} fd2=${RES[is_sh_fd2_num]}"
+        fi
+
+        if [ "${RES[is_sh_info_param]}" = "true" ] && [ "${RES[is_sh_star_regex]}" = "true" ]; then
+            pass "Neovim renders Shell case branch labels (INFO) in Base0 Grey (#839496) and wildcards (*) in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Shell case pattern captures" "Expected @variable.parameter for INFO and @string.regexp for *, got info=${RES[is_sh_info_param]} star=${RES[is_sh_star_regex]}"
         fi
     fi
 else
