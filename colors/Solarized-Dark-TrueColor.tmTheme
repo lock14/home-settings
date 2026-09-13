@@ -182,12 +182,12 @@
 				<string>#268BD2</string>
 			</dict>
 		</dict>
-		<!-- Parameters (Base0 Upright, matching Neovim) -->
+		<!-- Parameters & Variables (Base0 Upright, matching Neovim @variable) -->
 		<dict>
 			<key>name</key>
-			<string>Parameter</string>
+			<string>Variable and Parameter</string>
 			<key>scope</key>
-			<string>variable.parameter</string>
+			<string>variable, variable.other, variable.parameter</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

@@ -195,6 +195,13 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Rust query extension" "Missing or invalid after/queries/rust/highlights.scm"
     fi
 
+    BASH_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/bash/highlights.scm"
+    if [ -f "$BASH_QUERY" ] && grep -q 'trap' "$BASH_QUERY" && grep -q 'simple_expansion' "$BASH_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Bash (Magenta trap signals, Magenta positional parameters)"
+    else
+        fail "Neovim Bash query extension" "Missing or invalid after/queries/bash/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -437,6 +444,36 @@ local is_rs_print_macro = match_capture(rs_buf, r_rs_print, c_rs_print, "functio
 local r_rs_lt, c_rs_lt = find_pos(rs_buf, "find_by_id", string.char(39) .. "a")
 local is_rs_lt_mod = match_capture(rs_buf, r_rs_lt, c_rs_lt + 1, "keyword.modifier")
 
+-- 8. Inspect Shell (sample.sh)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.sh")
+vim.cmd("redraw")
+local sh_buf = vim.api.nvim_get_current_buf()
+
+local r_sh, c_sh
+r_sh, c_sh = find_pos(sh_buf, "readonly SCRIPT_NAME", "readonly")
+local is_sh_ro_kw = match_capture(sh_buf, r_sh, c_sh, "keyword")
+
+r_sh, c_sh = find_pos(sh_buf, "readonly SCRIPT_NAME", "SCRIPT_NAME")
+local is_sh_sn_const = match_capture(sh_buf, r_sh, c_sh, "constant")
+
+r_sh, c_sh = find_pos(sh_buf, "SCRIPT_NAME=\"$(basename \"$0\")\"", "basename")
+local is_sh_base_func = match_capture(sh_buf, r_sh, c_sh, "function.call")
+
+r_sh, c_sh = find_pos(sh_buf, "SCRIPT_NAME=\"$(basename \"$0\")\"", "0")
+local is_sh_p0_const = match_capture(sh_buf, r_sh, c_sh, "constant.builtin")
+
+r_sh, c_sh = find_pos(sh_buf, "trap cleanup EXIT", "trap")
+local is_sh_trap_func = match_capture(sh_buf, r_sh, c_sh, "function.builtin")
+
+r_sh, c_sh = find_pos(sh_buf, "trap cleanup EXIT", "EXIT")
+local is_sh_exit_const = match_capture(sh_buf, r_sh, c_sh, "constant.builtin")
+
+r_sh, c_sh = find_pos(sh_buf, "cleanup() {", "cleanup")
+local is_sh_clean_func = match_capture(sh_buf, r_sh, c_sh, "function")
+
+r_sh, c_sh = find_pos(sh_buf, "local -r exit_code=$?", "exit_code")
+local is_sh_ec_var = match_capture(sh_buf, r_sh, c_sh, "variable")
+
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -497,6 +534,14 @@ local results = {
     is_rs_self_var = tostring(is_rs_self_var),
     is_rs_print_macro = tostring(is_rs_print_macro),
     is_rs_lt_mod = tostring(is_rs_lt_mod),
+    is_sh_ro_kw = tostring(is_sh_ro_kw),
+    is_sh_sn_const = tostring(is_sh_sn_const),
+    is_sh_base_func = tostring(is_sh_base_func),
+    is_sh_p0_const = tostring(is_sh_p0_const),
+    is_sh_trap_func = tostring(is_sh_trap_func),
+    is_sh_exit_const = tostring(is_sh_exit_const),
+    is_sh_clean_func = tostring(is_sh_clean_func),
+    is_sh_ec_var = tostring(is_sh_ec_var),
 }
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
@@ -722,6 +767,30 @@ end
             pass "Neovim renders Rust lifetimes ('a, 'static, '_) unified as @keyword.modifier in Solarized Green (#859900)"
         else
             fail "Neovim Rust lifetime capture" "Expected @keyword.modifier for 'a, got ${RES[is_rs_lt_mod]}"
+        fi
+
+        if [ "${RES[is_sh_ro_kw]}" = "true" ]; then
+            pass "Neovim renders Shell declarations (readonly, local) as keywords (Green #859900)"
+        else
+            fail "Neovim Shell keyword capture" "Expected @keyword for readonly, got ${RES[is_sh_ro_kw]}"
+        fi
+
+        if [ "${RES[is_sh_sn_const]}" = "true" ] && [ "${RES[is_sh_p0_const]}" = "true" ]; then
+            pass "Neovim renders Shell ALL_CAPS constants (SCRIPT_NAME) and positional parameters (\$0) in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Shell constant captures" "Expected @constant for SCRIPT_NAME and @constant.builtin for \$0, got sn=${RES[is_sh_sn_const]} p0=${RES[is_sh_p0_const]}"
+        fi
+
+        if [ "${RES[is_sh_base_func]}" = "true" ] && [ "${RES[is_sh_trap_func]}" = "true" ] && [ "${RES[is_sh_clean_func]}" = "true" ]; then
+            pass "Neovim renders Shell functions and commands (basename, trap, cleanup) in Solarized Blue (#268bd2)"
+        else
+            fail "Neovim Shell function captures" "Expected @function for basename, trap, and cleanup, got base=${RES[is_sh_base_func]} trap=${RES[is_sh_trap_func]} clean=${RES[is_sh_clean_func]}"
+        fi
+
+        if [ "${RES[is_sh_exit_const]}" = "true" ]; then
+            pass "Neovim renders Shell trap signals (EXIT) as @constant.builtin in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Shell signal capture" "Expected @constant.builtin for EXIT in trap, got ${RES[is_sh_exit_const]}"
         fi
     fi
 else

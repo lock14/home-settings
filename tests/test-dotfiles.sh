@@ -88,6 +88,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Go.sublime-syntax" "" "Symlinked
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Java.sublime-syntax" "" "Symlinked Bat Java syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Python.sublime-syntax" "" "Symlinked Bat Python syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Rust.sublime-syntax" "" "Symlinked Bat Rust syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" "" "Symlinked Bat Bash syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -110,8 +111,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "variable.language" "$THEME_FILE" && \
    grep -q "storage.type.function" "$THEME_FILE" && \
    grep -q "storage.type.impl" "$THEME_FILE" && \
-   grep -q "variable.other.constant" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Rust, Namespace, Attribute, and Error scopes"
+   grep -q "variable.other.constant" "$THEME_FILE" && \
+   grep -q "variable, variable.other, variable.parameter" "$THEME_FILE"; then
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Rust, Bash, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -447,6 +449,51 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders Rust imports (Orange), modules (Violet), types/traits (Yellow), keywords/lifetimes (Green), constants/variants/self (Magenta), calls/macros (Blue), and attributes (Orange) matching Neovim"
     else
         fail "bat Rust rendering" "Expected Modern Rust Solarized TrueColor highlights in bat sample.rs output"
+    fi
+
+    # --- 2.9 Bash Syntax Verification ---
+    SH_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sh "$SCRIPT_DIR/sample-code/sample.sh" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}#!/bin/bash" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}set" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}SCRIPT_NAME" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}basename" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}0" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}readonly" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}WORK_DIR" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}XDG_CACHE_HOME" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}HOME" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}MAX_RETRIES" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}5" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}declare" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}ACTIVE_SERVICES" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}nginx" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}cleanup" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}local" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}?" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}if" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}then" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}printf" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}trap" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}EXIT" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}log_status" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}1" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}2" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}case" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}esac" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}render_banner" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}cat" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}EOF" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}check_services" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}for" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}in" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}do" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}done" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}mkdir" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}main" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}@" <<< "$SH_SAMPLE_OUT"; then
+        pass "bat renders Shell shebang (Orange), keywords (Green), functions/commands (Blue), constants/numbers/signals (Magenta), and heredocs/strings (Cyan) matching Neovim"
+    else
+        fail "bat Shell rendering" "Expected Modern Shell Solarized TrueColor highlights in bat sample.sh output"
     fi
 fi
 
