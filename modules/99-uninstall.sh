@@ -77,6 +77,22 @@ uninstall_dotfiles() {
         unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/themes"
     fi
 
+    # Clean up empty bat directories if they exist
+    rmdir "$xdg_config/bat/syntaxes" 2>/dev/null || true
+    rmdir "$xdg_config/bat/themes" 2>/dev/null || true
+    rmdir "$xdg_config/bat" 2>/dev/null || true
+
+    # Rebuild bat cache to purge uninstalled syntaxes and themes
+    if [ "$DRY_RUN" = false ]; then
+        if command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
+            mise exec -- bat cache --build >/dev/null 2>&1 || true
+        elif command -v bat >/dev/null 2>&1; then
+            bat cache --build >/dev/null 2>&1 || true
+        elif command -v batcat >/dev/null 2>&1; then
+            batcat cache --build >/dev/null 2>&1 || true
+        fi
+    fi
+
     echo "  Dotfile symlinks uninstalled."
 }
 

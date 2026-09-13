@@ -107,8 +107,9 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "string.special.path.diff" "$THEME_FILE" && \
    grep -q "meta.diff.range" "$THEME_FILE" && \
    grep -q "variable.language" "$THEME_FILE" && \
+   grep -q "storage.type.function" "$THEME_FILE" && \
    grep -q "variable.other.constant" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Namespace, Attribute, and Error scopes"
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -488,6 +489,24 @@ done
 if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ]; then
     all_unlinked=false
     fail "Unlink check" ".config subtrees still linked"
+fi
+
+for syn in "$SCRIPT_DIR/syntaxes"/*.sublime-syntax; do
+    [ -e "$syn" ] || continue
+    if [ -L "$TEMP_HOME/.config/bat/syntaxes/$(basename "$syn")" ]; then
+        all_unlinked=false
+        fail "Unlink check" "$TEMP_HOME/.config/bat/syntaxes/$(basename "$syn") is still linked"
+    fi
+done
+
+if [ -L "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" ]; then
+    all_unlinked=false
+    fail "Unlink check" "Bat theme is still linked"
+fi
+
+if [ -L "$TEMP_HOME/.config/mise/config.toml" ]; then
+    all_unlinked=false
+    fail "Unlink check" "Mise config is still linked"
 fi
 
 if [ "$all_unlinked" = true ]; then
