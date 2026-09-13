@@ -1,0 +1,522 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Python Syntax
+# Supports Modern Python 3.10+ / 3.12+:
+# - Module declarations in Solarized Violet (entity.name.module.python)
+# - Typing module constructs & type parameters in Solarized Yellow (support.type.python)
+# - PascalCase type annotations and class instantiations in Solarized Yellow (support.class.python)
+# - Unbroken numeric literals (Hex 0xFF00_AA55, Float 3.1415926535) in Solarized Magenta
+# - Gestalt strings and f-strings (f"...") in Solarized Cyan without prefix yellow fracturing
+# - Decorators (@dataclass, @property, @timed_execution) in Solarized Orange
+# - Built-in instance references (self, cls) and sentinels (__name__, None, True, False) in Solarized Magenta
+# - Function and method definitions in Solarized Blue (entity.name.function.python)
+# - Function and method calls in Solarized Blue (variable.function.python)
+name: Python
+scope: source.python
+version: 2
+
+file_extensions:
+  - py
+  - py3
+  - pyw
+  - pyi
+  - pyx
+
+first_line_match: |-
+  (?xi:
+    ^ \s* \#! .*? \bpython[0-9.]* \b
+  )
+
+variables:
+  ident: '\b[a-zA-Z_][a-zA-Z0-9_]*\b'
+  pascal_ident: '\b[A-Z][a-zA-Z0-9_]*\b'
+  const_ident: '\b[A-Z][A-Z0-9_]+\b'
+  builtin_types: '\b(?:int|float|str|bool|bytes|complex|object|type|list|dict|set|frozenset|tuple|range|bytearray|memoryview)\b'
+  typing_types: '\b(?:Any|Callable|Dict|List|Optional|Union|Tuple|Set|FrozenSet|Iterable|Iterator|Sequence|Mapping|MutableMapping|MutableSequence|MutableSet|Literal|TypeVar|Generic|Protocol|Final|ClassVar|Self|Concatenate|ParamSpec|TypeAlias|NamedTuple|TypedDict|DefaultDict|Deque|Counter|ChainMap|Annotated)\b'
+  builtin_exceptions: '\b(?:BaseException|Exception|ValueError|TypeError|KeyError|IndexError|AttributeError|IOError|OSError|RuntimeError|StopIteration|StopAsyncIteration|ZeroDivisionError|FileNotFoundError|ImportError|ModuleNotFoundError|NameError|OverflowError|RecursionError|NotImplementedError|TimeoutError|PermissionError|KeyboardInterrupt|SystemExit)\b'
+  builtin_functions: '\b(?:print|len|abs|all|any|bin|chr|dir|enumerate|filter|hex|id|input|isinstance|issubclass|iter|map|max|min|next|oct|open|ord|pow|range|repr|reversed|round|slice|sorted|sum|super|vars|zip)\b'
+
+contexts:
+  main:
+    - include: comments
+    - include: imports
+    - include: decorators
+    - include: func-def
+    - include: class-def
+    - include: statements
+    - include: annotated-variables
+    - include: expressions
+
+  comments:
+    # Top-level / docstring block triple double-quotes
+    - match: '"""'
+      scope: punctuation.definition.comment.begin.python
+      push:
+        - meta_scope: comment.block.documentation.python
+        - match: '"""'
+          scope: punctuation.definition.comment.end.python
+          pop: true
+    # Top-level / docstring block triple single-quotes
+    - match: "'''"
+      scope: punctuation.definition.comment.begin.python
+      push:
+        - meta_scope: comment.block.documentation.python
+        - match: "'''"
+          scope: punctuation.definition.comment.end.python
+          pop: true
+    # Standard single-line comments
+    - match: '#.*$'
+      scope: comment.line.number-sign.python
+
+  imports:
+    # from <module> import ...
+    - match: '\b(from)\b\s+'
+      captures:
+        1: keyword.control.import.from.python
+      push:
+        - match: '$'
+          pop: true
+        # The 'import' keyword
+        - match: '\b(import)\b\s*'
+          captures:
+            1: keyword.control.import.python
+          set: import-targets
+        # Module path identifiers in Solarized Violet
+        - match: '({{ident}})'
+          captures:
+            1: entity.name.module.python
+        - match: '\.'
+          scope: punctuation.accessor.dot.python
+
+    # import <module> [as <alias>]
+    - match: '\b(import)\b\s+'
+      captures:
+        1: keyword.control.import.python
+      push:
+        - match: '$'
+          pop: true
+        - match: '\b(as)\b\s+({{ident}})'
+          captures:
+            1: keyword.control.import.as.python
+            2: entity.name.module.alias.python
+        - match: '({{ident}})'
+          captures:
+            1: entity.name.module.python
+        - match: '\.'
+          scope: punctuation.accessor.dot.python
+        - match: ','
+          scope: punctuation.separator.comma.python
+
+  import-targets:
+    - match: '$'
+      pop: true
+    - match: '\('
+      scope: punctuation.section.parens.begin.python
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.python
+          pop: true
+        - include: import-target-items
+    - include: import-target-items
+
+  import-target-items:
+    - include: comments
+    - match: '\b(as)\b\s+({{ident}})'
+      captures:
+        1: keyword.control.import.as.python
+        2: variable.other.readwrite.alias.python
+    - match: '(\*)'
+      captures:
+        1: variable.language.wildcard.python
+    # Typing types or exceptions imported in Yellow
+    - match: '({{typing_types}})\b'
+      captures:
+        1: support.type.python
+    - match: '({{builtin_exceptions}})\b'
+      captures:
+        1: support.type.exception.python
+    # Custom PascalCase classes imported in Yellow
+    - match: '({{pascal_ident}})\b'
+      captures:
+        1: support.type.user-defined.python
+    # Normal functions or members imported in Base0
+    - match: '({{ident}})\b'
+      captures:
+        1: variable.other.readwrite.python
+    - match: ','
+      scope: punctuation.separator.comma.python
+
+  decorators:
+    # Unified decorator attribute: @<ident> or @<ident>(...)
+    - match: '(@[a-zA-Z_][a-zA-Z0-9_.]*)'
+      scope: entity.name.function.decorator.python
+
+  func-def:
+    # Function / method definition: def <name>(...) or async def <name>(...)
+    - match: '(?:(async)\s+)?(def)\b\s+({{ident}})'
+      captures:
+        1: keyword.control.flow.coroutine.python
+        2: storage.type.function.python
+        3: entity.name.function.python
+      push:
+        - match: ':'
+          scope: punctuation.section.function.begin.python
+          pop: true
+        - include: comments
+        - include: func-parameters
+        - include: return-annotation
+
+  func-parameters:
+    - match: '\('
+      scope: punctuation.section.parens.begin.python
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.python
+          pop: true
+        - include: comments
+        # Receiver / language parameter self, cls in Magenta
+        - match: '\b(self|cls)\b'
+          scope: variable.language.python
+        # Parameter with type annotation: name: Type
+        - match: '(\*{0,2}[a-zA-Z_][a-zA-Z0-9_]*)\s*(:)\s*'
+          captures:
+            1: variable.parameter.function.python
+            2: punctuation.separator.colon.python
+          push:
+            - match: '(?=[=,\)])'
+              pop: true
+            - match: '$'
+              pop: true
+            - include: type-expression
+        # Parameter default assignment: name = val
+        - match: '(\*{0,2}[a-zA-Z_][a-zA-Z0-9_]*)\s*(=)'
+          captures:
+            1: variable.parameter.function.python
+            2: keyword.operator.assignment.python
+        # Plain parameter name
+        - match: '(\*{0,2}[a-zA-Z_][a-zA-Z0-9_]*)'
+          captures:
+            1: variable.parameter.function.python
+        - match: ','
+          scope: punctuation.separator.comma.python
+        - include: expressions
+
+  return-annotation:
+    - match: '(->)\s*'
+      captures:
+        1: keyword.operator.arrow.python
+      push:
+        - match: '(?=:)'
+          pop: true
+        - match: '$'
+          pop: true
+        - include: type-expression
+
+  class-def:
+    - match: '\b(class)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.class.python
+        2: entity.name.type.class.python
+      push:
+        - match: ':'
+          scope: punctuation.section.class.begin.python
+          pop: true
+        - include: comments
+        - match: '\('
+          scope: punctuation.section.parens.begin.python
+          push:
+            - match: '\)'
+              scope: punctuation.section.parens.end.python
+              pop: true
+            - include: comments
+            - match: '{{pascal_ident}}\b'
+              scope: entity.other.inherited-class.python
+            - match: '{{builtin_types}}\b'
+              scope: support.type.builtin.python
+            - match: ','
+              scope: punctuation.separator.comma.python
+            - include: expressions
+
+  statements:
+    # Block openers: try:, finally:, else:, except ...:
+    - match: '\b(try|finally|else)\b\s*(:)'
+      captures:
+        1: keyword.control.flow.python
+        2: punctuation.section.block.begin.python
+    - match: '\b(except)\b'
+      scope: keyword.control.flow.python
+    # Async coroutine keywords
+    - match: '\b(async|await)\b'
+      scope: keyword.control.flow.coroutine.python
+    # Control flow
+    - match: '\b(return|yield|if|elif|raise|with|for|while|break|continue|pass|assert|match|case)\b'
+      scope: keyword.control.flow.python
+    # Declarations
+    - match: '\b(def|class|lambda|global|nonlocal|type)\b'
+      scope: keyword.declaration.python
+    # Word operators
+    - match: '\b(and|or|not|in|is)\b'
+      scope: keyword.operator.word.python
+
+  annotated-variables:
+    # Named constant with type annotation: CONST_NAME: Type = ...
+    - match: '^\s*({{const_ident}})\s*(:)\s*'
+      captures:
+        1: variable.other.constant.python
+        2: punctuation.separator.colon.python
+      push:
+        - match: '(?=[=;$#])'
+          pop: true
+        - match: '$'
+          pop: true
+        - include: type-expression
+    # Member variable with type annotation: self.name: Type = ...
+    - match: '^\s*(self|cls)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*(:)\s*'
+      captures:
+        1: variable.language.python
+        2: variable.other.member.python
+        3: punctuation.separator.colon.python
+      push:
+        - match: '(?=[=;$#])'
+          pop: true
+        - match: '$'
+          pop: true
+        - include: type-expression
+    # Plain variable with type annotation: name: Type = ...
+    - match: '^\s*({{ident}})\s*(:)\s*'
+      captures:
+        1: variable.other.readwrite.python
+        2: punctuation.separator.colon.python
+      push:
+        - match: '(?=[=;$#])'
+          pop: true
+        - match: '$'
+          pop: true
+        - include: type-expression
+
+  type-expression:
+    - match: '$'
+      pop: true
+    - match: '\bNone\b'
+      scope: constant.language.python
+    - match: '{{builtin_types}}\b'
+      scope: support.type.builtin.python
+    - match: '{{typing_types}}\b'
+      scope: support.type.python
+    - match: '{{pascal_ident}}\b'
+      scope: entity.name.type.class.python
+    - match: '\.\.\.'
+      scope: punctuation.delimiter.ellipsis.python
+    - match: '\['
+      scope: punctuation.section.brackets.begin.python
+      push:
+        - match: '\]'
+          scope: punctuation.section.brackets.end.python
+          pop: true
+        - include: type-expression
+    - match: ','
+      scope: punctuation.separator.comma.python
+    - match: '\.'
+      scope: punctuation.accessor.dot.python
+    - match: '\|'
+      scope: keyword.operator.bitwise.python
+    - match: '{{ident}}'
+      scope: variable.other.type.python
+
+  expressions:
+    # Built-in language constants
+    - match: '\b(True|False|None)\b'
+      scope: constant.language.python
+    # Built-in receiver/instance reference
+    - match: '\b(self|cls)\b'
+      scope: variable.language.python
+    # Special module/runtime attributes & sentinels
+    - match: '\b(__name__|__doc__|__file__|__package__|__loader__|__spec__|__all__|__class__)\b'
+      scope: constant.language.special.python
+    # Built-in exceptions called or referenced
+    - match: '{{builtin_exceptions}}\b'
+      scope: support.type.exception.python
+    # Built-in types called or referenced
+    - match: '{{builtin_types}}\b'
+      scope: support.type.builtin.python
+    # Built-in functions called
+    - match: '({{builtin_functions}})\s*(?=\()'
+      captures:
+        1: support.function.builtin.python
+
+    # PascalCase Class Constructor / Instantiation: ClassName(...)
+    - match: '({{pascal_ident}})\s*(?=\()'
+      captures:
+        1: support.class.python
+
+    # Normal function / method call: func(...) or obj.method(...)
+    - match: '({{ident}})\s*(?=\()'
+      captures:
+        1: variable.function.python
+
+    # ALL_CAPS Named Constants
+    - match: '{{const_ident}}\b'
+      scope: variable.other.constant.python
+
+    # Numeric Literals (Unified, unbroken in Solarized Magenta)
+    - match: '\b0[xX][0-9a-fA-F_]+\b'
+      scope: constant.numeric.hex.python
+    - match: '\b0[bB][01_]+\b'
+      scope: constant.numeric.binary.python
+    - match: '\b0[oO][0-7_]+\b'
+      scope: constant.numeric.octal.python
+    - match: '\b\d[0-9_]*\.[0-9_]+(?:[eE][+-]?[0-9_]+)?\b|\b\d[0-9_]*(?:[eE][+-]?[0-9_]+)\b'
+      scope: constant.numeric.float.python
+    - match: '\b\d[0-9_]*\b'
+      scope: constant.numeric.integer.python
+
+    # Strings & F-strings
+    - include: strings
+
+    # Operators
+    - match: '(\*\*|\*|\/\/|\/|\+|\-|%|<<|>>|&|\||\^|~)'
+      scope: keyword.operator.arithmetic.python
+    - match: '(==|!=|<=|>=|<|>)'
+      scope: keyword.operator.comparison.python
+    - match: '(=|\+=|-=|\*=|/=|//=|\*\*=|&=|\|=|\^=|>>=|<<=|:=)'
+      scope: keyword.operator.assignment.python
+
+    # Punctuation & Delimiters
+    - match: '[\(\)]'
+      scope: punctuation.section.parens.python
+    - match: '[\[\]]'
+      scope: punctuation.section.brackets.python
+    - match: '[\{\}]'
+      scope: punctuation.section.braces.python
+    - match: ','
+      scope: punctuation.separator.comma.python
+    - match: '\.'
+      scope: punctuation.accessor.dot.python
+    - match: ':'
+      scope: punctuation.separator.colon.python
+
+    # Standard identifiers / variables
+    - match: '{{ident}}'
+      scope: variable.other.readwrite.python
+
+  strings:
+    # F-Strings: Triple double-quoted
+    - match: '([fF][rR]?|[rR]?[fF])(""")'
+      captures:
+        1: string.interpolated.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - match: '"""'
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - include: f-string-interior
+
+    # F-Strings: Triple single-quoted
+    - match: "([fF][rR]?|[rR]?[fF])(''')"
+      captures:
+        1: string.interpolated.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - match: "'''"
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - include: f-string-interior
+
+    # F-Strings: Single double-quoted
+    - match: '([fF][rR]?|[rR]?[fF])(")'
+      captures:
+        1: string.interpolated.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - include: f-string-interior
+
+    # F-Strings: Single single-quoted
+    - match: "([fF][rR]?|[rR]?[fF])(')"
+      captures:
+        1: string.interpolated.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - match: "'"
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - include: f-string-interior
+
+    # Triple double-quoted strings
+    - match: '([bBuUrR]*)(""")'
+      captures:
+        1: string.quoted.multi.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - meta_scope: string.quoted.multi.python
+        - match: '"""'
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.python
+
+    # Triple single-quoted strings
+    - match: "([bBuUrR]*)(''')"
+      captures:
+        1: string.quoted.multi.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - meta_scope: string.quoted.multi.python
+        - match: "'''"
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.python
+
+    # Single-line double-quoted strings
+    - match: '([bBuUrR]*)(")'
+      captures:
+        1: string.quoted.double.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - meta_scope: string.quoted.double.python
+        - match: '"'
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.python
+
+    # Single-line single-quoted strings
+    - match: "([bBuUrR]*)(')"
+      captures:
+        1: string.quoted.single.python
+        2: punctuation.definition.string.begin.python
+      push:
+        - meta_scope: string.quoted.single.python
+        - match: "'"
+          scope: punctuation.definition.string.end.python
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.python
+
+  f-string-interior:
+    - match: '\{\{'
+      scope: string.interpolated.python
+    - match: '\}\}'
+      scope: string.interpolated.python
+    - match: '\{'
+      scope: punctuation.section.interpolation.begin.python
+      push:
+        - match: '\}'
+          scope: punctuation.section.interpolation.end.python
+          pop: true
+        # Format specifier colon inside expression (e.g. :.4f, :X)
+        - match: '(?<!:):(?!:)'
+          scope: punctuation.separator.format-spec.python
+          push:
+            - match: '(?=\})'
+              pop: true
+            - match: '[^}]+'
+              scope: variable.other.format-spec.python
+        - include: expressions
+    - match: '\\.'
+      scope: constant.character.escape.python
+    - match: '[^"''\\{}]+'
+      scope: string.interpolated.python

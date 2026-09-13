@@ -86,6 +86,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinke
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Diff.sublime-syntax" "" "Symlinked Bat Diff syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Go.sublime-syntax" "" "Symlinked Bat Go syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Java.sublime-syntax" "" "Symlinked Bat Java syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Python.sublime-syntax" "" "Symlinked Bat Python syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -378,6 +379,32 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders Java import (Orange), paths (Base0), types (Yellow), declarations (Green class/interface/record), annotations (Orange), guards (Green when), numbers (Magenta 1L/100.0), this (Magenta), super call (Blue), and doc comments (Base01 ///) matching Neovim"
     else
         fail "bat Java rendering" "Expected Modern Java Solarized TrueColor highlights in bat sample.java output"
+    fi
+
+    # --- 2.7 Python Syntax Verification ---
+    PYTHON_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l py "$SCRIPT_DIR/sample-code/sample.py" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}from" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}asyncio" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}typing" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}Callable" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}EndpointMetrics" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}DEFAULT_PORT" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}0xFF00_AA55" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}3.1415926535" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}def" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}timed_execution" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}async" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@dataclass" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@property" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}self" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}None" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}MetricsCollector" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}__init__" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}__name__" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}\"\"\"" <<< "$PYTHON_SAMPLE_OUT"; then
+        pass "bat renders Python imports (Orange), modules (Violet), typing/classes (Yellow), unbroken numbers (Magenta), decorators (Orange), instance self/None/__name__ (Magenta), def/async (Green), and calls (Blue) matching Neovim"
+    else
+        fail "bat Python rendering" "Expected Modern Python Solarized TrueColor highlights in bat sample.py output"
     fi
 fi
 

@@ -180,6 +180,14 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Java query extension" "Missing or invalid after/queries/java/highlights.scm"
     fi
 
+    PYTHON_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/python/highlights.scm"
+    if [ -f "$PYTHON_QUERY" ] && grep -q 'decorator' "$PYTHON_QUERY" && \
+       grep -q '@function\.method' "$PYTHON_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Python (Orange decorators, Blue def __init__ method)"
+    else
+        fail "Neovim Python query extension" "Missing or invalid after/queries/python/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -352,6 +360,38 @@ local is_ncn_call = match_capture(go_buf, r_ncn, c_ncn, "function.call")
 local hl_fcall = vim.api.nvim_get_hl(0, {name = "@function.call", link = false})
 local fcall_fg = string.format("%06x", hl_fcall.fg or 0)
 
+-- 6. Inspect Python (sample.py)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.py")
+vim.cmd("redraw")
+local py_buf = vim.api.nvim_get_current_buf()
+
+local r_py_from, c_py_from = find_pos(py_buf, "from __future__ import annotations", "from")
+local is_py_from_kw = match_capture(py_buf, r_py_from, c_py_from, "keyword.import")
+
+local r_py_async, c_py_async = find_pos(py_buf, "import asyncio", "asyncio")
+local is_py_async_mod = match_capture(py_buf, r_py_async, c_py_async, "module")
+
+local r_py_call, c_py_call = find_pos(py_buf, "def timed_execution(func: Callable[..., Any])", "Callable")
+local is_py_call_type = match_capture(py_buf, r_py_call, c_py_call, "type")
+
+local r_py_dc, c_py_dc = find_pos(py_buf, "@dataclass(frozen=True)", "@dataclass")
+local is_py_dc_attr = match_capture(py_buf, r_py_dc, c_py_dc + 1, "attribute")
+
+local r_py_prop, c_py_prop = find_pos(py_buf, "@property", "@property")
+local is_py_prop_attr = match_capture(py_buf, r_py_prop, c_py_prop + 1, "attribute")
+
+local r_py_self, c_py_self = find_pos(py_buf, "def summary(self) -> str:", "self")
+local is_py_self_var = match_capture(py_buf, r_py_self, c_py_self, "variable.builtin")
+
+local r_py_init, c_py_init = find_pos(py_buf, "def __init__(self, service_name: str) -> None:", "__init__")
+local is_py_init_meth = match_capture(py_buf, r_py_init, c_py_init, "function.method")
+
+local r_py_ep, c_py_ep = find_pos(py_buf, "EndpointMetrics(\"/health\",", "EndpointMetrics")
+local is_py_ep_ctor = match_capture(py_buf, r_py_ep, c_py_ep, "constructor")
+
+local r_py_name, c_py_name = find_pos(py_buf, "if __name__ == \"__main__\":", "__name__")
+local is_py_name_const = match_capture(py_buf, r_py_name, c_py_name, "constant.builtin")
+
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -392,6 +432,15 @@ local results = {
     is_ld_const = tostring(is_ld_const),
     is_ncn_call = tostring(is_ncn_call),
     fcall_fg = fcall_fg,
+    is_py_from_kw = tostring(is_py_from_kw),
+    is_py_async_mod = tostring(is_py_async_mod),
+    is_py_call_type = tostring(is_py_call_type),
+    is_py_dc_attr = tostring(is_py_dc_attr),
+    is_py_prop_attr = tostring(is_py_prop_attr),
+    is_py_self_var = tostring(is_py_self_var),
+    is_py_init_meth = tostring(is_py_init_meth),
+    is_py_ep_ctor = tostring(is_py_ep_ctor),
+    is_py_name_const = tostring(is_py_name_const),
 }
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
@@ -551,6 +600,36 @@ end
             pass "Neovim renders Go factory function calls (NewClusterNode) as @function.call in Solarized Blue (#268bd2)"
         else
             fail "Neovim Go factory function call" "Expected @function.call fg=268bd2 for NewClusterNode, got cap=${RES[is_ncn_call]} fg=${RES[fcall_fg]}"
+        fi
+
+        if [ "${RES[is_py_from_kw]}" = "true" ] && [ "${RES[is_py_async_mod]}" = "true" ]; then
+            pass "Neovim renders Python import keyword in Orange (@keyword.import) and module in Violet (@module)"
+        else
+            fail "Neovim Python import/module capture" "Expected @keyword.import for from and @module for asyncio, got from=${RES[is_py_from_kw]} mod=${RES[is_py_async_mod]}"
+        fi
+
+        if [ "${RES[is_py_call_type]}" = "true" ]; then
+            pass "Neovim renders Python typing constructs (Callable) as @type (Yellow #b58900)"
+        else
+            fail "Neovim Python type capture" "Expected @type for Callable, got ${RES[is_py_call_type]}"
+        fi
+
+        if [ "${RES[is_py_dc_attr]}" = "true" ] && [ "${RES[is_py_prop_attr]}" = "true" ]; then
+            pass "Neovim renders Python decorators (@dataclass, @property) unified as @attribute in Solarized Orange (#cb4b16)"
+        else
+            fail "Neovim Python decorator capture" "Expected @attribute for @dataclass and @property, got dc=${RES[is_py_dc_attr]} prop=${RES[is_py_prop_attr]}"
+        fi
+
+        if [ "${RES[is_py_self_var]}" = "true" ] && [ "${RES[is_py_name_const]}" = "true" ]; then
+            pass "Neovim renders Python self as @variable.builtin and __name__ as @constant.builtin in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Python built-in captures" "Expected @variable.builtin for self and @constant.builtin for __name__, got self=${RES[is_py_self_var]} name=${RES[is_py_name_const]}"
+        fi
+
+        if [ "${RES[is_py_init_meth]}" = "true" ] && [ "${RES[is_py_ep_ctor]}" = "true" ]; then
+            pass "Neovim renders Python def __init__ as @function.method (Blue) and class instantiations as @constructor (Yellow)"
+        else
+            fail "Neovim Python method/constructor captures" "Expected @function.method for __init__ and @constructor for EndpointMetrics, got init=${RES[is_py_init_meth]} ep=${RES[is_py_ep_ctor]}"
         fi
     fi
 else
