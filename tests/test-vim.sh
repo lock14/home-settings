@@ -419,6 +419,9 @@ local is_rs_max_const = match_capture(rs_buf, r_rs_max, c_rs_max, "constant")
 local r_rs_drv, c_rs_drv = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "derive")
 local is_rs_drv_attr = match_capture(rs_buf, r_rs_drv, c_rs_drv, "attribute")
 
+local r_rs_hash, c_rs_hash = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "#")
+local is_rs_hash_attr = match_capture(rs_buf, r_rs_hash, c_rs_hash, "attribute")
+
 local r_rs_inl, c_rs_inl = find_pos(rs_buf, "#[inline]", "inline")
 local is_rs_inl_attr = match_capture(rs_buf, r_rs_inl, c_rs_inl, "attribute")
 
@@ -488,6 +491,7 @@ local results = {
     is_rs_map_type = tostring(is_rs_map_type),
     is_rs_max_const = tostring(is_rs_max_const),
     is_rs_drv_attr = tostring(is_rs_drv_attr),
+    is_rs_hash_attr = tostring(is_rs_hash_attr),
     is_rs_inl_attr = tostring(is_rs_inl_attr),
     is_rs_start_const = tostring(is_rs_start_const),
     is_rs_self_var = tostring(is_rs_self_var),
@@ -696,10 +700,10 @@ end
             fail "Neovim Rust type capture" "Expected @type for HashMap, got ${RES[is_rs_map_type]}"
         fi
 
-        if [ "${RES[is_rs_drv_attr]}" = "true" ] && [ "${RES[is_rs_inl_attr]}" = "true" ]; then
-            pass "Neovim renders Rust attributes (derive, inline) unified as @attribute in Solarized Orange (#cb4b16)"
+        if [ "${RES[is_rs_drv_attr]}" = "true" ] && [ "${RES[is_rs_inl_attr]}" = "true" ] && [ "${RES[is_rs_hash_attr]}" = "true" ]; then
+            pass "Neovim renders Rust attributes (#[derive, #[inline) unified as @attribute in Solarized Orange (#cb4b16)"
         else
-            fail "Neovim Rust attribute capture" "Expected @attribute for derive and inline, got drv=${RES[is_rs_drv_attr]} inl=${RES[is_rs_inl_attr]}"
+            fail "Neovim Rust attribute capture" "Expected @attribute for #[derive and #[inline, got drv=${RES[is_rs_drv_attr]} inl=${RES[is_rs_inl_attr]} hash=${RES[is_rs_hash_attr]}"
         fi
 
         if [ "${RES[is_rs_max_const]}" = "true" ] && [ "${RES[is_rs_start_const]}" = "true" ] && [ "${RES[is_rs_self_var]}" = "true" ]; then
