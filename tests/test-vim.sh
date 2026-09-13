@@ -189,8 +189,8 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     RUST_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/rust/highlights.scm"
-    if [ -f "$RUST_QUERY" ] && grep -q 'attribute' "$RUST_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for Rust (Orange attributes)"
+    if [ -f "$RUST_QUERY" ] && grep -q 'attribute' "$RUST_QUERY" && grep -q 'lifetime' "$RUST_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Rust (Orange attributes, Green lifetimes)"
     else
         fail "Neovim Rust query extension" "Missing or invalid after/queries/rust/highlights.scm"
     fi
@@ -431,6 +431,9 @@ local is_rs_self_var = match_capture(rs_buf, r_rs_self, c_rs_self, "variable.bui
 local r_rs_print, c_rs_print = find_pos(rs_buf, "    println!(\"Max connections:", "println")
 local is_rs_print_macro = match_capture(rs_buf, r_rs_print, c_rs_print, "function.macro")
 
+local r_rs_lt, c_rs_lt = find_pos(rs_buf, "find_by_id", string.char(39) .. "a")
+local is_rs_lt_mod = match_capture(rs_buf, r_rs_lt, c_rs_lt + 1, "keyword.modifier")
+
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -489,6 +492,7 @@ local results = {
     is_rs_start_const = tostring(is_rs_start_const),
     is_rs_self_var = tostring(is_rs_self_var),
     is_rs_print_macro = tostring(is_rs_print_macro),
+    is_rs_lt_mod = tostring(is_rs_lt_mod),
 }
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
@@ -708,6 +712,12 @@ end
             pass "Neovim renders Rust macros (println) as @function.macro in Solarized Blue (#268bd2)"
         else
             fail "Neovim Rust macro capture" "Expected @function.macro for println, got ${RES[is_rs_print_macro]}"
+        fi
+
+        if [ "${RES[is_rs_lt_mod]}" = "true" ]; then
+            pass "Neovim renders Rust lifetimes ('a, 'static, '_) unified as @keyword.modifier in Solarized Green (#859900)"
+        else
+            fail "Neovim Rust lifetime capture" "Expected @keyword.modifier for 'a, got ${RES[is_rs_lt_mod]}"
         fi
     fi
 else
