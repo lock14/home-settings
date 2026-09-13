@@ -587,6 +587,9 @@ results["is_sql_serial_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "t
 r_sql, c_sql = find_pos(sql_buf, "plan_tier VARCHAR", "DEFAULT")
 results["is_sql_default_attr"] = tostring(match_capture(sql_buf, r_sql, c_sql, "attribute"))
 
+r_sql, c_sql = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "NULL")
+results["is_sql_null_const"] = tostring(match_capture(sql_buf, r_sql, c_sql, "constant.builtin"))
+
 r_sql, c_sql = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "TRUE")
 results["is_sql_true_bool"] = tostring(match_capture(sql_buf, r_sql, c_sql, "boolean"))
 
@@ -903,6 +906,7 @@ end
            [ "${RES[is_sql_table_type]}" = "true" ] && \
            [ "${RES[is_sql_serial_type]}" = "true" ] && \
            [ "${RES[is_sql_default_attr]}" = "true" ] && \
+           [ "${RES[is_sql_null_const]}" = "true" ] && \
            [ "${RES[is_sql_true_bool]}" = "true" ] && \
            [ "${RES[is_sql_now_func]}" = "true" ] && \
            [ "${RES[is_sql_uuid_type]}" = "true" ] && \
@@ -918,7 +922,7 @@ end
            [ "${RES[is_sql_over_kw]}" = "true" ] && \
            [ "${RES[is_sql_desc_attr]}" = "true" ] && \
            [ "${RES[is_sql_having_kw]}" = "true" ]; then
-            pass "Neovim highlights modern SQL queries (sample.sql) with 100% Tree-sitter AST parity: DDL keywords (Green), table/index/CTE relations and data types (Yellow), functions (Blue), DEFAULT/DESC attributes (Orange), TRUE/numbers (Magenta), and calm Base0 alias/column qualifiers"
+            pass "Neovim highlights modern SQL queries (sample.sql) with 100% Tree-sitter AST parity: DDL keywords (Green), table/index/CTE relations and data types (Yellow), functions (Blue), DEFAULT/DESC attributes (Orange), NULL sentinels / TRUE / numbers (Magenta), and calm Base0 alias/column qualifiers"
         else
             fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql"
         fi

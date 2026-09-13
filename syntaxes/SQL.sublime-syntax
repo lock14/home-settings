@@ -10,8 +10,8 @@
 # - Attributes & directives (DEFAULT, ASC, DESC, COLLATE) in Solarized Orange (keyword.other.attribute.sql)
 # - Strings in Solarized Cyan (string.quoted.single.sql, string.quoted.dollar.sql)
 # - Numbers, booleans (TRUE, FALSE) & sentinels (NULL) in Solarized Magenta (constant.numeric.sql, constant.language.sql)
-# - Column identifiers & table aliases (a.account_id) in Base0 Grey (variable.other.member.sql)
-# - Operators (+ - * / = > <) & punctuation delimiters in Base0 Grey (punctuation.delimiter.sql)
+# - Column identifiers, query parameters ($1, :id) & table aliases (a.account_id) in Base0 Grey (variable.other.member.sql, variable.parameter.sql)
+# - Operators (+ - * / || -> ->> = > <) & punctuation delimiters in Base0 Grey (punctuation.delimiter.sql, keyword.operator.sql)
 # - Comments in Base01 Dim (comment.line.double-dash.sql, comment.block.sql)
 
 name: SQL
@@ -38,6 +38,7 @@ contexts:
     - include: constants-and-numbers
     - include: functions
     - include: qualified-identifiers
+    - include: parameters
     - include: operators-and-punctuation
     - include: identifiers
 
@@ -122,8 +123,10 @@ contexts:
       scope: keyword.control.operator.sql
     - match: '(?xi:\b(case|when|then|else|end)\b)'
       scope: keyword.control.conditional.sql
-    - match: '(?xi:\b(over|partition\s+by|window)\b)'
+    - match: '(?xi:\b(over|partition\s+by|window|rows|range|groups|unbounded|preceding|following|current\s+row|exclude)\b)'
       scope: keyword.control.window.sql
+    - match: '(?xi:\b(filter)\s*(?=\(\s*where\b))'
+      scope: keyword.control.sql
     - match: '(?xi:\b(begin|commit|rollback|transaction)\b)'
       scope: keyword.control.transaction.sql
 
@@ -186,11 +189,23 @@ contexts:
         2: punctuation.accessor.dot.sql
         3: punctuation.definition.wildcard.sql
 
+  parameters:
+    - match: '\$[0-9]+\b'
+      scope: variable.parameter.positional.sql
+    - match: '(?<!:):[a-zA-Z_][a-zA-Z0-9_]*\b'
+      scope: variable.parameter.named.sql
+    - match: '\?'
+      scope: variable.parameter.positional.sql
+
   operators-and-punctuation:
     - match: '::'
       scope: keyword.operator.cast.sql
     - match: '!=|<>|<=|>=|=|<|>'
       scope: keyword.operator.comparison.sql
+    - match: '\|\|'
+      scope: keyword.operator.concatenation.sql
+    - match: '->>|->|#>>|#>'
+      scope: keyword.operator.json.sql
     - match: '\+|-|\*|/|%|\^'
       scope: keyword.operator.arithmetic.sql
     - match: '\(|\)'

@@ -164,6 +164,22 @@ Colors across our developer workstation fulfill invariant domain roles across al
      - In positional expansions (`$@`, `$*`), `@` represents the collection of argument parameters (**Solarized Magenta `#D33682`**).
      - In array subscripts (`${arr[@]}`, `${arr[*]}`), `@` is an iteration wildcard index (**Solarized Cyan `#2AA198`**).
    - Universal sigils must never be assigned blanket keyword or constant scoping across an entire language grammar. Scoping rules must enforce structural containment checks (e.g. subscript brackets `[...]` vs prefix parameter sigils `$`) to reflect the exact semantic role of the token.
+18. **Sub-Grammar Inheritance Isolation (The Legacy Fallback Trap)**:
+   - In modular text-processing environments, layered grammar inheritance cascades (e.g. `SQL -> MySQL -> SQL (basic) -> TextMate SQL.tmLanguage`) create hidden single points of failure.
+   - When an upstream dependency fails to resolve in a standalone utility, the runtime silently falls back to legacy regex grammars whose antiquated semantic scopes (such as categorizing database columns as `constant.other.column-name`) catastrophically poison downstream syntax themes into garish, unreadable color palettes (turning column identifiers violently Magenta).
+   - Specialized language support must be implemented via **fully isolated, non-inheriting, self-contained grammars** that declare all root contexts explicitly, eliminating cascading dependency traps and ensuring invariant, predictable theme rendering across all host systems.
+19. **Relational Paradigm Ontology (Relational Entities as Schema Types)**:
+   - Programming language highlighting systems are historically biased toward imperative and object-oriented paradigms, where "types" denote primitive scalars (`int`, `bool`) and class/struct definitions, while collections and tables are variable instances.
+   - In relational database theory (Codd's relational model), relations (tables, views, materialized views, CTE aliases, and schema indexes) represent the structural data schemas and relational types of the schema domain, whereas columns represent attributes and tuples represent records.
+   - Highlighting systems must reflect this relational ontology by treating tables, CTEs, and indexes as structural schema entities in **Solarized Yellow (`#B58900`)**, while preserving attribute columns and alias navigators in calm **Base0 Grey (`#839496`)**, avoiding cognitive dissonance between imperative types and relational schemas.
+20. **Tri-State Logic & Sentinel Disambiguation (Literal vs Type Classification)**:
+   - In SQL's three-valued logic (3VL), `NULL` represents an unknown/missing state value or sentinel literal, behaving analogously to `nil`, `None`, and `nullptr` in systems programming.
+   - Upstream AST grammars (such as Tree-sitter SQL) frequently misclassify `NULL` under `@type.builtin` simply because SQL column specifications permit `NOT NULL` constraints, erroneously grouping the keyword under type rules.
+   - Semantic token mapping must strictly disambiguate syntactic keywords by their operational logic: `NULL`, `TRUE`, and `FALSE` are boolean and sentinel literals (**Solarized Magenta `#D33682`**), decoupled from structural types and keywords, ensuring visual parity across imperative, functional, and relational environments.
+21. **Contextual Polysemy of Multi-Semantic Operators (Arithmetic vs Projection Invariance)**:
+   - Punctuation symbols such as the asterisk (`*`) serve radically divergent functions within the same language: as a projection quantifier (`SELECT *`, `COUNT(*)`, `t.*`) denoting relational attribute expansion, versus a binary arithmetic operator (`a * b`, `price * quantity`) denoting mathematical multiplication.
+   - Naive regex engines indiscriminately classify all asterisks as wildcards or constants, polluting arithmetic expressions with distracting syntax accents.
+   - Grammars must maintain contextual distinction: binary arithmetic operators between expressions remain in calm **Base0 Grey (`#839496`)**, while projection and quantifier expansions are isolated within selection contexts and tuple accessors.
 
 ### Integration Rules & Tooling Implementations
 1. **3-Tier Ergonomic Architecture**: All syntax highlighting across Neovim, `bat`, and shell environments strictly follows the 3-Tier cognitive hierarchy:
