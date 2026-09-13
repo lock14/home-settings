@@ -294,6 +294,14 @@ local is_j_pat_type = match_capture(java_buf, r_j_pat, c_j_pat, "type")
 local r_j_when, c_j_when = find_pos(java_buf, "when amount >=", "when")
 local is_j_when_kw = match_capture(java_buf, r_j_when, c_j_when, "keyword.conditional")
 
+local r_j_this, c_j_this = find_pos(java_buf, "this.timeoutMs", "this")
+local is_j_this_var = match_capture(java_buf, r_j_this, c_j_this, "variable.builtin")
+local hl_var_bi = vim.api.nvim_get_hl(0, {name = "@variable.builtin", link = false})
+local var_bi_fg = string.format("%06x", hl_var_bi.fg or 0)
+
+local r_j_super, c_j_super = find_pos(java_buf, "super(timeoutMs);", "super")
+local is_j_super_call = match_capture(java_buf, r_j_super, c_j_super, "function.builtin")
+
 -- 4. Inspect Diff (sample.diff)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.diff")
 vim.cmd("redraw")
@@ -357,6 +365,9 @@ local results = {
     is_j_ann = tostring(is_j_ann),
     is_j_pat_type = tostring(is_j_pat_type),
     is_j_when_kw = tostring(is_j_when_kw),
+    is_j_this_var = tostring(is_j_this_var),
+    var_bi_fg = var_bi_fg,
+    is_j_super_call = tostring(is_j_super_call),
     module_fg = module_fg,
     lsp_ns_fg = lsp_ns_fg,
     is_core_mod = tostring(is_core_mod),
@@ -480,6 +491,18 @@ end
             pass "Neovim renders Java annotations as @attribute (Orange) and record patterns as @type (Yellow)"
         else
             fail "Neovim Java annotation and record pattern highlights" "Expected @attribute for annotations and @type for record patterns, got ann=${RES[is_j_ann]} pat=${RES[is_j_pat_type]}"
+        fi
+
+        if [ "${RES[is_j_this_var]}" = "true" ] && [ "${RES[var_bi_fg]}" = "d33682" ]; then
+            pass "Neovim renders Java 'this' keyword as @variable.builtin in Solarized Magenta (#d33682)"
+        else
+            fail "Neovim Java this keyword" "Expected @variable.builtin fg=d33682, got cap=${RES[is_j_this_var]} fg=${RES[var_bi_fg]}"
+        fi
+
+        if [ "${RES[is_j_super_call]}" = "true" ]; then
+            pass "Neovim renders Java constructor delegation 'super(...)' as @function.builtin in Solarized Blue (#268bd2)"
+        else
+            fail "Neovim Java super delegation" "Expected @function.builtin for super(...), got ${RES[is_j_super_call]}"
         fi
 
         if [ "${RES[diff_plus_fg]}" = "859900" ] && [ "${RES[is_add_plus]}" = "true" ]; then

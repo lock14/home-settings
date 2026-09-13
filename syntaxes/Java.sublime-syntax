@@ -230,6 +230,10 @@ contexts:
       scope: constant.language.boolean.java
     - match: '\bnull\b'
       scope: constant.language.null.java
+    # Constructor delegation: this(...) or super(...)
+    - match: '\b(this|super)\s*(?=\()'
+      scope: variable.function.java
+    # Language variables: this, super (receiver or field/method qualifier)
     - match: '\b(this|super)\b'
       scope: variable.language.java
     # Named UPPERCASE constants (e.g. DEFAULT_BUFFER_SIZE, TAX_RATE_MULTIPLIER)

@@ -105,6 +105,7 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "entity.name.attribute" "$THEME_FILE" && \
    grep -q "string.special.path.diff" "$THEME_FILE" && \
    grep -q "meta.diff.range" "$THEME_FILE" && \
+   grep -q "variable.language" "$THEME_FILE" && \
    grep -q "variable.other.constant" "$THEME_FILE"; then
     pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Namespace, Attribute, and Error scopes"
 else
@@ -371,8 +372,10 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_ORANGE}@Override" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}when" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}100.0" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}this" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}super" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}///" <<< "$JAVA_SAMPLE_OUT"; then
-        pass "bat renders Java import (Orange), paths (Base0), types (Yellow), declarations (Green class/interface/record), annotations (Orange), guards (Green when), numbers (Magenta 1L/100.0), and doc comments (Base01 ///) matching Neovim"
+        pass "bat renders Java import (Orange), paths (Base0), types (Yellow), declarations (Green class/interface/record), annotations (Orange), guards (Green when), numbers (Magenta 1L/100.0), this (Magenta), super call (Blue), and doc comments (Base01 ///) matching Neovim"
     else
         fail "bat Java rendering" "Expected Modern Java Solarized TrueColor highlights in bat sample.java output"
     fi

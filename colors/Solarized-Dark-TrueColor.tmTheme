@@ -65,9 +65,9 @@
 		</dict>
 		<dict>
 			<key>name</key>
-			<string>Built-in Constant</string>
+			<string>Built-in Constant and Language Variables</string>
 			<key>scope</key>
-			<string>constant.language, constant.character, constant.other, entity.name.constant, variable.other.constant</string>
+			<string>constant.language, constant.character, constant.other, entity.name.constant, variable.other.constant, variable.language</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
