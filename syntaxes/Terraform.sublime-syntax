@@ -1,0 +1,190 @@
+%YAML 1.2
+---
+# Solarized Dark Terraform / HCL Syntax Package for bat / Sublime Text
+# Complies with 3-Tier Ergonomic Architecture and Solarized Dark TrueColor Palette:
+# - Top-level declarations (terraform, resource, variable, locals, output) in Solarized Green (keyword.declaration.terraform)
+# - Scope accessors (var., local., terraform., data., module., count., each.) in Solarized Green (keyword.control.scope.terraform)
+# - Comprehension control (for, in) in Solarized Green (keyword.control.terraform)
+# - Nested schema blocks (required_providers, validation, lifecycle) in Solarized Yellow (entity.name.type.block.terraform)
+# - Primitive data types (string, number, bool, list, map, set) in Solarized Yellow (storage.type.terraform)
+# - Built-in & user functions (contains, range, cidrsubnet, merge) in Solarized Blue (support.function.builtin.terraform)
+# - Strings & quoted labels in Solarized Cyan (string.quoted.double.terraform)
+# - Numbers, booleans (true, false) & sentinels (null) in Solarized Magenta (constant.numeric, constant.language)
+# - Attributes & map keys (source, version, Environment, CostCenter) in Base0 Grey (variable.other.member.terraform)
+# - Resource references (aws_s3_bucket.telemetry_lake.arn) in Base0 Grey (variable.other.terraform)
+# - Interpolation braces (${ and }) in Base0 Grey (punctuation.section.interpolation.terraform)
+# - Operators (=, ==, !=, <, >, <=, >=, !, ?, :, =>, +, -, *, /) & punctuation in Base0 Grey (punctuation.delimiter, keyword.operator)
+# - Comments in Base01 Dim (comment.line.number-sign, comment.line.double-slash, comment.block)
+
+name: Terraform
+scope: source.terraform
+version: 2
+
+file_extensions:
+  - tf
+  - tfvars
+  - hcl
+
+variables:
+  ident: '[a-zA-Z_][a-zA-Z0-9_-]*'
+
+contexts:
+  main:
+    - include: comments
+    - include: blocks-declaration
+    - include: blocks-inner
+    - include: comprehensions
+    - include: scope-keywords
+    - include: types
+    - include: functions
+    - include: constants-and-numbers
+    - include: strings
+    - include: attributes-and-keys
+    - include: operators-and-punctuation
+    - include: identifiers
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.terraform
+    - match: '//.*$'
+      scope: comment.line.double-slash.terraform
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.terraform
+      push:
+        - meta_scope: comment.block.terraform
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.terraform
+          pop: 1
+
+  blocks-declaration:
+    - match: '(?xi:\b(terraform|resource|data|variable|output|locals|provider|module|check|import|moved|removed)\b)'
+      scope: keyword.declaration.terraform
+
+  blocks-inner:
+    - match: '(?xi:\b(required_version|required_providers|validation|lifecycle|connection|provisioner|postcondition|precondition)\s*(?=\{))'
+      scope: entity.name.type.block.terraform
+
+  comprehensions:
+    - match: '(?xi:\b(for|in)\b)'
+      scope: keyword.control.terraform
+    - match: '=>'
+      scope: keyword.operator.arrow.terraform
+
+  scope-keywords:
+    # Match reserved scope prefixes before a dot accessor: var.x, local.y, terraform.z
+    - match: '(?xi:\b(var|local|data|module|output|path|terraform|count|each)\b(?=\.))'
+      scope: keyword.control.scope.terraform
+
+  types:
+    - match: '(?xi:\b(string|number|bool|list|map|set|object|tuple|any)\b)'
+      scope: storage.type.terraform
+
+  functions:
+    - match: '(?xi:\b(contains|range|cidrsubnet|merge|length|lookup|element|concat|coalesce|can|try|jsonencode|jsondecode|templatefile|file|basename|dirname|pathexpand|format|formatlist|join|lower|upper|replace|split|substr|trim|trimspace|abs|ceil|floor|log|max|min|parseint|pow|signum|chunklist|compact|distinct|flatten|index|keys|reverse|setintersection|setproduct|setsubtract|setunion|slice|sort|values|zipmap|base64decode|base64encode|base64gzip|csvdecode|jsondecode|jsonencode|textdecodebase64|textencodebase64|urlencode|yamldecode|yamlencode|formatdate|timeadd|timestamp|cidrhost|cidrnetmask|cidrsubnets|md5|sha1|sha256|sha512|bcrypt|uuid|uuidv5)\s*(?=\())'
+      scope: support.function.builtin.terraform
+    - match: '({{ident}})\s*(?=\()'
+      scope: variable.function.terraform
+
+  constants-and-numbers:
+    - match: '(?xi:\b(true|false)\b)'
+      scope: constant.language.boolean.terraform
+    - match: '(?xi:\bnull\b)'
+      scope: constant.language.null.terraform
+    - match: '\b0x[0-9a-fA-F]+\b'
+      scope: constant.numeric.hex.terraform
+    - match: '\b[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?\b'
+      scope: constant.numeric.float.terraform
+    - match: '\b[0-9]+\b'
+      scope: constant.numeric.integer.terraform
+
+  strings:
+    # Quoted string with interpolation
+    - match: '"'
+      scope: punctuation.definition.string.begin.terraform
+      push:
+        - meta_scope: string.quoted.double.terraform
+        - match: '"'
+          scope: punctuation.definition.string.end.terraform
+          pop: 1
+        # Interpolation ${...} with delimiters in calm Base0 Grey (punctuation.section.interpolation)
+        - match: '\$\{'
+          captures:
+            0: punctuation.section.interpolation.begin.terraform
+          push:
+            - meta_scope: meta.interpolation.terraform
+            - match: '\}'
+              captures:
+                0: punctuation.section.interpolation.end.terraform
+              pop: 1
+            - include: main
+        # Directive %{...}
+        - match: '%\{'
+          captures:
+            0: punctuation.section.directive.begin.terraform
+          push:
+            - meta_scope: meta.directive.terraform
+            - match: '\}'
+              captures:
+                0: punctuation.section.directive.end.terraform
+              pop: 1
+            - include: main
+        - match: '\\.'
+          scope: constant.character.escape.terraform
+
+    # Heredoc string <<-?([A-Z_]+)
+    - match: '(<<-?)\s*([a-zA-Z_][a-zA-Z0-9_]*)'
+      captures:
+        1: punctuation.definition.string.begin.terraform
+        2: keyword.control.heredoc-token.terraform
+      push:
+        - meta_scope: string.unquoted.heredoc.terraform
+        - match: '^\s*\2$'
+          captures:
+            0: keyword.control.heredoc-token.terraform
+          pop: 1
+        - match: '\$\{'
+          captures:
+            0: punctuation.section.interpolation.begin.terraform
+          push:
+            - meta_scope: meta.interpolation.terraform
+            - match: '\}'
+              captures:
+                0: punctuation.section.interpolation.end.terraform
+              pop: 1
+            - include: main
+
+  attributes-and-keys:
+    # Unquoted attribute argument: key =
+    - match: '({{ident}})\s*(?==)'
+      captures:
+        1: variable.other.member.terraform
+    # Unquoted map/object key: key :
+    - match: '({{ident}})\s*(?=:)'
+      captures:
+        1: variable.other.member.terraform
+
+  operators-and-punctuation:
+    - match: '==|!=|<=|>=|<|>'
+      scope: keyword.operator.comparison.terraform
+    - match: '&&|\|\||!'
+      scope: keyword.operator.logical.terraform
+    - match: '\+|-|\*|/|%'
+      scope: keyword.operator.arithmetic.terraform
+    - match: '\?|:'
+      scope: keyword.operator.ternary.terraform
+    - match: '='
+      scope: keyword.operator.assignment.terraform
+    - match: '\(|\)'
+      scope: punctuation.section.bracket.round.terraform
+    - match: '\[|\]'
+      scope: punctuation.section.bracket.square.terraform
+    - match: '\{|\}'
+      scope: punctuation.section.bracket.curly.terraform
+    - match: ',|;'
+      scope: punctuation.delimiter.terraform
+    - match: '\.'
+      scope: punctuation.accessor.dot.terraform
+
+  identifiers:
+    - match: '{{ident}}'
+      scope: variable.other.terraform

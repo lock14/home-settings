@@ -90,6 +90,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Python.sublime-syntax" "" "Symli
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Rust.sublime-syntax" "" "Symlinked Bat Rust syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" "" "Symlinked Bat Bash syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/SQL.sublime-syntax" "" "Symlinked Bat SQL syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Terraform.sublime-syntax" "" "Symlinked Bat Terraform syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -553,6 +554,39 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders SQL keywords (Green), relation entities and data types (Yellow), functions (Blue), DEFAULT/ASC/DESC directives (Orange), booleans/sentinels/numbers (Magenta), and calm Base0 column qualifiers matching Neovim"
     else
         fail "bat SQL rendering" "Expected Modern SQL Solarized TrueColor highlights in bat sample.sql output"
+    fi
+
+    # --- 2.11 Terraform / HCL Syntax Verification ---
+    TF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l tf "$SCRIPT_DIR/sample-code/sample.tf" 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}terraform" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}required_providers" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}variable" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}string" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}validation" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}contains" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}var" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}number" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}3" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}locals" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}local" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}for" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}in" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}range" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}cidrsubnet" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}resource" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}aws_s3_bucket" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}telemetry_lake" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}merge" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}lifecycle" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}false" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}output" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}\${" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}}" <<< "$TF_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_CYAN}source" <<< "$TF_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_CYAN}CostCenter" <<< "$TF_SAMPLE_OUT"; then
+        pass "bat renders Terraform declaration keywords & scope accessors (Green), block schemas & data types (Yellow), functions (Blue), booleans/numbers (Magenta), strings (Cyan), and calm Base0 attributes/interpolation delimiters matching Neovim"
+    else
+        fail "bat Terraform rendering" "Expected Modern Terraform Solarized TrueColor highlights in bat sample.tf output"
     fi
 fi
 

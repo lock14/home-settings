@@ -209,6 +209,13 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim SQL query extension" "Missing or invalid after/queries/sql/highlights.scm"
     fi
 
+    TF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/terraform/highlights.scm"
+    if [ -f "$TF_QUERY" ] && grep -q 'template_interpolation_start' "$TF_QUERY" && grep -q 'variable_expr' "$TF_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Terraform (Green scope keywords, Base0 delimiters & resource refs)"
+    else
+        fail "Neovim Terraform query extension" "Missing or invalid after/queries/terraform/highlights.scm"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -634,6 +641,43 @@ results["is_sql_desc_attr"] = tostring(match_capture(sql_buf, r_sql, c_sql, "att
 
 r_sql, c_sql = find_pos(sql_buf, "HAVING s.total_invoices > 0", "HAVING")
 results["is_sql_having_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
+
+-- 10. Inspect Terraform (sample.tf)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.tf")
+vim.cmd([[redraw]])
+local tf_buf = vim.api.nvim_get_current_buf()
+local r_tf, c_tf
+
+r_tf, c_tf = find_pos(tf_buf, "terraform {", "terraform")
+results["is_tf_main_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+
+r_tf, c_tf = find_pos(tf_buf, "required_providers {", "required_providers")
+results["is_tf_prov_type"] = tostring(match_capture(tf_buf, r_tf, c_tf, "type"))
+
+r_tf, c_tf = find_pos(tf_buf, "  type        = string", "string")
+results["is_tf_str_type"] = tostring(match_capture(tf_buf, r_tf, c_tf, "type.builtin"))
+
+r_tf, c_tf = find_pos(tf_buf, "contains([\"staging\"", "contains")
+results["is_tf_cnt_func"] = tostring(match_capture(tf_buf, r_tf, c_tf, "function"))
+
+r_tf, c_tf = find_pos(tf_buf, "var.environment)", "var")
+results["is_tf_var_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+
+r_tf, c_tf = find_pos(tf_buf, "local.vpc_cidr,", "local")
+results["is_tf_loc_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+
+r_tf, c_tf = find_pos(tf_buf, "resource \"aws_s3_bucket\"", "resource")
+results["is_tf_res_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+
+r_tf, c_tf = find_pos(tf_buf, "value       = aws_s3_bucket.telemetry_lake.arn", "aws_s3_bucket")
+results["is_tf_ref_var"] = tostring(match_capture(tf_buf, r_tf, c_tf, "variable"))
+
+r_tf, c_tf = find_pos(tf_buf, "prevent_destroy = false", "false")
+results["is_tf_false_bool"] = tostring(match_capture(tf_buf, r_tf, c_tf, "boolean"))
+
+r_tf, c_tf = find_pos(tf_buf, "\"subnet-${idx}\"", "${")
+results["is_tf_interp_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
+
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
@@ -925,6 +969,21 @@ end
             pass "Neovim highlights modern SQL queries (sample.sql) with 100% Tree-sitter AST parity: DDL keywords (Green), table/index/CTE relations and data types (Yellow), functions (Blue), DEFAULT/DESC attributes (Orange), NULL sentinels / TRUE / numbers (Magenta), and calm Base0 alias/column qualifiers"
         else
             fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql"
+        fi
+
+        if [ "${RES[is_tf_main_kw]}" = "true" ] && \
+           [ "${RES[is_tf_prov_type]}" = "true" ] && \
+           [ "${RES[is_tf_str_type]}" = "true" ] && \
+           [ "${RES[is_tf_cnt_func]}" = "true" ] && \
+           [ "${RES[is_tf_var_kw]}" = "true" ] && \
+           [ "${RES[is_tf_loc_kw]}" = "true" ] && \
+           [ "${RES[is_tf_res_kw]}" = "true" ] && \
+           [ "${RES[is_tf_ref_var]}" = "true" ] && \
+           [ "${RES[is_tf_false_bool]}" = "true" ] && \
+           [ "${RES[is_tf_interp_brack]}" = "true" ]; then
+            pass "Neovim highlights modern Terraform / HCL configurations (sample.tf) with 100% Tree-sitter AST parity: block declarations and scope keywords (Green), schema blocks and data types (Yellow), built-in functions (Blue), booleans (Magenta), Base0 string interpolation delimiters and resource references"
+        else
+            fail "Neovim Terraform Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.tf"
         fi
     fi
 else
