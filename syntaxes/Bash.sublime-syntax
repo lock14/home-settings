@@ -10,7 +10,10 @@
 # - ALL_CAPS constants and environment variables in Solarized Magenta (variable.other.constant.shell)
 # - Lowercase variables in Base0 Grey (variable.other.shell)
 # - Special & positional parameters ($?, $@, $*, $#, $$, $0, $1, $2) in Solarized Magenta
-# - Numbers in Solarized Magenta (constant.numeric.shell)
+# - Numbers and file descriptors (>&2, 2>&1) in Solarized Magenta (constant.numeric.shell)
+# - Redirection operators in Base0 Grey (keyword.operator.redirect.shell)
+# - Subscript wildcard indexes (${arr[@]}, ${arr[*]}) in Solarized Cyan (constant.character.special.subscript.shell)
+# - Case statement pattern words in Base0 Grey and wildcards (*, ?) in Solarized Magenta
 # - Non-bleeding strings & parameter expansions in Solarized Cyan (string.quoted.double.shell)
 # - Heredocs in Solarized Cyan with delimiter tokens in Solarized Green
 # - Test brackets ([[ ]], [ ]) and operators in Base0 Grey

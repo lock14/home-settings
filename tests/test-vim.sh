@@ -544,6 +544,8 @@ local results = {
     is_sh_ec_var = tostring(is_sh_ec_var),
 }
 
+-- Note: Populate additional probe assertions directly on the results table
+-- to avoid triggering the Lua 5.1 / LuaJIT 200 local variable chunk limit (E5107).
 r_sh, c_sh = find_pos(sh_buf, ">&2", ">&2")
 results["is_sh_gt_op"] = tostring(match_capture(sh_buf, r_sh, c_sh, "operator"))
 results["is_sh_fd2_num"] = tostring(match_capture(sh_buf, r_sh, c_sh + 2, "number"))
