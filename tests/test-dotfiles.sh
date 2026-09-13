@@ -493,6 +493,7 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_BASE0}>&${SOL_RESET}${SOL_MAGENTA}2" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}INFO${SOL_RESET}${SOL_BASE0})" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}*${SOL_RESET}${SOL_BASE0})" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}[${SOL_RESET}${SOL_CYAN}@${SOL_RESET}${SOL_BASE0}]" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}@" <<< "$SH_SAMPLE_OUT"; then
         pass "bat renders Shell shebang (Orange), keywords (Green), functions/commands (Blue), constants/numbers/signals (Magenta), redirections, case patterns, and heredocs/strings (Cyan) matching Neovim"
     else

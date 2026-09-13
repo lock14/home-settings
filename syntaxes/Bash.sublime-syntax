@@ -385,7 +385,7 @@ contexts:
         - match: '(\[)([@*])(\])'
           captures:
             1: punctuation.definition.bracket.shell
-            2: constant.language.special.shell
+            2: constant.character.special.subscript.shell
             3: punctuation.definition.bracket.shell
         - match: '(\[)([0-9]+)(\])'
           captures:

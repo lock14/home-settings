@@ -77,9 +77,9 @@
 		<!-- String Escapes & Placeholders (Solarized Cyan - Unbroken String Cohesion) -->
 		<dict>
 			<key>name</key>
-			<string>String Escapes and Format Placeholders</string>
+			<string>String Escapes, Format Placeholders, and Special Characters</string>
 			<key>scope</key>
-			<string>constant.character.escape, constant.other.placeholder</string>
+			<string>constant.character.escape, constant.other.placeholder, constant.character.special</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

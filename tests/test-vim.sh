@@ -474,16 +474,6 @@ local is_sh_clean_func = match_capture(sh_buf, r_sh, c_sh, "function")
 r_sh, c_sh = find_pos(sh_buf, "local -r exit_code=$?", "exit_code")
 local is_sh_ec_var = match_capture(sh_buf, r_sh, c_sh, "variable")
 
-r_sh, c_sh = find_pos(sh_buf, ">&2", ">&2")
-local is_sh_gt_op = match_capture(sh_buf, r_sh, c_sh, "operator")
-local is_sh_fd2_num = match_capture(sh_buf, r_sh, c_sh + 2, "number")
-
-r_sh, c_sh = find_pos(sh_buf, "INFO)", "INFO")
-local is_sh_info_param = match_capture(sh_buf, r_sh, c_sh, "variable.parameter")
-
-r_sh, c_sh = find_pos(sh_buf, "*)", "*")
-local is_sh_star_regex = match_capture(sh_buf, r_sh, c_sh, "string.regexp")
-
 local results = {
     param_italic = param_italic,
     const_fg = const_fg,
@@ -552,11 +542,23 @@ local results = {
     is_sh_exit_const = tostring(is_sh_exit_const),
     is_sh_clean_func = tostring(is_sh_clean_func),
     is_sh_ec_var = tostring(is_sh_ec_var),
-    is_sh_gt_op = tostring(is_sh_gt_op),
-    is_sh_fd2_num = tostring(is_sh_fd2_num),
-    is_sh_info_param = tostring(is_sh_info_param),
-    is_sh_star_regex = tostring(is_sh_star_regex),
 }
+
+r_sh, c_sh = find_pos(sh_buf, ">&2", ">&2")
+results["is_sh_gt_op"] = tostring(match_capture(sh_buf, r_sh, c_sh, "operator"))
+results["is_sh_fd2_num"] = tostring(match_capture(sh_buf, r_sh, c_sh + 2, "number"))
+
+r_sh, c_sh = find_pos(sh_buf, "INFO)", "INFO")
+results["is_sh_info_param"] = tostring(match_capture(sh_buf, r_sh, c_sh, "variable.parameter"))
+
+r_sh, c_sh = find_pos(sh_buf, "*)", "*")
+results["is_sh_star_regex"] = tostring(match_capture(sh_buf, r_sh, c_sh, "string.regexp"))
+
+r_sh, c_sh = find_pos(sh_buf, "${ACTIVE_SERVICES[@]}", "@")
+results["is_sh_sub_at"] = tostring(match_capture(sh_buf, r_sh, c_sh, "character.special"))
+
+r_sh, c_sh = find_pos(sh_buf, "main \"$@\"", "@")
+results["is_sh_pos_at"] = tostring(match_capture(sh_buf, r_sh, c_sh, "constant"))
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
@@ -817,6 +819,12 @@ end
             pass "Neovim renders Shell case branch labels (INFO) in Base0 Grey (#839496) and wildcards (*) in Solarized Magenta (#d33682)"
         else
             fail "Neovim Shell case pattern captures" "Expected @variable.parameter for INFO and @string.regexp for *, got info=${RES[is_sh_info_param]} star=${RES[is_sh_star_regex]}"
+        fi
+
+        if [ "${RES[is_sh_sub_at]}" = "true" ] && [ "${RES[is_sh_pos_at]}" = "true" ]; then
+            pass "Neovim renders Shell array subscript @ in Cyan (@character.special) and positional \$@ in Magenta (@constant)"
+        else
+            fail "Neovim Shell @ parameter captures" "Expected @character.special for [@] and @constant for \$@, got sub=${RES[is_sh_sub_at]} pos=${RES[is_sh_pos_at]}"
         fi
     fi
 else
