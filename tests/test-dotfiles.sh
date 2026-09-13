@@ -420,7 +420,9 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_MAGENTA}MAX_CONNECTIONS" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}usize" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}0xCAFE_BABE" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}#[" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}derive" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}]" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}Debug" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}pub" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}enum" <<< "$RUST_SAMPLE_OUT" && \
