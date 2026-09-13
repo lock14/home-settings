@@ -14,6 +14,10 @@ terraform {
   }
 }
 
+provider "aws" {
+  region = "us-east-1"
+}
+
 variable "environment" {
   type        = string
   default     = "production"
@@ -48,6 +52,7 @@ locals {
 }
 
 resource "aws_s3_bucket" "telemetry_lake" {
+  provider      = aws
   bucket        = "company-${var.environment}-telemetry-lake"
   force_destroy = !local.is_production
 
@@ -58,6 +63,14 @@ resource "aws_s3_bucket" "telemetry_lake" {
 
   lifecycle {
     prevent_destroy = false
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOF
+      %{ if var.environment == "production" ~}
+      echo "Provisioned bucket: ${self.id}"
+      %{ endif ~}
+    EOF
   }
 }
 

@@ -5,11 +5,11 @@
 (variable_expr
   (identifier) @variable)
 
-;; Map reserved Terraform scope accessors (var, local, terraform, data, module, etc.)
+;; Map reserved Terraform scope accessors (var, local, terraform, data, module, self, etc.)
 ;; to @keyword (Solarized Green #859900) matching their block declaration counterparts
 ((variable_expr
    (identifier) @keyword)
- (#any-of? @keyword "data" "var" "local" "module" "output" "path" "terraform" "count" "each"))
+ (#any-of? @keyword "data" "var" "local" "module" "output" "path" "terraform" "count" "each" "self"))
 
 ;; Map primitive types (string, number, bool, etc.) to @type.builtin (Solarized Yellow #B58900)
 ((variable_expr
@@ -32,6 +32,7 @@
   (template_interpolation_end)
   (template_directive_start)
   (template_directive_end)
+  (strip_marker)
 ] @punctuation.bracket
 
 ;; Map ternary operator ? to @operator in calm Base0 Grey

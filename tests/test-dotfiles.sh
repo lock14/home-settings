@@ -580,6 +580,14 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_YELLOW}lifecycle" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}false" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}output" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}provider" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}provider" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}provisioner" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}self" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}%{" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}~}" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}if" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}endif" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}\${" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}}" <<< "$TF_SAMPLE_OUT" && \
        ! grep -Fq "${SOL_CYAN}source" <<< "$TF_SAMPLE_OUT" && \

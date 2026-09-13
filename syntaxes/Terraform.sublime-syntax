@@ -57,22 +57,22 @@ contexts:
           pop: 1
 
   blocks-declaration:
-    - match: '(?xi:\b(terraform|resource|data|variable|output|locals|provider|module|check|import|moved|removed)\b)'
+    - match: '(?xi:\b(terraform|resource|data|variable|output|locals|provider|module|check|import|moved|removed)\b(?!\s*[=:]))'
       scope: keyword.declaration.terraform
 
   blocks-inner:
-    - match: '(?xi:\b(required_version|required_providers|validation|lifecycle|connection|provisioner|postcondition|precondition)\s*(?=\{))'
+    - match: '(?xi:\b(required_version|required_providers|validation|lifecycle|connection|provisioner|postcondition|precondition)\b(?!\s*[=:]))'
       scope: entity.name.type.block.terraform
 
   comprehensions:
-    - match: '(?xi:\b(for|in)\b)'
+    - match: '(?xi:\b(for|in|if|else|endif|endfor)\b)'
       scope: keyword.control.terraform
     - match: '=>'
       scope: keyword.operator.arrow.terraform
 
   scope-keywords:
-    # Match reserved scope prefixes before a dot accessor: var.x, local.y, terraform.z
-    - match: '(?xi:\b(var|local|data|module|output|path|terraform|count|each)\b(?=\.))'
+    # Match reserved scope prefixes before a dot accessor: var.x, local.y, terraform.z, self.a
+    - match: '(?xi:\b(var|local|data|module|output|path|terraform|count|each|self)\b(?=\.))'
       scope: keyword.control.scope.terraform
 
   types:
@@ -80,7 +80,7 @@ contexts:
       scope: storage.type.terraform
 
   functions:
-    - match: '(?xi:\b(contains|range|cidrsubnet|merge|length|lookup|element|concat|coalesce|can|try|jsonencode|jsondecode|templatefile|file|basename|dirname|pathexpand|format|formatlist|join|lower|upper|replace|split|substr|trim|trimspace|abs|ceil|floor|log|max|min|parseint|pow|signum|chunklist|compact|distinct|flatten|index|keys|reverse|setintersection|setproduct|setsubtract|setunion|slice|sort|values|zipmap|base64decode|base64encode|base64gzip|csvdecode|jsondecode|jsonencode|textdecodebase64|textencodebase64|urlencode|yamldecode|yamlencode|formatdate|timeadd|timestamp|cidrhost|cidrnetmask|cidrsubnets|md5|sha1|sha256|sha512|bcrypt|uuid|uuidv5)\s*(?=\())'
+    - match: '(?xi:\b(abs|alltrue|anytrue|base64decode|base64encode|base64gzip|bcrypt|can|ceil|chunklist|cidrhost|cidrnetmask|cidrsubnet|cidrsubnets|coalesce|compact|concat|contains|csvdecode|dirname|distinct|element|file|filebase64|fileexists|fileset|flatten|floor|format|formatdate|formatlist|index|join|jsondecode|jsonencode|keys|length|log|lookup|lower|matchkeys|max|md5|merge|min|nonsensitive|one|parseint|pathexpand|plantimestamp|pow|range|regex|regexall|replace|reverse|sensitive|setintersection|setproduct|setsubtract|setunion|sha1|sha256|sha512|signum|slice|sort|split|strrev|substr|sum|templatefile|textdecodebase64|textencodebase64|timeadd|timestamp|tobool|tolist|tomap|tonumber|toset|tostring|trim|trimspace|try|upper|urlencode|uuid|uuidv5|values|yamldecode|yamlencode|zipmap)\s*(?=\())'
       scope: support.function.builtin.terraform
     - match: '({{ident}})\s*(?=\()'
       scope: variable.function.terraform
@@ -107,12 +107,12 @@ contexts:
           scope: punctuation.definition.string.end.terraform
           pop: 1
         # Interpolation ${...} with delimiters in calm Base0 Grey (punctuation.section.interpolation)
-        - match: '\$\{'
+        - match: '\$\{~?'
           captures:
             0: punctuation.section.interpolation.begin.terraform
           push:
             - meta_scope: meta.interpolation.terraform
-            - match: '\}'
+            - match: '~?\}'
               captures:
                 0: punctuation.section.interpolation.end.terraform
               pop: 1
@@ -123,7 +123,7 @@ contexts:
             0: punctuation.section.directive.begin.terraform
           push:
             - meta_scope: meta.directive.terraform
-            - match: '\}'
+            - match: '~?\}'
               captures:
                 0: punctuation.section.directive.end.terraform
               pop: 1
@@ -142,14 +142,24 @@ contexts:
           captures:
             0: keyword.control.heredoc-token.terraform
           pop: 1
-        - match: '\$\{'
+        - match: '\$\{~?'
           captures:
             0: punctuation.section.interpolation.begin.terraform
           push:
             - meta_scope: meta.interpolation.terraform
-            - match: '\}'
+            - match: '~?\}'
               captures:
                 0: punctuation.section.interpolation.end.terraform
+              pop: 1
+            - include: main
+        - match: '%\{'
+          captures:
+            0: punctuation.section.directive.begin.terraform
+          push:
+            - meta_scope: meta.directive.terraform
+            - match: '~?\}'
+              captures:
+                0: punctuation.section.directive.end.terraform
               pop: 1
             - include: main
 

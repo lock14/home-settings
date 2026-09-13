@@ -678,6 +678,27 @@ results["is_tf_false_bool"] = tostring(match_capture(tf_buf, r_tf, c_tf, "boolea
 r_tf, c_tf = find_pos(tf_buf, "\"subnet-${idx}\"", "${")
 results["is_tf_interp_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
 
+r_tf, c_tf = find_pos(tf_buf, "provider \"aws\"", "provider")
+results["is_tf_prov_hdr_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+
+r_tf, c_tf = find_pos(tf_buf, "provider      = aws", "provider")
+results["is_tf_prov_arg_mbr"] = tostring(match_capture(tf_buf, r_tf, c_tf, "variable.member"))
+
+r_tf, c_tf = find_pos(tf_buf, "provisioner \"local-exec\"", "provisioner")
+results["is_tf_psnr_type"] = tostring(match_capture(tf_buf, r_tf, c_tf, "type"))
+
+r_tf, c_tf = find_pos(tf_buf, "echo \"Provisioned bucket: ${self.id}\"", "self")
+results["is_tf_self_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+
+r_tf, c_tf = find_pos(tf_buf, "%{ if var.environment", "%{")
+results["is_tf_dir_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
+
+r_tf, c_tf = find_pos(tf_buf, "%{ if var.environment", "~}")
+results["is_tf_strip_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
+
+r_tf, c_tf = find_pos(tf_buf, "%{ if var.environment", "if")
+results["is_tf_if_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword.conditional"))
+
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
@@ -980,7 +1001,14 @@ end
            [ "${RES[is_tf_res_kw]}" = "true" ] && \
            [ "${RES[is_tf_ref_var]}" = "true" ] && \
            [ "${RES[is_tf_false_bool]}" = "true" ] && \
-           [ "${RES[is_tf_interp_brack]}" = "true" ]; then
+           [ "${RES[is_tf_interp_brack]}" = "true" ] && \
+           [ "${RES[is_tf_prov_hdr_kw]}" = "true" ] && \
+           [ "${RES[is_tf_prov_arg_mbr]}" = "true" ] && \
+           [ "${RES[is_tf_psnr_type]}" = "true" ] && \
+           [ "${RES[is_tf_self_kw]}" = "true" ] && \
+           [ "${RES[is_tf_dir_brack]}" = "true" ] && \
+           [ "${RES[is_tf_strip_brack]}" = "true" ] && \
+           [ "${RES[is_tf_if_kw]}" = "true" ]; then
             pass "Neovim highlights modern Terraform / HCL configurations (sample.tf) with 100% Tree-sitter AST parity: block declarations and scope keywords (Green), schema blocks and data types (Yellow), built-in functions (Blue), booleans (Magenta), Base0 string interpolation delimiters and resource references"
         else
             fail "Neovim Terraform Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.tf"

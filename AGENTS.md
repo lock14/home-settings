@@ -188,6 +188,14 @@ Colors across our developer workstation fulfill invariant domain roles across al
    - In configuration and template languages embedding expression scopes (such as HCL `"${var.environment}"`), the interpolation opening and closing delimiters (`${` and `}`) represent grammatical enclosure boundaries.
    - Scoping delimiters with the same hue as the enclosed expression keywords (e.g. coloring `${` Green immediately adjacent to `var` in Green) creates chromatic fusion and visual ambiguity (`"${var"`).
    - Delimiter sigils must strictly remain neutral punctuation in calm **Base0 Grey (`#839496`)**, establishing a clean cognitive boundary between string literal wrappers (**Solarized Cyan `#2AA198`**) and dynamic expressions.
+24. **Positional Contextuality of Meta-Arguments (Header vs Assignment Distinction)**:
+   - In declarative configuration languages (such as HCL, Terraform, and Nix), certain identifiers fulfill dual semantic roles: `provider "aws" {` serves as a structural block header (**Solarized Green `#859900`**), whereas `provider = aws.west` inside a resource or module acts as an instanced argument/attribute.
+   - Naive regex engines indiscriminately match word boundaries (`\bprovider\b`), turning argument assignments into false declaration keywords.
+   - Pushdown regex engines must enforce negative lookahead constraints (`(?!\s*[=:])`) on block declaration keywords to ensure assignment targets and map keys fall through to attribute rules in calm **Base0 Grey (`#839496`)**.
+25. **Template Directive & Heredoc Structural Invariance (Cross-Enclosure Parity)**:
+   - Configuration and infrastructure code frequently interleave dynamic templates across both inline quoted strings (`"..."`) and multi-line heredocs (`<<-EOF ... EOF`).
+   - Control flow directives (`%{ if ... }`, `%{ for ... }`, `%{ endif }`, `%{ endfor }`), interpolation scopes (`${...}`), and whitespace strip markers (`~`) must maintain identical scoping rules across both quoted and heredoc boundaries, preventing heredocs from decaying into unparsed text.
+   - Delimiters and strip markers (`${`, `}`, `%{`, `~`) strictly remain calm punctuation in **Base0 Grey (`#839496`)** across all literal containers, shielding developers from chromatic distraction.
 
 ### Integration Rules & Tooling Implementations
 1. **3-Tier Ergonomic Architecture**: All syntax highlighting across Neovim, `bat`, and shell environments strictly follows the 3-Tier cognitive hierarchy:
