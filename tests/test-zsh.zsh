@@ -322,6 +322,38 @@ test_addendum() {
         echo "FAIL:p10k prompt_char:Expected prompt_char to be disabled in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
     fi
 
+    if [ "${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}" = "#EEE8D5" ]; then
+        echo "PASS:p10k shortened directory foreground configured with readable Base2 contrast on Blue"
+    else
+        echo "FAIL:p10k DIR_SHORTENED_FOREGROUND:Expected '#EEE8D5', got '${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "true" ]; then
+        echo "PASS:p10k directory OSC 8 hyperlinks enabled"
+    else
+        echo "FAIL:p10k DIR_HYPERLINK:Expected 'true', got '${POWERLEVEL9K_DIR_HYPERLINK:-}'"
+    fi
+
+    if [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"go_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"node_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"rust_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"java_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"package"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"terraform_version"* ]]; then
+        echo "PASS:p10k right prompt elements includes language toolchains, package, and terraform"
+    else
+        echo "FAIL:p10k RIGHT_PROMPT_ELEMENTS:Expected toolchain versions enabled in POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS"
+    fi
+
+    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#2AA198" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#002B36" ] && \
+       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#859900" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#002B36" ] && \
+       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#CB4B16" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#002B36" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#6C71C4" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#FDF6E3" ]; then
+        echo "PASS:p10k toolchain versions configured with authentic Solarized Dark TrueColor badges"
+    else
+        echo "FAIL:p10k toolchain version colors:Expected authentic Solarized TrueColor badges"
+    fi
+
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
         echo "PASS:ZSH_HIGHLIGHT_STYLES numeric-fd configured with Solarized Magenta"
     else
