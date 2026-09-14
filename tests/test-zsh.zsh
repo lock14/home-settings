@@ -328,10 +328,10 @@ test_addendum() {
         echo "FAIL:p10k DIR_SHORTENED_FOREGROUND:Expected '#EEE8D5', got '${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "true" ]; then
-        echo "PASS:p10k directory OSC 8 hyperlinks enabled"
+    if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
+        echo "PASS:p10k directory OSC 8 hyperlinks disabled for clean text selection"
     else
-        echo "FAIL:p10k DIR_HYPERLINK:Expected 'true', got '${POWERLEVEL9K_DIR_HYPERLINK:-}'"
+        echo "FAIL:p10k DIR_HYPERLINK:Expected 'false', got '${POWERLEVEL9K_DIR_HYPERLINK:-}'"
     fi
 
     if [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"go_version"* ]] && \
@@ -345,13 +345,26 @@ test_addendum() {
         echo "FAIL:p10k RIGHT_PROMPT_ELEMENTS:Expected toolchain versions enabled in POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS"
     fi
 
-    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#2AA198" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#002B36" ] && \
-       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#859900" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#002B36" ] && \
-       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#CB4B16" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#002B36" ] && \
-       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#6C71C4" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#FDF6E3" ]; then
-        echo "PASS:p10k toolchain versions configured with authentic Solarized Dark TrueColor badges"
+    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_PACKAGE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_PACKAGE_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#93A1A1" ]; then
+        echo "PASS:p10k toolchain versions unified under cohesive Base02 background with Base1 foreground"
     else
-        echo "FAIL:p10k toolchain version colors:Expected authentic Solarized TrueColor badges"
+        echo "FAIL:p10k toolchain version colors:Expected unified Base02 background with Base1 foreground"
+    fi
+
+    if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_AZURE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_GCLOUD_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GCLOUD_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND:-}" = "#93A1A1" ]; then
+        echo "PASS:p10k cloud provider segments unified under cohesive Base02 background with Base1 foreground"
+    else
+        echo "FAIL:p10k cloud provider segment colors:Expected unified Base02 background with Base1 foreground"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then

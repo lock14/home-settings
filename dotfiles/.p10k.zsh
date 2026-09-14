@@ -279,7 +279,7 @@
   # opening a directory in the file manager simply by clicking the link.
   # Can also be handy when the directory is shortened, as it allows you to see
   # the full directory that was used in previous commands.
-  typeset -g POWERLEVEL9K_DIR_HYPERLINK=true
+  typeset -g POWERLEVEL9K_DIR_HYPERLINK=false
 
   # Enable special styling for non-writable and non-existent directories. See POWERLEVEL9K_LOCK_ICON
   # and POWERLEVEL9K_DIR_CLASSES below.
@@ -1067,8 +1067,8 @@
 
   ##############################[ node_version: node.js version ]###############################
   # Node version color.
-  typeset -g POWERLEVEL9K_NODE_VERSION_FOREGROUND='#002B36'
-  typeset -g POWERLEVEL9K_NODE_VERSION_BACKGROUND='#859900'
+  typeset -g POWERLEVEL9K_NODE_VERSION_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_NODE_VERSION_BACKGROUND='#073642'
   # Show node version only when in a directory tree containing package.json.
   typeset -g POWERLEVEL9K_NODE_VERSION_PROJECT_ONLY=true
   # Custom icon.
@@ -1076,8 +1076,8 @@
 
   #######################[ go_version: go version (https://golang.org) ]########################
   # Go version color.
-  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND='#002B36'
-  typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND='#2AA198'
+  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND='#073642'
   # Show go version only when in a go project subdirectory.
   typeset -g POWERLEVEL9K_GO_VERSION_PROJECT_ONLY=true
   # Custom icon.
@@ -1085,8 +1085,8 @@
 
   #################[ rust_version: rustc version (https://www.rust-lang.org) ]##################
   # Rust version color.
-  typeset -g POWERLEVEL9K_RUST_VERSION_FOREGROUND='#002B36'
-  typeset -g POWERLEVEL9K_RUST_VERSION_BACKGROUND='#CB4B16'
+  typeset -g POWERLEVEL9K_RUST_VERSION_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_RUST_VERSION_BACKGROUND='#073642'
   # Show rust version only when in a rust project subdirectory.
   typeset -g POWERLEVEL9K_RUST_VERSION_PROJECT_ONLY=true
   # Custom icon.
@@ -1133,8 +1133,8 @@
 
   ####################[ java_version: java version (https://www.java.com/) ]####################
   # Java version color.
-  typeset -g POWERLEVEL9K_JAVA_VERSION_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_JAVA_VERSION_BACKGROUND='#DC322F'
+  typeset -g POWERLEVEL9K_JAVA_VERSION_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_JAVA_VERSION_BACKGROUND='#073642'
   # Show java version only when in a java project subdirectory.
   typeset -g POWERLEVEL9K_JAVA_VERSION_PROJECT_ONLY=true
   # Show brief version.
@@ -1302,14 +1302,14 @@
       # '*prod*'  PROD    # These values are examples that are unlikely
       # '*test*'  TEST    # to match your needs. Customize them as needed.
       '*'         OTHER)
-  typeset -g POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND='#6C71C4'
+  typeset -g POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND='#073642'
   # typeset -g POWERLEVEL9K_TERRAFORM_OTHER_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
   #############[ terraform_version: terraform version (https://www.terraform.io) ]##############
   # Terraform version color.
-  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND='#6C71C4'
+  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND='#073642'
   # Custom icon.
   # typeset -g POWERLEVEL9K_TERRAFORM_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
@@ -1352,8 +1352,8 @@
       # '*prod*'  PROD    # These values are examples that are unlikely
       # '*test*'  TEST    # to match your needs. Customize them as needed.
       '*'       DEFAULT)
-  typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND='#268BD2'
+  typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND='#073642'
   # typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
   # Use POWERLEVEL9K_KUBECONTEXT_CONTENT_EXPANSION to specify the content displayed by kubecontext
@@ -1437,8 +1437,8 @@
       # '*prod*'  PROD    # These values are examples that are unlikely
       # '*test*'  TEST    # to match your needs. Customize them as needed.
       '*'       DEFAULT)
-  typeset -g POWERLEVEL9K_AWS_DEFAULT_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_AWS_DEFAULT_BACKGROUND='#586E75'
+  typeset -g POWERLEVEL9K_AWS_DEFAULT_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_AWS_DEFAULT_BACKGROUND='#073642'
   # typeset -g POWERLEVEL9K_AWS_DEFAULT_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
   # AWS segment format. The following parameters are available within the expansion.
@@ -1449,8 +1449,8 @@
 
   #[ aws_eb_env: aws elastic beanstalk environment (https://aws.amazon.com/elasticbeanstalk/) ]#
   # AWS Elastic Beanstalk environment color.
-  typeset -g POWERLEVEL9K_AWS_EB_ENV_FOREGROUND='#073642'
-  typeset -g POWERLEVEL9K_AWS_EB_ENV_BACKGROUND='#2AA198'
+  typeset -g POWERLEVEL9K_AWS_EB_ENV_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_AWS_EB_ENV_BACKGROUND='#073642'
   # Custom icon.
   # typeset -g POWERLEVEL9K_AWS_EB_ENV_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
@@ -1459,8 +1459,8 @@
   # Tip: Remove the next line to always show azure.
   typeset -g POWERLEVEL9K_AZURE_SHOW_ON_COMMAND='az|terraform|pulumi|terragrunt'
   # Azure account name color.
-  typeset -g POWERLEVEL9K_AZURE_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_AZURE_BACKGROUND='#268BD2'
+  typeset -g POWERLEVEL9K_AZURE_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_AZURE_BACKGROUND='#073642'
   # Custom icon.
   # typeset -g POWERLEVEL9K_AZURE_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
@@ -1469,8 +1469,8 @@
   # Tip: Remove the next line to always show gcloud.
   typeset -g POWERLEVEL9K_GCLOUD_SHOW_ON_COMMAND='gcloud|gcs|gsutil'
   # Google cloud color.
-  typeset -g POWERLEVEL9K_GCLOUD_FOREGROUND='#FDF6E3'
-  typeset -g POWERLEVEL9K_GCLOUD_BACKGROUND='#268BD2'
+  typeset -g POWERLEVEL9K_GCLOUD_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_GCLOUD_BACKGROUND='#073642'
 
   # Google cloud format. Change the value of POWERLEVEL9K_GCLOUD_PARTIAL_CONTENT_EXPANSION and/or
   # POWERLEVEL9K_GCLOUD_COMPLETE_CONTENT_EXPANSION if the default is too verbose or not informative
@@ -1541,8 +1541,8 @@
       # '*:*prod*:*'  PROD    # These values are examples that are unlikely
       # '*:*test*:*'  TEST    # to match your needs. Customize them as needed.
       '*'             DEFAULT)
-  typeset -g POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND='#073642'
-  typeset -g POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND='#B58900'
+  typeset -g POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND='#073642'
   # typeset -g POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
   # Use POWERLEVEL9K_GOOGLE_APP_CRED_CONTENT_EXPANSION to specify the content displayed by
@@ -1563,8 +1563,8 @@
 
   ##############[ toolbox: toolbox name (https://github.com/containers/toolbox) ]###############
   # Toolbox color.
-  typeset -g POWERLEVEL9K_TOOLBOX_FOREGROUND='#073642'
-  typeset -g POWERLEVEL9K_TOOLBOX_BACKGROUND='#B58900'
+  typeset -g POWERLEVEL9K_TOOLBOX_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_TOOLBOX_BACKGROUND='#073642'
   # Don't display the name of the toolbox if it matches fedora-toolbox-*.
   typeset -g POWERLEVEL9K_TOOLBOX_CONTENT_EXPANSION='${P9K_TOOLBOX_NAME:#fedora-toolbox-*}'
   # Custom icon.
