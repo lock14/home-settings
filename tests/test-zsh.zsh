@@ -298,10 +298,10 @@ test_addendum() {
         echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#93A1A1" ]; then
-        echo "PASS:p10k OS icon anchored to Solarized Base02 background and Base1 foreground"
+    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#93A1A1" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#002B36" ]; then
+        echo "PASS:p10k OS icon configured with authentic Solarized Base1 background and Base03 foreground"
     else
-        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#93A1A1', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+        echo "FAIL:p10k OS_ICON colors:Expected bg='#93A1A1' fg='#002B36', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
     fi
 
     if [ "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" = "#B58900" ]; then
@@ -316,10 +316,10 @@ test_addendum() {
         echo "FAIL:p10k multiline ornaments:Expected Solarized Base01, got '${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}'"
     fi
 
-    if [[ "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}" == *"prompt_char"* ]]; then
-        echo "PASS:p10k left prompt elements includes prompt_char for operational exit code feedback"
+    if ! [[ "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}" == *"prompt_char"* ]]; then
+        echo "PASS:p10k prompt_char disabled in favor of clean multiline prefix"
     else
-        echo "FAIL:p10k prompt_char:Expected prompt_char in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
+        echo "FAIL:p10k prompt_char:Expected prompt_char to be disabled in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then

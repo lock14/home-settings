@@ -34,7 +34,7 @@
     os_icon                 # os identifier
     dir                     # current directory
     vcs                     # git status
-    prompt_char             # prompt symbol
+    # prompt_char           # prompt symbol
   )
 
   # The list of segments shown on the right. Fill it with less important segments.
@@ -179,8 +179,8 @@
 
   #################################[ os_icon: os identifier ]##################################
   # OS identifier color.
-  typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#93A1A1'
-  typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#073642'
+  typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#002B36'
+  typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#93A1A1'
   # Custom icon.
   # typeset -g POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION='⭐'
 
