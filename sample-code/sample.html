@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Service health dashboard for monitoring infrastructure">
+  <meta name="theme-color" content="#002b36">
+  <title>Gateway Dashboard — Service Health</title>
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <script type="module" src="/assets/js/dashboard.js" defer></script>
+</head>
+<body data-theme="solarized-dark" data-env="production">
+
+  <!-- Primary Navigation -->
+  <header role="banner">
+    <nav aria-label="Main navigation">
+      <a href="/" class="nav-brand" aria-current="page">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>Gateway</span>
+      </a>
+      <ul role="menubar">
+        <li role="none"><a href="/dashboard" role="menuitem">Dashboard</a></li>
+        <li role="none"><a href="/services" role="menuitem">Services</a></li>
+        <li role="none"><a href="/alerts" role="menuitem">Alerts</a></li>
+        <li role="none"><a href="/settings" role="menuitem">Settings</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="content" role="main">
+
+    <!-- Status Overview -->
+    <section aria-labelledby="status-heading" class="status-grid">
+      <h1 id="status-heading">Service Health Dashboard</h1>
+      <p>Real-time monitoring for <strong>solarized-gateway</strong> v3.8.1</p>
+
+      <div class="metric-cards" data-columns="4">
+        <article class="card" data-status="healthy">
+          <h2>Uptime</h2>
+          <p class="metric-value">99.97<small>%</small></p>
+          <p class="metric-label">Last 30 days</p>
+        </article>
+        <article class="card" data-status="healthy">
+          <h2>Latency (p99)</h2>
+          <p class="metric-value">12.5<small>ms</small></p>
+        </article>
+        <article class="card" data-status="warning">
+          <h2>Error Rate</h2>
+          <p class="metric-value">0.15<small>%</small></p>
+        </article>
+        <article class="card" data-status="healthy">
+          <h2>Throughput</h2>
+          <p class="metric-value">4,096<small>rps</small></p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Service Registry Table -->
+    <section aria-labelledby="services-heading">
+      <h2 id="services-heading">Registered Services</h2>
+      <table>
+        <caption>Active service instances and their health status</caption>
+        <thead>
+          <tr>
+            <th scope="col">Service</th>
+            <th scope="col">Version</th>
+            <th scope="col">Port</th>
+            <th scope="col">Replicas</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>telemetry-collector</td>
+            <td>3.8.1</td>
+            <td>4317</td>
+            <td>3</td>
+            <td><span class="badge badge--healthy">Healthy</span></td>
+          </tr>
+          <tr>
+            <td>auth-service</td>
+            <td>2.14.0</td>
+            <td>8443</td>
+            <td>2</td>
+            <td><span class="badge badge--healthy">Healthy</span></td>
+          </tr>
+          <tr>
+            <td>cache-proxy</td>
+            <td>1.9.3</td>
+            <td>6379</td>
+            <td>1</td>
+            <td><span class="badge badge--warning">Degraded</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Configuration Form -->
+    <aside aria-labelledby="config-heading">
+      <h2 id="config-heading">Quick Configuration</h2>
+      <form action="/api/v2/config" method="POST" autocomplete="off">
+        <fieldset>
+          <legend>Runtime Settings</legend>
+
+          <label for="log-level">Log Level</label>
+          <select id="log-level" name="logLevel" required>
+            <option value="debug">Debug</option>
+            <option value="info" selected>Info</option>
+            <option value="warn">Warning</option>
+            <option value="error">Error</option>
+          </select>
+
+          <label for="rate-limit">Rate Limit (req/s)</label>
+          <input type="number" id="rate-limit" name="rateLimit"
+                 value="1000" min="100" max="50000" step="100">
+
+          <label for="notify-email">Notification Email</label>
+          <input type="email" id="notify-email" name="notifyEmail"
+                 placeholder="ops@example.com" aria-describedby="email-hint">
+          <small id="email-hint">Alerts will be sent to this address.</small>
+
+          <label for="enable-tracing">
+            <input type="checkbox" id="enable-tracing" name="tracingEnabled" checked>
+            Enable distributed tracing
+          </label>
+        </fieldset>
+
+        <button type="submit" class="btn btn--primary">Apply Changes</button>
+        <button type="reset" class="btn btn--secondary">Reset</button>
+      </form>
+    </aside>
+
+  </main>
+
+  <footer role="contentinfo">
+    <p>&copy; 2025 Platform Engineering &mdash; Built with
+      <a href="https://ethanschoonover.com/solarized/" rel="noopener">Solarized</a>
+    </p>
+    <ul>
+      <li><a href="/docs">Documentation</a></li>
+      <li><a href="/api/v2/openapi.json">API Spec</a></li>
+      <li><a href="/status">System Status</a></li>
+    </ul>
+  </footer>
+
+  <!-- Inline analytics snippet -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const cards = document.querySelectorAll("[data-status]");
+      cards.forEach((card) => {
+        const status = card.dataset.status;
+        console.log(`Card status: ${status}`);
+      });
+    });
+  </script>
+
+</body>
+</html>

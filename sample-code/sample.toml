@@ -1,0 +1,121 @@
+# =============================================================================
+# Project configuration demonstrating TOML v1.0 syntax constructs:
+# tables, arrays of tables, inline tables, dotted keys, all scalar types.
+# =============================================================================
+
+[package]
+name = "solarized-gateway"
+version = "3.8.1"
+edition = "2024"
+authors = ["Platform Engineering <platform@example.com>"]
+description = """
+A high-performance API gateway and reverse proxy \
+for distributed microservice architectures."""
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/solarized-gateway"
+readme = "README.md"
+keywords = ["gateway", "proxy", "observability"]
+categories = ["web-programming::http-server"]
+rust-version = "1.82.0"
+
+[package.metadata.release]
+pre-release-commit-message = "chore: release v{{version}}"
+tag-prefix = "v"
+sign-tag = true
+
+# --- Server Configuration ---------------------------------------------------
+
+[server]
+host = "0.0.0.0"
+port = 8080
+max_connections = 4_096
+backlog = 1_024
+keepalive_timeout_ms = 75_000
+request_body_limit = 0x40_0000          # 4 MiB in hex
+worker_threads = 0o10                    # 8 in octal
+feature_flags = 0b1010_0011             # binary bitmask
+shutdown_timeout = 30.0
+graceful = true
+
+[server.tls]
+enabled = true
+cert_file = "/etc/tls/server.crt"
+key_file = "/etc/tls/server.key"
+min_version = "1.3"
+protocols = ["h2", "http/1.1"]
+
+# --- Database Configuration -------------------------------------------------
+
+[database]
+url = 'postgresql://db.internal.io:5432/gateway'
+pool.min_size = 5
+pool.max_size = 25
+pool.idle_timeout_sec = 300
+ssl_mode = "verify-full"
+statement_timeout_ms = 30_000
+connect_timeout = 5.0
+migrations_dir = './migrations'
+
+# --- Observability -----------------------------------------------------------
+
+[telemetry]
+service_name = "solarized-gateway"
+environment = "production"
+sample_rate = 0.15
+flush_interval_ms = 5_000
+enabled_at = 2025-09-14T08:30:00Z       # offset date-time
+deploy_date = 2025-09-14                 # local date
+daily_reset = 03:00:00                   # local time
+local_timestamp = 2025-09-14T08:30:00    # local date-time
+
+[telemetry.exporter]
+endpoint = "https://collector.internal.io:4317"
+protocol = "grpc"
+compression = "zstd"
+headers = { authorization = "Bearer ${OTEL_TOKEN}", content-type = "application/grpc" }
+
+[telemetry.metrics]
+port = 9090
+path = "/metrics"
+buckets = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+
+# Special float values
+positive_inf_example = inf
+negative_inf_example = -inf
+nan_example = nan
+
+# --- Rate Limiting -----------------------------------------------------------
+
+[[rate_limits]]
+path = "/api/v1/*"
+max_requests = 1_000
+window_seconds = 60
+burst_multiplier = 1.5
+
+[[rate_limits]]
+path = "/api/v2/*"
+max_requests = 2_000
+window_seconds = 60
+burst_multiplier = 2.0
+
+[[rate_limits]]
+path = "/webhooks/*"
+max_requests = 500
+window_seconds = 120
+burst_multiplier = 1.0
+
+# --- Dependencies (Cargo-style) ---------------------------------------------
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+axum = { version = "0.8", features = ["macros", "json"] }
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "tls-rustls"] }
+
+[dev-dependencies]
+insta = { version = "1.40", features = ["yaml"] }
+criterion = "0.5"
+
+[build-dependencies]
+prost-build = "0.13"

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://api.example.com/schemas/v2/service-config.json",
+  "apiVersion": "v2",
+  "kind": "ServiceConfiguration",
+  "metadata": {
+    "name": "telemetry-collector",
+    "namespace": "observability",
+    "createdAt": "2025-09-14T08:30:00Z",
+    "labels": {
+      "app": "telemetry",
+      "environment": "production",
+      "team": "platform-engineering",
+      "version": "3.8.1"
+    },
+    "annotations": null
+  },
+  "spec": {
+    "replicas": 3,
+    "maxSurge": 1,
+    "enabled": true,
+    "debug": false,
+    "image": "registry.internal.io/telemetry-collector:3.8.1-alpine",
+    "resources": {
+      "limits": {
+        "cpu": "2000m",
+        "memory": "1Gi",
+        "ephemeralStorage": "512Mi"
+      },
+      "requests": {
+        "cpu": "500m",
+        "memory": "256Mi"
+      }
+    },
+    "ports": [
+      { "name": "grpc", "port": 4317, "protocol": "TCP" },
+      { "name": "http", "port": 4318, "protocol": "TCP" },
+      { "name": "metrics", "port": 9090, "protocol": "TCP" }
+    ],
+    "env": [
+      { "name": "LOG_LEVEL", "value": "info" },
+      { "name": "BATCH_SIZE", "value": "4096" },
+      { "name": "FLUSH_INTERVAL_MS", "value": "5000" },
+      { "name": "COMPRESSION", "value": "zstd" },
+      { "name": "ENABLE_TRACING", "value": "true" }
+    ],
+    "healthCheck": {
+      "httpGet": {
+        "path": "/healthz",
+        "port": 4318,
+        "scheme": "HTTP"
+      },
+      "initialDelaySeconds": 15,
+      "periodSeconds": 10,
+      "timeoutSeconds": 3,
+      "failureThreshold": 3,
+      "successThreshold": 1
+    },
+    "ingestion": {
+      "endpoints": [
+        {
+          "name": "otlp-grpc",
+          "url": "https://collector.internal.io:4317",
+          "tls": true,
+          "rateLimitRps": 10000.0,
+          "maxPayloadBytes": 4194304,
+          "retryPolicy": {
+            "maxRetries": 5,
+            "backoffMs": [100, 250, 500, 1000, 2000],
+            "retryableStatusCodes": [429, 502, 503, 504]
+          }
+        },
+        {
+          "name": "otlp-http",
+          "url": "https://collector.internal.io:4318/v1/traces",
+          "tls": true,
+          "rateLimitRps": 5000.0,
+          "maxPayloadBytes": 2097152,
+          "retryPolicy": null
+        }
+      ],
+      "sampling": {
+        "strategy": "tail-based",
+        "rate": 0.15,
+        "minDurationMs": 250,
+        "errorAlwaysSample": true
+      }
+    },
+    "exporters": {
+      "primary": "otlp/jaeger",
+      "fallback": "otlp/zipkin",
+      "batchTimeout": "5s",
+      "queueSize": 8192
+    },
+    "tags": ["observability", "opentelemetry", "distributed-tracing"],
+    "featureFlags": {
+      "enableAdaptiveSampling": true,
+      "enableSpanMetrics": true,
+      "enableServiceGraph": false,
+      "legacyFormatSupport": null,
+      "experimentalCompression": -1
+    }
+  }
+}
