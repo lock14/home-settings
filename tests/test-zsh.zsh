@@ -234,7 +234,7 @@ test_addendum() {
     export HOME="$TEMP_HOME"
     cp "$SCRIPT_DIR/dotfiles/.aliases" "$HOME/.aliases"
     cp "$SCRIPT_DIR/dotfiles/.zsh-functions" "$HOME/.zsh-functions"
-    touch "$HOME/.environment-variables"
+    cp "$SCRIPT_DIR/dotfiles/.p10k.zsh" "$HOME/.p10k.zsh"
 
     source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
 
@@ -244,10 +244,22 @@ test_addendum() {
         echo "FAIL:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:Expected 'fg=#586E75', got '${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[command]:-}" = "fg=#859900,bold" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES command configured with Solarized Green"
+    if [ "${ZSH_HIGHLIGHT_STYLES[command]:-}" = "fg=#859900" ] && [ "${ZSH_HIGHLIGHT_STYLES[builtin]:-}" = "fg=#859900" ] && [ "${ZSH_HIGHLIGHT_STYLES[function]:-}" = "fg=#859900" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES command, builtin, and function configured with unbolded Solarized Green"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900,bold', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[reserved-word]:-}" = "fg=#B58900" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES reserved-word configured with Solarized Yellow for control flow"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES reserved-word:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[reserved-word]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES command-substitution-delimiter configured with calm Solarized Base0"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES command-substitution-delimiter:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#839496" ]; then
@@ -274,10 +286,40 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES path:Expected 'fg=#268BD2', got '${ZSH_HIGHLIGHT_STYLES[path]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F,bold" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES unknown-token configured with Solarized Red"
+    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES unknown-token configured with unbolded Solarized Red"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,bold', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}" = "false" ]; then
+        echo "PASS:p10k directory anchor bold styling disabled (zero-jitter typography)"
+    else
+        echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#93A1A1" ]; then
+        echo "PASS:p10k OS icon anchored to Solarized Base02 background and Base1 foreground"
+    else
+        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#93A1A1', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" = "#B58900" ]; then
+        echo "PASS:p10k VCS untracked background configured with Solarized Yellow for uncommitted state"
+    else
+        echo "FAIL:p10k VCS_UNTRACKED_BACKGROUND:Expected '#B58900', got '${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}'"
+    fi
+
+    if [[ "${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}" == *"#586E75"* ]]; then
+        echo "PASS:p10k multiline ornaments configured with authentic Solarized Base01 (#586E75)"
+    else
+        echo "FAIL:p10k multiline ornaments:Expected Solarized Base01, got '${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}'"
+    fi
+
+    if [[ "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}" == *"prompt_char"* ]]; then
+        echo "PASS:p10k left prompt elements includes prompt_char for operational exit code feedback"
+    else
+        echo "FAIL:p10k prompt_char:Expected prompt_char in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then

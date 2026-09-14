@@ -178,14 +178,19 @@ Colors across our developer workstation fulfill invariant domain roles across al
    - Structural declarations and scalar primitives in Green, control flow exclusively in Yellow, custom types and schema relations in calm Base0, function declarations in Blue, function calls in Base0, annotations/decorators/attributes/imports in Violet, sentinels/constants/booleans in Magenta, preprocessor directives in Orange, and Base0 delimiters/table boundaries matching `bat` 1:1.
 
 3. **`eza` (Modern Directory Listing)**:
-   - Configured via aliases `e`, `el`, `elm`, `et`, `elt`, and `elx` with `EZA_COLORS` and `EXA_COLORS` adhering to Solarized Dark palette (tree connectors `xx=38;5;10` in Base01 `#586E75`).
-   - Native `ls` and `ll` use standard GNU/BSD `ls` with Solarized `dircolors`.
+   - Configured via aliases `e`, `el`, `elm`, `et`, `elt`, and `elx` with `EZA_COLORS` and `EXA_COLORS` adhering strictly to Solarized Dark: unbolded layout, tree connectors in Base01 (`xx=38;2;88;110;117`), directories in Blue (`di=38;2;38;139;210`), executables in Green (`ex=38;2;133;153;0`), regular files, code and documents in calm Base0 (`fi`, `sc`, `do` in `38;2;131;148;150`), media in Violet (`im`, `vi`, `mu`, `lo` in `38;2;108;113;196`), archives in Orange (`cr=38;2;203;75;22`), symlinks in Cyan (`ln=38;2;42;161;152`), broken links in Red (`or=38;2;220;50;47`), and unbolded table headers in Base1 (`hd=4;38;2;147;161;161`).
 
-4. **Zsh Shell & Autosuggestions (`zsh-syntax-highlighting` / `ZLE`)**:
+4. **GNU/BSD `ls` & `dircolors` (Solarized Dark `LS_COLORS`)**:
+   - Configured via `dotfiles/.dir-colors/dircolors` evaluated into `LS_COLORS`. Pure monospace, zero-jitter, unbolded file classification: directories in Blue (`DIR 34`), executables in Green (`EXEC 32`), symlinks in Cyan (`LINK 36`), regular text files, source code, and documents in calm Base0 (`FILE 00`, `.c 00`, `.py 00`, `.md 00`, `.txt 00`, `.pdf 00`), media in Violet (`35`), archives in Orange (`33`), broken symlinks in Red (`ORPHAN 31`, `MISSING 31`), and backup files in Base01 (`90`).
+
+5. **Zsh Shell & Autosuggestions (`zsh-syntax-highlighting` / `ZLE`)**:
    - Autosuggestions pinned to `fg=#586E75` (Solarized Base01).
-   - `zsh-syntax-highlighting` configured in `.zshrc-addendum` using 24-bit TrueColor Solarized Dark with restrained, non-distracting highlighting: commands in Green (`#859900`), strings in Cyan (`#2AA198`), numbers/constants in Magenta (`#D33682`), functions/paths in Blue (`#268BD2`), errors in Red (`#DC322F`), comments/suggestions in Base01 (`#586E75`), selection in Base02 (`#073642`), with options, parameters, assignments, and operators kept calm in neutral foreground Base0 (`#839496`).
+   - `zsh-syntax-highlighting` configured in `.zshrc-addendum` using 24-bit TrueColor Solarized Dark with restrained, zero-jitter, unbolded syntax highlighting: valid command invocations, builtins, aliases, and functions in Green (`#859900`), control flow reserved words exclusively in Yellow (`#B58900`), strings in Cyan (`#2AA198`), numbers and arithmetic in Magenta (`#D33682`), precommands/paths in Blue (`#268BD2`), errors in Red (`#DC322F`), comments in Base01 (`#586E75`), selection in Base02 (`#073642`), with command substitution delimiters `$( ... )`, options, parameters, assignments, and operators kept calm in neutral foreground Base0 (`#839496`).
 
-5. **Terminal Emulators (GNOME Terminal, macOS Terminal, Ghostty)**:
+6. **Powerlevel10k Solarized Dark Prompt (`.p10k.zsh`)**:
+   - Single-line Powerlevel10k prompt configured in `dotfiles/.p10k.zsh` with Ethan Schoonover's authentic palette: OS icon re-anchored to Base02 (`#073642`) background with Base1 (`#93A1A1`) foreground, directory anchor bold disabled (`POWERLEVEL9K_DIR_ANCHOR_BOLD=false`), untracked git status reclassified to Yellow (`#B58900`) for clear dirty-state awareness, ornaments/delimiters in Base01 (`%F{#586E75}`), and `prompt_char` enabled with unbolded `❯` providing operational exit code feedback (Solarized Green `#859900` on success, Solarized Red `#DC322F` on error).
+
+7. **Terminal Emulators (GNOME Terminal, macOS Terminal, Ghostty)**:
    - GNOME Terminal configured via `colors/gnome-terminal-solarized.dconf` and `bin/gnome-terminal-solarized` with authentic TrueColor Solarized Dark, Color 8 pinned to `base01` (`#586E75`), MesloLGS NF 12 font, and Base02 highlight.
    - Ghostty configured via `.config/ghostty/config` with `theme = "Solarized Dark"`, palette overrides, and MesloLGS NF font.
    - macOS Terminal configured via `colors/Solarized-Dark.terminal`.

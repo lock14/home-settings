@@ -79,10 +79,14 @@ fi
 if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ] && \
    [[ "${EZA_COLORS}" == *"Su=38;2;131;148;150"* ]] && \
    [[ "${EZA_COLORS}" == *"ff=38;2;131;148;150"* ]] && \
-   [[ "${EZA_COLORS}" == *"sn=38;2;131;148;150"* ]]; then
-    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette (including SELinux, BSD flags, and size fallbacks)"
+   [[ "${EZA_COLORS}" == *"sn=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"do=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"sc=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"hd=4;38;2;147;161;161"* ]] && \
+   [[ "${EZA_COLORS}" != *"1;38;2;181;137;0"* ]]; then
+    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette (unbolded, Base0 documents/code, Base1 header)"
 else
-    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS with full eza_colors(5) codes, got: ${EZA_COLORS:-}"
+    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS with unbolded codes, got: ${EZA_COLORS:-}"
 fi
 
 if command -v nvim >/dev/null 2>&1; then
@@ -159,6 +163,14 @@ echo -e "\n[4/4] Testing dircolors validity..."
 if command -v dircolors >/dev/null 2>&1; then
     if dircolors_out=$(dircolors -b "$SCRIPT_DIR/dotfiles/.dir-colors/dircolors" 2>&1); then
         pass "dircolors database is valid"
+        if [[ "$dircolors_out" == *"ln=36:"* ]] && [[ "$dircolors_out" == *"ex=32:"* ]] && \
+           [[ "$dircolors_out" == *"*.png=35:"* ]] && [[ "$dircolors_out" == *"*.tar=33:"* ]] && \
+           [[ "$dircolors_out" == *"*.txt=00:"* ]] && ! [[ "$dircolors_out" == *"*.txt=32:"* ]] && \
+           ! [[ "$dircolors_out" == *"ex=01;32:"* ]]; then
+            pass "dircolors strictly follows 7 Pillars (Cyan symlinks, unbolded Green executables, Violet media, Orange archives, Base0 text/code)"
+        else
+            fail "dircolors semantic mapping" "dircolors does not adhere to 7 Pillars specification: $dircolors_out"
+        fi
     else
         fail "dircolors check" "dircolors failed: $dircolors_out"
     fi
