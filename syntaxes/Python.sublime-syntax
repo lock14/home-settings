@@ -155,7 +155,7 @@ contexts:
     # Function / method definition: def <name>(...) or async def <name>(...)
     - match: '(?:(async)\s+)?(def)\b\s+({{ident}})'
       captures:
-        1: keyword.control.flow.coroutine.python
+        1: storage.modifier.async.python
         2: storage.type.function.python
         3: entity.name.function.python
       push:
@@ -239,21 +239,24 @@ contexts:
 
   statements:
     # Block openers: try:, finally:, else:, except ...:
-    - match: '\b(try|finally|else)\b\s*(:)'
+    - match: '^\s*(try|finally|else)\b\s*(:)'
       captures:
         1: keyword.control.flow.python
         2: punctuation.section.block.begin.python
     - match: '\b(except)\b'
       scope: keyword.control.flow.python
-    # Async coroutine keywords
-    - match: '\b(async|await)\b'
+    # Async modifier
+    - match: '\b(async)\b'
+      scope: storage.modifier.async.python
+    # Await & coroutine control flow
+    - match: '\b(await)\b'
       scope: keyword.control.flow.coroutine.python
-    # Control flow
-    - match: '\b(return|yield|if|elif|raise|with|for|while|break|continue|pass|assert|match|case)\b'
+    # Control flow & exception handling
+    - match: '\b(return|yield|if|elif|else|raise|try|except|finally|with|for|while|break|continue|pass|assert|match|case)\b'
       scope: keyword.control.flow.python
     # Declarations
     - match: '\b(def|class|lambda|global|nonlocal|type)\b'
-      scope: keyword.declaration.python
+      scope: storage.type.declaration.python
     # Word operators
     - match: '\b(and|or|not|in|is)\b'
       scope: keyword.operator.word.python
@@ -283,7 +286,7 @@ contexts:
           pop: true
         - include: type-expression
     # Plain variable with type annotation: name: Type = ...
-    - match: '^\s*({{ident}})\s*(:)\s*'
+    - match: '^\s*(?!(?:try|finally|else|except|def|class|return|if|elif|for|while|with|match|case)\b)({{ident}})\s*(:)\s*'
       captures:
         1: variable.other.readwrite.python
         2: punctuation.separator.colon.python
@@ -514,7 +517,7 @@ contexts:
             - match: '(?=\})'
               pop: true
             - match: '[^}]+'
-              scope: variable.other.format-spec.python
+              scope: constant.other.placeholder.format-spec.python
         - include: expressions
     - match: '\\.'
       scope: constant.character.escape.python

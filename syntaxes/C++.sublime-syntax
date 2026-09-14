@@ -142,7 +142,7 @@ contexts:
 
   unique-keywords:
     - match: \busing\b
-      scope: keyword.control.c++
+      scope: keyword.declaration.using.c++
     - match: \bbreak\b
       scope: keyword.control.flow.break.c++
     - match: \bcontinue\b
@@ -729,8 +729,8 @@ contexts:
   using-namespace:
     - match: '\b(using)\s+(namespace)\b'
       captures:
-        1: keyword.control.c++
-        2: keyword.control.c++
+        1: keyword.declaration.using.c++
+        2: keyword.declaration.namespace.c++
       push:
         - match: ';'
           scope: punctuation.terminator.c++
@@ -745,16 +745,23 @@ contexts:
     - match: '\b(namespace)\s+(?=({{path_lookahead}})?(?!\s*[;,]))'
       scope: meta.namespace.c++
       captures:
-        1: keyword.control.c++
+        1: keyword.declaration.namespace.c++
       push:
-        - meta_content_scope: meta.namespace.c++ entity.name.namespace.c++
-        - include: identifiers
-        - match: ''
+        - match: '(?=\s*[;={])'
           set:
             - meta_scope: meta.namespace.c++
             - include: comments
             - match: '='
               scope: keyword.operator.alias.c++
+              set:
+                - match: ';'
+                  scope: punctuation.terminator.c++
+                  pop: true
+                - match: '::'
+                  scope: punctuation.accessor.double-colon.c++
+                - match: '{{identifier}}'
+                  scope: entity.name.namespace.c++
+                - include: comments
             - match: '(?=;)'
               pop: true
             - match: '\}'
@@ -769,6 +776,11 @@ contexts:
                 - include: preprocessor-global
                 - include: global
             - include: expressions
+        - match: '::'
+          scope: punctuation.accessor.double-colon.c++
+        - match: '{{identifier}}'
+          scope: entity.name.namespace.c++
+        - include: comments
 
   module-identifier:
     # Special handling for trailing periods to prevent color changing while typing.
@@ -1153,10 +1165,10 @@ contexts:
     # consume keyword if followed by typename
     - match: '\b(using)\b(?=\s+typename\b)'
       captures:
-        1: keyword.control.c++
+        1: keyword.declaration.using.c++
     - match: '\b(using)\b\s+({{identifier}})(?!\s*(<|::))'
       captures:
-        1: keyword.control.c++
+        1: keyword.declaration.using.c++
         2: entity.name.type.using.c++
 
   typedef:
@@ -1676,6 +1688,7 @@ contexts:
         - include: modifiers
         - match: '\b(virtual|{{visibility_modifiers}})\b'
           scope: storage.modifier.c++
+        - include: scope:source.c#types
         - match: (?={{path_lookahead}})
           push:
             - meta_scope: entity.other.inherited-class.c++
@@ -2114,16 +2127,40 @@ contexts:
             - include: negated-block
             - include: global
 
+  preprocessor-conditional-line:
+    - include: scope:source.c#preprocessor-line-continuation
+    - include: scope:source.c#preprocessor-comments
+    - match: \bdefined\b
+      scope: keyword.control.directive.c++
+    - match: \b__has_include(?:_next)?\b
+      scope: keyword.control.directive.c++
+    - match: '"'
+      scope: punctuation.definition.string.begin.c++
+      push:
+        - meta_scope: string.quoted.double.c++
+        - match: '"'
+          scope: punctuation.definition.string.end.c++
+          pop: true
+    - match: '({{identifier}})(?=\()'
+      scope: entity.name.function.preprocessor.c++
+    - match: '{{identifier}}'
+      scope: entity.name.constant.preprocessor.c++
+    - match: '\b0[xX][0-9a-fA-F]+[uUlL]*\b'
+      scope: constant.numeric.integer.hexadecimal.c++
+    - match: '\b[0-9]+[uUlL]*\b'
+      scope: constant.numeric.integer.decimal.c++
+    - match: '&&|\|\||!|==|!=|<=|>=|<|>|\+|\-|\*|/|%|&|\||\^|~|\?'
+      scope: keyword.operator.c++
+    - match: ':|\(|\)'
+      scope: punctuation.c++
+
   preprocessor-rule-other-global:
     - match: ^\s*(#\s*(?:if|ifdef|ifndef))\b
       captures:
         1: keyword.control.directive.conditional.if.c++
       push:
         - meta_scope: meta.preprocessor.c++
-        - include: scope:source.c#preprocessor-line-continuation
-        - include: scope:source.c#preprocessor-comments
-        - match: \bdefined\b
-          scope: keyword.control.c++
+        - include: preprocessor-conditional-line
         # Enter a new scope where all elif/elifdef/elifndef/else branches have
         # their contexts popped by a subsequent elif/elifdef/elifndef/else/endif.
         # This ensures that preprocessor branches don't push multiple meta.block
@@ -2250,10 +2287,7 @@ contexts:
         1: keyword.control.directive.conditional.if.c++
       push:
         - meta_scope: meta.preprocessor.c++
-        - include: scope:source.c#preprocessor-line-continuation
-        - include: scope:source.c#preprocessor-comments
-        - match: \bdefined\b
-          scope: keyword.control.c++
+        - include: preprocessor-conditional-line
         # Enter a new scope where all elif/elifdef/elifndef/else branches have
         # their contexts popped by a subsequent elif/elifdef/elifndef/else/endif.
         # This ensures that preprocessor branches don't push multiple meta.block
@@ -2442,12 +2476,15 @@ contexts:
     - match: '\b(namespace)\s+(?={{path_lookahead}}\s*\{)'
       scope: meta.namespace.c++
       captures:
-        1: keyword.control.c++
+        1: keyword.declaration.namespace.c++
       push:
-        - meta_content_scope: meta.namespace.c++ entity.name.namespace.c++
-        - include: identifiers
-        - match: '(?=\S)'
+        - match: '(?=\s*\{)'
           pop: true
+        - match: '::'
+          scope: punctuation.accessor.double-colon.c++
+        - match: '{{identifier}}'
+          scope: entity.name.namespace.c++
+        - include: comments
     - include: expressions
 
   preprocessor-practical-workarounds:
@@ -2473,12 +2510,9 @@ contexts:
         1: keyword.control.directive.conditional.c++
       push:
         - meta_scope: meta.preprocessor.c++
-        - include: scope:source.c#preprocessor-line-continuation
+        - include: preprocessor-conditional-line
         - include: scope:source.c#preprocessor-line-ending
-        - include: scope:source.c#preprocessor-comments
-        - match: \bdefined\b
-          scope: keyword.control.c++
-    - match: ^\s*(#\s*(?:line|pragma|undef))\b
+    - match: ^\s*(#\s*(?:line|pragma))\b
       captures:
         1: keyword.control.directive.other.c++
       push:
@@ -2488,6 +2522,16 @@ contexts:
         - include: scope:source.c#preprocessor-comments
         - match: \bdefined\b
           scope: keyword.control.c++
+    - match: ^\s*(#\s*undef)\b
+      captures:
+        1: keyword.control.directive.other.c++
+      push:
+        - meta_scope: meta.preprocessor.c++
+        - include: scope:source.c#preprocessor-line-continuation
+        - include: scope:source.c#preprocessor-line-ending
+        - include: scope:source.c#preprocessor-comments
+        - match: '{{identifier}}'
+          scope: entity.name.constant.preprocessor.c++
     - match: ^\s*(#\s*endif)\b
       captures:
         1: meta.preprocessor.c++ keyword.control.directive.conditional.endif.c++

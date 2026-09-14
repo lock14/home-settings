@@ -9,7 +9,7 @@
   (object_reference
     name: (identifier) @variable))
 
-;; Map index names in CREATE INDEX statements to @type (Solarized Yellow #B58900)
+;; Map index names in CREATE INDEX statements to @type (Solarized Base1 #93A1A1)
 (create_index
   (identifier) @type)
 

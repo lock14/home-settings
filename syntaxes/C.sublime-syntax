@@ -541,6 +541,33 @@ contexts:
         - match: (?=\n)
           pop: true
 
+  preprocessor-conditional-line:
+    - include: preprocessor-line-continuation
+    - include: preprocessor-comments
+    - match: \bdefined\b
+      scope: keyword.control.directive.c
+    - match: \b__has_include(?:_next)?\b
+      scope: keyword.control.directive.c
+    - match: '"'
+      scope: punctuation.definition.string.begin.c
+      push:
+        - meta_scope: string.quoted.double.c
+        - match: '"'
+          scope: punctuation.definition.string.end.c
+          pop: true
+    - match: '({{identifier}})(?=\()'
+      scope: entity.name.function.preprocessor.c
+    - match: '{{identifier}}'
+      scope: entity.name.constant.preprocessor.c
+    - match: '\b0[xX][0-9a-fA-F]+[uUlL]*\b'
+      scope: constant.numeric.integer.hexadecimal.c
+    - match: '\b[0-9]+[uUlL]*\b'
+      scope: constant.numeric.integer.decimal.c
+    - match: '&&|\|\||!|==|!=|<=|>=|<|>|\+|\-|\*|/|%|&|\||\^|~|\?'
+      scope: keyword.operator.c
+    - match: ':|\(|\)'
+      scope: punctuation.c
+
   pragma-mark:
     - match: ^\s*((#\s*pragma\s+mark)\s+(.*))
       scope: meta.section.c
@@ -1149,10 +1176,7 @@ contexts:
         1: keyword.control.directive.conditional.if.c
       push:
         - meta_scope: meta.preprocessor.c
-        - include: preprocessor-line-continuation
-        - include: preprocessor-comments
-        - match: \bdefined\b
-          scope: keyword.control.c
+        - include: preprocessor-conditional-line
         # Enter a new scope where all elif/elifdef/elifndef/else branches have
         # their contexts popped by a subsequent elif/elifdef/elifndef/else/endif.
         # This ensures that preprocessor branches don't push multiple meta.block
@@ -1268,10 +1292,7 @@ contexts:
         1: keyword.control.directive.conditional.if.c
       push:
         - meta_scope: meta.preprocessor.c
-        - include: preprocessor-line-continuation
-        - include: preprocessor-comments
-        - match: \bdefined\b
-          scope: keyword.control.c
+        - include: preprocessor-conditional-line
         # Enter a new scope where all elif/elifdef/elifndef/else branches have
         # their contexts popped by a subsequent elif/elifdef/elifndef/else/endif.
         # This ensures that preprocessor branches don't push multiple meta.block
@@ -1487,12 +1508,9 @@ contexts:
         1: keyword.control.directive.conditional.elseif.c
       push:
         - meta_scope: meta.preprocessor.c
-        - include: preprocessor-line-continuation
+        - include: preprocessor-conditional-line
         - include: preprocessor-line-ending
-        - include: preprocessor-comments
-        - match: \bdefined\b
-          scope: keyword.control.c
-    - match: ^\s*(#\s*(?:line|pragma|undef))\b
+    - match: ^\s*(#\s*(?:line|pragma))\b
       captures:
         1: keyword.control.directive.other.c
       push:
@@ -1502,6 +1520,16 @@ contexts:
         - include: preprocessor-comments
         - match: \bdefined\b
           scope: keyword.control.c
+    - match: ^\s*(#\s*undef)\b
+      captures:
+        1: keyword.control.directive.other.c
+      push:
+        - meta_scope: meta.preprocessor.c
+        - include: preprocessor-line-continuation
+        - include: preprocessor-line-ending
+        - include: preprocessor-comments
+        - match: '{{identifier}}'
+          scope: entity.name.constant.preprocessor.c
     - match: ^\s*(#\s*endif)\b
       captures:
         1: meta.preprocessor.c keyword.control.directive.conditional.endif.c

@@ -26,7 +26,7 @@ variables:
   ident: '\b[[:alpha:]_$][[:alnum:]_$]*\b'
   pascal_ident: '\b[[:upper:]][[:alnum:]_$]*\b'
   primitive_type: '\b(?:boolean|byte|char|double|float|int|long|short|void)\b'
-  modifier: '\b(?:public|protected|private|static|final|abstract|synchronized|native|transient|volatile|strictfp|default|sealed|non-sealed)\b'
+  modifier: '\b(?:public|protected|private|static|final|abstract|synchronized|native|transient|volatile|strictfp|sealed|non-sealed)\b'
   control_flow: '\b(?:if|else|while|do|for|return|throw|throws|try|catch|finally|assert)\b'
   switch_flow: '\b(?:switch|case|default|when|yield|break|continue)\b'
   hex_digit: '[0-9a-fA-F_]'
@@ -120,26 +120,30 @@ contexts:
     - match: '{{modifier}}'
       scope: storage.modifier.java
 
-    # Record Declaration: record OrderRecord(...)
-    - match: '\b(record)\b\s+({{pascal_ident}})'
+    # Interface default method modifier (e.g. default void reset())
+    - match: '\bdefault\b(?!\s*(?:->|:))'
+      scope: storage.modifier.java
+
+    # Record Declaration: record Name
+    - match: '\b(record)\b(?:\s+({{ident}}))?'
       captures:
         1: storage.type.record.java
         2: entity.name.type.class.record.java
 
     # Class Declaration: class Name [extends ...] [implements ...] [permits ...]
-    - match: '\b(class)\b\s+({{pascal_ident}})'
+    - match: '\b(class)\b(?:\s+({{ident}}))?'
       captures:
         1: storage.type.class.java
         2: entity.name.type.class.java
 
     # Interface Declaration: interface Name [extends ...]
-    - match: '\b(interface)\b\s+({{pascal_ident}})'
+    - match: '\b(interface)\b(?:\s+({{ident}}))?'
       captures:
         1: storage.type.interface.java
         2: entity.name.type.class.interface.java
 
     # Enum Declaration: enum Name [implements ...]
-    - match: '\b(enum)\b\s+({{pascal_ident}})'
+    - match: '\b(enum)\b(?:\s+({{ident}}))?'
       captures:
         1: storage.type.enum.java
         2: entity.name.type.class.enum.java
@@ -230,10 +234,7 @@ contexts:
       scope: constant.language.boolean.java
     - match: '\bnull\b'
       scope: constant.language.null.java
-    # Constructor delegation: this(...) or super(...)
-    - match: '\b(this|super)\s*(?=\()'
-      scope: variable.function.java
-    # Language variables: this, super (receiver or field/method qualifier)
+    # Language keywords: this, super (receiver, field qualifier, or constructor delegation)
     - match: '\b(this|super)\b'
       scope: variable.language.java
     # Named UPPERCASE constants (e.g. DEFAULT_BUFFER_SIZE, TAX_RATE_MULTIPLIER)
@@ -249,15 +250,22 @@ contexts:
       scope: support.type.user-defined.java
 
   function-calls:
-    # Method invocation: obj.method(...) or method(...)
-    - match: '\b([[:alpha:]_$][[:alnum:]_$]*)\s*(?=\()'
+    # Method invocation on an object: .method(...)
+    - match: '(\.)\s*([[:alpha:]_$][[:alnum:]_$]*)\s*(?=\()'
       captures:
-        1: variable.function.java
+        1: punctuation.accessor.dot.java
+        2: variable.function.java
     # Method reference: Class::method
     - match: '(::)\s*([[:alpha:]_$][[:alnum:]_$]*)'
       captures:
         1: punctuation.accessor.double-colon.java
         2: variable.function.java
+    # Method / Constructor declaration: name(...) followed by {, ;, throws, or default
+    - match: '\b([[:alpha:]_$][[:alnum:]_$]*)\s*(?=\([^;{]*\)\s*(?:default\b|throws\b[^{;]+|\{|;))'
+      scope: entity.name.function.java
+    # Standalone method invocation: method(...)
+    - match: '\b([[:alpha:]_$][[:alnum:]_$]*)\s*(?=\()'
+      scope: variable.function.java
 
   operators-and-delimiters:
     - match: '==|!=|<=|>=|&&|\|\||<<|>>|>>>|\+\+|--|[+\-*/%&|^~<>=!?:;]'

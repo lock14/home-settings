@@ -1095,7 +1095,7 @@ contexts:
 
   match-keyword-range:
     - match: \brange\b
-      scope: keyword.other.go
+      scope: keyword.control.loop.range.go
 
   match-keyword-return:
     - match: \breturn\b

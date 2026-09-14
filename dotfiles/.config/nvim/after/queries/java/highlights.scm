@@ -21,3 +21,13 @@
 
 ; Java 21 Pattern Matching guard keyword: when -> @keyword.conditional (Solarized Green #859900)
 (guard "when" @keyword.conditional)
+
+; Annotation type declaration keyword: @interface -> @attribute (Solarized Violet #6C71C4)
+(annotation_type_declaration "@interface" @attribute)
+
+; Disambiguate switch default branch: case null, default -> ... -> @keyword.conditional
+(switch_label "default" @keyword.conditional)
+(switch_label
+  (identifier) @keyword.conditional
+  (#eq? @keyword.conditional "default"))
+

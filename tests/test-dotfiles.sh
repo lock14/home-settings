@@ -91,6 +91,7 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Rust.sublime-syntax" "" "Symlink
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" "" "Symlinked Bat Bash syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/SQL.sublime-syntax" "" "Symlinked Bat SQL syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Terraform.sublime-syntax" "" "Symlinked Bat Terraform syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Markdown.sublime-syntax" "" "Symlinked Bat Markdown syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -128,21 +129,21 @@ elif command -v batcat >/dev/null 2>&1; then
 fi
 
 if [ -n "$BAT_BIN" ]; then
-    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n**bold text**\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
-    ORANGE_BOLD="$(printf "\033[1;38;2;203;75;22m")"
-    YELLOW_BOLD="$(printf "\033[1;38;2;181;137;0m")"
-    BLUE_BOLD="$(printf "\033[1;38;2;38;139;210m")"
+    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n#### Header 4\n**bold text**\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
     BASE1_BOLD="$(printf "\033[1;38;2;147;161;161m")"
-    if grep -Fq "${ORANGE_BOLD}#" <<< "$MD_OUT" && \
-       grep -Fq "${ORANGE_BOLD}Header 1" <<< "$MD_OUT" && \
-       grep -Fq "${YELLOW_BOLD}##" <<< "$MD_OUT" && \
-       grep -Fq "${YELLOW_BOLD}Header 2" <<< "$MD_OUT" && \
-       grep -Fq "${BLUE_BOLD}###" <<< "$MD_OUT" && \
-       grep -Fq "${BLUE_BOLD}Header 3" <<< "$MD_OUT" && \
-       grep -Fq "$BASE1_BOLD" <<< "$MD_OUT"; then
-        pass "bat renders Markdown headings (H1 Orange, H2 Yellow, H3 Blue with matching hashmarks) and Base1 bold text"
+    if grep -Fq "${SOL_BASE01}#" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_ORANGE}Header 1" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_BASE01}##" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_BLUE}Header 2" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_BASE01}###" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_VIOLET}Header 3" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_BASE01}####" <<< "$MD_OUT" && \
+       grep -Fq "${SOL_BASE1}Header 4" <<< "$MD_OUT" && \
+       grep -Fq "$BASE1_BOLD" <<< "$MD_OUT" && \
+       ! grep -Fq "$SOL_YELLOW" <<< "$MD_OUT"; then
+        pass "bat renders Markdown headings with Semantic Architecture (H1 Orange, H2 Blue, H3 Violet, H4 Base1, Base01 markers, no Yellow) and Base1 bold text"
     else
-        fail "bat Markdown rendering" "Expected H1 Orange, H2 Yellow, H3 Blue, and Base1 bold in bat output"
+        fail "bat Markdown rendering" "Expected H1 Orange, H2 Blue, H3 Violet, H4 Base1, Base01 markers, no Yellow, and Base1 bold in bat output"
     fi
 
     C_OUT="$(echo -e "#include <stdio.h>" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
@@ -160,24 +161,24 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     QUOTE_OUT="$(printf "> quote text\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
-    if grep -Fq "$SOL_BLUE" <<< "$QUOTE_OUT"; then
-        pass "bat renders Markdown blockquotes in Solarized Blue"
+    if grep -Fq "$SOL_BASE0" <<< "$QUOTE_OUT" && grep -Fq "$SOL_BASE01" <<< "$QUOTE_OUT"; then
+        pass "bat renders Markdown blockquotes in Solarized Base0 with Base01 marker"
     else
-        fail "bat blockquote rendering" "Expected Blue blockquote in bat output"
+        fail "bat blockquote rendering" "Expected Base0 text and Base01 marker in bat blockquote output"
     fi
 
     GO_OUT="$(printf "type MyStruct struct {}\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go - 2>/dev/null || true)"
-    if grep -Fq "$SOL_YELLOW" <<< "$GO_OUT"; then
-        pass "bat renders custom struct types in Solarized Yellow"
+    if grep -Fq "$SOL_BASE0" <<< "$GO_OUT"; then
+        pass "bat renders custom struct types in calm Base0"
     else
-        fail "bat custom type rendering" "Expected Yellow struct type in bat output"
+        fail "bat custom type rendering" "Expected Base0 struct type in bat output"
     fi
 
     C_TYPE_OUT="$(printf "int x = 42;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    if grep -Fq "$SOL_YELLOW" <<< "$C_TYPE_OUT"; then
-        pass "bat renders primitive C types (int, char, etc.) in Solarized Yellow"
+    if grep -Fq "$SOL_GREEN" <<< "$C_TYPE_OUT"; then
+        pass "bat renders primitive C types (int, char, etc.) in Solarized Green"
     else
-        fail "bat primitive type rendering" "Expected Yellow primitive type in bat output"
+        fail "bat primitive type rendering" "Expected Green primitive type in bat output"
     fi
 
     C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
@@ -219,6 +220,17 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.2 C Syntax Verification ---
+    C_PREPROC_OUT="$(printf '#ifndef LOG_LEVEL\n#define LOG_LEVEL 2\n#endif\n#ifdef __linux__\n#undef LOG_LEVEL\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}#ifndef" <<< "$C_PREPROC_OUT" && \
+       grep -Fq "${SOL_ORANGE}LOG_LEVEL" <<< "$C_PREPROC_OUT" && \
+       grep -Fq "${SOL_ORANGE}#ifdef" <<< "$C_PREPROC_OUT" && \
+       grep -Fq "${SOL_ORANGE}__linux__" <<< "$C_PREPROC_OUT" && \
+       grep -Fq "${SOL_ORANGE}#undef" <<< "$C_PREPROC_OUT"; then
+        pass "bat renders preprocessor macro identifiers in conditional directives (#ifndef LOG_LEVEL, #ifdef, #undef) in Solarized Orange"
+    else
+        fail "bat preprocessor conditional macro rendering" "Expected Solarized Orange macro identifiers in preprocessor conditionals"
+    fi
+
     C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_MAGENTA}EXIT_FAILURE" <<< "$C_CONST_OUT"; then
         pass "bat renders named uppercase constants (EXIT_FAILURE, etc.) in Solarized Magenta"
@@ -227,10 +239,10 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    if grep -Fq "${SOL_YELLOW}WorkerNode" <<< "$C_CUSTOM_TYPE_OUT"; then
-        pass "bat renders custom PascalCase types (WorkerNode, etc.) in Solarized Yellow"
+    if grep -Fq "${SOL_BASE0}WorkerNode" <<< "$C_CUSTOM_TYPE_OUT"; then
+        pass "bat renders custom PascalCase types (WorkerNode, etc.) in calm Solarized Base0"
     else
-        fail "bat custom type rendering" "Expected Yellow custom PascalCase type in bat output"
+        fail "bat custom type rendering" "Expected Base0 custom PascalCase type in bat output"
     fi
 
     C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
@@ -241,39 +253,59 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
-    if grep -Fq "${SOL_BLUE}emit_log" <<< "$C_FUNC_CALL_OUT"; then
-        pass "bat renders user function calls (emit_log, etc.) in Solarized Blue matching Neovim"
+    if grep -Fq "${SOL_BASE0}emit_log" <<< "$C_FUNC_CALL_OUT"; then
+        pass "bat renders user function calls (emit_log, etc.) in calm Solarized Base0 matching Neovim"
     else
-        fail "bat function call rendering" "Expected Blue emit_log call in bat output"
+        fail "bat function call rendering" "Expected Base0 emit_log call in bat output"
+    fi
+
+    C_CTRL_OUT="$(printf 'if (node == NULL) return EXIT_FAILURE;\nswitch (level) { case 0: break; default: break; }\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    if grep -Fq "${SOL_YELLOW}if" <<< "$C_CTRL_OUT" && \
+       grep -Fq "${SOL_YELLOW}return" <<< "$C_CTRL_OUT" && \
+       grep -Fq "${SOL_YELLOW}switch" <<< "$C_CTRL_OUT" && \
+       grep -Fq "${SOL_YELLOW}case" <<< "$C_CTRL_OUT"; then
+        pass "bat renders C control flow (if, return, switch, case) in Solarized Yellow matching Neovim"
+    else
+        fail "bat C control flow rendering" "Expected Yellow if, return, switch, case in bat output"
     fi
 
     # --- 2.3 C++ Syntax Verification ---
     CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if grep -Fq "${SOL_YELLOW}T" <<< "$CPP_TEMPLATE_OUT"; then
-        pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in Solarized Yellow matching Neovim"
+    if grep -Fq "${SOL_BASE0}T" <<< "$CPP_TEMPLATE_OUT"; then
+        pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in calm Solarized Base0 matching Neovim"
     else
-        fail "bat template type parameter rendering" "Expected Yellow template type parameter in bat output"
+        fail "bat template type parameter rendering" "Expected Base0 template type parameter in bat output"
     fi
 
-    if grep -Fq "${SOL_YELLOW}Printable" <<< "$CPP_TEMPLATE_OUT"; then
-        pass "bat renders C++ concept names (Printable) in Solarized Yellow matching Neovim"
+    if grep -Fq "${SOL_BASE0}Printable" <<< "$CPP_TEMPLATE_OUT"; then
+        pass "bat renders C++ concept names (Printable) in calm Solarized Base0 matching Neovim"
     else
-        fail "bat concept name rendering" "Expected Yellow concept name in bat output"
+        fail "bat concept name rendering" "Expected Base0 concept name in bat output"
     fi
 
-    if grep -Fq "${SOL_YELLOW}vector" <<< "$CPP_TEMPLATE_OUT"; then
-        pass "bat renders C++ STL container types (vector, optional) in Solarized Yellow matching Neovim"
+    if grep -Fq "${SOL_BASE0}vector" <<< "$CPP_TEMPLATE_OUT"; then
+        pass "bat renders C++ STL container types (vector, optional) in calm Solarized Base0 matching Neovim"
     else
-        fail "bat STL container rendering" "Expected Yellow STL container type in bat output"
+        fail "bat STL container rendering" "Expected Base0 STL container type in bat output"
     fi
 
-    CPP_NS_OUT="$(printf 'namespace core::telemetry {}\nusing namespace core::telemetry;\nstd::string s;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if grep -Fq "${SOL_VIOLET}core" <<< "$CPP_NS_OUT" && \
+    CPP_DECL_NS_OUT="$(printf 'namespace core::telemetry {\n}\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}namespace" <<< "$CPP_DECL_NS_OUT" && \
+       grep -Fq "${SOL_VIOLET}core" <<< "$CPP_DECL_NS_OUT" && \
+       grep -Fq "${SOL_VIOLET}telemetry" <<< "$CPP_DECL_NS_OUT"; then
+        pass "bat renders namespace declaration keywords in Solarized Green and namespace identifiers (core, telemetry) in Solarized Violet matching Neovim"
+    else
+        fail "bat namespace definition rendering" "Expected Green namespace keyword and Violet core::telemetry identifiers in bat output"
+    fi
+
+    CPP_NS_OUT="$(printf 'using namespace core::telemetry;\nstd::string s;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}using" <<< "$CPP_NS_OUT" && \
+       grep -Fq "${SOL_VIOLET}core" <<< "$CPP_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$CPP_NS_OUT" && \
        grep -Fq "${SOL_BASE0}std" <<< "$CPP_NS_OUT"; then
-        pass "bat renders namespace declarations (core, telemetry) in Solarized Violet and qualifiers (std) in calm Base0 Grey matching Neovim"
+        pass "bat renders using namespace keywords in Solarized Green, namespace targets (core, telemetry) in Solarized Violet, and qualifiers (std) in calm Base0 Grey matching Neovim"
     else
-        fail "bat namespace rendering" "Expected Violet namespace declarations and Base0 qualifiers in bat output"
+        fail "bat using namespace rendering" "Expected Green using keyword, Violet namespace targets, and Base0 qualifiers in bat output"
     fi
 
     CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
@@ -291,36 +323,36 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if grep -Fq "${SOL_YELLOW}same_as" <<< "$CPP_CONCEPT_OUT"; then
-        pass "bat renders standard C++20 concepts (same_as) in Solarized Yellow matching Neovim"
+    if grep -Fq "${SOL_BASE0}same_as" <<< "$CPP_CONCEPT_OUT"; then
+        pass "bat renders standard C++20 concepts (same_as) in calm Solarized Base0 matching Neovim"
     else
-        fail "bat C++20 concept rendering" "Expected Yellow same_as concept in bat output"
+        fail "bat C++20 concept rendering" "Expected Base0 same_as concept in bat output"
     fi
 
     CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if grep -Fq "${SOL_YELLOW}NodeState" <<< "$CPP_ENUM_OUT" && \
-       grep -Fq "${SOL_YELLOW}uint8_t" <<< "$CPP_ENUM_OUT"; then
-        pass "bat renders enum class types and underlying types (uint8_t) in Solarized Yellow matching Neovim"
+    if grep -Fq "${SOL_BASE0}NodeState" <<< "$CPP_ENUM_OUT" && \
+       grep -Fq "${SOL_GREEN}uint8_t" <<< "$CPP_ENUM_OUT"; then
+        pass "bat renders enum class types in calm Solarized Base0 and underlying primitive types (uint8_t) in Solarized Green matching Neovim"
     else
-        fail "bat enum type rendering" "Expected Yellow enum name and underlying type in bat output"
+        fail "bat enum type rendering" "Expected Base0 enum name and Green underlying type in bat output"
     fi
 
-    CPP_QUAL_FUNC_OUT="$(printf 'std::move(metric);\nstd::for_each(items.begin(), items.end());\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_QUAL_FUNC_OUT="$(printf 'void test() {\n    std::move(metric);\n    std::for_each(items.begin(), items.end());\n}\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}std" <<< "$CPP_QUAL_FUNC_OUT" && \
-       grep -Fq "${SOL_BLUE}move" <<< "$CPP_QUAL_FUNC_OUT" && \
-       grep -Fq "${SOL_BLUE}for_each" <<< "$CPP_QUAL_FUNC_OUT"; then
-        pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Base0 Grey namespace and Blue function matching Neovim"
+       grep -Fq "${SOL_BASE0}move" <<< "$CPP_QUAL_FUNC_OUT" && \
+       grep -Fq "${SOL_BASE0}for_each" <<< "$CPP_QUAL_FUNC_OUT"; then
+        pass "bat renders namespace-qualified function calls (std::move, std::for_each) with Base0 Grey namespace and function matching Neovim"
     else
-        fail "bat qualified function rendering" "Expected Base0 Grey std and Blue move/for_each in bat output"
+        fail "bat qualified function rendering" "Expected Base0 Grey std and Base0 move/for_each in bat output"
     fi
 
     CPP_ATTR_OUT="$(printf '[[nodiscard]] constexpr uint64_t id();\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
-    if grep -Fq "${SOL_ORANGE}[[" <<< "$CPP_ATTR_OUT" && \
-       grep -Fq "${SOL_ORANGE}nodiscard" <<< "$CPP_ATTR_OUT" && \
-       grep -Fq "${SOL_ORANGE}]]" <<< "$CPP_ATTR_OUT"; then
-        pass "bat renders C++ attributes ([[nodiscard]]) in Solarized Orange matching Neovim"
+    if grep -Fq "${SOL_VIOLET}[[" <<< "$CPP_ATTR_OUT" && \
+       grep -Fq "${SOL_VIOLET}nodiscard" <<< "$CPP_ATTR_OUT" && \
+       grep -Fq "${SOL_VIOLET}]]" <<< "$CPP_ATTR_OUT"; then
+        pass "bat renders C++ attributes ([[nodiscard]]) in Solarized Violet matching Neovim"
     else
-        fail "bat attribute rendering" "Expected Orange [[nodiscard]] in bat output"
+        fail "bat attribute rendering" "Expected Violet [[nodiscard]] in bat output"
     fi
 
     # --- 2.4 Diff Syntax Verification ---
@@ -346,109 +378,142 @@ if [ -n "$BAT_BIN" ]; then
     GO_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}package" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}main" <<< "$GO_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}import" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}import" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}type" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}func" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}struct" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}interface" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}context" <<< "$GO_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}Context" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Context" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ClusterNode" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}int" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}string" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}LevelDebug" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}MaskAll" <<< "$GO_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}ClusterNode" <<< "$GO_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}map" <<< "$GO_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}chan" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}NewClusterNode" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}return" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}select" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}defer" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}case" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}default" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}panic" <<< "$GO_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}make" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}\`json:\"port\"\`" <<< "$GO_SAMPLE_OUT"; then
-        pass "bat renders Go package (Green), main (Violet), import (Orange), declarations (Green), qualifiers (Base0 Grey), constants (Magenta), types/composite literals (Yellow), and calls (Blue) matching Neovim"
+        pass "bat renders Converged Ergonomic Go: structural scaffolding & primitive types (Green package/type/func/struct/interface/int/string), control flow (Yellow if/return/select/defer/case/default), function calls & builtins (Base0 panic/make), custom types in calm Base0 (Context/ClusterNode), method declarations (Blue NewClusterNode), package identity & imports (Violet main/import), constants & sentinels (Magenta LevelDebug/MaskAll/iota/nil), struct tags (Cyan), and qualifiers (Base0 context.) matching Neovim"
     else
-        fail "bat Go rendering" "Expected Model 2 Solarized TrueColor highlights in bat sample.go output"
+        fail "bat Go rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.go output"
     fi
 
     # --- 2.6 Java Syntax Verification ---
     JAVA_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l java "$SCRIPT_DIR/sample-code/sample.java" 2>/dev/null || true)"
-    if grep -Fq "${SOL_ORANGE}import" <<< "$JAVA_SAMPLE_OUT" && \
+    if grep -Fq "${SOL_VIOLET}import" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}java" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}Instant" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}@interface" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Instant" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@interface" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}public" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}class" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}interface" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}record" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}OrderRecord" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}implements" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}int" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}OrderRecord" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}DEFAULT_BUFFER_SIZE" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}1L" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}@Service" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}@Override" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}when" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@Service" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@Override" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}findById" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}throw" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}when" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}default" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}100.0" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_MAGENTA}this" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}super" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}new" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}this" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}super" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}///" <<< "$JAVA_SAMPLE_OUT"; then
-        pass "bat renders Java import (Orange), paths (Base0), types (Yellow), declarations (Green class/interface/record), annotations (Orange), guards (Green when), numbers (Magenta 1L/100.0), this (Magenta), super call (Blue), and doc comments (Base01 ///) matching Neovim"
+        pass "bat renders Converged Ergonomic Java: structural scaffolding & primitive types (Green public/class/implements/new/this/super/int), control flow (Yellow if/throw/when/default), custom types in calm Base0 (Instant/OrderRecord), method declarations (Blue findById), annotations & imports (Violet @interface/@Service/import), constants & numbers (Magenta DEFAULT_BUFFER_SIZE/1L/100.0), and comments (Base01 ///) matching Neovim"
     else
-        fail "bat Java rendering" "Expected Modern Java Solarized TrueColor highlights in bat sample.java output"
+        fail "bat Java rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.java output"
     fi
 
     # --- 2.7 Python Syntax Verification ---
     PYTHON_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l py "$SCRIPT_DIR/sample-code/sample.py" 2>/dev/null || true)"
-    if grep -Fq "${SOL_ORANGE}from" <<< "$PYTHON_SAMPLE_OUT" && \
+    if grep -Fq "${SOL_VIOLET}from" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}asyncio" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}typing" <<< "$PYTHON_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}Callable" <<< "$PYTHON_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}EndpointMetrics" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Callable" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}EndpointMetrics" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}int" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}float" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}str" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}bool" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}dict" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}list" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}set" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}tuple" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}DEFAULT_PORT" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}0xFF00_AA55" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}3.1415926535" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}def" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}timed_execution" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}async" <<< "$PYTHON_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}@dataclass" <<< "$PYTHON_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}@property" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}try" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}return" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}await" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}finally" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@dataclass" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@property" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}self" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}None" <<< "$PYTHON_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}MetricsCollector" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}MetricsCollector" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}__init__" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}__name__" <<< "$PYTHON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}.4f" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}\"\"\"" <<< "$PYTHON_SAMPLE_OUT"; then
-        pass "bat renders Python imports (Orange), modules (Violet), typing/classes (Yellow), unbroken numbers (Magenta), decorators (Orange), instance self/None/__name__ (Magenta), def/async (Green), and calls (Blue) matching Neovim"
+        pass "bat renders Python imports/modules/decorators (Violet), built-in types (Green int/float/str/bool/dict/list/set/tuple), custom types/classes (Base0 Callable/EndpointMetrics), constants/self/None (Magenta), scaffolding (Green def/async), control flow (Yellow try/return/await/if), format specifiers (.4f in Cyan), and declarations (Blue) matching Neovim"
     else
         fail "bat Python rendering" "Expected Modern Python Solarized TrueColor highlights in bat sample.py output"
     fi
 
     # --- 2.8 Rust Syntax Verification ---
     RUST_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l rs "$SCRIPT_DIR/sample-code/sample.rs" 2>/dev/null || true)"
-    if grep -Fq "${SOL_ORANGE}use" <<< "$RUST_SAMPLE_OUT" && \
+    if grep -Fq "${SOL_VIOLET}use" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}std" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}collections" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}HashMap" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}HashMap" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}const" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}MAX_CONNECTIONS" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}usize" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}usize" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}0xCAFE_BABE" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}#[" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}derive" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}]" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}Debug" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}#[" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}derive" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}]" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Debug" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}pub" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}enum" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}NodeStatus" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}NodeStatus" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}Starting" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}trait" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}Repository" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}T" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Repository" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}T" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}fn" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}find_by_id" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}'a" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}self" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}struct" <<< "$RUST_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}ServerNode" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ServerNode" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}where" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}impl" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}match" <<< "$RUST_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}write" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}let" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}mut" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}println" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}///" <<< "$RUST_SAMPLE_OUT"; then
-        pass "bat renders Rust imports (Orange), modules (Violet), types/traits (Yellow), keywords/lifetimes (Green), constants/variants/self (Magenta), calls/macros (Blue), and attributes (Orange) matching Neovim"
+        pass "bat renders Rust imports/attributes (Violet), custom types (Base0), primitive types & scaffolding/lifetimes (Green), control flow (Yellow), constants/variants/self (Magenta), and macro/function declarations (Blue) matching Neovim"
     else
         fail "bat Rust rendering" "Expected Modern Rust Solarized TrueColor highlights in bat sample.rs output"
     fi
@@ -456,9 +521,9 @@ if [ -n "$BAT_BIN" ]; then
     # --- 2.9 Bash Syntax Verification ---
     SH_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sh "$SCRIPT_DIR/sample-code/sample.sh" 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}#!/bin/bash" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}set" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}set" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}SCRIPT_NAME" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}basename" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}basename" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}0" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}readonly" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}WORK_DIR" <<< "$SH_SAMPLE_OUT" && \
@@ -472,129 +537,172 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_BLUE}cleanup" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}local" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}?" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}if" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}then" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}printf" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}trap" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}then" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}printf" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}trap" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}EXIT" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}log_status" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}log_status" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}1" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}2" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}case" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}esac" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}case" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}esac" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}render_banner" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}cat" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}cat" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}EOF" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}check_services" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}for" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}in" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}do" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}done" <<< "$SH_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}mkdir" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}check_services" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}for" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}in" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}do" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}done" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}mkdir" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}main" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}main" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}>&${SOL_RESET}${SOL_MAGENTA}2" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}INFO${SOL_RESET}${SOL_BASE0})" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}*${SOL_RESET}${SOL_BASE0})" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}[${SOL_RESET}${SOL_CYAN}@${SOL_RESET}${SOL_BASE0}]" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}\$" <<< "$SH_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}\${" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}@" <<< "$SH_SAMPLE_OUT"; then
-        pass "bat renders Shell shebang (Orange), keywords (Green), functions/commands (Blue), constants/numbers/signals (Magenta), redirections, case patterns, and heredocs/strings (Cyan) matching Neovim"
+        pass "bat renders Converged Ergonomic Shell: shebang (Orange), scaffolding & declarations (Green), control flow (Yellow), function declarations (Blue), invocations & commands (calm Base0), expansion sigils (\$ and \${ in Base0), constants & signals (Magenta), and strings & subscripts (Cyan) matching Neovim"
     else
-        fail "bat Shell rendering" "Expected Modern Shell Solarized TrueColor highlights in bat sample.sh output"
+        fail "bat Shell rendering" "Expected Converged Ergonomic Shell Solarized TrueColor highlights in bat sample.sh output"
     fi
 
     # --- 2.10 SQL Syntax Verification ---
     SQL_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sql "$SCRIPT_DIR/sample-code/sample.sql" 2>/dev/null || true)"
-    if grep -Fq "${SOL_GREEN}CREATE" <<< "$SQL_SAMPLE_OUT" && \
+    if       grep -Fq "${SOL_GREEN}CREATE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}TABLE" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}customer_accounts" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}BIGSERIAL" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}customer_accounts" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}BIGSERIAL" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}PRIMARY KEY" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}VARCHAR" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}VARCHAR" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}128" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}NOT" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}NULL" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}DEFAULT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}DEFAULT" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}'standard'" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}CHECK" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}IN" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}NUMERIC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}NUMERIC" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}0.00" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}BOOLEAN" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}BOOLEAN" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}TRUE" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}TIMESTAMPTZ" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}NOW" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}UUID" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}gen_random_uuid" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}BIGINT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}TIMESTAMPTZ" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}NOW" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}UUID" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}gen_random_uuid" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}BIGINT" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}REFERENCES" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}CASCADE" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}CHAR" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}idx_ledger_account_settled" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}DESC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}CHAR" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}idx_ledger_account_settled" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}DESC" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}WITH" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}monthly_billing_summary" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}monthly_billing_summary" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}SELECT" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}COUNT" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}COALESCE" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}SUM" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}COUNT" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}COALESCE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}SUM" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}100.0" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}CASE" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}WHEN" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}CASE" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}WHEN" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}0.15" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}DATE_TRUNC" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}INTERVAL" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}ROUND" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}DENSE_RANK" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}DATE_TRUNC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}INTERVAL" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ROUND" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}DENSE_RANK" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}OVER" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}HAVING" <<< "$SQL_SAMPLE_OUT" && \
-       grep -Fq "${SOL_ORANGE}ASC" <<< "$SQL_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}ASC" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}LIMIT" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}25" <<< "$SQL_SAMPLE_OUT" && \
        ! grep -Fq "${SOL_MAGENTA}account_id" <<< "$SQL_SAMPLE_OUT"; then
-        pass "bat renders SQL keywords (Green), relation entities and data types (Yellow), functions (Blue), DEFAULT/ASC/DESC directives (Orange), booleans/sentinels/numbers (Magenta), and calm Base0 column qualifiers matching Neovim"
+        pass "bat renders SQL keywords and data types (Green), relation entities (Base0), conditionals (Yellow), function calls (Base0), DEFAULT/ASC/DESC keywords (Green), booleans/sentinels/numbers (Magenta), and calm Base0 column qualifiers matching Neovim"
     else
-        fail "bat SQL rendering" "Expected Modern SQL Solarized TrueColor highlights in bat sample.sql output"
+        fail "bat SQL rendering" "Expected Converged Ergonomic SQL Solarized TrueColor highlights in bat sample.sql output"
     fi
 
     # --- 2.11 Terraform / HCL Syntax Verification ---
     TF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l tf "$SCRIPT_DIR/sample-code/sample.tf" 2>/dev/null || true)"
-    if grep -Fq "${SOL_GREEN}terraform" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}required_providers" <<< "$TF_SAMPLE_OUT" && \
+    if       grep -Fq "${SOL_GREEN}terraform" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}required_providers" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}variable" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}string" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}validation" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}contains" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}string" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}validation" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}contains" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}var" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}number" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}number" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}3" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}locals" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}local" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}for" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}in" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}range" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}cidrsubnet" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}for" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}in" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}range" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}cidrsubnet" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}resource" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}aws_s3_bucket" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}telemetry_lake" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BLUE}merge" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}lifecycle" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}merge" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}lifecycle" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}false" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}output" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}provider" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}provider" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_YELLOW}provisioner" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}provisioner" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}self" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}%{" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}~}" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}if" <<< "$TF_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}endif" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$TF_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}endif" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}\${" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}}" <<< "$TF_SAMPLE_OUT" && \
        ! grep -Fq "${SOL_CYAN}source" <<< "$TF_SAMPLE_OUT" && \
        ! grep -Fq "${SOL_CYAN}CostCenter" <<< "$TF_SAMPLE_OUT"; then
-        pass "bat renders Terraform declaration keywords & scope accessors (Green), block schemas & data types (Yellow), functions (Blue), booleans/numbers (Magenta), strings (Cyan), and calm Base0 attributes/interpolation delimiters matching Neovim"
+        pass "bat renders Terraform declaration keywords & scope accessors (Green), block schemas & data types (Base0), control flow (Yellow), function calls (Base0), booleans/numbers (Magenta), strings (Cyan), and calm Base0 attributes/interpolation delimiters matching Neovim"
     else
-        fail "bat Terraform rendering" "Expected Modern Terraform Solarized TrueColor highlights in bat sample.tf output"
+        fail "bat Terraform rendering" "Expected Converged Ergonomic Terraform Solarized TrueColor highlights in bat sample.tf output"
+    fi
+
+    MD_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md "$SCRIPT_DIR/sample-code/sample.md" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}Workstation Architecture" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}1. Executive Summary" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}2.1 File System Topology" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE1}2.2.1 Syntax Highlighting" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}2.2.1.1 Error Token" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Operational Verification Checklist" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}#" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}##" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}###" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}>" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}[!NOTE]" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}[!TIP]" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}[!IMPORTANT]" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}[!WARNING]" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}[x]" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}[ ]" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE1}Environment" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE1}Variable" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}|" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}git" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}cd" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}HOME" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}package" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}main" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}ValidateWorkstation" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}errors" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}New" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}return" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}nil" <<< "$MD_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_YELLOW}Workstation Architecture" <<< "$MD_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_YELLOW}1. Executive Summary" <<< "$MD_SAMPLE_OUT"; then
+        pass "bat renders Markdown showcase (sample.md) with Semantic Architecture: H1 Orange, H2 Blue, H3 Violet, H4 Base1, H5/H6 Base0, Base01 hashmarks/quote markers, GitHub alerts ([!NOTE], [!TIP], [!IMPORTANT], [!WARNING]), task checkboxes, Base1 table headers with Base01 borders, embedded Bash with Magenta \$HOME and Base0 commands, embedded Go with Green func/package, Violet main, Blue declarations, Base0 calls (errors.New), Magenta nil, and exclusive Yellow control flow"
+    else
+        fail "bat Markdown showcase rendering" "Expected Semantic Architecture TrueColor highlights in bat sample.md output"
     fi
 fi
 

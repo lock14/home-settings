@@ -127,7 +127,7 @@
 			<key>name</key>
 			<string>Built-in Type</string>
 			<key>scope</key>
-			<string>storage.type, storage.type.c, storage.type.primitive, storage.type.built-in, support.type.builtin, support.type.primitive, support.type</string>
+			<string>storage.type, storage.type.primitive, storage.type.built-in, support.type.builtin, support.type.primitive, support.type</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -211,100 +211,98 @@
 		<!-- ======================================================= -->
 		<!-- Markdown & Markup Extensions (First-Principles Hierarchy)-->
 		<!-- ======================================================= -->
-		<!-- Headings (H1: Solarized Orange, Bold) -->
+		<!-- Headings (H1: Solarized Orange) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading 1</string>
 			<key>scope</key>
-			<string>markup.heading.1, markup.heading.1 entity.name.section, markup.heading.1 punctuation.definition.heading</string>
+			<string>markup.heading.1, markup.heading.1 entity.name.section</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#CB4B16</string>
 			</dict>
 		</dict>
-		<!-- Headings (H2: Solarized Yellow, Bold) -->
+		<!-- Headings (H2: Solarized Blue) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading 2</string>
 			<key>scope</key>
-			<string>markup.heading.2, markup.heading.2 entity.name.section, markup.heading.2 punctuation.definition.heading</string>
+			<string>markup.heading.2, markup.heading.2 entity.name.section</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
-				<key>foreground</key>
-				<string>#B58900</string>
-			</dict>
-		</dict>
-		<!-- Headings (H3: Solarized Blue, Bold) -->
-		<dict>
-			<key>name</key>
-			<string>Markdown Heading 3</string>
-			<key>scope</key>
-			<string>markup.heading.3, markup.heading.3 entity.name.section, markup.heading.3 punctuation.definition.heading</string>
-			<key>settings</key>
-			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#268BD2</string>
 			</dict>
 		</dict>
-		<!-- Headings (H4: Solarized Violet, Bold) -->
+		<!-- Headings (H3: Solarized Violet) -->
 		<dict>
 			<key>name</key>
-			<string>Markdown Heading 4</string>
+			<string>Markdown Heading 3</string>
 			<key>scope</key>
-			<string>markup.heading.4, markup.heading.4 entity.name.section, markup.heading.4 punctuation.definition.heading</string>
+			<string>markup.heading.3, markup.heading.3 entity.name.section</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#6C71C4</string>
 			</dict>
 		</dict>
-		<!-- Headings (H5: Solarized Magenta, Bold) -->
+		<!-- Headings (H4: Solarized Base1) -->
 		<dict>
 			<key>name</key>
-			<string>Markdown Heading 5</string>
+			<string>Markdown Heading 4</string>
 			<key>scope</key>
-			<string>markup.heading.5, markup.heading.5 entity.name.section, markup.heading.5 punctuation.definition.heading</string>
+			<string>markup.heading.4, markup.heading.4 entity.name.section</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
-				<key>foreground</key>
-				<string>#D33682</string>
-			</dict>
-		</dict>
-		<!-- Headings (H6: Solarized Base1, Bold) -->
-		<dict>
-			<key>name</key>
-			<string>Markdown Heading 6</string>
-			<key>scope</key>
-			<string>markup.heading.6, markup.heading.6 entity.name.section, markup.heading.6 punctuation.definition.heading</string>
-			<key>settings</key>
-			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#93A1A1</string>
 			</dict>
 		</dict>
-		<!-- General Section Titles & Headings Fallback (Solarized Blue, Bold) -->
+		<!-- Headings (H5: Solarized Base0) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 5</string>
+			<key>scope</key>
+			<string>markup.heading.5, markup.heading.5 entity.name.section</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Headings (H6: Solarized Base0) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading 6</string>
+			<key>scope</key>
+			<string>markup.heading.6, markup.heading.6 entity.name.section</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Heading Hashmarks (# delimiter) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Heading Delimiter</string>
+			<key>scope</key>
+			<string>punctuation.definition.heading</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- General Section Titles & Headings Fallback (Solarized Blue) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading Generic</string>
 			<key>scope</key>
-			<string>markup.heading, markup.heading entity.name.section, markup.heading punctuation.definition.heading, entity.name.section</string>
+			<string>markup.heading, markup.heading entity.name.section, entity.name.section</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#268BD2</string>
 			</dict>
@@ -409,7 +407,7 @@
 				<string>#586E75</string>
 			</dict>
 		</dict>
-		<!-- Blockquotes (Solarized Blue, Upright) -->
+		<!-- Blockquotes (Solarized Base0, Upright) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Blockquote</string>
@@ -418,7 +416,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#268BD2</string>
+				<string>#839496</string>
 			</dict>
 		</dict>
 		<!-- Blockquote Markers (>) (Solarized Base01) -->
@@ -433,6 +431,62 @@
 				<string>#586E75</string>
 			</dict>
 		</dict>
+		<!-- GitHub Alert Callouts -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Alert Note</string>
+			<key>scope</key>
+			<string>support.alert.note</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markdown Alert Tip</string>
+			<key>scope</key>
+			<string>support.alert.tip</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markdown Alert Important</string>
+			<key>scope</key>
+			<string>support.alert.important</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markdown Alert Warning</string>
+			<key>scope</key>
+			<string>support.alert.warning</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markdown Alert Caution</string>
+			<key>scope</key>
+			<string>support.alert.caution</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#DC322F</string>
+			</dict>
+		</dict>
 		<!-- Bullet and Numbered List Item Markers (-, *, +, 1.) -->
 		<dict>
 			<key>name</key>
@@ -441,10 +495,31 @@
 			<string>punctuation.definition.list_item</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Task List Checkboxes ([x] Green, [ ] Base01) -->
+		<dict>
+			<key>name</key>
+			<string>Markdown Task Checked</string>
+			<key>scope</key>
+			<string>punctuation.definition.task.checked</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Markdown Task Unchecked</string>
+			<key>scope</key>
+			<string>punctuation.definition.task.unchecked</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
 			</dict>
 		</dict>
 		<!-- Horizontal Rules / Thematic Breaks (***) -->
@@ -455,18 +530,16 @@
 			<string>meta.separator.markdown, punctuation.definition.thematic-break</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
 				<string>#586E75</string>
 			</dict>
 		</dict>
-		<!-- Table Cell Delimiters (Base01) & Headers (Yellow Bold) -->
+		<!-- Table Cell Delimiters (Base01) & Headers (Base1) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Table Delimiters</string>
 			<key>scope</key>
-			<string>punctuation.separator.table-cell, meta.table punctuation</string>
+			<string>punctuation.separator.table, punctuation.separator.table-cell, punctuation.separator.table-alignment, meta.table punctuation</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -480,10 +553,8 @@
 			<string>markup.other.table.header</string>
 			<key>settings</key>
 			<dict>
-				<key>fontStyle</key>
-				<string>bold</string>
 				<key>foreground</key>
-				<string>#B58900</string>
+				<string>#93A1A1</string>
 			</dict>
 		</dict>
 		<!-- ======================================================= -->
@@ -571,6 +642,828 @@
 			<string>Diff Separators &amp; Parameters (Solarized Base0)</string>
 			<key>scope</key>
 			<string>punctuation.separator.range.diff, variable.parameter.diff, meta.diff.context</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Go Converged Ergonomic Solarized Scheme                  -->
+		<!-- ======================================================= -->
+		<!-- Go Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Go Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.go keyword.declaration, source.go keyword.operator.channel, source.go keyword.operator.word, source.go keyword.var, source.go keyword.const</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Go Control Flow & Jumps -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>Go Control Flow &amp; Jumps (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.go keyword.control, source.go keyword.other.range</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Go Primitive Scalar Types -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Go Primitive Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.go support.type.builtin, source.go storage.type.primitive</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Go Custom & Domain Types (Structs, Interfaces) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Go Custom Types (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.go storage.type, source.go entity.name.type, source.go support.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Go Function & Method Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>Go Function &amp; Method Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.go entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Go Package Identity & Imports -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>Go Package Identity &amp; Imports (Solarized Violet)</string>
+			<key>scope</key>
+			<string>source.go entity.name.namespace, source.go keyword.control.import</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- Go Constants, Literals & Sentinels -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Go Constants, Literals &amp; Sentinels (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.go constant.numeric, source.go constant.language, source.go constant.other, source.go variable.other.constant</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Go Base Canvas (Invocations, Builtins, Variables, Qualifiers, Operators) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Go Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.go variable.function, source.go variable.function.method, source.go support.function, source.go support.function.builtin, source.go variable.other, source.go keyword.operator, source.go punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Java Converged Ergonomic Solarized Scheme                -->
+		<!-- ======================================================= -->
+		<!-- Java Structural Scaffolding & Modifiers -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Java Structural Scaffolding &amp; Modifiers (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.java storage.type.record, source.java storage.type.class, source.java storage.type.interface, source.java storage.type.enum, source.java storage.modifier, source.java storage.modifier.extends, source.java keyword.operator.word, source.java variable.language</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Java Control Flow & Branching -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>Java Control Flow &amp; Branching (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.java keyword.control, source.java keyword.control.switch</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Java Primitive Types -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Java Primitive Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.java storage.type.primitive</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Java Custom & Standard Types (Classes, Records, Interfaces, Generics) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Java Custom Types (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.java entity.name.type, source.java support.type, source.java storage.type.generic, source.java support.type.user-defined</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Java Method & Routine Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>Java Method &amp; Routine Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.java entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Java Annotations & Imports -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>Java Annotations &amp; Imports (Solarized Violet)</string>
+			<key>scope</key>
+			<string>source.java storage.type.annotation, source.java storage.type.interface.annotation, source.java punctuation.definition.annotation, source.java keyword.control.import</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- Java Numbers, Constants & Sentinels -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Java Numbers, Constants &amp; Sentinels (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.java constant.numeric, source.java constant.language, source.java variable.other.constant</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Java Base Canvas (Method Invocations, Variables, Operators, Delimiters) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Java Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.java variable.function, source.java keyword.operator, source.java variable.other, source.java punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Rust Converged Ergonomic Solarized Scheme                -->
+		<!-- ======================================================= -->
+		<!-- Rust Structural Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Structural Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.rust storage.type, source.rust storage.modifier, source.rust keyword.declaration, source.rust storage.type.impl, source.rust storage.type.trait, source.rust storage.type.struct, source.rust storage.type.enum, source.rust storage.type.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Rust Control Flow & Jumps -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Control Flow &amp; Jumps (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.rust keyword.control</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Rust Primitive Types -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Primitive Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.rust support.type.primitive</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Rust Custom & Standard Types (Structs, Enums, Traits, Standard Library) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Custom Types (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.rust entity.name.type, source.rust support.type, source.rust support.type.builtin, source.rust support.type.user-defined</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Rust Function & Method Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Function &amp; Method Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.rust entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Rust Macro Invocations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Macro Invocations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.rust entity.name.function.macro</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Rust Attributes, Aspects & Imports -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Attributes, Aspects &amp; Imports (Solarized Violet)</string>
+			<key>scope</key>
+			<string>source.rust keyword.control.import, source.rust entity.name.module, source.rust entity.name.attribute, source.rust punctuation.section.attribute</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- Rust Constants, Literals, Sentinels & Enum Variants -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Constants, Literals, Sentinels &amp; Enum Variants (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.rust constant.numeric, source.rust constant.language, source.rust variable.other.constant, source.rust constant.other.enum-member, source.rust variable.language</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Rust Invocations & Base Canvas (Method Calls, Variables, Operators, Delimiters) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Rust Invocations &amp; Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.rust meta.attribute, source.rust variable.function, source.rust punctuation.definition.macro, source.rust variable.other, source.rust variable.parameter, source.rust keyword.operator, source.rust punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Python Converged Ergonomic Solarized Scheme             -->
+		<!-- ======================================================= -->
+		<!-- Python Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Python Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.python storage.type, source.python storage.modifier, source.python keyword.declaration, source.python keyword.operator.word</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Python Control Flow & Jumps -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>Python Control Flow &amp; Jumps (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.python keyword.control</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Python Built-in Types (int, str, bool, list, dict, set, tuple, etc.) -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Python Built-in Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.python support.type.builtin</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Python Custom Classes, Typing Constructs & Exceptions -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Python Custom Classes &amp; Typing Constructs (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.python entity.name.type, source.python support.type, source.python support.type.exception, source.python support.class, source.python entity.other.inherited-class</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Python Function & Method Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>Python Function &amp; Method Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.python entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Python Decorators, Aspects, Modules & Imports -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>Python Decorators, Aspects, Modules &amp; Imports (Solarized Violet)</string>
+			<key>scope</key>
+			<string>source.python keyword.control.import, source.python entity.name.module, source.python entity.name.function.decorator</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- Python Constants, Literals, Sentinels, Receivers & Built-ins -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Python Constants, Literals, Sentinels, Receivers &amp; Built-ins (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.python constant.numeric, source.python constant.language, source.python variable.language, source.python variable.other.constant</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Python Invocations & Base Canvas (Method Calls, Function Calls, Variables, Operators, Delimiters) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Python Invocations &amp; Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.python variable.function, source.python support.function, source.python variable.other, source.python variable.parameter, source.python keyword.operator, source.python punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- C / C++ Converged Ergonomic Solarized Scheme            -->
+		<!-- ======================================================= -->
+		<!-- C / C++ Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.c keyword.declaration, source.c storage.modifier, source.c keyword.operator.word, source.c++ keyword.declaration, source.c++ storage.modifier, source.c++ keyword.operator.word, source.c++ storage.type.template, source.c++ keyword.other.concept</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Control Flow & Jumps -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Control Flow &amp; Jumps (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.c keyword.control.c, source.c keyword.control.flow, source.c++ keyword.control.c++, source.c++ keyword.control.flow, source.c++ keyword.control.exception</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Primitive Types -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Primitive Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.c storage.type.c, source.c support.type.sys-types, source.c support.type.stdint, source.c++ storage.type.c, source.c++ storage.type.c++, source.c++ support.type.sys-types, source.c++ support.type.stdint</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Custom Types & Classes (Custom Structs, STL, Concepts, Type Parameters) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Custom Types &amp; Classes (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.c storage.type, source.c support.type, source.c entity.name.type, source.c entity.name.class, source.c entity.name.struct, source.c entity.name.enum, source.c support.type.user-defined, source.c++ storage.type, source.c++ support.type, source.c++ entity.name.type, source.c++ entity.name.type.parameter, source.c++ entity.name.concept, source.c++ entity.name.class, source.c++ entity.name.struct, source.c++ entity.name.enum, source.c++ entity.other.inherited-class, source.c++ support.type.user-defined, source.c++ support.type.std, source.c++ support.type.concept</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Function & Method Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Function &amp; Method Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.c entity.name.function, source.c++ entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Preprocessor Directives -> Solarized Orange (#CB4B16) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Preprocessor Directives (Solarized Orange)</string>
+			<key>scope</key>
+			<string>source.c meta.preprocessor keyword.control.directive, source.c keyword.control.directive, source.c punctuation.definition.directive, source.c punctuation.definition.preprocessor, source.c++ meta.preprocessor keyword.control.directive, source.c++ keyword.control.directive, source.c++ punctuation.definition.directive, source.c++ punctuation.definition.preprocessor</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Attributes, Namespaces & Modules -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Attributes, Namespaces &amp; Modules (Solarized Violet)</string>
+			<key>scope</key>
+			<string>source.c entity.name.attribute, source.c storage.modifier.attribute, source.c punctuation.section.attribute, source.c++ entity.name.attribute, source.c++ storage.modifier.attribute, source.c++ punctuation.section.attribute, source.c++ keyword.other.using, source.c++ entity.name.namespace, source.c++ entity.name.module</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Constants, Literals, Sentinels, Enum Members & Built-ins -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Constants, Literals, Sentinels, Enum Members &amp; Built-ins (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.c constant, source.c++ constant, source.c++ variable.language</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- C / C++ Invocations & Base Canvas (Method Calls, Function Calls, Qualifiers, Variables, Operators, Delimiters) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>C / C++ Invocations &amp; Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.c variable.function, source.c support.function, source.c variable.other, source.c variable.parameter, source.c keyword.operator, source.c punctuation, source.c++ variable.function, source.c++ support.function, source.c++ variable.other, source.c++ variable.parameter, source.c++ keyword.operator, source.c++ punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Shell / Bash Converged Ergonomic Solarized Scheme       -->
+		<!-- ======================================================= -->
+		<!-- Shell Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.shell keyword.declaration, source.shell keyword.control.heredoc-token</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Shell Control Flow & Jumps -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Control Flow &amp; Jumps (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.shell keyword.control, source.shell keyword.control.case</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Shell Shebang Directive -> Solarized Orange (#CB4B16) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Shebang Directive (Solarized Orange)</string>
+			<key>scope</key>
+			<string>source.shell keyword.control.directive.shebang</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- Shell Function Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Function Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.shell entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Shell Constants, Numbers, Exit Codes, Signals & Positional Parameters -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Constants, Numbers, Exit Codes &amp; Signals (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.shell constant, source.shell variable.other.constant, source.shell variable.parameter.positional, source.shell string.regexp.case</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Shell Strings & Array Subscript Wildcards -> Solarized Cyan (#2AA198) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Strings &amp; Subscripts (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>source.shell string, source.shell constant.character.special.subscript</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- Shell Comments -> Solarized Base01 (#586E75) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Comments (Solarized Base01)</string>
+			<key>scope</key>
+			<string>source.shell comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- Shell Invocations & Base Canvas (Commands, Builtins, Function Calls, Arguments, Variables, Redirections, Operators, Brackets) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Shell Invocations &amp; Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.shell variable.function, source.shell support.function, source.shell variable.other, source.shell variable.parameter, source.shell keyword.operator, source.shell punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- SQL Converged Ergonomic Solarized Scheme                -->
+		<!-- ======================================================= -->
+		<!-- SQL Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.sql keyword.control</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- SQL Control Flow & Conditionals (CASE, WHEN, THEN, ELSE, END) -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Control Flow &amp; Conditionals (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.sql keyword.control.conditional</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- SQL Data Types (VARCHAR, BIGINT, NUMERIC, etc.) -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Data Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.sql storage.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- SQL Relations & Schema Entities (Tables, CTEs, Indexes) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Relations &amp; Schema Entities (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.sql entity.name.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- SQL Directives & Attributes (DEFAULT, ASC, DESC, COLLATE) -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Directives &amp; Attributes (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.sql keyword.other.attribute</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- SQL Constants, Sentinels, Numbers & Booleans -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Constants, Sentinels, Numbers &amp; Booleans (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.sql constant</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- SQL Strings -> Solarized Cyan (#2AA198) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Strings (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>source.sql string</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- SQL Comments -> Solarized Base01 (#586E75) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Comments (Solarized Base01)</string>
+			<key>scope</key>
+			<string>source.sql comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- SQL Invocations & Base Canvas (Builtins, Function Calls, Fields, Parameters, Delimiters, Operators) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>SQL Invocations &amp; Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.sql variable.function, source.sql support.function, source.sql variable.other, source.sql variable.parameter, source.sql keyword.operator, source.sql punctuation</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Terraform / HCL Converged Ergonomic Solarized Scheme   -->
+		<!-- ======================================================= -->
+		<!-- Terraform Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.terraform keyword.declaration, source.terraform keyword.control.scope</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Terraform Control Flow & Comprehensions (for, in, if, else, endif, endfor) -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Control Flow &amp; Conditionals (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.terraform keyword.control.conditional</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- Terraform Types, Schema Blocks & Data Types -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Types &amp; Schema Blocks (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.terraform storage.type, source.terraform entity.name.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Terraform Constants, Booleans, Numbers & Sentinels -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Constants, Numbers &amp; Booleans (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.terraform constant</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Terraform Strings -> Solarized Cyan (#2AA198) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Strings (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>source.terraform string</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- Terraform Comments -> Solarized Base01 (#586E75) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Comments (Solarized Base01)</string>
+			<key>scope</key>
+			<string>source.terraform comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- Terraform Invocations, Functions, Attributes, Delimiters & Qualifiers -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Terraform Invocations &amp; Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.terraform support.function, source.terraform variable.function, source.terraform variable.other, source.terraform variable.parameter, source.terraform keyword.operator, source.terraform punctuation, source.terraform meta.interpolation, source.terraform meta.directive</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

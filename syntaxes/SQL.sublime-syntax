@@ -7,7 +7,7 @@
 # - SQL primitive & complex data types in Solarized Yellow (storage.type.sql)
 # - Built-in, aggregate & window functions in Solarized Blue (support.function.builtin.sql)
 # - Invocations & user routines in Solarized Blue (variable.function.sql)
-# - Attributes & directives (DEFAULT, ASC, DESC, COLLATE) in Solarized Orange (keyword.other.attribute.sql)
+# - Attributes & directives (DEFAULT, ASC, DESC, COLLATE) in Solarized Green (keyword.other.attribute.sql)
 # - Strings in Solarized Cyan (string.quoted.single.sql, string.quoted.dollar.sql)
 # - Numbers, booleans (TRUE, FALSE) & sentinels (NULL) in Solarized Magenta (constant.numeric.sql, constant.language.sql)
 # - Column identifiers, query parameters ($1, :id) & table aliases (a.account_id) in Base0 Grey (variable.other.member.sql, variable.parameter.sql)

@@ -11,6 +11,18 @@ The developer workstation environment provides an automated, idempotent configur
 > "Solarized is a sixteen color palette designed for use with terminal and GUI applications. It includes unique properties and is tested extensively in real-world use."
 > — Ethan Schoonover, *Solarized Specification*
 
+> [!NOTE]
+> All user dotfiles and toolchains are managed declaratively without hardcoded personal username paths.
+
+> [!TIP]
+> Execute `./setup.sh --verbose` for real-time stage progression and diagnostic output.
+
+> [!IMPORTANT]
+> Modern Neovim (0.11+) is provisioned via `mise`, avoiding obsolete distribution packages.
+
+> [!WARNING]
+> Never install database daemons directly on the workstation; use containerized instances instead.
+
 Key architectural tenets include:
 - **Declarative Configuration**: All user preferences, toolchains, and dotfiles are defined declaratively and mirrored into place without hardcoded personal usernames.
 - **Fail-Fast & Idempotent**: Scripts execute with `set -euo pipefail`. Running `./setup.sh` multiple times produces completely deterministic, repeatable results.
@@ -93,6 +105,29 @@ The environment provisions ergonomic shortcuts for common daily workflows:
 - `el` / `elt`: Directory listing and tree view via `eza` with Solarized file metadata colors.
 - `gsync`: Synchronize feature branches with `main` cleanly using rebase and stash preservation.
 - `gprune`: Safely delete merged local tracking branches.
+
+### 3.3 Programmatic Validation Hook
+
+Polyglot code blocks embedded inside Markdown preserve exclusive Solarized Yellow highlighting for execution pathways:
+
+```go
+package main
+
+import (
+    "errors"
+    "os"
+)
+
+func ValidateWorkstation(configPath string) error {
+    if configPath == "" {
+        return errors.New("configuration path required")
+    }
+    if _, err := os.Stat(configPath); os.IsNotExist(err) {
+        return err
+    }
+    return nil
+}
+```
 
 ---
 

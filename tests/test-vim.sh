@@ -76,19 +76,20 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \
-       grep -q '@markup.heading\.2.*colors\.yellow' "$NVIM_CONFIG" && \
-       grep -q '@markup.heading\.3.*colors\.blue' "$NVIM_CONFIG" && \
-       grep -q '@markup.heading\.4.*colors\.violet' "$NVIM_CONFIG" && \
-       grep -q '@markup.heading\.5.*colors\.magenta' "$NVIM_CONFIG" && \
-       grep -q '@markup.heading\.6.*colors\.base1' "$NVIM_CONFIG" && \
-       grep -q '@markup\.quote.*colors\.blue' "$NVIM_CONFIG" && \
-       grep -q '@type.*colors\.yellow' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.2.*colors\.blue' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.3.*colors\.violet' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.4.*colors\.base1' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.5.*colors\.base0' "$NVIM_CONFIG" && \
+       grep -q '@markup.heading\.6.*colors\.base0' "$NVIM_CONFIG" && \
+       grep -q '@markup\.quote.*colors\.base0' "$NVIM_CONFIG" && \
+       grep -q '@type.*colors\.base0' "$NVIM_CONFIG" && \
        grep -q '@keyword\.type.*colors\.green' "$NVIM_CONFIG" && \
        grep -q '@keyword\.conditional\.ternary.*colors\.base0' "$NVIM_CONFIG" && \
        grep -q 'markdownH1.*colors\.orange' "$NVIM_CONFIG" && \
+       grep -q 'markdownH2.*colors\.blue' "$NVIM_CONFIG" && \
        grep -q '\["@constant"\] = { fg = colors\.magenta }' "$NVIM_CONFIG" && \
        grep -q '@attribute' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua defines first-principles markup headings, blue quotes, yellow types, green declaration keywords, magenta constants, and calm operators matching bat"
+        pass "Neovim init.lua defines first-principles markup headings (H1 Orange, H2 Blue, H3 Violet, H4 Base1, H5/H6 Base0), Base0 quotes, calm base0 types, green declaration keywords, magenta constants, and calm operators matching bat"
     else
         fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, @constant, or markdownH1 in init.lua"
     fi
@@ -183,14 +184,14 @@ if [ -f "$NVIM_CONFIG" ]; then
     PYTHON_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/python/highlights.scm"
     if [ -f "$PYTHON_QUERY" ] && grep -q 'decorator' "$PYTHON_QUERY" && \
        grep -q '@function\.method' "$PYTHON_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for Python (Orange decorators, Blue def __init__ method)"
+        pass "Neovim defines Tree-sitter query extensions for Python (Violet decorators, Blue def __init__ method)"
     else
         fail "Neovim Python query extension" "Missing or invalid after/queries/python/highlights.scm"
     fi
 
     RUST_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/rust/highlights.scm"
     if [ -f "$RUST_QUERY" ] && grep -q 'attribute' "$RUST_QUERY" && grep -q 'lifetime' "$RUST_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for Rust (Orange attributes, Green lifetimes)"
+        pass "Neovim defines Tree-sitter query extensions for Rust (Violet attributes, Green lifetimes)"
     else
         fail "Neovim Rust query extension" "Missing or invalid after/queries/rust/highlights.scm"
     fi
@@ -204,7 +205,7 @@ if [ -f "$NVIM_CONFIG" ]; then
 
     SQL_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/sql/highlights.scm"
     if [ -f "$SQL_QUERY" ] && grep -q 'keyword_null' "$SQL_QUERY" && grep -q 'object_reference' "$SQL_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for SQL (Magenta NULL, Base0 qualifiers, Yellow index relations)"
+        pass "Neovim defines Tree-sitter query extensions for SQL (Magenta NULL, Base0 qualifiers, Base1 index relations)"
     else
         fail "Neovim SQL query extension" "Missing or invalid after/queries/sql/highlights.scm"
     fi
@@ -214,6 +215,15 @@ if [ -f "$NVIM_CONFIG" ]; then
         pass "Neovim defines Tree-sitter query extensions for Terraform (Green scope keywords, Base0 delimiters & resource refs)"
     else
         fail "Neovim Terraform query extension" "Missing or invalid after/queries/terraform/highlights.scm"
+    fi
+
+    MD_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/markdown/highlights.scm"
+    MD_INLINE_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/markdown_inline/highlights.scm"
+    if [ -f "$MD_QUERY" ] && grep -q 'atx_h1_marker' "$MD_QUERY" && grep -q 'pipe_table_header' "$MD_QUERY" && \
+       [ -f "$MD_INLINE_QUERY" ] && grep -q '!NOTE' "$MD_INLINE_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for Markdown & Inline Markdown (Base01 heading/quote delimiters, Base01 table borders, GitHub alerts)"
+    else
+        fail "Neovim Markdown query extension" "Missing or invalid after/queries/markdown/highlights.scm or after/queries/markdown_inline/highlights.scm"
     fi
 
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
@@ -238,10 +248,12 @@ if [ -f "$NVIM_CONFIG" ]; then
         NVIM_RESULTS="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
 vim.cmd([[redraw]])
 local hl_param = vim.api.nvim_get_hl(0, {name = "@variable.parameter", link = false})
-local param_italic = tostring(hl_param.italic == true)
-
 local hl_const = vim.api.nvim_get_hl(0, {name = "@constant", link = false})
-local const_fg = string.format("%06x", hl_const.fg or 0)
+
+local results = {
+    param_italic = tostring(hl_param.italic == true),
+    const_fg = string.format("%06x", hl_const.fg or 0),
+}
 
 local function find_pos(buf, line_pat, token, start_col)
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
@@ -265,301 +277,439 @@ local function match_capture(buf, row, col, expected)
     return false
 end
 
+local r, c, hl
+
 -- 1. Inspect C (sample.c)
 local c_buf = 0
-local r_wn, c_wn = find_pos(c_buf, "malloc(sizeof(WorkerNode))", "WorkerNode", 20)
-local is_wn_type = match_capture(c_buf, r_wn, c_wn, "type")
+r, c = find_pos(c_buf, "malloc(sizeof(WorkerNode))", "WorkerNode", 20)
+results["is_wn_type"] = tostring(match_capture(c_buf, r, c, "type"))
 
-local r_so, c_so = find_pos(c_buf, "malloc(sizeof(WorkerNode))", "sizeof")
-local is_so_kw = match_capture(c_buf, r_so, c_so, "keyword.operator")
+r, c = find_pos(c_buf, "malloc(sizeof(WorkerNode))", "sizeof")
+results["is_so_kw"] = tostring(match_capture(c_buf, r, c, "keyword.operator"))
+
+r, c = find_pos(c_buf, "switch (level) {", "switch")
+results["is_c_switch_cond"] = tostring(match_capture(c_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(c_buf, "WorkerNode *node = malloc(sizeof(WorkerNode));", "malloc")
+results["is_c_malloc_call"] = tostring(match_capture(c_buf, r, c, "function.call"))
+
+r, c = find_pos(c_buf, "#ifndef LOG_LEVEL", "LOG_LEVEL")
+results["is_c_ifndef_macro"] = tostring(match_capture(c_buf, r, c, "constant.macro"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@constant.macro", link = false})
+results["macro_c_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.c", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_c_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.builtin.c", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_c_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.c", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_c_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@function.call.c", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_c_fg"] = string.format("%06x", hl.fg or 0)
 
 -- 2. Inspect C++ (sample.cpp)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.cpp")
 vim.cmd([[redraw]])
 local cpp_buf = vim.api.nvim_get_current_buf()
 
-local hl_module = vim.api.nvim_get_hl(0, {name = "@module", link = false})
-local module_fg = string.format("%06x", hl_module.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@module", link = false})
+results["module_fg"] = string.format("%06x", hl.fg or 0)
 
-local hl_lsp_ns = vim.api.nvim_get_hl(0, {name = "@lsp.type.namespace", link = false})
-local lsp_ns_fg = string.format("%06x", hl_lsp_ns.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@lsp.type.namespace", link = false})
+results["lsp_ns_fg"] = string.format("%06x", hl.fg or 0)
 
-local r_t, c_t = find_pos(cpp_buf, "template <Printable T>", "T>", 18)
-local is_t_type = match_capture(cpp_buf, r_t, c_t, "type")
+r, c = find_pos(cpp_buf, "template <Printable T>", "T>", 18)
+results["is_t_type"] = tostring(match_capture(cpp_buf, r, c, "type"))
 
-local r_core, c_core = find_pos(cpp_buf, "namespace core::telemetry", "core")
-local is_core_mod = match_capture(cpp_buf, r_core, c_core, "module")
+r, c = find_pos(cpp_buf, "namespace core::telemetry", "namespace")
+results["is_ns_kw"] = tostring(match_capture(cpp_buf, r, c, "keyword.type"))
 
-local r_telem, c_telem = find_pos(cpp_buf, "namespace core::telemetry", "telemetry")
-local is_telem_mod = match_capture(cpp_buf, r_telem, c_telem, "module")
+r, c = find_pos(cpp_buf, "using namespace core::telemetry;", "using")
+results["is_using_kw"] = tostring(match_capture(cpp_buf, r, c, "keyword"))
 
-local r_init, c_init = find_pos(cpp_buf, "NodeState::Initializing", "Initializing")
-local is_init_const = match_capture(cpp_buf, r_init, c_init, "constant")
+r, c = find_pos(cpp_buf, "namespace core::telemetry", "core")
+results["is_core_mod"] = tostring(match_capture(cpp_buf, r, c, "module"))
 
-local r_null, c_null = find_pos(cpp_buf, "return std::nullopt;", "nullopt")
-local is_nullopt_const = match_capture(cpp_buf, r_null, c_null, "constant")
+r, c = find_pos(cpp_buf, "namespace core::telemetry", "telemetry")
+results["is_telem_mod"] = tostring(match_capture(cpp_buf, r, c, "module"))
 
-local r_std, c_std = find_pos(cpp_buf, "return std::nullopt;", "std")
-local is_std_var = match_capture(cpp_buf, r_std, c_std, "variable")
+r, c = find_pos(cpp_buf, "NodeState::Initializing", "Initializing")
+results["is_init_const"] = tostring(match_capture(cpp_buf, r, c, "constant"))
 
-local r_attr, c_attr = find_pos(cpp_buf, "[[nodiscard]]", "nodiscard")
-local is_attr_orange = match_capture(cpp_buf, r_attr, c_attr, "attribute")
+r, c = find_pos(cpp_buf, "return std::nullopt;", "nullopt")
+results["is_nullopt_const"] = tostring(match_capture(cpp_buf, r, c, "constant"))
 
-local hl_attr = vim.api.nvim_get_hl(0, {name = "@attribute", link = false})
-local attr_fg = string.format("%06x", hl_attr.fg or 0)
+r, c = find_pos(cpp_buf, "return std::nullopt;", "std")
+results["is_std_var"] = tostring(match_capture(cpp_buf, r, c, "variable"))
+
+r, c = find_pos(cpp_buf, "[[nodiscard]]", "nodiscard")
+results["is_attr_orange"] = tostring(match_capture(cpp_buf, r, c, "attribute"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@attribute.cpp", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@attribute", link = false}) end
+results["attr_fg"] = string.format("%06x", hl.fg or 0)
+
+r, c = find_pos(cpp_buf, "if (payload_history_.empty()) {", "if")
+results["is_cpp_if_cond"] = tostring(match_capture(cpp_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(cpp_buf, "std::for_each(", "for_each")
+results["is_cpp_fe_call"] = tostring(match_capture(cpp_buf, r, c, "function.call"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.cpp", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_cpp_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.builtin.cpp", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_cpp_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.cpp", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_cpp_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@function.call.cpp", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_cpp_fg"] = string.format("%06x", hl.fg or 0)
 
 -- 3. Inspect Java (sample.java)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.java")
 vim.cmd("redraw")
 local java_buf = vim.api.nvim_get_current_buf()
-local java_ft = vim.bo.filetype
+results["java_ft"] = vim.bo.filetype
 local ok_jdtls, _ = pcall(require, "jdtls")
+results["ok_jdtls"] = tostring(ok_jdtls)
 
-local r_j_imp, c_j_imp = find_pos(java_buf, "import java.time.Instant;", "import")
-local is_j_imp_kw = match_capture(java_buf, r_j_imp, c_j_imp, "keyword.import")
+r, c = find_pos(java_buf, "import java.time.Instant;", "import")
+results["is_j_imp_kw"] = tostring(match_capture(java_buf, r, c, "keyword.import"))
 
-local r_j_rec, c_j_rec = find_pos(java_buf, "record OrderRecord(", "record")
-local is_j_rec_kw = match_capture(java_buf, r_j_rec, c_j_rec, "keyword.type")
+r, c = find_pos(java_buf, "record OrderRecord(", "record")
+results["is_j_rec_kw"] = tostring(match_capture(java_buf, r, c, "keyword.type"))
 
-local r_j_ann, c_j_ann = find_pos(java_buf, "@Service", "@Service")
-local is_j_ann = match_capture(java_buf, r_j_ann, c_j_ann, "attribute")
+r, c = find_pos(java_buf, "@Service", "@Service")
+results["is_j_ann"] = tostring(match_capture(java_buf, r, c, "attribute"))
 
-local r_j_pat, c_j_pat = find_pos(java_buf, "case OrderRecord(", "OrderRecord")
-local is_j_pat_type = match_capture(java_buf, r_j_pat, c_j_pat, "type")
+r, c = find_pos(java_buf, "case OrderRecord(", "OrderRecord")
+results["is_j_pat_type"] = tostring(match_capture(java_buf, r, c, "type"))
 
-local r_j_when, c_j_when = find_pos(java_buf, "when amount >=", "when")
-local is_j_when_kw = match_capture(java_buf, r_j_when, c_j_when, "keyword.conditional")
+r, c = find_pos(java_buf, "when amount >=", "when")
+results["is_j_when_kw"] = tostring(match_capture(java_buf, r, c, "keyword.conditional"))
 
-local r_j_this, c_j_this = find_pos(java_buf, "this.timeoutMs", "this")
-local is_j_this_var = match_capture(java_buf, r_j_this, c_j_this, "variable.builtin")
-local hl_var_bi = vim.api.nvim_get_hl(0, {name = "@variable.builtin", link = false})
-local var_bi_fg = string.format("%06x", hl_var_bi.fg or 0)
+r, c = find_pos(java_buf, "this.timeoutMs", "this")
+results["is_j_this_var"] = tostring(match_capture(java_buf, r, c, "variable.builtin"))
+hl = vim.api.nvim_get_hl(0, {name = "@variable.builtin", link = false})
+results["var_bi_fg"] = string.format("%06x", hl.fg or 0)
 
-local r_j_super, c_j_super = find_pos(java_buf, "super(timeoutMs);", "super")
-local is_j_super_call = match_capture(java_buf, r_j_super, c_j_super, "function.builtin")
+r, c = find_pos(java_buf, "super(timeoutMs);", "super")
+results["is_j_super_call"] = tostring(match_capture(java_buf, r, c, "function.builtin"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.java", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_java_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.builtin.java", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_java_fg"] = string.format("%06x", hl.fg or 0)
 
 -- 4. Inspect Diff (sample.diff)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.diff")
 vim.cmd("redraw")
 local diff_buf = vim.api.nvim_get_current_buf()
 
-local hl_plus = vim.api.nvim_get_hl(0, {name = "@diff.plus", link = false})
-local diff_plus_fg = string.format("%06x", hl_plus.fg or 0)
-local hl_minus = vim.api.nvim_get_hl(0, {name = "@diff.minus", link = false})
-local diff_minus_fg = string.format("%06x", hl_minus.fg or 0)
-local hl_line = vim.api.nvim_get_hl(0, {name = "@diff.line", link = false})
-local diff_line_fg = string.format("%06x", hl_line.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@diff.plus", link = false})
+results["diff_plus_fg"] = string.format("%06x", hl.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@diff.minus", link = false})
+results["diff_minus_fg"] = string.format("%06x", hl.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@diff.line", link = false})
+results["diff_line_fg"] = string.format("%06x", hl.fg or 0)
 
-local r_del, c_del = find_pos(diff_buf, "maxRetries", "-")
-local is_del_minus = match_capture(diff_buf, r_del, c_del, "diff.minus")
+r, c = find_pos(diff_buf, "maxRetries", "-")
+results["is_del_minus"] = tostring(match_capture(diff_buf, r, c, "diff.minus"))
 
-local r_add, c_add = find_pos(diff_buf, "Maximum retry attempts", "+")
-local is_add_plus = match_capture(diff_buf, r_add, c_add, "diff.plus")
+r, c = find_pos(diff_buf, "Maximum retry attempts", "+")
+results["is_add_plus"] = tostring(match_capture(diff_buf, r, c, "diff.plus"))
 
-local r_hunk, c_hunk = find_pos(diff_buf, "@@ -32,18 +32,22 @@", "@@")
-local is_hunk_line = match_capture(diff_buf, r_hunk, c_hunk, "diff.line")
+r, c = find_pos(diff_buf, "@@ -32,18 +32,22 @@", "@@")
+results["is_hunk_line"] = tostring(match_capture(diff_buf, r, c, "diff.line"))
 
 -- 5. Inspect Go (sample.go)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.go")
 vim.cmd("redraw")
 local go_buf = vim.api.nvim_get_current_buf()
 
-local r_pkg, c_pkg = find_pos(go_buf, "package main", "package")
-local is_pkg_kw = match_capture(go_buf, r_pkg, c_pkg, "keyword")
-local hl_kw = vim.api.nvim_get_hl(0, {name = "@keyword", link = false})
-local pkg_fg = string.format("%06x", hl_kw.fg or 0)
+r, c = find_pos(go_buf, "package main", "package")
+results["is_pkg_kw"] = tostring(match_capture(go_buf, r, c, "keyword"))
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.go", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword", link = false}) end
+results["pkg_fg"] = string.format("%06x", hl.fg or 0)
 
-local r_imp, c_imp = find_pos(go_buf, "import (", "import")
-local is_imp_kw = match_capture(go_buf, r_imp, c_imp, "keyword.import")
-local hl_imp = vim.api.nvim_get_hl(0, {name = "@keyword.import", link = false})
-local imp_fg = string.format("%06x", hl_imp.fg or 0)
+r, c = find_pos(go_buf, "import (", "import")
+results["is_imp_kw"] = tostring(match_capture(go_buf, r, c, "keyword.import"))
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.import.go", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.import", link = false}) end
+results["imp_fg"] = string.format("%06x", hl.fg or 0)
 
-local r_main, c_main = find_pos(go_buf, "package main", "main")
-local is_main_mod = match_capture(go_buf, r_main, c_main, "module")
+r, c = find_pos(go_buf, "package main", "main")
+results["is_main_mod"] = tostring(match_capture(go_buf, r, c, "module"))
 
-local r_ctx, c_ctx = find_pos(go_buf, "ctx context.Context", "context")
-local is_ctx_var = match_capture(go_buf, r_ctx, c_ctx, "variable")
+r, c = find_pos(go_buf, "ctx context.Context", "context")
+results["is_ctx_var"] = tostring(match_capture(go_buf, r, c, "variable"))
 
-local r_ld, c_ld = find_pos(go_buf, "LevelDebug LogLevel = iota", "LevelDebug")
-local is_ld_const = match_capture(go_buf, r_ld, c_ld, "constant")
+r, c = find_pos(go_buf, "LevelDebug LogLevel = iota", "LevelDebug")
+results["is_ld_const"] = tostring(match_capture(go_buf, r, c, "constant"))
 
-local r_ncn, c_ncn = find_pos(go_buf, "node, err := NewClusterNode(cfg)", "NewClusterNode")
-local is_ncn_call = match_capture(go_buf, r_ncn, c_ncn, "function.call")
-local hl_fcall = vim.api.nvim_get_hl(0, {name = "@function.call", link = false})
-local fcall_fg = string.format("%06x", hl_fcall.fg or 0)
+r, c = find_pos(go_buf, "node, err := NewClusterNode(cfg)", "NewClusterNode")
+results["is_ncn_call"] = tostring(match_capture(go_buf, r, c, "function.call"))
+hl = vim.api.nvim_get_hl(0, {name = "@function.call.go", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_fg"] = string.format("%06x", hl.fg or 0)
+
+r, c = find_pos(go_buf, "defer c.mu.RUnlock()", "defer")
+results["is_defer_cond"] = tostring(match_capture(go_buf, r, c, "keyword.conditional"))
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.go", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_go_fg"] = string.format("%06x", hl.fg or 0)
+
+r, c = find_pos(go_buf, "select {", "select")
+results["is_select_cond"] = tostring(match_capture(go_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(go_buf, "case <-ctx.Done():", "case")
+results["is_case_cond"] = tostring(match_capture(go_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(go_buf, "default:", "default")
+results["is_default_cond"] = tostring(match_capture(go_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(go_buf, "panic(err)", "panic")
+results["is_panic_call"] = tostring(match_capture(go_buf, r, c, "function.call"))
+
+r, c = find_pos(go_buf, "ctx context.Context", "Context")
+results["is_t_ctx_type"] = tostring(match_capture(go_buf, r, c, "type"))
+hl = vim.api.nvim_get_hl(0, {name = "@type.go", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_go_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.builtin.go", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_go_fg"] = string.format("%06x", hl.fg or 0)
 
 -- 6. Inspect Python (sample.py)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.py")
 vim.cmd("redraw")
 local py_buf = vim.api.nvim_get_current_buf()
 
-local r_py_from, c_py_from = find_pos(py_buf, "from __future__ import annotations", "from")
-local is_py_from_kw = match_capture(py_buf, r_py_from, c_py_from, "keyword.import")
+r, c = find_pos(py_buf, "from __future__ import annotations", "from")
+results["is_py_from_kw"] = tostring(match_capture(py_buf, r, c, "keyword.import"))
 
-local r_py_async, c_py_async = find_pos(py_buf, "import asyncio", "asyncio")
-local is_py_async_mod = match_capture(py_buf, r_py_async, c_py_async, "module")
+r, c = find_pos(py_buf, "import asyncio", "asyncio")
+results["is_py_async_mod"] = tostring(match_capture(py_buf, r, c, "module"))
 
-local r_py_call, c_py_call = find_pos(py_buf, "def timed_execution(func: Callable[..., Any])", "Callable")
-local is_py_call_type = match_capture(py_buf, r_py_call, c_py_call, "type")
+r, c = find_pos(py_buf, "def timed_execution(func: Callable[..., Any])", "Callable")
+results["is_py_call_type"] = tostring(match_capture(py_buf, r, c, "type"))
 
-local r_py_dc, c_py_dc = find_pos(py_buf, "@dataclass(frozen=True)", "@dataclass")
-local is_py_dc_attr = match_capture(py_buf, r_py_dc, c_py_dc + 1, "attribute")
+r, c = find_pos(py_buf, "DEFAULT_PORT: int = 8080", "int")
+results["is_py_int_type"] = tostring(match_capture(py_buf, r, c, "type.builtin"))
 
-local r_py_prop, c_py_prop = find_pos(py_buf, "@property", "@property")
-local is_py_prop_attr = match_capture(py_buf, r_py_prop, c_py_prop + 1, "attribute")
+r, c = find_pos(py_buf, "path: str", "str")
+results["is_py_str_type"] = tostring(match_capture(py_buf, r, c, "type.builtin"))
 
-local r_py_self, c_py_self = find_pos(py_buf, "def summary(self) -> str:", "self")
-local is_py_self_var = match_capture(py_buf, r_py_self, c_py_self, "variable.builtin")
+r, c = find_pos(py_buf, "metadata: dict[str, str | int | bool]", "dict")
+results["is_py_dict_type"] = tostring(match_capture(py_buf, r, c, "type.builtin"))
 
-local r_py_init, c_py_init = find_pos(py_buf, "def __init__(self, service_name: str) -> None:", "__init__")
-local is_py_init_meth = match_capture(py_buf, r_py_init, c_py_init, "function.method")
+r, c = find_pos(py_buf, "self._buffer: list[EndpointMetrics] = []", "list")
+results["is_py_list_type"] = tostring(match_capture(py_buf, r, c, "type.builtin"))
 
-local r_py_ep, c_py_ep = find_pos(py_buf, "EndpointMetrics(\"/health\",", "EndpointMetrics")
-local is_py_ep_ctor = match_capture(py_buf, r_py_ep, c_py_ep, "constructor")
+r, c = find_pos(py_buf, "@dataclass(frozen=True)", "@dataclass")
+results["is_py_dc_attr"] = tostring(match_capture(py_buf, r, c + 1, "attribute"))
 
-local r_py_name, c_py_name = find_pos(py_buf, "if __name__ == \"__main__\":", "__name__")
-local is_py_name_const = match_capture(py_buf, r_py_name, c_py_name, "constant.builtin")
+r, c = find_pos(py_buf, "@property", "@property")
+results["is_py_prop_attr"] = tostring(match_capture(py_buf, r, c + 1, "attribute"))
+
+r, c = find_pos(py_buf, "def summary(self) -> str:", "self")
+results["is_py_self_var"] = tostring(match_capture(py_buf, r, c, "variable.builtin"))
+
+r, c = find_pos(py_buf, "def __init__(self, service_name: str) -> None:", "__init__")
+results["is_py_init_meth"] = tostring(match_capture(py_buf, r, c, "function.method"))
+
+r, c = find_pos(py_buf, "EndpointMetrics(\"/health\",", "EndpointMetrics")
+results["is_py_ep_ctor"] = tostring(match_capture(py_buf, r, c, "constructor"))
+
+r, c = find_pos(py_buf, "if __name__ == \"__main__\":", "__name__")
+results["is_py_name_const"] = tostring(match_capture(py_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(py_buf, "func.__name__", "__name__")
+results["is_py_func_name_const"] = tostring(match_capture(py_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(py_buf, "elapsed:.4f", ".4f")
+results["is_py_fspec_str"] = tostring(match_capture(py_buf, r, c, "string"))
 
 -- 7. Inspect Rust (sample.rs)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.rs")
 vim.cmd("redraw")
 local rs_buf = vim.api.nvim_get_current_buf()
 
-local r_rs_use, c_rs_use = find_pos(rs_buf, "use std::collections::HashMap;", "use")
-local is_rs_use_kw = match_capture(rs_buf, r_rs_use, c_rs_use, "keyword.import")
+r, c = find_pos(rs_buf, "use std::collections::HashMap;", "use")
+results["is_rs_use_kw"] = tostring(match_capture(rs_buf, r, c, "keyword.import"))
 
-local r_rs_std, c_rs_std = find_pos(rs_buf, "use std::collections::HashMap;", "std")
-local is_rs_std_mod = match_capture(rs_buf, r_rs_std, c_rs_std, "module")
+r, c = find_pos(rs_buf, "use std::collections::HashMap;", "std")
+results["is_rs_std_mod"] = tostring(match_capture(rs_buf, r, c, "module"))
 
-local r_rs_map, c_rs_map = find_pos(rs_buf, "use std::collections::HashMap;", "HashMap")
-local is_rs_map_type = match_capture(rs_buf, r_rs_map, c_rs_map, "type")
+r, c = find_pos(rs_buf, "use std::collections::HashMap;", "HashMap")
+results["is_rs_map_type"] = tostring(match_capture(rs_buf, r, c, "type"))
 
-local r_rs_max, c_rs_max = find_pos(rs_buf, "const MAX_CONNECTIONS: usize = 128;", "MAX_CONNECTIONS")
-local is_rs_max_const = match_capture(rs_buf, r_rs_max, c_rs_max, "constant")
+r, c = find_pos(rs_buf, "const MAX_CONNECTIONS: usize = 128;", "MAX_CONNECTIONS")
+results["is_rs_max_const"] = tostring(match_capture(rs_buf, r, c, "constant"))
 
-local r_rs_drv, c_rs_drv = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "derive")
-local is_rs_drv_attr = match_capture(rs_buf, r_rs_drv, c_rs_drv, "attribute")
+r, c = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "derive")
+results["is_rs_drv_attr"] = tostring(match_capture(rs_buf, r, c, "attribute"))
 
-local r_rs_hash, c_rs_hash = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "#")
-local is_rs_hash_attr = match_capture(rs_buf, r_rs_hash, c_rs_hash, "attribute")
+r, c = find_pos(rs_buf, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "#")
+results["is_rs_hash_attr"] = tostring(match_capture(rs_buf, r, c, "attribute"))
 
-local r_rs_inl, c_rs_inl = find_pos(rs_buf, "#[inline]", "inline")
-local is_rs_inl_attr = match_capture(rs_buf, r_rs_inl, c_rs_inl, "attribute")
+r, c = find_pos(rs_buf, "#[inline]", "inline")
+results["is_rs_inl_attr"] = tostring(match_capture(rs_buf, r, c, "attribute"))
 
-local r_rs_start, c_rs_start = find_pos(rs_buf, "    Starting,", "Starting")
-local is_rs_start_const = match_capture(rs_buf, r_rs_start, c_rs_start, "constant")
+r, c = find_pos(rs_buf, "    Starting,", "Starting")
+results["is_rs_start_const"] = tostring(match_capture(rs_buf, r, c, "constant"))
 
-local r_rs_self, c_rs_self = find_pos(rs_buf, "    pub fn inspect_state(&self) ->", "self")
-local is_rs_self_var = match_capture(rs_buf, r_rs_self, c_rs_self, "variable.builtin")
+r, c = find_pos(rs_buf, "    pub fn inspect_state(&self) ->", "self")
+results["is_rs_self_var"] = tostring(match_capture(rs_buf, r, c, "variable.builtin"))
 
-local r_rs_print, c_rs_print = find_pos(rs_buf, "    println!(\"Max connections:", "println")
-local is_rs_print_macro = match_capture(rs_buf, r_rs_print, c_rs_print, "function.macro")
+r, c = find_pos(rs_buf, "    println!(\"Max connections:", "println")
+results["is_rs_print_macro"] = tostring(match_capture(rs_buf, r, c, "function.macro"))
 
-local r_rs_lt, c_rs_lt = find_pos(rs_buf, "find_by_id", string.char(39) .. "a")
-local is_rs_lt_mod = match_capture(rs_buf, r_rs_lt, c_rs_lt + 1, "keyword.modifier")
+r, c = find_pos(rs_buf, "find_by_id", string.char(39) .. "a")
+results["is_rs_lt_mod"] = tostring(match_capture(rs_buf, r, c + 1, "keyword.modifier"))
 
 -- 8. Inspect Shell (sample.sh)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.sh")
 vim.cmd("redraw")
 local sh_buf = vim.api.nvim_get_current_buf()
 
-local r_sh, c_sh
-r_sh, c_sh = find_pos(sh_buf, "readonly SCRIPT_NAME", "readonly")
-local is_sh_ro_kw = match_capture(sh_buf, r_sh, c_sh, "keyword")
+r, c = find_pos(sh_buf, "readonly SCRIPT_NAME", "readonly")
+results["is_sh_ro_kw"] = tostring(match_capture(sh_buf, r, c, "keyword"))
 
-r_sh, c_sh = find_pos(sh_buf, "readonly SCRIPT_NAME", "SCRIPT_NAME")
-local is_sh_sn_const = match_capture(sh_buf, r_sh, c_sh, "constant")
+r, c = find_pos(sh_buf, "readonly SCRIPT_NAME", "SCRIPT_NAME")
+results["is_sh_sn_const"] = tostring(match_capture(sh_buf, r, c, "constant"))
 
-r_sh, c_sh = find_pos(sh_buf, "SCRIPT_NAME=\"$(basename \"$0\")\"", "basename")
-local is_sh_base_func = match_capture(sh_buf, r_sh, c_sh, "function.call")
+r, c = find_pos(sh_buf, "SCRIPT_NAME=\"$(basename \"$0\")\"", "basename")
+results["is_sh_base_func"] = tostring(match_capture(sh_buf, r, c, "function.call"))
 
-r_sh, c_sh = find_pos(sh_buf, "SCRIPT_NAME=\"$(basename \"$0\")\"", "0")
-local is_sh_p0_const = match_capture(sh_buf, r_sh, c_sh, "constant.builtin")
+r, c = find_pos(sh_buf, "SCRIPT_NAME=\"$(basename \"$0\")\"", "0")
+results["is_sh_p0_const"] = tostring(match_capture(sh_buf, r, c, "constant.builtin"))
 
-r_sh, c_sh = find_pos(sh_buf, "trap cleanup EXIT", "trap")
-local is_sh_trap_func = match_capture(sh_buf, r_sh, c_sh, "function.builtin")
+r, c = find_pos(sh_buf, "trap cleanup EXIT", "trap")
+results["is_sh_trap_func"] = tostring(match_capture(sh_buf, r, c, "function.builtin"))
 
-r_sh, c_sh = find_pos(sh_buf, "trap cleanup EXIT", "EXIT")
-local is_sh_exit_const = match_capture(sh_buf, r_sh, c_sh, "constant.builtin")
+r, c = find_pos(sh_buf, "trap cleanup EXIT", "EXIT")
+results["is_sh_exit_const"] = tostring(match_capture(sh_buf, r, c, "constant.builtin"))
 
-r_sh, c_sh = find_pos(sh_buf, "cleanup() {", "cleanup")
-local is_sh_clean_func = match_capture(sh_buf, r_sh, c_sh, "function")
+r, c = find_pos(sh_buf, "cleanup() {", "cleanup")
+results["is_sh_clean_func"] = tostring(match_capture(sh_buf, r, c, "function"))
 
-r_sh, c_sh = find_pos(sh_buf, "local -r exit_code=$?", "exit_code")
-local is_sh_ec_var = match_capture(sh_buf, r_sh, c_sh, "variable")
+r, c = find_pos(sh_buf, "local -r exit_code=$?", "exit_code")
+results["is_sh_ec_var"] = tostring(match_capture(sh_buf, r, c, "variable"))
 
-local results = {
-    param_italic = param_italic,
-    const_fg = const_fg,
-    is_wn_type = tostring(is_wn_type),
-    is_so_kw = tostring(is_so_kw),
-    is_t_type = tostring(is_t_type),
-    java_ft = java_ft,
-    ok_jdtls = tostring(ok_jdtls),
-    is_j_imp_kw = tostring(is_j_imp_kw),
-    is_j_rec_kw = tostring(is_j_rec_kw),
-    is_j_ann = tostring(is_j_ann),
-    is_j_pat_type = tostring(is_j_pat_type),
-    is_j_when_kw = tostring(is_j_when_kw),
-    is_j_this_var = tostring(is_j_this_var),
-    var_bi_fg = var_bi_fg,
-    is_j_super_call = tostring(is_j_super_call),
-    module_fg = module_fg,
-    lsp_ns_fg = lsp_ns_fg,
-    is_core_mod = tostring(is_core_mod),
-    is_init_const = tostring(is_init_const),
-    is_nullopt_const = tostring(is_nullopt_const),
-    is_telem_mod = tostring(is_telem_mod),
-    is_std_var = tostring(is_std_var),
-    attr_fg = attr_fg,
-    is_attr_orange = tostring(is_attr_orange),
-    diff_plus_fg = diff_plus_fg,
-    is_add_plus = tostring(is_add_plus),
-    diff_minus_fg = diff_minus_fg,
-    is_del_minus = tostring(is_del_minus),
-    diff_line_fg = diff_line_fg,
-    is_hunk_line = tostring(is_hunk_line),
-    is_pkg_kw = tostring(is_pkg_kw),
-    pkg_fg = pkg_fg,
-    is_imp_kw = tostring(is_imp_kw),
-    imp_fg = imp_fg,
-    is_main_mod = tostring(is_main_mod),
-    is_ctx_var = tostring(is_ctx_var),
-    is_ld_const = tostring(is_ld_const),
-    is_ncn_call = tostring(is_ncn_call),
-    fcall_fg = fcall_fg,
-    is_py_from_kw = tostring(is_py_from_kw),
-    is_py_async_mod = tostring(is_py_async_mod),
-    is_py_call_type = tostring(is_py_call_type),
-    is_py_dc_attr = tostring(is_py_dc_attr),
-    is_py_prop_attr = tostring(is_py_prop_attr),
-    is_py_self_var = tostring(is_py_self_var),
-    is_py_init_meth = tostring(is_py_init_meth),
-    is_py_ep_ctor = tostring(is_py_ep_ctor),
-    is_py_name_const = tostring(is_py_name_const),
-    is_rs_use_kw = tostring(is_rs_use_kw),
-    is_rs_std_mod = tostring(is_rs_std_mod),
-    is_rs_map_type = tostring(is_rs_map_type),
-    is_rs_max_const = tostring(is_rs_max_const),
-    is_rs_drv_attr = tostring(is_rs_drv_attr),
-    is_rs_hash_attr = tostring(is_rs_hash_attr),
-    is_rs_inl_attr = tostring(is_rs_inl_attr),
-    is_rs_start_const = tostring(is_rs_start_const),
-    is_rs_self_var = tostring(is_rs_self_var),
-    is_rs_print_macro = tostring(is_rs_print_macro),
-    is_rs_lt_mod = tostring(is_rs_lt_mod),
-    is_sh_ro_kw = tostring(is_sh_ro_kw),
-    is_sh_sn_const = tostring(is_sh_sn_const),
-    is_sh_base_func = tostring(is_sh_base_func),
-    is_sh_p0_const = tostring(is_sh_p0_const),
-    is_sh_trap_func = tostring(is_sh_trap_func),
-    is_sh_exit_const = tostring(is_sh_exit_const),
-    is_sh_clean_func = tostring(is_sh_clean_func),
-    is_sh_ec_var = tostring(is_sh_ec_var),
-}
+r, c = find_pos(sh_buf, "if [[ $exit_code", "if")
+results["is_sh_if_cond"] = tostring(match_capture(sh_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(sh_buf, "for svc in", "for")
+results["is_sh_for_rep"] = tostring(match_capture(sh_buf, r, c, "keyword.repeat"))
+
+r, c = find_pos(sh_buf, "case \"$level\" in", "case")
+results["is_sh_case_cond"] = tostring(match_capture(sh_buf, r, c, "keyword.conditional"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.bash", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_sh_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.bash", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword", link = false}) end
+results["kw_sh_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@function.bash", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function", link = false}) end
+results["fn_sh_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@function.call.bash", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_sh_fg"] = string.format("%06x", hl.fg or 0)
 
 -- Note: Populate additional probe assertions directly on the results table
 -- to avoid triggering the Lua 5.1 / LuaJIT 200 local variable chunk limit (E5107).
+r_sh, c_sh = find_pos(py_buf, "try:", "try")
+results["is_py_try_kw"] = tostring(match_capture(py_buf, r_sh, c_sh, "keyword.exception"))
+
+r_sh, c_sh = find_pos(py_buf, "return await func(*args, **kwargs)", "await")
+results["is_py_await_kw"] = tostring(match_capture(py_buf, r_sh, c_sh, "keyword.coroutine"))
+
+r_sh, c_sh = find_pos(py_buf, "asyncio.sleep(0.02)", "sleep")
+results["is_py_sleep_call"] = tostring(match_capture(py_buf, r_sh, c_sh, "function.method.call") or match_capture(py_buf, r_sh, c_sh, "function.call"))
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@type.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@type.builtin.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@attribute.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@attribute", link = false}) end
+results["attr_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.import.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.import", link = false}) end
+results["imp_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@function.call.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@constructor.python", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@constructor", link = false}) end
+results["ctor_py_fg"] = string.format("%06x", hl_const.fg or 0)
+
+r_sh, c_sh = find_pos(rs_buf, "match self.status {", "match")
+results["is_rs_match_kw"] = tostring(match_capture(rs_buf, r_sh, c_sh, "keyword.conditional"))
+
+r_sh, c_sh = find_pos(rs_buf, "ServerNode::new(101,", "new")
+results["is_rs_new_call"] = tostring(match_capture(rs_buf, r_sh, c_sh, "function.call"))
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@type.rust", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_rs_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@type.builtin.rust", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_rs_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@attribute.rust", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@attribute", link = false}) end
+results["attr_rs_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.import.rust", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.import", link = false}) end
+results["imp_rs_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.rust", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_rs_fg"] = string.format("%06x", hl_const.fg or 0)
+
+hl_const = vim.api.nvim_get_hl(0, {name = "@function.call.rust", link = false})
+if not hl_const.fg then hl_const = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_rs_fg"] = string.format("%06x", hl_const.fg or 0)
+
 r_sh, c_sh = find_pos(sh_buf, ">&2", ">&2")
 results["is_sh_gt_op"] = tostring(match_capture(sh_buf, r_sh, c_sh, "operator"))
 results["is_sh_fd2_num"] = tostring(match_capture(sh_buf, r_sh, c_sh + 2, "number"))
@@ -576,133 +726,285 @@ results["is_sh_sub_at"] = tostring(match_capture(sh_buf, r_sh, c_sh, "character.
 r_sh, c_sh = find_pos(sh_buf, "main \"$@\"", "@")
 results["is_sh_pos_at"] = tostring(match_capture(sh_buf, r_sh, c_sh, "constant"))
 
+r_sh, c_sh = find_pos(sh_buf, "local -r exit_code=$?", "$")
+results["is_sh_dollar_punc"] = tostring(match_capture(sh_buf, r_sh, c_sh, "punctuation.special"))
+hl = vim.api.nvim_get_hl(0, {name = "@punctuation.special.bash", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@punctuation.special", link = false}) end
+results["dollar_sh_fg"] = string.format("%06x", hl.fg or 0)
+
 -- 9. Inspect SQL (sample.sql)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.sql")
 vim.cmd("redraw")
 local sql_buf = vim.api.nvim_get_current_buf()
 
-local r_sql, c_sql
-r_sql, c_sql = find_pos(sql_buf, "CREATE TABLE IF NOT EXISTS customer_accounts", "CREATE")
-results["is_sql_create_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
+r, c = find_pos(sql_buf, "CREATE TABLE IF NOT EXISTS customer_accounts", "CREATE")
+results["is_sql_create_kw"] = tostring(match_capture(sql_buf, r, c, "keyword"))
 
-r_sql, c_sql = find_pos(sql_buf, "CREATE TABLE IF NOT EXISTS customer_accounts", "customer_accounts")
-results["is_sql_table_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type"))
+r, c = find_pos(sql_buf, "CREATE TABLE IF NOT EXISTS customer_accounts", "customer_accounts")
+results["is_sql_table_type"] = tostring(match_capture(sql_buf, r, c, "type"))
 
-r_sql, c_sql = find_pos(sql_buf, "account_id BIGSERIAL PRIMARY KEY", "BIGSERIAL")
-results["is_sql_serial_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type.builtin"))
+r, c = find_pos(sql_buf, "account_id BIGSERIAL PRIMARY KEY", "BIGSERIAL")
+results["is_sql_serial_type"] = tostring(match_capture(sql_buf, r, c, "type.builtin"))
 
-r_sql, c_sql = find_pos(sql_buf, "plan_tier VARCHAR", "DEFAULT")
-results["is_sql_default_attr"] = tostring(match_capture(sql_buf, r_sql, c_sql, "attribute"))
+r, c = find_pos(sql_buf, "plan_tier VARCHAR", "DEFAULT")
+results["is_sql_default_attr"] = tostring(match_capture(sql_buf, r, c, "attribute"))
 
-r_sql, c_sql = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "NULL")
-results["is_sql_null_const"] = tostring(match_capture(sql_buf, r_sql, c_sql, "constant.builtin"))
+r, c = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "NULL")
+results["is_sql_null_const"] = tostring(match_capture(sql_buf, r, c, "constant.builtin"))
 
-r_sql, c_sql = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "TRUE")
-results["is_sql_true_bool"] = tostring(match_capture(sql_buf, r_sql, c_sql, "boolean"))
+r, c = find_pos(sql_buf, "is_active BOOLEAN NOT NULL DEFAULT TRUE", "TRUE")
+results["is_sql_true_bool"] = tostring(match_capture(sql_buf, r, c, "boolean"))
 
-r_sql, c_sql = find_pos(sql_buf, "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()", "NOW")
-results["is_sql_now_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+r, c = find_pos(sql_buf, "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()", "NOW")
+results["is_sql_now_func"] = tostring(match_capture(sql_buf, r, c, "function.call"))
 
-r_sql, c_sql = find_pos(sql_buf, "transaction_id UUID PRIMARY KEY", "UUID")
-results["is_sql_uuid_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type.builtin"))
+r, c = find_pos(sql_buf, "transaction_id UUID PRIMARY KEY", "UUID")
+results["is_sql_uuid_type"] = tostring(match_capture(sql_buf, r, c, "type.builtin"))
 
-r_sql, c_sql = find_pos(sql_buf, "CREATE INDEX IF NOT EXISTS idx_ledger_account_settled", "idx_ledger_account_settled")
-results["is_sql_index_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type"))
+r, c = find_pos(sql_buf, "CREATE INDEX IF NOT EXISTS idx_ledger_account_settled", "idx_ledger_account_settled")
+results["is_sql_index_type"] = tostring(match_capture(sql_buf, r, c, "type"))
 
-r_sql, c_sql = find_pos(sql_buf, "WITH monthly_billing_summary AS (", "monthly_billing_summary")
-results["is_sql_cte_type"] = tostring(match_capture(sql_buf, r_sql, c_sql, "type"))
+r, c = find_pos(sql_buf, "WITH monthly_billing_summary AS (", "monthly_billing_summary")
+results["is_sql_cte_type"] = tostring(match_capture(sql_buf, r, c, "type"))
 
-r_sql, c_sql = find_pos(sql_buf, "        a.account_id,", "a")
-results["is_sql_alias_var"] = tostring(match_capture(sql_buf, r_sql, c_sql, "variable"))
+r, c = find_pos(sql_buf, "        a.account_id,", "a")
+results["is_sql_alias_var"] = tostring(match_capture(sql_buf, r, c, "variable"))
 
-r_sql, c_sql = find_pos(sql_buf, "        a.account_id,", "account_id")
-results["is_sql_col_member"] = tostring(match_capture(sql_buf, r_sql, c_sql, "variable.member"))
+r, c = find_pos(sql_buf, "        a.account_id,", "account_id")
+results["is_sql_col_member"] = tostring(match_capture(sql_buf, r, c, "variable.member"))
 
-r_sql, c_sql = find_pos(sql_buf, "COUNT(t.transaction_id)", "COUNT")
-results["is_sql_count_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+r, c = find_pos(sql_buf, "COUNT(t.transaction_id)", "COUNT")
+results["is_sql_count_func"] = tostring(match_capture(sql_buf, r, c, "function.call"))
 
-r_sql, c_sql = find_pos(sql_buf, "        CASE", "CASE")
-results["is_sql_case_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword.conditional"))
+r, c = find_pos(sql_buf, "        CASE", "CASE")
+results["is_sql_case_kw"] = tostring(match_capture(sql_buf, r, c, "keyword.conditional"))
 
-r_sql, c_sql = find_pos(sql_buf, "THEN 0.15", "0.15")
-results["is_sql_num_float"] = tostring(match_capture(sql_buf, r_sql, c_sql, "number.float"))
+r, c = find_pos(sql_buf, "THEN 0.15", "0.15")
+results["is_sql_num_float"] = tostring(match_capture(sql_buf, r, c, "number.float"))
 
-r_sql, c_sql = find_pos(sql_buf, "ROUND(s.aggregate_spend", "ROUND")
-results["is_sql_round_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+r, c = find_pos(sql_buf, "ROUND(s.aggregate_spend", "ROUND")
+results["is_sql_round_func"] = tostring(match_capture(sql_buf, r, c, "function.call"))
 
-r_sql, c_sql = find_pos(sql_buf, "DENSE_RANK()", "DENSE_RANK")
-results["is_sql_rank_func"] = tostring(match_capture(sql_buf, r_sql, c_sql, "function.call"))
+r, c = find_pos(sql_buf, "DENSE_RANK()", "DENSE_RANK")
+results["is_sql_rank_func"] = tostring(match_capture(sql_buf, r, c, "function.call"))
 
-r_sql, c_sql = find_pos(sql_buf, "DENSE_RANK() OVER", "OVER")
-results["is_sql_over_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
+r, c = find_pos(sql_buf, "DENSE_RANK() OVER", "OVER")
+results["is_sql_over_kw"] = tostring(match_capture(sql_buf, r, c, "keyword"))
 
-r_sql, c_sql = find_pos(sql_buf, "aggregate_spend DESC) AS revenue_rank", "DESC")
-results["is_sql_desc_attr"] = tostring(match_capture(sql_buf, r_sql, c_sql, "attribute"))
+r, c = find_pos(sql_buf, "aggregate_spend DESC) AS revenue_rank", "DESC")
+results["is_sql_desc_attr"] = tostring(match_capture(sql_buf, r, c, "attribute"))
 
-r_sql, c_sql = find_pos(sql_buf, "HAVING s.total_invoices > 0", "HAVING")
-results["is_sql_having_kw"] = tostring(match_capture(sql_buf, r_sql, c_sql, "keyword"))
+r, c = find_pos(sql_buf, "HAVING s.total_invoices > 0", "HAVING")
+results["is_sql_having_kw"] = tostring(match_capture(sql_buf, r, c, "keyword"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.sql", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_sql_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.sql", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
+results["type_sql_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.builtin.sql", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_builtin_sql_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@function.call.sql", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.call", link = false}) end
+results["fcall_sql_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@attribute.sql", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@attribute", link = false}) end
+results["attr_sql_fg"] = string.format("%06x", hl.fg or 0)
 
 -- 10. Inspect Terraform (sample.tf)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.tf")
 vim.cmd([[redraw]])
 local tf_buf = vim.api.nvim_get_current_buf()
-local r_tf, c_tf
 
-r_tf, c_tf = find_pos(tf_buf, "terraform {", "terraform")
-results["is_tf_main_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+r, c = find_pos(tf_buf, "terraform {", "terraform")
+results["is_tf_main_kw"] = tostring(match_capture(tf_buf, r, c, "keyword"))
 
-r_tf, c_tf = find_pos(tf_buf, "required_providers {", "required_providers")
-results["is_tf_prov_type"] = tostring(match_capture(tf_buf, r_tf, c_tf, "type"))
+r, c = find_pos(tf_buf, "required_providers {", "required_providers")
+results["is_tf_prov_type"] = tostring(match_capture(tf_buf, r, c, "type"))
 
-r_tf, c_tf = find_pos(tf_buf, "  type        = string", "string")
-results["is_tf_str_type"] = tostring(match_capture(tf_buf, r_tf, c_tf, "type.builtin"))
+r, c = find_pos(tf_buf, "  type        = string", "string")
+results["is_tf_str_type"] = tostring(match_capture(tf_buf, r, c, "type.builtin"))
 
-r_tf, c_tf = find_pos(tf_buf, "contains([\"staging\"", "contains")
-results["is_tf_cnt_func"] = tostring(match_capture(tf_buf, r_tf, c_tf, "function"))
+r, c = find_pos(tf_buf, "contains([\"staging\"", "contains")
+results["is_tf_cnt_func"] = tostring(match_capture(tf_buf, r, c, "function"))
 
-r_tf, c_tf = find_pos(tf_buf, "var.environment)", "var")
-results["is_tf_var_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+r, c = find_pos(tf_buf, "var.environment)", "var")
+results["is_tf_var_kw"] = tostring(match_capture(tf_buf, r, c, "keyword"))
 
-r_tf, c_tf = find_pos(tf_buf, "local.vpc_cidr,", "local")
-results["is_tf_loc_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+r, c = find_pos(tf_buf, "local.vpc_cidr,", "local")
+results["is_tf_loc_kw"] = tostring(match_capture(tf_buf, r, c, "keyword"))
 
-r_tf, c_tf = find_pos(tf_buf, "resource \"aws_s3_bucket\"", "resource")
-results["is_tf_res_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+r, c = find_pos(tf_buf, "resource \"aws_s3_bucket\"", "resource")
+results["is_tf_res_kw"] = tostring(match_capture(tf_buf, r, c, "keyword"))
 
-r_tf, c_tf = find_pos(tf_buf, "value       = aws_s3_bucket.telemetry_lake.arn", "aws_s3_bucket")
-results["is_tf_ref_var"] = tostring(match_capture(tf_buf, r_tf, c_tf, "variable"))
+r, c = find_pos(tf_buf, "value       = aws_s3_bucket.telemetry_lake.arn", "aws_s3_bucket")
+results["is_tf_ref_var"] = tostring(match_capture(tf_buf, r, c, "variable"))
 
-r_tf, c_tf = find_pos(tf_buf, "prevent_destroy = false", "false")
-results["is_tf_false_bool"] = tostring(match_capture(tf_buf, r_tf, c_tf, "boolean"))
+r, c = find_pos(tf_buf, "prevent_destroy = false", "false")
+results["is_tf_false_bool"] = tostring(match_capture(tf_buf, r, c, "boolean"))
 
-r_tf, c_tf = find_pos(tf_buf, "\"subnet-${idx}\"", "${")
-results["is_tf_interp_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
+r, c = find_pos(tf_buf, "\"subnet-${idx}\"", "${")
+results["is_tf_interp_brack"] = tostring(match_capture(tf_buf, r, c, "punctuation.bracket"))
 
-r_tf, c_tf = find_pos(tf_buf, "provider \"aws\"", "provider")
-results["is_tf_prov_hdr_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+r, c = find_pos(tf_buf, "provider \"aws\"", "provider")
+results["is_tf_prov_hdr_kw"] = tostring(match_capture(tf_buf, r, c, "keyword"))
 
-r_tf, c_tf = find_pos(tf_buf, "provider      = aws", "provider")
-results["is_tf_prov_arg_mbr"] = tostring(match_capture(tf_buf, r_tf, c_tf, "variable.member"))
+r, c = find_pos(tf_buf, "provider      = aws", "provider")
+results["is_tf_prov_arg_mbr"] = tostring(match_capture(tf_buf, r, c, "variable.member"))
 
-r_tf, c_tf = find_pos(tf_buf, "provisioner \"local-exec\"", "provisioner")
-results["is_tf_psnr_type"] = tostring(match_capture(tf_buf, r_tf, c_tf, "type"))
+r, c = find_pos(tf_buf, "provisioner \"local-exec\"", "provisioner")
+results["is_tf_psnr_type"] = tostring(match_capture(tf_buf, r, c, "type"))
 
-r_tf, c_tf = find_pos(tf_buf, "echo \"Provisioned bucket: ${self.id}\"", "self")
-results["is_tf_self_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword"))
+r, c = find_pos(tf_buf, "echo \"Provisioned bucket: ${self.id}\"", "self")
+results["is_tf_self_kw"] = tostring(match_capture(tf_buf, r, c, "keyword"))
 
-r_tf, c_tf = find_pos(tf_buf, "%{ if var.environment", "%{")
-results["is_tf_dir_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
+r, c = find_pos(tf_buf, "%{ if var.environment", "%{")
+results["is_tf_dir_brack"] = tostring(match_capture(tf_buf, r, c, "punctuation.bracket"))
 
-r_tf, c_tf = find_pos(tf_buf, "%{ if var.environment", "~}")
-results["is_tf_strip_brack"] = tostring(match_capture(tf_buf, r_tf, c_tf, "punctuation.bracket"))
+r, c = find_pos(tf_buf, "%{ if var.environment", "~}")
+results["is_tf_strip_brack"] = tostring(match_capture(tf_buf, r, c, "punctuation.bracket"))
 
-r_tf, c_tf = find_pos(tf_buf, "%{ if var.environment", "if")
-results["is_tf_if_kw"] = tostring(match_capture(tf_buf, r_tf, c_tf, "keyword.conditional"))
+r, c = find_pos(tf_buf, "%{ if var.environment", "if")
+results["is_tf_if_kw"] = tostring(match_capture(tf_buf, r, c, "keyword.conditional"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.terraform", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword", link = false}) end
+results["kw_tf_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional.terraform", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@keyword.conditional", link = false}) end
+results["cond_tf_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@type.builtin.terraform", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type.builtin", link = false}) end
+results["type_tf_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@function.call.terraform", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.builtin.terraform", link = false}) end
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function", link = false}) end
+results["fn_tf_fg"] = string.format("%06x", hl.fg or 0)
+
+-- 11. Inspect Markdown (sample.md)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.md")
+vim.cmd("redraw")
+local md_buf = vim.api.nvim_get_current_buf()
+vim.treesitter.start(md_buf, "markdown")
+local md_hl = vim.treesitter.highlighter.active[md_buf]
+if md_hl and md_hl.tree then
+    md_hl.tree:parse(true)
+end
+
+r, c = find_pos(md_buf, "Workstation Architecture", "#")
+results["is_md_h1_delim"] = tostring(match_capture(md_buf, r, c, "markup.heading.delimiter"))
+
+r, c = find_pos(md_buf, "Workstation Architecture", "Workstation")
+results["is_md_h1_txt"] = tostring(match_capture(md_buf, r, c, "markup.heading.1"))
+
+r, c = find_pos(md_buf, "Executive Summary", "##")
+results["is_md_h2_delim"] = tostring(match_capture(md_buf, r, c, "markup.heading.delimiter"))
+
+r, c = find_pos(md_buf, "Executive Summary", "Executive")
+results["is_md_h2_txt"] = tostring(match_capture(md_buf, r, c, "markup.heading.2"))
+
+r, c = find_pos(md_buf, "File System Topology", "###")
+results["is_md_h3_delim"] = tostring(match_capture(md_buf, r, c, "markup.heading.delimiter"))
+
+r, c = find_pos(md_buf, "File System Topology", "File")
+results["is_md_h3_txt"] = tostring(match_capture(md_buf, r, c, "markup.heading.3"))
+
+r, c = find_pos(md_buf, "Syntax Highlighting", "####")
+results["is_md_h4_delim"] = tostring(match_capture(md_buf, r, c, "markup.heading.delimiter"))
+
+r, c = find_pos(md_buf, "Syntax Highlighting", "Syntax")
+results["is_md_h4_txt"] = tostring(match_capture(md_buf, r, c, "markup.heading.4"))
+
+r, c = find_pos(md_buf, "> [!NOTE]", ">")
+results["is_md_quote_marker"] = tostring(match_capture(md_buf, r, c, "markup.quote.marker"))
+
+r, c = find_pos(md_buf, "> [!NOTE]", "!NOTE")
+results["is_md_alert_note"] = tostring(match_capture(md_buf, r, c, "markup.alert.note"))
+
+r, c = find_pos(md_buf, "> [!TIP]", "!TIP")
+results["is_md_alert_tip"] = tostring(match_capture(md_buf, r, c, "markup.alert.tip"))
+
+r, c = find_pos(md_buf, "> [!WARNING]", "!WARNING")
+results["is_md_alert_warning"] = tostring(match_capture(md_buf, r, c, "markup.alert.warning"))
+
+r, c = find_pos(md_buf, "- [x]", "[x]")
+results["is_md_task_checked"] = tostring(match_capture(md_buf, r, c, "markup.list.checked"))
+
+r, c = find_pos(md_buf, "- [ ]", "[ ]")
+results["is_md_task_unchecked"] = tostring(match_capture(md_buf, r, c, "markup.list.unchecked"))
+
+r, c = find_pos(md_buf, "Environment Variable", "|")
+results["is_md_table_delim"] = tostring(match_capture(md_buf, r, c, "markup.table.delimiter"))
+
+r, c = find_pos(md_buf, "Environment Variable", "Environment")
+results["is_md_table_hdr"] = tostring(match_capture(md_buf, r, c, "markup.heading.4"))
+
+r, c = find_pos(md_buf, "git clone https", "git")
+results["is_md_bash_cmd"] = tostring(match_capture(md_buf, r, c, "function.call"))
+
+r, c = find_pos(md_buf, "if configPath ==", "if")
+results["is_md_go_if_cond"] = tostring(match_capture(md_buf, r, c, "keyword.conditional"))
+
+r, c = find_pos(md_buf, "if _, err := os.Stat", "_")
+results["is_md_go_blank"] = tostring(match_capture(md_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(md_buf, "return errors.New", "New")
+results["is_md_go_call"] = tostring(match_capture(md_buf, r, c, "function.method.call"))
+
+r, c = find_pos(md_buf, "return nil", "nil")
+results["is_md_go_nil"] = tostring(match_capture(md_buf, r, c, "constant.builtin"))
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.1", link = false})
+results["h1_fg"] = string.format("%06x", hl.fg or 0)
+results["h1_bold"] = tostring(hl.bold == true)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.2", link = false})
+results["h2_fg"] = string.format("%06x", hl.fg or 0)
+results["h2_bold"] = tostring(hl.bold == true)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.3", link = false})
+results["h3_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.4", link = false})
+results["h4_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.5", link = false})
+results["h5_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.6", link = false})
+results["h6_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.heading.delimiter", link = false})
+results["h_delim_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.quote", link = false})
+results["quote_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.quote.marker", link = false})
+results["quote_marker_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.list.checked", link = false})
+results["task_chk_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.list.unchecked", link = false})
+results["task_unchk_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@markup.table.delimiter", link = false})
+results["table_delim_fg"] = string.format("%06x", hl.fg or 0)
 
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
-' -c 'q' 2>/dev/null || true)"
+' -c 'qall!' 2>/dev/null || true)"
 
         declare -A RES=()
         while IFS='=' read -r k v; do
@@ -721,10 +1023,10 @@ end
             fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=${RES[const_fg]}"
         fi
 
-        if [ "${RES[is_wn_type]}" = "true" ]; then
-            pass "Neovim Tree-sitter captures sizeof(WorkerNode) as @type (Yellow)"
+        if [ "${RES[is_wn_type]}" = "true" ] && [ "${RES[type_c_fg]}" = "839496" ] && [ "${RES[type_builtin_c_fg]}" = "859900" ]; then
+            pass "Neovim renders C custom types (WorkerNode) in calm Base0 (#839496) and primitives in Green (#859900)"
         else
-            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type, got ${RES[is_wn_type]}"
+            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type fg=839496 and builtin fg=859900, got cap=${RES[is_wn_type]} fg=${RES[type_c_fg]} builtin=${RES[type_builtin_c_fg]}"
         fi
 
         if [ "${RES[is_so_kw]}" = "true" ]; then
@@ -733,16 +1035,40 @@ end
             fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got ${RES[is_so_kw]}"
         fi
 
-        if [ "${RES[is_t_type]}" = "true" ]; then
-            pass "Neovim Tree-sitter captures template <Printable T> as @type (Yellow)"
+        if [ "${RES[is_c_switch_cond]}" = "true" ] && [ "${RES[cond_c_fg]}" = "b58900" ]; then
+            pass "Neovim Tree-sitter captures C control flow (switch) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type, got ${RES[is_t_type]}"
+            fail "Neovim C control flow capture" "Expected switch as @keyword.conditional fg=b58900, got cap=${RES[is_c_switch_cond]} fg=${RES[cond_c_fg]}"
+        fi
+
+        if [ "${RES[is_c_malloc_call]}" = "true" ] && [ "${RES[fcall_c_fg]}" = "839496" ]; then
+            pass "Neovim Tree-sitter captures C function calls (malloc) as @function.call in calm Base0 (#839496)"
+        else
+            fail "Neovim C function call capture" "Expected malloc as @function.call fg=839496, got cap=${RES[is_c_malloc_call]} fg=${RES[fcall_c_fg]}"
+        fi
+
+        if [ "${RES[is_c_ifndef_macro]}" = "true" ] && [ "${RES[macro_c_fg]}" = "cb4b16" ]; then
+            pass "Neovim Tree-sitter captures C preprocessor conditionals (#ifndef LOG_LEVEL) as @constant.macro in Solarized Orange (#cb4b16)"
+        else
+            fail "Neovim C preprocessor conditional capture" "Expected LOG_LEVEL as @constant.macro fg=cb4b16, got cap=${RES[is_c_ifndef_macro]} fg=${RES[macro_c_fg]}"
+        fi
+
+        if [ "${RES[is_t_type]}" = "true" ] && [ "${RES[type_cpp_fg]}" = "839496" ] && [ "${RES[type_builtin_cpp_fg]}" = "859900" ]; then
+            pass "Neovim renders C++ custom types (Printable T) in calm Base0 (#839496) and primitives in Green (#859900)"
+        else
+            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type fg=839496 and builtin fg=859900, got cap=${RES[is_t_type]} fg=${RES[type_cpp_fg]} builtin=${RES[type_builtin_cpp_fg]}"
         fi
 
         if [ "${RES[module_fg]}" = "6c71c4" ] && [ "${RES[lsp_ns_fg]}" = "6c71c4" ]; then
             pass "Neovim renders @module and @lsp.type.namespace in Solarized Violet (#6c71c4)"
         else
             fail "Neovim module/namespace highlight" "Expected fg=6c71c4, got module=${RES[module_fg]} lsp_ns=${RES[lsp_ns_fg]}"
+        fi
+
+        if [ "${RES[is_ns_kw]}" = "true" ] && [ "${RES[is_using_kw]}" = "true" ]; then
+            pass "Neovim Tree-sitter captures namespace and using as declaration keywords in Solarized Green (#859900)"
+        else
+            fail "Neovim namespace/using capture" "Expected @keyword.type/@keyword (Green), got ns=${RES[is_ns_kw]} using=${RES[is_using_kw]}"
         fi
 
         if [ "${RES[is_core_mod]}" = "true" ] && [ "${RES[is_telem_mod]}" = "true" ]; then
@@ -769,10 +1095,22 @@ end
             fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got ${RES[is_nullopt_const]}"
         fi
 
-        if [ "${RES[attr_fg]}" = "cb4b16" ] && [ "${RES[is_attr_orange]}" = "true" ]; then
-            pass "Neovim renders C++ attributes ([[nodiscard]]) in Solarized Orange (#cb4b16)"
+        if [ "${RES[attr_fg]}" = "6c71c4" ] && [ "${RES[is_attr_orange]}" = "true" ]; then
+            pass "Neovim renders C++ attributes ([[nodiscard]]) in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim attribute highlight" "Expected fg=cb4b16 and capture=attribute, got fg=${RES[attr_fg]} cap=${RES[is_attr_orange]}"
+            fail "Neovim attribute highlight" "Expected fg=6c71c4 and capture=attribute, got fg=${RES[attr_fg]} cap=${RES[is_attr_orange]}"
+        fi
+
+        if [ "${RES[is_cpp_if_cond]}" = "true" ] && [ "${RES[cond_cpp_fg]}" = "b58900" ]; then
+            pass "Neovim Tree-sitter captures C++ control flow (if) as @keyword.conditional in Solarized Yellow (#b58900)"
+        else
+            fail "Neovim C++ control flow capture" "Expected if as @keyword.conditional fg=b58900, got cap=${RES[is_cpp_if_cond]} fg=${RES[cond_cpp_fg]}"
+        fi
+
+        if [ "${RES[is_cpp_fe_call]}" = "true" ] && [ "${RES[fcall_cpp_fg]}" = "839496" ]; then
+            pass "Neovim Tree-sitter captures C++ function calls (for_each) as @function.call in calm Base0 (#839496)"
+        else
+            fail "Neovim C++ function call capture" "Expected for_each as @function.call fg=839496, got cap=${RES[is_cpp_fe_call]} fg=${RES[fcall_cpp_fg]}"
         fi
 
         if [ "${RES[java_ft]}" = "java" ] && [ "${RES[ok_jdtls]}" = "true" ]; then
@@ -782,7 +1120,7 @@ end
         fi
 
         if [ "${RES[is_j_imp_kw]}" = "true" ]; then
-            pass "Neovim renders Java import keyword as @keyword.import (Orange)"
+            pass "Neovim renders Java import keyword as @keyword.import (Violet)"
         else
             fail "Neovim Java import keyword" "Expected @keyword.import for import, got ${RES[is_j_imp_kw]}"
         fi
@@ -793,10 +1131,10 @@ end
             fail "Neovim Java record/when keywords" "Expected @keyword.type for record and @keyword.conditional for when, got rec=${RES[is_j_rec_kw]} when=${RES[is_j_when_kw]}"
         fi
 
-        if [ "${RES[is_j_ann]}" = "true" ] && [ "${RES[is_j_pat_type]}" = "true" ]; then
-            pass "Neovim renders Java annotations as @attribute (Orange) and record patterns as @type (Yellow)"
+        if [ "${RES[is_j_ann]}" = "true" ] && [ "${RES[is_j_pat_type]}" = "true" ] && [ "${RES[type_builtin_java_fg]}" = "859900" ] && [ "${RES[type_java_fg]}" = "839496" ]; then
+            pass "Neovim renders Java annotations as @attribute (Violet), record patterns as @type (Base0), and primitives as @type.builtin (Green #859900)"
         else
-            fail "Neovim Java annotation and record pattern highlights" "Expected @attribute for annotations and @type for record patterns, got ann=${RES[is_j_ann]} pat=${RES[is_j_pat_type]}"
+            fail "Neovim Java annotation and record pattern highlights" "Expected @attribute for annotations, @type fg=839496 for record patterns, and @type.builtin fg=859900, got ann=${RES[is_j_ann]} pat=${RES[is_j_pat_type]} type=${RES[type_java_fg]} bi=${RES[type_builtin_java_fg]}"
         fi
 
         if [ "${RES[is_j_this_var]}" = "true" ] && [ "${RES[var_bi_fg]}" = "d33682" ]; then
@@ -835,10 +1173,10 @@ end
             fail "Neovim Go package keyword" "Expected @keyword fg=859900, got cap=${RES[is_pkg_kw]} fg=${RES[pkg_fg]}"
         fi
 
-        if [ "${RES[is_imp_kw]}" = "true" ] && [ "${RES[imp_fg]}" = "cb4b16" ]; then
-            pass "Neovim renders Go import keyword in Solarized Orange (#cb4b16)"
+        if [ "${RES[is_imp_kw]}" = "true" ] && [ "${RES[imp_fg]}" = "6c71c4" ]; then
+            pass "Neovim renders Go import keyword in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim Go import keyword" "Expected @keyword.import fg=cb4b16, got cap=${RES[is_imp_kw]} fg=${RES[imp_fg]}"
+            fail "Neovim Go import keyword" "Expected @keyword.import fg=6c71c4, got cap=${RES[is_imp_kw]} fg=${RES[imp_fg]}"
         fi
 
         if [ "${RES[is_main_mod]}" = "true" ] && [ "${RES[is_ctx_var]}" = "true" ]; then
@@ -853,58 +1191,101 @@ end
             fail "Neovim Go constant capture" "Expected @constant for LevelDebug, got ${RES[is_ld_const]}"
         fi
 
-        if [ "${RES[is_ncn_call]}" = "true" ] && [ "${RES[fcall_fg]}" = "268bd2" ]; then
-            pass "Neovim renders Go factory function calls (NewClusterNode) as @function.call in Solarized Blue (#268bd2)"
+        if [ "${RES[is_ncn_call]}" = "true" ] && [ "${RES[fcall_fg]}" = "839496" ]; then
+            pass "Neovim renders Go function calls (NewClusterNode) as @function.call in calm Solarized Base0 (#839496)"
         else
-            fail "Neovim Go factory function call" "Expected @function.call fg=268bd2 for NewClusterNode, got cap=${RES[is_ncn_call]} fg=${RES[fcall_fg]}"
+            fail "Neovim Go function call" "Expected @function.call fg=839496 for NewClusterNode, got cap=${RES[is_ncn_call]} fg=${RES[fcall_fg]}"
         fi
 
-        if [ "${RES[is_py_from_kw]}" = "true" ] && [ "${RES[is_py_async_mod]}" = "true" ]; then
-            pass "Neovim renders Python import keyword in Orange (@keyword.import) and module in Violet (@module)"
+        if [ "${RES[is_t_ctx_type]}" = "true" ] && [ "${RES[type_go_fg]}" = "839496" ] && [ "${RES[type_builtin_go_fg]}" = "859900" ]; then
+            pass "Neovim renders Go types (Context) as @type in calm Base0 (#839496) and primitives in Green (#859900)"
         else
-            fail "Neovim Python import/module capture" "Expected @keyword.import for from and @module for asyncio, got from=${RES[is_py_from_kw]} mod=${RES[is_py_async_mod]}"
+            fail "Neovim Go type capture" "Expected @type fg=839496 for Context and builtin fg=859900, got cap=${RES[is_t_ctx_type]} fg=${RES[type_go_fg]} bi=${RES[type_builtin_go_fg]}"
         fi
 
-        if [ "${RES[is_py_call_type]}" = "true" ]; then
-            pass "Neovim renders Python typing constructs (Callable) as @type (Yellow #b58900)"
+        if [ "${RES[is_defer_cond]}" = "true" ] && \
+           [ "${RES[is_select_cond]}" = "true" ] && \
+           [ "${RES[is_case_cond]}" = "true" ] && \
+           [ "${RES[is_default_cond]}" = "true" ] && \
+           [ "${RES[cond_go_fg]}" = "b58900" ]; then
+            pass "Neovim renders Go control flow (defer, select, case, default) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim Python type capture" "Expected @type for Callable, got ${RES[is_py_call_type]}"
+            fail "Neovim Go control flow capture" "Expected @keyword.conditional fg=b58900 for defer, select, case, default; got defer=${RES[is_defer_cond]} select=${RES[is_select_cond]} case=${RES[is_case_cond]} default=${RES[is_default_cond]} fg=${RES[cond_go_fg]}"
         fi
 
-        if [ "${RES[is_py_dc_attr]}" = "true" ] && [ "${RES[is_py_prop_attr]}" = "true" ]; then
-            pass "Neovim renders Python decorators (@dataclass, @property) unified as @attribute in Solarized Orange (#cb4b16)"
+        if [ "${RES[is_panic_call]}" = "true" ]; then
+            pass "Neovim renders Go built-in calls (panic) as @function.call in calm Solarized Base0 (#839496)"
         else
-            fail "Neovim Python decorator capture" "Expected @attribute for @dataclass and @property, got dc=${RES[is_py_dc_attr]} prop=${RES[is_py_prop_attr]}"
+            fail "Neovim Go builtin call capture" "Expected @function.call for panic, got ${RES[is_panic_call]}"
         fi
 
-        if [ "${RES[is_py_self_var]}" = "true" ] && [ "${RES[is_py_name_const]}" = "true" ]; then
-            pass "Neovim renders Python self as @variable.builtin and __name__ as @constant.builtin in Solarized Magenta (#d33682)"
+        if [ "${RES[is_py_from_kw]}" = "true" ] && [ "${RES[imp_py_fg]}" = "6c71c4" ] && [ "${RES[is_py_async_mod]}" = "true" ]; then
+            pass "Neovim renders Python import keyword in Violet (@keyword.import #6c71c4) and module in Violet (@module)"
         else
-            fail "Neovim Python built-in captures" "Expected @variable.builtin for self and @constant.builtin for __name__, got self=${RES[is_py_self_var]} name=${RES[is_py_name_const]}"
+            fail "Neovim Python import/module capture" "Expected @keyword.import fg=6c71c4 for from and @module for asyncio, got from=${RES[is_py_from_kw]} fg=${RES[imp_py_fg]} mod=${RES[is_py_async_mod]}"
         fi
 
-        if [ "${RES[is_py_init_meth]}" = "true" ] && [ "${RES[is_py_ep_ctor]}" = "true" ]; then
-            pass "Neovim renders Python def __init__ as @function.method (Blue) and class instantiations as @constructor (Yellow)"
+        if [ "${RES[is_py_call_type]}" = "true" ] && [ "${RES[type_py_fg]}" = "839496" ] && \
+           [ "${RES[is_py_int_type]}" = "true" ] && [ "${RES[is_py_str_type]}" = "true" ] && \
+           [ "${RES[is_py_dict_type]}" = "true" ] && [ "${RES[is_py_list_type]}" = "true" ] && \
+           [ "${RES[type_builtin_py_fg]}" = "859900" ]; then
+            pass "Neovim renders Python typing constructs (Callable) as @type in calm Base0 (#839496) and built-in types (int, str, dict, list) as @type.builtin in Solarized Green (#859900)"
         else
-            fail "Neovim Python method/constructor captures" "Expected @function.method for __init__ and @constructor for EndpointMetrics, got init=${RES[is_py_init_meth]} ep=${RES[is_py_ep_ctor]}"
+            fail "Neovim Python type capture" "Expected @type fg=839496 for Callable and builtin fg=859900 for int/str/dict/list, got call=${RES[is_py_call_type]} int=${RES[is_py_int_type]} str=${RES[is_py_str_type]} dict=${RES[is_py_dict_type]} list=${RES[is_py_list_type]} fg=${RES[type_py_fg]} bi=${RES[type_builtin_py_fg]}"
         fi
 
-        if [ "${RES[is_rs_use_kw]}" = "true" ] && [ "${RES[is_rs_std_mod]}" = "true" ]; then
-            pass "Neovim renders Rust use keyword as @keyword.import (Orange) and module path std as @module (Violet)"
+        if [ "${RES[is_py_dc_attr]}" = "true" ] && [ "${RES[is_py_prop_attr]}" = "true" ] && [ "${RES[attr_py_fg]}" = "6c71c4" ]; then
+            pass "Neovim renders Python decorators (@dataclass, @property) unified as @attribute in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim Rust import/module capture" "Expected @keyword.import for use and @module for std, got use=${RES[is_rs_use_kw]} std=${RES[is_rs_std_mod]}"
+            fail "Neovim Python decorator capture" "Expected @attribute fg=6c71c4 for @dataclass and @property, got dc=${RES[is_py_dc_attr]} prop=${RES[is_py_prop_attr]} fg=${RES[attr_py_fg]}"
         fi
 
-        if [ "${RES[is_rs_map_type]}" = "true" ]; then
-            pass "Neovim renders Rust types (HashMap) as @type (Yellow #b58900)"
+        if [ "${RES[is_py_self_var]}" = "true" ] && [ "${RES[is_py_name_const]}" = "true" ] && [ "${RES[is_py_func_name_const]}" = "true" ]; then
+            pass "Neovim renders Python self as @variable.builtin and __name__ (both standalone and attribute func.__name__) as @constant.builtin in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Rust type capture" "Expected @type for HashMap, got ${RES[is_rs_map_type]}"
+            fail "Neovim Python built-in captures" "Expected @variable.builtin for self and @constant.builtin for __name__, got self=${RES[is_py_self_var]} name=${RES[is_py_name_const]} func_name=${RES[is_py_func_name_const]}"
         fi
 
-        if [ "${RES[is_rs_drv_attr]}" = "true" ] && [ "${RES[is_rs_inl_attr]}" = "true" ] && [ "${RES[is_rs_hash_attr]}" = "true" ]; then
-            pass "Neovim renders Rust attributes (#[derive, #[inline) unified as @attribute in Solarized Orange (#cb4b16)"
+        if [ "${RES[is_py_init_meth]}" = "true" ] && [ "${RES[is_py_ep_ctor]}" = "true" ] && [ "${RES[ctor_py_fg]}" = "839496" ]; then
+            pass "Neovim renders Python def __init__ as @function.method (Blue) and class instantiations as @constructor in calm Base0 (#839496)"
         else
-            fail "Neovim Rust attribute capture" "Expected @attribute for #[derive and #[inline, got drv=${RES[is_rs_drv_attr]} inl=${RES[is_rs_inl_attr]} hash=${RES[is_rs_hash_attr]}"
+            fail "Neovim Python method/constructor captures" "Expected @function.method for __init__ and @constructor fg=839496 for EndpointMetrics, got init=${RES[is_py_init_meth]} ep=${RES[is_py_ep_ctor]} fg=${RES[ctor_py_fg]}"
+        fi
+
+        if [ "${RES[is_py_try_kw]}" = "true" ] && [ "${RES[is_py_await_kw]}" = "true" ] && [ "${RES[cond_py_fg]}" = "b58900" ]; then
+            pass "Neovim renders Python control flow (try, await) as @keyword.conditional/@keyword.coroutine in Solarized Yellow (#b58900)"
+        else
+            fail "Neovim Python control flow captures" "Expected try and await in Yellow #b58900, got try=${RES[is_py_try_kw]} await=${RES[is_py_await_kw]} fg=${RES[cond_py_fg]}"
+        fi
+
+        if [ "${RES[is_py_sleep_call]}" = "true" ] && [ "${RES[fcall_py_fg]}" = "839496" ]; then
+            pass "Neovim renders Python function/method calls (sleep) as @function.call in calm Base0 (#839496)"
+        else
+            fail "Neovim Python function call" "Expected @function.call fg=839496 for sleep, got ${RES[is_py_sleep_call]} fg=${RES[fcall_py_fg]}"
+        fi
+
+        if [ "${RES[is_py_fspec_str]}" = "true" ]; then
+            pass "Neovim renders Python f-string format specifier (.4f) in Solarized Cyan (#2aa198)"
+        else
+            fail "Neovim Python format specifier" "Expected string capture in Cyan for .4f, got ${RES[is_py_fspec_str]}"
+        fi
+
+        if [ "${RES[is_rs_use_kw]}" = "true" ] && [ "${RES[imp_rs_fg]}" = "6c71c4" ] && [ "${RES[is_rs_std_mod]}" = "true" ]; then
+            pass "Neovim renders Rust use keyword as @keyword.import (Violet #6c71c4) and module path std as @module (Violet)"
+        else
+            fail "Neovim Rust import/module capture" "Expected @keyword.import fg=6c71c4 for use and @module for std, got use=${RES[is_rs_use_kw]} fg=${RES[imp_rs_fg]} std=${RES[is_rs_std_mod]}"
+        fi
+
+        if [ "${RES[is_rs_map_type]}" = "true" ] && [ "${RES[type_rs_fg]}" = "839496" ] && [ "${RES[type_builtin_rs_fg]}" = "859900" ]; then
+            pass "Neovim renders Rust types (HashMap) as @type in calm Base0 (#839496) and primitives in Green (#859900)"
+        else
+            fail "Neovim Rust type capture" "Expected @type fg=839496 for HashMap and builtin fg=859900, got ${RES[is_rs_map_type]} fg=${RES[type_rs_fg]} bi=${RES[type_builtin_rs_fg]}"
+        fi
+
+        if [ "${RES[is_rs_drv_attr]}" = "true" ] && [ "${RES[is_rs_inl_attr]}" = "true" ] && [ "${RES[is_rs_hash_attr]}" = "true" ] && [ "${RES[attr_rs_fg]}" = "6c71c4" ]; then
+            pass "Neovim renders Rust attributes (#[derive, #[inline) unified as @attribute in Solarized Violet (#6c71c4)"
+        else
+            fail "Neovim Rust attribute capture" "Expected @attribute fg=6c71c4 for #[derive and #[inline, got drv=${RES[is_rs_drv_attr]} inl=${RES[is_rs_inl_attr]} hash=${RES[is_rs_hash_attr]} fg=${RES[attr_rs_fg]}"
         fi
 
         if [ "${RES[is_rs_max_const]}" = "true" ] && [ "${RES[is_rs_start_const]}" = "true" ] && [ "${RES[is_rs_self_var]}" = "true" ]; then
@@ -925,22 +1306,40 @@ end
             fail "Neovim Rust lifetime capture" "Expected @keyword.modifier for 'a, got ${RES[is_rs_lt_mod]}"
         fi
 
-        if [ "${RES[is_sh_ro_kw]}" = "true" ]; then
-            pass "Neovim renders Shell declarations (readonly, local) as keywords (Green #859900)"
+        if [ "${RES[is_rs_match_kw]}" = "true" ] && [ "${RES[cond_rs_fg]}" = "b58900" ]; then
+            pass "Neovim renders Rust control flow (match) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim Shell keyword capture" "Expected @keyword for readonly, got ${RES[is_sh_ro_kw]}"
+            fail "Neovim Rust control flow capture" "Expected @keyword.conditional fg=b58900 for match, got ${RES[is_rs_match_kw]} fg=${RES[cond_rs_fg]}"
         fi
 
-        if [ "${RES[is_sh_sn_const]}" = "true" ] && [ "${RES[is_sh_p0_const]}" = "true" ]; then
-            pass "Neovim renders Shell ALL_CAPS constants (SCRIPT_NAME) and positional parameters (\$0) in Solarized Magenta (#d33682)"
+        if [ "${RES[is_rs_new_call]}" = "true" ] && [ "${RES[fcall_rs_fg]}" = "839496" ]; then
+            pass "Neovim renders Rust function/method calls (ServerNode::new) as @function.call in calm Base0 (#839496)"
         else
-            fail "Neovim Shell constant captures" "Expected @constant for SCRIPT_NAME and @constant.builtin for \$0, got sn=${RES[is_sh_sn_const]} p0=${RES[is_sh_p0_const]}"
+            fail "Neovim Rust function call capture" "Expected @function.call fg=839496 for new, got ${RES[is_rs_new_call]} fg=${RES[fcall_rs_fg]}"
         fi
 
-        if [ "${RES[is_sh_base_func]}" = "true" ] && [ "${RES[is_sh_trap_func]}" = "true" ] && [ "${RES[is_sh_clean_func]}" = "true" ]; then
-            pass "Neovim renders Shell functions and commands (basename, trap, cleanup) in Solarized Blue (#268bd2)"
+        if [ "${RES[is_sh_ro_kw]}" = "true" ] && [ "${RES[kw_sh_fg]}" = "859900" ]; then
+            pass "Neovim renders Shell declarations (readonly, local) as @keyword in Solarized Green (#859900)"
         else
-            fail "Neovim Shell function captures" "Expected @function for basename, trap, and cleanup, got base=${RES[is_sh_base_func]} trap=${RES[is_sh_trap_func]} clean=${RES[is_sh_clean_func]}"
+            fail "Neovim Shell keyword capture" "Expected @keyword fg=859900 for readonly, got cap=${RES[is_sh_ro_kw]} fg=${RES[kw_sh_fg]}"
+        fi
+
+        if [ "${RES[is_sh_if_cond]}" = "true" ] && [ "${RES[is_sh_case_cond]}" = "true" ] && [ "${RES[cond_sh_fg]}" = "b58900" ]; then
+            pass "Neovim renders Shell control flow (if, case, for) as @keyword.conditional in Solarized Yellow (#b58900)"
+        else
+            fail "Neovim Shell control flow capture" "Expected if and case as @keyword.conditional fg=b58900, got if=${RES[is_sh_if_cond]} case=${RES[is_sh_case_cond]} fg=${RES[cond_sh_fg]}"
+        fi
+
+        if [ "${RES[is_sh_clean_func]}" = "true" ] && [ "${RES[fn_sh_fg]}" = "268bd2" ]; then
+            pass "Neovim renders Shell function declarations (cleanup) as @function in Solarized Blue (#268bd2)"
+        else
+            fail "Neovim Shell function declaration capture" "Expected @function fg=268bd2 for cleanup, got cap=${RES[is_sh_clean_func]} fg=${RES[fn_sh_fg]}"
+        fi
+
+        if [ "${RES[is_sh_base_func]}" = "true" ] && [ "${RES[fcall_sh_fg]}" = "839496" ]; then
+            pass "Neovim renders Shell command and function invocations (basename, trap) as @function.call in calm Base0 (#839496)"
+        else
+            fail "Neovim Shell function call capture" "Expected @function.call fg=839496 for basename, got cap=${RES[is_sh_base_func]} fg=${RES[fcall_sh_fg]}"
         fi
 
         if [ "${RES[is_sh_exit_const]}" = "true" ]; then
@@ -967,6 +1366,12 @@ end
             fail "Neovim Shell @ parameter captures" "Expected @character.special for [@] and @constant for \$@, got sub=${RES[is_sh_sub_at]} pos=${RES[is_sh_pos_at]}"
         fi
 
+        if [ "${RES[is_sh_dollar_punc]}" = "true" ] && [ "${RES[dollar_sh_fg]}" = "839496" ]; then
+            pass "Neovim renders Shell variable expansion prefix ($) as @punctuation.special in calm Base0 Grey (#839496)"
+        else
+            fail "Neovim Shell dollar prefix capture" "Expected @punctuation.special fg=839496 for $, got cap=${RES[is_sh_dollar_punc]} fg=${RES[dollar_sh_fg]}"
+        fi
+
         if [ "${RES[is_sql_create_kw]}" = "true" ] && \
            [ "${RES[is_sql_table_type]}" = "true" ] && \
            [ "${RES[is_sql_serial_type]}" = "true" ] && \
@@ -986,10 +1391,15 @@ end
            [ "${RES[is_sql_rank_func]}" = "true" ] && \
            [ "${RES[is_sql_over_kw]}" = "true" ] && \
            [ "${RES[is_sql_desc_attr]}" = "true" ] && \
-           [ "${RES[is_sql_having_kw]}" = "true" ]; then
-            pass "Neovim highlights modern SQL queries (sample.sql) with 100% Tree-sitter AST parity: DDL keywords (Green), table/index/CTE relations and data types (Yellow), functions (Blue), DEFAULT/DESC attributes (Orange), NULL sentinels / TRUE / numbers (Magenta), and calm Base0 alias/column qualifiers"
+           [ "${RES[is_sql_having_kw]}" = "true" ] && \
+           [ "${RES[cond_sql_fg]}" = "b58900" ] && \
+           [ "${RES[type_sql_fg]}" = "839496" ] && \
+           [ "${RES[type_builtin_sql_fg]}" = "859900" ] && \
+           [ "${RES[fcall_sql_fg]}" = "839496" ] && \
+           [ "${RES[attr_sql_fg]}" = "859900" ]; then
+            pass "Neovim highlights modern SQL queries (sample.sql) with Converged Ergonomic Solarized Scheme: DDL keywords (Green), table/index/CTE relations in Base0, data types in Green (#859900), conditionals (Yellow), function calls (Base0), DEFAULT/DESC keywords (Green), NULL sentinels / TRUE / numbers (Magenta), and calm Base0 alias/column qualifiers"
         else
-            fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql"
+            fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql (cond=${RES[cond_sql_fg]} type=${RES[type_sql_fg]} builtin=${RES[type_builtin_sql_fg]} fcall=${RES[fcall_sql_fg]} attr=${RES[attr_sql_fg]})"
         fi
 
         if [ "${RES[is_tf_main_kw]}" = "true" ] && \
@@ -1008,10 +1418,39 @@ end
            [ "${RES[is_tf_self_kw]}" = "true" ] && \
            [ "${RES[is_tf_dir_brack]}" = "true" ] && \
            [ "${RES[is_tf_strip_brack]}" = "true" ] && \
-           [ "${RES[is_tf_if_kw]}" = "true" ]; then
-            pass "Neovim highlights modern Terraform / HCL configurations (sample.tf) with 100% Tree-sitter AST parity: block declarations and scope keywords (Green), schema blocks and data types (Yellow), built-in functions (Blue), booleans (Magenta), Base0 string interpolation delimiters and resource references"
+           [ "${RES[is_tf_if_kw]}" = "true" ] && \
+           [ "${RES[kw_tf_fg]}" = "859900" ] && \
+           [ "${RES[cond_tf_fg]}" = "b58900" ] && \
+           [ "${RES[type_tf_fg]}" = "839496" ] && \
+           [ "${RES[fn_tf_fg]}" = "839496" ]; then
+            pass "Neovim highlights modern Terraform / HCL configurations (sample.tf) with Converged Ergonomic Solarized Scheme: block declarations and scope keywords (Green), schema blocks and data types in Base0, control flow (Yellow), built-in functions (Base0), booleans/numbers (Magenta), Base0 string interpolation delimiters and resource references"
         else
-            fail "Neovim Terraform Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.tf"
+            fail "Neovim Terraform Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.tf (kw=${RES[kw_tf_fg]} cond=${RES[cond_tf_fg]} type=${RES[type_tf_fg]} fn=${RES[fn_tf_fg]})"
+        fi
+
+        if [ "${RES[is_md_h1_txt]}" = "true" ] && [ "${RES[h1_fg]}" = "cb4b16" ] && [ "${RES[h1_bold]}" != "true" ] && \
+           [ "${RES[is_md_h2_txt]}" = "true" ] && [ "${RES[h2_fg]}" = "268bd2" ] && [ "${RES[h2_bold]}" != "true" ] && \
+           [ "${RES[is_md_h3_txt]}" = "true" ] && [ "${RES[h3_fg]}" = "6c71c4" ] && \
+           [ "${RES[is_md_h4_txt]}" = "true" ] && [ "${RES[h4_fg]}" = "93a1a1" ] && \
+           [ "${RES[h5_fg]}" = "839496" ] && [ "${RES[h6_fg]}" = "839496" ] && \
+           [ "${RES[is_md_h1_delim]}" = "true" ] && [ "${RES[h_delim_fg]}" = "586e75" ] && \
+           [ "${RES[is_md_quote_marker]}" = "true" ] && [ "${RES[quote_marker_fg]}" = "586e75" ] && \
+           [ "${RES[quote_fg]}" = "839496" ] && \
+           [ "${RES[is_md_alert_note]}" = "true" ] && \
+           [ "${RES[is_md_alert_tip]}" = "true" ] && \
+           [ "${RES[is_md_alert_warning]}" = "true" ] && \
+           [ "${RES[is_md_task_checked]}" = "true" ] && [ "${RES[task_chk_fg]}" = "859900" ] && \
+           [ "${RES[is_md_task_unchecked]}" = "true" ] && [ "${RES[task_unchk_fg]}" = "586e75" ] && \
+           [ "${RES[is_md_table_delim]}" = "true" ] && [ "${RES[table_delim_fg]}" = "586e75" ] && \
+           [ "${RES[is_md_table_hdr]}" = "true" ] && \
+           [ "${RES[is_md_bash_cmd]}" = "true" ] && \
+           [ "${RES[is_md_go_if_cond]}" = "true" ] && \
+           [ "${RES[is_md_go_blank]}" = "true" ] && \
+           [ "${RES[is_md_go_call]}" = "true" ] && \
+           [ "${RES[is_md_go_nil]}" = "true" ]; then
+            pass "Neovim highlights modern Markdown documents (sample.md) with Semantic Architecture: H1 Orange (#cb4b16), H2 Blue (#268bd2, unbolded), H3 Violet (#6c71c4), H4 Base1 (#93a1a1), H5/H6 Base0 (#839496), Base01 heading/quote delimiters, calm Base0 blockquotes, GitHub alerts ([!NOTE], [!TIP], [!WARNING]), task checkboxes, Base1 table headers with Base01 delimiters, embedded Bash invocations in calm Base0, and embedded Go with Magenta blank identifier/nil, Base0 method calls (errors.New), and exclusive Yellow control flow"
+        else
+            fail "Neovim Markdown highlights" "Expected complete Tree-sitter capture matches in sample.md (h1=${RES[h1_fg]} h2=${RES[h2_fg]} delim=${RES[h_delim_fg]} note=${RES[is_md_alert_note]} tbl_hdr=${RES[is_md_table_hdr]} bash_cmd=${RES[is_md_bash_cmd]} go_if=${RES[is_md_go_if_cond]} go_call=${RES[is_md_go_call]})"
         fi
     fi
 else

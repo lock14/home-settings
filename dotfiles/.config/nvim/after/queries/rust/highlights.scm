@@ -1,6 +1,6 @@
 ;; extends
 
-;; Unify Rust attributes (#[inline], #[derive(...)]) as Solarized Orange (@attribute)
+;; Unify Rust attributes (#[inline], #[derive(...)]) as Solarized Violet (@attribute #6c71c4)
 (attribute
   (identifier) @attribute)
 

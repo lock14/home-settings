@@ -307,7 +307,7 @@ contexts:
         - include: comments
         - include: generic-params
         - match: '\b(for)\b'
-          scope: keyword.control.for.rust
+          scope: storage.type.for.rust
         - include: where-clause
         - include: type-expression
 
@@ -375,7 +375,7 @@ contexts:
 
   where-clause:
     - match: '\b(where)\b'
-      scope: keyword.control.where.rust
+      scope: storage.modifier.where.rust
       push:
         - match: '(?=[;{])'
           pop: true
@@ -511,8 +511,11 @@ contexts:
 
   expressions:
     - include: comments
-    # Control flow keywords in Solarized Green
-    - match: '\b(match|if|else|while|for|in|loop|return|break|continue|yield|await|async)\b'
+    # Scaffolding modifier async
+    - match: '\b(async)\b'
+      scope: storage.modifier.async.rust
+    # Control flow keywords in Solarized Yellow
+    - match: '\b(match|if|else|while|for|in|loop|return|break|continue|yield|await)\b'
       scope: keyword.control.rust
     # Macro invocations in Solarized Blue: println!(...), eprintln!(...), write!(...)
     - match: '({{ident}})(!)'

@@ -7,9 +7,10 @@ and exception handling.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 # Constant definitions
 DEFAULT_PORT: int = 8080
@@ -35,7 +36,9 @@ class EndpointMetrics:
     path: str
     status_code: int
     duration_ms: float
-    metadata: Dict[str, Union[str, int, bool]] = field(default_factory=dict)
+    metadata: dict[str, str | int | bool] = field(default_factory=dict)
+    tags: set[str] = field(default_factory=set)
+    headers: list[tuple[str, str]] = field(default_factory=list)
     active: bool = True
 
     @property
@@ -52,9 +55,9 @@ class MetricsCollector:
 
     def __init__(self, service_name: str) -> None:
         self.service_name = service_name
-        self._buffer: List[EndpointMetrics] = []
+        self._buffer: list[EndpointMetrics] = []
 
-    def record(self, metric: Optional[EndpointMetrics]) -> None:
+    def record(self, metric: EndpointMetrics | None) -> None:
         if metric is None:
             raise ValueError("metric argument cannot be None")
         self._buffer.append(metric)

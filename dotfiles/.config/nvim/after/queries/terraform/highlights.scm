@@ -11,7 +11,7 @@
    (identifier) @keyword)
  (#any-of? @keyword "data" "var" "local" "module" "output" "path" "terraform" "count" "each" "self"))
 
-;; Map primitive types (string, number, bool, etc.) to @type.builtin (Solarized Yellow #B58900)
+;; Map primitive types (string, number, bool, etc.) to @type.builtin (Solarized Base1 #93A1A1)
 ((variable_expr
    (identifier) @type.builtin)
  (#any-of? @type.builtin "bool" "string" "number" "object" "tuple" "list" "map" "set" "any"))

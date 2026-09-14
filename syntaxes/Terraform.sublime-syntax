@@ -1,13 +1,13 @@
 %YAML 1.2
 ---
 # Solarized Dark Terraform / HCL Syntax Package for bat / Sublime Text
-# Complies with 3-Tier Ergonomic Architecture and Solarized Dark TrueColor Palette:
+# Complies with Converged Ergonomic Solarized Scheme:
 # - Top-level declarations (terraform, resource, variable, locals, output) in Solarized Green (keyword.declaration.terraform)
-# - Scope accessors (var., local., terraform., data., module., count., each.) in Solarized Green (keyword.control.scope.terraform)
-# - Comprehension control (for, in) in Solarized Green (keyword.control.terraform)
-# - Nested schema blocks (required_providers, validation, lifecycle) in Solarized Yellow (entity.name.type.block.terraform)
-# - Primitive data types (string, number, bool, list, map, set) in Solarized Yellow (storage.type.terraform)
-# - Built-in & user functions (contains, range, cidrsubnet, merge) in Solarized Blue (support.function.builtin.terraform)
+# - Scope accessors (var., local., terraform., data., module., count., each., self.) in Solarized Green (keyword.control.scope.terraform)
+# - Comprehension & directive control (for, in, if, else, endif, endfor) in Solarized Yellow (keyword.control.conditional.terraform)
+# - Nested schema blocks (required_providers, validation, lifecycle) in Solarized Base1 (entity.name.type.block.terraform)
+# - Primitive data types (string, number, bool, list, map, set) in Solarized Base1 (storage.type.terraform)
+# - Built-in & user functions (contains, range, cidrsubnet, merge) in calm Base0 Grey (support.function.builtin.terraform)
 # - Strings & quoted labels in Solarized Cyan (string.quoted.double.terraform)
 # - Numbers, booleans (true, false) & sentinels (null) in Solarized Magenta (constant.numeric, constant.language)
 # - Attributes & map keys (source, version, Environment, CostCenter) in Base0 Grey (variable.other.member.terraform)
@@ -66,7 +66,7 @@ contexts:
 
   comprehensions:
     - match: '(?xi:\b(for|in|if|else|endif|endfor)\b)'
-      scope: keyword.control.terraform
+      scope: keyword.control.conditional.terraform
     - match: '=>'
       scope: keyword.operator.arrow.terraform
 
