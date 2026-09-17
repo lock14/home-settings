@@ -121,6 +121,7 @@
   typeset -g POWERLEVEL9K_NODE_ICON=$'\uE718'          # Official Node.js hexagon badge with JS (replaces small arch E617)
   typeset -g POWERLEVEL9K_NODEJS_ICON=$'\uE718'
   typeset -g POWERLEVEL9K_RUBY_ICON=$'\uE791'          # Official faceted Ruby gemstone (replaces diamond outline F219)
+  typeset -g POWERLEVEL9K_JAVA_ICON=$'\uF0F4'          # Solid filled coffee mug with saucer (replaces squished E738)
 
   # When set to true, icons appear before content on both sides of the prompt. When set
   # to false, icons go after content. If empty or not set, icons go before content in the left
@@ -690,7 +691,7 @@
   # typeset -g POWERLEVEL9K_ASDF_LUA_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Java version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_JAVA_FOREGROUND='#D33682'
+  typeset -g POWERLEVEL9K_ASDF_JAVA_FOREGROUND='#CB4B16'
   typeset -g POWERLEVEL9K_ASDF_JAVA_BACKGROUND='#073642'
   # typeset -g POWERLEVEL9K_ASDF_JAVA_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_JAVA_SHOW_ON_UPGLOB='*.foo|*.bar'
@@ -1153,14 +1154,14 @@
 
   ####################[ java_version: java version (https://www.java.com/) ]####################
   # Java version color.
-  typeset -g POWERLEVEL9K_JAVA_VERSION_FOREGROUND='#D33682'
+  typeset -g POWERLEVEL9K_JAVA_VERSION_FOREGROUND='#CB4B16'
   typeset -g POWERLEVEL9K_JAVA_VERSION_BACKGROUND='#073642'
   # Show java version only when in a java project subdirectory.
   typeset -g POWERLEVEL9K_JAVA_VERSION_PROJECT_ONLY=true
   # Show brief version.
   typeset -g POWERLEVEL9K_JAVA_VERSION_FULL=false
-  # Custom icon.
-  # typeset -g POWERLEVEL9K_JAVA_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: solid filled coffee mug with saucer
+  typeset -g POWERLEVEL9K_JAVA_VERSION_VISUAL_IDENTIFIER_EXPANSION=$'\uF0F4'
 
   ###[ package: name@version from package.json (https://docs.npmjs.com/files/package.json) ]####
   # Package color.
@@ -1211,7 +1212,7 @@
 
   ###############[ jenv: java version from jenv (https://github.com/jenv/jenv) ]################
   # Java color.
-  typeset -g POWERLEVEL9K_JENV_FOREGROUND='#D33682'
+  typeset -g POWERLEVEL9K_JENV_FOREGROUND='#CB4B16'
   typeset -g POWERLEVEL9K_JENV_BACKGROUND='#073642'
   # Hide java version if it doesn't come from one of these sources.
   typeset -g POWERLEVEL9K_JENV_SOURCES=(shell local global)
@@ -1264,7 +1265,7 @@
 
   #######[ scalaenv: scala version from scalaenv (https://github.com/scalaenv/scalaenv) ]#######
   # Scala color.
-  typeset -g POWERLEVEL9K_SCALAENV_FOREGROUND='#D33682'
+  typeset -g POWERLEVEL9K_SCALAENV_FOREGROUND='#DC322F'
   typeset -g POWERLEVEL9K_SCALAENV_BACKGROUND='#073642'
   # Hide scala version if it doesn't come from one of these sources.
   typeset -g POWERLEVEL9K_SCALAENV_SOURCES=(shell local global)

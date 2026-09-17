@@ -364,10 +364,10 @@ test_addendum() {
     if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#2AA198" ] && \
        [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#859900" ] && \
        [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
-       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#D33682" ] && \
+       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
        [ "${POWERLEVEL9K_PACKAGE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_PACKAGE_FOREGROUND:-}" = "#93A1A1" ] && \
        [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#6C71C4" ] && \
-       [ "${POWERLEVEL9K_SCALAENV_FOREGROUND:-}" = "#D33682" ] && \
+       [ "${POWERLEVEL9K_SCALAENV_FOREGROUND:-}" = "#DC322F" ] && \
        [ "${POWERLEVEL9K_RBENV_FOREGROUND:-}" = "#DC322F" ] && [ "${POWERLEVEL9K_RVM_FOREGROUND:-}" = "#DC322F" ]; then
         echo "PASS:p10k toolchain versions unified on Base02 background with semantic foregrounds"
     else
@@ -377,10 +377,11 @@ test_addendum() {
     if [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
        [ "${POWERLEVEL9K_TERRAFORM_ICON:-}" = $'\U000F1062' ] && \
        [ "${POWERLEVEL9K_NODE_ICON:-}" = $'\uE718' ] && \
-       [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ]; then
-        echo "PASS:p10k modern Nerd Font icons configured (solid Go gopher, HashiCorp Terraform, Node hexagon, Ruby gem)"
+       [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ] && \
+       [ "${POWERLEVEL9K_JAVA_ICON:-}" = $'\uF0F4' ]; then
+        echo "PASS:p10k modern Nerd Font icons configured (solid Go gopher, HashiCorp Terraform, Node hexagon, Ruby gem, solid Java mug)"
     else
-        echo "FAIL:p10k modern Nerd Font icons:Expected modern glyphs for Go, Terraform, Node, and Ruby"
+        echo "FAIL:p10k modern Nerd Font icons:Expected modern glyphs for Go, Terraform, Node, Ruby, and Java"
     fi
 
     if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
