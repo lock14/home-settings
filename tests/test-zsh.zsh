@@ -298,18 +298,18 @@ test_addendum() {
         echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#93A1A1" ]; then
-        echo "PASS:p10k OS icon configured with Base02 background and Solarized Base1 foreground"
+    if [ -z "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#93A1A1" ]; then
+        echo "PASS:p10k OS icon configured with transparent background and Solarized Base1 foreground"
     else
-        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#93A1A1', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+        echo "FAIL:p10k OS_ICON colors:Expected bg='' fg='#93A1A1', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-}" = "#859900" ] && \
-       [ "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND:-}" = "#B58900" ] && \
-       [ "${POWERLEVEL9K_VCS_MODIFIED_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_MODIFIED_FOREGROUND:-}" = "#B58900" ]; then
-        echo "PASS:p10k VCS configured with Base02 background and semantic foregrounds"
+    if [ -z "${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-}" = "#859900" ] && \
+       [ -z "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND:-}" = "#B58900" ] && \
+       [ -z "${POWERLEVEL9K_VCS_MODIFIED_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_VCS_MODIFIED_FOREGROUND:-}" = "#B58900" ]; then
+        echo "PASS:p10k VCS configured with transparent background and semantic foregrounds"
     else
-        echo "FAIL:p10k VCS colors:Expected bg='#073642' with Green clean and Yellow dirty foregrounds"
+        echo "FAIL:p10k VCS colors:Expected bg='' with Green clean and Yellow dirty foregrounds"
     fi
 
     if [[ "${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}" == *"#586E75"* ]]; then
@@ -324,11 +324,11 @@ test_addendum() {
         echo "FAIL:p10k prompt_char:Expected prompt_char to be disabled in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
     fi
 
-    if [ "${POWERLEVEL9K_DIR_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_DIR_FOREGROUND:-}" = "#268BD2" ] && \
+    if [ -z "${POWERLEVEL9K_DIR_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_DIR_FOREGROUND:-}" = "#268BD2" ] && \
        [ "${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}" = "#268BD2" ] && [ "${POWERLEVEL9K_DIR_ANCHOR_FOREGROUND:-}" = "#268BD2" ]; then
-        echo "PASS:p10k directory configured with Base02 background and Solarized Blue foregrounds"
+        echo "PASS:p10k directory configured with transparent background and Solarized Blue foregrounds"
     else
-        echo "FAIL:p10k DIR colors:Expected bg='#073642' fg='#268BD2'"
+        echo "FAIL:p10k DIR colors:Expected bg='' fg='#268BD2'"
     fi
 
     if [ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" = '\uE0B1' ] && \
@@ -338,7 +338,7 @@ test_addendum() {
        [[ "${POWERLEVEL9K_DIR_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" == *'\uE0B1'* ]] && \
        [[ "${POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION:-}" == *""* ]] && \
        [[ "${POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION:-}" == *""* ]]; then
-        echo "PASS:p10k pure unified thin chevron architecture ( and ) configured across internal and boundary segments on Base02"
+        echo "PASS:p10k pure unified thin chevron architecture ( and ) configured across transparent canvas"
     else
         echo "FAIL:p10k separators:Expected pure unified thin chevrons (\uE0B1 on left, \uE0B3 on right, empty outer caps, leading/trailing boundary chevrons)"
     fi
@@ -360,36 +360,36 @@ test_addendum() {
         echo "FAIL:p10k RIGHT_PROMPT_ELEMENTS:Expected toolchain versions enabled in POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS"
     fi
 
-    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#2AA198" ] && \
-       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#859900" ] && \
-       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
-       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#268BD2" ] && \
-       [ "${POWERLEVEL9K_PACKAGE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_PACKAGE_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#6C71C4" ]; then
-        echo "PASS:p10k toolchain versions unified on Base02 background with semantic foregrounds"
+    if [ -z "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#2AA198" ] && \
+       [ -z "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#859900" ] && \
+       [ -z "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ -z "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#268BD2" ] && \
+       [ -z "${POWERLEVEL9K_PACKAGE_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_PACKAGE_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ -z "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#6C71C4" ]; then
+        echo "PASS:p10k toolchain versions unified on transparent background with semantic foregrounds"
     else
-        echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
+        echo "FAIL:p10k toolchain version colors:Expected transparent background with semantic foregrounds"
     fi
 
-    if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
-       [ "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#CB4B16" ] && \
-       [ "${POWERLEVEL9K_AZURE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#268BD2" ] && \
-       [ "${POWERLEVEL9K_GCLOUD_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GCLOUD_FOREGROUND:-}" = "#268BD2" ] && \
-       [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
-       [ "${POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND:-}" = "#6C71C4" ]; then
-        echo "PASS:p10k cloud provider segments unified on Base02 background with semantic foregrounds"
+    if [ -z "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
+       [ -z "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ -z "${POWERLEVEL9K_AZURE_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#268BD2" ] && \
+       [ -z "${POWERLEVEL9K_GCLOUD_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_GCLOUD_FOREGROUND:-}" = "#268BD2" ] && \
+       [ -z "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
+       [ -z "${POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND:-}" = "#6C71C4" ]; then
+        echo "PASS:p10k cloud provider segments unified on transparent background with semantic foregrounds"
     else
-        echo "FAIL:p10k cloud provider segment colors:Expected Base02 background with semantic foregrounds"
+        echo "FAIL:p10k cloud provider segment colors:Expected transparent background with semantic foregrounds"
     fi
 
-    if [ "${POWERLEVEL9K_STATUS_OK_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_STATUS_OK_FOREGROUND:-}" = "#859900" ] && \
-       [ "${POWERLEVEL9K_STATUS_ERROR_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_STATUS_ERROR_FOREGROUND:-}" = "#DC322F" ] && \
-       [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND:-}" = "#B58900" ] && \
-       [ "${POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND:-}" = "#2AA198" ] && \
-       [ "${POWERLEVEL9K_CONTEXT_ROOT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_CONTEXT_ROOT_FOREGROUND:-}" = "#DC322F" ]; then
-        echo "PASS:p10k status, execution time, background jobs, and context unified on Base02 background with semantic foregrounds"
+    if [ -z "${POWERLEVEL9K_STATUS_OK_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_STATUS_OK_FOREGROUND:-}" = "#859900" ] && \
+       [ -z "${POWERLEVEL9K_STATUS_ERROR_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_STATUS_ERROR_FOREGROUND:-}" = "#DC322F" ] && \
+       [ -z "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND:-}" = "#B58900" ] && \
+       [ -z "${POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND:-}" = "#2AA198" ] && \
+       [ -z "${POWERLEVEL9K_CONTEXT_ROOT_BACKGROUND:-}" ] && [ "${POWERLEVEL9K_CONTEXT_ROOT_FOREGROUND:-}" = "#DC322F" ]; then
+        echo "PASS:p10k status, execution time, background jobs, and context unified on transparent background with semantic foregrounds"
     else
-        echo "FAIL:p10k right status colors:Expected Base02 background with semantic foregrounds"
+        echo "FAIL:p10k right status colors:Expected transparent background with semantic foregrounds"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
