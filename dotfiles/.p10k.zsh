@@ -179,8 +179,8 @@
 
   #################################[ os_icon: os identifier ]##################################
   # OS identifier color.
-  typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#002B36'
-  typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#93A1A1'
+  typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#073642'
   # Custom icon.
   # typeset -g POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION='⭐'
 
@@ -209,19 +209,19 @@
 
   ##################################[ dir: current directory ]##################################
   # Current directory background color.
-  typeset -g POWERLEVEL9K_DIR_BACKGROUND='#268BD2'
+  typeset -g POWERLEVEL9K_DIR_BACKGROUND='#073642'
   # Default current directory foreground color.
-  typeset -g POWERLEVEL9K_DIR_FOREGROUND='#FDF6E3'
+  typeset -g POWERLEVEL9K_DIR_FOREGROUND='#268BD2'
   # If directory is too long, shorten some of its segments to the shortest possible unique
   # prefix. The shortened directory can be tab-completed to the original.
   typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
   # Replace removed segment suffixes with this symbol.
   typeset -g POWERLEVEL9K_SHORTEN_DELIMITER=
   # Color of the shortened directory segments.
-  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND='#EEE8D5'
+  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND='#268BD2'
   # Color of the anchor directory segments. Anchor segments are never shortened. The first
   # segment is always an anchor.
-  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND='#FDF6E3'
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND='#268BD2'
   # Display anchor directory segments in bold.
   typeset -g POWERLEVEL9K_DIR_ANCHOR_BOLD=false
   # Don't shorten directories that contain any of these files. They are anchors.
@@ -347,12 +347,17 @@
   # typeset -g POWERLEVEL9K_DIR_PREFIX='in '
 
   #####################################[ vcs: git status ]######################################
-  # Version control background colors.
-  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND='#859900'
-  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND='#B58900'
-  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND='#B58900'
-  typeset -g POWERLEVEL9K_VCS_CONFLICTED_BACKGROUND='#CB4B16'
-  typeset -g POWERLEVEL9K_VCS_LOADING_BACKGROUND='#586E75'
+  # Version control foreground and background colors.
+  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND='#859900'
+  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND='#073642'
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND='#B58900'
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND='#073642'
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND='#B58900'
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND='#073642'
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_FOREGROUND='#CB4B16'
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_BACKGROUND='#073642'
+  typeset -g POWERLEVEL9K_VCS_LOADING_FOREGROUND='#586E75'
+  typeset -g POWERLEVEL9K_VCS_LOADING_BACKGROUND='#073642'
 
   # Branch icon. Set this parameter to '\UE0A0 ' for the popular Powerline branch icon.
   typeset -g POWERLEVEL9K_VCS_BRANCH_ICON='\uF126 '
@@ -379,12 +384,12 @@
       return
     fi
 
-    # Styling for different parts of Git status.
-    local       meta='%F{#073642}' # white foreground
-    local      clean='%F{#073642}' # black foreground
-    local   modified='%F{#073642}' # black foreground
-    local  untracked='%F{#073642}' # black foreground
-    local conflicted='%F{#002B36}' # dark foreground for high contrast on Orange (#CB4B16) background
+    # Styling for different parts of Git status on Base02 background.
+    local       meta='%F{#586E75}' # Base01
+    local      clean='%F{#859900}' # Solarized Green
+    local   modified='%F{#B58900}' # Solarized Yellow
+    local  untracked='%F{#B58900}' # Solarized Yellow
+    local conflicted='%F{#CB4B16}' # Solarized Orange
 
     local res
 

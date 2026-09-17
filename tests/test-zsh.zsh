@@ -298,16 +298,18 @@ test_addendum() {
         echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#93A1A1" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#002B36" ]; then
-        echo "PASS:p10k OS icon configured with authentic Solarized Base1 background and Base03 foreground"
+    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#93A1A1" ]; then
+        echo "PASS:p10k OS icon configured with Base02 background and Solarized Base1 foreground"
     else
-        echo "FAIL:p10k OS_ICON colors:Expected bg='#93A1A1' fg='#002B36', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#93A1A1', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" = "#B58900" ]; then
-        echo "PASS:p10k VCS untracked background configured with Solarized Yellow for uncommitted state"
+    if [ "${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-}" = "#859900" ] && \
+       [ "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND:-}" = "#B58900" ] && \
+       [ "${POWERLEVEL9K_VCS_MODIFIED_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_MODIFIED_FOREGROUND:-}" = "#B58900" ]; then
+        echo "PASS:p10k VCS configured with Base02 background and semantic foregrounds"
     else
-        echo "FAIL:p10k VCS_UNTRACKED_BACKGROUND:Expected '#B58900', got '${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}'"
+        echo "FAIL:p10k VCS colors:Expected bg='#073642' with Green clean and Yellow dirty foregrounds"
     fi
 
     if [[ "${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}" == *"#586E75"* ]]; then
@@ -322,10 +324,20 @@ test_addendum() {
         echo "FAIL:p10k prompt_char:Expected prompt_char to be disabled in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
     fi
 
-    if [ "${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}" = "#EEE8D5" ]; then
-        echo "PASS:p10k shortened directory foreground configured with readable Base2 contrast on Blue"
+    if [ "${POWERLEVEL9K_DIR_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_DIR_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}" = "#268BD2" ] && [ "${POWERLEVEL9K_DIR_ANCHOR_FOREGROUND:-}" = "#268BD2" ]; then
+        echo "PASS:p10k directory configured with Base02 background and Solarized Blue foregrounds"
     else
-        echo "FAIL:p10k DIR_SHORTENED_FOREGROUND:Expected '#EEE8D5', got '${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}'"
+        echo "FAIL:p10k DIR colors:Expected bg='#073642' fg='#268BD2'"
+    fi
+
+    if [ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" = '\uE0B1' ] && \
+       [ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" = '\uE0B3' ] && \
+       [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '\uE0B0' ] && \
+       [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '\uE0B2' ]; then
+        echo "PASS:p10k subsegment arrows (\uE0B1 and \uE0B3) configured with matching text colors on Base02"
+    else
+        echo "FAIL:p10k separators:Expected subsegment arrows \uE0B1 on left and \uE0B3 on right"
     fi
 
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
