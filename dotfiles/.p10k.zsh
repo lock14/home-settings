@@ -158,10 +158,10 @@
     typeset -g POWERLEVEL9K_EMPTY_LINE_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL='%{%}'
   fi
 
-  # Separator between same-color segments on the left (semantic vertical separator).
-  typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR='%F{#268BD2}│'
-  # Separator between same-color segments on the right (semantic vertical separator).
-  typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR='│'
+  # Separator between same-color segments on the left (quiet Base01 vertical separator).
+  typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR='%F{#586E75}│'
+  # Separator between same-color segments on the right (quiet Base01 vertical separator).
+  typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR='%F{#586E75}│'
   # Separator between different-color segments on the left.
   typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR='\uE0B0'
   # Separator between different-color segments on the right.
@@ -181,7 +181,6 @@
   # OS identifier color.
   typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#93A1A1'
   typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#073642'
-  typeset -g POWERLEVEL9K_OS_ICON_LEFT_SUBSEGMENT_SEPARATOR='%F{#93A1A1}│'
   # Custom icon.
   # typeset -g POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION='⭐'
 
@@ -213,7 +212,6 @@
   typeset -g POWERLEVEL9K_DIR_BACKGROUND='#073642'
   # Default current directory foreground color.
   typeset -g POWERLEVEL9K_DIR_FOREGROUND='#268BD2'
-  typeset -g POWERLEVEL9K_DIR_LEFT_SUBSEGMENT_SEPARATOR='%F{#268BD2}│'
   # If directory is too long, shorten some of its segments to the shortest possible unique
   # prefix. The shortened directory can be tab-completed to the original.
   typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique

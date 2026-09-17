@@ -331,15 +331,17 @@ test_addendum() {
         echo "FAIL:p10k DIR colors:Expected bg='#073642' fg='#268BD2'"
     fi
 
-    if [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
-       [ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" = "│" ] && \
+    if [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"#586E75"* ]] && \
+       [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"#586E75"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
        [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '\uE0B0' ] && \
        [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '\uE0B2' ] && \
        [ "${POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION:-}" = "✔" ] && \
        [ "${POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION:-}" = "✘" ]; then
-        echo "PASS:p10k semantic vertical separators (│) and solid wedge caps (\uE0B0 and \uE0B2) configured on Base02 shelf"
+        echo "PASS:p10k uniform Base01 vertical separators (│) and solid wedge caps (\uE0B0 and \uE0B2) configured on Base02 shelf"
     else
-        echo "FAIL:p10k separators:Expected semantic vertical separators (│) and solid wedge caps (\uE0B0 on left, \uE0B2 on right) on Base02 shelf"
+        echo "FAIL:p10k separators:Expected uniform Base01 vertical separators (│) and solid wedge caps (\uE0B0 on left, \uE0B2 on right) on Base02 shelf"
     fi
 
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
