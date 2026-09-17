@@ -374,6 +374,15 @@ test_addendum() {
         echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
     fi
 
+    if [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_ICON:-}" = $'\U000F1062' ] && \
+       [ "${POWERLEVEL9K_NODE_ICON:-}" = $'\uE718' ] && \
+       [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ]; then
+        echo "PASS:p10k modern Nerd Font icons configured (solid Go gopher, HashiCorp Terraform, Node hexagon, Ruby gem)"
+    else
+        echo "FAIL:p10k modern Nerd Font icons:Expected modern glyphs for Go, Terraform, Node, and Ruby"
+    fi
+
     if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
        [ "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#CB4B16" ] && \
        [ "${POWERLEVEL9K_AZURE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#268BD2" ] && \

@@ -115,6 +115,13 @@
   # icon overlap when using non-monospace fonts. When set to `none`, spaces are not added.
   typeset -g POWERLEVEL9K_ICON_PADDING=none
 
+  # Modern Nerd Font icon overrides (solid silhouettes and official brand logos replacing legacy 2017 glyphs)
+  typeset -g POWERLEVEL9K_GO_ICON=$'\uE627'            # Solid filled Gopher silhouette (replaces hollow E626)
+  typeset -g POWERLEVEL9K_TERRAFORM_ICON=$'\U000F1062' # Official HashiCorp geometric logo (replaces pine tree F1BB)
+  typeset -g POWERLEVEL9K_NODE_ICON=$'\uE718'          # Official Node.js hexagon badge with JS (replaces small arch E617)
+  typeset -g POWERLEVEL9K_NODEJS_ICON=$'\uE718'
+  typeset -g POWERLEVEL9K_RUBY_ICON=$'\uE791'          # Official faceted Ruby gemstone (replaces diamond outline F219)
+
   # When set to true, icons appear before content on both sides of the prompt. When set
   # to false, icons go after content. If empty or not set, icons go before content in the left
   # prompt and after content in the right prompt.
@@ -1084,8 +1091,8 @@
   typeset -g POWERLEVEL9K_NODE_VERSION_BACKGROUND='#073642'
   # Show node version only when in a directory tree containing package.json.
   typeset -g POWERLEVEL9K_NODE_VERSION_PROJECT_ONLY=true
-  # Custom icon.
-  # typeset -g POWERLEVEL9K_NODE_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: official Node.js hexagon badge
+  typeset -g POWERLEVEL9K_NODE_VERSION_VISUAL_IDENTIFIER_EXPANSION=$'\uE718'
 
   #######################[ go_version: go version (https://golang.org) ]########################
   # Go version color.
@@ -1093,8 +1100,8 @@
   typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND='#073642'
   # Show go version only when in a go project subdirectory.
   typeset -g POWERLEVEL9K_GO_VERSION_PROJECT_ONLY=true
-  # Custom icon.
-  # typeset -g POWERLEVEL9K_GO_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: solid filled Gopher silhouette
+  typeset -g POWERLEVEL9K_GO_VERSION_VISUAL_IDENTIFIER_EXPANSION=$'\uE627'
 
   #################[ rust_version: rustc version (https://www.rust-lang.org) ]##################
   # Rust version color.
@@ -1141,8 +1148,8 @@
   typeset -g POWERLEVEL9K_RBENV_PROMPT_ALWAYS_SHOW=false
   # If set to false, hide ruby version if it's equal to "system".
   typeset -g POWERLEVEL9K_RBENV_SHOW_SYSTEM=true
-  # Custom icon.
-  # typeset -g POWERLEVEL9K_RBENV_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: official Ruby gemstone
+  typeset -g POWERLEVEL9K_RBENV_VISUAL_IDENTIFIER_EXPANSION=$'\uE791'
 
   ####################[ java_version: java version (https://www.java.com/) ]####################
   # Java version color.
@@ -1178,8 +1185,8 @@
   typeset -g POWERLEVEL9K_RVM_SHOW_GEMSET=false
   # Don't show ruby- at the front.
   typeset -g POWERLEVEL9K_RVM_SHOW_PREFIX=false
-  # Custom icon.
-  # typeset -g POWERLEVEL9K_RVM_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: official Ruby gemstone
+  typeset -g POWERLEVEL9K_RVM_VISUAL_IDENTIFIER_EXPANSION=$'\uE791'
 
   ###########[ fvm: flutter version management (https://github.com/leoafarias/fvm) ]############
   # Fvm color.
@@ -1318,14 +1325,15 @@
       '*'         OTHER)
   typeset -g POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND='#6C71C4'
   typeset -g POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND='#073642'
-  # typeset -g POWERLEVEL9K_TERRAFORM_OTHER_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: official HashiCorp Terraform logo
+  typeset -g POWERLEVEL9K_TERRAFORM_OTHER_VISUAL_IDENTIFIER_EXPANSION=$'\U000F1062'
 
   #############[ terraform_version: terraform version (https://www.terraform.io) ]##############
   # Terraform version color.
   typeset -g POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND='#6C71C4'
   typeset -g POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND='#073642'
-  # Custom icon.
-  # typeset -g POWERLEVEL9K_TERRAFORM_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  # Custom icon: official HashiCorp Terraform logo
+  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_VISUAL_IDENTIFIER_EXPANSION=$'\U000F1062'
 
   ################[ terraform_version: It shows active terraform version (https://www.terraform.io) ]#################
   typeset -g POWERLEVEL9K_TERRAFORM_VERSION_SHOW_ON_COMMAND='terraform|tf'
