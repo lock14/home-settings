@@ -345,26 +345,36 @@ test_addendum() {
         echo "FAIL:p10k RIGHT_PROMPT_ELEMENTS:Expected toolchain versions enabled in POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS"
     fi
 
-    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#93A1A1" ] && \
+    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#2AA198" ] && \
+       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#859900" ] && \
+       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#268BD2" ] && \
        [ "${POWERLEVEL9K_PACKAGE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_PACKAGE_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#93A1A1" ]; then
-        echo "PASS:p10k toolchain versions unified under cohesive Base02 background with Base1 foreground"
+       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#6C71C4" ]; then
+        echo "PASS:p10k toolchain versions unified on Base02 background with semantic foregrounds"
     else
-        echo "FAIL:p10k toolchain version colors:Expected unified Base02 background with Base1 foreground"
+        echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
     fi
 
-    if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_AZURE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_GCLOUD_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GCLOUD_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND:-}" = "#93A1A1" ] && \
-       [ "${POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND:-}" = "#93A1A1" ]; then
-        echo "PASS:p10k cloud provider segments unified under cohesive Base02 background with Base1 foreground"
+    if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ "${POWERLEVEL9K_AZURE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_GCLOUD_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GCLOUD_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND:-}" = "#6C71C4" ]; then
+        echo "PASS:p10k cloud provider segments unified on Base02 background with semantic foregrounds"
     else
-        echo "FAIL:p10k cloud provider segment colors:Expected unified Base02 background with Base1 foreground"
+        echo "FAIL:p10k cloud provider segment colors:Expected Base02 background with semantic foregrounds"
+    fi
+
+    if [ "${POWERLEVEL9K_STATUS_OK_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_STATUS_OK_FOREGROUND:-}" = "#859900" ] && \
+       [ "${POWERLEVEL9K_STATUS_ERROR_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_STATUS_ERROR_FOREGROUND:-}" = "#DC322F" ] && \
+       [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND:-}" = "#B58900" ] && \
+       [ "${POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND:-}" = "#2AA198" ] && \
+       [ "${POWERLEVEL9K_CONTEXT_ROOT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_CONTEXT_ROOT_FOREGROUND:-}" = "#DC322F" ]; then
+        echo "PASS:p10k status, execution time, background jobs, and context unified on Base02 background with semantic foregrounds"
+    else
+        echo "FAIL:p10k right status colors:Expected Base02 background with semantic foregrounds"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then
