@@ -333,11 +333,14 @@ test_addendum() {
 
     if [ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" = '\uE0B1' ] && \
        [ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" = '\uE0B3' ] && \
-       [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '\uE0B0' ] && \
-       [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '\uE0B2' ]; then
-        echo "PASS:p10k subsegment arrows (\uE0B1 and \uE0B3) configured with matching text colors on Base02"
+       [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '' ] && \
+       [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '' ] && \
+       [[ "${POWERLEVEL9K_DIR_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" == *'\uE0B1'* ]] && \
+       [[ "${POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION:-}" == *""* ]] && \
+       [[ "${POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION:-}" == *""* ]]; then
+        echo "PASS:p10k pure unified thin chevron architecture ( and ) configured across internal and boundary segments on Base02"
     else
-        echo "FAIL:p10k separators:Expected subsegment arrows \uE0B1 on left and \uE0B3 on right"
+        echo "FAIL:p10k separators:Expected pure unified thin chevrons (\uE0B1 on left, \uE0B3 on right, empty outer caps, leading/trailing boundary chevrons)"
     fi
 
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then

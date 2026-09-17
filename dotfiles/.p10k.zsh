@@ -166,10 +166,10 @@
   typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR='\uE0B0'
   # Separator between different-color segments on the right.
   typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR='\uE0B2'
-  # The right end of left prompt.
-  typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL='\uE0B0'
-  # The left end of right prompt.
-  typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL='\uE0B2'
+  # The right end of left prompt (empty in pure unified thin chevron architecture).
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
+  # The left end of right prompt (empty in pure unified thin chevron architecture).
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''
   # The left end of left prompt.
   typeset -g POWERLEVEL9K_LEFT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''
   # The right end of right prompt.
@@ -281,6 +281,10 @@
   # the full directory that was used in previous commands.
   typeset -g POWERLEVEL9K_DIR_HYPERLINK=false
 
+  # In pure unified thin chevron architecture, when dir is the last segment on the left prompt
+  # (outside git repos), terminate with a matching Solarized Blue thin chevron.
+  typeset -g POWERLEVEL9K_DIR_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL='%K{#073642}%F{#268BD2}\uE0B1%k'
+
   # Enable special styling for non-writable and non-existent directories. See POWERLEVEL9K_LOCK_ICON
   # and POWERLEVEL9K_DIR_CLASSES below.
   typeset -g POWERLEVEL9K_DIR_SHOW_WRITABLE=v3
@@ -380,7 +384,7 @@
     if [[ -n $P9K_CONTENT ]]; then
       # If P9K_CONTENT is not empty, use it. It's either "loading" or from vcs_info (not from
       # gitstatus plugin). VCS_STATUS_* parameters are not available in this case.
-      typeset -g my_git_format=$P9K_CONTENT
+      typeset -g my_git_format="${P9K_CONTENT} %F{#859900}${(g::)POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR}"
       return
     fi
 
@@ -461,6 +465,12 @@
     # in this case.
     (( VCS_STATUS_HAS_UNSTAGED == -1 )) && res+=" ${modified}─"
 
+    # In pure unified thin chevron architecture, terminate left shelf with a matching thin chevron.
+    local state_color=$clean
+    (( VCS_STATUS_HAS_UNSTAGED || VCS_STATUS_HAS_STAGED || VCS_STATUS_NUM_UNTRACKED )) && state_color=$modified
+    (( VCS_STATUS_NUM_CONFLICTED )) && state_color=$conflicted
+    res+=" ${state_color}${(g::)POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR}"
+
     typeset -g my_git_format=$res
   }
   functions -M my_git_formatter 2>/dev/null
@@ -504,21 +514,21 @@
   # Status on success. No content, just an icon. No need to show it if prompt_char is enabled as
   # it will signify success by turning green.
   typeset -g POWERLEVEL9K_STATUS_OK=true
-  typeset -g POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION='✔'
+  typeset -g POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION=' ✔'
   typeset -g POWERLEVEL9K_STATUS_OK_FOREGROUND='#859900'
   typeset -g POWERLEVEL9K_STATUS_OK_BACKGROUND='#073642'
 
   # Status when some part of a pipe command fails but the overall exit status is zero. It may look
   # like this: 1|0.
   typeset -g POWERLEVEL9K_STATUS_OK_PIPE=true
-  typeset -g POWERLEVEL9K_STATUS_OK_PIPE_VISUAL_IDENTIFIER_EXPANSION='✔'
+  typeset -g POWERLEVEL9K_STATUS_OK_PIPE_VISUAL_IDENTIFIER_EXPANSION=' ✔'
   typeset -g POWERLEVEL9K_STATUS_OK_PIPE_FOREGROUND='#859900'
   typeset -g POWERLEVEL9K_STATUS_OK_PIPE_BACKGROUND='#073642'
 
   # Status when it's just an error code (e.g., '1'). No need to show it if prompt_char is enabled as
   # it will signify error by turning red.
   typeset -g POWERLEVEL9K_STATUS_ERROR=true
-  typeset -g POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION='✘'
+  typeset -g POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION=' ✘'
   typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND='#DC322F'
   typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND='#073642'
 
@@ -526,14 +536,14 @@
   typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL=true
   # Use terse signal names: "INT" instead of "SIGINT(2)".
   typeset -g POWERLEVEL9K_STATUS_VERBOSE_SIGNAME=false
-  typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_VISUAL_IDENTIFIER_EXPANSION='✘'
+  typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_VISUAL_IDENTIFIER_EXPANSION=' ✘'
   typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_FOREGROUND='#DC322F'
   typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_BACKGROUND='#073642'
 
   # Status when some part of a pipe command fails and the overall exit status is also non-zero.
   # It may look like this: 1|0.
   typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE=true
-  typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_VISUAL_IDENTIFIER_EXPANSION='✘'
+  typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_VISUAL_IDENTIFIER_EXPANSION=' ✘'
   typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_FOREGROUND='#DC322F'
   typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_BACKGROUND='#073642'
 
