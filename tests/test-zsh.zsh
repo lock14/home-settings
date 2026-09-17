@@ -298,10 +298,10 @@ test_addendum() {
         echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#93A1A1" ]; then
-        echo "PASS:p10k OS icon configured with Base02 background and Solarized Base1 foreground"
+    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#EEE8D5" ]; then
+        echo "PASS:p10k OS icon configured with Base02 background and Solarized Base2 pearl white foreground"
     else
-        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#93A1A1', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#EEE8D5', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
     fi
 
     if [ "${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-}" = "#859900" ] && \
