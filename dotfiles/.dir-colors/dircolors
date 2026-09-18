@@ -182,17 +182,17 @@ EXEC 32
 .sql 00
 .tf 00
 
-# Security, Crypto & Keys (Solarized Blue #268BD2 / ANSI 34)
-.gpg 34
-.pgp 34
-.asc 34
-.3des 34
-.aes 34
-.enc 34
-.key 34
-.pem 34
-.crt 34
-.cer 34
+# Security, Crypto & Keys (Solarized Magenta #D33682 / ANSI 35)
+.gpg 35
+.pgp 35
+.asc 35
+.3des 35
+.aes 35
+.enc 35
+.key 35
+.pem 35
+.crt 35
+.cer 35
 
 # Temporary, Backup & Swap Files (Solarized Base01 Dim #586E75 / ANSI 90)
 .bak 90
