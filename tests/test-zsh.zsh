@@ -332,16 +332,16 @@ test_addendum() {
     fi
 
     if [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"#657B83"* ]] && \
-       [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
+       [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"\uE0B1"* ]] && \
        [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"#657B83"* ]] && \
-       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"\uE0B3"* ]] && \
        [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '\uE0B0' ] && \
        [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '\uE0B2' ] && \
        [ "${POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION:-}" = "✔" ] && \
        [ "${POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION:-}" = "✘" ]; then
-        echo "PASS:p10k Base00 vertical separators (│) and solid wedge caps (\uE0B0 and \uE0B2) configured on Base02 shelf"
+        echo "PASS:p10k Base00 thin chevron separators (\uE0B1/\uE0B3) and solid wedge caps (\uE0B0/\uE0B2) configured on Base02 shelf"
     else
-        echo "FAIL:p10k separators:Expected Base00 vertical separators (│) and solid wedge caps (\uE0B0 on left, \uE0B2 on right) on Base02 shelf"
+        echo "FAIL:p10k separators:Expected Base00 thin chevrons (\uE0B1 left, \uE0B3 right) and solid wedge caps (\uE0B0/\uE0B2) on Base02 shelf"
     fi
 
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then

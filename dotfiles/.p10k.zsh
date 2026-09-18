@@ -166,10 +166,10 @@
     typeset -g POWERLEVEL9K_EMPTY_LINE_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL='%{%}'
   fi
 
-  # Separator between same-color segments on the left (Base00 vertical separator, crisper than Base01 frame).
-  typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR='%F{#657B83}│'
-  # Separator between same-color segments on the right (Base00 vertical separator, crisper than Base01 frame).
-  typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR='%F{#657B83}│'
+  # Separator between same-color segments on the left (Base00 thin chevron, flows with wedge cap).
+  typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR='%F{#657B83}\uE0B1'
+  # Separator between same-color segments on the right (Base00 thin chevron, flows with wedge cap).
+  typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR='%F{#657B83}\uE0B3'
   # Separator between different-color segments on the left.
   typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR='\uE0B0'
   # Separator between different-color segments on the right.
