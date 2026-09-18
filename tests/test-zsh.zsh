@@ -298,10 +298,10 @@ test_addendum() {
         echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
     fi
 
-    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#EEE8D5" ]; then
-        echo "PASS:p10k OS icon configured with Base02 background and Solarized Base2 pearl white foreground"
+    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#839496" ]; then
+        echo "PASS:p10k OS icon configured with Base02 background and Base0 standard foreground"
     else
-        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#EEE8D5', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#839496', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
     fi
 
     if [ "${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-}" = "#859900" ] && \
@@ -331,17 +331,17 @@ test_addendum() {
         echo "FAIL:p10k DIR colors:Expected bg='#073642' fg='#268BD2'"
     fi
 
-    if [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"#586E75"* ]] && \
+    if [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"#657B83"* ]] && \
        [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
-       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"#586E75"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"#657B83"* ]] && \
        [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"│"* ]] && \
        [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '\uE0B0' ] && \
        [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '\uE0B2' ] && \
        [ "${POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION:-}" = "✔" ] && \
        [ "${POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION:-}" = "✘" ]; then
-        echo "PASS:p10k uniform Base01 vertical separators (│) and solid wedge caps (\uE0B0 and \uE0B2) configured on Base02 shelf"
+        echo "PASS:p10k Base00 vertical separators (│) and solid wedge caps (\uE0B0 and \uE0B2) configured on Base02 shelf"
     else
-        echo "FAIL:p10k separators:Expected uniform Base01 vertical separators (│) and solid wedge caps (\uE0B0 on left, \uE0B2 on right) on Base02 shelf"
+        echo "FAIL:p10k separators:Expected Base00 vertical separators (│) and solid wedge caps (\uE0B0 on left, \uE0B2 on right) on Base02 shelf"
     fi
 
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
