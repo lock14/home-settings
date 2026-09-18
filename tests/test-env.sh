@@ -164,10 +164,10 @@ if command -v dircolors >/dev/null 2>&1; then
     if dircolors_out=$(dircolors -b "$SCRIPT_DIR/dotfiles/.dir-colors/dircolors" 2>&1); then
         pass "dircolors database is valid"
         if [[ "$dircolors_out" == *"ln=36:"* ]] && [[ "$dircolors_out" == *"ex=32:"* ]] && \
-           [[ "$dircolors_out" == *"*.png=35:"* ]] && [[ "$dircolors_out" == *"*.tar=33:"* ]] && \
+           [[ "$dircolors_out" == *"*.png=95:"* ]] && [[ "$dircolors_out" == *"*.tar=91:"* ]] && \
            [[ "$dircolors_out" == *"*.txt=00:"* ]] && ! [[ "$dircolors_out" == *"*.txt=32:"* ]] && \
            ! [[ "$dircolors_out" == *"ex=01;32:"* ]]; then
-            pass "dircolors strictly follows 7 Pillars (Cyan symlinks, unbolded Green executables, Violet media, Orange archives, Base0 text/code)"
+            pass "dircolors strictly follows 7 Pillars (Cyan symlinks, unbolded Green executables, Violet media ANSI 95, Orange archives ANSI 91, Base0 text/code)"
         else
             fail "dircolors semantic mapping" "dircolors does not adhere to 7 Pillars specification: $dircolors_out"
         fi
