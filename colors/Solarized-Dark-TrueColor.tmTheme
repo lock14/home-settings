@@ -1471,6 +1471,576 @@
 			</dict>
 		</dict>
 		<!-- ======================================================= -->
+		<!-- TypeScript & JavaScript Ergonomic Solarized Scheme      -->
+		<!-- ======================================================= -->
+		<!-- TS Scaffolding & Declarations -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Scaffolding &amp; Declarations (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.ts storage.type, source.ts storage.modifier, source.ts keyword.declaration, source.ts keyword.operator.new, source.ts keyword.operator.word, source.ts keyword.operator.expression</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- TS Control Flow & Jumps -> Solarized Yellow (#B58900) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Control Flow &amp; Jumps (Solarized Yellow)</string>
+			<key>scope</key>
+			<string>source.ts keyword.control.flow, source.ts keyword.control.coroutine</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
+		<!-- TS Primitive Scalar Types -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Primitive Types (Solarized Green)</string>
+			<key>scope</key>
+			<string>source.ts storage.type.primitive, source.ts support.type.builtin</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- TS Custom & Domain Types (Interfaces, Classes, Types, Enums) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Custom Types &amp; Interfaces (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.ts entity.name.type, source.ts support.type, source.ts support.class, source.ts storage.type.array, source.ts storage.type.constructor</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- TS Function & Method Declarations -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Function &amp; Method Declarations (Solarized Blue)</string>
+			<key>scope</key>
+			<string>source.ts entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- TS Modules, Imports, Exports & Decorators -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Modules, Imports &amp; Decorators (Solarized Violet)</string>
+			<key>scope</key>
+			<string>source.ts keyword.control.import, source.ts keyword.control.export, source.ts entity.name.function.decorator, source.ts punctuation.definition.decorator</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- TS Constants, Numbers, Booleans, Sentinels, Regex & Receivers -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Constants, Literals &amp; Sentinels (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>source.ts constant.numeric, source.ts constant.language, source.ts constant.other.allcaps, source.ts variable.language.this, source.ts variable.language.super, source.ts variable.language.builtin, source.ts string.regexp</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- TS Strings & Regex Flags -> Solarized Cyan (#2AA198) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Strings &amp; Regex Flags (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>source.ts string, source.ts string.template, source.ts constant.character.escape, source.ts keyword.other.regexp-flags</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- TS Comments -> Solarized Base01 (#586E75) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Comments (Solarized Base01)</string>
+			<key>scope</key>
+			<string>source.ts comment, source.ts punctuation.definition.comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- TS Base Canvas (Invocations, Variables, Parameters, Properties, Operators, Punctuation) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>TypeScript Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>source.ts variable.function, source.ts support.function, variable.function.ts, support.function.ts, text.html source.ts variable.function, text.html source.ts support.function, source.ts variable.other, source.ts variable.parameter, source.ts keyword.operator, source.ts punctuation, source.ts storage.type.function.arrow, source.ts punctuation.definition.string.regexp</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- XML Syntax Scopes (Universal Semantic Architecture)     -->
+		<!-- ======================================================= -->
+		<!-- XML Element Tags -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>XML Tag Names (Solarized Blue)</string>
+			<key>scope</key>
+			<string>text.xml entity.name.tag, entity.name.tag.xml, entity.name.tag.localname.xml</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- XML Tag Namespaces -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>XML Namespaces (Solarized Violet)</string>
+			<key>scope</key>
+			<string>text.xml entity.name.tag.namespace, entity.name.tag.namespace.xml, entity.other.attribute-name.namespace.xml</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- XML Directives & Processing Instructions -> Solarized Orange (#CB4B16) -->
+		<dict>
+			<key>name</key>
+			<string>XML Processing Instructions &amp; Directives (Solarized Orange)</string>
+			<key>scope</key>
+			<string>text.xml keyword.other.directive, keyword.other.directive.xml, meta.tag.preprocessor.xml</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- XML Entity References -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>XML Entity References (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>text.xml constant.character.entity, constant.character.entity.xml</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- XML CDATA Boundaries -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>XML CDATA Boundaries (Solarized Violet)</string>
+			<key>scope</key>
+			<string>text.xml keyword.other.cdata, keyword.other.cdata.xml</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- XML Strings -> Solarized Cyan (#2AA198) -->
+		<dict>
+			<key>name</key>
+			<string>XML Attribute Strings (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>text.xml string.quoted</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- XML Comments -> Solarized Base01 (#586E75) -->
+		<dict>
+			<key>name</key>
+			<string>XML Comments (Solarized Base01)</string>
+			<key>scope</key>
+			<string>text.xml comment, text.xml punctuation.definition.comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- XML Base Canvas (Delimiters, Attributes, Operators, Text, CDATA Body) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>XML Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>text.xml entity.other.attribute-name, entity.other.attribute-name.xml, entity.other.attribute-name.localname.xml, text.xml punctuation.definition.tag, punctuation.definition.tag.xml, text.xml punctuation.separator, text.xml string.unquoted.cdata, string.unquoted.cdata.xml, text.xml variable.parameter</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- HTML Element Tags -> Solarized Blue (#268BD2)          -->
+		<dict>
+			<key>name</key>
+			<string>HTML Tag Names (Solarized Blue)</string>
+			<key>scope</key>
+			<string>text.html entity.name.tag, entity.name.tag.html</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- HTML Doctype -> Solarized Orange (#CB4B16)             -->
+		<dict>
+			<key>name</key>
+			<string>HTML Doctype Directives (Solarized Orange)</string>
+			<key>scope</key>
+			<string>text.html keyword.other.directive.doctype, keyword.other.directive.doctype.html</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- HTML Entity References -> Solarized Magenta (#D33682)  -->
+		<dict>
+			<key>name</key>
+			<string>HTML Entity References (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>text.html constant.character.entity, constant.character.entity.html</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- HTML Strings -> Solarized Cyan (#2AA198)               -->
+		<dict>
+			<key>name</key>
+			<string>HTML Attribute Strings (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>text.html string.quoted</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- HTML Comments -> Solarized Base01 (#586E75)            -->
+		<dict>
+			<key>name</key>
+			<string>HTML Comments (Solarized Base01)</string>
+			<key>scope</key>
+			<string>text.html comment, text.html punctuation.definition.comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- HTML Base Canvas (Delimiters, Attributes, Operators, Text) -> Solarized Base0 (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>HTML Base Canvas (Solarized Base0)</string>
+			<key>scope</key>
+			<string>text.html entity.other.attribute-name, entity.other.attribute-name.html, text.html punctuation.definition.tag, punctuation.definition.tag.html, text.html punctuation.separator, text.html text, text.html variable.function, text.html support.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- JSON Syntax Scopes (Universal Semantic Architecture)    -->
+		<!-- ======================================================= -->
+		<!-- JSON Mapping Keys -> Solarized Green (#859900)          -->
+		<dict>
+			<key>name</key>
+			<string>JSON Mapping Keys (Solarized Green)</string>
+			<key>scope</key>
+			<string>entity.name.tag.json, source.json entity.name.tag, punctuation.definition.string.begin.json entity.name.tag, punctuation.definition.string.end.json entity.name.tag, source.json meta.mapping.key, meta.mapping.key.json</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- YAML Syntax Scopes (Universal Semantic Architecture)    -->
+		<!-- ======================================================= -->
+		<!-- YAML Mapping Keys -> Solarized Green (#859900)          -->
+		<dict>
+			<key>name</key>
+			<string>YAML Mapping Keys (Solarized Green)</string>
+			<key>scope</key>
+			<string>entity.name.tag.yaml, source.yaml entity.name.tag</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- YAML Explicit Type Tags -> Solarized Base0 (#839496)    -->
+		<dict>
+			<key>name</key>
+			<string>YAML Type Tags (Solarized Base0)</string>
+			<key>scope</key>
+			<string>storage.type.tag-handle.yaml, storage.type.tag-prefix.yaml, storage.type.tag-name.yaml, storage.type.yaml, source.yaml storage.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- YAML Merge Key (<<) -> Solarized Green (#859900)        -->
+		<dict>
+			<key>name</key>
+			<string>YAML Merge Key (Solarized Green)</string>
+			<key>scope</key>
+			<string>constant.language.merge.yaml, keyword.operator.merge-key.yaml, source.yaml constant.language.merge</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- YAML Anchors & Aliases -> Solarized Base01 Dim (#586E75) -->
+		<dict>
+			<key>name</key>
+			<string>YAML Anchors and Aliases (Solarized Base01)</string>
+			<key>scope</key>
+			<string>entity.name.other.anchor.yaml, entity.name.type.anchor.yaml, variable.other.alias.yaml, source.yaml entity.name.other.anchor, source.yaml variable.other.alias</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- TOML Syntax Scopes (Universal Semantic Architecture)    -->
+		<!-- ======================================================= -->
+		<!-- TOML Table Section Headers -> Solarized Blue (#268BD2)  -->
+		<dict>
+			<key>name</key>
+			<string>TOML Table Headers (Solarized Blue)</string>
+			<key>scope</key>
+			<string>entity.name.section.table.toml, source.toml entity.name.section, entity.name.table.toml, source.toml entity.name.table</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- TOML Mapping & Inline Keys -> Solarized Green (#859900) -->
+		<dict>
+			<key>name</key>
+			<string>TOML Mapping Keys (Solarized Green)</string>
+			<key>scope</key>
+			<string>entity.name.tag.toml, source.toml entity.name.tag</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- TOML Date-Time Literals -> Solarized Magenta (#D33682)  -->
+		<dict>
+			<key>name</key>
+			<string>TOML Date-Time Literals (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>constant.other.datetime.toml, source.toml constant.other.datetime</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- CSS Syntax Scopes (Universal Semantic Architecture)     -->
+		<!-- ======================================================= -->
+		<!-- CSS At-Rules & Directives -> Solarized Orange (#CB4B16) -->
+		<dict>
+			<key>name</key>
+			<string>CSS At-Rules (Solarized Orange)</string>
+			<key>scope</key>
+			<string>keyword.control.at-rule.css, source.css keyword.control.at-rule</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- CSS Import -> Solarized Violet (#6C71C4)                -->
+		<dict>
+			<key>name</key>
+			<string>CSS Imports (Solarized Violet)</string>
+			<key>scope</key>
+			<string>keyword.control.import.css, source.css keyword.control.import</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- CSS Selectors (Tags, Classes, IDs) -> Solarized Blue (#268BD2) -->
+		<dict>
+			<key>name</key>
+			<string>CSS Selectors (Solarized Blue)</string>
+			<key>scope</key>
+			<string>entity.name.tag.css, entity.other.attribute-name.class.css, entity.other.attribute-name.id.css, source.css entity.name.tag, source.css entity.other.attribute-name.class, source.css entity.other.attribute-name.id</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- CSS Pseudo-Classes & Pseudo-Elements -> Solarized Violet (#6C71C4) -->
+		<dict>
+			<key>name</key>
+			<string>CSS Pseudo Selectors (Solarized Violet)</string>
+			<key>scope</key>
+			<string>entity.other.attribute-name.pseudo-class.css, entity.other.attribute-name.pseudo-element.css, source.css entity.other.attribute-name.pseudo-class, source.css entity.other.attribute-name.pseudo-element</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
+			</dict>
+		</dict>
+		<!-- CSS Properties -> Solarized Green (#859900)             -->
+		<dict>
+			<key>name</key>
+			<string>CSS Properties (Solarized Green)</string>
+			<key>scope</key>
+			<string>support.type.property-name.css, source.css support.type.property-name</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- CSS Custom Properties & Functions -> Base0 Grey (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>CSS Custom Properties and Functions (Base0 Grey)</string>
+			<key>scope</key>
+			<string>variable.other.custom-property.css, source.css variable.other.custom-property, support.function.css, source.css support.function, keyword.other.unit.css, source.css keyword.other.unit, support.constant.property-value.css, source.css support.constant.property-value, keyword.operator.nesting.css, source.css keyword.operator.nesting, punctuation.definition.entity.css, source.css punctuation.definition.entity, entity.other.attribute-name.attribute.css, source.css entity.other.attribute-name.attribute</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- CSS Hex Colors -> Solarized Magenta (#D33682)           -->
+		<dict>
+			<key>name</key>
+			<string>CSS Hex Colors (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>constant.other.color.rgb-value.hex.css, source.css constant.other.color</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- CSS !important -> Solarized Red (#DC322F)               -->
+		<dict>
+			<key>name</key>
+			<string>CSS Important (Solarized Red)</string>
+			<key>scope</key>
+			<string>keyword.other.important.css, source.css keyword.other.important</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#DC322F</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Java Properties Specification (Ethan Schoonover Palette)-->
+		<!-- ======================================================= -->
+		<!-- Properties Keys -> Solarized Green (#859900)             -->
+		<dict>
+			<key>name</key>
+			<string>Properties Keys (Solarized Green)</string>
+			<key>scope</key>
+			<string>support.type.property-name.properties, source.properties support.type.property-name, keyword.other.definition.key.properties</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- Properties Numbers & Booleans -> Solarized Magenta (#D33682) -->
+		<dict>
+			<key>name</key>
+			<string>Properties Numbers and Booleans (Solarized Magenta)</string>
+			<key>scope</key>
+			<string>constant.numeric.properties, source.properties constant.numeric, constant.language.boolean.properties, source.properties constant.language.boolean</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#D33682</string>
+			</dict>
+		</dict>
+		<!-- Properties Strings & Escapes -> Solarized Cyan (#2AA198)   -->
+		<dict>
+			<key>name</key>
+			<string>Properties Strings and Escapes (Solarized Cyan)</string>
+			<key>scope</key>
+			<string>string.unquoted.properties, source.properties string.unquoted, constant.character.escape.properties, source.properties constant.character.escape</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#2AA198</string>
+			</dict>
+		</dict>
+		<!-- Properties Delimiters & Interpolation -> Base0 Grey (#839496) -->
+		<dict>
+			<key>name</key>
+			<string>Properties Delimiters and Interpolation (Base0 Grey)</string>
+			<key>scope</key>
+			<string>punctuation.separator.key-value.properties, punctuation.section.embedded.properties, variable.other.interpolation.properties, punctuation.separator.continuation.properties</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
+			</dict>
+		</dict>
+		<!-- Properties Comments -> Base01 Dim (#586E75)                -->
+		<dict>
+			<key>name</key>
+			<string>Properties Comments (Solarized Base01 Dim)</string>
+			<key>scope</key>
+			<string>comment.line.properties, source.properties comment.line, punctuation.definition.comment.properties</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#586E75</string>
+				<key>fontStyle</key>
+				<string></string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
 		<!-- Errors & Invalid Syntax (Solarized Red)                -->
 		<!-- ======================================================= -->
 		<dict>

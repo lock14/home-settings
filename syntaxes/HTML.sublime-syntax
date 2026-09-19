@@ -1,0 +1,166 @@
+%YAML 1.2
+---
+# Solarized Dark HTML5 Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Doctype (<!DOCTYPE html>) in Solarized Orange (keyword.other.directive.doctype.html)
+# - Element tag names in Solarized Blue (entity.name.tag.html)
+# - Tag delimiters (<, >, </, />) in calm Base0 Grey (punctuation.definition.tag.html)
+# - Attribute names in calm Base0 Grey (entity.other.attribute-name.html)
+# - Attribute strings in Solarized Cyan (string.quoted.double.html, string.quoted.single.html)
+# - Entity references (&copy;, &mdash;) in Solarized Magenta (constant.character.entity.html)
+# - Comments in Base01 Dim (comment.block.html)
+# - Content text in calm Base0 Grey (text.html)
+# - Embedded <script> delegates to scope:source.ts (Converged Ergonomic Solarized JS/TS)
+# - Embedded <style> delegates to CSS
+
+name: HTML
+scope: text.html
+version: 2
+
+file_extensions:
+  - html
+  - htm
+  - xhtml
+  - shtml
+
+first_line_match: '(?i)^<!DOCTYPE\s+html\b'
+
+variables:
+  tag_name: '[a-zA-Z][a-zA-Z0-9:-]*'
+  attr_name: '[a-zA-Z_:][a-zA-Z0-9._:-]*'
+
+contexts:
+  main:
+    - include: comments
+    - include: doctype
+    - include: script-tag
+    - include: style-tag
+    - include: tags
+    - include: entity-references
+    - include: text
+
+  comments:
+    - match: '<!--'
+      scope: punctuation.definition.comment.begin.html comment.block.html
+      push:
+        - match: '-->'
+          scope: punctuation.definition.comment.end.html comment.block.html
+          pop: true
+        - match: '.+?(?=-->|$)'
+          scope: comment.block.html
+
+  doctype:
+    - match: '(?i)(<!)(DOCTYPE)\s+([a-zA-Z0-9]+)'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: keyword.other.directive.doctype.html
+        3: keyword.other.directive.doctype.html
+      push:
+        - match: '>'
+          scope: punctuation.definition.tag.end.html
+          pop: true
+        - match: '\b(?i)(SYSTEM|PUBLIC)\b'
+          scope: keyword.other.directive.doctype.html
+        - include: strings
+
+  script-tag:
+    - match: '(?i)(<)(script)\b'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.html
+      push:
+        - match: '(?i)(</)(script)(>)'
+          captures:
+            1: punctuation.definition.tag.begin.html
+            2: entity.name.tag.html
+            3: punctuation.definition.tag.end.html
+          pop: true
+        - match: '>'
+          scope: punctuation.definition.tag.end.html
+          push:
+            - meta_content_scope: source.ts
+            - match: '(?i)(?=</script>)'
+              pop: true
+            - include: scope:source.ts
+        - include: tag-attributes
+
+  style-tag:
+    - match: '(?i)(<)(style)\b'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.html
+      push:
+        - match: '(?i)(</)(style)(>)'
+          captures:
+            1: punctuation.definition.tag.begin.html
+            2: entity.name.tag.html
+            3: punctuation.definition.tag.end.html
+          pop: true
+        - match: '>'
+          scope: punctuation.definition.tag.end.html
+          push:
+            - match: '(?i)(?=</style>)'
+              pop: true
+            - match: '[^<]+'
+              scope: source.css
+        - include: tag-attributes
+
+  tags:
+    # Closing tag: </tag>
+    - match: '(</)({{tag_name}})\s*(>)'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.html
+        3: punctuation.definition.tag.end.html
+
+    # Opening tag: <tag
+    - match: '(<)({{tag_name}})'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.html
+      push: tag-attributes
+
+  tag-attributes:
+    - match: '/>'
+      scope: punctuation.definition.tag.end.html
+      pop: true
+    - match: '>'
+      scope: punctuation.definition.tag.end.html
+      pop: true
+    # Attribute with value: name="value" or name='value'
+    - match: '({{attr_name}})\s*(=)'
+      captures:
+        1: entity.other.attribute-name.html
+        2: punctuation.separator.key-value.html
+    # Boolean attribute: defer, required, checked, etc.
+    - match: '{{attr_name}}'
+      scope: entity.other.attribute-name.html
+    - include: strings
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.html string.quoted.double.html
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.end.html string.quoted.double.html
+          pop: true
+        - include: entity-references
+        - match: '[^"&]+'
+          scope: string.quoted.double.html
+    - match: "'"
+      scope: punctuation.definition.string.begin.html string.quoted.single.html
+      push:
+        - match: "'"
+          scope: punctuation.definition.string.end.html string.quoted.single.html
+          pop: true
+        - include: entity-references
+        - match: "[^'&]+"
+          scope: string.quoted.single.html
+
+  entity-references:
+    - match: '&(?:[a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);'
+      scope: constant.character.entity.html
+
+  text:
+    - match: '[^<&]+'
+      scope: text.html

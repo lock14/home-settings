@@ -226,6 +226,51 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Markdown query extension" "Missing or invalid after/queries/markdown/highlights.scm or after/queries/markdown_inline/highlights.scm"
     fi
 
+    JS_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/javascript/highlights.scm"
+    TS_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/typescript/highlights.scm"
+    if [ -f "$JS_QUERY" ] && grep -q '"Date"' "$JS_QUERY" && grep -q '"process"' "$JS_QUERY" && \
+       [ -f "$TS_QUERY" ] && grep -q '"process"' "$TS_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for JavaScript & TypeScript (Date in calm Base0 Grey, process & globalThis in Solarized Magenta)"
+    else
+        fail "Neovim JavaScript/TypeScript query extensions" "Missing or invalid after/queries/javascript/highlights.scm or after/queries/typescript/highlights.scm"
+    fi
+
+    XML_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/xml/highlights.scm"
+    if [ -f "$XML_QUERY" ] && grep -q 'keyword\.directive' "$XML_QUERY" && \
+       grep -q 'CDSect' "$XML_QUERY" && grep -q '@module' "$XML_QUERY"; then
+        pass "Neovim defines Tree-sitter query extensions for XML (Orange directives, Violet CDATA delimiters, calm Base0 CDATA body)"
+    else
+        fail "Neovim XML query extension" "Missing or invalid after/queries/xml/highlights.scm"
+    fi
+
+    if grep -q '\["@tag"\]\s*=\s*{\s*fg\s*=\s*colors\.blue' "$NVIM_CONFIG" && \
+       grep -q '\["@tag\.attribute"\]\s*=\s*{\s*fg\s*=\s*colors\.base0' "$NVIM_CONFIG" && \
+       grep -q '\["@tag\.delimiter"\]\s*=\s*{\s*fg\s*=\s*colors\.base0' "$NVIM_CONFIG" && \
+       grep -q 'xmlTagName\s*=\s*{\s*fg\s*=\s*colors\.blue' "$NVIM_CONFIG" && \
+       grep -q '"xml"' "$NVIM_CONFIG"; then
+        pass "Neovim defines Tree-sitter and legacy syntax highlights for XML (Blue tags, Base0 delimiters/attributes, parsers table)"
+    else
+        fail "Neovim XML highlights in init.lua" "Missing or invalid XML highlight groups or parser in init.lua"
+    fi
+
+    HTML_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/html/highlights.scm"
+    HTML_TAGS_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/html_tags/highlights.scm"
+    if [ -f "$HTML_QUERY" ] && grep -q 'keyword\.directive' "$HTML_QUERY" && \
+       grep -q 'doctype' "$HTML_QUERY" && [ -f "$HTML_TAGS_QUERY" ] && \
+       grep -q 'markup\.raw\.block' "$HTML_TAGS_QUERY"; then
+        pass "Neovim defines Tree-sitter base queries for HTML (Orange doctype, Magenta entities, calm Base0 markup text, zero OSC 8 links)"
+    else
+        fail "Neovim HTML query base" "Missing or invalid queries/html/highlights.scm or queries/html_tags/highlights.scm"
+    fi
+
+    if grep -q 'htmlTagName\s*=\s*{\s*fg\s*=\s*colors\.blue' "$NVIM_CONFIG" && \
+       grep -q '\["@markup\.heading\.html"\]\s*=\s*{\s*fg\s*=\s*colors\.base0' "$NVIM_CONFIG" && \
+       grep -q '"html"' "$NVIM_CONFIG"; then
+        pass "Neovim defines Tree-sitter and legacy syntax highlights for HTML (Blue tags, Base0 heading desensitization, parsers table)"
+    else
+        fail "Neovim HTML highlights in init.lua" "Missing or invalid HTML highlight groups or parser in init.lua"
+    fi
+
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
     if [ -f "$JAVA_FTPLUGIN" ] && grep -q 'jdtls' "$JAVA_FTPLUGIN" && grep -q 'XDG_CACHE_HOME' "$JAVA_FTPLUGIN"; then
         pass "Neovim defines Java filetype plugin for nvim-jdtls with dynamic XDG workspace caching"
@@ -1001,6 +1046,642 @@ results["task_unchk_fg"] = string.format("%06x", hl.fg or 0)
 hl = vim.api.nvim_get_hl(0, {name = "@markup.table.delimiter", link = false})
 results["table_delim_fg"] = string.format("%06x", hl.fg or 0)
 
+-- 12. Inspect JavaScript (sample.js)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.js")
+vim.cmd("redraw")
+local js_buf = vim.api.nvim_get_current_buf()
+local js_hl = vim.treesitter.get_parser(js_buf, "javascript")
+if js_hl then
+    js_hl:parse(true)
+end
+
+r, c = find_pos(js_buf, "Date.now()", "Date")
+results["is_js_date_type"] = tostring(match_capture(js_buf, r, c, "type"))
+
+r, c = find_pos(js_buf, "console.log(", "console")
+results["is_js_console_builtin"] = tostring(match_capture(js_buf, r, c, "variable.builtin"))
+
+r, c = find_pos(js_buf, "healthRegex", "/")
+results["is_js_regex_slash"] = tostring(match_capture(js_buf, r, c, "punctuation.bracket"))
+
+r, c = find_pos(js_buf, "healthRegex", "^")
+results["is_js_regex_body"] = tostring(match_capture(js_buf, r, c, "string.regexp"))
+
+r, c = find_pos(js_buf, "healthRegex", "i;")
+results["is_js_regex_flag"] = tostring(match_capture(js_buf, r, c, "character.special"))
+
+r, c = find_pos(js_buf, "*[Symbol.iterator]()", "*")
+results["is_js_gen_star_op"] = tostring(match_capture(js_buf, r, c, "operator"))
+
+r, c = find_pos(js_buf, "*[Symbol.iterator]()", "Symbol")
+results["is_js_symbol_type"] = tostring(match_capture(js_buf, r, c, "type"))
+
+r, c = find_pos(js_buf, "*[Symbol.iterator]()", "iterator")
+results["is_js_iter_member"] = tostring(match_capture(js_buf, r, c, "variable.member"))
+
+r, c = find_pos(js_buf, "[inspectSymbol]()", "inspectSymbol")
+results["is_js_inspect_var"] = tostring(match_capture(js_buf, r, c, "variable"))
+
+r, c = find_pos(js_buf, "] of this.#cache", "of")
+results["is_js_of_kw"] = tostring(match_capture(js_buf, r, c, "keyword.repeat"))
+
+r, c = find_pos(js_buf, "process.exitCode", "process")
+results["is_js_proc_builtin"] = tostring(match_capture(js_buf, r, c, "variable.builtin"))
+
+-- 13. Inspect TypeScript (sample.ts)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.ts")
+vim.cmd("redraw")
+local ts_buf = vim.api.nvim_get_current_buf()
+local ts_hl = vim.treesitter.get_parser(ts_buf, "typescript")
+if ts_hl then
+    ts_hl:parse(true)
+end
+
+r, c = find_pos(ts_buf, "export enum UserRole", "export")
+results["is_ts_export_import"] = tostring(match_capture(ts_buf, r, c, "keyword.import"))
+
+r, c = find_pos(ts_buf, "export enum UserRole", "enum")
+results["is_ts_enum_kw"] = tostring(match_capture(ts_buf, r, c, "keyword.type"))
+
+r, c = find_pos(ts_buf, "export enum UserRole", "UserRole")
+results["is_ts_userrole_type"] = tostring(match_capture(ts_buf, r, c, "type"))
+
+r, c = find_pos(ts_buf, "export type ConnectionState", "type")
+results["is_ts_type_kw"] = tostring(match_capture(ts_buf, r, c, "keyword"))
+
+r, c = find_pos(ts_buf, "export interface ApiResponse", "interface")
+results["is_ts_interface_kw"] = tostring(match_capture(ts_buf, r, c, "keyword.type"))
+
+r, c = find_pos(ts_buf, "readonly success: boolean", "readonly")
+results["is_ts_readonly_mod"] = tostring(match_capture(ts_buf, r, c, "keyword.modifier"))
+
+r, c = find_pos(ts_buf, "readonly success: boolean", "boolean")
+results["is_ts_bool_builtin"] = tostring(match_capture(ts_buf, r, c, "type.builtin"))
+
+r, c = find_pos(ts_buf, "export class ServiceGateway", "class")
+results["is_ts_class_kw"] = tostring(match_capture(ts_buf, r, c, "keyword.type"))
+
+r, c = find_pos(ts_buf, "export class ServiceGateway", "ServiceGateway")
+results["is_ts_gateway_type"] = tostring(match_capture(ts_buf, r, c, "type"))
+
+r, c = find_pos(ts_buf, "public async request", "async")
+results["is_ts_async_coro"] = tostring(match_capture(ts_buf, r, c, "keyword.coroutine"))
+
+r, c = find_pos(ts_buf, "public async request", "request")
+results["is_ts_request_method"] = tostring(match_capture(ts_buf, r, c, "function.method"))
+
+r, c = find_pos(ts_buf, "await new Promise", "await")
+results["is_ts_await_coro"] = tostring(match_capture(ts_buf, r, c, "keyword.coroutine"))
+
+r, c = find_pos(ts_buf, "success: true", "true")
+results["is_ts_true_bool"] = tostring(match_capture(ts_buf, r, c, "boolean"))
+
+r, c = find_pos(ts_buf, "this.baseUrl = baseUrl", "this")
+results["is_ts_this_builtin"] = tostring(match_capture(ts_buf, r, c, "variable.builtin"))
+
+-- 14. Inspect XML (sample.xml)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.xml")
+vim.cmd("redraw")
+local xml_buf = vim.api.nvim_get_current_buf()
+local xml_hl = vim.treesitter.get_parser(xml_buf, "xml")
+if xml_hl then
+    xml_hl:parse(true)
+end
+
+r, c = find_pos(xml_buf, "<?xml version", "xml")
+results["is_xml_decl_dir"] = tostring(match_capture(xml_buf, r, c, "keyword.directive"))
+
+r, c = find_pos(xml_buf, "<?xml-stylesheet", "xml-stylesheet")
+results["is_xml_pi_dir"] = tostring(match_capture(xml_buf, r, c, "keyword.directive"))
+
+r, c = find_pos(xml_buf, "<deployment xmlns=", "deployment")
+results["is_xml_dep_tag"] = tostring(match_capture(xml_buf, r, c, "tag"))
+
+r, c = find_pos(xml_buf, "<mon:monitoring>", "mon:monitoring")
+results["is_xml_mon_tag"] = tostring(match_capture(xml_buf, r, c, "tag"))
+
+r, c = find_pos(xml_buf, "xmlns:mon=", "xmlns:mon")
+results["is_xml_xmlns_attr"] = tostring(match_capture(xml_buf, r, c, "tag.attribute"))
+
+r, c = find_pos(xml_buf, "<?xml version=\"1.0\"", "1.0")
+results["is_xml_ver_str"] = tostring(match_capture(xml_buf, r, c, "string"))
+
+r, c = find_pos(xml_buf, "API Gateway &amp; reverse", "&amp;")
+results["is_xml_amp_const"] = tostring(match_capture(xml_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(xml_buf, "<script><![CDATA[", "<![CDATA[")
+results["is_xml_cdata_start"] = tostring(match_capture(xml_buf, r, c, "module"))
+results["is_xml_cdata_bracket"] = tostring(match_capture(xml_buf, r, c + 8, "module"))
+
+local has_js = false
+if xml_hl then
+    for lang, _ in pairs(xml_hl:children()) do
+        if lang == "javascript" then has_js = true end
+    end
+end
+results["xml_has_js_tree"] = tostring(has_js)
+
+r, c = find_pos(xml_buf, "]]></script>", "]]>")
+results["is_xml_cdata_end"] = tostring(match_capture(xml_buf, r, c, "module"))
+
+r, c = find_pos(xml_buf, "curl -sf http://localhost:8080/healthz", "curl")
+results["is_xml_cdata_block"] = tostring(match_capture(xml_buf, r, c, "markup.raw.block"))
+local insp = vim.inspect_pos(xml_buf, r, c)
+local cdata_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local eff = insp.treesitter[#insp.treesitter]
+    local hl = vim.api.nvim_get_hl(0, {name = eff.hl_group, link = false})
+    if hl.fg then cdata_fg = string.format("%06x", hl.fg) end
+end
+results["cdata_payload_fg"] = cdata_fg
+
+hl = vim.api.nvim_get_hl(0, {name = "@tag", link = false})
+results["tag_fg"] = string.format("%06x", hl.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@tag.attribute", link = false})
+results["tag_attr_fg"] = string.format("%06x", hl.fg or 0)
+hl = vim.api.nvim_get_hl(0, {name = "@tag.delimiter", link = false})
+results["tag_delim_fg"] = string.format("%06x", hl.fg or 0)
+
+-- 15. Inspect HTML (sample.html)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.html")
+vim.cmd("redraw")
+local html_buf = vim.api.nvim_get_current_buf()
+local html_hl = vim.treesitter.get_parser(html_buf, "html")
+if html_hl then
+    html_hl:parse(true)
+end
+
+r, c = find_pos(html_buf, "<!DOCTYPE html>", "DOCTYPE")
+results["is_html_doctype_dir"] = tostring(match_capture(html_buf, r, c, "keyword.directive"))
+
+r, c = find_pos(html_buf, "<html", "html")
+results["is_html_tag"] = tostring(match_capture(html_buf, r, c, "tag"))
+
+r, c = find_pos(html_buf, "<html", "<")
+results["is_html_tag_delim"] = tostring(match_capture(html_buf, r, c, "tag.delimiter"))
+
+r, c = find_pos(html_buf, "<html", "lang")
+results["is_html_attr"] = tostring(match_capture(html_buf, r, c, "tag.attribute"))
+
+r, c = find_pos(html_buf, "<html", "en")
+results["is_html_str"] = tostring(match_capture(html_buf, r, c, "string"))
+
+r, c = find_pos(html_buf, "<!-- Primary Navigation -->", "Primary")
+results["is_html_comment"] = tostring(match_capture(html_buf, r, c, "comment"))
+
+r, c = find_pos(html_buf, "Gateway Dashboard — Service Health", "Gateway")
+insp = vim.inspect_pos(html_buf, r, c)
+local h_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local eff = insp.treesitter[#insp.treesitter]
+    local hl = vim.api.nvim_get_hl(0, {name = eff.hl_group, link = false})
+    if hl.fg then h_fg = string.format("%06x", hl.fg) end
+end
+results["html_title_fg"] = h_fg
+
+r, c = find_pos(html_buf, "<h2>Uptime</h2>", "Uptime")
+insp = vim.inspect_pos(html_buf, r, c)
+local h2_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local eff = insp.treesitter[#insp.treesitter]
+    local hl = vim.api.nvim_get_hl(0, {name = eff.hl_group, link = false})
+    if hl.fg then h2_fg = string.format("%06x", hl.fg) end
+end
+results["html_h2_fg"] = h2_fg
+
+r, c = find_pos(html_buf, "&copy; 2025 Platform", "&copy;")
+results["is_html_copy_const"] = tostring(match_capture(html_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(html_buf, "document.addEventListener", "document")
+results["is_html_js_doc"] = tostring(match_capture(html_buf, r, c, "variable.builtin"))
+
+r, c = find_pos(html_buf, "document.addEventListener", "addEventListener")
+results["is_html_js_event"] = tostring(match_capture(html_buf, r, c, "function.method.call"))
+
+r, c = find_pos(html_buf, "const cards = document.querySelectorAll", "const")
+results["is_html_js_const"] = tostring(match_capture(html_buf, r, c, "keyword"))
+
+r, c = find_pos(html_buf, "console.log(`Card status:", "console")
+results["is_html_js_console"] = tostring(match_capture(html_buf, r, c, "variable.builtin"))
+
+r, c = find_pos(html_buf, "console.log(`Card status:", "log")
+results["is_html_js_log"] = tostring(match_capture(html_buf, r, c, "function.method.call"))
+
+r, c = find_pos(html_buf, "<strong>solarized-gateway</strong>", "solarized-gateway")
+insp = vim.inspect_pos(html_buf, r, c)
+local s_fg = "nil"
+local s_bold = "false"
+if insp.treesitter and #insp.treesitter > 0 then
+    local eff = insp.treesitter[#insp.treesitter]
+    local hl = vim.api.nvim_get_hl(0, {name = eff.hl_group, link = false})
+    if hl.fg then s_fg = string.format("%06x", hl.fg) end
+    if hl.bold then s_bold = "true" end
+end
+results["html_strong_fg"] = s_fg
+results["html_strong_bold"] = s_bold
+
+r, c = find_pos(html_buf, ">Dashboard</a>", "Dashboard")
+insp = vim.inspect_pos(html_buf, r, c)
+local l_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local eff = insp.treesitter[#insp.treesitter]
+    local hl = vim.api.nvim_get_hl(0, {name = eff.hl_group, link = false})
+    if hl.fg then l_fg = string.format("%06x", hl.fg) end
+end
+results["html_link_fg"] = l_fg
+
+r, c = find_pos(html_buf, "href=\"/dashboard\"", "/dashboard")
+insp = vim.inspect_pos(html_buf, r, c)
+local u_under = "false"
+if insp.treesitter and #insp.treesitter > 0 then
+    local eff = insp.treesitter[#insp.treesitter]
+    local hl = vim.api.nvim_get_hl(0, {name = eff.hl_group, link = false})
+    if hl.underline then u_under = "true" end
+end
+results["html_url_underline"] = u_under
+
+-- 16. Inspect JSON (sample.json)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.json")
+vim.cmd("redraw")
+local json_buf = vim.api.nvim_get_current_buf()
+local json_hl = vim.treesitter.get_parser(json_buf, "json")
+if json_hl then json_hl:parse(true) end
+
+r, c = find_pos(json_buf, "\"$schema\":", "$schema")
+results["is_json_key_prop"] = tostring(match_capture(json_buf, r, c, "property"))
+
+r, c = find_pos(json_buf, "\"telemetry-collector\"", "telemetry-collector")
+results["is_json_str"] = tostring(match_capture(json_buf, r, c, "string"))
+
+r, c = find_pos(json_buf, "\"replicas\": 3", "3")
+results["is_json_num"] = tostring(match_capture(json_buf, r, c, "number"))
+
+r, c = find_pos(json_buf, "\"enabled\": true", "true")
+results["is_json_bool"] = tostring(match_capture(json_buf, r, c, "boolean"))
+
+r, c = find_pos(json_buf, "\"annotations\": null", "null")
+results["is_json_null"] = tostring(match_capture(json_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(json_buf, "\"https://api.example.com", "https")
+results["is_json_url_str"] = tostring(match_capture(json_buf, r, c, "string"))
+local insp_url = vim.inspect_pos(json_buf, r, c)
+local url_fg = "nil"
+if insp_url.treesitter and #insp_url.treesitter > 0 then
+    local eff = insp_url.treesitter[#insp_url.treesitter]
+    local hl = vim.api.nvim_get_hl(0, { name = eff.hl_group, link = false })
+    if hl.fg then url_fg = string.format("%06x", hl.fg) end
+end
+results["json_url_fg"] = url_fg
+
+local hl_duw = vim.api.nvim_get_hl(0, { name = "DiagnosticUnderlineWarn", link = false })
+results["duw_has_fg"] = tostring(hl_duw.fg ~= nil)
+
+-- 17. Inspect YAML (sample.yaml)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.yaml")
+vim.cmd("redraw")
+json_buf = vim.api.nvim_get_current_buf()
+json_hl = vim.treesitter.get_parser(json_buf, "yaml")
+if json_hl then json_hl:parse(true) end
+
+r, c = find_pos(json_buf, "apiVersion: apps/v1", "apiVersion")
+results["is_yaml_key_prop"] = tostring(match_capture(json_buf, r, c, "property"))
+
+r, c = find_pos(json_buf, "apiVersion: apps/v1", "apps/v1")
+results["is_yaml_str"] = tostring(match_capture(json_buf, r, c, "string"))
+
+r, c = find_pos(json_buf, "!!str 42", "!!str")
+results["is_yaml_type"] = tostring(match_capture(json_buf, r, c, "type"))
+
+r, c = find_pos(json_buf, "!!str 42", "42")
+results["is_yaml_num"] = tostring(match_capture(json_buf, r, c, "number"))
+
+r, c = find_pos(json_buf, "runAsNonRoot: true", "true")
+results["is_yaml_bool"] = tostring(match_capture(json_buf, r, c, "boolean"))
+
+r, c = find_pos(json_buf, "pod-template-hash: null", "null")
+results["is_yaml_null"] = tostring(match_capture(json_buf, r, c, "constant.builtin"))
+
+r, c = find_pos(json_buf, "<<: *common-labels", "<<")
+results["is_yaml_merge_prop"] = tostring(match_capture(json_buf, r, c, "property"))
+
+r, c = find_pos(json_buf, "<<: *common-labels", "common-labels")
+results["is_yaml_alias_label"] = tostring(match_capture(json_buf, r, c, "label"))
+
+r, c = find_pos(json_buf, "resources: &resource-defaults", "resource-defaults")
+results["is_yaml_anchor_label"] = tostring(match_capture(json_buf, r, c, "label"))
+
+-- 18. Inspect TOML (sample.toml)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.toml")
+vim.cmd("redraw")
+json_buf = vim.api.nvim_get_current_buf()
+json_hl = vim.treesitter.get_parser(json_buf, "toml")
+if json_hl then json_hl:parse(true) end
+
+r, c = find_pos(json_buf, "[package]", "package")
+results["is_toml_tbl_tag"] = tostring(match_capture(json_buf, r, c, "tag"))
+insp = vim.inspect_pos(json_buf, r, c)
+local tbl_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp.treesitter[#insp.treesitter].hl_group, link = false })
+    if hl.fg then tbl_fg = string.format("%06x", hl.fg) end
+end
+results["toml_tbl_fg"] = tbl_fg
+
+r, c = find_pos(json_buf, "[[rate_limits]]", "rate_limits")
+results["is_toml_arr_tag"] = tostring(match_capture(json_buf, r, c, "tag"))
+
+r, c = find_pos(json_buf, "name = \"solarized-gateway\"", "name")
+results["is_toml_key_prop"] = tostring(match_capture(json_buf, r, c, "property"))
+insp = vim.inspect_pos(json_buf, r, c)
+local key_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp.treesitter[#insp.treesitter].hl_group, link = false })
+    if hl.fg then key_fg = string.format("%06x", hl.fg) end
+end
+results["toml_key_fg"] = key_fg
+
+r, c = find_pos(json_buf, "pool.min_size = 5", "min_size")
+results["is_toml_dot_prop"] = tostring(match_capture(json_buf, r, c, "property"))
+
+r, c = find_pos(json_buf, "name = \"solarized-gateway\"", "solarized-gateway")
+results["is_toml_str"] = tostring(match_capture(json_buf, r, c, "string"))
+
+r, c = find_pos(json_buf, "port = 8080", "8080")
+results["is_toml_num"] = tostring(match_capture(json_buf, r, c, "number"))
+
+r, c = find_pos(json_buf, "graceful = true", "true")
+results["is_toml_bool"] = tostring(match_capture(json_buf, r, c, "boolean"))
+
+r, c = find_pos(json_buf, "enabled_at = 2025-09-14T08:30:00Z", "2025-09-14T08:30:00Z")
+results["is_toml_dt_const"] = tostring(match_capture(json_buf, r, c, "constant.builtin"))
+insp = vim.inspect_pos(json_buf, r, c)
+local dt_fg = "nil"
+if insp.treesitter and #insp.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp.treesitter[#insp.treesitter].hl_group, link = false })
+    if hl.fg then dt_fg = string.format("%06x", hl.fg) end
+end
+results["toml_dt_fg"] = dt_fg
+
+-- 19. Inspect CSS (sample.css)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.css")
+vim.cmd("redraw")
+local css_buf = vim.api.nvim_get_current_buf()
+local css_hl = vim.treesitter.get_parser(css_buf, "css")
+if css_hl then css_hl:parse(true) end
+vim.treesitter.start(css_buf, "css")
+
+r, c = find_pos(css_buf, "@layer reset, tokens, layout, components, utilities;", "@layer")
+results["is_css_at_dir"] = tostring(match_capture(css_buf, r, c, "keyword.directive"))
+
+r, c = find_pos(css_buf, "@font-face {", "@font-face")
+results["is_css_ff_dir"] = tostring(match_capture(css_buf, r, c, "keyword.directive"))
+
+r, c = find_pos(css_buf, "body {", "body")
+results["is_css_tag"] = tostring(match_capture(css_buf, r, c, "tag"))
+
+r, c = find_pos(css_buf, ".dashboard-grid {", "dashboard-grid")
+results["is_css_class_type"] = tostring(match_capture(css_buf, r, c, "type.css"))
+
+r, c = find_pos(css_buf, "font-family: var(--font-mono);", "font-family")
+results["is_css_prop"] = tostring(match_capture(css_buf, r, c, "property.css"))
+
+r, c = find_pos(css_buf, "--color-base03: #002b36;", "--color-base03")
+results["is_css_cust_prop_var"] = tostring(match_capture(css_buf, r, c, "variable.css"))
+
+r, c = find_pos(css_buf, "font-family: var(--font-mono);", "--font-mono")
+results["is_css_cust_val_var"] = tostring(match_capture(css_buf, r, c, "variable.css"))
+
+r, c = find_pos(css_buf, ":root {", "root")
+results["is_css_root_attr"] = tostring(match_capture(css_buf, r, c, "attribute"))
+
+r, c = find_pos(css_buf, "&:hover {", "hover")
+results["is_css_hover_attr"] = tostring(match_capture(css_buf, r, c, "attribute"))
+
+r, c = find_pos(css_buf, "*::before,", "before")
+results["is_css_before_attr"] = tostring(match_capture(css_buf, r, c, "attribute"))
+
+r, c = find_pos(css_buf, "font-family: \"MesloLGS NF\";", "MesloLGS NF")
+results["is_css_str"] = tostring(match_capture(css_buf, r, c, "string"))
+
+r, c = find_pos(css_buf, "& .card-title {", "&")
+results["is_css_nest_op"] = tostring(match_capture(css_buf, r, c, "operator"))
+local insp_nest = vim.inspect_pos(css_buf, r, c)
+local nest_fg = "nil"
+if insp_nest.treesitter and #insp_nest.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_nest.treesitter[#insp_nest.treesitter].hl_group, link = false })
+    if hl.fg then nest_fg = string.format("%06x", hl.fg) end
+end
+results["css_nest_fg"] = nest_fg
+
+r, c = find_pos(css_buf, "&[data-status=\"healthy\"] {", "data-status")
+results["is_css_attr_sel_name"] = tostring(match_capture(css_buf, r, c, "tag.attribute"))
+local insp_attr_sel = vim.inspect_pos(css_buf, r, c)
+local attr_sel_fg = "nil"
+if insp_attr_sel.treesitter and #insp_attr_sel.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_attr_sel.treesitter[#insp_attr_sel.treesitter].hl_group, link = false })
+    if hl.fg then attr_sel_fg = string.format("%06x", hl.fg) end
+end
+results["css_attr_sel_fg"] = attr_sel_fg
+
+r, c = find_pos(css_buf, "&[data-status=\"healthy\"] {", "healthy")
+results["is_css_attr_sel_str"] = tostring(match_capture(css_buf, r, c, "string"))
+local insp_attr_sel_str = vim.inspect_pos(css_buf, r, c)
+local attr_sel_str_fg = "nil"
+if insp_attr_sel_str.treesitter and #insp_attr_sel_str.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_attr_sel_str.treesitter[#insp_attr_sel_str.treesitter].hl_group, link = false })
+    if hl.fg then attr_sel_str_fg = string.format("%06x", hl.fg) end
+end
+results["css_attr_sel_str_fg"] = attr_sel_str_fg
+
+r, c = find_pos(css_buf, "@container content (min-width: 640px) {", "@container")
+results["is_css_container_dir"] = tostring(match_capture(css_buf, r, c, "keyword.directive"))
+local insp_container = vim.inspect_pos(css_buf, r, c)
+local container_fg = "nil"
+if insp_container.treesitter and #insp_container.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_container.treesitter[#insp_container.treesitter].hl_group, link = false })
+    if hl.fg then container_fg = string.format("%06x", hl.fg) end
+end
+results["css_container_fg"] = container_fg
+
+r, c = find_pos(css_buf, "@container content (min-width: 640px) {", "content")
+results["is_css_container_name_var"] = tostring(match_capture(css_buf, r, c, "variable.css"))
+local insp_cname = vim.inspect_pos(css_buf, r, c)
+local cname_fg = "nil"
+if insp_cname.treesitter and #insp_cname.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_cname.treesitter[#insp_cname.treesitter].hl_group, link = false })
+    if hl.fg then cname_fg = string.format("%06x", hl.fg) end
+end
+results["css_container_name_fg"] = cname_fg
+
+r, c = find_pos(css_buf, "@container content (min-width: 640px) {", "640")
+results["is_css_container_num"] = tostring(match_capture(css_buf, r, c, "number"))
+local insp_cnum = vim.inspect_pos(css_buf, r, c)
+local cnum_fg = "nil"
+if insp_cnum.treesitter and #insp_cnum.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_cnum.treesitter[#insp_cnum.treesitter].hl_group, link = false })
+    if hl.fg then cnum_fg = string.format("%06x", hl.fg) end
+end
+results["css_container_num_fg"] = cnum_fg
+
+r, c = find_pos(css_buf, "--color-base03: #002b36;", "#002b36")
+results["is_css_hex_str"] = tostring(match_capture(css_buf, r, c, "string.special.css"))
+local insp_hex = vim.inspect_pos(css_buf, r, c)
+local hex_hash_fg = "nil"
+if insp_hex.treesitter and #insp_hex.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_hex.treesitter[#insp_hex.treesitter].hl_group, link = false })
+    if hl.fg then hex_hash_fg = string.format("%06x", hl.fg) end
+end
+results["css_hex_hash_fg"] = hex_hash_fg
+
+r, c = find_pos(css_buf, "font-weight: 400;", "400")
+results["is_css_num"] = tostring(match_capture(css_buf, r, c, "number"))
+
+r, c = find_pos(css_buf, "--font-mono: \"MesloLGS NF\", ui-monospace, monospace;", "ui-monospace")
+results["is_css_uimono_var"] = tostring(match_capture(css_buf, r, c, "variable.css"))
+local insp_uimono = vim.inspect_pos(css_buf, r, c)
+local uimono_fg = "nil"
+if insp_uimono.treesitter and #insp_uimono.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_uimono.treesitter[#insp_uimono.treesitter].hl_group, link = false })
+    if hl.fg then uimono_fg = string.format("%06x", hl.fg) end
+end
+results["css_uimono_fg"] = uimono_fg
+
+r, c = find_pos(css_buf, "grid-template-rows: auto 1fr auto;", "auto")
+results["is_css_auto_var"] = tostring(match_capture(css_buf, r, c, "variable.css"))
+local insp_auto = vim.inspect_pos(css_buf, r, c)
+local auto_fg = "nil"
+if insp_auto.treesitter and #insp_auto.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_auto.treesitter[#insp_auto.treesitter].hl_group, link = false })
+    if hl.fg then auto_fg = string.format("%06x", hl.fg) end
+end
+results["css_auto_fg"] = auto_fg
+
+r, c = find_pos(css_buf, "repeat(auto-fill,", "auto-fill")
+results["is_css_autofill_var"] = tostring(match_capture(css_buf, r, c, "variable.css"))
+local insp_autofill = vim.inspect_pos(css_buf, r, c)
+local autofill_fg = "nil"
+if insp_autofill.treesitter and #insp_autofill.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_autofill.treesitter[#insp_autofill.treesitter].hl_group, link = false })
+    if hl.fg then autofill_fg = string.format("%06x", hl.fg) end
+end
+results["css_autofill_fg"] = autofill_fg
+
+hl = vim.api.nvim_get_hl(0, { name = "@keyword.directive.css", link = false })
+if not hl.fg then hl = vim.api.nvim_get_hl(0, { name = "@keyword.directive", link = false }) end
+results["css_at_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, { name = "@type.css", link = false })
+results["css_class_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, { name = "@tag.css", link = false })
+if not hl.fg then hl = vim.api.nvim_get_hl(0, { name = "@tag", link = false }) end
+results["css_tag_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, { name = "@property.css", link = false })
+if not hl.fg then hl = vim.api.nvim_get_hl(0, { name = "@property", link = false }) end
+results["css_prop_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, { name = "@variable.css", link = false })
+if not hl.fg then hl = vim.api.nvim_get_hl(0, { name = "@variable", link = false }) end
+results["css_var_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, { name = "@attribute.css", link = false })
+if not hl.fg then hl = vim.api.nvim_get_hl(0, { name = "@attribute", link = false }) end
+results["css_attr_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, { name = "@string.special.css", link = false })
+results["css_hex_fg"] = string.format("%06x", hl.fg or 0)
+
+-- 20. Inspect Java Properties (sample.properties)
+vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.properties")
+vim.cmd("redraw")
+local prop_buf = vim.api.nvim_get_current_buf()
+local prop_hl = vim.treesitter.get_parser(prop_buf, "properties")
+if prop_hl then prop_hl:parse(true) end
+
+r, c = find_pos(prop_buf, "spring.application.name=solarized-gateway", "spring.application.name")
+results["is_prop_key"] = tostring(match_capture(prop_buf, r, c, "property.properties"))
+local insp_prop_key = vim.inspect_pos(prop_buf, r, c)
+local prop_key_fg = "nil"
+if insp_prop_key.treesitter and #insp_prop_key.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_key.treesitter[#insp_prop_key.treesitter].hl_group, link = false })
+    if hl.fg then prop_key_fg = string.format("%06x", hl.fg) end
+end
+results["prop_key_fg"] = prop_key_fg
+
+r, c = find_pos(prop_buf, "spring.application.name=solarized-gateway", "=")
+results["is_prop_eq_op"] = tostring(match_capture(prop_buf, r, c, "operator"))
+local insp_prop_eq = vim.inspect_pos(prop_buf, r, c)
+local prop_eq_fg = "nil"
+if insp_prop_eq.treesitter and #insp_prop_eq.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_eq.treesitter[#insp_prop_eq.treesitter].hl_group, link = false })
+    if hl.fg then prop_eq_fg = string.format("%06x", hl.fg) end
+end
+results["prop_eq_fg"] = prop_eq_fg
+
+r, c = find_pos(prop_buf, "spring.application.name=solarized-gateway", "solarized-gateway")
+results["is_prop_val_str"] = tostring(match_capture(prop_buf, r, c, "string"))
+local insp_prop_str = vim.inspect_pos(prop_buf, r, c)
+local prop_str_fg = "nil"
+if insp_prop_str.treesitter and #insp_prop_str.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_str.treesitter[#insp_prop_str.treesitter].hl_group, link = false })
+    if hl.fg then prop_str_fg = string.format("%06x", hl.fg) end
+end
+results["prop_str_fg"] = prop_str_fg
+
+r, c = find_pos(prop_buf, "server.port=8080", "8080")
+results["is_prop_val_num"] = tostring(match_capture(prop_buf, r, c, "number"))
+local insp_prop_num = vim.inspect_pos(prop_buf, r, c)
+local prop_num_fg = "nil"
+if insp_prop_num.treesitter and #insp_prop_num.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_num.treesitter[#insp_prop_num.treesitter].hl_group, link = false })
+    if hl.fg then prop_num_fg = string.format("%06x", hl.fg) end
+end
+results["prop_num_fg"] = prop_num_fg
+
+r, c = find_pos(prop_buf, "server.compression.enabled=true", "true")
+results["is_prop_val_bool"] = tostring(match_capture(prop_buf, r, c, "boolean"))
+local insp_prop_bool = vim.inspect_pos(prop_buf, r, c)
+local prop_bool_fg = "nil"
+if insp_prop_bool.treesitter and #insp_prop_bool.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_bool.treesitter[#insp_prop_bool.treesitter].hl_group, link = false })
+    if hl.fg then prop_bool_fg = string.format("%06x", hl.fg) end
+end
+results["prop_bool_fg"] = prop_bool_fg
+
+r, c = find_pos(prop_buf, "management.tracing.sampling.probability=0.15", "0.15")
+results["is_prop_val_float"] = tostring(match_capture(prop_buf, r, c, "number.float"))
+local insp_prop_float = vim.inspect_pos(prop_buf, r, c)
+local prop_float_fg = "nil"
+if insp_prop_float.treesitter and #insp_prop_float.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_float.treesitter[#insp_prop_float.treesitter].hl_group, link = false })
+    if hl.fg then prop_float_fg = string.format("%06x", hl.fg) end
+end
+results["prop_float_fg"] = prop_float_fg
+
+r, c = find_pos(prop_buf, "management.metrics.tags.application=${spring.application.name}", "${")
+results["is_prop_interp_delim"] = tostring(match_capture(prop_buf, r, c, "punctuation.special"))
+local insp_prop_interp = vim.inspect_pos(prop_buf, r, c)
+local prop_interp_delim_fg = "nil"
+if insp_prop_interp.treesitter and #insp_prop_interp.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_interp.treesitter[#insp_prop_interp.treesitter].hl_group, link = false })
+    if hl.fg then prop_interp_delim_fg = string.format("%06x", hl.fg) end
+end
+results["prop_interp_delim_fg"] = prop_interp_delim_fg
+
+local r_var, c_var = find_pos(prop_buf, "management.metrics.tags.application=${spring.application.name}", "spring.application.name", c + 3)
+results["is_prop_interp_var"] = tostring(match_capture(prop_buf, r_var, c_var, "variable.properties"))
+local insp_prop_var = vim.inspect_pos(prop_buf, r_var, c_var)
+local prop_var_fg = "nil"
+if insp_prop_var.treesitter and #insp_prop_var.treesitter > 0 then
+    local hl = vim.api.nvim_get_hl(0, { name = insp_prop_var.treesitter[#insp_prop_var.treesitter].hl_group, link = false })
+    if hl.fg then prop_var_fg = string.format("%06x", hl.fg) end
+end
+results["prop_var_fg"] = prop_var_fg
+
+r, c = find_pos(prop_buf, "! Server Configuration", "!")
+results["is_prop_excl_comment"] = tostring(match_capture(prop_buf, r, c, "comment"))
+
 for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
@@ -1451,6 +2132,194 @@ end
             pass "Neovim highlights modern Markdown documents (sample.md) with Semantic Architecture: H1 Orange (#cb4b16), H2 Blue (#268bd2, unbolded), H3 Violet (#6c71c4), H4 Base1 (#93a1a1), H5/H6 Base0 (#839496), Base01 heading/quote delimiters, calm Base0 blockquotes, GitHub alerts ([!NOTE], [!TIP], [!WARNING]), task checkboxes, Base1 table headers with Base01 delimiters, embedded Bash invocations in calm Base0, and embedded Go with Magenta blank identifier/nil, Base0 method calls (errors.New), and exclusive Yellow control flow"
         else
             fail "Neovim Markdown highlights" "Expected complete Tree-sitter capture matches in sample.md (h1=${RES[h1_fg]} h2=${RES[h2_fg]} delim=${RES[h_delim_fg]} note=${RES[is_md_alert_note]} tbl_hdr=${RES[is_md_table_hdr]} bash_cmd=${RES[is_md_bash_cmd]} go_if=${RES[is_md_go_if_cond]} go_call=${RES[is_md_go_call]})"
+        fi
+
+        if [ "${RES[is_js_date_type]}" = "true" ] && \
+           [ "${RES[is_js_console_builtin]}" = "true" ] && \
+           [ "${RES[is_js_regex_slash]}" = "true" ] && \
+           [ "${RES[is_js_regex_body]}" = "true" ] && \
+           [ "${RES[is_js_regex_flag]}" = "true" ] && \
+           [ "${RES[is_js_gen_star_op]}" = "true" ] && \
+           [ "${RES[is_js_symbol_type]}" = "true" ] && \
+           [ "${RES[is_js_iter_member]}" = "true" ] && \
+           [ "${RES[is_js_inspect_var]}" = "true" ] && \
+           [ "${RES[is_js_of_kw]}" = "true" ] && \
+           [ "${RES[is_js_proc_builtin]}" = "true" ]; then
+            pass "Neovim highlights modern JavaScript (sample.js) with Converged Ergonomic Solarized Scheme: Date in Base0 Grey (@type), console & process in Magenta (@variable.builtin), regex /^\/health[z]?$/i with Magenta body, Base0 delimiters, and Cyan flags, *[Symbol.iterator] with calm Base0 operator and computed member identifiers, and 'of' in Solarized Yellow (@keyword.repeat)"
+        else
+            fail "Neovim JavaScript highlights" "Expected complete Tree-sitter capture matches in sample.js (date=${RES[is_js_date_type]} console=${RES[is_js_console_builtin]} slash=${RES[is_js_regex_slash]} body=${RES[is_js_regex_body]} flag=${RES[is_js_regex_flag]} star=${RES[is_js_gen_star_op]} sym=${RES[is_js_symbol_type]} iter=${RES[is_js_iter_member]} insp=${RES[is_js_inspect_var]} of=${RES[is_js_of_kw]} proc=${RES[is_js_proc_builtin]})"
+        fi
+
+        if [ "${RES[is_ts_export_import]}" = "true" ] && \
+           [ "${RES[is_ts_enum_kw]}" = "true" ] && \
+           [ "${RES[is_ts_userrole_type]}" = "true" ] && \
+           [ "${RES[is_ts_type_kw]}" = "true" ] && \
+           [ "${RES[is_ts_interface_kw]}" = "true" ] && \
+           [ "${RES[is_ts_readonly_mod]}" = "true" ] && \
+           [ "${RES[is_ts_bool_builtin]}" = "true" ] && \
+           [ "${RES[is_ts_class_kw]}" = "true" ] && \
+           [ "${RES[is_ts_gateway_type]}" = "true" ] && \
+           [ "${RES[is_ts_async_coro]}" = "true" ] && \
+           [ "${RES[is_ts_request_method]}" = "true" ] && \
+           [ "${RES[is_ts_await_coro]}" = "true" ] && \
+           [ "${RES[is_ts_true_bool]}" = "true" ] && \
+           [ "${RES[is_ts_this_builtin]}" = "true" ]; then
+            pass "Neovim highlights modern TypeScript (sample.ts) with Converged Ergonomic Solarized Scheme: exports in Violet (@keyword.import), structural declarations (enum, type, interface, class, readonly) and primitive scalars in Green, method declarations in Blue (@function.method), custom domain types in Base0 Grey (@type), control flow in Yellow (@keyword.coroutine), and constants/this in Magenta (@boolean, @variable.builtin)"
+        else
+            fail "Neovim TypeScript highlights" "Expected complete Tree-sitter capture matches in sample.ts (export=${RES[is_ts_export_import]} enum=${RES[is_ts_enum_kw]} role=${RES[is_ts_userrole_type]} type=${RES[is_ts_type_kw]} iface=${RES[is_ts_interface_kw]} ro=${RES[is_ts_readonly_mod]} bool=${RES[is_ts_bool_builtin]} class=${RES[is_ts_class_kw]} gw=${RES[is_ts_gateway_type]} async=${RES[is_ts_async_coro]} req=${RES[is_ts_request_method]} await=${RES[is_ts_await_coro]} true=${RES[is_ts_true_bool]} this=${RES[is_ts_this_builtin]})"
+        fi
+
+        if [ "${RES[is_xml_decl_dir]}" = "true" ] && \
+           [ "${RES[is_xml_pi_dir]}" = "true" ] && \
+           [ "${RES[is_xml_dep_tag]}" = "true" ] && \
+           [ "${RES[is_xml_mon_tag]}" = "true" ] && \
+           [ "${RES[is_xml_xmlns_attr]}" = "true" ] && \
+           [ "${RES[is_xml_ver_str]}" = "true" ] && \
+           [ "${RES[is_xml_amp_const]}" = "true" ] && \
+           [ "${RES[is_xml_cdata_start]}" = "true" ] && \
+           [ "${RES[is_xml_cdata_bracket]}" = "true" ] && \
+           [ "${RES[xml_has_js_tree]}" = "false" ] && \
+           [ "${RES[is_xml_cdata_end]}" = "true" ] && \
+           [ "${RES[is_xml_cdata_block]}" = "true" ] && \
+           [ "${RES[cdata_payload_fg]}" = "839496" ] && \
+           [ "${RES[tag_fg]}" = "268bd2" ] && \
+           [ "${RES[tag_attr_fg]}" = "839496" ] && \
+           [ "${RES[tag_delim_fg]}" = "839496" ]; then
+            pass "Neovim highlights modern XML documents (sample.xml) with Converged Ergonomic Solarized: directives in Orange (@keyword.directive), element tags in Blue (@tag #268bd2), tag delimiters & attributes in calm Base0 Grey (@tag.attribute, @tag.delimiter #839496), strings in Cyan (@string), entities in Magenta (@constant.builtin), and CDATA section delimiters in Violet (@module) with calm Base0 payload (@markup.raw.block #839496)"
+        else
+            fail "Neovim XML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.xml (decl=${RES[is_xml_decl_dir]} pi=${RES[is_xml_pi_dir]} tag=${RES[is_xml_dep_tag]} mon=${RES[is_xml_mon_tag]} attr=${RES[is_xml_xmlns_attr]} str=${RES[is_xml_ver_str]} amp=${RES[is_xml_amp_const]} cdata_s=${RES[is_xml_cdata_start]} cdata_brk=${RES[is_xml_cdata_bracket]} js_tree=${RES[xml_has_js_tree]} cdata_e=${RES[is_xml_cdata_end]} cdata_blk=${RES[is_xml_cdata_block]} cdata_fg=${RES[cdata_payload_fg]} tag_fg=${RES[tag_fg]} attr_fg=${RES[tag_attr_fg]} delim_fg=${RES[tag_delim_fg]})"
+        fi
+
+        if [ "${RES[is_html_doctype_dir]}" = "true" ] && \
+           [ "${RES[is_html_tag]}" = "true" ] && \
+           [ "${RES[is_html_tag_delim]}" = "true" ] && \
+           [ "${RES[is_html_attr]}" = "true" ] && \
+           [ "${RES[is_html_str]}" = "true" ] && \
+           [ "${RES[is_html_comment]}" = "true" ] && \
+           [ "${RES[html_title_fg]}" = "839496" ] && \
+           [ "${RES[html_h2_fg]}" = "839496" ] && \
+           [ "${RES[html_strong_fg]}" = "839496" ] && \
+           [ "${RES[html_strong_bold]}" = "false" ] && \
+           [ "${RES[html_link_fg]}" = "839496" ] && \
+           [ "${RES[html_url_underline]}" = "false" ] && \
+           [ "${RES[is_html_copy_const]}" = "true" ] && \
+           [ "${RES[is_html_js_doc]}" = "true" ] && \
+           [ "${RES[is_html_js_event]}" = "true" ] && \
+           [ "${RES[is_html_js_const]}" = "true" ] && \
+           [ "${RES[is_html_js_console]}" = "true" ] && \
+           [ "${RES[is_html_js_log]}" = "true" ]; then
+            pass "Neovim highlights modern HTML5 documents (sample.html) with Converged Ergonomic Solarized: doctype in Orange (@keyword.directive), element tags in Blue (@tag #268bd2), tag delimiters & attributes in Base0 Grey (@tag.delimiter, @tag.attribute #839496), strings in Cyan (@string), unbolded & un-underlined content (headings, links, strong in calm Base0 Grey #839496), entities in Magenta (@constant.builtin), and embedded <script> matching bat"
+        else
+            fail "Neovim HTML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.html (doctype=${RES[is_html_doctype_dir]} tag=${RES[is_html_tag]} delim=${RES[is_html_tag_delim]} attr=${RES[is_html_attr]} str=${RES[is_html_str]} comment=${RES[is_html_comment]} title_fg=${RES[html_title_fg]} h2_fg=${RES[html_h2_fg]} strong_fg=${RES[html_strong_fg]} strong_bold=${RES[html_strong_bold]} link_fg=${RES[html_link_fg]} url_under=${RES[html_url_underline]} copy=${RES[is_html_copy_const]} doc=${RES[is_html_js_doc]} event=${RES[is_html_js_event]} const=${RES[is_html_js_const]} console=${RES[is_html_js_console]} log=${RES[is_html_js_log]})"
+        fi
+
+        if [ "${RES[is_json_key_prop]}" = "true" ] && \
+           [ "${RES[is_json_str]}" = "true" ] && \
+           [ "${RES[is_json_num]}" = "true" ] && \
+           [ "${RES[is_json_bool]}" = "true" ] && \
+           [ "${RES[is_json_null]}" = "true" ] && \
+           [ "${RES[is_json_url_str]}" = "true" ] && \
+           [ "${RES[json_url_fg]}" = "2aa198" ] && \
+           [ "${RES[duw_has_fg]}" = "false" ]; then
+            pass "Neovim highlights modern JSON documents (sample.json) with Converged Ergonomic Solarized: object keys in Green (@property #859900), strings in Cyan (@string #2aa198, URLs non-clickable and uncorrupted by diagnostic fg), numbers in Magenta (@number), booleans in Magenta (@boolean), and null in Magenta (@constant.builtin)"
+        else
+            fail "Neovim JSON Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.json (key=${RES[is_json_key_prop]} str=${RES[is_json_str]} num=${RES[is_json_num]} bool=${RES[is_json_bool]} null=${RES[is_json_null]} url_str=${RES[is_json_url_str]} url_fg=${RES[json_url_fg]} duw_fg=${RES[duw_has_fg]})"
+        fi
+
+        if [ "${RES[is_yaml_key_prop]}" = "true" ] && \
+           [ "${RES[is_yaml_str]}" = "true" ] && \
+           [ "${RES[is_yaml_type]}" = "true" ] && \
+           [ "${RES[is_yaml_num]}" = "true" ] && \
+           [ "${RES[is_yaml_bool]}" = "true" ] && \
+           [ "${RES[is_yaml_null]}" = "true" ] && \
+           [ "${RES[is_yaml_merge_prop]}" = "true" ] && \
+           [ "${RES[is_yaml_alias_label]}" = "true" ] && \
+           [ "${RES[is_yaml_anchor_label]}" = "true" ]; then
+            pass "Neovim highlights modern YAML documents (sample.yaml) with Converged Ergonomic Solarized: mapping keys & merge keys (<<) in Green (@property #859900), strings in Cyan (@string), explicit type tags in calm Base0 Grey (@type #839496, zero Yellow), anchors & aliases in Base01 Dim (@label #586e75), numbers in Magenta (@number), booleans in Magenta (@boolean), and null in Magenta (@constant.builtin)"
+        else
+            fail "Neovim YAML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.yaml (key=${RES[is_yaml_key_prop]} str=${RES[is_yaml_str]} type=${RES[is_yaml_type]} num=${RES[is_yaml_num]} bool=${RES[is_yaml_bool]} null=${RES[is_yaml_null]} merge=${RES[is_yaml_merge_prop]} alias=${RES[is_yaml_alias_label]} anchor=${RES[is_yaml_anchor_label]})"
+        fi
+
+        if [ "${RES[is_toml_tbl_tag]}" = "true" ] && \
+           [ "${RES[is_toml_arr_tag]}" = "true" ] && \
+           [ "${RES[is_toml_key_prop]}" = "true" ] && \
+           [ "${RES[is_toml_dot_prop]}" = "true" ] && \
+           [ "${RES[is_toml_str]}" = "true" ] && \
+           [ "${RES[is_toml_num]}" = "true" ] && \
+           [ "${RES[is_toml_bool]}" = "true" ] && \
+           [ "${RES[is_toml_dt_const]}" = "true" ] && \
+           [ "${RES[toml_tbl_fg]}" = "268bd2" ] && \
+           [ "${RES[toml_key_fg]}" = "859900" ] && \
+           [ "${RES[toml_dt_fg]}" = "d33682" ]; then
+            pass "Neovim highlights modern TOML documents (sample.toml) with Converged Ergonomic Solarized: table headers in Blue (@tag #268bd2), mapping & inline keys in Green (@property #859900), strings in Cyan (@string #2aa198), numbers/booleans/date-times in Magenta (@number, @boolean, @constant.builtin #d33682)"
+        else
+            fail "Neovim TOML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.toml (tbl=${RES[is_toml_tbl_tag]} arr=${RES[is_toml_arr_tag]} key=${RES[is_toml_key_prop]} dot=${RES[is_toml_dot_prop]} str=${RES[is_toml_str]} num=${RES[is_toml_num]} bool=${RES[is_toml_bool]} dt=${RES[is_toml_dt_const]} tbl_fg=${RES[toml_tbl_fg]} key_fg=${RES[toml_key_fg]} dt_fg=${RES[toml_dt_fg]})"
+        fi
+
+        if [ "${RES[is_css_at_dir]}" = "true" ] && \
+           [ "${RES[is_css_ff_dir]}" = "true" ] && \
+           [ "${RES[is_css_tag]}" = "true" ] && \
+           [ "${RES[is_css_class_type]}" = "true" ] && \
+           [ "${RES[is_css_prop]}" = "true" ] && \
+           [ "${RES[is_css_cust_prop_var]}" = "true" ] && \
+           [ "${RES[is_css_cust_val_var]}" = "true" ] && \
+           [ "${RES[is_css_root_attr]}" = "true" ] && \
+           [ "${RES[is_css_hover_attr]}" = "true" ] && \
+           [ "${RES[is_css_before_attr]}" = "true" ] && \
+           [ "${RES[is_css_str]}" = "true" ] && \
+           [ "${RES[is_css_hex_str]}" = "true" ] && \
+           [ "${RES[is_css_num]}" = "true" ] && \
+           [ "${RES[is_css_uimono_var]}" = "true" ] && \
+           [ "${RES[css_uimono_fg]}" = "839496" ] && \
+           [ "${RES[is_css_auto_var]}" = "true" ] && \
+           [ "${RES[css_auto_fg]}" = "839496" ] && \
+           [ "${RES[is_css_autofill_var]}" = "true" ] && \
+           [ "${RES[css_autofill_fg]}" = "839496" ] && \
+           [ "${RES[css_at_fg]}" = "cb4b16" ] && \
+           [ "${RES[css_class_fg]}" = "268bd2" ] && \
+           [ "${RES[css_tag_fg]}" = "268bd2" ] && \
+           [ "${RES[is_css_nest_op]}" = "true" ] && \
+           [ "${RES[css_nest_fg]}" = "839496" ] && \
+           [ "${RES[is_css_attr_sel_name]}" = "true" ] && \
+           [ "${RES[css_attr_sel_fg]}" = "839496" ] && \
+           [ "${RES[is_css_attr_sel_str]}" = "true" ] && \
+           [ "${RES[css_attr_sel_str_fg]}" = "2aa198" ] && \
+           [ "${RES[is_css_container_dir]}" = "true" ] && \
+           [ "${RES[css_container_fg]}" = "cb4b16" ] && \
+           [ "${RES[is_css_container_name_var]}" = "true" ] && \
+           [ "${RES[css_container_name_fg]}" = "839496" ] && \
+           [ "${RES[is_css_container_num]}" = "true" ] && \
+           [ "${RES[css_container_num_fg]}" = "d33682" ] && \
+           [ "${RES[css_prop_fg]}" = "859900" ] && \
+           [ "${RES[css_var_fg]}" = "839496" ] && \
+           [ "${RES[css_attr_fg]}" = "6c71c4" ] && \
+           [ "${RES[css_hex_hash_fg]}" = "d33682" ] && \
+           [ "${RES[css_hex_fg]}" = "d33682" ]; then
+            pass "Neovim highlights modern CSS documents (sample.css) with Converged Ergonomic Solarized: at-rules in Orange (@keyword.directive #cb4b16), selectors in Blue (@tag, @type.css #268bd2), pseudo-selectors in Violet (@attribute #6c71c4), nesting parent '&' and attribute selector names in calm Base0 (@operator, @tag.attribute #839496), attribute strings in Cyan (@string #2aa198), container queries (@container in Orange, container-name in Base0, dimensions in Magenta #d33682), properties in Green (@property.css #859900), custom properties & keyword values in Base0 Grey (@variable.css #839496), strings in Cyan (@string), and hex colors & numbers in Magenta (@string.special.css, @number #d33682)"
+        else
+            fail "Neovim CSS Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.css (at=${RES[is_css_at_dir]} ff=${RES[is_css_ff_dir]} tag=${RES[is_css_tag]} class=${RES[is_css_class_type]} prop=${RES[is_css_prop]} cust_p=${RES[is_css_cust_prop_var]} cust_v=${RES[is_css_cust_val_var]} root=${RES[is_css_root_attr]} hover=${RES[is_css_hover_attr]} before=${RES[is_css_before_attr]} str=${RES[is_css_str]} hex=${RES[is_css_hex_str]} num=${RES[is_css_num]} uimono=${RES[is_css_uimono_var]} uimono_fg=${RES[css_uimono_fg]} auto=${RES[is_css_auto_var]} auto_fg=${RES[css_auto_fg]} autofill=${RES[is_css_autofill_var]} autofill_fg=${RES[css_autofill_fg]} nest=${RES[is_css_nest_op]} nest_fg=${RES[css_nest_fg]} attr_sel=${RES[is_css_attr_sel_name]} attr_sel_fg=${RES[css_attr_sel_fg]} attr_sel_str=${RES[is_css_attr_sel_str]} attr_sel_str_fg=${RES[css_attr_sel_str_fg]} container=${RES[is_css_container_dir]} container_fg=${RES[css_container_fg]} cname=${RES[is_css_container_name_var]} cname_fg=${RES[css_container_name_fg]} cnum=${RES[is_css_container_num]} cnum_fg=${RES[css_container_num_fg]} at_fg=${RES[css_at_fg]} class_fg=${RES[css_class_fg]} tag_fg=${RES[css_tag_fg]} prop_fg=${RES[css_prop_fg]} var_fg=${RES[css_var_fg]} attr_fg=${RES[css_attr_fg]} hex_fg=${RES[css_hex_fg]})"
+        fi
+
+        if [ "${RES[is_prop_key]}" = "true" ] && \
+           [ "${RES[prop_key_fg]}" = "859900" ] && \
+           [ "${RES[is_prop_eq_op]}" = "true" ] && \
+           [ "${RES[prop_eq_fg]}" = "839496" ] && \
+           [ "${RES[is_prop_val_str]}" = "true" ] && \
+           [ "${RES[prop_str_fg]}" = "2aa198" ] && \
+           [ "${RES[is_prop_val_num]}" = "true" ] && \
+           [ "${RES[prop_num_fg]}" = "d33682" ] && \
+           [ "${RES[is_prop_val_bool]}" = "true" ] && \
+           [ "${RES[prop_bool_fg]}" = "d33682" ] && \
+           [ "${RES[is_prop_val_float]}" = "true" ] && \
+           [ "${RES[prop_float_fg]}" = "d33682" ] && \
+           [ "${RES[is_prop_interp_delim]}" = "true" ] && \
+           [ "${RES[prop_interp_delim_fg]}" = "839496" ] && \
+           [ "${RES[is_prop_interp_var]}" = "true" ] && \
+           [ "${RES[prop_var_fg]}" = "839496" ] && \
+           [ "${RES[is_prop_excl_comment]}" = "true" ]; then
+            pass "Neovim highlights Java Properties documents (sample.properties) with Converged Ergonomic Solarized: keys in Green (@property.properties #859900), delimiters in Base0 (@operator #839496), strings in Cyan (@string #2aa198), integers/booleans/floats in Magenta (@number, @boolean, @number.float #d33682), variable interpolation delimiters and keys in calm Base0 (@punctuation.special, @variable.properties #839496), and comments in Base01 Dim (@comment)"
+        else
+            fail "Neovim Java Properties Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.properties (key=${RES[is_prop_key]} key_fg=${RES[prop_key_fg]} eq=${RES[is_prop_eq_op]} eq_fg=${RES[prop_eq_fg]} str=${RES[is_prop_val_str]} str_fg=${RES[prop_str_fg]} num=${RES[is_prop_val_num]} num_fg=${RES[prop_num_fg]} bool=${RES[is_prop_val_bool]} bool_fg=${RES[prop_bool_fg]} float=${RES[is_prop_val_float]} float_fg=${RES[prop_float_fg]} interp_delim=${RES[is_prop_interp_delim]} interp_delim_fg=${RES[prop_interp_delim_fg]} var=${RES[is_prop_interp_var]} var_fg=${RES[prop_var_fg]} comment=${RES[is_prop_excl_comment]})"
         fi
     fi
 else

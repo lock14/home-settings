@@ -1,0 +1,264 @@
+%YAML 1.2
+---
+# Solarized Dark TOML Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Table Section Headers in Solarized Blue (entity.name.section.table.toml)
+# - Mapping & Inline Keys in Solarized Green (entity.name.tag.toml)
+# - String Values in Solarized Cyan (string.quoted.*.toml)
+# - Numeric Values & Floats in Solarized Magenta (constant.numeric.*.toml)
+# - Booleans in Solarized Magenta (constant.language.boolean.toml)
+# - Date-Time Literals in Solarized Magenta (constant.other.datetime.toml)
+# - Structural Brackets & Delimiters in calm Base0 Grey (punctuation.definition.*, punctuation.separator.*)
+# - Comments in Base01 Dim (comment.line.number-sign.toml)
+
+name: TOML
+scope: source.toml
+version: 2
+
+file_extensions:
+  - toml
+  - tml
+  - Cargo.lock
+  - Gopkg.lock
+  - Pipfile
+  - pdm.lock
+  - poetry.lock
+  - uv.lock
+
+contexts:
+  prototype:
+    - include: comments
+
+  comments:
+    - match: '(#).*$'
+      scope: comment.line.number-sign.toml
+      captures:
+        1: punctuation.definition.comment.toml
+
+  main:
+    - include: table-array
+    - include: table
+    - include: key-value
+
+  table-array:
+    - match: '^\s*(\[\[)'
+      captures:
+        1: punctuation.definition.table.array.begin.toml
+      push:
+        - match: '(\]\])'
+          captures:
+            1: punctuation.definition.table.array.end.toml
+          pop: true
+        - match: '\.'
+          scope: punctuation.separator.table.toml
+        - match: '"'
+          scope: punctuation.definition.key.begin.toml entity.name.section.table.toml
+          push:
+            - match: '"'
+              scope: punctuation.definition.key.end.toml entity.name.section.table.toml
+              pop: true
+            - match: '\\(?:[btnfr"\\]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})'
+              scope: constant.character.escape.toml entity.name.section.table.toml
+            - match: '[^"\\]+'
+              scope: entity.name.section.table.toml
+        - match: "'"
+          scope: punctuation.definition.key.begin.toml entity.name.section.table.toml
+          push:
+            - match: "'"
+              scope: punctuation.definition.key.end.toml entity.name.section.table.toml
+              pop: true
+            - match: "[^']+"
+              scope: entity.name.section.table.toml
+        - match: '[A-Za-z0-9_-]+'
+          scope: entity.name.section.table.toml
+
+  table:
+    - match: '^\s*(\[)'
+      captures:
+        1: punctuation.definition.table.begin.toml
+      push:
+        - match: '(\])'
+          captures:
+            1: punctuation.definition.table.end.toml
+          pop: true
+        - match: '\.'
+          scope: punctuation.separator.table.toml
+        - match: '"'
+          scope: punctuation.definition.key.begin.toml entity.name.section.table.toml
+          push:
+            - match: '"'
+              scope: punctuation.definition.key.end.toml entity.name.section.table.toml
+              pop: true
+            - match: '\\(?:[btnfr"\\]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})'
+              scope: constant.character.escape.toml entity.name.section.table.toml
+            - match: '[^"\\]+'
+              scope: entity.name.section.table.toml
+        - match: "'"
+          scope: punctuation.definition.key.begin.toml entity.name.section.table.toml
+          push:
+            - match: "'"
+              scope: punctuation.definition.key.end.toml entity.name.section.table.toml
+              pop: true
+            - match: "[^']+"
+              scope: entity.name.section.table.toml
+        - match: '[A-Za-z0-9_-]+'
+          scope: entity.name.section.table.toml
+
+  key-value:
+    - include: key-name
+    - match: '\.'
+      scope: punctuation.separator.key.toml
+    - match: '='
+      scope: punctuation.definition.key-value.toml
+      push:
+        - match: '$'
+          pop: true
+        - include: value
+
+  key-name:
+    - match: '"'
+      scope: punctuation.definition.key.begin.toml entity.name.tag.toml
+      push:
+        - match: '"'
+          scope: punctuation.definition.key.end.toml entity.name.tag.toml
+          pop: true
+        - match: '\\(?:[btnfr"\\]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})'
+          scope: constant.character.escape.toml entity.name.tag.toml
+        - match: '[^"\\]+'
+          scope: entity.name.tag.toml
+    - match: "'"
+      scope: punctuation.definition.key.begin.toml entity.name.tag.toml
+      push:
+        - match: "'"
+          scope: punctuation.definition.key.end.toml entity.name.tag.toml
+          pop: true
+        - match: "[^']+"
+          scope: entity.name.tag.toml
+    - match: '[A-Za-z0-9_-]+'
+      scope: entity.name.tag.toml
+
+  value:
+    - include: comments
+    - include: string-triple-basic
+    - include: string-triple-literal
+    - include: string-basic
+    - include: string-literal
+    - include: datetime
+    - include: float
+    - include: integer
+    - include: boolean
+    - include: array
+    - include: inline-table
+
+  string-triple-basic:
+    - match: '"""'
+      scope: punctuation.definition.string.begin.toml string.quoted.triple.basic.block.toml
+      push:
+        - match: '"""'
+          scope: punctuation.definition.string.end.toml string.quoted.triple.basic.block.toml
+          pop: true
+        - match: '\\(?:[btnfr"\\]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|\n)'
+          scope: constant.character.escape.toml string.quoted.triple.basic.block.toml
+        - match: '[^"\\]+'
+          scope: string.quoted.triple.basic.block.toml
+        - match: '"'
+          scope: string.quoted.triple.basic.block.toml
+
+  string-triple-literal:
+    - match: "'''"
+      scope: punctuation.definition.string.begin.toml string.quoted.triple.literal.block.toml
+      push:
+        - match: "'''"
+          scope: punctuation.definition.string.end.toml string.quoted.triple.literal.block.toml
+          pop: true
+        - match: "[^']+"
+          scope: string.quoted.triple.literal.block.toml
+        - match: "'"
+          scope: string.quoted.triple.literal.block.toml
+
+  string-basic:
+    - match: '"'
+      scope: punctuation.definition.string.begin.toml string.quoted.double.basic.toml
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.end.toml string.quoted.double.basic.toml
+          pop: true
+        - match: '\\(?:[btnfr"\\]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})'
+          scope: constant.character.escape.toml string.quoted.double.basic.toml
+        - match: '[^"\\]+'
+          scope: string.quoted.double.basic.toml
+
+  string-literal:
+    - match: "'"
+      scope: punctuation.definition.string.begin.toml string.quoted.single.literal.toml
+      push:
+        - match: "'"
+          scope: punctuation.definition.string.end.toml string.quoted.single.literal.toml
+          pop: true
+        - match: "[^']+"
+          scope: string.quoted.single.literal.toml
+
+  datetime:
+    - match: '\b\d{4}-\d{2}-\d{2}[tT ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[zZ]|[-+]\d{2}:\d{2})\b'
+      scope: constant.other.datetime.offset.toml
+    - match: '\b\d{4}-\d{2}-\d{2}[tT ]\d{2}:\d{2}:\d{2}(?:\.\d+)?\b'
+      scope: constant.other.datetime.local.toml
+    - match: '\b\d{4}-\d{2}-\d{2}\b'
+      scope: constant.other.datetime.date.toml
+    - match: '\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b'
+      scope: constant.other.datetime.time.toml
+
+  float:
+    - match: '(?<!\w)[+-]?(?:inf|nan)\b'
+      scope: constant.numeric.float.special.toml
+    - match: '(?<!\w)[+-]?[0-9](?:[0-9]|_[0-9])*\.[0-9](?:[0-9]|_[0-9])*(?:[eE][+-]?[0-9](?:[0-9]|_[0-9])*)?\b'
+      scope: constant.numeric.float.toml
+    - match: '(?<!\w)[+-]?[0-9](?:[0-9]|_[0-9])*[eE][+-]?[0-9](?:[0-9]|_[0-9])*\b'
+      scope: constant.numeric.float.toml
+
+  integer:
+    - match: '(?<!\w)0x[0-9a-fA-F](?:[0-9a-fA-F]|_[0-9a-fA-F])*\b'
+      scope: constant.numeric.integer.hexadecimal.toml
+    - match: '(?<!\w)0o[0-7](?:[0-7]|_[0-7])*\b'
+      scope: constant.numeric.integer.octal.toml
+    - match: '(?<!\w)0b[01](?:[01]|_[01])*\b'
+      scope: constant.numeric.integer.binary.toml
+    - match: '(?<!\w)[+-]?(?:0|[1-9](?:[0-9]|_[0-9])*)\b'
+      scope: constant.numeric.integer.decimal.toml
+
+  boolean:
+    - match: '\b(?:true|false)\b'
+      scope: constant.language.boolean.toml
+
+  array:
+    - match: '\['
+      scope: punctuation.definition.array.begin.toml
+      push:
+        - match: '\]'
+          scope: punctuation.definition.array.end.toml
+          pop: true
+        - match: ','
+          scope: punctuation.separator.array.toml
+        - include: value
+
+  inline-table:
+    - match: '\{'
+      scope: punctuation.definition.inline-table.begin.toml
+      push:
+        - match: '\}'
+          scope: punctuation.definition.inline-table.end.toml
+          pop: true
+        - match: ','
+          scope: punctuation.separator.inline-table.toml
+        - include: inline-key-value
+
+  inline-key-value:
+    - include: key-name
+    - match: '\.'
+      scope: punctuation.separator.key.toml
+    - match: '='
+      scope: punctuation.definition.key-value.toml
+      push:
+        - match: '(?=[,}])'
+          pop: true
+        - include: value

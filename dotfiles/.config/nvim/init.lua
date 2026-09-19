@@ -234,6 +234,19 @@ lazy.setup({
                     ["@punctuation.bracket"] = { fg = colors.base0 },
                     ["@punctuation.delimiter"] = { fg = colors.base0 },
                     ["@punctuation.special"] = { fg = colors.base0 },
+                    -- Tags & Markup Elements (HTML / XML / JSX / TSX)
+                    Tag = { fg = colors.blue },
+                    TagAttribute = { fg = colors.base0 },
+                    TagDelimiter = { fg = colors.base0 },
+                    ["@tag"] = { fg = colors.blue },
+                    ["@tag.attribute"] = { fg = colors.base0 },
+                    ["@tag.delimiter"] = { fg = colors.base0 },
+                    ["@markup.raw.xml"] = { fg = colors.base0 },
+                    -- Diagnostic Underlines (sp-only underline/undercurl without mutating syntax fg)
+                    DiagnosticUnderlineError = { fg = "NONE", sp = colors.red, undercurl = true, underline = true },
+                    DiagnosticUnderlineWarn = { fg = "NONE", sp = colors.yellow, undercurl = true, underline = true },
+                    DiagnosticUnderlineInfo = { fg = "NONE", sp = colors.blue, undercurl = true, underline = true },
+                    DiagnosticUnderlineHint = { fg = "NONE", sp = colors.cyan, undercurl = true, underline = true },
                     -- Markdown & Markup Overrides (Exact 1:1 Parity with Bat - First Principles Sequence)
                     ["@markup.heading"] = { fg = colors.orange, bold = false },
                     ["@markup.heading.1"] = { fg = colors.orange, bold = false },
@@ -302,14 +315,6 @@ lazy.setup({
                     markdownUrl = { fg = colors.cyan, underline = true },
                     markdownId = { fg = colors.blue },
                     markdownIdDeclaration = { fg = colors.cyan },
-                    htmlH1 = { fg = colors.orange, bold = false },
-                    htmlH2 = { fg = colors.blue, bold = false },
-                    htmlH3 = { fg = colors.violet, bold = false },
-                    htmlH4 = { fg = colors.base1, bold = false },
-                    htmlH5 = { fg = colors.base0, bold = false },
-                    htmlH6 = { fg = colors.base0, bold = false },
-                    htmlBold = { fg = colors.base1, bold = true },
-                    htmlItalic = { italic = true },
                     goPredefinedIdentifiers = { fg = colors.magenta },
                     goConstants = { fg = colors.magenta },
                     goExtraType = { fg = colors.base0 },
@@ -386,6 +391,72 @@ lazy.setup({
                     shFunction = { fg = colors.blue },
                     sqlKeyword = { fg = colors.green },
                     sqlSpecial = { fg = colors.magenta },
+                    -- Legacy XML Syntax Fallbacks
+                    xmlTagName = { fg = colors.blue },
+                    xmlTag = { fg = colors.base0 },
+                    xmlEndTag = { fg = colors.base0 },
+                    xmlAttrib = { fg = colors.base0 },
+                    xmlEqual = { fg = colors.base0 },
+                    xmlString = { fg = colors.cyan },
+                    xmlProcessing = { fg = colors.orange },
+                    xmlProcessingDelim = { fg = colors.base0 },
+                    xmlDocTypeDecl = { fg = colors.orange },
+                    xmlDocTypeKeyword = { fg = colors.orange },
+                    xmlEntity = { fg = colors.magenta },
+                    xmlEntityPunct = { fg = colors.magenta },
+                    xmlCdataStart = { fg = colors.violet },
+                    xmlCdataEnd = { fg = colors.violet },
+                    xmlCdata = { fg = colors.base0 },
+                    xmlCdataCdata = { fg = colors.violet },
+                    xmlComment = { fg = colors.base01, italic = false },
+                    xmlCommentPart = { fg = colors.base01, italic = false },
+                    xmlNamespace = { fg = colors.blue },
+                    -- Legacy HTML Syntax Fallbacks
+                    htmlTagName = { fg = colors.blue },
+                    htmlSpecialTagName = { fg = colors.blue },
+                    htmlTag = { fg = colors.base0 },
+                    htmlEndTag = { fg = colors.base0 },
+                    htmlArg = { fg = colors.base0 },
+                    htmlString = { fg = colors.cyan },
+                    htmlComment = { fg = colors.base01, italic = false },
+                    htmlCommentPart = { fg = colors.base01, italic = false },
+                    htmlSpecialChar = { fg = colors.magenta },
+                    htmlDoctype = { fg = colors.orange },
+                    htmlHead = { fg = colors.base0 },
+                    htmlTitle = { fg = colors.base0 },
+                    htmlH1 = { fg = colors.base0, bold = false },
+                    htmlH2 = { fg = colors.base0, bold = false },
+                    htmlH3 = { fg = colors.base0, bold = false },
+                    htmlH4 = { fg = colors.base0, bold = false },
+                    htmlH5 = { fg = colors.base0, bold = false },
+                    htmlH6 = { fg = colors.base0, bold = false },
+                    htmlBold = { fg = colors.base0, bold = false },
+                    htmlItalic = { fg = colors.base0, italic = false },
+                    htmlUnderline = { fg = colors.base0, underline = false },
+                    htmlLink = { fg = colors.base0, underline = false },
+                    -- Legacy CSS Syntax Fallbacks
+                    cssProp = { fg = colors.green },
+                    cssTagName = { fg = colors.blue },
+                    cssClassName = { fg = colors.blue },
+                    cssClassNameDot = { fg = colors.base0 },
+                    cssIdentifier = { fg = colors.blue },
+                    cssColor = { fg = colors.magenta },
+                    cssValueNumber = { fg = colors.magenta },
+                    cssValueLength = { fg = colors.magenta },
+                    cssUnitizers = { fg = colors.base0 },
+                    cssStringQ = { fg = colors.cyan },
+                    cssStringQQ = { fg = colors.cyan },
+                    cssPseudoClass = { fg = colors.violet },
+                    cssPseudoClassId = { fg = colors.violet },
+                    cssCustomProperty = { fg = colors.base0 },
+                    cssVar = { fg = colors.base0 },
+                    cssAtRule = { fg = colors.orange },
+                    -- Legacy Java Properties Syntax Fallbacks
+                    jpropertiesIdentifier = { fg = colors.green },
+                    jpropertiesAssignment = { fg = colors.base0 },
+                    jpropertiesString = { fg = colors.cyan },
+                    jpropertiesSpecialChar = { fg = colors.violet },
+                    jpropertiesComment = { fg = colors.base01, italic = false },
 
                     -- Language-Specific Tree-sitter Semantic Specializations & Contextual Invariance
                     -- Java (Principle 7 Operational Role Invariance & Module Directives)
@@ -403,6 +474,39 @@ lazy.setup({
                     -- Terraform / HCL (Principle 35 Calm Typename Declarations)
                     ["@type.builtin.terraform"] = { fg = colors.base0 },
                     ["@type.builtin.hcl"] = { fg = colors.base0 },
+
+                    -- HTML (Semantic Headings & Content Desensitization to calm Base0 Grey)
+                    ["@markup.heading.html"] = { fg = colors.base0 },
+                    ["@markup.heading.1.html"] = { fg = colors.base0 },
+                    ["@markup.heading.2.html"] = { fg = colors.base0 },
+                    ["@markup.heading.3.html"] = { fg = colors.base0 },
+                    ["@markup.heading.4.html"] = { fg = colors.base0 },
+                    ["@markup.heading.5.html"] = { fg = colors.base0 },
+                    ["@markup.heading.6.html"] = { fg = colors.base0 },
+                    ["@markup.link.label.html"] = { fg = colors.base0, underline = false },
+                    ["@markup.link.html"] = { fg = colors.base0, underline = false },
+                    ["@markup.strong.html"] = { fg = colors.base0, bold = false },
+                    ["@markup.italic.html"] = { fg = colors.base0, italic = false },
+                    ["@markup.underline.html"] = { fg = colors.base0, underline = false },
+                    ["@string.special.url.html"] = { fg = colors.cyan, underline = false },
+
+                    -- TOML (Mapping Keys in Solarized Green matching JSON and YAML)
+                    ["@property.toml"] = { fg = colors.green },
+
+                    -- CSS (Universal Semantic Architecture: Selectors Blue, Properties Green, Custom Props Base0, Hex Magenta)
+                    ["@property.css"] = { fg = colors.green },
+                    ["@type.css"] = { fg = colors.blue },
+                    ["@tag.css"] = { fg = colors.blue },
+                    ["@variable.css"] = { fg = colors.base0 },
+                    ["@function.call.css"] = { fg = colors.base0 },
+                    ["@type.builtin.css"] = { fg = colors.base0 },
+                    ["@string.special.css"] = { fg = colors.magenta },
+                    ["@constant.css"] = { fg = colors.base0 },
+                    ["@keyword.modifier.css"] = { fg = colors.red },
+
+                    -- Java Properties (Mapping Keys in Green matching JSON, YAML, TOML)
+                    ["@property.properties"] = { fg = colors.green },
+                    ["@variable.properties"] = { fg = colors.base0 },
                 }
             end,
         },
@@ -424,8 +528,22 @@ lazy.setup({
                 "c", "cpp", "go", "java", "python", "rust", "typescript",
                 "javascript", "bash", "markdown", "markdown_inline",
                 "json", "yaml", "toml", "terraform", "sql", "lua",
-                "vim", "vimdoc", "diff", "printf"
+                "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
+                "properties"
             }
+
+            -- Pin tree-sitter-css to revision with Container Query support (PR #96)
+            local parsers_meta_ok, parsers_meta = pcall(require, "nvim-treesitter.parsers")
+            if parsers_meta_ok then
+                if parsers_meta.css and parsers_meta.css.install_info then
+                    parsers_meta.css.install_info.revision = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+                elseif parsers_meta.get_parser_configs then
+                    local pconfigs = parsers_meta.get_parser_configs()
+                    if pconfigs.css and pconfigs.css.install_info then
+                        pconfigs.css.install_info.revision = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+                    end
+                end
+            end
 
             -- Support legacy nvim-treesitter.configs if present
             local ts_configs_ok, ts_configs = pcall(require, "nvim-treesitter.configs")
@@ -465,6 +583,12 @@ lazy.setup({
                     end)
                 end
             end
+
+            -- Ensure user config directory unconditionally takes precedence over site queries in runtimepath
+            vim.opt.rtp:prepend(vim.fn.stdpath("config"))
+
+            -- Register Tree-sitter language aliases
+            pcall(vim.treesitter.language.register, "properties", { "jproperties", "properties" })
 
             -- Autocommand to start Tree-sitter highlighting on buffer attach (Neovim 0.12+)
             vim.api.nvim_create_autocmd("FileType", {
@@ -531,6 +655,8 @@ lazy.setup({
                     if client then
                         -- Disable LSP semantic token overrides so Treesitter handles syntax highlighting consistently without coloring parts of import strings
                         client.server_capabilities.semanticTokensProvider = nil
+                        -- Disable documentLinkProvider to eliminate rogue clickable hyperlink metadata and spurious link highlights
+                        client.server_capabilities.documentLinkProvider = nil
                     end
 
                     local bufmap = function(keys, func, desc)
@@ -584,8 +710,20 @@ lazy.setup({
                 pyright = {},
                 bashls = {},
                 terraformls = {},
-                yamlls = {},
-                jsonls = {},
+                yamlls = {
+                    settings = {
+                        yaml = {
+                            validate = false,
+                        },
+                    },
+                },
+                jsonls = {
+                    settings = {
+                        json = {
+                            validate = { enable = false },
+                        },
+                    },
+                },
             }
 
             -- Configure servers using modern vim.lsp.config (Neovim 0.11+) with legacy fallback

@@ -1,0 +1,166 @@
+%YAML 1.2
+---
+# Solarized Dark XML Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Processing instructions (<?xml ... ?>) directive names in Solarized Orange (keyword.other.directive.xml)
+# - Element tag names in Solarized Blue (entity.name.tag.xml)
+# - Tag delimiters (<, >, </, />, <?, ?>) in calm Base0 Grey (punctuation.definition.tag.xml)
+# - Attribute names in calm Base0 Grey (entity.other.attribute-name.xml)
+# - Attribute strings in Solarized Cyan (string.quoted.double.xml, string.quoted.single.xml)
+# - Entity references (&amp;, &lt;) in Solarized Magenta (constant.character.entity.xml)
+# - CDATA section boundaries (<![CDATA[ and ]]>) in Solarized Violet (keyword.other.cdata.xml)
+# - CDATA content in calm Base0 Grey (string.unquoted.cdata.xml)
+# - Comments in Base01 Dim (comment.block.xml)
+
+name: XML
+scope: text.xml
+version: 2
+
+file_extensions:
+  - xml
+  - xsd
+  - xslt
+  - svg
+  - plist
+  - xaml
+  - csproj
+  - vbproj
+  - props
+  - targets
+  - wxs
+  - pom
+  - config
+  - manifest
+
+first_line_match: '^(?:<\?xml\b|<!DOCTYPE\s+(?:html|xml)\b)'
+
+variables:
+  nc_name_start_char: '[a-zA-Z_]'
+  nc_name_char: '[a-zA-Z0-9._-]'
+  nc_name: '{{nc_name_start_char}}{{nc_name_char}}*'
+  qname: '{{nc_name}}(?::{{nc_name}})?'
+
+contexts:
+  main:
+    - include: comments
+    - include: processing-instruction
+    - include: cdata
+    - include: doctype
+    - include: tags
+    - include: entity-references
+    - include: text
+
+  comments:
+    - match: '<!--'
+      scope: punctuation.definition.comment.begin.xml comment.block.xml
+      push:
+        - match: '-->'
+          scope: punctuation.definition.comment.end.xml comment.block.xml
+          pop: true
+        - match: '.+?(?=-->|$)'
+          scope: comment.block.xml
+
+  processing-instruction:
+    - match: '(<\?)({{nc_name}})'
+      captures:
+        1: punctuation.definition.tag.begin.xml
+        2: keyword.other.directive.xml
+      push:
+        - match: '\?>'
+          scope: punctuation.definition.tag.end.xml
+          pop: true
+        - match: '({{qname}})\s*(=)'
+          captures:
+            1: entity.other.attribute-name.xml
+            2: punctuation.separator.key-value.xml
+        - include: strings
+        - match: '\S+'
+          scope: variable.parameter.xml
+
+  doctype:
+    - match: '(<!)(DOCTYPE)\b'
+      captures:
+        1: punctuation.definition.tag.begin.xml
+        2: keyword.other.directive.xml
+      push:
+        - match: '>'
+          scope: punctuation.definition.tag.end.xml
+          pop: true
+        - include: comments
+        - include: strings
+        - match: '\b(SYSTEM|PUBLIC)\b'
+          scope: keyword.other.directive.xml
+        - match: '\['
+          scope: punctuation.section.brackets.begin.xml
+          push:
+            - match: '\]'
+              scope: punctuation.section.brackets.end.xml
+              pop: true
+            - include: main
+
+  cdata:
+    - match: '<!\[CDATA\['
+      scope: punctuation.definition.string.begin.xml keyword.other.cdata.xml
+      push:
+        - match: '\]\]>'
+          scope: punctuation.definition.string.end.xml keyword.other.cdata.xml
+          pop: true
+        - match: '[^\]]+|.'
+          scope: string.unquoted.cdata.xml
+
+  tags:
+    # Closing tag: </prefix:localname> or </localname>
+    - match: '(</)({{qname}})\s*(>)'
+      captures:
+        1: punctuation.definition.tag.begin.xml
+        2: entity.name.tag.xml
+        3: punctuation.definition.tag.end.xml
+
+    # Opening tag: <prefix:localname or <localname
+    - match: '(<)({{qname}})'
+      captures:
+        1: punctuation.definition.tag.begin.xml
+        2: entity.name.tag.xml
+      push: tag-attributes
+
+  tag-attributes:
+    - match: '/>'
+      scope: punctuation.definition.tag.end.xml
+      pop: true
+    - match: '>'
+      scope: punctuation.definition.tag.end.xml
+      pop: true
+    # Any attribute name: prefix:name="..." or name="..."
+    - match: '({{qname}})\s*(=)'
+      captures:
+        1: entity.other.attribute-name.xml
+        2: punctuation.separator.key-value.xml
+    - include: strings
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.xml string.quoted.double.xml
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.end.xml string.quoted.double.xml
+          pop: true
+        - include: entity-references
+        - match: '[^"&]+'
+          scope: string.quoted.double.xml
+    - match: "'"
+      scope: punctuation.definition.string.begin.xml string.quoted.single.xml
+      push:
+        - match: "'"
+          scope: punctuation.definition.string.end.xml string.quoted.single.xml
+          pop: true
+        - include: entity-references
+        - match: "[^'&]+"
+          scope: string.quoted.single.xml
+
+  entity-references:
+    - match: '&(?:[a-zA-Z0-9_]+|#[0-9]+|#x[0-9a-fA-F]+);'
+      scope: constant.character.entity.xml
+
+  text:
+    - match: '[^<&]+'
+      scope: text.xml

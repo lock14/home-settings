@@ -50,6 +50,14 @@ if [ -f "$TEMP_HOME/.config/nvim/ftplugin/java.lua" ] && grep -q 'jdtls' "$TEMP_
 else
     fail "Java ftplugin symlink" "Expected .config/nvim/ftplugin/java.lua in mirrored dotfiles"
 fi
+if [ -f "$TEMP_HOME/.config/nvim/after/queries/javascript/highlights.scm" ] && \
+   grep -q '"process"' "$TEMP_HOME/.config/nvim/after/queries/javascript/highlights.scm" && \
+   [ -f "$TEMP_HOME/.config/nvim/after/queries/typescript/highlights.scm" ] && \
+   grep -q '"process"' "$TEMP_HOME/.config/nvim/after/queries/typescript/highlights.scm"; then
+    pass "Auto-discovered and symlinked: JavaScript and TypeScript Tree-sitter query overrides"
+else
+    fail "JS/TS queries symlink" "Expected after/queries/javascript and after/queries/typescript in mirrored .config/nvim"
+fi
 assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
 assert_symlink "$TEMP_HOME/.config/clangd" "" "Auto-discovered and symlinked: .config/clangd"
 if [ -f "$TEMP_HOME/.config/clangd/config.yaml" ] && \
@@ -92,6 +100,13 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" "" "Symlink
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/SQL.sublime-syntax" "" "Symlinked Bat SQL syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Terraform.sublime-syntax" "" "Symlinked Bat Terraform syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Markdown.sublime-syntax" "" "Symlinked Bat Markdown syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/TypeScript.sublime-syntax" "" "Symlinked Bat TypeScript syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/XML.sublime-syntax" "" "Symlinked Bat XML syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/HTML.sublime-syntax" "" "Symlinked Bat HTML syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/JSON.sublime-syntax" "" "Symlinked Bat JSON syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/TOML.sublime-syntax" "" "Symlinked Bat TOML syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/CSS.sublime-syntax" "" "Symlinked Bat CSS syntax"
+assert_symlink "$TEMP_HOME/.config/bat/syntaxes/JavaProperties.sublime-syntax" "" "Symlinked Bat Java Properties syntax"
 
 THEME_FILE="$SCRIPT_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if grep -q "<string>markup.heading" "$THEME_FILE" && \
@@ -115,8 +130,18 @@ if grep -q "<string>markup.heading" "$THEME_FILE" && \
    grep -q "storage.type.function" "$THEME_FILE" && \
    grep -q "storage.type.impl" "$THEME_FILE" && \
    grep -q "variable.other.constant" "$THEME_FILE" && \
+   grep -q "text.xml entity.name.tag" "$THEME_FILE" && \
+   grep -q "text.xml keyword.other.directive" "$THEME_FILE" && \
+   grep -q "text.html entity.name.tag" "$THEME_FILE" && \
+   grep -q "text.html keyword.other.directive.doctype" "$THEME_FILE" && \
+   grep -q "entity.name.tag.json" "$THEME_FILE" && \
+   grep -q "entity.name.tag.yaml" "$THEME_FILE" && \
+   grep -q "entity.name.section.table.toml" "$THEME_FILE" && \
+   grep -q "entity.name.tag.toml" "$THEME_FILE" && \
+   grep -q "keyword.control.at-rule.css" "$THEME_FILE" && \
+   grep -q "support.type.property-name.css" "$THEME_FILE" && \
    grep -q "variable, variable.other, variable.parameter" "$THEME_FILE"; then
-    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Rust, Bash, Namespace, Attribute, and Error scopes"
+    pass "Solarized-Dark-TrueColor.tmTheme defines complete Markdown, C/C++, Java, Diff, Go, Python, Rust, Bash, XML, HTML, JSON, YAML, TOML, CSS, Namespace, Attribute, and Error scopes"
 else
     fail "Bat theme scope completeness" "Missing required scopes in Solarized-Dark-TrueColor.tmTheme"
 fi
@@ -703,6 +728,243 @@ if [ -n "$BAT_BIN" ]; then
         pass "bat renders Markdown showcase (sample.md) with Semantic Architecture: H1 Orange, H2 Blue, H3 Violet, H4 Base1, H5/H6 Base0, Base01 hashmarks/quote markers, GitHub alerts ([!NOTE], [!TIP], [!IMPORTANT], [!WARNING]), task checkboxes, Base1 table headers with Base01 borders, embedded Bash with Magenta \$HOME and Base0 commands, embedded Go with Green func/package, Violet main, Blue declarations, Base0 calls (errors.New), Magenta nil, and exclusive Yellow control flow"
     else
         fail "bat Markdown showcase rendering" "Expected Semantic Architecture TrueColor highlights in bat sample.md output"
+    fi
+
+    TS_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l ts "$SCRIPT_DIR/sample-code/sample.ts" 2>/dev/null || true)"
+    if grep -Fq "${SOL_VIOLET}export" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}enum" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}type" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}interface" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}class" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}boolean" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}number" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}string" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}readonly" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}public" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}const" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}async" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}request" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}getState" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}try" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}await" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}return" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}catch" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}throw" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}new" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}this" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}true" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}8080" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}UserRole" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ConnectionState" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ApiResponse" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ServiceGateway" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}requestUrl" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}mockData" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}message" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}setTimeout" <<< "$TS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}encodeURIComponent" <<< "$TS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_YELLOW}UserRole" <<< "$TS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_MAGENTA}requestUrl" <<< "$TS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_GREEN}return" <<< "$TS_SAMPLE_OUT"; then
+        pass "bat renders TypeScript showcase (sample.ts) with Converged Ergonomic Solarized: imports/exports in Violet, declarations & primitive types in Green, exclusive control flow in Yellow, method declarations in Blue, invocations & custom types in Base0, and constants/numbers in Magenta matching Neovim"
+    else
+        fail "bat TypeScript rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.ts output"
+    fi
+
+    JS_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l js "$SCRIPT_DIR/sample-code/sample.js" 2>/dev/null || true)"
+    if grep -Fq "${SOL_VIOLET}import" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}export" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}class" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}const" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}async" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}await" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}try" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}yield" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}of" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}this" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}console" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}process" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Date" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}^\\/health[z]?$" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}i" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Symbol" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}iterator" <<< "$JS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}inspectSymbol" <<< "$JS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_GREEN}Date" <<< "$JS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_BASE0}console" <<< "$JS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_BASE0}process" <<< "$JS_SAMPLE_OUT" && \
+        ! grep -Fq "${SOL_BLUE}Symbol.iterator" <<< "$JS_SAMPLE_OUT" && \
+        ! grep -Fq "${SOL_BLUE}inspectSymbol" <<< "$JS_SAMPLE_OUT"; then
+        pass "bat renders JavaScript showcase (sample.js) with Converged Ergonomic Solarized: Date in Base0, console & process in Magenta, regex body in Magenta with Cyan flags and Base0 delimiters, *[Symbol.iterator] with calm Base0 operator and computed members, and loop 'of' keyword in Yellow matching Neovim"
+    else
+        fail "bat JavaScript rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.js output"
+    fi
+
+    # --- 2.14 XML Syntax Verification ---
+    XML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l xml "$SCRIPT_DIR/sample-code/sample.xml" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}xml" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}xml-stylesheet" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}deployment" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}mon:monitoring" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}sec:security" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}script" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}version" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}xmlns:mon" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}urn:deployment:v2" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}&amp;" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}<![CDATA[" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}]]>" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}        #!/bin/sh" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}<!--" <<< "$XML_SAMPLE_OUT"; then
+        pass "bat renders XML showcase (sample.xml) with Converged Ergonomic Solarized: directives in Orange, element tags in Blue, tag delimiters & attributes in Base0, attribute strings in Cyan, entity references in Magenta, CDATA boundaries in Violet with calm Base0 payload, and comments in Base01 matching Neovim"
+    else
+        fail "bat XML rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.xml output"
+    fi
+
+    # --- 2.15 HTML Syntax Verification ---
+    HTML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l html "$SCRIPT_DIR/sample-code/sample.html" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}DOCTYPE" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}html" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}header" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}footer" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}script" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}charset" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}data-status" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}solarized-dark" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}&copy;" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}&mdash;" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Gateway Dashboard" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}<!--" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}document" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}addEventListener" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}const" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}console" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}log" <<< "$HTML_SAMPLE_OUT"; then
+        pass "bat renders HTML5 showcase (sample.html) with Converged Ergonomic Solarized: doctype in Orange, element tags in Blue, tag delimiters & attributes in Base0, attribute strings in Cyan, entities in Magenta, document text in calm Base0 Grey, comments in Base01, and embedded script in JS/TS scheme matching Neovim"
+    else
+        fail "bat HTML rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.html output"
+    fi
+
+    # --- 2.16 JSON Syntax Verification ---
+    JSON_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l json "$SCRIPT_DIR/sample-code/sample.json" 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}\$schema" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}apiVersion" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}metadata" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}https://api.example.com" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}v2" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}3" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}true" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}false" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}null" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}{" <<< "$JSON_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}:" <<< "$JSON_SAMPLE_OUT"; then
+        pass "bat renders JSON showcase (sample.json) with Converged Ergonomic Solarized: object mapping keys in Green, string values in Cyan, numeric values, booleans & null in Magenta, and delimiters/brackets in calm Base0 Grey matching Neovim"
+    else
+        fail "bat JSON rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.json output"
+    fi
+
+    # --- 2.17 YAML Syntax Verification ---
+    YAML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l yaml "$SCRIPT_DIR/sample-code/sample.yaml" 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}apiVersion" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}kind" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}metadata" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}apps/v1" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}Deployment" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}!!str" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}42" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}null" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}true" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}<<" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}common-labels" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}resource-defaults" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}pod-security" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}&" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}*" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}#" <<< "$YAML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}---" <<< "$YAML_SAMPLE_OUT"; then
+        pass "bat renders YAML showcase (sample.yaml) with Converged Ergonomic Solarized: mapping keys & merge keys (<<) in Green, anchors & aliases in Base01 Dim with calm Base0 sigils (&, *), string values in Cyan, explicit type tags (!!str) in Base0 Grey (zero Yellow), numbers/booleans/null in Magenta, comments in Base01, and document markers in Base0 Grey matching Neovim"
+    else
+        fail "bat YAML rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.yaml output"
+    fi
+
+    # --- 2.18 TOML Syntax Verification ---
+    TOML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l toml "$SCRIPT_DIR/sample-code/sample.toml" 2>/dev/null || true)"
+    if grep -Fq "${SOL_BLUE}package" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}server" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}rate_limits" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}name" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}version" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}pool" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}min_size" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}authorization" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}solarized-gateway" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}8080" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}true" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}2025-09-14T08:30:00Z" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}inf" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}nan" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}[" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}]" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}=" <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}." <<< "$TOML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}#" <<< "$TOML_SAMPLE_OUT"; then
+        pass "bat renders TOML showcase (sample.toml) with Converged Ergonomic Solarized: table headers in Blue, mapping & inline keys in Green, string values in Cyan, numeric values, booleans, floats (inf, nan) & date-times in Magenta, brackets & delimiters in calm Base0, and comments in Base01 matching Neovim"
+    else
+        fail "bat TOML rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.toml output"
+    fi
+
+    # --- 2.19 CSS Syntax Verification ---
+    CSS_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l css "$SCRIPT_DIR/sample-code/sample.css" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}@layer" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@font-face" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@keyframes" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@container" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}@media" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}body" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}dashboard-grid" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}*" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}root" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}hover" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}before" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}font-family" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}color" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}background" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}--color-base03" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}MesloLGS NF" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}#002b36" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}400" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}ui-monospace" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}monospace" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}auto" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}auto-fill" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}&" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}data-status" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}healthy" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}content" <<< "$CSS_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}640" <<< "$CSS_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_YELLOW}font-family" <<< "$CSS_SAMPLE_OUT"; then
+        pass "bat renders CSS showcase (sample.css) with Converged Ergonomic Solarized: at-rules in Orange, selectors in Blue, pseudo-classes/elements in Violet, nesting parent '&' and attribute selector names in Base0, attribute strings in Cyan, container queries in Orange/Base0/Magenta, properties in Green (zero Yellow), custom properties unbroken in Base0, keyword values (ui-monospace, monospace, auto, auto-fill) in Base0, strings in Cyan, numbers/hex in Magenta, and delimiters in calm Base0 matching Neovim"
+    else
+        fail "bat CSS rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.css output"
+    fi
+
+    # --- 2.20 Java Properties Syntax Verification ---
+    PROPERTIES_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l properties "$SCRIPT_DIR/sample-code/sample.properties" 2>/dev/null || true)"
+    if grep -Fq "${SOL_GREEN}spring.application.name" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}server.port" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}8080" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}0.15" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}true" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}solarized-gateway" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}=" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}:" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}#" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE01}!" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}\${" <<< "$PROPERTIES_SAMPLE_OUT" && \
+       ! grep -Fq "${SOL_YELLOW}" <<< "$PROPERTIES_SAMPLE_OUT"; then
+        pass "bat renders Java Properties showcase (sample.properties) with Converged Ergonomic Solarized: keys in Green, integer/float numbers and booleans in Magenta, strings in Cyan, delimiters and variable references in calm Base0, and comments in Base01 matching Neovim"
+    else
+        fail "bat Java Properties rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.properties output"
     fi
 fi
 
