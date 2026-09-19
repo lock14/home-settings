@@ -1598,7 +1598,7 @@
 		<!-- ======================================================= -->
 		<!-- XML Syntax Scopes (Universal Semantic Architecture)     -->
 		<!-- ======================================================= -->
-		<!-- XML Element Tags -> Solarized Blue (#268BD2) -->
+		<!-- XML Element Tags -> Solarized Blue (#268BD2)            -->
 		<dict>
 			<key>name</key>
 			<string>XML Tag Names (Solarized Blue)</string>
@@ -1684,18 +1684,32 @@
 				<string></string>
 			</dict>
 		</dict>
-		<!-- XML Base Canvas (Delimiters, Attributes, Operators, Text, CDATA Body) -> Solarized Base0 (#839496) -->
+		<!-- XML Attribute Names -> Solarized Green (#859900)        -->
+		<dict>
+			<key>name</key>
+			<string>XML Attribute Names (Solarized Green)</string>
+			<key>scope</key>
+			<string>entity.other.attribute-name.xml, text.xml entity.other.attribute-name, entity.other.attribute-name.localname.xml</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- XML Base Canvas (Delimiters, Operators, Text, CDATA Body) -> Solarized Base0 (#839496) -->
 		<dict>
 			<key>name</key>
 			<string>XML Base Canvas (Solarized Base0)</string>
 			<key>scope</key>
-			<string>text.xml entity.other.attribute-name, entity.other.attribute-name.xml, entity.other.attribute-name.localname.xml, text.xml punctuation.definition.tag, punctuation.definition.tag.xml, text.xml punctuation.separator, text.xml string.unquoted.cdata, string.unquoted.cdata.xml, text.xml variable.parameter</string>
+			<string>text.xml punctuation.definition.tag, punctuation.definition.tag.xml, text.xml punctuation.separator, text.xml string.unquoted.cdata, string.unquoted.cdata.xml, text.xml variable.parameter</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
 				<string>#839496</string>
 			</dict>
 		</dict>
+		<!-- ======================================================= -->
+		<!-- HTML5 Syntax Scopes (Universal Semantic Architecture)   -->
 		<!-- ======================================================= -->
 		<!-- HTML Element Tags -> Solarized Blue (#268BD2)          -->
 		<dict>
@@ -1733,24 +1747,24 @@
 				<string>#D33682</string>
 			</dict>
 		</dict>
-		<!-- HTML Strings -> Solarized Cyan (#2AA198)               -->
+		<!-- HTML String Literals -> Solarized Cyan (#2AA198)       -->
 		<dict>
 			<key>name</key>
-			<string>HTML Attribute Strings (Solarized Cyan)</string>
+			<string>HTML String Literals (Solarized Cyan)</string>
 			<key>scope</key>
-			<string>text.html string.quoted</string>
+			<string>text.html string.quoted, string.quoted.double.html, string.quoted.single.html</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
 				<string>#2AA198</string>
 			</dict>
 		</dict>
-		<!-- HTML Comments -> Solarized Base01 (#586E75)            -->
+		<!-- HTML Comments -> Solarized Base01 Dim (#586E75)        -->
 		<dict>
 			<key>name</key>
 			<string>HTML Comments (Solarized Base01)</string>
 			<key>scope</key>
-			<string>text.html comment, text.html punctuation.definition.comment</string>
+			<string>text.html comment, comment.block.html</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -1759,12 +1773,24 @@
 				<string></string>
 			</dict>
 		</dict>
-		<!-- HTML Base Canvas (Delimiters, Attributes, Operators, Text) -> Solarized Base0 (#839496) -->
+		<!-- HTML Attribute Names -> Solarized Green (#859900)       -->
+		<dict>
+			<key>name</key>
+			<string>HTML Attribute Names (Solarized Green)</string>
+			<key>scope</key>
+			<string>entity.other.attribute-name.html, text.html entity.other.attribute-name</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#859900</string>
+			</dict>
+		</dict>
+		<!-- HTML Base Canvas (Delimiters, Operators, Text) -> Solarized Base0 (#839496) -->
 		<dict>
 			<key>name</key>
 			<string>HTML Base Canvas (Solarized Base0)</string>
 			<key>scope</key>
-			<string>text.html entity.other.attribute-name, entity.other.attribute-name.html, text.html punctuation.definition.tag, punctuation.definition.tag.html, text.html punctuation.separator, text.html text, text.html variable.function, text.html support.function</string>
+			<string>text.html punctuation.definition.tag, punctuation.definition.tag.html, text.html punctuation.separator, text.html text, text.html variable.function, text.html support.function</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

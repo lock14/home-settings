@@ -145,12 +145,71 @@ lazy.setup({
             },
             on_highlights = function(colors, _)
                 return {
-                    -- Base Editor
+                    -- =========================================================================
+                    -- Non-Language-Specific UI & Framing Architecture (Converged Solarized Dark)
+                    -- =========================================================================
+                    -- Base Canvas & Cursor
                     Normal = { fg = colors.base0, bg = colors.base03 },
+                    NormalNC = { fg = colors.base0, bg = colors.base03 },
+                    Cursor = { fg = colors.base03, bg = colors.base0 },
                     CursorLine = { bg = colors.base02 },
+                    CursorColumn = { bg = colors.base02 },
+                    ColorColumn = { bg = colors.base02 },
+
+                    -- Gutter & Navigation Coordinates (Calm Monochromatic Luminance)
                     LineNr = { fg = colors.base01, bg = colors.base03 },
-                    CursorLineNr = { fg = colors.yellow, bg = colors.base02, bold = true },
+                    LineNrAbove = { fg = colors.base01, bg = colors.base03 },
+                    LineNrBelow = { fg = colors.base01, bg = colors.base03 },
+                    CursorLineNr = { fg = colors.base1, bg = colors.base02, bold = true },
                     SignColumn = { bg = colors.base03 },
+                    FoldColumn = { fg = colors.base01, bg = colors.base03 },
+                    Folded = { fg = colors.base0, bg = colors.base02 },
+
+                    -- Window Framing & Splits (Calm Base01 Dim Borders, Zero Chromatic Noise)
+                    WinSeparator = { fg = colors.base01, bg = colors.base03 },
+                    VertSplit = { fg = colors.base01, bg = colors.base03 },
+                    FloatBorder = { fg = colors.base01, bg = colors.base04 },
+                    FloatTitle = { fg = colors.base1, bg = colors.base02, bold = true },
+                    NormalFloat = { fg = colors.base0, bg = colors.base04 },
+
+                    -- Delimiter Matching (Luminance Bounding without Syntax Corruption)
+                    MatchParen = { fg = colors.base1, bg = colors.base02, bold = true },
+
+                    -- Search & Selection Plane (Zero Collision)
+                    Visual = { bg = colors.mix_base1 },
+                    VisualNOS = { bg = colors.mix_base1 },
+                    Search = { fg = colors.base1, bg = colors.mix_yellow, bold = true },
+                    IncSearch = { fg = colors.magenta, bg = colors.mix_magenta, bold = true },
+                    CurSearch = { fg = colors.magenta, bg = colors.mix_magenta, bold = true },
+
+                    -- Status, Tabline & Completion Menus
+                    StatusLine = { fg = colors.base1, bg = colors.base04 },
+                    StatusLineNC = { fg = colors.base01, bg = colors.base04 },
+                    TabLine = { fg = colors.base01, bg = colors.base04 },
+                    TabLineFill = { fg = colors.base0, bg = colors.base04 },
+                    TabLineSel = { fg = colors.base0, bg = colors.base03 },
+                    Pmenu = { fg = colors.base0, bg = colors.base04 },
+                    PmenuSel = { fg = colors.base2, bg = colors.base01 },
+                    PmenuSbar = { bg = colors.base04 },
+                    PmenuThumb = { bg = colors.base1 },
+
+                    -- Diagnostic Severity Hierarchy (Unified 4-Tier Ladder)
+                    DiagnosticError = { fg = colors.red },
+                    DiagnosticSignError = { fg = colors.red, bg = colors.base03 },
+                    DiagnosticFloatingError = { fg = colors.red },
+                    DiagnosticVirtualTextError = { fg = colors.red },
+                    DiagnosticWarn = { fg = colors.yellow },
+                    DiagnosticSignWarn = { fg = colors.yellow, bg = colors.base03 },
+                    DiagnosticFloatingWarn = { fg = colors.yellow },
+                    DiagnosticVirtualTextWarn = { fg = colors.yellow },
+                    DiagnosticInfo = { fg = colors.blue },
+                    DiagnosticSignInfo = { fg = colors.blue, bg = colors.base03 },
+                    DiagnosticFloatingInfo = { fg = colors.blue },
+                    DiagnosticVirtualTextInfo = { fg = colors.blue },
+                    DiagnosticHint = { fg = colors.cyan },
+                    DiagnosticSignHint = { fg = colors.cyan, bg = colors.base03 },
+                    DiagnosticFloatingHint = { fg = colors.cyan },
+                    DiagnosticVirtualTextHint = { fg = colors.cyan },
                     -- Canonical Syntax Highlights
                     Comment = { fg = colors.base01, italic = false },
                     Keyword = { fg = colors.green },
@@ -236,11 +295,12 @@ lazy.setup({
                     ["@punctuation.special"] = { fg = colors.base0 },
                     -- Tags & Markup Elements (HTML / XML / JSX / TSX)
                     Tag = { fg = colors.blue },
-                    TagAttribute = { fg = colors.base0 },
+                    TagAttribute = { fg = colors.green },
                     TagDelimiter = { fg = colors.base0 },
                     ["@tag"] = { fg = colors.blue },
-                    ["@tag.attribute"] = { fg = colors.base0 },
+                    ["@tag.attribute"] = { fg = colors.green },
                     ["@tag.delimiter"] = { fg = colors.base0 },
+                    ["@tag.attribute.css"] = { fg = colors.base0 },
                     ["@markup.raw.xml"] = { fg = colors.base0 },
                     -- Diagnostic Underlines (sp-only underline/undercurl without mutating syntax fg)
                     DiagnosticUnderlineError = { fg = "NONE", sp = colors.red, undercurl = true, underline = true },
@@ -374,9 +434,10 @@ lazy.setup({
                     diffFile = { fg = colors.orange },
                     diffNewFile = { fg = colors.yellow },
                     diffIndexLine = { fg = colors.base01 },
-                    DiffAdd = { fg = colors.green },
-                    DiffDelete = { fg = colors.red },
-                    DiffChange = { fg = colors.yellow },
+                    DiffAdd = { fg = colors.green, bg = colors.mix_green },
+                    DiffDelete = { fg = colors.red, bg = colors.mix_red },
+                    DiffChange = { fg = colors.yellow, bg = colors.mix_yellow },
+                    DiffText = { fg = colors.blue, bg = colors.mix_blue, bold = true },
                     ["@diff.plus"] = { fg = colors.green },
                     ["@diff.minus"] = { fg = colors.red },
                     ["@diff.delta"] = { fg = colors.yellow },
@@ -395,7 +456,7 @@ lazy.setup({
                     xmlTagName = { fg = colors.blue },
                     xmlTag = { fg = colors.base0 },
                     xmlEndTag = { fg = colors.base0 },
-                    xmlAttrib = { fg = colors.base0 },
+                    xmlAttrib = { fg = colors.green },
                     xmlEqual = { fg = colors.base0 },
                     xmlString = { fg = colors.cyan },
                     xmlProcessing = { fg = colors.orange },
@@ -416,7 +477,7 @@ lazy.setup({
                     htmlSpecialTagName = { fg = colors.blue },
                     htmlTag = { fg = colors.base0 },
                     htmlEndTag = { fg = colors.base0 },
-                    htmlArg = { fg = colors.base0 },
+                    htmlArg = { fg = colors.green },
                     htmlString = { fg = colors.cyan },
                     htmlComment = { fg = colors.base01, italic = false },
                     htmlCommentPart = { fg = colors.base01, italic = false },
@@ -490,11 +551,14 @@ lazy.setup({
                     ["@markup.underline.html"] = { fg = colors.base0, underline = false },
                     ["@string.special.url.html"] = { fg = colors.cyan, underline = false },
 
-                    -- TOML (Mapping Keys in Solarized Green matching JSON and YAML)
+                    -- Declarative Configuration Continuum (Mapping Keys in Solarized Green)
+                    ["@property.json"] = { fg = colors.green },
+                    ["@property.yaml"] = { fg = colors.green },
                     ["@property.toml"] = { fg = colors.green },
+                    ["@property.css"] = { fg = colors.green },
+                    ["@property.properties"] = { fg = colors.green },
 
                     -- CSS (Universal Semantic Architecture: Selectors Blue, Properties Green, Custom Props Base0, Hex Magenta)
-                    ["@property.css"] = { fg = colors.green },
                     ["@type.css"] = { fg = colors.blue },
                     ["@tag.css"] = { fg = colors.blue },
                     ["@variable.css"] = { fg = colors.base0 },
@@ -504,8 +568,7 @@ lazy.setup({
                     ["@constant.css"] = { fg = colors.base0 },
                     ["@keyword.modifier.css"] = { fg = colors.red },
 
-                    -- Java Properties (Mapping Keys in Green matching JSON, YAML, TOML)
-                    ["@property.properties"] = { fg = colors.green },
+                    -- Java Properties (Variable Interpolation in Base0 Grey)
                     ["@variable.properties"] = { fg = colors.base0 },
                 }
             end,

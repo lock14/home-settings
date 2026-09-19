@@ -808,15 +808,15 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_BLUE}mon:monitoring" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}sec:security" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}script" <<< "$XML_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BASE0}version" <<< "$XML_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BASE0}xmlns:mon" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}version" <<< "$XML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}xmlns:mon" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}urn:deployment:v2" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}&amp;" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}<![CDATA[" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}]]>" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}        #!/bin/sh" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}<!--" <<< "$XML_SAMPLE_OUT"; then
-        pass "bat renders XML showcase (sample.xml) with Converged Ergonomic Solarized: directives in Orange, element tags in Blue, tag delimiters & attributes in Base0, attribute strings in Cyan, entity references in Magenta, CDATA boundaries in Violet with calm Base0 payload, and comments in Base01 matching Neovim"
+        pass "bat renders XML showcase (sample.xml) with Converged Ergonomic Solarized: directives in Orange, element tags in Blue, tag attributes in Green, tag delimiters in Base0, attribute strings in Cyan, entity references in Magenta, CDATA boundaries in Violet with calm Base0 payload, and comments in Base01 matching Neovim"
     else
         fail "bat XML rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.xml output"
     fi
@@ -828,8 +828,8 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_BLUE}header" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}footer" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}script" <<< "$HTML_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BASE0}charset" <<< "$HTML_SAMPLE_OUT" && \
-       grep -Fq "${SOL_BASE0}data-status" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}charset" <<< "$HTML_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}data-status" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}solarized-dark" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}&copy;" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}&mdash;" <<< "$HTML_SAMPLE_OUT" && \
@@ -840,7 +840,7 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_GREEN}const" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}console" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}log" <<< "$HTML_SAMPLE_OUT"; then
-        pass "bat renders HTML5 showcase (sample.html) with Converged Ergonomic Solarized: doctype in Orange, element tags in Blue, tag delimiters & attributes in Base0, attribute strings in Cyan, entities in Magenta, document text in calm Base0 Grey, comments in Base01, and embedded script in JS/TS scheme matching Neovim"
+        pass "bat renders HTML5 showcase (sample.html) with Converged Ergonomic Solarized: doctype in Orange, element tags in Blue, tag attributes in Green, tag delimiters in Base0, attribute strings in Cyan, entities in Magenta, document text in calm Base0 Grey, comments in Base01, and embedded script in JS/TS scheme matching Neovim"
     else
         fail "bat HTML rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.html output"
     fi

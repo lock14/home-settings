@@ -7,6 +7,9 @@
 ;; Property keys -> Solarized Green (#859900)
 ((key) @property.properties (#set! priority 130))
 
+;; Default string values -> Solarized Cyan (#2AA198)
+(value) @string
+
 ;; Boolean values -> Solarized Magenta (#D33682)
 ((value) @boolean
   (#any-of? @boolean "true" "false")
@@ -59,6 +62,3 @@
   "."
   "\\"
 ] @punctuation.delimiter
-
-;; Default string values -> Solarized Cyan (#2AA198)
-(value) @string
