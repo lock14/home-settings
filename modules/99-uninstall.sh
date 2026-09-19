@@ -93,6 +93,12 @@ uninstall_dotfiles() {
         fi
     fi
 
+    # Clean up legacy fzf-zsh-plugin directory and .vim bundles if present
+    if [ "$DRY_RUN" = false ]; then
+        rm -rf "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/fzf-zsh-plugin" 2>/dev/null || true
+        rm -rf "$HOME/.vim/bundle" "$HOME/.vim/autoload" 2>/dev/null || true
+    fi
+
     echo "  Dotfile symlinks uninstalled."
 }
 
