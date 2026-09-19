@@ -62,9 +62,11 @@ if [ "$SKIP_ZSH" = false ]; then
         if [ "$OS" = "macos" ]; then
             sed -i '' 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
             sed -i '' 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc" 2>/dev/null || true
+            sed -i '' -E 's/[[:space:]]*fzf-zsh-plugin//g' "$HOME/.zshrc" 2>/dev/null || true
         else
             sed -i 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
             sed -i 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc" 2>/dev/null || true
+            sed -i -E 's/[[:space:]]*fzf-zsh-plugin//g' "$HOME/.zshrc" 2>/dev/null || true
         fi
         grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" || \
             printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"

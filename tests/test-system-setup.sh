@@ -269,6 +269,25 @@ else
 fi
 rm -rf "$TEMP_BIN_HOME"
 
+TEMP_SHELL_HOME=$(mktemp -d)
+mkdir -p "$TEMP_SHELL_HOME/.oh-my-zsh/custom/plugins/fzf-zsh-plugin"
+mkdir -p "$TEMP_SHELL_HOME/.vim/bundle/solarized"
+printf 'plugins=(git fzf-zsh-plugin zsh-autosuggestions)\n' > "$TEMP_SHELL_HOME/.zshrc"
+sed -i -E 's/[[:space:]]*fzf-zsh-plugin//g' "$TEMP_SHELL_HOME/.zshrc"
+if ! grep -q 'fzf-zsh-plugin' "$TEMP_SHELL_HOME/.zshrc" && grep -q 'plugins=(git zsh-autosuggestions)' "$TEMP_SHELL_HOME/.zshrc"; then
+    pass "modules/60-shell.sh strips legacy fzf-zsh-plugin from .zshrc"
+else
+    fail "modules/60-shell.sh fzf-zsh-plugin cleanup" "Expected fzf-zsh-plugin removed from .zshrc"
+fi
+
+HOME="$TEMP_SHELL_HOME" "$SCRIPT_DIR/setup.sh" --uninstall-dotfiles >/dev/null 2>&1 || true
+if [ ! -d "$TEMP_SHELL_HOME/.oh-my-zsh/custom/plugins/fzf-zsh-plugin" ] && [ ! -d "$TEMP_SHELL_HOME/.vim/bundle" ]; then
+    pass "setup.sh --uninstall-dotfiles purges legacy fzf-zsh-plugin and .vim/bundle directories"
+else
+    fail "setup.sh --uninstall-dotfiles legacy directory purge" "Expected legacy directories to be deleted"
+fi
+rm -rf "$TEMP_SHELL_HOME"
+
 # Test 4: Mise Configuration Validity
 echo -e "\n[4/5] Testing .mise.toml toolchain definition..."
 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
