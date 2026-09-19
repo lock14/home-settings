@@ -42,25 +42,25 @@ check_option "&shiftwidth == 4" "shiftwidth is set to 4"
 check_option "&expandtab == 1" "expandtab is enabled"
 check_option "&background == 'dark'" "background is set to dark"
 
-# Test 3: UltiSnips and AutoPairs variables
-echo -e "\n[3/6] Testing UltiSnips and plugin settings..."
-check_option "g:UltiSnipsExpandTrigger == '<tab>'" "UltiSnipsExpandTrigger is <tab>"
-check_option "g:UltiSnipsJumpForwardTrigger == '<c-j>'" "UltiSnipsJumpForwardTrigger is <c-j>"
-check_option "g:UltiSnipsJumpBackwardTrigger == '<c-k>'" "UltiSnipsJumpBackwardTrigger is <c-k>"
-check_option "g:SuperTabDefaultCompletionType == '<c-n>'" "SuperTabDefaultCompletionType is <c-n>"
-check_option "g:AutoPairsShortcutJump == '<c-l>'" "AutoPairsShortcutJump is <c-l>"
+# Test 3: Standalone & zero-dependency verification
+echo -e "\n[3/6] Testing that dotfiles/.vimrc is standalone and zero-dependency..."
+if ! grep -q 'pathogen#infect' "$SCRIPT_DIR/dotfiles/.vimrc" && ! grep -q 'PYTHONWARNINGS' "$SCRIPT_DIR/dotfiles/.vimrc" && ! grep -q 'UltiSnips' "$SCRIPT_DIR/dotfiles/.vimrc"; then
+    pass "dotfiles/.vimrc is self-contained without external bundle dependencies or Python hacks"
+else
+    fail "dotfiles/.vimrc standalone" "Expected no pathogen, PYTHONWARNINGS, or UltiSnips in .vimrc"
+fi
 
 # Test 4: Verify Home key mapping
 echo -e "\n[4/6] Testing key mappings..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 
-# Test 5: Verify Vim bundle provisioning
-echo -e "\n[5/6] Testing Vim bundle provisioning..."
-if grep -q 'honza/vim-snippets' "$SCRIPT_DIR/setup.sh" || grep -q 'honza/vim-snippets' "$SCRIPT_DIR/modules/50-vim.sh"; then
-    pass "setup.sh provisions curated honza/vim-snippets bundle"
+# Test 5: Verify fallback Vim zero-external-dependency architecture
+echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."
+if [ ! -f "$SCRIPT_DIR/modules/50-vim.sh" ] && ! grep -q 'modules/50-vim.sh' "$SCRIPT_DIR/setup.sh"; then
+    pass "setup.sh relies on declarative .vimrc without obsolete bundle provisioning"
 else
-    fail "setup.sh vim-snippets" "Expected honza/vim-snippets in setup.sh or modules/50-vim.sh"
+    fail "setup.sh vim bundles" "Unexpected legacy modules/50-vim.sh found in repository or setup.sh"
 fi
 
 # Test 6: Verify Neovim init.lua configuration

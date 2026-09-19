@@ -66,7 +66,7 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | **Environment Variables** | `dotfiles/.environment-variables` | `$HOME/.environment-variables` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
 | **Zsh Addendum & Hooks** | `dotfiles/.zshrc-addendum` | `$HOME/.zshrc-addendum` | `tests/test-zsh.zsh` |
 | **Bash Addendum & Hooks** | `dotfiles/.bashrc-addendum` | `$HOME/.bashrc-addendum` | `tests/test-env.sh` |
-| **Shortcuts & Aliases** | `dotfiles/.aliases` | `$HOME/.aliases` (and `$HOME/.zsh-aliases`) | `tests/test-zsh.zsh`, `tests/test-dotfiles.sh` |
+| **Shortcuts & Aliases** | `dotfiles/.aliases` | `$HOME/.aliases` | `tests/test-zsh.zsh`, `tests/test-dotfiles.sh` |
 | **Shell Functions** | `dotfiles/.zsh-functions` | `$HOME/.zsh-functions` | `tests/test-zsh.zsh`, `tests/test-dotfiles.sh` |
 | **CLI Completions** | `dotfiles/.zsh-completions` | `$HOME/.zsh-completions` | `tests/test-completions.sh` |
 | **Powerlevel10k Theme** | `dotfiles/.p10k.zsh` | `$HOME/.p10k.zsh` | `tests/test-zsh.zsh` |

@@ -18,7 +18,6 @@ home-settings/
 │
 ├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
-│   ├── mvn-release                  # Automated Maven release branching and tagging
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   └── sum                          # High-performance AWK number summation & stats
 │
@@ -48,7 +47,6 @@ home-settings/
 │   ├── 20-bin.sh                    # User binaries & Debian shims (fd, bat)
 │   ├── 30-fonts.sh                  # MesloLGS NF font downloader with disk cache
 │   ├── 40-mise.sh                   # Mise runtime manager & polyglot toolchains
-│   ├── 50-vim.sh                    # Legacy Vim Pathogen & plugin bundles
 │   ├── 60-shell.sh                  # Oh-My-Zsh, plugins, shellrc hooks, completions
 │   └── 99-uninstall.sh              # Clean uninstallation of managed components
 │
@@ -292,7 +290,6 @@ The redesigned repository is built for frictionless extension:
 | `gen-passwd` | Generate random passwords with configurable character sets (`-u`, `-l`, `-n`, `-s`) and lengths |
 | `sum` | Sum numbers from stdin/args with CSV parsing, column filtering (`-k`), human byte units (`-H`), averages (`-a`), and stats (`-s`) |
 | `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
-| `mvn-release` | Cut a Maven release: branch, tag, deploy, bump `SNAPSHOT` |
 
 ---
 

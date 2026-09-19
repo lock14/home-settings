@@ -30,15 +30,15 @@ for src in "$DOTFILES_DIR"/.* "$DOTFILES_DIR"/*; do
             continue
             ;;
     esac
+    if [ "$name" = ".vimrc" ] && [ "${SKIP_VIM:-false}" = true ]; then
+        continue
+    fi
     if [ -f "$src" ]; then
         link_file "$src" "$HOME/$name"
     fi
 done
 
-# 2. Backward compatibility alias symlink (.zsh-aliases -> .aliases)
-link_file "$HOME/.aliases" "$HOME/.zsh-aliases"
-
-# 3. Discover and link directory-based dotfiles (.dir-colors)
+# 2. Discover and link directory-based dotfiles (.dir-colors)
 if [ -d "$DOTFILES_DIR/.dir-colors" ]; then
     mkdir -p "$HOME/.dir-colors"
     for f in "$DOTFILES_DIR/.dir-colors"/*; do
@@ -47,7 +47,7 @@ if [ -d "$DOTFILES_DIR/.dir-colors" ]; then
     done
 fi
 
-# 4. Discover and link .config subtrees (e.g. nvim)
+# 3. Discover and link .config subtrees (e.g. nvim)
 if [ -d "$DOTFILES_DIR/.config" ]; then
     mkdir -p "$XDG_CONFIG"
     for item in "$DOTFILES_DIR/.config"/*; do
@@ -64,7 +64,7 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
     done
 fi
 
-# 5. Ghostty macOS Application Support compatibility symlink
+# 4. Ghostty macOS Application Support compatibility symlink
 if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     GHOSTTY_MAC_DIR="$HOME/Library/Application Support/com.mitchellh.ghostty"
     mkdir -p "$GHOSTTY_MAC_DIR"
@@ -74,7 +74,7 @@ if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     fi
 fi
 
-# 6. Bat TrueColor Syntax Highlighting Theme & Granular Syntaxes
+# 5. Bat TrueColor Syntax Highlighting Theme & Granular Syntaxes
 BAT_THEME_SRC="$REPO_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if [ -f "$BAT_THEME_SRC" ]; then
     echo "  Configuring Bat TrueColor theme..."

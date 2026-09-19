@@ -34,7 +34,7 @@ file_extensions:
   - .bash_aliases
   - .bash_functions
   - .bash_completions
-  - .zsh-aliases
+  - .aliases
   - .zsh-functions
   - .zsh-completions
   - .environment-variables
