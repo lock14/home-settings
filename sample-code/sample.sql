@@ -53,6 +53,7 @@ SELECT
     ROUND(s.aggregate_spend * (1.0 - s.discount_percentage), 2) AS net_billed_amount,
     DENSE_RANK() OVER (ORDER BY s.aggregate_spend DESC) AS revenue_rank
 FROM monthly_billing_summary s
+GROUP BY s.account_id, s.organization_name, s.plan_tier, s.total_invoices, s.aggregate_spend, s.discount_percentage
 HAVING s.total_invoices > 0
 ORDER BY revenue_rank ASC, s.aggregate_spend DESC
 LIMIT 25;
