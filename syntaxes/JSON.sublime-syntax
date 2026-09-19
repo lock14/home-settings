@@ -1,0 +1,104 @@
+%YAML 1.2
+---
+# Solarized Dark JSON Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Object Mapping Keys in Solarized Green (entity.name.tag.json)
+# - String Values in Solarized Cyan (string.quoted.double.json)
+# - Numeric Values in Solarized Magenta (constant.numeric.json)
+# - Booleans & Null in Solarized Magenta (constant.language.json)
+# - Structural Brackets & Delimiters in calm Base0 Grey (punctuation.section.json, punctuation.separator.json)
+# - Comments in Base01 Dim (comment.line.double-slash.json, comment.block.json)
+
+name: JSON
+scope: source.json
+version: 2
+
+file_extensions:
+  - json
+  - jsonc
+  - jsonl
+  - geojson
+
+contexts:
+  main:
+    - include: value
+
+  value:
+    - include: comments
+    - include: object
+    - include: array
+    - include: number
+    - include: string
+    - include: constants
+
+  object:
+    - match: '\{'
+      scope: punctuation.section.mapping.begin.json
+      push:
+        - match: '\}'
+          scope: punctuation.section.mapping.end.json
+          pop: true
+        - match: '"'
+          scope: punctuation.definition.string.begin.json entity.name.tag.json
+          push:
+            - match: '"'
+              scope: punctuation.definition.string.end.json entity.name.tag.json
+              pop: true
+            - match: '\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})'
+              scope: constant.character.escape.json entity.name.tag.json
+            - match: '[^"\\]+'
+              scope: entity.name.tag.json
+        - match: ':'
+          scope: punctuation.separator.key-value.json
+          push:
+            - match: '(?=[,}])'
+              pop: true
+            - include: value
+        - match: ','
+          scope: punctuation.separator.sequence.json
+        - include: comments
+
+  array:
+    - match: '\['
+      scope: punctuation.section.sequence.begin.json
+      push:
+        - match: '\]'
+          scope: punctuation.section.sequence.end.json
+          pop: true
+        - match: ','
+          scope: punctuation.separator.sequence.json
+        - include: value
+
+  string:
+    - match: '"'
+      scope: punctuation.definition.string.begin.json string.quoted.double.json
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.end.json string.quoted.double.json
+          pop: true
+        - match: '\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.json string.quoted.double.json
+        - match: '[^"\\]+'
+          scope: string.quoted.double.json
+
+  number:
+    - match: '-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\b'
+      scope: constant.numeric.json
+
+  constants:
+    - match: '\b(?:true|false)\b'
+      scope: constant.language.boolean.json
+    - match: '\bnull\b'
+      scope: constant.language.null.json
+
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.json
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.json comment.block.json
+      push:
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.json comment.block.json
+          pop: true
+        - match: '.+?(?=\*/|$)'
+          scope: comment.block.json

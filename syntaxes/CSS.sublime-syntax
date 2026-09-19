@@ -1,0 +1,311 @@
+%YAML 1.2
+---
+# Solarized Dark CSS Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - At-Rules & Directives in Solarized Orange (keyword.control.at-rule.css)
+# - Imports in Solarized Violet (keyword.control.import.css)
+# - Tag / Type Selectors in Solarized Blue (entity.name.tag.css)
+# - Class Selectors in Solarized Blue (entity.other.attribute-name.class.css)
+# - ID Selectors in Solarized Blue (entity.other.attribute-name.id.css)
+# - Pseudo-Classes & Pseudo-Elements in Solarized Violet (entity.other.attribute-name.pseudo-class.css, entity.other.attribute-name.pseudo-element.css)
+# - Standard Properties in Solarized Green (support.type.property-name.css) matching JSON/YAML/TOML mapping keys
+# - Custom Properties (Variables) in calm Base0 Grey (variable.other.custom-property.css)
+# - CSS Functions in calm Base0 Grey (support.function.css) for canvas tranquility
+# - Strings in Solarized Cyan (string.quoted.double.css, string.quoted.single.css)
+# - Numbers & Hex Colors in Solarized Magenta (constant.numeric.css, constant.other.color.rgb-value.hex.css)
+# - Units & Suffixes in calm Base0 Grey (keyword.other.unit.css)
+# - Important Flag in Solarized Red (keyword.other.important.css)
+# - Punctuation & Brackets in calm Base0 Grey (punctuation.section.property-list.css, punctuation.separator.css)
+# - Block Comments in Base01 Dim (comment.block.css)
+
+name: CSS
+scope: source.css
+version: 2
+
+file_extensions:
+  - css
+  - css.erb
+  - css.liquid
+
+contexts:
+  main:
+    - include: comments
+    - include: at-rules
+    - include: rules
+
+  comments:
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.css
+      push:
+        - meta_scope: comment.block.css
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.css
+          pop: true
+
+  # --- At-Rules (@layer, @font-face, @keyframes, @media, @container, @supports, @import, @charset) ---
+  at-rules:
+    - match: '(@import)\b'
+      captures:
+        1: keyword.control.import.css
+      push:
+        - include: comments
+        - match: ';'
+          scope: punctuation.terminator.rule.css
+          pop: true
+        - include: strings
+        - include: functions
+        - include: values
+
+    - match: '(@(?:layer|font-face|keyframes|media|container|supports|charset|page|namespace|property))\b'
+      captures:
+        1: keyword.control.at-rule.css
+      push:
+        - include: comments
+        - match: ';'
+          scope: punctuation.terminator.rule.css
+          pop: true
+        - match: '\{'
+          scope: punctuation.section.property-list.begin.css
+          set:
+            - meta_scope: meta.property-list.css
+            - include: comments
+            - match: '\}'
+              scope: punctuation.section.property-list.end.css
+              pop: true
+            - include: at-rules
+            - include: rules
+            - include: declarations
+        - include: strings
+        - include: functions
+        - include: numbers
+        - match: '\b(and|or|not|only)\b'
+          scope: keyword.operator.logical.css
+        - match: '([a-zA-Z_-][a-zA-Z0-9_-]*)\s*(:)'
+          captures:
+            1: support.type.property-name.css
+            2: punctuation.separator.key-value.css
+        - match: '[,()]'
+          scope: punctuation.separator.css
+
+  # --- Style Rules & Selectors ---
+  rules:
+    - match: '(?=\{)'
+      push:
+        - match: '\{'
+          scope: punctuation.section.property-list.begin.css
+          set:
+            - meta_scope: meta.property-list.css
+            - include: comments
+            - match: '\}'
+              scope: punctuation.section.property-list.end.css
+              pop: true
+            - include: at-rules
+            - include: nested-rules
+            - include: declarations
+    - include: selectors
+
+  nested-rules:
+    # Modern CSS Nesting (&, & .class, &:hover, tag { ... }, .class { ... })
+    - match: '(?=(?:&|\.|\*|#|::|:|[a-zA-Z_-])(?:[^;{}]*)\{)'
+      push:
+        - match: '\{'
+          scope: punctuation.section.property-list.begin.css
+          set:
+            - meta_scope: meta.property-list.css
+            - include: comments
+            - match: '\}'
+              scope: punctuation.section.property-list.end.css
+              pop: true
+            - include: at-rules
+            - include: nested-rules
+            - include: declarations
+        - include: selectors
+
+  selectors:
+    - include: comments
+
+    # Nesting parent selector '&'
+    - match: '&'
+      scope: keyword.operator.nesting.css
+
+    # Class selector (.class-name)
+    - match: '(\.)([a-zA-Z0-9_-]+)'
+      captures:
+        1: punctuation.definition.entity.css
+        2: entity.other.attribute-name.class.css
+
+    # ID selector (#id-name)
+    - match: '(#)([a-zA-Z0-9_-]+)'
+      captures:
+        1: punctuation.definition.entity.css
+        2: entity.other.attribute-name.id.css
+
+    # Pseudo-element (::before, ::after)
+    - match: '(::)([a-zA-Z0-9_-]+)'
+      captures:
+        1: punctuation.definition.entity.css
+        2: entity.other.attribute-name.pseudo-element.css
+
+    # Pseudo-class (:root, :hover, :focus-visible, :nth-child)
+    - match: '(:)([a-zA-Z0-9_-]+)'
+      captures:
+        1: punctuation.definition.entity.css
+        2: entity.other.attribute-name.pseudo-class.css
+
+    # Attribute selector ([data-status="healthy"], [aria-current])
+    - match: '\['
+      scope: punctuation.definition.entity.begin.bracket.css
+      push:
+        - match: '\]'
+          scope: punctuation.definition.entity.end.bracket.css
+          pop: true
+        - include: strings
+        - match: '([a-zA-Z0-9_-]+)'
+          scope: entity.other.attribute-name.attribute.css
+        - match: '[\^$*~|]?='
+          scope: punctuation.separator.operator.css
+
+    # Keyframes selectors (from, to, 0%, 50%, 100%)
+    - match: '\b(from|to)\b'
+      scope: entity.name.tag.keyframe-selector.css
+    - match: '\b([0-9]+)(%)'
+      captures:
+        1: constant.numeric.css
+        2: keyword.other.unit.css
+
+    # Tag / Element / Universal Selectors (body, a, div, span, *)
+    - match: '\*'
+      scope: entity.name.tag.wildcard.css
+    - match: '\b(html|body|main|header|footer|nav|aside|section|article|div|span|h[1-6]|p|a|ul|ol|li|dl|dt|dd|table|thead|tbody|tfoot|tr|th|td|form|input|button|select|textarea|label|img|picture|figure|figcaption|video|audio|canvas|svg|code|pre|blockquote|hr|br|b|i|strong|em|mark|small|sub|sup)\b'
+      scope: entity.name.tag.css
+
+    # Combinators & Punctuation
+    - match: '[,>+~]'
+      scope: punctuation.separator.combinator.css
+
+    # Opening brace to enter property list
+    - match: '\{'
+      scope: punctuation.section.property-list.begin.css
+      push:
+        - meta_scope: meta.property-list.css
+        - include: comments
+        - match: '\}'
+          scope: punctuation.section.property-list.end.css
+          pop: true
+        - include: at-rules
+        - include: nested-rules
+        - include: declarations
+
+  # --- Declarations inside { ... } ---
+  declarations:
+    - include: comments
+
+    # Custom Property (Variable) Declaration: --color-base03: ... ;
+    - match: '(--[a-zA-Z0-9_-]+)\s*(:)'
+      captures:
+        1: variable.other.custom-property.css
+        2: punctuation.separator.key-value.css
+      push:
+        - include: comments
+        - match: ';'
+          scope: punctuation.terminator.rule.css
+          pop: true
+        - match: '(?=\})'
+          pop: true
+        - include: values
+
+    # Standard Property Declaration: font-family: ... ;
+    - match: '([a-zA-Z_-][a-zA-Z0-9_-]*)\s*(:)'
+      captures:
+        1: support.type.property-name.css
+        2: punctuation.separator.key-value.css
+      push:
+        - include: comments
+        - match: ';'
+          scope: punctuation.terminator.rule.css
+          pop: true
+        - match: '(?=\})'
+          pop: true
+        - include: values
+
+  # --- Values inside property declarations ---
+  values:
+    - include: comments
+    - include: strings
+    - include: colors
+    - include: numbers
+    - include: functions
+    - include: custom-property-references
+    - include: important
+    - include: keywords
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.css
+      push:
+        - meta_scope: string.quoted.double.css
+        - match: '\\.'
+          scope: constant.character.escape.css
+        - match: '"'
+          scope: punctuation.definition.string.end.css
+          pop: true
+
+    - match: "'"
+      scope: punctuation.definition.string.begin.css
+      push:
+        - meta_scope: string.quoted.single.css
+        - match: '\\.'
+          scope: constant.character.escape.css
+        - match: "'"
+          scope: punctuation.definition.string.end.css
+          pop: true
+
+  colors:
+    # Hex color codes: #002b36, #073642, #fff
+    - match: '#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b'
+      scope: constant.other.color.rgb-value.hex.css
+
+  numbers:
+    # Numbers with optional units: 100dvh, 0.25rem, 150ms, 40%, 1fr
+    - match: '([-+]?(?:[0-9]*\.[0-9]+|[0-9]+))(px|rem|em|vw|vh|vmin|vmax|dvh|dvw|svh|svw|lvh|lvw|ms|s|%|fr|ch|ex|cap|ic|cqw|cqh|cqi|cqb|cqmin|cqmax|deg|rad|grad|turn|dpi|dpcm|dppx)\b'
+      captures:
+        1: constant.numeric.css
+        2: keyword.other.unit.css
+    - match: '[-+]?(?:[0-9]*\.[0-9]+|[0-9]+)\b'
+      scope: constant.numeric.css
+
+  functions:
+    # CSS Functions: var(), oklch(), clamp(), calc(), rgb(), hsl(), color-mix(), url(), format(), min(), max(), cubic-bezier()
+    - match: '([a-zA-Z_-][a-zA-Z0-9_-]*)\s*(\()'
+      captures:
+        1: support.function.css
+        2: punctuation.section.function.begin.css
+      push:
+        - include: comments
+        - match: '\)'
+          scope: punctuation.section.function.end.css
+          pop: true
+        - include: functions
+        - include: custom-property-references
+        - include: strings
+        - include: colors
+        - include: numbers
+        - include: keywords
+        - match: '[,/]'
+          scope: punctuation.separator.css
+        - match: '[-+*]'
+          scope: punctuation.separator.operator.css
+
+  custom-property-references:
+    # var(--color-base03) or standalone --custom-property reference
+    - match: '(--[a-zA-Z0-9_-]+)'
+      scope: variable.other.custom-property.css
+
+  important:
+    - match: '!\s*important\b'
+      scope: keyword.other.important.css
+
+  keywords:
+    - match: '(?<![a-zA-Z0-9_-])(revert-layer|ease-in-out|inline-block|inline-flex|inline-grid|table-cell|border-box|content-box|sans-serif|table-row|ui-monospace|auto-fill|auto-fit|backwards|capitalize|currentColor|ease-out|forwards|infinite|monospace|no-repeat|system-ui|transparent|underline|uppercase|absolute|collapse|cursive|ease-in|fallback|fantasy|initial|inherit|lighter|lowercase|oblique|optional|relative|running|sticky|bolder|double|groove|hidden|linear|outset|paused|revert|repeat|static|visible|bottom|center|dashed|dotted|inline|justify|normal|outset|ridge|select|solid|block|both|flex|grid|left|none|over|auto|bold|clip|drop|ease|fill|into|open|part|span|stop|swap|text|view|wrap|fit|row|top|all)(?![a-zA-Z0-9_-])'
+      scope: support.constant.property-value.css
+

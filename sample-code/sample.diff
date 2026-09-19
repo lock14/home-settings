@@ -1,0 +1,41 @@
+diff --git a/src/service/cluster_manager.go b/src/service/cluster_manager.go
+index 4b825dc..f1e94a2 100644
+--- a/src/service/cluster_manager.go
++++ b/src/service/cluster_manager.go
+@@ -32,18 +32,22 @@ type ClusterManager struct {
+ 	activeNodes map[string]*Node
+-	maxRetries  int
+-	timeoutSec  int
++	maxRetries  int           // Maximum retry attempts
++	timeout     time.Duration // Context timeout duration
++	telemetry   TelemetryClient
+ }
+
+ func NewClusterManager(cfg Config) *ClusterManager {
+-	return &ClusterManager{
+-		maxRetries: 3,
+-		timeoutSec: 30,
+-	}
++	return &ClusterManager{
++		activeNodes: make(map[string]*Node),
++		maxRetries:  5,
++		timeout:     10 * time.Second,
++		telemetry:   NewPrometheusClient("cluster_service"),
++	}
+ }
+
+@@ -85,9 +89,11 @@ func (m *ClusterManager) Dispatch(ctx context.Context, task Task) error {
+ 	m.mu.Lock()
+ 	defer m.mu.Unlock()
+
+-	if len(m.activeNodes) == 0 {
+-		return errors.New("no active worker nodes available")
+-	}
++	node, err := m.selectHealthyNode()
++	if err != nil {
++		m.telemetry.RecordError("dispatch_failure")
++		return fmt.Errorf("failed node dispatch: %w", err)
++	}
+
+ 	return node.Execute(ctx, task)
+ }

@@ -1,0 +1,463 @@
+%YAML 1.2
+---
+name: Markdown
+scope: text.html.markdown
+version: 2
+
+file_extensions:
+  - md
+  - mdown
+  - markdown
+  - mkd
+
+first_line_match: |-
+  (?x:
+    ^---\s*$
+    |^#\s+
+  )
+
+variables:
+  ident: '[a-zA-Z0-9_.-]+'
+
+contexts:
+  main:
+    - include: block-elements
+
+  block-elements:
+    - include: fenced-code-blocks
+    - include: headings
+    - include: thematic-break
+    - include: table
+    - include: blockquote
+    - include: list-item
+    - include: paragraph-text
+
+  # =========================================================================
+  # Fenced Code Blocks with Polyglot Language Embeddings
+  # =========================================================================
+  fenced-code-blocks:
+    # Bash / Shell (our custom standalone Bash syntax)
+    - match: '^(\s*)(`{3,}|~{3,})\s*(bash|sh|shell|zsh)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.shell.bash
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.shell.bash
+
+    # Python
+    - match: '^(\s*)(`{3,}|~{3,})\s*(python|py)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.python
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.python
+
+    # Go
+    - match: '^(\s*)(`{3,}|~{3,})\s*(go|golang)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.go
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.go
+
+    # Rust
+    - match: '^(\s*)(`{3,}|~{3,})\s*(rust|rs)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.rust
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.rust
+
+    # C
+    - match: '^(\s*)(`{3,}|~{3,})\s*(c)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.c
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.c
+
+    # C++
+    - match: '^(\s*)(`{3,}|~{3,})\s*(cpp|c\+\+|cxx)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.c++
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.c++
+
+    # Java
+    - match: '^(\s*)(`{3,}|~{3,})\s*(java)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.java
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.java
+
+    # Diff
+    - match: '^(\s*)(`{3,}|~{3,})\s*(diff|patch)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.diff
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.diff
+
+    # SQL
+    - match: '^(\s*)(`{3,}|~{3,})\s*(sql|pgsql|mysql)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.sql
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.sql
+
+    # Terraform / HCL
+    - match: '^(\s*)(`{3,}|~{3,})\s*(terraform|tf|hcl)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.terraform
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.terraform
+
+    # Generic Fenced Code Block
+    - match: '^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_.-]*)\s*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - match: '^.*$'
+          scope: markup.raw.block.markdown
+
+  # =========================================================================
+  # Headings (Semantic Architecture: H1 Orange, H2 Blue, H3 Violet, H4 Base1, H5/H6 Base0)
+  # =========================================================================
+  headings:
+    # H1: # Title (Solarized Orange)
+    - match: '^(#)\s+(.*)$'
+      scope: markup.heading.1.markdown
+      captures:
+        1: punctuation.definition.heading.markdown
+        2: entity.name.section.markdown
+
+    # H2: ## Section (Solarized Blue)
+    - match: '^(##)\s+(.*)$'
+      scope: markup.heading.2.markdown
+      captures:
+        1: punctuation.definition.heading.markdown
+        2: entity.name.section.markdown
+
+    # H3: ### Subsection (Solarized Violet)
+    - match: '^(###)\s+(.*)$'
+      scope: markup.heading.3.markdown
+      captures:
+        1: punctuation.definition.heading.markdown
+        2: entity.name.section.markdown
+
+    # H4: #### Topic (Solarized Base1)
+    - match: '^(####)\s+(.*)$'
+      scope: markup.heading.4.markdown
+      captures:
+        1: punctuation.definition.heading.markdown
+        2: entity.name.section.markdown
+
+    # H5: ##### Subtopic (Solarized Base0)
+    - match: '^(#####)\s+(.*)$'
+      scope: markup.heading.5.markdown
+      captures:
+        1: punctuation.definition.heading.markdown
+        2: entity.name.section.markdown
+
+    # H6: ###### Minor Item (Solarized Base0)
+    - match: '^(######)\s+(.*)$'
+      scope: markup.heading.6.markdown
+      captures:
+        1: punctuation.definition.heading.markdown
+        2: entity.name.section.markdown
+
+  # =========================================================================
+  # Thematic Breaks / Horizontal Rules (Base01)
+  # =========================================================================
+  thematic-break:
+    - match: '^\s*(?:-{3,}|\*{3,}|_{3,})\s*$'
+      scope: meta.separator.markdown
+
+  # =========================================================================
+  # Tables (Base01 borders/delimiters, Base1 header text, Base0 cells)
+  # =========================================================================
+  table:
+    # Table alignment row: | :--- | :---: | ---: |
+    - match: '^\s*\|(?:\s*:?-+:?\s*\|)+\s*$'
+      scope: punctuation.separator.table-alignment.markdown
+
+    # First row of a table (assumed table header)
+    - match: '^\s*(\|)'
+      captures:
+        1: punctuation.separator.table.markdown
+      push:
+        - match: '$'
+          set: table-after-header
+        - match: '\|'
+          scope: punctuation.separator.table.markdown
+        - include: inline-elements
+        - match: '[^\s|`*!_\[\]~()]+'
+          scope: markup.other.table.header.markdown
+        - match: '[()]+'
+          scope: markup.other.table.header.markdown
+        - match: '[.,;:!?-]'
+          scope: markup.other.table.header.markdown
+        - match: '\S'
+          scope: markup.other.table.header.markdown
+
+  table-after-header:
+    # Alignment row confirms table header
+    - match: '^\s*\|(?:\s*:?-+:?\s*\|)+\s*$'
+      scope: punctuation.separator.table-alignment.markdown
+      set: table-body
+    - match: '^(?!\s*\|)'
+      pop: true
+    - match: '^\s*(\|)'
+      captures:
+        1: punctuation.separator.table.markdown
+      push: table-data-row-line
+
+  table-body:
+    - match: '^\s*(\|)'
+      captures:
+        1: punctuation.separator.table.markdown
+      push: table-data-row-line
+    - match: '^(?!\s*\|)'
+      pop: true
+
+  table-data-row-line:
+    - match: '$'
+      pop: true
+    - match: '\|'
+      scope: punctuation.separator.table.markdown
+    - include: inline-elements
+    - match: '[^\s|`*!_\[\]~()]+'
+      scope: text.html.markdown
+    - match: '[()]+'
+      scope: text.html.markdown
+    - match: '[.,;:!?-]'
+      scope: text.html.markdown
+    - match: '\S'
+      scope: text.html.markdown
+
+  # =========================================================================
+  # Blockquotes & GitHub Alert Callouts
+  # =========================================================================
+  blockquote:
+    # GitHub Alert Callout Headers: > [!NOTE], > [!TIP], etc.
+    - match: '^\s*(>)\s*(\[\!NOTE\])'
+      captures:
+        1: punctuation.definition.quote.markdown
+        2: support.alert.note.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    - match: '^\s*(>)\s*(\[\!TIP\])'
+      captures:
+        1: punctuation.definition.quote.markdown
+        2: support.alert.tip.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    - match: '^\s*(>)\s*(\[\!IMPORTANT\])'
+      captures:
+        1: punctuation.definition.quote.markdown
+        2: support.alert.important.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    - match: '^\s*(>)\s*(\[\!WARNING\])'
+      captures:
+        1: punctuation.definition.quote.markdown
+        2: support.alert.warning.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    - match: '^\s*(>)\s*(\[\!CAUTION\])'
+      captures:
+        1: punctuation.definition.quote.markdown
+        2: support.alert.caution.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    # Standard Blockquote
+    - match: '^\s*(>)'
+      captures:
+        1: punctuation.definition.quote.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+  # =========================================================================
+  # Lists & Task Lists (Checkboxes)
+  # =========================================================================
+  list-item:
+    # Task List Checked: - [x] or - [X]
+    - match: '^\s*([-*+]|\d+\.)\s+(\[[xX]\])'
+      captures:
+        1: punctuation.definition.list_item.markdown
+        2: punctuation.definition.task.checked.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    # Task List Unchecked: - [ ]
+    - match: '^\s*([-*+]|\d+\.)\s+(\[\s\])'
+      captures:
+        1: punctuation.definition.list_item.markdown
+        2: punctuation.definition.task.unchecked.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+    # Standard Bullet or Numbered List Item
+    - match: '^\s*([-*+]|\d+\.)(?=\s)'
+      captures:
+        1: punctuation.definition.list_item.markdown
+      push:
+        - match: '$'
+          pop: true
+        - include: inline-elements
+        - include: paragraph-text
+
+  # =========================================================================
+  # Paragraph Text
+  # =========================================================================
+  paragraph-text:
+    - include: inline-elements
+    - match: '[^\s`*!_\[\]~()]+'
+      scope: text.html.markdown
+    - match: '[()]+'
+      scope: text.html.markdown
+    - match: '[.,;:!?-]'
+      scope: text.html.markdown
+    - match: '\S'
+      scope: text.html.markdown
+
+  # =========================================================================
+  # Inline Elements (Code, Links, Bold, Italic, Strikethrough)
+  # =========================================================================
+  inline-elements:
+    # Inline Code: `code`
+    - match: '(`)([^`]+)(`)'
+      captures:
+        1: punctuation.definition.raw.code.begin.markdown
+        2: markup.raw.inline.markdown
+        3: punctuation.definition.raw.code.end.markdown
+
+    # Images: ![alt](url)
+    - match: '(!)(\[)(.*?)(\])(\()(.*?)(\))'
+      captures:
+        1: punctuation.definition.image.markdown
+        2: punctuation.definition.image.begin.markdown
+        3: string.other.link.description.markdown
+        4: punctuation.definition.image.end.markdown
+        5: punctuation.definition.metadata.begin.markdown
+        6: markup.underline.link.markdown
+        7: punctuation.definition.metadata.end.markdown
+
+    # Links: [text](url)
+    - match: '(\[)(.+?)(\])(\()(.+?)(\))'
+      captures:
+        1: punctuation.definition.link.begin.markdown
+        2: string.other.link.title.markdown
+        3: punctuation.definition.link.end.markdown
+        4: punctuation.definition.metadata.begin.markdown
+        5: markup.underline.link.markdown
+        6: punctuation.definition.metadata.end.markdown
+
+    # Bold: **bold** or __bold__
+    - match: '(\*\*|__)(.+?)(\1)'
+      captures:
+        1: punctuation.definition.bold.markdown
+        2: markup.bold.markdown
+        3: punctuation.definition.bold.markdown
+
+    # Italic: *italic* or _italic_
+    - match: '(\*|_)(.+?)(\1)'
+      captures:
+        1: punctuation.definition.italic.markdown
+        2: markup.italic.markdown
+        3: punctuation.definition.italic.markdown
+
+    # Strikethrough: ~~text~~
+    - match: '(~~)(.+?)(~~)'
+      captures:
+        1: punctuation.definition.strikethrough.markdown
+        2: markup.strikethrough.markdown
+        3: punctuation.definition.strikethrough.markdown

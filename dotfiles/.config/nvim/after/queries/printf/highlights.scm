@@ -1,0 +1,2 @@
+;; extends
+(format) @string.special

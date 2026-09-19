@@ -1,0 +1,635 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Rust Syntax
+# Supports Rust 2018 / 2021 / 2024:
+# - Module path components in Solarized Violet (entity.name.module.rust)
+# - Import keyword (use) in Solarized Orange (keyword.control.import.rust)
+# - Primitive and user types/traits in Solarized Yellow (support.type.rust)
+# - Structural keywords (fn, pub, const, struct, enum, trait, impl, let, mut) in Solarized Green
+# - Lifetimes ('a, 'static) in Solarized Green (storage.modifier.lifetime.rust)
+# - ALL_CAPS constants and enum variants in Solarized Magenta (variable.other.constant.rust)
+# - Built-in instance receiver (self) in Solarized Magenta (variable.language.rust)
+# - Unbroken numeric literals (Hex 0xCAFE_BABE, Floats 0.85) in Solarized Magenta
+# - Macro invocations (println!, eprintln!, write!) in Solarized Blue (entity.name.function.macro.rust)
+# - Function declarations and method invocations in Solarized Blue (entity.name.function.rust / variable.function.rust)
+# - Attributes (#[derive(...)], #[inline]) in Solarized Orange (entity.name.attribute.rust)
+# - Gestalt strings in Solarized Cyan without format checkerboarding
+name: Rust
+scope: source.rust
+version: 2
+
+file_extensions:
+  - rs
+
+first_line_match: |-
+  (?xi:
+    ^ \s* \#! .*? \brustc \b
+  )
+
+variables:
+  ident: '\b[a-zA-Z_][a-zA-Z0-9_]*\b'
+  pascal_ident: '\b[A-Z][a-zA-Z0-9_]*\b'
+  const_ident: '\b[A-Z][A-Z0-9_]+\b'
+  lifetime: "'(?:[a-zA-Z_][a-zA-Z0-9_]*|_)\\b"
+  primitive_types: '\b(?:u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|char|str)\b'
+  standard_types: '\b(?:String|Option|Result|Vec|HashMap|HashSet|BTreeMap|BTreeSet|Box|Rc|Arc|Cell|RefCell|Mutex|RwLock|Duration|Instant|Path|PathBuf|File|Formatter|Display|Debug|Clone|Copy|PartialEq|Eq|PartialOrd|Ord|Hash|Default|Into|From|TryInto|TryFrom|Iterator|IntoIterator|AsRef|AsMut)\b'
+
+contexts:
+  main:
+    - include: comments
+    - include: attributes
+    - include: imports
+    - include: enum-def
+    - include: struct-def
+    - include: trait-def
+    - include: impl-def
+    - include: fn-def
+    - include: declarations
+    - include: expressions
+
+  comments:
+    # Outer / Inner doc comments (triple slash or slash-bang)
+    - match: '//[!/].*$'
+      scope: comment.line.documentation.rust
+    # Standard single line comment
+    - match: '//.*$'
+      scope: comment.line.double-slash.rust
+    # Block doc comments
+    - match: '/\*[*!]'
+      scope: punctuation.definition.comment.begin.rust
+      push:
+        - meta_scope: comment.block.documentation.rust
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.rust
+          pop: true
+        - include: comments
+    # Standard block comment
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.rust
+      push:
+        - meta_scope: comment.block.rust
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.rust
+          pop: true
+        - include: comments
+
+  attributes:
+    # Outer attribute: #[...] or Inner attribute: #![...]
+    - match: '#!?\['
+      scope: punctuation.section.attribute.begin.rust
+      push:
+        - meta_scope: meta.attribute.rust
+        - match: '\]'
+          scope: punctuation.section.attribute.end.rust
+          pop: true
+        - include: comments
+        # Attribute identifier (derive, inline, repr, cfg, etc.) in Solarized Orange
+        - match: '({{ident}})\s*(\()'
+          captures:
+            1: entity.name.attribute.rust
+            2: punctuation.section.parens.begin.rust
+          push:
+            - match: '\)'
+              scope: punctuation.section.parens.end.rust
+              pop: true
+            - include: comments
+            - match: '{{pascal_ident}}\b'
+              scope: support.type.user-defined.rust
+            - match: '{{primitive_types}}\b'
+              scope: support.type.primitive.rust
+            - match: '{{ident}}\b'
+              scope: variable.other.attribute.rust
+            - match: ','
+              scope: punctuation.separator.comma.rust
+            - match: '='
+              scope: keyword.operator.assignment.rust
+            - include: expressions
+        - match: '{{ident}}\b'
+          scope: entity.name.attribute.rust
+        - match: ','
+          scope: punctuation.separator.comma.rust
+        - match: '='
+          scope: keyword.operator.assignment.rust
+
+  imports:
+    # use statement: use path::to::Item;
+    - match: '\b(use)\b\s+'
+      captures:
+        1: keyword.control.import.rust
+      push:
+        - match: ';'
+          scope: punctuation.terminator.statement.rust
+          pop: true
+        - match: '$'
+          pop: true
+        - include: comments
+        - match: '\b(as)\b\s+({{ident}})'
+          captures:
+            1: keyword.control.import.as.rust
+            2: entity.name.module.alias.rust
+        # Module path grouping {self, Display, Formatter}
+        - match: '\{'
+          scope: punctuation.section.braces.begin.rust
+          push:
+            - match: '\}'
+              scope: punctuation.section.braces.end.rust
+              pop: true
+            - include: comments
+            - match: '\b(as)\b\s+({{ident}})'
+              captures:
+                1: keyword.control.import.as.rust
+                2: entity.name.module.alias.rust
+            - match: '\b(self|super|crate)\b'
+              scope: entity.name.module.rust
+            - match: '{{pascal_ident}}\b'
+              scope: support.type.user-defined.rust
+            - match: '{{ident}}\b'
+              scope: entity.name.module.rust
+            - match: ','
+              scope: punctuation.separator.comma.rust
+            - match: '::'
+              scope: punctuation.accessor.double-colon.rust
+        # Module keywords
+        - match: '\b(self|super|crate)\b'
+          scope: entity.name.module.rust
+        # Double-colon accessor
+        - match: '::'
+          scope: punctuation.accessor.double-colon.rust
+        # Wildcard *
+        - match: '\*'
+          scope: variable.language.wildcard.rust
+        # PascalCase type in use statement
+        - match: '{{pascal_ident}}\b'
+          scope: support.type.user-defined.rust
+        # Module path identifiers in Solarized Violet
+        - match: '{{ident}}\b'
+          scope: entity.name.module.rust
+
+  enum-def:
+    # enum Name { Variant1, Variant2(u16), ... }
+    - match: '(?:\b(pub(?:\s*\([^)]*\))?)\s+)?\b(enum)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.modifier.visibility.rust
+        2: storage.type.enum.rust
+        3: entity.name.type.enum.rust
+      push:
+        - match: '\{'
+          scope: punctuation.section.braces.begin.rust
+          set: enum-body
+        - match: '(?=[;])'
+          pop: true
+        - match: '$'
+          pop: true
+        - include: comments
+        - include: generic-params
+        - include: where-clause
+
+  enum-body:
+    - match: '\}'
+      scope: punctuation.section.braces.end.rust
+      pop: true
+    - include: comments
+    - include: attributes
+    # Tuple variant: Running(u16)
+    - match: '({{pascal_ident}})\s*(\()'
+      captures:
+        1: constant.other.enum-member.rust
+        2: punctuation.section.parens.begin.rust
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.rust
+          pop: true
+        - include: comments
+        - include: type-expression
+        - match: ','
+          scope: punctuation.separator.comma.rust
+    # Struct variant: Degraded { latency_ms: u64 }
+    - match: '({{pascal_ident}})\s*(\{)'
+      captures:
+        1: constant.other.enum-member.rust
+        2: punctuation.section.braces.begin.rust
+      push:
+        - match: '\}'
+          scope: punctuation.section.braces.end.rust
+          pop: true
+        - include: comments
+        - match: '({{ident}})\s*(:)\s*'
+          captures:
+            1: variable.other.member.rust
+            2: punctuation.separator.colon.rust
+          push:
+            - match: '(?=[,}])'
+              pop: true
+            - include: type-expression
+        - match: ','
+          scope: punctuation.separator.comma.rust
+    # Unit variant: Starting, Terminated
+    - match: '{{pascal_ident}}\b'
+      scope: constant.other.enum-member.rust
+    # Discriminant value: Variant = 1
+    - match: '='
+      scope: keyword.operator.assignment.rust
+    - include: expressions
+    - match: ','
+      scope: punctuation.separator.comma.rust
+
+  struct-def:
+    # struct Name<T> where ... { ... }
+    - match: '(?:\b(pub(?:\s*\([^)]*\))?)\s+)?\b(struct)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.modifier.visibility.rust
+        2: storage.type.struct.rust
+        3: entity.name.type.struct.rust
+      push:
+        - match: '\{'
+          scope: punctuation.section.braces.begin.rust
+          set: struct-body
+        - match: ';'
+          scope: punctuation.terminator.statement.rust
+          pop: true
+        - match: '(?=[;])'
+          pop: true
+        - include: comments
+        - include: generic-params
+        - include: where-clause
+
+  struct-body:
+    - match: '\}'
+      scope: punctuation.section.braces.end.rust
+      pop: true
+    - include: comments
+    - include: attributes
+    # Field declaration: pub name: Type,
+    - match: '(?:\b(pub(?:\s*\([^)]*\))?)\s+)?({{ident}})\s*(:)\s*'
+      captures:
+        1: storage.modifier.visibility.rust
+        2: variable.other.member.rust
+        3: punctuation.separator.colon.rust
+      push:
+        - match: '(?=[,}])'
+          pop: true
+        - include: type-expression
+    - match: ','
+      scope: punctuation.separator.comma.rust
+
+  trait-def:
+    # pub trait Name<T> ... { ... }
+    - match: '(?:\b(pub(?:\s*\([^)]*\))?)\s+)?\b(trait)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.modifier.visibility.rust
+        2: storage.type.trait.rust
+        3: entity.name.type.trait.rust
+      push:
+        - match: '\{'
+          scope: punctuation.section.braces.begin.rust
+          set: trait-body
+        - match: '(?=[;])'
+          pop: true
+        - include: comments
+        - include: generic-params
+        - include: where-clause
+
+  trait-body:
+    - match: '\}'
+      scope: punctuation.section.braces.end.rust
+      pop: true
+    - include: main
+
+  impl-def:
+    # impl<T> Trait for Type where ... { ... } or impl<T> Type { ... }
+    - match: '\b(impl)\b'
+      captures:
+        1: storage.type.impl.rust
+      push:
+        - match: '\{'
+          scope: punctuation.section.braces.begin.rust
+          set: impl-body
+        - include: comments
+        - include: generic-params
+        - match: '\b(for)\b'
+          scope: storage.type.for.rust
+        - include: where-clause
+        - include: type-expression
+
+  impl-body:
+    - match: '\}'
+      scope: punctuation.section.braces.end.rust
+      pop: true
+    - include: main
+
+  fn-def:
+    # [pub] [async] [const] [unsafe] [extern] fn name(...) [-> Ret]
+    - match: '(?:\b(pub(?:\s*\([^)]*\))?)\s+)?(?:\b(async|const|unsafe|extern)\s+)*\b(fn)\b\s+({{ident}})'
+      captures:
+        1: storage.modifier.visibility.rust
+        2: storage.modifier.rust
+        3: storage.type.function.rust
+        4: entity.name.function.rust
+      push:
+        - match: '\{'
+          scope: punctuation.section.braces.begin.rust
+          set: fn-body
+        - match: ';'
+          scope: punctuation.terminator.statement.rust
+          pop: true
+        - include: comments
+        - include: generic-params
+        - include: fn-parameters
+        - include: return-type
+        - include: where-clause
+
+  fn-body:
+    - match: '\}'
+      scope: punctuation.section.braces.end.rust
+      pop: true
+    - include: main
+
+  generic-params:
+    - match: '<'
+      scope: punctuation.section.brackets.begin.rust
+      push:
+        - match: '>'
+          scope: punctuation.section.brackets.end.rust
+          pop: true
+        - include: comments
+        - match: '{{lifetime}}'
+          scope: storage.modifier.lifetime.rust
+        - match: '{{primitive_types}}\b'
+          scope: support.type.primitive.rust
+        - match: '{{standard_types}}\b'
+          scope: support.type.builtin.rust
+        - match: '{{pascal_ident}}\b'
+          scope: support.type.user-defined.rust
+        - match: '\b(const)\b'
+          scope: storage.type.const.rust
+        - match: ':'
+          scope: punctuation.separator.colon.rust
+        - match: '\+'
+          scope: keyword.operator.arithmetic.rust
+        - match: ','
+          scope: punctuation.separator.comma.rust
+        - match: '='
+          scope: keyword.operator.assignment.rust
+        - match: '&'
+          scope: keyword.operator.bitwise.rust
+
+  where-clause:
+    - match: '\b(where)\b'
+      scope: storage.modifier.where.rust
+      push:
+        - match: '(?=[;{])'
+          pop: true
+        - include: comments
+        - match: '{{lifetime}}'
+          scope: storage.modifier.lifetime.rust
+        - match: '{{primitive_types}}\b'
+          scope: support.type.primitive.rust
+        - match: '{{standard_types}}\b'
+          scope: support.type.builtin.rust
+        - match: '{{pascal_ident}}\b'
+          scope: support.type.user-defined.rust
+        - match: ':'
+          scope: punctuation.separator.colon.rust
+        - match: '\+'
+          scope: keyword.operator.arithmetic.rust
+        - match: ','
+          scope: punctuation.separator.comma.rust
+
+  fn-parameters:
+    - match: '\('
+      scope: punctuation.section.parens.begin.rust
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.rust
+          pop: true
+        - include: comments
+        # Receiver: &self, &'a self, &mut self, mut self, self
+        - match: '&'
+          scope: keyword.operator.bitwise.rust
+        - match: '{{lifetime}}'
+          scope: storage.modifier.lifetime.rust
+        - match: '\b(mut)\b'
+          scope: storage.modifier.mut.rust
+        - match: '\b(self)\b'
+          scope: variable.language.rust
+        # Typed parameter: name: Type
+        - match: '(?:\b(mut)\s+)?({{ident}})\s*(:)\s*'
+          captures:
+            1: storage.modifier.mut.rust
+            2: variable.parameter.function.rust
+            3: punctuation.separator.colon.rust
+          push:
+            - match: '(?=[,\)])'
+              pop: true
+            - include: type-expression
+        - match: ','
+          scope: punctuation.separator.comma.rust
+
+  return-type:
+    - match: '(->)\s*'
+      captures:
+        1: punctuation.separator.arrow.rust
+      push:
+        - match: '(?=[;{])'
+          pop: true
+        - include: type-expression
+
+  declarations:
+    # let [mut] name [: Type] [= expr];
+    - match: '\b(let)\b'
+      scope: storage.type.var.rust
+    # const / static declarations
+    - match: '\b(const)\b'
+      scope: storage.type.const.rust
+    - match: '\b(static)\b'
+      scope: storage.modifier.rust
+    # mut keyword
+    - match: '\b(mut)\b'
+      scope: storage.modifier.mut.rust
+    # pub keyword with optional (crate) or (super)
+    - match: '\b(pub)\b(?:\s*\([^)]*\))?'
+      scope: storage.modifier.visibility.rust
+    # type alias
+    - match: '\b(type)\b'
+      scope: storage.type.type.rust
+    # mod declaration: mod name;
+    - match: '\b(mod)\b\s+({{ident}})'
+      captures:
+        1: keyword.declaration.mod.rust
+        2: entity.name.module.rust
+
+  type-expression:
+    - include: comments
+    - match: '{{lifetime}}'
+      scope: storage.modifier.lifetime.rust
+    - match: '\b(Self)\b'
+      scope: support.type.user-defined.rust
+    - match: '\b(impl|dyn)\b'
+      scope: keyword.declaration.rust
+    - match: '{{primitive_types}}\b'
+      scope: support.type.primitive.rust
+    - match: '{{standard_types}}\b'
+      scope: support.type.builtin.rust
+    - match: '{{pascal_ident}}\b'
+      scope: support.type.user-defined.rust
+    - match: '::'
+      scope: punctuation.accessor.double-colon.rust
+    - match: '&'
+      scope: keyword.operator.bitwise.rust
+    - match: '\b(mut)\b'
+      scope: storage.modifier.mut.rust
+    - match: '<'
+      scope: punctuation.section.brackets.begin.rust
+      push:
+        - match: '>'
+          scope: punctuation.section.brackets.end.rust
+          pop: true
+        - include: type-expression
+    - match: '\['
+      scope: punctuation.section.brackets.begin.rust
+      push:
+        - match: '\]'
+          scope: punctuation.section.brackets.end.rust
+          pop: true
+        - include: type-expression
+        - match: ';'
+          scope: punctuation.separator.semicolon.rust
+        - include: expressions
+    - match: '\('
+      scope: punctuation.section.parens.begin.rust
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.rust
+          pop: true
+        - include: type-expression
+        - match: ','
+          scope: punctuation.separator.comma.rust
+    - match: '\+'
+      scope: keyword.operator.arithmetic.rust
+    - match: ','
+      scope: punctuation.separator.comma.rust
+
+  expressions:
+    - include: comments
+    # Scaffolding modifier async
+    - match: '\b(async)\b'
+      scope: storage.modifier.async.rust
+    # Control flow keywords in Solarized Yellow
+    - match: '\b(match|if|else|while|for|in|loop|return|break|continue|yield|await)\b'
+      scope: keyword.control.rust
+    # Macro invocations in Solarized Blue: println!(...), eprintln!(...), write!(...)
+    - match: '({{ident}})(!)'
+      captures:
+        1: entity.name.function.macro.rust
+        2: punctuation.definition.macro.rust
+    # Built-in receiver self in Solarized Magenta
+    - match: '\b(self)\b'
+      scope: variable.language.rust
+    # Boolean constants in Solarized Magenta
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.rust
+    # Scoped enum variant access: Type::Variant (e.g. NodeStatus::Running, NodeStatus::Starting)
+    - match: '({{pascal_ident}})(::)({{pascal_ident}})'
+      captures:
+        1: support.type.user-defined.rust
+        2: punctuation.accessor.double-colon.rust
+        3: constant.other.enum-member.rust
+    # Scoped function call: Type::func(...) (e.g. ServerNode::new, Duration::from_millis)
+    - match: '({{pascal_ident}})(::)({{ident}})\s*(?=\()'
+      captures:
+        1: support.type.user-defined.rust
+        2: punctuation.accessor.double-colon.rust
+        3: variable.function.rust
+    # ALL_CAPS constants in Solarized Magenta
+    - match: '{{const_ident}}\b'
+      scope: variable.other.constant.rust
+    # Numeric Literals (Hex, Binary, Float, Decimal) unbroken in Solarized Magenta
+    - match: '\b0[xX][0-9a-fA-F_]+(?:[uif](?:8|16|32|64|128|size))?\b'
+      scope: constant.numeric.hex.rust
+    - match: '\b0[bB][01_]+(?:[uif](?:8|16|32|64|128|size))?\b'
+      scope: constant.numeric.binary.rust
+    - match: '\b0[oO][0-7_]+(?:[uif](?:8|16|32|64|128|size))?\b'
+      scope: constant.numeric.octal.rust
+    - match: '\b\d[0-9_]*\.[0-9_]+(?:[eE][+-]?[0-9_]+)?(?:f32|f64)?\b|\b\d[0-9_]*(?:[eE][+-]?[0-9_]+)(?:f32|f64)?\b'
+      scope: constant.numeric.float.rust
+    - match: '\b\d[0-9_]*(?:[uif](?:8|16|32|64|128|size))?\b'
+      scope: constant.numeric.integer.rust
+    # Strings and Characters
+    - include: strings
+    # Primitive types
+    - match: '{{primitive_types}}\b'
+      scope: support.type.primitive.rust
+    # Standard types
+    - match: '{{standard_types}}\b'
+      scope: support.type.builtin.rust
+    # PascalCase Class / Type / Struct instantiation or reference in Solarized Yellow
+    - match: '{{pascal_ident}}\b'
+      scope: support.type.user-defined.rust
+    # Method / function call in Solarized Blue: func(...)
+    - match: '({{ident}})\s*(?=\()'
+      captures:
+        1: variable.function.rust
+    # Lifetimes
+    - match: '{{lifetime}}'
+      scope: storage.modifier.lifetime.rust
+    # Operators in calm Base0
+    - match: '(=>|->)'
+      scope: punctuation.separator.arrow.rust
+    - match: '(==|!=|<=|>=|<|>)'
+      scope: keyword.operator.comparison.rust
+    - match: '(=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=)'
+      scope: keyword.operator.assignment.rust
+    - match: '(\.\.|\.\.\=)'
+      scope: keyword.operator.range.rust
+    - match: '(\+|\-|\*|/|%|<<|>>|&|\||\^|!)'
+      scope: keyword.operator.arithmetic.rust
+    # Punctuation
+    - match: '::'
+      scope: punctuation.accessor.double-colon.rust
+    - match: '\.'
+      scope: punctuation.accessor.dot.rust
+    - match: ','
+      scope: punctuation.separator.comma.rust
+    - match: ';'
+      scope: punctuation.terminator.statement.rust
+    - match: ':'
+      scope: punctuation.separator.colon.rust
+    - match: '[\(\)]'
+      scope: punctuation.section.parens.rust
+    - match: '[\[\]]'
+      scope: punctuation.section.brackets.rust
+    - match: '[\{\}]'
+      scope: punctuation.section.braces.rust
+    # Identifiers in calm Base0
+    - match: '{{ident}}'
+      scope: variable.other.readwrite.rust
+
+  strings:
+    # Raw string literals: r#"..."# or r##"..."##
+    - match: 'b?r(#*)(")'
+      captures:
+        1: punctuation.definition.string.begin.rust
+        2: punctuation.definition.string.begin.rust
+      push:
+        - meta_scope: string.quoted.raw.rust
+        - match: '"\1'
+          scope: punctuation.definition.string.end.rust
+          pop: true
+    # Standard double-quoted string literals: "..."
+    - match: 'b?(")'
+      captures:
+        1: punctuation.definition.string.begin.rust
+      push:
+        - meta_scope: string.quoted.double.rust
+        - match: '"'
+          scope: punctuation.definition.string.end.rust
+          pop: true
+        # Escapes in Cyan
+        - match: '\\.'
+          scope: constant.character.escape.rust
+    # Single-quoted char literals: 'c' or '\n'
+    - match: "b?(')(?:[^'\\\\]|\\\\.)(')"
+      captures:
+        1: punctuation.definition.char.begin.rust
+        2: punctuation.definition.char.end.rust
+      scope: string.quoted.single.rust

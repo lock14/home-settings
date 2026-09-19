@@ -1,0 +1,461 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Bash / Shell Syntax
+# Supports Modern Bash / Zsh / POSIX Shell:
+# - Shebang in Solarized Orange (keyword.control.directive.shebang.shell)
+# - Comments in Base01 Dim (comment.line.number-sign.shell)
+# - Declaration keywords (local, readonly, declare, typeset, export) in Solarized Green
+# - Control keywords (if, then, else, elif, fi, for, in, do, done, case, esac) in Solarized Green
+# - Commands, builtins, and functions in Solarized Blue (support.function.builtin.shell / entity.name.function.shell)
+# - ALL_CAPS constants and environment variables in Solarized Magenta (variable.other.constant.shell)
+# - Lowercase variables in Base0 Grey (variable.other.shell)
+# - Special & positional parameters ($?, $@, $*, $#, $$, $0, $1, $2) in Solarized Magenta
+# - Numbers and file descriptors (>&2, 2>&1) in Solarized Magenta (constant.numeric.shell)
+# - Redirection operators in Base0 Grey (keyword.operator.redirect.shell)
+# - Subscript wildcard indexes (${arr[@]}, ${arr[*]}) in Solarized Cyan (constant.character.special.subscript.shell)
+# - Case statement pattern words in Base0 Grey and wildcards (*, ?) in Solarized Magenta
+# - Non-bleeding strings & parameter expansions in Solarized Cyan (string.quoted.double.shell)
+# - Heredocs in Solarized Cyan with delimiter tokens in Solarized Green
+# - Test brackets ([[ ]], [ ]) and operators in Base0 Grey
+# - Trap signal sentinels (EXIT, ERR, DEBUG, SIGINT) in Solarized Magenta
+name: Bash
+scope: source.shell.bash
+version: 2
+
+file_extensions:
+  - sh
+  - bash
+  - zsh
+  - ash
+  - ksh
+  - .bashrc
+  - .zshrc
+  - .bash_profile
+  - .bash_aliases
+  - .bash_functions
+  - .bash_completions
+  - .zsh-aliases
+  - .zsh-functions
+  - .zsh-completions
+  - .environment-variables
+  - PKGBUILD
+  - ebuild
+
+first_line_match: |-
+  (?xi:
+    ^ \s* \#! .*? \b(bash|zsh|sh|ash|ksh) \b
+  )
+
+variables:
+  ident: '\b[a-zA-Z_][a-zA-Z0-9_]*\b'
+  all_caps: '\b[A-Z][A-Z0-9_]+\b'
+  lower_ident: '\b[a-z_][a-zA-Z0-9_]*\b'
+  builtins: '\b(?:alias|bg|bind|break|builtin|caller|cd|command|compgen|complete|compopt|continue|coproc|dirs|disown|echo|enable|eval|exec|exit|false|fc|fg|getopts|hash|help|history|jobs|kill|let|logout|mapfile|popd|printf|pushd|pwd|read|readarray|return|set|shift|shopt|source|suspend|test|time|times|trap|true|type|typeset|ulimit|umask|unalias|wait)\b'
+  common_cmds: '\b(?:basename|cat|chmod|chown|cp|curl|cut|date|dirname|find|grep|head|jq|ls|mkdir|mv|ps|rm|rmdir|sed|sleep|sort|sudo|tail|tar|tee|touch|tr|uniq|wc|which|xargs)\b'
+  declarations: '\b(?:declare|local|readonly|typeset|export)\b'
+  control_kws: '\b(?:if|then|else|elif|fi|for|in|do|done|case|esac|while|until|select|function)\b'
+
+contexts:
+  main:
+    - include: shebang
+    - include: comments
+    - include: heredoc
+    - include: command-line
+
+  shebang:
+    - match: '^#!.*$'
+      scope: keyword.control.directive.shebang.shell
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.shell
+
+  command-line:
+    - match: '\s+'
+    - include: comments
+    - include: heredoc
+    - include: function-def
+    - include: declarations
+    - include: case-statement
+    - include: control-keywords
+    - include: trap-command
+    - include: test-brackets
+    - include: variable-assignments
+    - include: commands-and-invocations
+    - include: expressions
+    - include: operators-and-punctuation
+
+  case-statement:
+    # case "$var" in
+    - match: '\b(case)\b'
+      captures:
+        1: keyword.control.case.shell
+      push:
+        - match: '\b(in)\b'
+          captures:
+            1: keyword.control.case.in.shell
+          set: case-body
+        - match: '\s+'
+        - include: comments
+        - include: expressions
+
+  case-body:
+    - match: '\b(esac)\b'
+      scope: keyword.control.case.esac.shell
+      pop: true
+    - match: '\s+'
+    - include: comments
+    # Wildcard pattern: *) or ?) or *.log)
+    - match: '(\*|\?|[^\)\s]+\*|[^\)\s]+\?)\s*(\))'
+      captures:
+        1: string.regexp.case.shell
+        2: punctuation.definition.case-pattern.shell
+      push: case-item-body
+    # Word pattern: INFO) or WARN) or ERROR) or foo|bar)
+    - match: '([a-zA-Z0-9_\-\|\s]+?)(\))'
+      captures:
+        1: variable.parameter.case.shell
+        2: punctuation.definition.case-pattern.shell
+      push: case-item-body
+
+  case-item-body:
+    - match: '(;;|;&|;;&)'
+      scope: punctuation.terminator.case.shell
+      pop: true
+    - match: '(?=\b(esac)\b)'
+      pop: true
+    - include: command-line
+
+  function-def:
+    # function name [()] {
+    - match: '\b(function)\s+({{ident}})(?:\s*(\(\s*\)))?'
+      captures:
+        1: keyword.declaration.function.shell
+        2: entity.name.function.shell
+        3: punctuation.definition.parameters.shell
+    # name() {
+    - match: '({{ident}})\s*(\(\s*\))\s*(?=\{)'
+      captures:
+        1: entity.name.function.shell
+        2: punctuation.definition.parameters.shell
+
+  declarations:
+    - match: '\b(declare|local|readonly|typeset|export)\b'
+      captures:
+        1: keyword.declaration.shell
+      push:
+        - match: '(?=[;\n&|]|$)'
+          pop: true
+        - match: '\s+'
+        - include: comments
+        - match: '(-[a-zA-Z0-9]+|--[a-zA-Z0-9_\-]+)'
+          scope: variable.parameter.option.shell
+        - match: '({{all_caps}})(\+?=)'
+          captures:
+            1: variable.other.constant.shell
+            2: keyword.operator.assignment.shell
+        - match: '({{lower_ident}})(\+?=)'
+          captures:
+            1: variable.other.shell
+            2: keyword.operator.assignment.shell
+        - match: '({{all_caps}})\b'
+          scope: variable.other.constant.shell
+        - match: '({{lower_ident}})\b'
+          scope: variable.other.shell
+        - include: expressions
+
+  control-keywords:
+    # for <var> in ...
+    - match: '\b(for)\s+({{ident}})\s+(in)\b'
+      captures:
+        1: keyword.control.shell
+        2: variable.other.shell
+        3: keyword.control.shell
+    - match: '{{control_kws}}'
+      scope: keyword.control.shell
+
+  trap-command:
+    - match: '\b(trap)\b'
+      captures:
+        1: support.function.builtin.shell
+      push:
+        - match: '(?=[;\n&|]|$)'
+          pop: true
+        - match: '\s+'
+        - include: comments
+        - match: '\b(EXIT|ERR|DEBUG|RETURN|SIGHUP|SIGINT|SIGQUIT|SIGILL|SIGTRAP|SIGABRT|SIGBUS|SIGFPE|SIGKILL|SIGUSR1|SIGSEGV|SIGUSR2|SIGPIPE|SIGALRM|SIGTERM)\b'
+          scope: constant.language.signal.shell
+        - include: expressions
+
+  test-brackets:
+    - match: '\[\['
+      scope: punctuation.definition.bracket.shell
+      push:
+        - match: '\]\]'
+          scope: punctuation.definition.bracket.shell
+          pop: true
+        - match: '\s+'
+        - match: '\b(-[a-zA-Z]+)\b'
+          scope: keyword.operator.test.shell
+        - match: '(==|!=|=~|<|>|&&|\|\||!)'
+          scope: keyword.operator.test.shell
+        - include: expressions
+
+    - match: '(?<=\s|^)\[(?=\s)'
+      scope: punctuation.definition.bracket.shell
+      push:
+        - match: '(?<=\s)\](?=[;\s]|$)'
+          scope: punctuation.definition.bracket.shell
+          pop: true
+        - match: '\s+'
+        - match: '\b(-[a-zA-Z]+)\b'
+          scope: keyword.operator.test.shell
+        - match: '(==|!=|=|<|>|&&|\|\||!)'
+          scope: keyword.operator.test.shell
+        - include: expressions
+
+  variable-assignments:
+    # ALL_CAPS assignment: NAME=... or NAME+=...
+    - match: '({{all_caps}})(\+?=)'
+      captures:
+        1: variable.other.constant.shell
+        2: keyword.operator.assignment.shell
+    # Lowercase assignment: name=... or name+=...
+    - match: '({{lower_ident}})(\+?=)'
+      captures:
+        1: variable.other.shell
+        2: keyword.operator.assignment.shell
+
+  commands-and-invocations:
+    # Built-in commands
+    - match: '{{builtins}}'
+      scope: support.function.builtin.shell
+      push: command-args
+    # Common core utilities
+    - match: '{{common_cmds}}'
+      scope: support.function.shell
+      push: command-args
+    # General command invocation
+    - match: '\b([a-zA-Z_][a-zA-Z0-9_\-\.]*)\b'
+      scope: variable.function.shell
+      push: command-args
+
+  command-args:
+    - match: '(?=[;\n`\(\)]|$|&&|\|\||\||&|\b(then|else|elif|fi|do|done|esac)\b)'
+      pop: true
+    - match: '\s+'
+    - include: comments
+    - include: heredoc
+    - match: '(-[a-zA-Z0-9]+|--[a-zA-Z0-9_\-]+)'
+      scope: variable.parameter.option.shell
+    # Redirection to/from file descriptor: >&2, <&1, 2>&1, etc.
+    - match: '([0-9]+)?(>&|<&)([0-9]+)'
+      captures:
+        1: constant.numeric.file-descriptor.shell
+        2: keyword.operator.redirect.shell
+        3: constant.numeric.file-descriptor.shell
+    # General redirection operators
+    - match: '(&>>?|>>?|<&-|>&-|<<<|<<|>[|&]?|<)'
+      scope: keyword.operator.redirect.shell
+    - include: expressions
+    - match: '\b([a-zA-Z0-9_\-\./]+)\b'
+      scope: variable.parameter.argument.shell
+
+  expressions:
+    - include: strings
+    - include: arithmetic-expansion
+    - include: command-substitution
+    - include: parameter-expansion
+    - include: numbers
+    - include: case-pattern
+
+  strings:
+    # Double-quoted string with variable expansion
+    - match: '"'
+      scope: punctuation.definition.string.begin.shell
+      push:
+        - meta_scope: string.quoted.double.shell
+        - match: '"'
+          scope: punctuation.definition.string.end.shell
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.shell
+        - include: parameter-expansion
+        - include: command-substitution
+        - include: arithmetic-expansion
+
+    # Single-quoted string (literal)
+    - match: "'[^']*'"
+      scope: string.quoted.single.shell
+
+    # ANSI-C string $'...'
+    - match: "\x24'([^'\\\\]|\\\\.)*'"
+      scope: string.quoted.single.dollar.shell
+
+  heredoc:
+    # Quoted heredoc: << 'EOF' or <<- 'EOF'
+    - match: '(<<-?)\s*(''([a-zA-Z0-9_]+)''|"([a-zA-Z0-9_]+)")'
+      captures:
+        1: keyword.operator.redirect.shell
+        2: string.quoted.single.shell
+        3: keyword.control.heredoc-token.shell
+        4: keyword.control.heredoc-token.shell
+      push:
+        - meta_scope: string.unquoted.heredoc.shell
+        - match: '^\s*(\3|\4)$'
+          captures:
+            1: keyword.control.heredoc-token.shell
+          pop: true
+
+    # Bare heredoc: << EOF or <<- EOF
+    - match: '(<<-?)\s*(\\?([a-zA-Z0-9_]+))'
+      captures:
+        1: keyword.operator.redirect.shell
+        2: keyword.control.heredoc-token.shell
+        3: keyword.control.heredoc-token.shell
+      push:
+        - meta_scope: string.unquoted.heredoc.shell
+        - match: '^\s*\3$'
+          captures:
+            0: keyword.control.heredoc-token.shell
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.shell
+        - include: parameter-expansion
+        - include: command-substitution
+        - include: arithmetic-expansion
+
+  arithmetic-expansion:
+    # $(( ... ))
+    - match: '\$\(\('
+      scope: punctuation.definition.variable.shell
+      push:
+        - match: '\)\)'
+          scope: punctuation.definition.variable.shell
+          pop: true
+        - match: '\s+'
+        - include: numbers
+        - include: parameter-expansion
+        - match: '{{all_caps}}'
+          scope: variable.other.constant.shell
+        - match: '{{lower_ident}}'
+          scope: variable.other.shell
+        - match: '[\+\-\*/%~^&|!=<>]'
+          scope: keyword.operator.arithmetic.shell
+        - match: '[\(\)]'
+          scope: punctuation.definition.group.shell
+
+  command-substitution:
+    # $( ... )
+    - match: '\$\('
+      scope: punctuation.definition.variable.shell
+      push:
+        - match: '\)'
+          scope: punctuation.definition.variable.shell
+          pop: true
+        - include: command-line
+
+    # `...`
+    - match: '`'
+      scope: punctuation.definition.variable.shell
+      push:
+        - match: '`'
+          scope: punctuation.definition.variable.shell
+          pop: true
+        - include: command-line
+
+  parameter-expansion:
+    # Positional parameters: $0, $1, $2, ...
+    - match: '(\$)([0-9]+)'
+      captures:
+        1: punctuation.definition.variable.shell
+        2: constant.language.positional.shell
+
+    # Special parameters: $?, $@, $*, $#, $$, $!, $-
+    - match: '(\$)([@*#?$!_\-])'
+      captures:
+        1: punctuation.definition.variable.shell
+        2: constant.language.special.shell
+
+    # Complex expansion ${...}
+    - match: '\$\{'
+      scope: punctuation.definition.variable.shell
+      push:
+        - match: '\}'
+          scope: punctuation.definition.variable.shell
+          pop: true
+        # Array indexing: [@] or [*] or [0]
+        - match: '(\[)([@*])(\])'
+          captures:
+            1: punctuation.definition.bracket.shell
+            2: constant.character.special.subscript.shell
+            3: punctuation.definition.bracket.shell
+        - match: '(\[)([0-9]+)(\])'
+          captures:
+            1: punctuation.definition.bracket.shell
+            2: constant.numeric.integer.shell
+            3: punctuation.definition.bracket.shell
+        # Expansion operators: :-, :=, :?, :+, %%, %, ##, #, //, /
+        - match: '(:[-=?+]|%%?|##?|//?)'
+          scope: keyword.operator.expansion.shell
+        # ALL_CAPS variable name
+        - match: '{{all_caps}}'
+          scope: variable.other.constant.shell
+        # Lowercase variable name
+        - match: '{{lower_ident}}'
+          scope: variable.other.shell
+        # Nested expansions or strings inside defaults
+        - include: strings
+        - include: parameter-expansion
+
+    # Simple ALL_CAPS variable: $NAME
+    - match: '(\$)({{all_caps}})'
+      captures:
+        1: punctuation.definition.variable.shell
+        2: variable.other.constant.shell
+
+    # Simple lowercase variable: $name
+    - match: '(\$)({{lower_ident}})'
+      captures:
+        1: punctuation.definition.variable.shell
+        2: variable.other.shell
+
+  numbers:
+    # Hex: 0x...
+    - match: '\b0x[0-9a-fA-F_]+\b'
+      scope: constant.numeric.hex.shell
+    # Integer: 123
+    - match: '\b[0-9]+\b'
+      scope: constant.numeric.integer.shell
+
+  case-pattern:
+    # Pattern in case item: foo) or INFO) or *)
+    - match: '(?<=[\s\n]|^)([a-zA-Z0-9_\*\?\-\|]+)(\))(?=\s)'
+      captures:
+        1: variable.parameter.case.shell
+        2: punctuation.definition.case-pattern.shell
+
+  operators-and-punctuation:
+    - match: '(;;|;&|;;&)'
+      scope: punctuation.terminator.case.shell
+    - match: ';'
+      scope: punctuation.terminator.statement.shell
+    - match: '(&&|\|\||\|&|\||&)'
+      scope: keyword.operator.logical.shell
+    # Redirection to/from file descriptor: >&2, <&1, 2>&1, etc.
+    - match: '([0-9]+)?(>&|<&)([0-9]+)'
+      captures:
+        1: constant.numeric.file-descriptor.shell
+        2: keyword.operator.redirect.shell
+        3: constant.numeric.file-descriptor.shell
+    # General redirection operators
+    - match: '(&>>?|>>?|<&-|>&-|<<<|<<|>[|&]?|<)'
+      scope: keyword.operator.redirect.shell
+    - match: '(\+?=)'
+      scope: keyword.operator.assignment.shell
+    - match: '(\(|\))'
+      scope: punctuation.definition.group.shell
+    - match: '(\{|\})'
+      scope: punctuation.definition.block.shell
+    - match: '(-[a-zA-Z0-9]+|--[a-zA-Z0-9_\-]+)'
+      scope: variable.parameter.option.shell

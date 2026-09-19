@@ -13,6 +13,7 @@ neovim = "latest"
 eza = "latest"
 bat = "latest"
 glow = "latest"
+tree-sitter = "latest"
 
 [settings]
 legacy_version_file = true

@@ -1,0 +1,103 @@
+%YAML 1.2
+---
+name: Diff
+scope: source.diff
+version: 2
+
+file_extensions:
+  - diff
+  - patch
+  - debdiff
+
+first_line_match: |-
+  (?x:
+    ^diff\s+--git
+    |^---\s+[^\s]
+    |^\*\*\*\s+\d+
+    |^Index:\s+
+  )
+
+contexts:
+  main:
+    - include: diff-header
+    - include: hunk-header
+    - include: line-added
+    - include: line-deleted
+    - include: line-context
+    - include: line-comment
+
+  diff-header:
+    # diff --git a/... b/...
+    - match: '^(diff)\s+(--git)\s+(\S+)\s+(\S+)'
+      captures:
+        1: keyword.control.diff
+        2: variable.parameter.diff
+        3: string.special.path.diff
+        4: string.special.path.diff
+    # index 4b825dc..f1e94a2 100644
+    - match: '^(index)\s+([0-9a-fA-F]+)(\.\.)([0-9a-fA-F]+)(?:\s+(\d+))?'
+      captures:
+        1: keyword.other.diff
+        2: constant.other.hash.diff
+        3: punctuation.separator.range.diff
+        4: constant.other.hash.diff
+        5: constant.numeric.integer.octal.diff
+    # --- a/...
+    - match: '^(---)\s+(\S.*)$'
+      captures:
+        1: punctuation.definition.from-file.diff
+        2: string.special.path.diff
+    # +++ b/...
+    - match: '^(\+\+\+)\s+(\S.*)$'
+      captures:
+        1: punctuation.definition.to-file.diff
+        2: string.special.path.diff
+    # other git metadata
+    - match: '^(new file mode|deleted file mode|old mode|new mode)\s+(\d+)'
+      captures:
+        1: keyword.other.diff
+        2: constant.numeric.integer.octal.diff
+    - match: '^(similarity index|dissimilarity index)\s+(\d+)%'
+      captures:
+        1: keyword.other.diff
+        2: constant.numeric.integer.percent.diff
+    - match: '^(rename from|rename to|copy from|copy to)\s+(.+)$'
+      captures:
+        1: keyword.other.diff
+        2: string.special.path.diff
+    - match: '^(Binary files)\s+(.+)\s+(and)\s+(.+)\s+(differ)$'
+      captures:
+        1: keyword.other.diff
+        2: string.special.path.diff
+        3: keyword.other.diff
+        4: string.special.path.diff
+        5: keyword.other.diff
+    - match: '^(GIT binary patch)$'
+      scope: keyword.other.diff
+
+  hunk-header:
+    # @@ -32,18 +32,22 @@ func (...)
+    - match: '^(@@\s+-[0-9,]+\s+\+[0-9,]+\s+@@)(.*)$'
+      captures:
+        1: punctuation.definition.range.diff meta.diff.range.unified
+        2: entity.name.section.diff
+
+  line-added:
+    - match: '^(\+)(.*)$'
+      scope: markup.inserted.diff
+      captures:
+        1: punctuation.definition.inserted.diff
+
+  line-deleted:
+    - match: '^(-)(.*)$'
+      scope: markup.deleted.diff
+      captures:
+        1: punctuation.definition.deleted.diff
+
+  line-context:
+    - match: '^[ \t].*$'
+      scope: meta.diff.context
+
+  line-comment:
+    - match: '^\\.*$'
+      scope: comment.line.diff

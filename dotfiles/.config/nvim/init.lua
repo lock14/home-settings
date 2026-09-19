@@ -120,7 +120,7 @@ if not status_ok then
     vim.cmd([[
         highlight Normal guibg=#002B36 guifg=#839496
         highlight CursorLine guibg=#073642
-        highlight Comment guifg=#586E75 gui=italic
+        highlight Comment guifg=#586E75
     ]])
     return
 end
@@ -137,89 +137,439 @@ lazy.setup({
                 enabled = false,
             },
             styles = {
-                comments = { italic = true },
+                comments = { italic = false },
                 keywords = { italic = false },
                 functions = { bold = false },
-                variables = {},
+                variables = { italic = false },
+                parameters = { italic = false },
             },
             on_highlights = function(colors, _)
                 return {
-                    -- Base Editor
+                    -- =========================================================================
+                    -- Non-Language-Specific UI & Framing Architecture (Converged Solarized Dark)
+                    -- =========================================================================
+                    -- Base Canvas & Cursor
                     Normal = { fg = colors.base0, bg = colors.base03 },
+                    NormalNC = { fg = colors.base0, bg = colors.base03 },
+                    Cursor = { fg = colors.base03, bg = colors.base0 },
                     CursorLine = { bg = colors.base02 },
+                    CursorColumn = { bg = colors.base02 },
+                    ColorColumn = { bg = colors.base02 },
+
+                    -- Gutter & Navigation Coordinates (Calm Monochromatic Luminance)
                     LineNr = { fg = colors.base01, bg = colors.base03 },
-                    CursorLineNr = { fg = colors.yellow, bg = colors.base02, bold = true },
+                    LineNrAbove = { fg = colors.base01, bg = colors.base03 },
+                    LineNrBelow = { fg = colors.base01, bg = colors.base03 },
+                    CursorLineNr = { fg = colors.base1, bg = colors.base02, bold = true },
                     SignColumn = { bg = colors.base03 },
+                    FoldColumn = { fg = colors.base01, bg = colors.base03 },
+                    Folded = { fg = colors.base0, bg = colors.base02 },
+
+                    -- Window Framing & Splits (Calm Base01 Dim Borders, Zero Chromatic Noise)
+                    WinSeparator = { fg = colors.base01, bg = colors.base03 },
+                    VertSplit = { fg = colors.base01, bg = colors.base03 },
+                    FloatBorder = { fg = colors.base01, bg = colors.base04 },
+                    FloatTitle = { fg = colors.base1, bg = colors.base02, bold = true },
+                    NormalFloat = { fg = colors.base0, bg = colors.base04 },
+
+                    -- Delimiter Matching (Luminance Bounding without Syntax Corruption)
+                    MatchParen = { fg = colors.base1, bg = colors.base02, bold = true },
+
+                    -- Search & Selection Plane (Zero Collision)
+                    Visual = { bg = colors.mix_base1 },
+                    VisualNOS = { bg = colors.mix_base1 },
+                    Search = { fg = colors.base1, bg = colors.mix_yellow, bold = true },
+                    IncSearch = { fg = colors.magenta, bg = colors.mix_magenta, bold = true },
+                    CurSearch = { fg = colors.magenta, bg = colors.mix_magenta, bold = true },
+
+                    -- Status, Tabline & Completion Menus
+                    StatusLine = { fg = colors.base1, bg = colors.base04 },
+                    StatusLineNC = { fg = colors.base01, bg = colors.base04 },
+                    TabLine = { fg = colors.base01, bg = colors.base04 },
+                    TabLineFill = { fg = colors.base0, bg = colors.base04 },
+                    TabLineSel = { fg = colors.base0, bg = colors.base03 },
+                    Pmenu = { fg = colors.base0, bg = colors.base04 },
+                    PmenuSel = { fg = colors.base2, bg = colors.base01 },
+                    PmenuSbar = { bg = colors.base04 },
+                    PmenuThumb = { bg = colors.base1 },
+
+                    -- Diagnostic Severity Hierarchy (Unified 4-Tier Ladder)
+                    DiagnosticError = { fg = colors.red },
+                    DiagnosticSignError = { fg = colors.red, bg = colors.base03 },
+                    DiagnosticFloatingError = { fg = colors.red },
+                    DiagnosticVirtualTextError = { fg = colors.red },
+                    DiagnosticWarn = { fg = colors.yellow },
+                    DiagnosticSignWarn = { fg = colors.yellow, bg = colors.base03 },
+                    DiagnosticFloatingWarn = { fg = colors.yellow },
+                    DiagnosticVirtualTextWarn = { fg = colors.yellow },
+                    DiagnosticInfo = { fg = colors.blue },
+                    DiagnosticSignInfo = { fg = colors.blue, bg = colors.base03 },
+                    DiagnosticFloatingInfo = { fg = colors.blue },
+                    DiagnosticVirtualTextInfo = { fg = colors.blue },
+                    DiagnosticHint = { fg = colors.cyan },
+                    DiagnosticSignHint = { fg = colors.cyan, bg = colors.base03 },
+                    DiagnosticFloatingHint = { fg = colors.cyan },
+                    DiagnosticVirtualTextHint = { fg = colors.cyan },
                     -- Canonical Syntax Highlights
-                    Comment = { fg = colors.base01, italic = true },
+                    Comment = { fg = colors.base01, italic = false },
                     Keyword = { fg = colors.green },
                     Statement = { fg = colors.green },
-                    Conditional = { fg = colors.green },
-                    Repeat = { fg = colors.green },
-                    Type = { fg = colors.yellow },
-                    Structure = { fg = colors.green },
+                    Conditional = { fg = colors.yellow },
+                    Repeat = { fg = colors.yellow },
+                    Type = { fg = colors.base0 },
+                    Structure = { fg = colors.base0 },
                     StorageClass = { fg = colors.green },
                     Function = { fg = colors.blue },
                     Identifier = { fg = colors.base0 },
+                    Parameter = { fg = colors.base0, italic = false },
                     String = { fg = colors.cyan },
                     Character = { fg = colors.cyan },
-                    Constant = { fg = colors.base0 },
+                    Constant = { fg = colors.magenta },
                     Number = { fg = colors.magenta },
                     Boolean = { fg = colors.magenta },
                     Float = { fg = colors.magenta },
                     Operator = { fg = colors.base0 },
                     PreProc = { fg = colors.orange },
                     Include = { fg = colors.orange },
+                    Define = { fg = colors.orange },
+                    Macro = { fg = colors.blue },
                     Special = { fg = colors.violet },
-                    goConstants = { fg = colors.magenta },
-                    goExtraType = { fg = colors.magenta },
+                    Delimiter = { fg = colors.base0 },
                     -- Tree-sitter & LSP Semantic Token Overrides (Exact 1:1 Parity with Bat)
                     ["@keyword"] = { fg = colors.green },
                     ["@keyword.function"] = { fg = colors.green },
-                    ["@keyword.return"] = { fg = colors.green },
-                    ["@keyword.coroutine"] = { fg = colors.green },
+                    ["@keyword.modifier"] = { fg = colors.green },
+                    ["@keyword.operator"] = { fg = colors.green },
+                    ["@keyword.conditional"] = { fg = colors.yellow },
+                    ["@keyword.repeat"] = { fg = colors.yellow },
+                    ["@keyword.return"] = { fg = colors.yellow },
+                    ["@keyword.coroutine"] = { fg = colors.yellow },
+                    ["@keyword.exception"] = { fg = colors.yellow },
+                    ["@keyword.conditional.ternary"] = { fg = colors.base0 },
+                    ["@keyword.directive"] = { fg = colors.orange },
+                    ["@keyword.directive.define"] = { fg = colors.orange },
+                    ["@keyword.import"] = { fg = colors.violet },
+                    ["@keyword.type"] = { fg = colors.green },
                     ["@type"] = { fg = colors.base0 },
-                    ["@type.builtin"] = { fg = colors.yellow },
+                    ["@type.builtin"] = { fg = colors.green },
                     ["@type.definition"] = { fg = colors.base0 },
+                    ["@type.qualifier"] = { fg = colors.base0 },
+                    ["@constructor"] = { fg = colors.base0 },
                     ["@function"] = { fg = colors.blue },
-                    ["@function.call"] = { fg = colors.blue },
+                    ["@function.call"] = { fg = colors.base0 },
                     ["@function.method"] = { fg = colors.blue },
-                    ["@function.method.call"] = { fg = colors.blue },
-                    ["@function.builtin"] = { fg = colors.blue },
+                    ["@function.method.call"] = { fg = colors.base0 },
+                    ["@function.builtin"] = { fg = colors.base0 },
+                    ["@function.macro"] = { fg = colors.blue },
                     ["@variable"] = { fg = colors.base0 },
-                    ["@variable.parameter"] = { fg = colors.base0 },
+                    ["@variable.parameter"] = { fg = colors.base0, italic = false },
+                    ["@variable.parameter.builtin"] = { fg = colors.base0, italic = false },
+                    ["@variable.builtin"] = { fg = colors.magenta },
                     ["@variable.member"] = { fg = colors.base0 },
                     ["@property"] = { fg = colors.base0 },
-                    ["@module"] = { fg = colors.base0 },
-                    ["@module.builtin"] = { fg = colors.base0 },
+                    ["@module"] = { fg = colors.violet },
+                    ["@module.builtin"] = { fg = colors.violet },
                     ["@string"] = { fg = colors.cyan },
+                    ["@string.documentation"] = { fg = colors.base01, italic = false },
                     ["@string.special"] = { fg = colors.cyan },
                     ["@string.special.path"] = { fg = colors.cyan },
                     ["@string.special.url"] = { fg = colors.cyan },
                     ["@string.special.symbol"] = { fg = colors.cyan },
                     ["@string.escape"] = { fg = colors.cyan },
-                    ["@comment"] = { fg = colors.base01, italic = true },
-                    ["@constant"] = { fg = colors.base0 },
+                    ["@character"] = { fg = colors.cyan },
+                    ["@character.printf"] = { fg = colors.cyan },
+                    ["@character.special"] = { fg = colors.cyan },
+                    ["@comment"] = { fg = colors.base01, italic = false },
+                    ["@comment.documentation"] = { fg = colors.base01, italic = false },
+                    ["@spell"] = {},
+                    ["@label"] = { fg = colors.base01 },
+                    ["@constant"] = { fg = colors.magenta },
                     ["@constant.builtin"] = { fg = colors.magenta },
+                    ["@constant.macro"] = { fg = colors.orange },
                     ["@number"] = { fg = colors.magenta },
+                    ["@number.float"] = { fg = colors.magenta },
                     ["@boolean"] = { fg = colors.magenta },
                     ["@operator"] = { fg = colors.base0 },
+                    ["@punctuation.bracket"] = { fg = colors.base0 },
+                    ["@punctuation.delimiter"] = { fg = colors.base0 },
+                    ["@punctuation.special"] = { fg = colors.base0 },
+                    -- Tags & Markup Elements (HTML / XML / JSX / TSX)
+                    Tag = { fg = colors.blue },
+                    TagAttribute = { fg = colors.green },
+                    TagDelimiter = { fg = colors.base0 },
+                    ["@tag"] = { fg = colors.blue },
+                    ["@tag.attribute"] = { fg = colors.green },
+                    ["@tag.delimiter"] = { fg = colors.base0 },
+                    ["@tag.attribute.css"] = { fg = colors.base0 },
+                    ["@markup.raw.xml"] = { fg = colors.base0 },
+                    -- Diagnostic Underlines (sp-only underline/undercurl without mutating syntax fg)
+                    DiagnosticUnderlineError = { fg = "NONE", sp = colors.red, undercurl = true, underline = true },
+                    DiagnosticUnderlineWarn = { fg = "NONE", sp = colors.yellow, undercurl = true, underline = true },
+                    DiagnosticUnderlineInfo = { fg = "NONE", sp = colors.blue, undercurl = true, underline = true },
+                    DiagnosticUnderlineHint = { fg = "NONE", sp = colors.cyan, undercurl = true, underline = true },
+                    -- Markdown & Markup Overrides (Exact 1:1 Parity with Bat - First Principles Sequence)
+                    ["@markup.heading"] = { fg = colors.orange, bold = false },
+                    ["@markup.heading.1"] = { fg = colors.orange, bold = false },
+                    ["@markup.heading.2"] = { fg = colors.blue, bold = false },
+                    ["@markup.heading.3"] = { fg = colors.violet, bold = false },
+                    ["@markup.heading.4"] = { fg = colors.base1, bold = false },
+                    ["@markup.heading.5"] = { fg = colors.base0, bold = false },
+                    ["@markup.heading.6"] = { fg = colors.base0, bold = false },
+                    ["@markup.heading.delimiter"] = { fg = colors.base01, bold = false },
+                    ["@markup.strong"] = { fg = colors.base1, bold = true },
+                    ["@markup.italic"] = { fg = colors.base0, italic = true },
+                    ["@markup.raw"] = { fg = colors.cyan },
+                    ["@markup.raw.delimiter"] = { fg = colors.base01 },
+                    ["@markup.raw.block"] = { fg = colors.base0 },
+                    ["@markup.link"] = { fg = colors.base01 },
+                    ["@markup.link.label"] = { fg = colors.blue },
+                    ["@markup.link.url"] = { fg = colors.cyan, underline = true },
+                    ["@markup.quote"] = { fg = colors.base0, italic = false },
+                    ["@markup.quote.marker"] = { fg = colors.base01 },
+                    ["@markup.list"] = { fg = colors.green, bold = false },
+                    ["@markup.list.checked"] = { fg = colors.green, bold = false },
+                    ["@markup.list.unchecked"] = { fg = colors.base01, bold = false },
+                    ["@markup.table"] = { fg = colors.base01 },
+                    ["@markup.table.delimiter"] = { fg = colors.base01 },
+                    ["@markup.alert.note"] = { fg = colors.blue },
+                    ["@markup.alert.tip"] = { fg = colors.green },
+                    ["@markup.alert.important"] = { fg = colors.violet },
+                    ["@markup.alert.warning"] = { fg = colors.orange },
+                    ["@markup.alert.caution"] = { fg = colors.red },
+                    ["@attribute"] = { fg = colors.violet },
                     ["@lsp.type.keyword"] = { fg = colors.green },
-                    ["@lsp.type.namespace"] = { fg = colors.base0 },
+                    ["@lsp.type.namespace"] = { fg = colors.violet },
                     ["@lsp.type.type"] = { fg = colors.base0 },
                     ["@lsp.type.class"] = { fg = colors.base0 },
                     ["@lsp.type.struct"] = { fg = colors.base0 },
                     ["@lsp.type.interface"] = { fg = colors.base0 },
+                    ["@lsp.type.enum"] = { fg = colors.base0 },
                     ["@lsp.type.typeParameter"] = { fg = colors.base0 },
-                    ["@lsp.type.enumMember"] = { fg = colors.base0 },
+                    ["@lsp.type.enumMember"] = { fg = colors.magenta },
                     ["@lsp.type.function"] = { fg = colors.blue },
                     ["@lsp.type.method"] = { fg = colors.blue },
                     ["@lsp.type.variable"] = { fg = colors.base0 },
-                    ["@lsp.type.parameter"] = { fg = colors.base0 },
+                    ["@lsp.type.parameter"] = { fg = colors.base0, italic = false },
                     ["@lsp.type.property"] = { fg = colors.base0 },
                     ["@lsp.type.string"] = { fg = colors.cyan },
-                    ["@lsp.type.comment"] = { fg = colors.base01, italic = true },
+                    ["@lsp.type.comment"] = { fg = colors.base01, italic = false },
                     ["@lsp.typemod.variable.readonly"] = { fg = colors.base0 },
+                    -- Classic Vim Regex Fallbacks (Exact 1:1 Parity with Bat when Tree-sitter is offline)
+                    markdownH1 = { fg = colors.orange, bold = false },
+                    markdownH2 = { fg = colors.blue, bold = false },
+                    markdownH3 = { fg = colors.violet, bold = false },
+                    markdownH4 = { fg = colors.base1, bold = false },
+                    markdownH5 = { fg = colors.base0, bold = false },
+                    markdownH6 = { fg = colors.base0, bold = false },
+                    markdownHeadingDelimiter = { fg = colors.base01, bold = false },
+                    markdownBold = { fg = colors.base1, bold = true },
+                    markdownItalic = { italic = true },
+                    markdownCode = { fg = colors.cyan },
+                    markdownCodeBlock = { fg = colors.base0 },
+                    markdownCodeDelimiter = { fg = colors.base01 },
+                    markdownBlockquote = { fg = colors.base0, italic = false },
+                    markdownListMarker = { fg = colors.green, bold = false },
+                    markdownOrderedListMarker = { fg = colors.green, bold = false },
+                    markdownRule = { fg = colors.base01, bold = false },
+                    markdownLinkText = { fg = colors.blue },
+                    markdownUrl = { fg = colors.cyan, underline = true },
+                    markdownId = { fg = colors.blue },
+                    markdownIdDeclaration = { fg = colors.cyan },
+                    goPredefinedIdentifiers = { fg = colors.magenta },
+                    goConstants = { fg = colors.magenta },
+                    goExtraType = { fg = colors.base0 },
+                    goType = { fg = colors.base0 },
+                    goSignedInts = { fg = colors.green },
+                    goUnsignedInts = { fg = colors.green },
+                    goFloats = { fg = colors.green },
+                    goComplexes = { fg = colors.green },
+                    goDecimalInt = { fg = colors.magenta },
+                    goHexadecimalInt = { fg = colors.magenta },
+                    goOctalInt = { fg = colors.magenta },
+                    goFloat = { fg = colors.magenta },
+                    goStatement = { fg = colors.yellow },
+                    goConditional = { fg = colors.yellow },
+                    goRepeat = { fg = colors.yellow },
+                    goDeclaration = { fg = colors.green },
+                    goDeclType = { fg = colors.green },
+                    goDirective = { fg = colors.violet },
+                    pythonDocstring = { fg = colors.base01, italic = false },
+                    pythonBuiltinType = { fg = colors.green },
+                    pythonDecorator = { fg = colors.violet },
+                    pythonDecoratorName = { fg = colors.violet },
+                    pythonConditional = { fg = colors.yellow },
+                    pythonRepeat = { fg = colors.yellow },
+                    pythonException = { fg = colors.yellow },
+                    pythonStatement = { fg = colors.yellow },
+                    rustCommentLineDoc = { fg = colors.base01, italic = false },
+                    rustAttribute = { fg = colors.violet },
+                    rustDerive = { fg = colors.violet },
+                    rustDeriveTrait = { fg = colors.base0 },
+                    rustConditional = { fg = colors.yellow },
+                    rustRepeat = { fg = colors.yellow },
+                    rustKeyword = { fg = colors.green },
+                    rustModPath = { fg = colors.violet },
+                    rustMacro = { fg = colors.blue },
+                    rustType = { fg = colors.base0 },
+                    cDefine = { fg = colors.orange },
+                    cInclude = { fg = colors.orange },
+                    cPreProc = { fg = colors.orange },
+                    cPreCondit = { fg = colors.orange },
+                    cType = { fg = colors.base0 },
+                    cStructure = { fg = colors.green },
+                    cStorageClass = { fg = colors.green },
+                    cConditional = { fg = colors.yellow },
+                    cRepeat = { fg = colors.yellow },
+                    cStatement = { fg = colors.yellow },
+                    cConstant = { fg = colors.magenta },
+                    cppAccess = { fg = colors.green },
+                    cppType = { fg = colors.base0 },
+                    cppStructure = { fg = colors.green },
+                    cppStorageClass = { fg = colors.green },
+                    cppModifier = { fg = colors.green },
+                    diffAdded = { fg = colors.green },
+                    diffRemoved = { fg = colors.red },
+                    diffChanged = { fg = colors.yellow },
+                    diffLine = { fg = colors.blue },
+                    diffFile = { fg = colors.orange },
+                    diffNewFile = { fg = colors.yellow },
+                    diffIndexLine = { fg = colors.base01 },
+                    DiffAdd = { fg = colors.green, bg = colors.mix_green },
+                    DiffDelete = { fg = colors.red, bg = colors.mix_red },
+                    DiffChange = { fg = colors.yellow, bg = colors.mix_yellow },
+                    DiffText = { fg = colors.blue, bg = colors.mix_blue, bold = true },
+                    ["@diff.plus"] = { fg = colors.green },
+                    ["@diff.minus"] = { fg = colors.red },
+                    ["@diff.delta"] = { fg = colors.yellow },
+                    ["@diff.line"] = { fg = colors.blue },
+                    -- Legacy Vim Regex Fallbacks (Shell and SQL)
+                    shOption = { fg = colors.base0 },
+                    shCommandSub = { fg = colors.orange },
+                    shConditional = { fg = colors.yellow },
+                    shRepeat = { fg = colors.yellow },
+                    shStatement = { fg = colors.yellow },
+                    shFunctionKey = { fg = colors.green },
+                    shFunction = { fg = colors.blue },
+                    sqlKeyword = { fg = colors.green },
+                    sqlSpecial = { fg = colors.magenta },
+                    -- Legacy XML Syntax Fallbacks
+                    xmlTagName = { fg = colors.blue },
+                    xmlTag = { fg = colors.base0 },
+                    xmlEndTag = { fg = colors.base0 },
+                    xmlAttrib = { fg = colors.green },
+                    xmlEqual = { fg = colors.base0 },
+                    xmlString = { fg = colors.cyan },
+                    xmlProcessing = { fg = colors.orange },
+                    xmlProcessingDelim = { fg = colors.base0 },
+                    xmlDocTypeDecl = { fg = colors.orange },
+                    xmlDocTypeKeyword = { fg = colors.orange },
+                    xmlEntity = { fg = colors.magenta },
+                    xmlEntityPunct = { fg = colors.magenta },
+                    xmlCdataStart = { fg = colors.violet },
+                    xmlCdataEnd = { fg = colors.violet },
+                    xmlCdata = { fg = colors.base0 },
+                    xmlCdataCdata = { fg = colors.violet },
+                    xmlComment = { fg = colors.base01, italic = false },
+                    xmlCommentPart = { fg = colors.base01, italic = false },
+                    xmlNamespace = { fg = colors.blue },
+                    -- Legacy HTML Syntax Fallbacks
+                    htmlTagName = { fg = colors.blue },
+                    htmlSpecialTagName = { fg = colors.blue },
+                    htmlTag = { fg = colors.base0 },
+                    htmlEndTag = { fg = colors.base0 },
+                    htmlArg = { fg = colors.green },
+                    htmlString = { fg = colors.cyan },
+                    htmlComment = { fg = colors.base01, italic = false },
+                    htmlCommentPart = { fg = colors.base01, italic = false },
+                    htmlSpecialChar = { fg = colors.magenta },
+                    htmlDoctype = { fg = colors.orange },
+                    htmlHead = { fg = colors.base0 },
+                    htmlTitle = { fg = colors.base0 },
+                    htmlH1 = { fg = colors.base0, bold = false },
+                    htmlH2 = { fg = colors.base0, bold = false },
+                    htmlH3 = { fg = colors.base0, bold = false },
+                    htmlH4 = { fg = colors.base0, bold = false },
+                    htmlH5 = { fg = colors.base0, bold = false },
+                    htmlH6 = { fg = colors.base0, bold = false },
+                    htmlBold = { fg = colors.base0, bold = false },
+                    htmlItalic = { fg = colors.base0, italic = false },
+                    htmlUnderline = { fg = colors.base0, underline = false },
+                    htmlLink = { fg = colors.base0, underline = false },
+                    -- Legacy CSS Syntax Fallbacks
+                    cssProp = { fg = colors.green },
+                    cssTagName = { fg = colors.blue },
+                    cssClassName = { fg = colors.blue },
+                    cssClassNameDot = { fg = colors.base0 },
+                    cssIdentifier = { fg = colors.blue },
+                    cssColor = { fg = colors.magenta },
+                    cssValueNumber = { fg = colors.magenta },
+                    cssValueLength = { fg = colors.magenta },
+                    cssUnitizers = { fg = colors.base0 },
+                    cssStringQ = { fg = colors.cyan },
+                    cssStringQQ = { fg = colors.cyan },
+                    cssPseudoClass = { fg = colors.violet },
+                    cssPseudoClassId = { fg = colors.violet },
+                    cssCustomProperty = { fg = colors.base0 },
+                    cssVar = { fg = colors.base0 },
+                    cssAtRule = { fg = colors.orange },
+                    -- Legacy Java Properties Syntax Fallbacks
+                    jpropertiesIdentifier = { fg = colors.green },
+                    jpropertiesAssignment = { fg = colors.base0 },
+                    jpropertiesString = { fg = colors.cyan },
+                    jpropertiesSpecialChar = { fg = colors.violet },
+                    jpropertiesComment = { fg = colors.base01, italic = false },
+
+                    -- Language-Specific Tree-sitter Semantic Specializations & Contextual Invariance
+                    -- Java (Principle 7 Operational Role Invariance & Module Directives)
+                    ["@keyword.directive.java"] = { fg = colors.base0 },
+                    ["@function.builtin.java"] = { fg = colors.green },
+                    ["@variable.builtin.java"] = { fg = colors.green },
+                    ["@module.java"] = { fg = colors.base0 },
+
+                    -- Go (Principle 12 Blank Identifier Sentinel)
+                    ["@variable.builtin.go"] = { fg = colors.magenta },
+
+                    -- SQL (Principle 29 Scaffolding Constraints)
+                    ["@attribute.sql"] = { fg = colors.green },
+
+                    -- Terraform / HCL (Principle 35 Calm Typename Declarations)
+                    ["@type.builtin.terraform"] = { fg = colors.base0 },
+                    ["@type.builtin.hcl"] = { fg = colors.base0 },
+
+                    -- HTML (Semantic Headings & Content Desensitization to calm Base0 Grey)
+                    ["@markup.heading.html"] = { fg = colors.base0 },
+                    ["@markup.heading.1.html"] = { fg = colors.base0 },
+                    ["@markup.heading.2.html"] = { fg = colors.base0 },
+                    ["@markup.heading.3.html"] = { fg = colors.base0 },
+                    ["@markup.heading.4.html"] = { fg = colors.base0 },
+                    ["@markup.heading.5.html"] = { fg = colors.base0 },
+                    ["@markup.heading.6.html"] = { fg = colors.base0 },
+                    ["@markup.link.label.html"] = { fg = colors.base0, underline = false },
+                    ["@markup.link.html"] = { fg = colors.base0, underline = false },
+                    ["@markup.strong.html"] = { fg = colors.base0, bold = false },
+                    ["@markup.italic.html"] = { fg = colors.base0, italic = false },
+                    ["@markup.underline.html"] = { fg = colors.base0, underline = false },
+                    ["@string.special.url.html"] = { fg = colors.cyan, underline = false },
+
+                    -- Declarative Configuration Continuum (Mapping Keys in Solarized Green)
+                    ["@property.json"] = { fg = colors.green },
+                    ["@property.yaml"] = { fg = colors.green },
+                    ["@property.toml"] = { fg = colors.green },
+                    ["@property.css"] = { fg = colors.green },
+                    ["@property.properties"] = { fg = colors.green },
+
+                    -- CSS (Universal Semantic Architecture: Selectors Blue, Properties Green, Custom Props Base0, Hex Magenta)
+                    ["@type.css"] = { fg = colors.blue },
+                    ["@tag.css"] = { fg = colors.blue },
+                    ["@variable.css"] = { fg = colors.base0 },
+                    ["@function.call.css"] = { fg = colors.base0 },
+                    ["@type.builtin.css"] = { fg = colors.base0 },
+                    ["@string.special.css"] = { fg = colors.magenta },
+                    ["@constant.css"] = { fg = colors.base0 },
+                    ["@keyword.modifier.css"] = { fg = colors.red },
+
+                    -- Java Properties (Variable Interpolation in Base0 Grey)
+                    ["@variable.properties"] = { fg = colors.base0 },
                 }
             end,
         },
@@ -237,24 +587,32 @@ lazy.setup({
         lazy = false,
         priority = 900,
         config = function()
-            local ts_ok, ts = pcall(require, "nvim-treesitter.configs")
-            if ts_ok then
-                ts.setup({
-                    ensure_installed = {
-                        "go",
-                        "terraform",
-                        "hcl",
-                        "lua",
-                        "vim",
-                        "vimdoc",
-                        "python",
-                        "json",
-                        "yaml",
-                        "toml",
-                        "markdown",
-                        "markdown_inline",
-                        "bash",
-                    },
+            local parsers = {
+                "c", "cpp", "go", "java", "python", "rust", "typescript",
+                "javascript", "bash", "markdown", "markdown_inline",
+                "json", "yaml", "toml", "terraform", "sql", "lua",
+                "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
+                "properties"
+            }
+
+            -- Pin tree-sitter-css to revision with Container Query support (PR #96)
+            local parsers_meta_ok, parsers_meta = pcall(require, "nvim-treesitter.parsers")
+            if parsers_meta_ok then
+                if parsers_meta.css and parsers_meta.css.install_info then
+                    parsers_meta.css.install_info.revision = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+                elseif parsers_meta.get_parser_configs then
+                    local pconfigs = parsers_meta.get_parser_configs()
+                    if pconfigs.css and pconfigs.css.install_info then
+                        pconfigs.css.install_info.revision = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+                    end
+                end
+            end
+
+            -- Support legacy nvim-treesitter.configs if present
+            local ts_configs_ok, ts_configs = pcall(require, "nvim-treesitter.configs")
+            if ts_configs_ok then
+                ts_configs.setup({
+                    ensure_installed = parsers,
                     auto_install = true,
                     highlight = {
                         enable = true,
@@ -263,6 +621,45 @@ lazy.setup({
                     indent = { enable = true },
                 })
             end
+
+            -- Support modern nvim-treesitter rewrite API
+            local nts_ok, nts = pcall(require, "nvim-treesitter")
+            if nts_ok and nts.setup then
+                pcall(function()
+                    nts.setup({
+                        install_dir = vim.fn.stdpath("data") .. "/site",
+                    })
+                end)
+                local installed = {}
+                for _, p in ipairs(nts.get_installed()) do
+                    installed[p] = true
+                end
+                local to_install = {}
+                for _, p in ipairs(parsers) do
+                    if not installed[p] then
+                        table.insert(to_install, p)
+                    end
+                end
+                if #to_install > 0 then
+                    pcall(function()
+                        nts.install(to_install)
+                    end)
+                end
+            end
+
+            -- Ensure user config directory unconditionally takes precedence over site queries in runtimepath
+            vim.opt.rtp:prepend(vim.fn.stdpath("config"))
+
+            -- Register Tree-sitter language aliases
+            pcall(vim.treesitter.language.register, "properties", { "jproperties", "properties" })
+
+            -- Autocommand to start Tree-sitter highlighting on buffer attach (Neovim 0.12+)
+            vim.api.nvim_create_autocmd("FileType", {
+                group = vim.api.nvim_create_augroup("SolarizedTreesitterHighlight", { clear = true }),
+                callback = function(args)
+                    pcall(vim.treesitter.start, args.buf)
+                end,
+            })
         end,
     },
 
@@ -288,10 +685,25 @@ lazy.setup({
         opts = {},
     },
     {
+        "mfussenegger/nvim-jdtls",
+        ft = "java",
+    },
+    {
         "williamboman/mason-lspconfig.nvim",
         dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
         opts = {
-            ensure_installed = { "gopls", "terraformls", "pyright", "yamlls" },
+            ensure_installed = {
+                "clangd",
+                "rust_analyzer",
+                "gopls",
+                "pyright",
+                "lua_ls",
+                "bashls",
+                "terraformls",
+                "yamlls",
+                "jsonls",
+                "jdtls",
+            },
             automatic_installation = true,
             automatic_enable = false,
         },
@@ -306,6 +718,8 @@ lazy.setup({
                     if client then
                         -- Disable LSP semantic token overrides so Treesitter handles syntax highlighting consistently without coloring parts of import strings
                         client.server_capabilities.semanticTokensProvider = nil
+                        -- Disable documentLinkProvider to eliminate rogue clickable hyperlink metadata and spurious link highlights
+                        client.server_capabilities.documentLinkProvider = nil
                     end
 
                     local bufmap = function(keys, func, desc)
@@ -320,17 +734,73 @@ lazy.setup({
                 end,
             })
 
+            -- Server-specific configuration overrides
+            local server_configs = {
+                clangd = {
+                    cmd = {
+                        "clangd",
+                        "--background-index",
+                        "--clang-tidy",
+                        "--header-insertion=iwyu",
+                        "--completion-style=detailed",
+                        "--fallback-style=llvm",
+                    },
+                },
+                lua_ls = {
+                    settings = {
+                        Lua = {
+                            diagnostics = {
+                                globals = { "vim" },
+                            },
+                            workspace = {
+                                library = vim.api.nvim_get_runtime_file("", true),
+                                checkThirdParty = false,
+                            },
+                            telemetry = { enable = false },
+                        },
+                    },
+                },
+                rust_analyzer = {
+                    settings = {
+                        ["rust-analyzer"] = {
+                            check = {
+                                command = "check",
+                            },
+                        },
+                    },
+                },
+                gopls = {},
+                pyright = {},
+                bashls = {},
+                terraformls = {},
+                yamlls = {
+                    settings = {
+                        yaml = {
+                            validate = false,
+                        },
+                    },
+                },
+                jsonls = {
+                    settings = {
+                        json = {
+                            validate = { enable = false },
+                        },
+                    },
+                },
+            }
+
             -- Configure servers using modern vim.lsp.config (Neovim 0.11+) with legacy fallback
-            local servers = { "gopls", "terraformls", "pyright", "yamlls" }
+            -- Note: jdtls is managed on-demand via ftplugin/java.lua with nvim-jdtls
+            local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls" }
             if vim.lsp.config and vim.lsp.enable then
                 for _, s in ipairs(servers) do
-                    vim.lsp.config[s] = {}
+                    vim.lsp.config[s] = server_configs[s] or {}
                 end
                 vim.lsp.enable(servers)
             else
                 local lspconfig = require("lspconfig")
                 for _, s in ipairs(servers) do
-                    lspconfig[s].setup({})
+                    lspconfig[s].setup(server_configs[s] or {})
                 end
             end
         end,

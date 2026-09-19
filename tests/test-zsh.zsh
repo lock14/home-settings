@@ -234,7 +234,7 @@ test_addendum() {
     export HOME="$TEMP_HOME"
     cp "$SCRIPT_DIR/dotfiles/.aliases" "$HOME/.aliases"
     cp "$SCRIPT_DIR/dotfiles/.zsh-functions" "$HOME/.zsh-functions"
-    touch "$HOME/.environment-variables"
+    cp "$SCRIPT_DIR/dotfiles/.p10k.zsh" "$HOME/.p10k.zsh"
 
     source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
 
@@ -244,10 +244,22 @@ test_addendum() {
         echo "FAIL:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:Expected 'fg=#586E75', got '${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[command]:-}" = "fg=#859900,bold" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES command configured with Solarized Green"
+    if [ "${ZSH_HIGHLIGHT_STYLES[command]:-}" = "fg=#859900" ] && [ "${ZSH_HIGHLIGHT_STYLES[builtin]:-}" = "fg=#859900" ] && [ "${ZSH_HIGHLIGHT_STYLES[function]:-}" = "fg=#859900" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES command, builtin, and function configured with unbolded Solarized Green"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900,bold', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES command:Expected 'fg=#859900', got '${ZSH_HIGHLIGHT_STYLES[command]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[reserved-word]:-}" = "fg=#B58900" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES reserved-word configured with Solarized Yellow for control flow"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES reserved-word:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[reserved-word]:-}'"
+    fi
+
+    if [ "${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES command-substitution-delimiter configured with calm Solarized Base0"
+    else
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES command-substitution-delimiter:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#839496" ]; then
@@ -274,10 +286,123 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES path:Expected 'fg=#268BD2', got '${ZSH_HIGHLIGHT_STYLES[path]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F,bold" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES unknown-token configured with Solarized Red"
+    if [ "${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}" = "fg=#DC322F" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES unknown-token configured with unbolded Solarized Red"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F,bold', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES unknown-token:Expected 'fg=#DC322F', got '${ZSH_HIGHLIGHT_STYLES[unknown-token]:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}" = "false" ]; then
+        echo "PASS:p10k directory anchor bold styling disabled (zero-jitter typography)"
+    else
+        echo "FAIL:p10k DIR_ANCHOR_BOLD:Expected 'false', got '${POWERLEVEL9K_DIR_ANCHOR_BOLD:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_OS_ICON_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_OS_ICON_FOREGROUND:-}" = "#839496" ]; then
+        echo "PASS:p10k OS icon configured with Base02 background and Base0 standard foreground"
+    else
+        echo "FAIL:p10k OS_ICON colors:Expected bg='#073642' fg='#839496', got bg='${POWERLEVEL9K_OS_ICON_BACKGROUND:-}' fg='${POWERLEVEL9K_OS_ICON_FOREGROUND:-}'"
+    fi
+
+    if [ "${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-}" = "#859900" ] && \
+       [ "${POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND:-}" = "#B58900" ] && \
+       [ "${POWERLEVEL9K_VCS_MODIFIED_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_VCS_MODIFIED_FOREGROUND:-}" = "#B58900" ]; then
+        echo "PASS:p10k VCS configured with Base02 background and semantic foregrounds"
+    else
+        echo "FAIL:p10k VCS colors:Expected Base02 background with Green clean and Yellow dirty foregrounds"
+    fi
+
+    if [[ "${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}" == *"#586E75"* ]]; then
+        echo "PASS:p10k multiline ornaments configured with authentic Solarized Base01 (#586E75)"
+    else
+        echo "FAIL:p10k multiline ornaments:Expected Solarized Base01, got '${POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX:-}'"
+    fi
+
+    if ! [[ "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}" == *"prompt_char"* ]]; then
+        echo "PASS:p10k prompt_char disabled in favor of clean multiline prefix"
+    else
+        echo "FAIL:p10k prompt_char:Expected prompt_char to be disabled in POWERLEVEL9K_LEFT_PROMPT_ELEMENTS"
+    fi
+
+    if [ "${POWERLEVEL9K_DIR_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_DIR_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_DIR_SHORTENED_FOREGROUND:-}" = "#268BD2" ] && [ "${POWERLEVEL9K_DIR_ANCHOR_FOREGROUND:-}" = "#268BD2" ]; then
+        echo "PASS:p10k directory configured with Base02 background and Solarized Blue foregrounds"
+    else
+        echo "FAIL:p10k DIR colors:Expected bg='#073642' fg='#268BD2'"
+    fi
+
+    if [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"#657B83"* ]] && \
+       [[ "${POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR:-}" == *"\uE0B1"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"#657B83"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR:-}" == *"\uE0B3"* ]] && \
+       [ "${POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL:-}" = '\uE0B0' ] && \
+       [ "${POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL:-}" = '\uE0B2' ] && \
+       [ "${POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION:-}" = "✔" ] && \
+       [ "${POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION:-}" = "✘" ]; then
+        echo "PASS:p10k Base00 thin chevron separators (\uE0B1/\uE0B3) and solid wedge caps (\uE0B0/\uE0B2) configured on Base02 shelf"
+    else
+        echo "FAIL:p10k separators:Expected Base00 thin chevrons (\uE0B1 left, \uE0B3 right) and solid wedge caps (\uE0B0/\uE0B2) on Base02 shelf"
+    fi
+
+    if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
+        echo "PASS:p10k directory OSC 8 hyperlinks disabled for clean text selection"
+    else
+        echo "FAIL:p10k DIR_HYPERLINK:Expected 'false', got '${POWERLEVEL9K_DIR_HYPERLINK:-}'"
+    fi
+
+    if [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"go_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"node_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"rust_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"java_version"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"package"* ]] && \
+       [[ "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}" == *"terraform_version"* ]]; then
+        echo "PASS:p10k right prompt elements includes language toolchains, package, and terraform"
+    else
+        echo "FAIL:p10k RIGHT_PROMPT_ELEMENTS:Expected toolchain versions enabled in POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS"
+    fi
+
+    if [ "${POWERLEVEL9K_GO_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GO_VERSION_FOREGROUND:-}" = "#2AA198" ] && \
+       [ "${POWERLEVEL9K_NODE_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_NODE_VERSION_FOREGROUND:-}" = "#859900" ] && \
+       [ "${POWERLEVEL9K_RUST_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_RUST_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ "${POWERLEVEL9K_JAVA_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_JAVA_VERSION_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ "${POWERLEVEL9K_PACKAGE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_PACKAGE_FOREGROUND:-}" = "#93A1A1" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND:-}" = "#6C71C4" ] && \
+       [ "${POWERLEVEL9K_SCALAENV_FOREGROUND:-}" = "#DC322F" ] && \
+       [ "${POWERLEVEL9K_RBENV_FOREGROUND:-}" = "#DC322F" ] && [ "${POWERLEVEL9K_RVM_FOREGROUND:-}" = "#DC322F" ]; then
+        echo "PASS:p10k toolchain versions unified on Base02 background with semantic foregrounds"
+    else
+        echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
+    fi
+
+    if [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_ICON:-}" = $'\U000F1062' ] && \
+       [ "${POWERLEVEL9K_NODE_ICON:-}" = $'\uE718' ] && \
+       [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ] && \
+       [ "${POWERLEVEL9K_JAVA_ICON:-}" = $'\uF0F4' ]; then
+        echo "PASS:p10k modern Nerd Font icons configured (solid Go gopher, HashiCorp Terraform, Node hexagon, Ruby gem, solid Java mug)"
+    else
+        echo "FAIL:p10k modern Nerd Font icons:Expected modern glyphs for Go, Terraform, Node, Ruby, and Java"
+    fi
+
+    if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_AWS_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AWS_DEFAULT_FOREGROUND:-}" = "#CB4B16" ] && \
+       [ "${POWERLEVEL9K_AZURE_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_AZURE_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_GCLOUD_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GCLOUD_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_GOOGLE_APP_CRED_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_OTHER_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_TERRAFORM_OTHER_FOREGROUND:-}" = "#6C71C4" ]; then
+        echo "PASS:p10k cloud provider segments unified on Base02 background with semantic foregrounds"
+    else
+        echo "FAIL:p10k cloud provider segment colors:Expected Base02 background with semantic foregrounds"
+    fi
+
+    if [ "${POWERLEVEL9K_STATUS_OK_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_STATUS_OK_FOREGROUND:-}" = "#859900" ] && \
+       [ "${POWERLEVEL9K_STATUS_ERROR_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_STATUS_ERROR_FOREGROUND:-}" = "#DC322F" ] && \
+       [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND:-}" = "#B58900" ] && \
+       [ "${POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND:-}" = "#2AA198" ] && \
+       [ "${POWERLEVEL9K_CONTEXT_ROOT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_CONTEXT_ROOT_FOREGROUND:-}" = "#DC322F" ]; then
+        echo "PASS:p10k status, execution time, background jobs, and context unified on Base02 background with semantic foregrounds"
+    else
+        echo "FAIL:p10k right status colors:Expected Base02 background with semantic foregrounds"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[numeric-fd]:-}" = "fg=#D33682" ]; then

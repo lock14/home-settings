@@ -55,6 +55,11 @@ home-settings/
 ├── colors/                          # 24-bit TrueColor TextMate themes
 │   └── Solarized-Dark-TrueColor.tmTheme  # Canonical Solarized Dark theme for bat
 │
+├── syntaxes/                        # Enhanced Sublime syntax packages for bat
+│   ├── C.sublime-syntax             # Modern C syntax with granular declaration scopes
+│   ├── C++.sublime-syntax           # Modern C++ syntax with concept/template support
+│   └── Diff.sublime-syntax          # Standalone Git & Unified Diff syntax for bat
+│
 └── tests/                           # Automated test suites (160+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests
@@ -210,14 +215,14 @@ The redesigned repository is built for frictionless extension:
 - **`zoxide` (`z`)** frecency-based smart directory jumping.
 
 ### 2. Modern Rust Developer CLI Suite
-- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers (`bat <file>` or `b <file>`; `cat` remains coreutils).
+- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers and italic rendering (`bat <file>` or `b <file>`; `cat` remains coreutils), featuring custom Solarized Dark styling for Markdown, C/C++, Java, Python, and Git diffs.
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
 - **`fd` / `fs`**: Lightning-fast file and directory tree search.
 
 ### 3. Modern Lua Neovim (`dotfiles/.config/nvim/init.lua`)
-- **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Auto-manages Go (`gopls`), Terraform (`terraformls`), Python (`pyright`), YAML (`yamlls`).
+- **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
 - **Treesitter**: AST-based syntax highlighting with 1:1 parity matching `bat`.
 - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`).
 - **Solarized Dark**: Seamless `#002B36` terminal background matching.

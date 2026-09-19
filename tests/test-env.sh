@@ -70,13 +70,34 @@ else
     fail "BAT_THEME export" "Expected Solarized-Dark-TrueColor, got: ${BAT_THEME:-}"
 fi
 
+if [[ "${BAT_OPTS:-}" == *"--italic-text=always"* ]]; then
+    pass "BAT_OPTS is configured with --italic-text=always"
+else
+    fail "BAT_OPTS export" "Expected --italic-text=always in BAT_OPTS, got: ${BAT_OPTS:-}"
+fi
+
+if [ -n "${LSCOLORS:-}" ] && [ "${LSCOLORS:-}" = "exgxfxdxcxfxfxegedabagacad" ]; then
+    pass "LSCOLORS configured with Solarized Dark palette for macOS BSD ls parity"
+else
+    fail "LSCOLORS export" "Expected exgxfxdxcxfxfxegedabagacad in LSCOLORS, got: ${LSCOLORS:-}"
+fi
+
 if [ -n "${EZA_COLORS:-}" ] && [ "${EXA_COLORS:-}" = "${EZA_COLORS:-}" ] && \
    [[ "${EZA_COLORS}" == *"Su=38;2;131;148;150"* ]] && \
    [[ "${EZA_COLORS}" == *"ff=38;2;131;148;150"* ]] && \
-   [[ "${EZA_COLORS}" == *"sn=38;2;131;148;150"* ]]; then
-    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette (including SELinux, BSD flags, and size fallbacks)"
+   [[ "${EZA_COLORS}" == *"sn=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"do=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"sc=38;2;131;148;150"* ]] && \
+   [[ "${EZA_COLORS}" == *"hd=4;38;2;147;161;161"* ]] && \
+   [[ "${EZA_COLORS}" == *"co=38;2;203;75;22"* ]] && \
+   [[ "${EZA_COLORS}" == *"cr=38;2;211;54;130"* ]] && \
+   [[ "${EZA_COLORS}" == *"Gm=38;2;133;153;0"* ]] && \
+   [[ "${EZA_COLORS}" == *"Gd=38;2;181;137;0"* ]] && \
+   [[ "${EZA_COLORS}" == *"gm=38;2;181;137;0"* ]] && \
+   [[ "${EZA_COLORS}" != *"1;38;2;181;137;0"* ]]; then
+    pass "EZA_COLORS and EXA_COLORS configured with Solarized Dark palette (unbolded, Base0 documents/code, Base1 header, Orange archives, Magenta crypto, Green main branch, Yellow modified)"
 else
-    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS with full eza_colors(5) codes, got: ${EZA_COLORS:-}"
+    fail "EZA_COLORS export" "Expected Solarized Dark in EZA_COLORS with unbolded codes, got: ${EZA_COLORS:-}"
 fi
 
 if command -v nvim >/dev/null 2>&1; then
@@ -153,6 +174,15 @@ echo -e "\n[4/4] Testing dircolors validity..."
 if command -v dircolors >/dev/null 2>&1; then
     if dircolors_out=$(dircolors -b "$SCRIPT_DIR/dotfiles/.dir-colors/dircolors" 2>&1); then
         pass "dircolors database is valid"
+        if [[ "$dircolors_out" == *"ln=36:"* ]] && [[ "$dircolors_out" == *"ex=32:"* ]] && \
+           [[ "$dircolors_out" == *"*.png=95:"* ]] && [[ "$dircolors_out" == *"*.tar=91:"* ]] && \
+           [[ "$dircolors_out" == *"*.key=35:"* ]] && [[ "$dircolors_out" == *"*.pem=35:"* ]] && \
+           [[ "$dircolors_out" == *"*.txt=00:"* ]] && ! [[ "$dircolors_out" == *"*.txt=32:"* ]] && \
+           ! [[ "$dircolors_out" == *"ex=01;32:"* ]]; then
+            pass "dircolors strictly follows Pillars VIII & IX (Cyan symlinks, unbolded Green executables, Violet media ANSI 95, Orange archives ANSI 91, Magenta crypto ANSI 35, Base0 text/code)"
+        else
+            fail "dircolors semantic mapping" "dircolors does not adhere to 7 Pillars specification: $dircolors_out"
+        fi
     else
         fail "dircolors check" "dircolors failed: $dircolors_out"
     fi

@@ -1,0 +1,106 @@
+%YAML 1.2
+---
+# Solarized Dark Java Properties Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Comments in Solarized Base01 Dim (comment.line.properties)
+# - Property Keys in Solarized Green (support.type.property-name.properties) matching JSON/YAML/TOML mapping keys
+# - Separators (=, :) in calm Base0 Grey (punctuation.separator.key-value.properties)
+# - Number values in Solarized Magenta (constant.numeric.properties)
+# - Boolean values in Solarized Magenta (constant.language.boolean.properties)
+# - Unicode and character escapes in Solarized Violet (constant.character.escape.properties)
+# - Embedded variable interpolations (${...}) in calm Base0 Grey (punctuation.section.embedded.properties, variable.other.interpolation.properties)
+# - Line continuations (\) in calm Base0 Grey (punctuation.separator.continuation.properties)
+# - String values in Solarized Cyan (string.unquoted.properties)
+
+name: Java Properties
+scope: source.properties
+version: 2
+
+file_extensions:
+  - properties
+
+contexts:
+  main:
+    - include: comments
+    - include: empty-lines
+    - include: properties
+
+  comments:
+    # Comments starting with # or ! (with optional leading whitespace)
+    - match: '^[ \t]*([#!])(.*)$'
+      captures:
+        1: punctuation.definition.comment.properties
+        2: comment.line.properties
+
+  empty-lines:
+    - match: '^[ \t]*$'
+
+  properties:
+    # Key-value definition: key = value or key : value
+    - match: '(?=[^ \t\r\n#!])'
+      push:
+        - match: '(?=[\r\n])'
+          pop: true
+        - include: key
+
+  key:
+    # Match the property key until delimiter (=, :, or unescaped whitespace)
+    - match: '((?:\\.|[^=: \t\r\n])+)'
+      captures:
+        1: support.type.property-name.properties
+      set: separator
+
+  separator:
+    # Delimiter = or : with optional surrounding whitespace
+    - match: '[ \t]*([=:][ \t]*|[ \t]+)'
+      captures:
+        1: punctuation.separator.key-value.properties
+      set: value
+
+  value:
+    - include: value-tokens
+
+  value-tokens:
+    - match: '(?=[\r\n])'
+      pop: true
+
+    # Line continuation backslash followed by newline
+    - match: '\\$'
+      scope: punctuation.separator.continuation.properties
+      push:
+        - match: '^[ \t]*'
+          set: value-tokens
+
+    # Variable substitution: ${var.name}
+    - match: '(\$\{)([^}]+)(\})'
+      captures:
+        1: punctuation.section.embedded.properties
+        2: variable.other.interpolation.properties
+        3: punctuation.section.embedded.properties
+
+    # Standalone booleans: true or false
+    - match: '(?<=[=:\s])(true|false)(?=[,\s\\]|$)'
+      captures:
+        1: constant.language.boolean.properties
+
+    # Standalone float numbers: 0.15, 1.5
+    - match: '(?<=[=:\s])([0-9]+\.[0-9]+)(?=[,\s\\]|$)'
+      captures:
+        1: constant.numeric.float.properties
+
+    # Standalone integer numbers: 8080, 4096
+    - match: '(?<=[=:\s])([0-9]+)(?=[,\s\\]|$)'
+      captures:
+        1: constant.numeric.integer.properties
+
+    # Escaped characters: \uXXXX, \:, \=, \\
+    - match: '\\u[0-9a-fA-F]{4}'
+      scope: constant.character.escape.unicode.properties
+    - match: '\\.'
+      scope: constant.character.escape.properties
+
+    # Standard unquoted string characters
+    - match: '[^\r\n\\$]+'
+      scope: string.unquoted.properties
+    - match: '\$'
+      scope: string.unquoted.properties

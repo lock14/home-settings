@@ -4,16 +4,18 @@
 typeset -A ZSH_HIGHLIGHT_STYLES
 ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
 
-# Commands & Builtins (Solarized Green #859900)
-ZSH_HIGHLIGHT_STYLES[command]='fg=#859900,bold'
-ZSH_HIGHLIGHT_STYLES[builtin]='fg=#859900,bold'
-ZSH_HIGHLIGHT_STYLES[alias]='fg=#859900,bold'
-ZSH_HIGHLIGHT_STYLES[reserved-word]='fg=#859900,bold'
+# Commands & Builtins (Solarized Green #859900 - unbolded, zero-jitter)
+ZSH_HIGHLIGHT_STYLES[command]='fg=#859900'
+ZSH_HIGHLIGHT_STYLES[builtin]='fg=#859900'
+ZSH_HIGHLIGHT_STYLES[alias]='fg=#859900'
+ZSH_HIGHLIGHT_STYLES[function]='fg=#859900'
 ZSH_HIGHLIGHT_STYLES[hashed-command]='fg=#859900'
 
-# Functions & Precommands (Solarized Blue #268BD2)
-ZSH_HIGHLIGHT_STYLES[function]='fg=#268BD2,bold'
-ZSH_HIGHLIGHT_STYLES[precommand]='fg=#268BD2,bold'
+# Control Flow & Reserved Words (Solarized Yellow #B58900 - exclusive control flow)
+ZSH_HIGHLIGHT_STYLES[reserved-word]='fg=#B58900'
+
+# Precommands & Autodirectory (Solarized Blue #268BD2)
+ZSH_HIGHLIGHT_STYLES[precommand]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[autodirectory]='fg=#268BD2'
 
 # Options, Flags & Parameters (Solarized Base0 #839496 - restrained)
@@ -32,10 +34,10 @@ ZSH_HIGHLIGHT_STYLES[globbing]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[history-expansion]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[assign]='fg=#839496'
 
-# Substitutions (Solarized Blue #268BD2)
+# Substitutions & Delimiters (Pillar IV: Navigational Neutrality)
 ZSH_HIGHLIGHT_STYLES[command-substitution]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[command-substitution-quoted]='fg=#268BD2'
-ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]='fg=#268BD2'
+ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[process-substitution]='fg=#268BD2'
 
 # Numbers, Constants & Arithmetic (Solarized Magenta #D33682)
@@ -59,7 +61,7 @@ ZSH_HIGHLIGHT_STYLES[path]='fg=#268BD2'
 ZSH_HIGHLIGHT_STYLES[path_prefix]='fg=#839496'
 
 # Unknown Tokens & Errors (Solarized Red #DC322F)
-ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=#DC322F,bold'
+ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=#DC322F'
 
 # Comments (Solarized Base01 #586E75)
 ZSH_HIGHLIGHT_STYLES[comment]='fg=#586E75'
@@ -71,7 +73,7 @@ ZSH_HIGHLIGHT_STYLES[default]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[bracket-level-1]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[bracket-level-2]='fg=#839496'
 ZSH_HIGHLIGHT_STYLES[bracket-level-3]='fg=#839496'
-ZSH_HIGHLIGHT_STYLES[bracket-error]='fg=#DC322F,bold'
+ZSH_HIGHLIGHT_STYLES[bracket-error]='fg=#DC322F'
 
 # ZLE Selection, Search & Autosuggestion (Base02 #073642, Base01 #586E75)
 zle_highlight=(region:bg=#073642 special:fg=#D33682 isearch:underline,fg=#268BD2)

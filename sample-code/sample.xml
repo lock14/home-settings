@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="transform.xsl"?>
+<!--
+  Service deployment descriptor demonstrating XML syntax constructs:
+  namespaces, CDATA, attributes, nested elements, entity references.
+-->
+<deployment xmlns="urn:deployment:v2"
+            xmlns:mon="urn:monitoring:v1"
+            xmlns:sec="urn:security:v1"
+            version="3.2"
+            timestamp="2025-09-14T08:30:00Z">
+
+  <metadata>
+    <name>solarized-gateway</name>
+    <description>API Gateway &amp; reverse proxy for microservices</description>
+    <labels>
+      <label key="environment">production</label>
+      <label key="team">platform-engineering</label>
+      <label key="cost-center">CC-4200</label>
+    </labels>
+  </metadata>
+
+  <service id="gw-primary" replicas="3" enabled="true">
+    <image registry="registry.internal.io" repository="gateway" tag="2.14.0-alpine"/>
+    <resources>
+      <limits cpu="2000m" memory="1Gi"/>
+      <requests cpu="500m" memory="256Mi"/>
+    </resources>
+
+    <ports>
+      <port name="http" containerPort="8080" protocol="TCP"/>
+      <port name="https" containerPort="8443" protocol="TCP"/>
+      <port name="metrics" containerPort="9090" protocol="TCP"/>
+    </ports>
+
+    <env>
+      <variable name="LOG_LEVEL" value="info"/>
+      <variable name="MAX_CONNECTIONS" value="4096"/>
+      <variable name="RATE_LIMIT_RPS" value="1500.75"/>
+      <variable name="ENABLE_TRACING" value="true"/>
+      <variable name="CORS_ORIGINS" value="https://app.example.com"/>
+    </env>
+
+    <healthCheck>
+      <httpGet path="/healthz" port="8080" scheme="HTTP"/>
+      <initialDelaySeconds>15</initialDelaySeconds>
+      <periodSeconds>10</periodSeconds>
+      <failureThreshold>3</failureThreshold>
+    </healthCheck>
+
+    <volumes>
+      <volume name="tls-certs" mountPath="/etc/tls" readOnly="true"/>
+      <volume name="config" mountPath="/etc/gateway/config.yaml" readOnly="true"/>
+    </volumes>
+  </service>
+
+  <mon:monitoring>
+    <mon:endpoint url="https://metrics.internal.io/v1/ingest" interval="30s"/>
+    <mon:alerts>
+      <mon:alert name="HighLatency" threshold="500" unit="ms" severity="warning"/>
+      <mon:alert name="ErrorRate" threshold="5.0" unit="percent" severity="critical"/>
+    </mon:alerts>
+    <mon:dashboards>
+      <mon:dashboard id="gw-overview" title="Gateway Overview &amp; Health"/>
+    </mon:dashboards>
+  </mon:monitoring>
+
+  <sec:security>
+    <sec:tls minVersion="1.3" cipherSuites="TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"/>
+    <sec:authentication provider="oidc">
+      <sec:issuer>https://auth.example.com/realms/production</sec:issuer>
+      <sec:audience>gateway-api</sec:audience>
+    </sec:authentication>
+    <sec:rateLimit>
+      <sec:rule path="/api/v1/*" maxRequests="1000" windowSeconds="60"/>
+      <sec:rule path="/api/v2/*" maxRequests="2000" windowSeconds="60"/>
+    </sec:rateLimit>
+  </sec:security>
+
+  <hooks>
+    <postDeploy>
+      <script><![CDATA[
+        #!/bin/sh
+        echo "Running post-deploy verification..."
+        curl -sf http://localhost:8080/healthz || exit 1
+        echo "Deployment verified successfully"
+      ]]></script>
+    </postDeploy>
+  </hooks>
+
+</deployment>

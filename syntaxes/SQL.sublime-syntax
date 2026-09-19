@@ -1,0 +1,222 @@
+%YAML 1.2
+---
+# Solarized Dark SQL Syntax Package for bat / Sublime Text
+# Complies with 3-Tier Ergonomic Architecture and Solarized Dark TrueColor Palette:
+# - Control flow & DDL/DML keywords in Solarized Green (keyword.control.sql)
+# - Relational types (tables, views, indexes, CTEs) in Solarized Yellow (entity.name.type.table.sql)
+# - SQL primitive & complex data types in Solarized Yellow (storage.type.sql)
+# - Built-in, aggregate & window functions in Solarized Blue (support.function.builtin.sql)
+# - Invocations & user routines in Solarized Blue (variable.function.sql)
+# - Attributes & directives (DEFAULT, ASC, DESC, COLLATE) in Solarized Green (keyword.other.attribute.sql)
+# - Strings in Solarized Cyan (string.quoted.single.sql, string.quoted.dollar.sql)
+# - Numbers, booleans (TRUE, FALSE) & sentinels (NULL) in Solarized Magenta (constant.numeric.sql, constant.language.sql)
+# - Column identifiers, query parameters ($1, :id) & table aliases (a.account_id) in Base0 Grey (variable.other.member.sql, variable.parameter.sql)
+# - Operators (+ - * / || -> ->> = > <) & punctuation delimiters in Base0 Grey (punctuation.delimiter.sql, keyword.operator.sql)
+# - Comments in Base01 Dim (comment.line.double-dash.sql, comment.block.sql)
+
+name: SQL
+scope: source.sql
+version: 2
+
+file_extensions:
+  - sql
+  - ddl
+  - dml
+
+variables:
+  ident: '[a-zA-Z_][a-zA-Z0-9_$]*'
+
+contexts:
+  main:
+    - include: comments
+    - include: strings
+    - include: ddl-statements
+    - include: cte-clause
+    - include: keywords
+    - include: types
+    - include: attributes
+    - include: constants-and-numbers
+    - include: functions
+    - include: qualified-identifiers
+    - include: parameters
+    - include: operators-and-punctuation
+    - include: identifiers
+
+  comments:
+    - match: '--.*$'
+      scope: comment.line.double-dash.sql
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.sql
+      push:
+        - meta_scope: comment.block.sql
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.sql
+          pop: 1
+
+  strings:
+    - match: "'([^']|'')*'"
+      scope: string.quoted.single.sql
+    - match: '(\$[a-zA-Z0-9_]*\$)(.*?)(\1)'
+      captures:
+        1: punctuation.definition.string.begin.sql
+        2: string.quoted.dollar.sql
+        3: punctuation.definition.string.end.sql
+
+  ddl-statements:
+    - match: '(?xi:\b(create(?:\s+or\s+replace)?)\s+(table)\s+(?:(if\s+not\s+exists)\s+)?({{ident}}))'
+      captures:
+        1: keyword.control.ddl.sql
+        2: keyword.control.ddl.sql
+        3: keyword.control.ddl.sql
+        4: entity.name.type.table.sql
+    - match: '(?xi:\b(create(?:\s+unique)?)\s+(index)\s+(?:(if\s+not\s+exists)\s+)?({{ident}}))'
+      captures:
+        1: keyword.control.ddl.sql
+        2: keyword.control.ddl.sql
+        3: keyword.control.ddl.sql
+        4: entity.name.type.index.sql
+    - match: '(?xi:\b(create(?:\s+or\s+replace)?)\s+(view)\s+(?:(if\s+not\s+exists)\s+)?({{ident}}))'
+      captures:
+        1: keyword.control.ddl.sql
+        2: keyword.control.ddl.sql
+        3: keyword.control.ddl.sql
+        4: entity.name.type.view.sql
+    - match: '(?xi:\b(references)\s+({{ident}}))'
+      captures:
+        1: keyword.control.ddl.sql
+        2: entity.name.type.table.sql
+    - match: '(?xi:\b(from|into|update)\s+({{ident}}))'
+      captures:
+        1: keyword.control.sql
+        2: entity.name.type.table.sql
+    - match: '(?xi:\b((?:left|right|inner|full|cross|natural)?\s*join)\s+({{ident}}))'
+      captures:
+        1: keyword.control.sql
+        2: entity.name.type.table.sql
+    - match: '(?xi:\b(on)\s+({{ident}})\s*(?=\())'
+      captures:
+        1: keyword.control.sql
+        2: entity.name.type.table.sql
+
+  cte-clause:
+    - match: '(?xi:\b(with(?:\s+recursive)?)\s+({{ident}})\s+(as)\s*(\())'
+      captures:
+        1: keyword.control.sql
+        2: entity.name.type.table.cte.sql
+        3: keyword.control.sql
+        4: punctuation.section.bracket.round.sql
+
+  keywords:
+    - match: '(?xi:\b(select|distinct|from|where|group\s+by|order\s+by|having|limit|offset|union(?:\s+all)?|intersect|except)\b)'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(with|as|join|left|right|inner|full|cross|natural|outer|on)\b)'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(insert\s+into|values|update|set|delete(?:\s+from)?|returning)\b)'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(create|drop|alter|table|index|view|schema|database|sequence|trigger|procedure|function)\b)'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(primary\s+key|foreign\s+key|check|constraint|unique|references|on\s+delete|on\s+update|cascade|restrict)\b)'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(if\s+not\s+exists|if\s+exists|if|not|exists)\b)'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(in|and|or|is|like|ilike|between|similar\s+to)\b)'
+      scope: keyword.control.operator.sql
+    - match: '(?xi:\b(case|when|then|else|end)\b)'
+      scope: keyword.control.conditional.sql
+    - match: '(?xi:\b(over|partition\s+by|window|rows|range|groups|unbounded|preceding|following|current\s+row|exclude)\b)'
+      scope: keyword.control.window.sql
+    - match: '(?xi:\b(filter)\s*(?=\(\s*where\b))'
+      scope: keyword.control.sql
+    - match: '(?xi:\b(begin|commit|rollback|transaction)\b)'
+      scope: keyword.control.transaction.sql
+
+  attributes:
+    - match: '(?xi:\b(default|asc|desc|collate|nulls\s+first|nulls\s+last)\b)'
+      scope: keyword.other.attribute.sql
+
+  types:
+    - match: '(?xi:\b(bigserial|smallserial|serial|bigint|integer|int|smallint|tinyint)\b)'
+      scope: storage.type.sql
+    - match: '(?xi:\b(numeric|decimal|dec|float|real|double(?:\s+precision)?|double)\b)'
+      scope: storage.type.sql
+    - match: '(?xi:\b(varchar|nvarchar|char|nchar|character(?:\s+varying)?|text)\b)'
+      scope: storage.type.sql
+    - match: '(?xi:\b(boolean|bool|uuid)\b)'
+      scope: storage.type.sql
+    - match: '(?xi:\b(timestamptz|timestamp(?:\s+with(?:out)?\s+time\s+zone)?|timetz|time(?:\s+with(?:out)?\s+time\s+zone)?|date|interval)\b)'
+      scope: storage.type.sql
+    - match: '(?xi:\b(jsonb|json|xml|bytea|blob|clob|inet|cidr|macaddr|money)\b)'
+      scope: storage.type.sql
+
+  constants-and-numbers:
+    - match: '(?xi:\b(true|false)\b)'
+      scope: constant.language.boolean.sql
+    - match: '(?xi:\bnull\b)'
+      scope: constant.language.null.sql
+    - match: '\b0x[0-9a-fA-F]+\b'
+      scope: constant.numeric.hex.sql
+    - match: '\b[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?\b'
+      scope: constant.numeric.float.sql
+    - match: '\b[0-9]+\b'
+      scope: constant.numeric.integer.sql
+
+  functions:
+    - match: '(?xi:\b(count|sum|avg|min|max|coalesce|round|trunc|floor|ceil|ceiling|abs|power|sqrt|mod)\s*(?=\())'
+      scope: support.function.builtin.sql
+    - match: '(?xi:\b(dense_rank|rank|row_number|ntile|lag|lead|first_value|last_value|nth_value)\s*(?=\())'
+      scope: support.function.builtin.sql
+    - match: '(?xi:\b(now|gen_random_uuid|date_trunc|date_part|extract|age|current_timestamp|current_date|current_time)\s*(?=\())'
+      scope: support.function.builtin.sql
+    - match: '(?xi:\b(concat|concat_ws|substring|substr|trim|ltrim|rtrim|lower|upper|length|replace|position|split_part)\s*(?=\())'
+      scope: support.function.builtin.sql
+    - match: '(?xi:\b(cast|nullif|greatest|least|array_agg|string_agg)\s*(?=\())'
+      scope: support.function.builtin.sql
+    # Generic function invocation
+    - match: '({{ident}})\s*(?=\()'
+      scope: variable.function.sql
+
+  qualified-identifiers:
+    # Qualified column/field: table.column (e.g. a.account_id, s.aggregate_spend)
+    - match: '({{ident}})\s*(\.)\s*({{ident}})'
+      captures:
+        1: variable.other.member.sql
+        2: punctuation.accessor.dot.sql
+        3: variable.other.member.sql
+    # Wildcard column access: table.* (e.g. t.*)
+    - match: '({{ident}})\s*(\.)\s*(\*)'
+      captures:
+        1: variable.other.member.sql
+        2: punctuation.accessor.dot.sql
+        3: punctuation.definition.wildcard.sql
+
+  parameters:
+    - match: '\$[0-9]+\b'
+      scope: variable.parameter.positional.sql
+    - match: '(?<!:):[a-zA-Z_][a-zA-Z0-9_]*\b'
+      scope: variable.parameter.named.sql
+    - match: '\?'
+      scope: variable.parameter.positional.sql
+
+  operators-and-punctuation:
+    - match: '::'
+      scope: keyword.operator.cast.sql
+    - match: '!=|<>|<=|>=|=|<|>'
+      scope: keyword.operator.comparison.sql
+    - match: '\|\|'
+      scope: keyword.operator.concatenation.sql
+    - match: '->>|->|#>>|#>'
+      scope: keyword.operator.json.sql
+    - match: '\+|-|\*|/|%|\^'
+      scope: keyword.operator.arithmetic.sql
+    - match: '\(|\)'
+      scope: punctuation.section.bracket.round.sql
+    - match: '\[|\]'
+      scope: punctuation.section.bracket.square.sql
+    - match: ',|;'
+      scope: punctuation.delimiter.sql
+    - match: '\.'
+      scope: punctuation.accessor.dot.sql
+
+  identifiers:
+    - match: '{{ident}}'
+      scope: variable.other.sql
