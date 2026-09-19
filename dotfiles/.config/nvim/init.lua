@@ -592,7 +592,7 @@ lazy.setup({
                 "javascript", "bash", "markdown", "markdown_inline",
                 "json", "yaml", "toml", "terraform", "sql", "lua",
                 "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
-                "properties"
+                "properties", "regex"
             }
 
             -- Pin tree-sitter-css to revision with Container Query support (PR #96)
@@ -624,7 +624,7 @@ lazy.setup({
 
             -- Support modern nvim-treesitter rewrite API
             local nts_ok, nts = pcall(require, "nvim-treesitter")
-            if nts_ok and nts.setup then
+            if nts_ok and nts.setup and type(nts.get_installed) == "function" then
                 pcall(function()
                     nts.setup({
                         install_dir = vim.fn.stdpath("data") .. "/site",
@@ -652,6 +652,53 @@ lazy.setup({
 
             -- Register Tree-sitter language aliases
             pcall(vim.treesitter.language.register, "properties", { "jproperties", "properties" })
+
+            -- Ensure compatibility with Neovim 0.12 directive handling (captures passed as TSNode[])
+            if vim.treesitter.query.add_directive then
+                local function unwrap_node(node)
+                    if type(node) == "table" and not node.range then
+                        return node[1]
+                    end
+                    return node
+                end
+
+                vim.treesitter.query.add_directive("set-lang-from-info-string!", function(match, _, bufnr, pred, metadata)
+                    local capture_id = pred[2]
+                    local node = unwrap_node(match[capture_id])
+                    if not node or not node.range then return end
+                    local alias = vim.treesitter.get_node_text(node, bufnr):lower()
+                    metadata["injection.language"] = alias
+                end, { force = true })
+
+                vim.treesitter.query.add_directive("set-lang-from-mimetype!", function(match, _, bufnr, pred, metadata)
+                    local capture_id = pred[2]
+                    local node = unwrap_node(match[capture_id])
+                    if not node or not node.range then return end
+                    local type_attr_value = vim.treesitter.get_node_text(node, bufnr)
+                    local mimes = {
+                        ["importmap"] = "json",
+                        ["module"] = "javascript",
+                        ["application/ecmascript"] = "javascript",
+                        ["text/ecmascript"] = "javascript",
+                        ["text/javascript"] = "javascript",
+                    }
+                    if mimes[type_attr_value] then
+                        metadata["injection.language"] = mimes[type_attr_value]
+                    else
+                        local parts = vim.split(type_attr_value, "/", { trimempty = true })
+                        metadata["injection.language"] = parts[#parts]
+                    end
+                end, { force = true })
+
+                vim.treesitter.query.add_directive("downcase!", function(match, _, bufnr, pred, metadata)
+                    local capture_id = pred[2]
+                    local node = unwrap_node(match[capture_id])
+                    if not node or not node.range then return end
+                    local text = vim.treesitter.get_node_text(node, bufnr):lower()
+                    local prop = pred[3]
+                    metadata[prop] = text
+                end, { force = true })
+            end
 
             -- Autocommand to start Tree-sitter highlighting on buffer attach (Neovim 0.12+)
             vim.api.nvim_create_autocmd("FileType", {

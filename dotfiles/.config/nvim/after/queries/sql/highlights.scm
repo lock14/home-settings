@@ -13,3 +13,7 @@
 (create_index
   (identifier) @type)
 
+;; Map CTE alias names in WITH statements to @type
+(cte
+  (identifier) @type)
+
