@@ -26,7 +26,6 @@ uninstall_dotfiles() {
         "$HOME/.bashrc-addendum"
         "$HOME/.zshrc-addendum"
         "$HOME/.aliases"
-        "$HOME/.zsh-aliases"
         "$HOME/.zsh-functions"
         "$HOME/.zsh-completions"
         "$HOME/.p10k.zsh"
@@ -61,6 +60,7 @@ uninstall_dotfiles() {
     for f in "${dotfiles[@]}"; do
         unlink_path "$f"
     done
+    unlink_path "$HOME/.zsh-aliases"
 
     # Unlink any managed .config entries dynamically
     local nvim_target="$xdg_config/nvim"

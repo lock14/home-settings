@@ -8,20 +8,16 @@ fs() {
         fd_cmd="fd"
     elif (( $+commands[fdfind] )); then
         fd_cmd="fdfind"
-    elif type -p fd >/dev/null 2>&1; then
-        fd_cmd="fd"
-    elif type -p fdfind >/dev/null 2>&1; then
-        fd_cmd="fdfind"
-    elif command -v fdfind >/dev/null 2>&1; then
-        fd_cmd="fdfind"
     elif command -v fd >/dev/null 2>&1; then
         fd_cmd="fd"
+    elif command -v fdfind >/dev/null 2>&1; then
+        fd_cmd="fdfind"
     else
         echo "Error: 'fd' (or 'fdfind') is not installed." >&2
         return 1
     fi
 
-    if ! (( $+commands[tree] )) && ! type -p tree >/dev/null 2>&1 && ! command -v tree >/dev/null 2>&1; then
+    if ! command -v tree >/dev/null 2>&1 && ! (( $+commands[tree] )); then
         echo "Error: 'tree' is not installed." >&2
         return 1
     fi

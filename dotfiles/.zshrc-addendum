@@ -88,7 +88,6 @@ zstyle ':omz:update' mode auto
 [ -f "$HOME/.zsh-completions" ] && source "$HOME/.zsh-completions"
 [ -f "$HOME/.zsh-functions" ] && source "$HOME/.zsh-functions"
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
-[ -f "$HOME/.zsh-aliases" ] && [ ! -f "$HOME/.aliases" ] && source "$HOME/.zsh-aliases"
 [ -f "$HOME/.p10k.zsh" ] && source "$HOME/.p10k.zsh"
 
 # LS_COLORS dircolors integration

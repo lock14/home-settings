@@ -8,7 +8,7 @@
 export COLORTERM=truecolor
 
 # Standard user binaries
-export PATH="$HOME/.local/bin:$HOME/software/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 # Mise runtime manager shims
 export MISE_YES=1
@@ -29,7 +29,6 @@ elif command -v vim >/dev/null 2>&1; then
 elif command -v vi >/dev/null 2>&1; then
     export EDITOR=vi
 fi
-export SVN_EDITOR="$EDITOR"
 export VISUAL="$EDITOR"
 
 # bat theme and rendering configuration
@@ -49,9 +48,13 @@ export EXA_COLORS="$EZA_COLORS"
 #                   exec(cx=Green), block(fx=Magenta), char(fx=Magenta), suid, sgid, ow_sticky, ow
 export LSCOLORS="exgxfxdxcxfxfxegedabagacad"
 
-# FZF Solarized Dark theme & ripgrep integration
+# FZF Solarized Dark theme & ripgrep / fd integration
 export FZF_DEFAULT_OPTS='--color=bg+:#073642,bg:#002B36,spinner:#859900,hl:#586E75 --color=fg:#839496,header:#586E75,info:#B58900,pointer:#859900 --color=marker:#859900,fg+:#93A1A1,prompt:#B58900,hl+:#268BD2 --layout=reverse --border=rounded --info=inline'
 if command -v rg >/dev/null 2>&1; then
+    export FZF_DEFAULT_COMMAND='rg --files --hidden --glob !.git'
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+elif command -v fd >/dev/null 2>&1; then
+    export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --exclude .git'
     export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 fi
 

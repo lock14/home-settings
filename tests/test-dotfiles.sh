@@ -32,7 +32,6 @@ expected_top_level=(
     ".bashrc-addendum"
     ".zshrc-addendum"
     ".aliases"
-    ".zsh-aliases"
     ".zsh-functions"
     ".zsh-completions"
     ".p10k.zsh"
@@ -42,6 +41,12 @@ expected_top_level=(
 for df in "${expected_top_level[@]}"; do
     assert_symlink "$TEMP_HOME/$df" "" "Auto-discovered and symlinked: $df"
 done
+
+if [ ! -e "$TEMP_HOME/.zsh-aliases" ]; then
+    pass "Legacy .zsh-aliases symlink is cleanly retired"
+else
+    fail "Legacy .zsh-aliases" "Found retired .zsh-aliases symlink"
+fi
 
 assert_symlink "$TEMP_HOME/.dir-colors/dircolors" "" "Auto-discovered and symlinked: .dir-colors/dircolors"
 assert_symlink "$TEMP_HOME/.config/nvim" "" "Auto-discovered and symlinked: .config/nvim"

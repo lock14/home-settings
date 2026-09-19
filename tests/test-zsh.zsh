@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Test suite for zsh dotfiles (dotfiles/.zsh-aliases, dotfiles/.zsh-functions, dotfiles/.zshrc-addendum)
+# Test suite for zsh dotfiles (dotfiles/.aliases, dotfiles/.zsh-functions, dotfiles/.zshrc-addendum)
 
 set -euo pipefail
 

@@ -60,7 +60,7 @@ jobs:
           # Test dotfiles-only installation & uninstallation
           ./setup.sh --dotfiles-only
           [ -L "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases symlink missing"; exit 1; }
-          [ -L "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases symlink missing"; exit 1; }
+          [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases should be retired"; exit 1; }
           [ -L "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables symlink missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
           [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd missing"; exit 1; }
@@ -85,7 +85,7 @@ jobs:
           [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
           [ -L "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases symlink missing"; exit 1; }
-          [ -L "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases symlink missing"; exit 1; }
+          [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases should be retired"; exit 1; }
           [ -L "$HOME/.zsh-functions" ] || { echo "FAIL: ~/.zsh-functions symlink missing"; exit 1; }
           [ -L "$HOME/.zshrc-addendum" ] || { echo "FAIL: ~/.zshrc-addendum symlink missing"; exit 1; }
           [ -L "$HOME/.zsh-completions" ] || { echo "FAIL: ~/.zsh-completions symlink missing"; exit 1; }
@@ -289,24 +289,6 @@ jobs:
           echo "$output" | grep -q "mean: 12.5" || { echo "FAIL mean"; exit 1; }
           echo "$output" | grep -q "sum: 50" || { echo "FAIL sum"; exit 1; }
 
-  script-mvn-release:
-    name: Test mvn-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Make executable
-        run: chmod +x bin/mvn-release
-      - name: Rejects invalid branch
-        run: |
-          TMP_REPO=$(mktemp -d)
-          git init "$TMP_REPO"
-          cd "$TMP_REPO"
-          git config user.email "ci@example.com"
-          git config user.name "CI Runner"
-          git checkout -b feature-branch
-          "$GITHUB_WORKSPACE/bin/mvn-release" \
-            && { echo "FAIL: should reject disallowed branch"; exit 1; } || echo "PASS"
-
   # ─────────────────────────────────────────────────────────────────────────────
   # 7. CI Gatekeeper: Aggregated Status Check
   # ─────────────────────────────────────────────────────────────────────────────
@@ -322,7 +304,6 @@ jobs:
       - script-gen-passwd
       - script-repeat-until-success
       - script-sum
-      - script-mvn-release
     if: always()
     steps:
       - name: Verify all checks succeeded

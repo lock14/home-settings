@@ -42,7 +42,7 @@ cleanup_env_test() {
 trap cleanup_env_test EXIT
 
 export HOME="$TEMP_HOME"
-unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME
+unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
@@ -52,10 +52,10 @@ else
     fail "\$HOME/.local/bin in PATH" "Expected $HOME/.local/bin in PATH, got: $PATH"
 fi
 
-if [[ ":$PATH:" == *":$HOME/software/bin:"* ]]; then
-    pass "\$HOME/software/bin present in PATH"
+if [[ ":$PATH:" != *":$HOME/software/bin:"* ]]; then
+    pass "\$HOME/software/bin is cleanly excluded from standard PATH"
 else
-    fail "\$HOME/software/bin in PATH" "Expected $HOME/software/bin in PATH, got: $PATH"
+    fail "\$HOME/software/bin in PATH" "\$HOME/software/bin should not be in standard PATH"
 fi
 
 if [ "${COLORTERM:-}" = "truecolor" ]; then
@@ -136,6 +136,20 @@ if [[ "${FZF_DEFAULT_OPTS:-}" == *"#002B36"* ]] && [[ "${FZF_DEFAULT_OPTS:-}" ==
     pass "FZF_DEFAULT_OPTS configured with Solarized Dark palette"
 else
     fail "FZF_DEFAULT_OPTS export" "Expected Solarized Dark palette in FZF_DEFAULT_OPTS, got: ${FZF_DEFAULT_OPTS:-}"
+fi
+
+if command -v rg >/dev/null 2>&1 || command -v fd >/dev/null 2>&1; then
+    if [ -n "${FZF_DEFAULT_COMMAND:-}" ] && [ -n "${FZF_CTRL_T_COMMAND:-}" ]; then
+        pass "FZF_DEFAULT_COMMAND and FZF_CTRL_T_COMMAND cleanly configured ($FZF_DEFAULT_COMMAND)"
+    else
+        fail "FZF commands" "Expected non-empty FZF_DEFAULT_COMMAND and FZF_CTRL_T_COMMAND"
+    fi
+fi
+
+if [ -z "${SVN_EDITOR:-}" ]; then
+    pass "Legacy SVN_EDITOR is cleanly omitted"
+else
+    fail "SVN_EDITOR" "SVN_EDITOR should not be exported"
 fi
 
 # Test fallback to vi when nvim and vim are absent

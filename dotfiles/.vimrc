@@ -1,21 +1,3 @@
-" Plugin management (Pathogen)
-if filereadable(expand('~/.vim/autoload/pathogen.vim'))
-    execute pathogen#infect()
-endif
-
-" Suppress Python 3.12+ syntax/deprecation warnings from interrupting Vim
-let $PYTHONWARNINGS = "ignore"
-
-
-" UltiSnips snippet triggers & SuperTab integration
-let g:UltiSnipsExpandTrigger = "<tab>"
-let g:UltiSnipsJumpForwardTrigger = "<c-j>"
-let g:UltiSnipsJumpBackwardTrigger = "<c-k>"
-let g:SuperTabDefaultCompletionType = "<c-n>"
-
-" Auto-Pairs configuration
-let g:AutoPairsShortcutJump = '<c-l>'
-
 " Indentation & Formatting
 filetype plugin indent on
 set tabstop=4

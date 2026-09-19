@@ -117,7 +117,7 @@ User Environment Options:
   --skip-fonts            Skip MesloLGS NF font installation
   --skip-tools            Skip Mise polyglot toolchain runtime installation
   --skip-nvim             Skip Neovim configuration and plugins
-  --skip-vim              Skip Vim configuration and plugins
+  --skip-vim              Skip fallback Vim configuration (.vimrc)
   --skip-zsh              Skip Zsh dotfiles, Oh-My-Zsh, plugins, and Powerlevel10k
   --skip-bash             Skip Bash configuration and environment variables
   --skip-bin              Skip ~/.local/bin user utilities synchronization
@@ -364,7 +364,7 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. User-Level Configuration (Dotfiles, Fonts, Tools, Shell, Vim)
+# 2. User-Level Configuration (Dotfiles, Fonts, Tools, Shell, Terminal)
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$SKIP_USER" = false ]; then
     echo -e "\n[2/2] Running User Dotfiles & Environment Setup..."
@@ -385,11 +385,6 @@ if [ "$SKIP_USER" = false ]; then
     # Mise polyglot toolchains
     if [ "$SKIP_TOOLS" = false ]; then
         "$SCRIPT_DIR/modules/40-mise.sh"
-    fi
-
-    # Legacy Vim plugins (provisions honza/vim-snippets, solarized, auto-pairs, ultisnips, supertab)
-    if [ "$SKIP_VIM" = false ]; then
-        "$SCRIPT_DIR/modules/50-vim.sh"
     fi
 
     # Shell environment (Zsh, Bash, Completions)
