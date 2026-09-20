@@ -30,13 +30,18 @@ else
     CACHE_DIR="${HOME_SETTINGS_FONT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/home-settings/fonts}"
     mkdir -p "$CACHE_DIR"
 
-    # Remove any conflicting Nerd Fonts v3 or hyphenated files
+    # Remove any conflicting Nerd Fonts v3, hyphenated, or stray numbered font files
     rm -f "$FONT_DIR"/MesloLGSNerdFont-*.ttf "$CACHE_DIR"/MesloLGSNerdFont-*.ttf
-    rm -f "$FONT_DIR"/MesloLGS-NF-*.ttf
+    rm -f "$FONT_DIR"/MesloLGS-NF-*.ttf "$CACHE_DIR"/MesloLGS-NF-*.ttf
+    rm -f "$FONT_DIR"/[0-9]MesloLGS*.ttf "$CACHE_DIR"/[0-9]MesloLGS*.ttf
 
-    # Ensure fontconfig alias is provisioned on Linux
+    # Ensure fontconfig alias is provisioned on Linux and clean any dangling symlinks
     if [ "$OS" != "macos" ]; then
-        fontconfig_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d"
+        xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
+        if [ -L "$xdg_config/fontconfig" ] && [ ! -e "$xdg_config/fontconfig" ]; then
+            rm -f "$xdg_config/fontconfig"
+        fi
+        fontconfig_dir="$xdg_config/fontconfig/conf.d"
         mkdir -p "$fontconfig_dir"
         fc_alias_src="$REPO_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
         fc_alias_dest="$fontconfig_dir/10-meslo-nerd-font.conf"
@@ -44,9 +49,6 @@ else
             cp -f "$fc_alias_src" "$fc_alias_dest"
         fi
     fi
-
-
-
 
     BASE_FONT_URL="https://github.com/romkatv/powerlevel10k-media/raw/master"
     FONTS=(
@@ -77,13 +79,16 @@ else
 
         if [ ! -s "$target" ]; then
             if [ -s "$cached" ]; then
-                cp -f "$cached" "$target"
+                target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
+                cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
             else
                 (
                     tmp_file="$cached.tmp.$$.${BASHPID:-$RANDOM}"
-                    trap 'rm -f "$tmp_file"' EXIT
+                    target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
+                    trap 'rm -f "$tmp_file" "$target_tmp"' EXIT
                     if curl -fsSL "$BASE_FONT_URL/$encoded_font" -o "$tmp_file"; then
-                        mv -f "$tmp_file" "$cached" && cp -f "$cached" "$target"
+                        mv -f "$tmp_file" "$cached"
+                        cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
                     else
                         rm -f "$tmp_file"
                         exit 1

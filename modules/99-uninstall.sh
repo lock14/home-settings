@@ -134,10 +134,14 @@ uninstall_fonts() {
     fi
     echo "  Removing MesloLGS NF / MesloLGS Nerd Font fonts from $font_dir..."
     if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] rm -f $font_dir/MesloLGS-NF-*.ttf $font_dir/MesloLGS NF*.ttf $font_dir/MesloLGSNerdFont*.ttf"
+        echo "  [DryRun] rm -f $font_dir/MesloLGS-NF-*.ttf $font_dir/MesloLGS NF*.ttf $font_dir/MesloLGSNerdFont*.ttf $font_dir/[0-9]MesloLGS*.ttf"
     else
-        rm -f "$font_dir"/MesloLGS-NF-*.ttf "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf || true
-        rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d/10-meslo-nerd-font.conf"
+        rm -f "$font_dir"/MesloLGS-NF-*.ttf "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf "$font_dir"/[0-9]MesloLGS*.ttf || true
+        local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
+        if [ -L "$xdg_config/fontconfig" ] && [ ! -e "$xdg_config/fontconfig" ]; then
+            rm -f "$xdg_config/fontconfig"
+        fi
+        rm -f "$xdg_config/fontconfig/conf.d/10-meslo-nerd-font.conf"
         if command -v fc-cache >/dev/null 2>&1; then
             fc-cache -f "$font_dir" >/dev/null 2>&1 || true
         fi

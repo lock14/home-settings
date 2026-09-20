@@ -97,20 +97,34 @@ EOF
     rm -f "$fc_conf"
 fi
 
-
-# Verify that any conflicting MesloLGSNerdFont-*.ttf or MesloLGS-NF-*.ttf files are cleaned up and replaced with romkatv MesloLGS NF *.ttf
+# Verify that any conflicting MesloLGSNerdFont-*.ttf, MesloLGS-NF-*.ttf, or stray numbered [0-9]MesloLGS*.ttf files and dangling fontconfig symlinks are cleaned up and replaced with romkatv MesloLGS NF *.ttf
 printf "conflicting-v3-font" > "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf"
 printf "conflicting-hyphen-font" > "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf"
+printf "stray-numbered-font" > "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf"
+ln -sfn "$TEMP_HOME/nonexistent-fontconfig" "$TEMP_HOME/.config/fontconfig"
 printf "stub" > "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
     nf_size=$(wc -c < "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" | tr -d ' ')
-    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ "$nf_size" -gt 2000000 ] && [ "$nf_size" -lt 2700000 ]; then
-        pass "Font setup removes conflicting MesloLGSNerdFont-*.ttf / MesloLGS-NF-*.ttf files and restores authentic romkatv MesloLGS NF Regular.ttf ($nf_size bytes)"
+    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2000000 ] && [ "$nf_size" -lt 2700000 ]; then
+        pass "Font setup removes conflicting MesloLGSNerdFont-*.ttf, MesloLGS-NF-*.ttf, stray numbered fonts, and resolves broken fontconfig symlink, restoring authentic romkatv MesloLGS NF Regular.ttf ($nf_size bytes)"
     else
-        fail "Font cleanup and restoration" "Expected conflicting files removed and 2.0M < size < 2.7M (got size=$nf_size)"
+        fail "Font cleanup and restoration" "Expected conflicting/stray files removed, broken symlink resolved, and 2.0M < size < 2.7M (got size=$nf_size)"
     fi
 else
-    fail "Font setup idempotency" "Second run failed: $output"
+    fail "Font setup cleanup run" "Second run failed: $output"
+fi
+
+# Verify font inode preservation on repeated runs (prevents unlinking fonts out from under running terminal emulators)
+inode_before=$(stat -c '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" 2>/dev/null || stat -f '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf")
+if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
+    inode_after=$(stat -c '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" 2>/dev/null || stat -f '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf")
+    if [ "$inode_before" = "$inode_after" ]; then
+        pass "Font setup preserves existing valid font file inode ($inode_before == $inode_after) without unlinking under running apps"
+    else
+        fail "Font inode stability" "Expected unchanged inode $inode_before, got $inode_after"
+    fi
+else
+    fail "Font setup idempotency" "Third run failed: $output"
 fi
 
 # Test 3: Font installation on macOS target
