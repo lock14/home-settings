@@ -134,9 +134,9 @@ uninstall_fonts() {
     fi
     echo "  Removing MesloLGS NF / MesloLGS Nerd Font fonts from $font_dir..."
     if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] rm -f $font_dir/MesloLGS NF*.ttf $font_dir/MesloLGSNerdFont*.ttf"
+        echo "  [DryRun] rm -f $font_dir/MesloLGS-NF-*.ttf $font_dir/MesloLGS NF*.ttf $font_dir/MesloLGSNerdFont*.ttf"
     else
-        rm -f "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf || true
+        rm -f "$font_dir"/MesloLGS-NF-*.ttf "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf || true
         if command -v fc-cache >/dev/null 2>&1; then
             fc-cache -f "$font_dir" >/dev/null 2>&1 || true
         fi

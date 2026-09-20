@@ -30,22 +30,32 @@ else
     CACHE_DIR="${HOME_SETTINGS_FONT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/home-settings/fonts}"
     mkdir -p "$CACHE_DIR"
 
-    # Remove any conflicting Nerd Fonts v3 files or fontconfig alias symlinks
+    # Remove any conflicting Nerd Fonts v3 files, old spaced filenames (which macOS CoreText
+    # com.apple.FontRegistry.user.plist marks as disabled duplicates), or fontconfig alias symlinks
     rm -f "$FONT_DIR"/MesloLGSNerdFont-*.ttf "$CACHE_DIR"/MesloLGSNerdFont-*.ttf
+    rm -f "$FONT_DIR"/"MesloLGS NF"*.ttf
     rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d/10-meslo-nerd-font.conf"
 
     BASE_FONT_URL="https://github.com/romkatv/powerlevel10k-media/raw/master"
-    FONTS=(
-        "MesloLGS NF Regular.ttf"
-        "MesloLGS NF Bold.ttf"
-        "MesloLGS NF Italic.ttf"
-        "MesloLGS NF Bold Italic.ttf"
+    FONT_SPECS=(
+        "MesloLGS%20NF%20Regular.ttf|MesloLGS-NF-Regular.ttf|MesloLGS NF Regular.ttf"
+        "MesloLGS%20NF%20Bold.ttf|MesloLGS-NF-Bold.ttf|MesloLGS NF Bold.ttf"
+        "MesloLGS%20NF%20Italic.ttf|MesloLGS-NF-Italic.ttf|MesloLGS NF Italic.ttf"
+        "MesloLGS%20NF%20Bold%20Italic.ttf|MesloLGS-NF-Bold-Italic.ttf|MesloLGS NF Bold Italic.ttf"
     )
     pids=()
-    for font in "${FONTS[@]}"; do
-        target="$FONT_DIR/$font"
-        cached="$CACHE_DIR/$font"
-        encoded_font="${font// /%20}"
+    for spec in "${FONT_SPECS[@]}"; do
+        IFS='|' read -r encoded_remote target_name legacy_cache_name <<< "$spec"
+        target="$FONT_DIR/$target_name"
+        cached="$CACHE_DIR/$target_name"
+        legacy_cached="$CACHE_DIR/$legacy_cache_name"
+
+        if [ ! -s "$cached" ] && [ -s "$legacy_cached" ]; then
+            lsize=$(wc -c < "$legacy_cached" | tr -d ' ')
+            if [ "$lsize" -gt 1000000 ] && [ "$lsize" -lt 2700000 ]; then
+                cp -f "$legacy_cached" "$cached"
+            fi
+        fi
 
         # Purge any >2.7MB Nerd Fonts v3 overwrite or stub so authentic romkatv MesloLGS NF (~2.59MB) is restored
         if [ -f "$cached" ]; then
@@ -68,7 +78,7 @@ else
                 (
                     tmp_file="$cached.tmp.$$.${BASHPID:-$RANDOM}"
                     trap 'rm -f "$tmp_file"' EXIT
-                    if curl -fsSL "$BASE_FONT_URL/$encoded_font" -o "$tmp_file"; then
+                    if curl -fsSL "$BASE_FONT_URL/$encoded_remote" -o "$tmp_file"; then
                         mv -f "$tmp_file" "$cached" && cp -f "$cached" "$target"
                     else
                         rm -f "$tmp_file"
@@ -92,10 +102,15 @@ else
             exit 1
         fi
     fi
-    if [ "$OS" = "macos" ] && command -v atsutil &>/dev/null; then
-        atsutil databases -removeUser >/dev/null 2>&1 || true
-        atsutil server -shutdown >/dev/null 2>&1 || true
-        atsutil server -ping >/dev/null 2>&1 || true
+    if [ "$OS" = "macos" ]; then
+        defaults delete com.apple.FontRegistry.user >/dev/null 2>&1 || true
+        rm -f "$HOME/Library/Preferences/com.apple.FontRegistry.user.plist" 2>/dev/null || true
+        if command -v atsutil &>/dev/null; then
+            atsutil databases -removeUser >/dev/null 2>&1 || true
+            atsutil server -shutdown >/dev/null 2>&1 || true
+            atsutil server -ping >/dev/null 2>&1 || true
+        fi
+        killall fontd >/dev/null 2>&1 || true
     fi
     if command -v fc-cache &>/dev/null; then
         fc-cache -rf "$FONT_DIR" >/dev/null 2>&1 || fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
