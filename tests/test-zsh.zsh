@@ -377,15 +377,15 @@ test_addendum() {
         echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
     fi
 
-    if [ "${POWERLEVEL9K_MODE:-}" = "nerdfont-complete" ] && \
+    if [ "${POWERLEVEL9K_MODE:-}" = "nerdfont-v3" ] && \
        [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
        [ "${POWERLEVEL9K_TERRAFORM_ICON:-}" = $'\uF1BB' ] && \
        [ "${POWERLEVEL9K_NODE_ICON:-}" = $'\uE718' ] && \
        [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ] && \
        [ "${POWERLEVEL9K_JAVA_ICON:-}" = $'\uF0F4' ]; then
-        echo "PASS:p10k configured with POWERLEVEL9K_MODE=nerdfont-complete and MesloLGS NF BMP icons (solid Go gopher, Terraform, Node hexagon, Ruby gem, solid Java mug)"
+        echo "PASS:p10k configured with POWERLEVEL9K_MODE=nerdfont-v3 and MesloLGS Nerd Font icons (solid Go gopher, Terraform, Node hexagon, Ruby gem, solid Java mug)"
     else
-        echo "FAIL:p10k MesloLGS NF icons:Expected POWERLEVEL9K_MODE=nerdfont-complete and BMP glyphs for Go, Terraform, Node, Ruby, and Java"
+        echo "FAIL:p10k MesloLGS Nerd Font icons:Expected POWERLEVEL9K_MODE=nerdfont-v3 and glyphs for Go, Terraform, Node, Ruby, and Java"
     fi
 
     if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \

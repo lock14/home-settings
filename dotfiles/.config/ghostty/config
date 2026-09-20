@@ -36,9 +36,9 @@ palette = 14=#93A1A1
 palette = 15=#FDF6E3
 
 # ------------------------------------------------------------------------------
-# 2. Typography & Fonts (MesloLGS NF / Powerlevel10k)
+# 2. Typography & Fonts (MesloLGS Nerd Font / Powerlevel10k)
 # ------------------------------------------------------------------------------
-font-family = "MesloLGS NF"
+font-family = "MesloLGS Nerd Font"
 font-size = 12
 font-thicken = false
 

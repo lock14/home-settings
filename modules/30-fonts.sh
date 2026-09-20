@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stage 30: MesloLGS NF (romkatv/powerlevel10k-media) downloading and caching.
+# Stage 30: MesloLGS Nerd Font (ryanoasis/nerd-fonts v3) downloading and caching.
 
 set -euo pipefail
 
@@ -21,17 +21,16 @@ else
     FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 fi
 
-echo "  Installing MesloLGS NF fonts into $FONT_DIR..."
+echo "  Installing MesloLGS Nerd Font fonts into $FONT_DIR..."
 
 if [ "$DRY_RUN" = true ]; then
-    echo "  [DryRun] Downloading MesloLGS NF (Regular, Bold, Italic, Bold Italic) to $FONT_DIR"
+    echo "  [DryRun] Downloading MesloLGS Nerd Font (Regular, Bold, Italic, Bold Italic) to $FONT_DIR"
 else
     mkdir -p "$FONT_DIR"
     CACHE_DIR="${HOME_SETTINGS_FONT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/home-settings/fonts}"
     mkdir -p "$CACHE_DIR"
 
-    # Remove any conflicting Nerd Fonts v3, hyphenated, or stray numbered font files
-    rm -f "$FONT_DIR"/MesloLGSNerdFont-*.ttf "$CACHE_DIR"/MesloLGSNerdFont-*.ttf
+    # Remove any conflicting hyphenated or stray numbered font files
     rm -f "$FONT_DIR"/MesloLGS-NF-*.ttf "$CACHE_DIR"/MesloLGS-NF-*.ttf
     rm -f "$FONT_DIR"/[0-9]MesloLGS*.ttf "$CACHE_DIR"/[0-9]MesloLGS*.ttf
 
@@ -47,32 +46,34 @@ else
         fc_alias_dest="$fontconfig_dir/10-meslo-nerd-font.conf"
         if [ -f "$fc_alias_src" ] && [ ! -e "$fc_alias_dest" ]; then
             cp -f "$fc_alias_src" "$fc_alias_dest"
+        elif [ -f "$fc_alias_src" ] && ! [ "$fc_alias_src" -ef "$fc_alias_dest" ]; then
+            cp -f "$fc_alias_src" "$fc_alias_dest"
         fi
     fi
 
-    BASE_FONT_URL="https://github.com/romkatv/powerlevel10k-media/raw/master"
+    BASE_FONT_URL="https://github.com/ryanoasis/nerd-fonts/raw/v3.3.0/patched-fonts/Meslo/S"
     FONTS=(
-        "MesloLGS NF Regular.ttf"
-        "MesloLGS NF Bold.ttf"
-        "MesloLGS NF Italic.ttf"
-        "MesloLGS NF Bold Italic.ttf"
+        "Regular/MesloLGSNerdFont-Regular.ttf:MesloLGSNerdFont-Regular.ttf"
+        "Bold/MesloLGSNerdFont-Bold.ttf:MesloLGSNerdFont-Bold.ttf"
+        "Italic/MesloLGSNerdFont-Italic.ttf:MesloLGSNerdFont-Italic.ttf"
+        "Bold-Italic/MesloLGSNerdFont-BoldItalic.ttf:MesloLGSNerdFont-BoldItalic.ttf"
     )
     pids=()
-    for font in "${FONTS[@]}"; do
-        target="$FONT_DIR/$font"
-        cached="$CACHE_DIR/$font"
-        encoded_font="${font// /%20}"
+    for entry in "${FONTS[@]}"; do
+        IFS=":" read -r remote_path local_file <<< "$entry"
+        target="$FONT_DIR/$local_file"
+        cached="$CACHE_DIR/$local_file"
 
-        # Purge any >2.7MB Nerd Fonts v3 overwrite or stub so authentic romkatv MesloLGS NF (~2.59MB) is restored
+        # Validate cache & target size (>2.0MB for complete Nerd Font v3)
         if [ -f "$cached" ]; then
             csize=$(wc -c < "$cached" | tr -d ' ')
-            if [ "$csize" -gt 2700000 ] || [ "$csize" -lt 1000000 ]; then
+            if [ "$csize" -lt 2000000 ]; then
                 rm -f "$cached"
             fi
         fi
         if [ -f "$target" ]; then
             tsize=$(wc -c < "$target" | tr -d ' ')
-            if [ "$tsize" -gt 2700000 ] || [ "$tsize" -lt 1000000 ]; then
+            if [ "$tsize" -lt 2000000 ]; then
                 rm -f "$target"
             fi
         fi
@@ -86,7 +87,7 @@ else
                     tmp_file="$cached.tmp.$$.${BASHPID:-$RANDOM}"
                     target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
                     trap 'rm -f "$tmp_file" "$target_tmp"' EXIT
-                    if curl -fsSL "$BASE_FONT_URL/$encoded_font" -o "$tmp_file"; then
+                    if curl -fsSL "$BASE_FONT_URL/$remote_path" -o "$tmp_file"; then
                         mv -f "$tmp_file" "$cached"
                         cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
                     else
@@ -111,6 +112,10 @@ else
             exit 1
         fi
     fi
+
+    # Clean up legacy unpatched romkatv fonts once v3 is safely in place
+    rm -f "$FONT_DIR/MesloLGS NF"*.ttf "$CACHE_DIR/MesloLGS NF"*.ttf
+
     if [ "$OS" = "macos" ] && command -v atsutil &>/dev/null; then
         # Ensure the macOS font server is awake (never kill fontd while terminal apps are running)
         atsutil server -ping >/dev/null 2>&1 || true
