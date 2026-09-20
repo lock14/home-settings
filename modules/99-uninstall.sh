@@ -22,18 +22,17 @@ uninstall_dotfiles() {
     echo "  Removing managed dotfile symlinks..."
     local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
     local dotfiles=(
-        "$HOME/.environment-variables"
-        "$HOME/.bashrc-addendum"
-        "$HOME/.zshrc-addendum"
-        "$HOME/.aliases"
-        "$HOME/.zsh-functions"
-        "$HOME/.zsh-completions"
-        "$HOME/.p10k.zsh"
-        "$HOME/.vimrc"
         "$HOME/.dir-colors/dircolors"
         "$xdg_config/bat/themes/Solarized-Dark-TrueColor.tmTheme"
         "$xdg_config/mise/config.toml"
     )
+
+    if [ -d "$REPO_DIR/dotfiles/.dir-colors" ]; then
+        for f in "$REPO_DIR/dotfiles/.dir-colors"/*; do
+            [ -e "$f" ] || continue
+            dotfiles+=("$HOME/.dir-colors/$(basename "$f")")
+        done
+    fi
 
     if [ -d "$REPO_DIR/syntaxes" ]; then
         for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
@@ -133,11 +132,11 @@ uninstall_fonts() {
     else
         font_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
     fi
-    echo "  Removing MesloLGS NF fonts from $font_dir..."
+    echo "  Removing MesloLGS NF / MesloLGS Nerd Font fonts from $font_dir..."
     if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] rm -f $font_dir/MesloLGS NF*.ttf"
+        echo "  [DryRun] rm -f $font_dir/MesloLGS NF*.ttf $font_dir/MesloLGSNerdFont*.ttf"
     else
-        rm -f "$font_dir/MesloLGS NF"*.ttf || true
+        rm -f "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf || true
         if command -v fc-cache >/dev/null 2>&1; then
             fc-cache -f "$font_dir" >/dev/null 2>&1 || true
         fi

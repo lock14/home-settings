@@ -81,4 +81,17 @@ if [ "$all_bin_unlinked" = true ]; then
     pass "All managed user binaries successfully removed by uninstaller"
 fi
 
+# Test 5: bin/sum process substitution and whitespace-padded delimited columns
+echo -e "\n[5/5] Testing bin/sum edge cases (process substitution & padded columns)..."
+SUM_PROC_OUT="$("$SCRIPT_DIR/bin/sum" -k 5 <(printf "r1 c2 c3 c4 10\nr2 c2 c3 c4 25\n"))"
+assert_eq "$SUM_PROC_OUT" "35" "bin/sum supports process substitution (<(cmd)) with column selection (-k 5)"
+
+SUM_PAD_OUT="$(printf "alpha | 12.5 \r\nbeta | 27.5 \r\n" | "$SCRIPT_DIR/bin/sum" -d '|' -k 2)"
+assert_eq "$SUM_PAD_OUT" "40" "bin/sum trims whitespace and CR around delimited columns (-d '|' -k 2)"
+
+COMMA_FILE="$TEMP_HOME/data,1.txt"
+printf "15\n25\n" > "$COMMA_FILE"
+SUM_COMMA_FILE_OUT="$("$SCRIPT_DIR/bin/sum" "$COMMA_FILE")"
+assert_eq "$SUM_COMMA_FILE_OUT" "40" "bin/sum reads files whose paths contain commas"
+
 test_summary

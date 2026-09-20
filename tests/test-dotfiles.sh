@@ -25,7 +25,7 @@ echo -e "\n[2/5] Testing declarative dotfiles auto-discovery..."
 TEMP_HOME=$(mktemp -d)
 trap 'rm -rf "$TEMP_HOME"' EXIT
 
-HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
 
 expected_top_level=(
     ".environment-variables"
@@ -64,6 +64,14 @@ else
     fail "JS/TS queries symlink" "Expected after/queries/javascript and after/queries/typescript in mirrored .config/nvim"
 fi
 assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
+assert_symlink "$TEMP_HOME/.config/fontconfig" "" "Auto-discovered and symlinked: .config/fontconfig"
+if [ -f "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ] && \
+   grep -q '<family>MesloLGS Nerd Font</family>' "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" && \
+   grep -q '<family>MesloLGS NF</family>' "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"; then
+    pass "fontconfig conf.d alias maps MesloLGS NF <-> MesloLGS Nerd Font"
+else
+    fail "fontconfig alias verification" "Missing or invalid .config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+fi
 assert_symlink "$TEMP_HOME/.config/clangd" "" "Auto-discovered and symlinked: .config/clangd"
 if [ -f "$TEMP_HOME/.config/clangd/config.yaml" ] && \
    grep -q 'std=gnu++20' "$TEMP_HOME/.config/clangd/config.yaml" && \
@@ -73,8 +81,8 @@ else
     fail "clangd config verification" "Missing or invalid .config/clangd/config.yaml"
 fi
 
-if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme and MesloLGS NF font"
+if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS Nerd Font"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme and MesloLGS Nerd Font (v3) + MesloLGS NF font families"
 else
     fail "Ghostty config verification" "Ghostty config missing expected theme or font"
 fi
@@ -159,7 +167,7 @@ elif command -v batcat >/dev/null 2>&1; then
 fi
 
 if [ -n "$BAT_BIN" ]; then
-    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n#### Header 4\n**bold text**\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
+    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n#### Header 4\n**bold text**\n" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
     BASE1_BOLD="$(printf "\033[1;38;2;147;161;161m")"
     if grep -Fq "${SOL_BASE01}#" <<< "$MD_OUT" && \
        grep -Fq "${SOL_ORANGE}Header 1" <<< "$MD_OUT" && \
@@ -176,49 +184,49 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat Markdown rendering" "Expected H1 Orange, H2 Blue, H3 Violet, H4 Base1, Base01 markers, no Yellow, and Base1 bold in bat output"
     fi
 
-    C_OUT="$(echo -e "#include <stdio.h>" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_OUT="$(echo -e "#include <stdio.h>" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "$SOL_ORANGE" <<< "$C_OUT"; then
         pass "bat renders C/C++ preprocessor directives in Solarized Orange"
     else
         fail "bat C preprocessor rendering" "Expected Orange preprocessor directive in bat output"
     fi
 
-    DIFF_OUT="$(echo -e "--- a\n+++ b\n-old\n+new" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff - 2>/dev/null || true)"
+    DIFF_OUT="$(echo -e "--- a\n+++ b\n-old\n+new" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff - 2>/dev/null || true)"
     if grep -Fq "$SOL_GREEN" <<< "$DIFF_OUT" && grep -Fq "$SOL_RED" <<< "$DIFF_OUT"; then
         pass "bat renders Unified Diffs with Solarized Green additions and Red deletions"
     else
         fail "bat Diff rendering" "Expected Green additions and Red deletions in bat diff output"
     fi
 
-    QUOTE_OUT="$(printf "> quote text\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
+    QUOTE_OUT="$(printf "> quote text\n" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
     if grep -Fq "$SOL_BASE0" <<< "$QUOTE_OUT" && grep -Fq "$SOL_BASE01" <<< "$QUOTE_OUT"; then
         pass "bat renders Markdown blockquotes in Solarized Base0 with Base01 marker"
     else
         fail "bat blockquote rendering" "Expected Base0 text and Base01 marker in bat blockquote output"
     fi
 
-    GO_OUT="$(printf "type MyStruct struct {}\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go - 2>/dev/null || true)"
+    GO_OUT="$(printf "type MyStruct struct {}\n" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go - 2>/dev/null || true)"
     if grep -Fq "$SOL_BASE0" <<< "$GO_OUT"; then
         pass "bat renders custom struct types in calm Base0"
     else
         fail "bat custom type rendering" "Expected Base0 struct type in bat output"
     fi
 
-    C_TYPE_OUT="$(printf "int x = 42;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_TYPE_OUT="$(printf "int x = 42;\n" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "$SOL_GREEN" <<< "$C_TYPE_OUT"; then
         pass "bat renders primitive C types (int, char, etc.) in Solarized Green"
     else
         fail "bat primitive type rendering" "Expected Green primitive type in bat output"
     fi
 
-    C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "$SOL_CYAN" <<< "$C_STR_OUT"; then
         pass "bat renders string format specifiers and escapes in Solarized Cyan"
     else
         fail "bat string escape rendering" "Expected Cyan string escape in bat output"
     fi
 
-    C_DECL_OUT="$(printf "typedef struct {\n    int x;\n} Node;\n" | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_DECL_OUT="$(printf "typedef struct {\n    int x;\n} Node;\n" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}typedef" <<< "$C_DECL_OUT" && grep -Fq "${SOL_GREEN}struct" <<< "$C_DECL_OUT"; then
         pass "bat renders C declaration keywords (typedef, struct) in Solarized Green"
     else
@@ -226,7 +234,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     ESC_ITALIC="$(printf "\033[3;")"
-    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}#define" <<< "$C_MACRO_OUT" && \
        grep -Fq "${SOL_BASE0}x" <<< "$C_MACRO_OUT" && \
        ! grep -Fq "$ESC_ITALIC" <<< "$C_MACRO_OUT"; then
@@ -235,14 +243,14 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat macro parameter rendering" "Expected upright Base0 grey parameters and body expressions in macro"
     fi
 
-    C_COMMENT_OUT="$(printf '/* sample comment */\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_COMMENT_OUT="$(printf '/* sample comment */\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "$SOL_BASE01" <<< "$C_COMMENT_OUT" && ! grep -Fq "$ESC_ITALIC" <<< "$C_COMMENT_OUT"; then
         pass "bat renders C comments in upright Solarized Base01 without italics"
     else
         fail "bat comment rendering" "Expected upright Base01 comment without italics in bat output"
     fi
 
-    MD_ITALIC_OUT="$(printf '*explicit italic*\n' | BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
+    MD_ITALIC_OUT="$(printf '*explicit italic*\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" BAT_OPTS="--italic-text=always" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
     if grep -Fq "$ESC_ITALIC" <<< "$MD_ITALIC_OUT"; then
         pass "bat renders explicitly tagged Markdown *italic* with true italics"
     else
@@ -250,7 +258,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.2 C Syntax Verification ---
-    C_PREPROC_OUT="$(printf '#ifndef LOG_LEVEL\n#define LOG_LEVEL 2\n#endif\n#ifdef __linux__\n#undef LOG_LEVEL\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_PREPROC_OUT="$(printf '#ifndef LOG_LEVEL\n#define LOG_LEVEL 2\n#endif\n#ifdef __linux__\n#undef LOG_LEVEL\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}#ifndef" <<< "$C_PREPROC_OUT" && \
        grep -Fq "${SOL_ORANGE}LOG_LEVEL" <<< "$C_PREPROC_OUT" && \
        grep -Fq "${SOL_ORANGE}#ifdef" <<< "$C_PREPROC_OUT" && \
@@ -261,35 +269,35 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat preprocessor conditional macro rendering" "Expected Solarized Orange macro identifiers in preprocessor conditionals"
     fi
 
-    C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_MAGENTA}EXIT_FAILURE" <<< "$C_CONST_OUT"; then
         pass "bat renders named uppercase constants (EXIT_FAILURE, etc.) in Solarized Magenta"
     else
         fail "bat constant rendering" "Expected Magenta named constants in bat output"
     fi
 
-    C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}WorkerNode" <<< "$C_CUSTOM_TYPE_OUT"; then
         pass "bat renders custom PascalCase types (WorkerNode, etc.) in calm Solarized Base0"
     else
         fail "bat custom type rendering" "Expected Base0 custom PascalCase type in bat output"
     fi
 
-    C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}sizeof" <<< "$C_WORD_OP_OUT"; then
         pass "bat renders word operators (sizeof, etc.) in Solarized Green matching Neovim"
     else
         fail "bat word operator rendering" "Expected Green sizeof in bat output"
     fi
 
-    C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}emit_log" <<< "$C_FUNC_CALL_OUT"; then
         pass "bat renders user function calls (emit_log, etc.) in calm Solarized Base0 matching Neovim"
     else
         fail "bat function call rendering" "Expected Base0 emit_log call in bat output"
     fi
 
-    C_CTRL_OUT="$(printf 'if (node == NULL) return EXIT_FAILURE;\nswitch (level) { case 0: break; default: break; }\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
+    C_CTRL_OUT="$(printf 'if (node == NULL) return EXIT_FAILURE;\nswitch (level) { case 0: break; default: break; }\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l c - 2>/dev/null || true)"
     if grep -Fq "${SOL_YELLOW}if" <<< "$C_CTRL_OUT" && \
        grep -Fq "${SOL_YELLOW}return" <<< "$C_CTRL_OUT" && \
        grep -Fq "${SOL_YELLOW}switch" <<< "$C_CTRL_OUT" && \
@@ -300,7 +308,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.3 C++ Syntax Verification ---
-    CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}T" <<< "$CPP_TEMPLATE_OUT"; then
         pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in calm Solarized Base0 matching Neovim"
     else
@@ -319,7 +327,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat STL container rendering" "Expected Base0 STL container type in bat output"
     fi
 
-    CPP_DECL_NS_OUT="$(printf 'namespace core::telemetry {\n}\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_DECL_NS_OUT="$(printf 'namespace core::telemetry {\n}\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}namespace" <<< "$CPP_DECL_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}core" <<< "$CPP_DECL_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$CPP_DECL_NS_OUT"; then
@@ -328,7 +336,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat namespace definition rendering" "Expected Green namespace keyword and Violet core::telemetry identifiers in bat output"
     fi
 
-    CPP_NS_OUT="$(printf 'using namespace core::telemetry;\nstd::string s;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_NS_OUT="$(printf 'using namespace core::telemetry;\nstd::string s;\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}using" <<< "$CPP_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}core" <<< "$CPP_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$CPP_NS_OUT" && \
@@ -338,7 +346,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat using namespace rendering" "Expected Green using keyword, Violet namespace targets, and Base0 qualifiers in bat output"
     fi
 
-    CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_MAGENTA}Initializing" <<< "$CPP_CONST_OUT" && \
        grep -Fq "${SOL_MAGENTA}nullopt" <<< "$CPP_CONST_OUT"; then
         pass "bat renders scoped enum constants (NodeState::Initializing) and sentinels (std::nullopt) in Solarized Magenta matching Neovim"
@@ -352,14 +360,14 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat uniform initialization rendering" "Expected Base0 grey variable in uniform initialization"
     fi
 
-    CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}same_as" <<< "$CPP_CONCEPT_OUT"; then
         pass "bat renders standard C++20 concepts (same_as) in calm Solarized Base0 matching Neovim"
     else
         fail "bat C++20 concept rendering" "Expected Base0 same_as concept in bat output"
     fi
 
-    CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}NodeState" <<< "$CPP_ENUM_OUT" && \
        grep -Fq "${SOL_GREEN}uint8_t" <<< "$CPP_ENUM_OUT"; then
         pass "bat renders enum class types in calm Solarized Base0 and underlying primitive types (uint8_t) in Solarized Green matching Neovim"
@@ -367,7 +375,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat enum type rendering" "Expected Base0 enum name and Green underlying type in bat output"
     fi
 
-    CPP_QUAL_FUNC_OUT="$(printf 'void test() {\n    std::move(metric);\n    std::for_each(items.begin(), items.end());\n}\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_QUAL_FUNC_OUT="$(printf 'void test() {\n    std::move(metric);\n    std::for_each(items.begin(), items.end());\n}\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_BASE0}std" <<< "$CPP_QUAL_FUNC_OUT" && \
        grep -Fq "${SOL_BASE0}move" <<< "$CPP_QUAL_FUNC_OUT" && \
        grep -Fq "${SOL_BASE0}for_each" <<< "$CPP_QUAL_FUNC_OUT"; then
@@ -376,7 +384,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat qualified function rendering" "Expected Base0 Grey std and Base0 move/for_each in bat output"
     fi
 
-    CPP_ATTR_OUT="$(printf '[[nodiscard]] constexpr uint64_t id();\n' | BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
+    CPP_ATTR_OUT="$(printf '[[nodiscard]] constexpr uint64_t id();\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l cpp - 2>/dev/null || true)"
     if grep -Fq "${SOL_VIOLET}[[" <<< "$CPP_ATTR_OUT" && \
        grep -Fq "${SOL_VIOLET}nodiscard" <<< "$CPP_ATTR_OUT" && \
        grep -Fq "${SOL_VIOLET}]]" <<< "$CPP_ATTR_OUT"; then
@@ -386,7 +394,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.4 Diff Syntax Verification ---
-    DIFF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
+    DIFF_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
     if grep -Fq "${SOL_BLUE}diff" <<< "$DIFF_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" <<< "$DIFF_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}4b825dc" <<< "$DIFF_SAMPLE_OUT" && \
@@ -405,7 +413,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.5 Go Syntax Verification ---
-    GO_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
+    GO_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}package" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}main" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}import" <<< "$GO_SAMPLE_OUT" && \
@@ -436,7 +444,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.6 Java Syntax Verification ---
-    JAVA_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l java "$SCRIPT_DIR/sample-code/sample.java" 2>/dev/null || true)"
+    JAVA_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l java "$SCRIPT_DIR/sample-code/sample.java" 2>/dev/null || true)"
     if grep -Fq "${SOL_VIOLET}import" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}java" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}Instant" <<< "$JAVA_SAMPLE_OUT" && \
@@ -468,7 +476,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.7 Python Syntax Verification ---
-    PYTHON_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l py "$SCRIPT_DIR/sample-code/sample.py" 2>/dev/null || true)"
+    PYTHON_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l py "$SCRIPT_DIR/sample-code/sample.py" 2>/dev/null || true)"
     if grep -Fq "${SOL_VIOLET}from" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}asyncio" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}typing" <<< "$PYTHON_SAMPLE_OUT" && \
@@ -508,7 +516,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.8 Rust Syntax Verification ---
-    RUST_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l rs "$SCRIPT_DIR/sample-code/sample.rs" 2>/dev/null || true)"
+    RUST_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l rs "$SCRIPT_DIR/sample-code/sample.rs" 2>/dev/null || true)"
     if grep -Fq "${SOL_VIOLET}use" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}std" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}collections" <<< "$RUST_SAMPLE_OUT" && \
@@ -549,7 +557,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.9 Bash Syntax Verification ---
-    SH_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sh "$SCRIPT_DIR/sample-code/sample.sh" 2>/dev/null || true)"
+    SH_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sh "$SCRIPT_DIR/sample-code/sample.sh" 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}#!/bin/bash" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}set" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}SCRIPT_NAME" <<< "$SH_SAMPLE_OUT" && \
@@ -603,7 +611,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.10 SQL Syntax Verification ---
-    SQL_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sql "$SCRIPT_DIR/sample-code/sample.sql" 2>/dev/null || true)"
+    SQL_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l sql "$SCRIPT_DIR/sample-code/sample.sql" 2>/dev/null || true)"
     if       grep -Fq "${SOL_GREEN}CREATE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}TABLE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}customer_accounts" <<< "$SQL_SAMPLE_OUT" && \
@@ -657,7 +665,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.11 Terraform / HCL Syntax Verification ---
-    TF_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l tf "$SCRIPT_DIR/sample-code/sample.tf" 2>/dev/null || true)"
+    TF_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l tf "$SCRIPT_DIR/sample-code/sample.tf" 2>/dev/null || true)"
     if       grep -Fq "${SOL_GREEN}terraform" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}required_providers" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}variable" <<< "$TF_SAMPLE_OUT" && \
@@ -697,7 +705,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat Terraform rendering" "Expected Converged Ergonomic Terraform Solarized TrueColor highlights in bat sample.tf output"
     fi
 
-    MD_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md "$SCRIPT_DIR/sample-code/sample.md" 2>/dev/null || true)"
+    MD_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md "$SCRIPT_DIR/sample-code/sample.md" 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}Workstation Architecture" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}1. Executive Summary" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}2.1 File System Topology" <<< "$MD_SAMPLE_OUT" && \
@@ -735,7 +743,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat Markdown showcase rendering" "Expected Semantic Architecture TrueColor highlights in bat sample.md output"
     fi
 
-    TS_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l ts "$SCRIPT_DIR/sample-code/sample.ts" 2>/dev/null || true)"
+    TS_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l ts "$SCRIPT_DIR/sample-code/sample.ts" 2>/dev/null || true)"
     if grep -Fq "${SOL_VIOLET}export" <<< "$TS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}enum" <<< "$TS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}type" <<< "$TS_SAMPLE_OUT" && \
@@ -776,7 +784,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat TypeScript rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.ts output"
     fi
 
-    JS_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l js "$SCRIPT_DIR/sample-code/sample.js" 2>/dev/null || true)"
+    JS_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l js "$SCRIPT_DIR/sample-code/sample.js" 2>/dev/null || true)"
     if grep -Fq "${SOL_VIOLET}import" <<< "$JS_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}export" <<< "$JS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}class" <<< "$JS_SAMPLE_OUT" && \
@@ -806,7 +814,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.14 XML Syntax Verification ---
-    XML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l xml "$SCRIPT_DIR/sample-code/sample.xml" 2>/dev/null || true)"
+    XML_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l xml "$SCRIPT_DIR/sample-code/sample.xml" 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}xml" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}xml-stylesheet" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}deployment" <<< "$XML_SAMPLE_OUT" && \
@@ -827,7 +835,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.15 HTML Syntax Verification ---
-    HTML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l html "$SCRIPT_DIR/sample-code/sample.html" 2>/dev/null || true)"
+    HTML_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l html "$SCRIPT_DIR/sample-code/sample.html" 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}DOCTYPE" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}html" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}header" <<< "$HTML_SAMPLE_OUT" && \
@@ -851,7 +859,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.16 JSON Syntax Verification ---
-    JSON_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l json "$SCRIPT_DIR/sample-code/sample.json" 2>/dev/null || true)"
+    JSON_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l json "$SCRIPT_DIR/sample-code/sample.json" 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}\$schema" <<< "$JSON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}apiVersion" <<< "$JSON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}metadata" <<< "$JSON_SAMPLE_OUT" && \
@@ -869,7 +877,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.17 YAML Syntax Verification ---
-    YAML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l yaml "$SCRIPT_DIR/sample-code/sample.yaml" 2>/dev/null || true)"
+    YAML_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l yaml "$SCRIPT_DIR/sample-code/sample.yaml" 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}apiVersion" <<< "$YAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}kind" <<< "$YAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}metadata" <<< "$YAML_SAMPLE_OUT" && \
@@ -893,7 +901,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.18 TOML Syntax Verification ---
-    TOML_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l toml "$SCRIPT_DIR/sample-code/sample.toml" 2>/dev/null || true)"
+    TOML_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l toml "$SCRIPT_DIR/sample-code/sample.toml" 2>/dev/null || true)"
     if grep -Fq "${SOL_BLUE}package" <<< "$TOML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}server" <<< "$TOML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}rate_limits" <<< "$TOML_SAMPLE_OUT" && \
@@ -919,7 +927,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.19 CSS Syntax Verification ---
-    CSS_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l css "$SCRIPT_DIR/sample-code/sample.css" 2>/dev/null || true)"
+    CSS_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l css "$SCRIPT_DIR/sample-code/sample.css" 2>/dev/null || true)"
     if grep -Fq "${SOL_ORANGE}@layer" <<< "$CSS_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}@font-face" <<< "$CSS_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}@keyframes" <<< "$CSS_SAMPLE_OUT" && \
@@ -954,7 +962,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.20 Java Properties Syntax Verification ---
-    PROPERTIES_SAMPLE_OUT="$(BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l properties "$SCRIPT_DIR/sample-code/sample.properties" 2>/dev/null || true)"
+    PROPERTIES_SAMPLE_OUT="$(HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l properties "$SCRIPT_DIR/sample-code/sample.properties" 2>/dev/null || true)"
     if grep -Fq "${SOL_GREEN}spring.application.name" <<< "$PROPERTIES_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}server.port" <<< "$PROPERTIES_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}8080" <<< "$PROPERTIES_SAMPLE_OUT" && \
@@ -979,7 +987,7 @@ TEMP_HOME_BAK=$(mktemp -d)
 mkdir -p "$TEMP_HOME_BAK/.config/nvim"
 echo "custom config" > "$TEMP_HOME_BAK/.config/nvim/custom.txt"
 
-HOME="$TEMP_HOME_BAK" XDG_CONFIG_HOME="$TEMP_HOME_BAK/.config" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+HOME="$TEMP_HOME_BAK" XDG_CONFIG_HOME="$TEMP_HOME_BAK/.config" XDG_CACHE_HOME="$TEMP_HOME_BAK/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
 
 if [ -L "$TEMP_HOME_BAK/.config/nvim" ]; then
     pass "Replaced physical nvim directory with symlink"
@@ -1006,29 +1014,29 @@ echo "export TEST_DROPIN_VAR='dropin_success'" > "$TEMP_DROPIN_HOME/.environment
 echo "alias test_dropin_alias='echo dropin_alias_ok'" > "$TEMP_DROPIN_HOME/.aliases.d/custom.sh"
 echo "test_dropin_func() { echo 'dropin_func_ok'; }" > "$TEMP_DROPIN_HOME/.zsh-functions.d/custom.zsh"
 
-# Source environment variables with drop-in
-(
+# Source environment variables with drop-in (evaluate in parent shell so TESTS_FAILED increments are preserved)
+if (
     HOME="$TEMP_DROPIN_HOME"
     # shellcheck source=/dev/null
     . "$SCRIPT_DIR/dotfiles/.environment-variables"
-    if [ "${TEST_DROPIN_VAR:-}" = "dropin_success" ]; then
-        pass ".environment-variables cleanly sources ~/.environment-variables.d/*.sh"
-    else
-        fail "Drop-in env var failed" "Expected TEST_DROPIN_VAR=dropin_success, got '${TEST_DROPIN_VAR:-}'"
-    fi
-)
+    [ "${TEST_DROPIN_VAR:-}" = "dropin_success" ]
+); then
+    pass ".environment-variables cleanly sources ~/.environment-variables.d/*.sh"
+else
+    fail "Drop-in env var failed" "Expected TEST_DROPIN_VAR=dropin_success"
+fi
 
-# Source aliases with drop-in
-(
+# Source aliases with drop-in (evaluate in parent shell so TESTS_FAILED increments are preserved)
+if (
     HOME="$TEMP_DROPIN_HOME"
     # shellcheck source=/dev/null
     . "$SCRIPT_DIR/dotfiles/.aliases"
-    if alias test_dropin_alias >/dev/null 2>&1; then
-        pass ".aliases cleanly sources ~/.aliases.d/*.sh"
-    else
-        fail "Drop-in alias failed" "test_dropin_alias was not defined"
-    fi
-)
+    alias test_dropin_alias >/dev/null 2>&1
+); then
+    pass ".aliases cleanly sources ~/.aliases.d/*.sh"
+else
+    fail "Drop-in alias failed" "test_dropin_alias was not defined"
+fi
 
 # Source zsh-functions with drop-in (in zsh)
 if zsh -c "HOME='$TEMP_DROPIN_HOME'; source '$SCRIPT_DIR/dotfiles/.zsh-functions'; type test_dropin_func >/dev/null 2>&1"; then
@@ -1038,9 +1046,20 @@ else
 fi
 rm -rf "$TEMP_DROPIN_HOME"
 
+# Verify empty drop-in directories (~/.environment-variables.d, ~/.aliases.d) do not fail under Zsh NOMATCH or Bash
+TEMP_EMPTY_DROPIN_HOME=$(mktemp -d)
+mkdir -p "$TEMP_EMPTY_DROPIN_HOME/.environment-variables.d" "$TEMP_EMPTY_DROPIN_HOME/.aliases.d" "$TEMP_EMPTY_DROPIN_HOME/.zsh-functions.d"
+if zsh -c "setopt NOMATCH; HOME='$TEMP_EMPTY_DROPIN_HOME'; source '$SCRIPT_DIR/dotfiles/.environment-variables'; source '$SCRIPT_DIR/dotfiles/.aliases'; source '$SCRIPT_DIR/dotfiles/.zsh-functions'" >/dev/null 2>&1 && \
+   bash -c "HOME='$TEMP_EMPTY_DROPIN_HOME'; . '$SCRIPT_DIR/dotfiles/.environment-variables'; . '$SCRIPT_DIR/dotfiles/.aliases'" >/dev/null 2>&1; then
+    pass "Empty drop-in directories (~/.environment-variables.d, ~/.aliases.d, ~/.zsh-functions.d) source cleanly in Zsh (NOMATCH) and Bash"
+else
+    fail "Empty drop-in directories" "Sourcing .environment-variables, .aliases, or .zsh-functions failed when drop-in directories are empty"
+fi
+rm -rf "$TEMP_EMPTY_DROPIN_HOME"
+
 # Test 5: Uninstallation of dotfiles
 echo -e "\n[5/5] Testing dotfiles uninstallation..."
-HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
+HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
 
 all_unlinked=true
 for df in "${expected_top_level[@]}"; do

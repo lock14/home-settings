@@ -42,12 +42,38 @@ check_option "&shiftwidth == 4" "shiftwidth is set to 4"
 check_option "&expandtab == 1" "expandtab is enabled"
 check_option "&background == 'dark'" "background is set to dark"
 
-# Test 3: Standalone & zero-dependency verification
-echo -e "\n[3/6] Testing that dotfiles/.vimrc is standalone and zero-dependency..."
+# Test 3: Standalone & zero-dependency Solarized Dark palette verification
+echo -e "\n[3/6] Testing that dotfiles/.vimrc is standalone with inline Solarized Dark palette..."
 if ! grep -q 'pathogen#infect' "$SCRIPT_DIR/dotfiles/.vimrc" && ! grep -q 'PYTHONWARNINGS' "$SCRIPT_DIR/dotfiles/.vimrc" && ! grep -q 'UltiSnips' "$SCRIPT_DIR/dotfiles/.vimrc"; then
     pass "dotfiles/.vimrc is self-contained without external bundle dependencies or Python hacks"
 else
     fail "dotfiles/.vimrc standalone" "Expected no pathogen, PYTHONWARNINGS, or UltiSnips in .vimrc"
+fi
+
+check_option "toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#002B36'" "Vim Normal group mapped to Base0 (#839496) on Base03 (#002B36)"
+check_option "toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && synIDattr(hlID('Comment'), 'italic', 'gui') != 1" "Vim Comment group mapped to upright Base01 (#586E75)"
+check_option "toupper(synIDattr(hlID('CursorLineNr'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('CursorLineNr'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('MatchParen'), 'fg#', 'gui')) == '#93A1A1'" "Vim CursorLineNr and MatchParen mapped to Base1 (#93A1A1) on Base02 (#073642)"
+check_option "toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Repeat'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Exception'), 'fg#', 'gui')) == '#B58900'" "Vim control flow (Conditional, Repeat, Exception) mapped to Solarized Yellow (#B58900)"
+check_option "toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Keyword'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Type'), 'fg#', 'gui')) == '#859900'" "Vim scaffolding and types (Statement, Keyword, Type) mapped to Solarized Green (#859900)"
+check_option "toupper(synIDattr(hlID('Function'), 'fg#', 'gui')) == '#268BD2'" "Vim Function declarations mapped to Solarized Blue (#268BD2)"
+check_option "toupper(synIDattr(hlID('Include'), 'fg#', 'gui')) == '#6C71C4'" "Vim Include directives mapped to Solarized Violet (#6C71C4)"
+check_option "toupper(synIDattr(hlID('PreProc'), 'fg#', 'gui')) == '#CB4B16' && toupper(synIDattr(hlID('Special'), 'fg#', 'gui')) == '#CB4B16'" "Vim PreProc and Special mapped to Solarized Orange (#CB4B16)"
+check_option "toupper(synIDattr(hlID('String'), 'fg#', 'gui')) == '#2AA198' && toupper(synIDattr(hlID('Character'), 'fg#', 'gui')) == '#2AA198'" "Vim String and Character literals mapped to Solarized Cyan (#2AA198)"
+check_option "toupper(synIDattr(hlID('Constant'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Number'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Boolean'), 'fg#', 'gui')) == '#D33682'" "Vim Constant, Number, and Boolean mapped to Solarized Magenta (#D33682)"
+check_option "toupper(synIDattr(hlID('Error'), 'fg#', 'gui')) == '#DC322F' && toupper(synIDattr(hlID('WarningMsg'), 'fg#', 'gui')) == '#CB4B16'" "Vim Error and WarningMsg mapped to Solarized Red (#DC322F) and Orange (#CB4B16)"
+check_option "synIDattr(hlID('Normal'), 'fg', 'cterm') == '12' && synIDattr(hlID('Conditional'), 'fg', 'cterm') == '3' && synIDattr(hlID('Type'), 'fg', 'cterm') == '2' && synIDattr(hlID('Function'), 'fg', 'cterm') == '4' && synIDattr(hlID('String'), 'fg', 'cterm') == '6' && synIDattr(hlID('Constant'), 'fg', 'cterm') == '5'" "Vim 16/256-color cterm fallback attributes configured alongside TrueColor gui attributes"
+check_option "toupper(synIDattr(hlID('WildMenu'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('WildMenu'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('StatusLineTerm'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('Added'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Changed'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Removed'), 'fg#', 'gui')) == '#DC322F'" "Vim WildMenu, StatusLineTerm, and Added/Changed/Removed groups mapped to Solarized Dark"
+
+if COLORTERM=truecolor vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &termguicolors == 1 | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+    pass "Vim enables termguicolors automatically when COLORTERM=truecolor"
+else
+    fail "Vim termguicolors" "Expected &termguicolors == 1 when COLORTERM=truecolor"
+fi
+
+if COLORTERM=truecolor vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "syntax on" -c "set background=dark" -c "if toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+    pass "Vim SolarizedDarkFallback augroup preserves inline highlights across :syntax on and :set background=dark"
+else
+    fail "Vim highlight persistence" "Inline Solarized Dark highlights were reset by :syntax on or :set background=dark"
 fi
 
 # Test 4: Verify Home key mapping
@@ -290,7 +316,9 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     if command -v nvim >/dev/null 2>&1; then
-        NVIM_RESULTS="$(nvim --headless -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
+        TEMP_NVIM_XDG_CONFIG=$(mktemp -d)
+        ln -sfn "$SCRIPT_DIR/dotfiles/.config/nvim" "$TEMP_NVIM_XDG_CONFIG/nvim"
+        NVIM_RESULTS="$(XDG_CONFIG_HOME="$TEMP_NVIM_XDG_CONFIG" nvim --headless -u "$NVIM_CONFIG" -c "edit $SCRIPT_DIR/sample-code/sample.c" -c 'lua
 vim.cmd([[redraw]])
 local hl_param = vim.api.nvim_get_hl(0, {name = "@variable.parameter", link = false})
 local hl_const = vim.api.nvim_get_hl(0, {name = "@constant", link = false})
@@ -313,6 +341,7 @@ end
 
 local function match_capture(buf, row, col, expected)
     if row < 0 or col < 0 then return false end
+    pcall(function() vim.treesitter.get_parser(buf):parse(true) end)
     local caps = vim.treesitter.get_captures_at_pos(buf, row, col)
     if #caps == 0 then return false end
     if caps[#caps].capture == expected then return true end
@@ -324,6 +353,7 @@ end
 
 local function inspect_effective_fg(buf, row, col)
     if row < 0 or col < 0 then return "nil" end
+    pcall(function() vim.treesitter.get_parser(buf):parse(true) end)
     local insp = vim.inspect_pos(buf, row, col)
     if insp.treesitter and #insp.treesitter > 0 then
         local eff = insp.treesitter[#insp.treesitter]
@@ -950,7 +980,7 @@ results["fn_tf_fg"] = string.format("%06x", hl.fg or 0)
 vim.cmd("edit " .. vim.fn.expand("%:p:h") .. "/sample.md")
 vim.cmd("redraw")
 local md_buf = vim.api.nvim_get_current_buf()
-vim.treesitter.start(md_buf, "markdown")
+pcall(vim.treesitter.start, md_buf, "markdown")
 local md_hl = vim.treesitter.highlighter.active[md_buf]
 if md_hl and md_hl.tree then
     md_hl.tree:parse(true)
@@ -1386,7 +1416,7 @@ vim.cmd("redraw")
 local css_buf = vim.api.nvim_get_current_buf()
 local css_hl = vim.treesitter.get_parser(css_buf, "css")
 if css_hl then css_hl:parse(true) end
-vim.treesitter.start(css_buf, "css")
+pcall(vim.treesitter.start, css_buf, "css")
 
 r, c = find_pos(css_buf, "@layer reset, tokens, layout, components, utilities;", "@layer")
 results["is_css_at_dir"] = tostring(match_capture(css_buf, r, c, "keyword.directive"))
@@ -1561,669 +1591,670 @@ for k, v in pairs(results) do
     io.write(string.format("%s=%s\n", k, v))
 end
 ' -c 'qall!' 2>/dev/null || true)"
+        rm -rf "$TEMP_NVIM_XDG_CONFIG"
 
         declare -A RES=()
         while IFS='=' read -r k v; do
             [ -n "$k" ] && RES["$k"]="$v"
         done <<< "$NVIM_RESULTS"
 
-        if [ "${RES[param_italic]}" != "true" ]; then
+        if [ "${RES[param_italic]:-}" != "true" ]; then
             pass "Neovim renders parameters in upright font without italics"
         else
-            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=${RES[param_italic]}"
+            fail "Neovim parameter italics" "Expected upright parameter highlight in Neovim, got italic=${RES[param_italic]:-}"
         fi
 
-        if [ "${RES[const_fg]}" = "d33682" ]; then
+        if [ "${RES[const_fg]:-}" = "d33682" ]; then
             pass "Neovim renders @constant in Solarized Magenta (#d33682)"
         else
-            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=${RES[const_fg]}"
+            fail "Neovim @constant highlight" "Expected fg=d33682 for @constant, got fg=${RES[const_fg]:-}"
         fi
 
-        if [ "${RES[is_wn_type]}" = "true" ] && [ "${RES[type_c_fg]}" = "839496" ] && [ "${RES[type_builtin_c_fg]}" = "859900" ]; then
+        if [ "${RES[is_wn_type]:-}" = "true" ] && [ "${RES[type_c_fg]:-}" = "839496" ] && [ "${RES[type_builtin_c_fg]:-}" = "859900" ]; then
             pass "Neovim renders C custom types (WorkerNode) in calm Base0 (#839496) and primitives in Green (#859900)"
         else
-            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type fg=839496 and builtin fg=859900, got cap=${RES[is_wn_type]} fg=${RES[type_c_fg]} builtin=${RES[type_builtin_c_fg]}"
+            fail "Neovim sizeof(type) highlight" "Expected sizeof(WorkerNode) to be captured as @type fg=839496 and builtin fg=859900, got cap=${RES[is_wn_type]:-} fg=${RES[type_c_fg]:-} builtin=${RES[type_builtin_c_fg]:-}"
         fi
 
-        if [ "${RES[is_so_kw]}" = "true" ]; then
+        if [ "${RES[is_so_kw]:-}" = "true" ]; then
             pass "Neovim Tree-sitter captures sizeof as @keyword.operator (Green)"
         else
-            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got ${RES[is_so_kw]}"
+            fail "Neovim sizeof highlight" "Expected sizeof to be captured as @keyword.operator, got ${RES[is_so_kw]:-}"
         fi
 
-        if [ "${RES[is_c_switch_cond]}" = "true" ] && [ "${RES[cond_c_fg]}" = "b58900" ]; then
+        if [ "${RES[is_c_switch_cond]:-}" = "true" ] && [ "${RES[cond_c_fg]:-}" = "b58900" ]; then
             pass "Neovim Tree-sitter captures C control flow (switch) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim C control flow capture" "Expected switch as @keyword.conditional fg=b58900, got cap=${RES[is_c_switch_cond]} fg=${RES[cond_c_fg]}"
+            fail "Neovim C control flow capture" "Expected switch as @keyword.conditional fg=b58900, got cap=${RES[is_c_switch_cond]:-} fg=${RES[cond_c_fg]:-}"
         fi
 
-        if [ "${RES[is_c_malloc_call]}" = "true" ] && [ "${RES[fcall_c_fg]}" = "839496" ]; then
+        if [ "${RES[is_c_malloc_call]:-}" = "true" ] && [ "${RES[fcall_c_fg]:-}" = "839496" ]; then
             pass "Neovim Tree-sitter captures C function calls (malloc) as @function.call in calm Base0 (#839496)"
         else
-            fail "Neovim C function call capture" "Expected malloc as @function.call fg=839496, got cap=${RES[is_c_malloc_call]} fg=${RES[fcall_c_fg]}"
+            fail "Neovim C function call capture" "Expected malloc as @function.call fg=839496, got cap=${RES[is_c_malloc_call]:-} fg=${RES[fcall_c_fg]:-}"
         fi
 
-        if [ "${RES[is_c_ifndef_macro]}" = "true" ] && [ "${RES[macro_c_fg]}" = "cb4b16" ]; then
+        if [ "${RES[is_c_ifndef_macro]:-}" = "true" ] && [ "${RES[macro_c_fg]:-}" = "cb4b16" ]; then
             pass "Neovim Tree-sitter captures C preprocessor conditionals (#ifndef LOG_LEVEL) as @constant.macro in Solarized Orange (#cb4b16)"
         else
-            fail "Neovim C preprocessor conditional capture" "Expected LOG_LEVEL as @constant.macro fg=cb4b16, got cap=${RES[is_c_ifndef_macro]} fg=${RES[macro_c_fg]}"
+            fail "Neovim C preprocessor conditional capture" "Expected LOG_LEVEL as @constant.macro fg=cb4b16, got cap=${RES[is_c_ifndef_macro]:-} fg=${RES[macro_c_fg]:-}"
         fi
 
-        if [ "${RES[is_t_type]}" = "true" ] && [ "${RES[type_cpp_fg]}" = "839496" ] && [ "${RES[type_builtin_cpp_fg]}" = "859900" ]; then
+        if [ "${RES[is_t_type]:-}" = "true" ] && [ "${RES[type_cpp_fg]:-}" = "839496" ] && [ "${RES[type_builtin_cpp_fg]:-}" = "859900" ]; then
             pass "Neovim renders C++ custom types (Printable T) in calm Base0 (#839496) and primitives in Green (#859900)"
         else
-            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type fg=839496 and builtin fg=859900, got cap=${RES[is_t_type]} fg=${RES[type_cpp_fg]} builtin=${RES[type_builtin_cpp_fg]}"
+            fail "Neovim template type parameter highlight" "Expected template <Printable T> to be captured as @type fg=839496 and builtin fg=859900, got cap=${RES[is_t_type]:-} fg=${RES[type_cpp_fg]:-} builtin=${RES[type_builtin_cpp_fg]:-}"
         fi
 
-        if [ "${RES[module_fg]}" = "6c71c4" ] && [ "${RES[lsp_ns_fg]}" = "6c71c4" ]; then
+        if [ "${RES[module_fg]:-}" = "6c71c4" ] && [ "${RES[lsp_ns_fg]:-}" = "6c71c4" ]; then
             pass "Neovim renders @module and @lsp.type.namespace in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim module/namespace highlight" "Expected fg=6c71c4, got module=${RES[module_fg]} lsp_ns=${RES[lsp_ns_fg]}"
+            fail "Neovim module/namespace highlight" "Expected fg=6c71c4, got module=${RES[module_fg]:-} lsp_ns=${RES[lsp_ns_fg]:-}"
         fi
 
-        if [ "${RES[is_ns_kw]}" = "true" ] && [ "${RES[is_using_kw]}" = "true" ]; then
+        if [ "${RES[is_ns_kw]:-}" = "true" ] && [ "${RES[is_using_kw]:-}" = "true" ]; then
             pass "Neovim Tree-sitter captures namespace and using as declaration keywords in Solarized Green (#859900)"
         else
-            fail "Neovim namespace/using capture" "Expected @keyword.type/@keyword (Green), got ns=${RES[is_ns_kw]} using=${RES[is_using_kw]}"
+            fail "Neovim namespace/using capture" "Expected @keyword.type/@keyword (Green), got ns=${RES[is_ns_kw]:-} using=${RES[is_using_kw]:-}"
         fi
 
-        if [ "${RES[is_core_mod]}" = "true" ] && [ "${RES[is_telem_mod]}" = "true" ]; then
+        if [ "${RES[is_core_mod]:-}" = "true" ] && [ "${RES[is_telem_mod]:-}" = "true" ]; then
             pass "Neovim Tree-sitter captures namespace identifiers (core, telemetry) as @module (Violet)"
         else
-            fail "Neovim namespace capture" "Expected @module for core and telemetry, got core=${RES[is_core_mod]} telem=${RES[is_telem_mod]}"
+            fail "Neovim namespace capture" "Expected @module for core and telemetry, got core=${RES[is_core_mod]:-} telem=${RES[is_telem_mod]:-}"
         fi
 
-        if [ "${RES[is_std_var]}" = "true" ]; then
+        if [ "${RES[is_std_var]:-}" = "true" ]; then
             pass "Neovim Tree-sitter captures C++ scope qualifiers (std::) as @variable (Base0 Grey)"
         else
-            fail "Neovim C++ scope qualifier capture" "Expected @variable for std:: qualifier, got ${RES[is_std_var]}"
+            fail "Neovim C++ scope qualifier capture" "Expected @variable for std:: qualifier, got ${RES[is_std_var]:-}"
         fi
 
-        if [ "${RES[is_init_const]}" = "true" ]; then
+        if [ "${RES[is_init_const]:-}" = "true" ]; then
             pass "Neovim Tree-sitter captures scoped enum members (NodeState::Initializing) as @constant (Magenta)"
         else
-            fail "Neovim scoped enum constant capture" "Expected @constant for NodeState::Initializing, got ${RES[is_init_const]}"
+            fail "Neovim scoped enum constant capture" "Expected @constant for NodeState::Initializing, got ${RES[is_init_const]:-}"
         fi
 
-        if [ "${RES[is_nullopt_const]}" = "true" ]; then
+        if [ "${RES[is_nullopt_const]:-}" = "true" ]; then
             pass "Neovim Tree-sitter captures standard sentinels (std::nullopt) as @constant (Magenta)"
         else
-            fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got ${RES[is_nullopt_const]}"
+            fail "Neovim sentinel capture" "Expected @constant for std::nullopt, got ${RES[is_nullopt_const]:-}"
         fi
 
-        if [ "${RES[attr_fg]}" = "6c71c4" ] && [ "${RES[is_attr_orange]}" = "true" ]; then
+        if [ "${RES[attr_fg]:-}" = "6c71c4" ] && [ "${RES[is_attr_orange]:-}" = "true" ]; then
             pass "Neovim renders C++ attributes ([[nodiscard]]) in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim attribute highlight" "Expected fg=6c71c4 and capture=attribute, got fg=${RES[attr_fg]} cap=${RES[is_attr_orange]}"
+            fail "Neovim attribute highlight" "Expected fg=6c71c4 and capture=attribute, got fg=${RES[attr_fg]:-} cap=${RES[is_attr_orange]:-}"
         fi
 
-        if [ "${RES[is_cpp_if_cond]}" = "true" ] && [ "${RES[cond_cpp_fg]}" = "b58900" ]; then
+        if [ "${RES[is_cpp_if_cond]:-}" = "true" ] && [ "${RES[cond_cpp_fg]:-}" = "b58900" ]; then
             pass "Neovim Tree-sitter captures C++ control flow (if) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim C++ control flow capture" "Expected if as @keyword.conditional fg=b58900, got cap=${RES[is_cpp_if_cond]} fg=${RES[cond_cpp_fg]}"
+            fail "Neovim C++ control flow capture" "Expected if as @keyword.conditional fg=b58900, got cap=${RES[is_cpp_if_cond]:-} fg=${RES[cond_cpp_fg]:-}"
         fi
 
-        if [ "${RES[is_cpp_fe_call]}" = "true" ] && [ "${RES[fcall_cpp_fg]}" = "839496" ]; then
+        if [ "${RES[is_cpp_fe_call]:-}" = "true" ] && [ "${RES[fcall_cpp_fg]:-}" = "839496" ]; then
             pass "Neovim Tree-sitter captures C++ function calls (for_each) as @function.call in calm Base0 (#839496)"
         else
-            fail "Neovim C++ function call capture" "Expected for_each as @function.call fg=839496, got cap=${RES[is_cpp_fe_call]} fg=${RES[fcall_cpp_fg]}"
+            fail "Neovim C++ function call capture" "Expected for_each as @function.call fg=839496, got cap=${RES[is_cpp_fe_call]:-} fg=${RES[fcall_cpp_fg]:-}"
         fi
 
-        if [ "${RES[java_ft]}" = "java" ] && [ "${RES[ok_jdtls]}" = "true" ]; then
+        if [ "${RES[java_ft]:-}" = "java" ] && [ "${RES[ok_jdtls]:-}" = "true" ]; then
             pass "Neovim detects Java filetype and loads nvim-jdtls cleanly"
         else
-            fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=${RES[java_ft]} ok=${RES[ok_jdtls]}"
+            fail "Neovim Java ftplugin verification" "Expected java filetype and jdtls loaded, got ft=${RES[java_ft]:-} ok=${RES[ok_jdtls]:-}"
         fi
 
-        if [ "${RES[is_j_imp_kw]}" = "true" ]; then
+        if [ "${RES[is_j_imp_kw]:-}" = "true" ]; then
             pass "Neovim renders Java import keyword as @keyword.import (Violet)"
         else
-            fail "Neovim Java import keyword" "Expected @keyword.import for import, got ${RES[is_j_imp_kw]}"
+            fail "Neovim Java import keyword" "Expected @keyword.import for import, got ${RES[is_j_imp_kw]:-}"
         fi
 
-        if [ "${RES[is_j_rec_kw]}" = "true" ] && [ "${RES[is_j_when_kw]}" = "true" ]; then
+        if [ "${RES[is_j_rec_kw]:-}" = "true" ] && [ "${RES[is_j_when_kw]:-}" = "true" ]; then
             pass "Neovim renders Java record declaration and pattern guard 'when' as keywords (Green)"
         else
-            fail "Neovim Java record/when keywords" "Expected @keyword.type for record and @keyword.conditional for when, got rec=${RES[is_j_rec_kw]} when=${RES[is_j_when_kw]}"
+            fail "Neovim Java record/when keywords" "Expected @keyword.type for record and @keyword.conditional for when, got rec=${RES[is_j_rec_kw]:-} when=${RES[is_j_when_kw]:-}"
         fi
 
-        if [ "${RES[is_j_ann]}" = "true" ] && [ "${RES[is_j_pat_type]}" = "true" ] && [ "${RES[type_builtin_java_fg]}" = "859900" ] && [ "${RES[type_java_fg]}" = "839496" ]; then
+        if [ "${RES[is_j_ann]:-}" = "true" ] && [ "${RES[is_j_pat_type]:-}" = "true" ] && [ "${RES[type_builtin_java_fg]:-}" = "859900" ] && [ "${RES[type_java_fg]:-}" = "839496" ]; then
             pass "Neovim renders Java annotations as @attribute (Violet), record patterns as @type (Base0), and primitives as @type.builtin (Green #859900)"
         else
-            fail "Neovim Java annotation and record pattern highlights" "Expected @attribute for annotations, @type fg=839496 for record patterns, and @type.builtin fg=859900, got ann=${RES[is_j_ann]} pat=${RES[is_j_pat_type]} type=${RES[type_java_fg]} bi=${RES[type_builtin_java_fg]}"
+            fail "Neovim Java annotation and record pattern highlights" "Expected @attribute for annotations, @type fg=839496 for record patterns, and @type.builtin fg=859900, got ann=${RES[is_j_ann]:-} pat=${RES[is_j_pat_type]:-} type=${RES[type_java_fg]:-} bi=${RES[type_builtin_java_fg]:-}"
         fi
 
-        if [ "${RES[is_j_this_var]}" = "true" ] && [ "${RES[var_bi_fg]}" = "d33682" ]; then
+        if [ "${RES[is_j_this_var]:-}" = "true" ] && [ "${RES[var_bi_fg]:-}" = "d33682" ]; then
             pass "Neovim renders Java 'this' keyword as @variable.builtin in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Java this keyword" "Expected @variable.builtin fg=d33682, got cap=${RES[is_j_this_var]} fg=${RES[var_bi_fg]}"
+            fail "Neovim Java this keyword" "Expected @variable.builtin fg=d33682, got cap=${RES[is_j_this_var]:-} fg=${RES[var_bi_fg]:-}"
         fi
 
-        if [ "${RES[is_j_super_call]}" = "true" ]; then
+        if [ "${RES[is_j_super_call]:-}" = "true" ]; then
             pass "Neovim renders Java constructor delegation 'super(...)' as @function.builtin in Solarized Blue (#268bd2)"
         else
-            fail "Neovim Java super delegation" "Expected @function.builtin for super(...), got ${RES[is_j_super_call]}"
+            fail "Neovim Java super delegation" "Expected @function.builtin for super(...), got ${RES[is_j_super_call]:-}"
         fi
 
-        if [ "${RES[diff_plus_fg]}" = "859900" ] && [ "${RES[is_add_plus]}" = "true" ]; then
+        if [ "${RES[diff_plus_fg]:-}" = "859900" ] && [ "${RES[is_add_plus]:-}" = "true" ]; then
             pass "Neovim renders diff additions (+) in Solarized Green (#859900)"
         else
-            fail "Neovim diff addition highlight" "Expected fg=859900 and capture=diff.plus, got fg=${RES[diff_plus_fg]} cap=${RES[is_add_plus]}"
+            fail "Neovim diff addition highlight" "Expected fg=859900 and capture=diff.plus, got fg=${RES[diff_plus_fg]:-} cap=${RES[is_add_plus]:-}"
         fi
 
-        if [ "${RES[diff_minus_fg]}" = "dc322f" ] && [ "${RES[is_del_minus]}" = "true" ]; then
+        if [ "${RES[diff_minus_fg]:-}" = "dc322f" ] && [ "${RES[is_del_minus]:-}" = "true" ]; then
             pass "Neovim renders diff deletions (-) in Solarized Red (#dc322f)"
         else
-            fail "Neovim diff deletion highlight" "Expected fg=dc322f and capture=diff.minus, got fg=${RES[diff_minus_fg]} cap=${RES[is_del_minus]}"
+            fail "Neovim diff deletion highlight" "Expected fg=dc322f and capture=diff.minus, got fg=${RES[diff_minus_fg]:-} cap=${RES[is_del_minus]:-}"
         fi
 
-        if [ "${RES[diff_line_fg]}" = "268bd2" ] && [ "${RES[is_hunk_line]}" = "true" ]; then
+        if [ "${RES[diff_line_fg]:-}" = "268bd2" ] && [ "${RES[is_hunk_line]:-}" = "true" ]; then
             pass "Neovim renders diff hunk headers (@@ ... @@) in Solarized Blue (#268bd2)"
         else
-            fail "Neovim diff hunk line highlight" "Expected fg=268bd2 and capture=diff.line, got fg=${RES[diff_line_fg]} cap=${RES[is_hunk_line]}"
+            fail "Neovim diff hunk line highlight" "Expected fg=268bd2 and capture=diff.line, got fg=${RES[diff_line_fg]:-} cap=${RES[is_hunk_line]:-}"
         fi
 
-        if [ "${RES[is_pkg_kw]}" = "true" ] && [ "${RES[pkg_fg]}" = "859900" ]; then
+        if [ "${RES[is_pkg_kw]:-}" = "true" ] && [ "${RES[pkg_fg]:-}" = "859900" ]; then
             pass "Neovim renders Go package keyword in Solarized Green (#859900)"
         else
-            fail "Neovim Go package keyword" "Expected @keyword fg=859900, got cap=${RES[is_pkg_kw]} fg=${RES[pkg_fg]}"
+            fail "Neovim Go package keyword" "Expected @keyword fg=859900, got cap=${RES[is_pkg_kw]:-} fg=${RES[pkg_fg]:-}"
         fi
 
-        if [ "${RES[is_imp_kw]}" = "true" ] && [ "${RES[imp_fg]}" = "6c71c4" ]; then
+        if [ "${RES[is_imp_kw]:-}" = "true" ] && [ "${RES[imp_fg]:-}" = "6c71c4" ]; then
             pass "Neovim renders Go import keyword in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim Go import keyword" "Expected @keyword.import fg=6c71c4, got cap=${RES[is_imp_kw]} fg=${RES[imp_fg]}"
+            fail "Neovim Go import keyword" "Expected @keyword.import fg=6c71c4, got cap=${RES[is_imp_kw]:-} fg=${RES[imp_fg]:-}"
         fi
 
-        if [ "${RES[is_main_mod]}" = "true" ] && [ "${RES[is_ctx_var]}" = "true" ]; then
+        if [ "${RES[is_main_mod]:-}" = "true" ] && [ "${RES[is_ctx_var]:-}" = "true" ]; then
             pass "Neovim renders Go package declaration (main) as @module (Violet) and qualifiers (context.) as @variable (Base0 Grey)"
         else
-            fail "Neovim Go module/qualifier captures" "Expected @module for main and @variable for context, got main=${RES[is_main_mod]} ctx=${RES[is_ctx_var]}"
+            fail "Neovim Go module/qualifier captures" "Expected @module for main and @variable for context, got main=${RES[is_main_mod]:-} ctx=${RES[is_ctx_var]:-}"
         fi
 
-        if [ "${RES[is_ld_const]}" = "true" ]; then
+        if [ "${RES[is_ld_const]:-}" = "true" ]; then
             pass "Neovim renders Go enum identifiers (LevelDebug) in Solarized Magenta (@constant)"
         else
-            fail "Neovim Go constant capture" "Expected @constant for LevelDebug, got ${RES[is_ld_const]}"
+            fail "Neovim Go constant capture" "Expected @constant for LevelDebug, got ${RES[is_ld_const]:-}"
         fi
 
-        if [ "${RES[is_ncn_call]}" = "true" ] && [ "${RES[fcall_fg]}" = "839496" ]; then
+        if [ "${RES[is_ncn_call]:-}" = "true" ] && [ "${RES[fcall_fg]:-}" = "839496" ]; then
             pass "Neovim renders Go function calls (NewClusterNode) as @function.call in calm Solarized Base0 (#839496)"
         else
-            fail "Neovim Go function call" "Expected @function.call fg=839496 for NewClusterNode, got cap=${RES[is_ncn_call]} fg=${RES[fcall_fg]}"
+            fail "Neovim Go function call" "Expected @function.call fg=839496 for NewClusterNode, got cap=${RES[is_ncn_call]:-} fg=${RES[fcall_fg]:-}"
         fi
 
-        if [ "${RES[is_t_ctx_type]}" = "true" ] && [ "${RES[type_go_fg]}" = "839496" ] && [ "${RES[type_builtin_go_fg]}" = "859900" ]; then
+        if [ "${RES[is_t_ctx_type]:-}" = "true" ] && [ "${RES[type_go_fg]:-}" = "839496" ] && [ "${RES[type_builtin_go_fg]:-}" = "859900" ]; then
             pass "Neovim renders Go types (Context) as @type in calm Base0 (#839496) and primitives in Green (#859900)"
         else
-            fail "Neovim Go type capture" "Expected @type fg=839496 for Context and builtin fg=859900, got cap=${RES[is_t_ctx_type]} fg=${RES[type_go_fg]} bi=${RES[type_builtin_go_fg]}"
+            fail "Neovim Go type capture" "Expected @type fg=839496 for Context and builtin fg=859900, got cap=${RES[is_t_ctx_type]:-} fg=${RES[type_go_fg]:-} bi=${RES[type_builtin_go_fg]:-}"
         fi
 
-        if [ "${RES[is_defer_cond]}" = "true" ] && \
-           [ "${RES[is_select_cond]}" = "true" ] && \
-           [ "${RES[is_case_cond]}" = "true" ] && \
-           [ "${RES[is_default_cond]}" = "true" ] && \
-           [ "${RES[cond_go_fg]}" = "b58900" ]; then
+        if [ "${RES[is_defer_cond]:-}" = "true" ] && \
+           [ "${RES[is_select_cond]:-}" = "true" ] && \
+           [ "${RES[is_case_cond]:-}" = "true" ] && \
+           [ "${RES[is_default_cond]:-}" = "true" ] && \
+           [ "${RES[cond_go_fg]:-}" = "b58900" ]; then
             pass "Neovim renders Go control flow (defer, select, case, default) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim Go control flow capture" "Expected @keyword.conditional fg=b58900 for defer, select, case, default; got defer=${RES[is_defer_cond]} select=${RES[is_select_cond]} case=${RES[is_case_cond]} default=${RES[is_default_cond]} fg=${RES[cond_go_fg]}"
+            fail "Neovim Go control flow capture" "Expected @keyword.conditional fg=b58900 for defer, select, case, default; got defer=${RES[is_defer_cond]:-} select=${RES[is_select_cond]:-} case=${RES[is_case_cond]:-} default=${RES[is_default_cond]:-} fg=${RES[cond_go_fg]:-}"
         fi
 
-        if [ "${RES[is_panic_call]}" = "true" ]; then
+        if [ "${RES[is_panic_call]:-}" = "true" ]; then
             pass "Neovim renders Go built-in calls (panic) as @function.call in calm Solarized Base0 (#839496)"
         else
-            fail "Neovim Go builtin call capture" "Expected @function.call for panic, got ${RES[is_panic_call]}"
+            fail "Neovim Go builtin call capture" "Expected @function.call for panic, got ${RES[is_panic_call]:-}"
         fi
 
-        if [ "${RES[is_py_from_kw]}" = "true" ] && [ "${RES[imp_py_fg]}" = "6c71c4" ] && [ "${RES[is_py_async_mod]}" = "true" ]; then
+        if [ "${RES[is_py_from_kw]:-}" = "true" ] && [ "${RES[imp_py_fg]:-}" = "6c71c4" ] && [ "${RES[is_py_async_mod]:-}" = "true" ]; then
             pass "Neovim renders Python import keyword in Violet (@keyword.import #6c71c4) and module in Violet (@module)"
         else
-            fail "Neovim Python import/module capture" "Expected @keyword.import fg=6c71c4 for from and @module for asyncio, got from=${RES[is_py_from_kw]} fg=${RES[imp_py_fg]} mod=${RES[is_py_async_mod]}"
+            fail "Neovim Python import/module capture" "Expected @keyword.import fg=6c71c4 for from and @module for asyncio, got from=${RES[is_py_from_kw]:-} fg=${RES[imp_py_fg]:-} mod=${RES[is_py_async_mod]:-}"
         fi
 
-        if [ "${RES[is_py_call_type]}" = "true" ] && [ "${RES[type_py_fg]}" = "839496" ] && \
-           [ "${RES[is_py_int_type]}" = "true" ] && [ "${RES[is_py_str_type]}" = "true" ] && \
-           [ "${RES[is_py_dict_type]}" = "true" ] && [ "${RES[is_py_list_type]}" = "true" ] && \
-           [ "${RES[type_builtin_py_fg]}" = "859900" ]; then
+        if [ "${RES[is_py_call_type]:-}" = "true" ] && [ "${RES[type_py_fg]:-}" = "839496" ] && \
+           [ "${RES[is_py_int_type]:-}" = "true" ] && [ "${RES[is_py_str_type]:-}" = "true" ] && \
+           [ "${RES[is_py_dict_type]:-}" = "true" ] && [ "${RES[is_py_list_type]:-}" = "true" ] && \
+           [ "${RES[type_builtin_py_fg]:-}" = "859900" ]; then
             pass "Neovim renders Python typing constructs (Callable) as @type in calm Base0 (#839496) and built-in types (int, str, dict, list) as @type.builtin in Solarized Green (#859900)"
         else
-            fail "Neovim Python type capture" "Expected @type fg=839496 for Callable and builtin fg=859900 for int/str/dict/list, got call=${RES[is_py_call_type]} int=${RES[is_py_int_type]} str=${RES[is_py_str_type]} dict=${RES[is_py_dict_type]} list=${RES[is_py_list_type]} fg=${RES[type_py_fg]} bi=${RES[type_builtin_py_fg]}"
+            fail "Neovim Python type capture" "Expected @type fg=839496 for Callable and builtin fg=859900 for int/str/dict/list, got call=${RES[is_py_call_type]:-} int=${RES[is_py_int_type]:-} str=${RES[is_py_str_type]:-} dict=${RES[is_py_dict_type]:-} list=${RES[is_py_list_type]:-} fg=${RES[type_py_fg]:-} bi=${RES[type_builtin_py_fg]:-}"
         fi
 
-        if [ "${RES[is_py_dc_attr]}" = "true" ] && [ "${RES[is_py_prop_attr]}" = "true" ] && [ "${RES[attr_py_fg]}" = "6c71c4" ]; then
+        if [ "${RES[is_py_dc_attr]:-}" = "true" ] && [ "${RES[is_py_prop_attr]:-}" = "true" ] && [ "${RES[attr_py_fg]:-}" = "6c71c4" ]; then
             pass "Neovim renders Python decorators (@dataclass, @property) unified as @attribute in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim Python decorator capture" "Expected @attribute fg=6c71c4 for @dataclass and @property, got dc=${RES[is_py_dc_attr]} prop=${RES[is_py_prop_attr]} fg=${RES[attr_py_fg]}"
+            fail "Neovim Python decorator capture" "Expected @attribute fg=6c71c4 for @dataclass and @property, got dc=${RES[is_py_dc_attr]:-} prop=${RES[is_py_prop_attr]:-} fg=${RES[attr_py_fg]:-}"
         fi
 
-        if [ "${RES[is_py_self_var]}" = "true" ] && [ "${RES[is_py_name_const]}" = "true" ] && [ "${RES[is_py_func_name_const]}" = "true" ]; then
+        if [ "${RES[is_py_self_var]:-}" = "true" ] && [ "${RES[is_py_name_const]:-}" = "true" ] && [ "${RES[is_py_func_name_const]:-}" = "true" ]; then
             pass "Neovim renders Python self as @variable.builtin and __name__ (both standalone and attribute func.__name__) as @constant.builtin in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Python built-in captures" "Expected @variable.builtin for self and @constant.builtin for __name__, got self=${RES[is_py_self_var]} name=${RES[is_py_name_const]} func_name=${RES[is_py_func_name_const]}"
+            fail "Neovim Python built-in captures" "Expected @variable.builtin for self and @constant.builtin for __name__, got self=${RES[is_py_self_var]:-} name=${RES[is_py_name_const]:-} func_name=${RES[is_py_func_name_const]:-}"
         fi
 
-        if [ "${RES[is_py_init_meth]}" = "true" ] && [ "${RES[is_py_ep_ctor]}" = "true" ] && [ "${RES[ctor_py_fg]}" = "839496" ]; then
+        if [ "${RES[is_py_init_meth]:-}" = "true" ] && [ "${RES[is_py_ep_ctor]:-}" = "true" ] && [ "${RES[ctor_py_fg]:-}" = "839496" ]; then
             pass "Neovim renders Python def __init__ as @function.method (Blue) and class instantiations as @constructor in calm Base0 (#839496)"
         else
-            fail "Neovim Python method/constructor captures" "Expected @function.method for __init__ and @constructor fg=839496 for EndpointMetrics, got init=${RES[is_py_init_meth]} ep=${RES[is_py_ep_ctor]} fg=${RES[ctor_py_fg]}"
+            fail "Neovim Python method/constructor captures" "Expected @function.method for __init__ and @constructor fg=839496 for EndpointMetrics, got init=${RES[is_py_init_meth]:-} ep=${RES[is_py_ep_ctor]:-} fg=${RES[ctor_py_fg]:-}"
         fi
 
-        if [ "${RES[is_py_try_kw]}" = "true" ] && [ "${RES[is_py_await_kw]}" = "true" ] && [ "${RES[cond_py_fg]}" = "b58900" ]; then
+        if [ "${RES[is_py_try_kw]:-}" = "true" ] && [ "${RES[is_py_await_kw]:-}" = "true" ] && [ "${RES[cond_py_fg]:-}" = "b58900" ]; then
             pass "Neovim renders Python control flow (try, await) as @keyword.conditional/@keyword.coroutine in Solarized Yellow (#b58900)"
         else
-            fail "Neovim Python control flow captures" "Expected try and await in Yellow #b58900, got try=${RES[is_py_try_kw]} await=${RES[is_py_await_kw]} fg=${RES[cond_py_fg]}"
+            fail "Neovim Python control flow captures" "Expected try and await in Yellow #b58900, got try=${RES[is_py_try_kw]:-} await=${RES[is_py_await_kw]:-} fg=${RES[cond_py_fg]:-}"
         fi
 
-        if [ "${RES[is_py_sleep_call]}" = "true" ] && [ "${RES[fcall_py_fg]}" = "839496" ]; then
+        if [ "${RES[is_py_sleep_call]:-}" = "true" ] && [ "${RES[fcall_py_fg]:-}" = "839496" ]; then
             pass "Neovim renders Python function/method calls (sleep) as @function.call in calm Base0 (#839496)"
         else
-            fail "Neovim Python function call" "Expected @function.call fg=839496 for sleep, got ${RES[is_py_sleep_call]} fg=${RES[fcall_py_fg]}"
+            fail "Neovim Python function call" "Expected @function.call fg=839496 for sleep, got ${RES[is_py_sleep_call]:-} fg=${RES[fcall_py_fg]:-}"
         fi
 
-        if [ "${RES[is_py_fspec_str]}" = "true" ]; then
+        if [ "${RES[is_py_fspec_str]:-}" = "true" ]; then
             pass "Neovim renders Python f-string format specifier (.4f) in Solarized Cyan (#2aa198)"
         else
-            fail "Neovim Python format specifier" "Expected string capture in Cyan for .4f, got ${RES[is_py_fspec_str]}"
+            fail "Neovim Python format specifier" "Expected string capture in Cyan for .4f, got ${RES[is_py_fspec_str]:-}"
         fi
 
-        if [ "${RES[is_rs_use_kw]}" = "true" ] && [ "${RES[imp_rs_fg]}" = "6c71c4" ] && [ "${RES[is_rs_std_mod]}" = "true" ]; then
+        if [ "${RES[is_rs_use_kw]:-}" = "true" ] && [ "${RES[imp_rs_fg]:-}" = "6c71c4" ] && [ "${RES[is_rs_std_mod]:-}" = "true" ]; then
             pass "Neovim renders Rust use keyword as @keyword.import (Violet #6c71c4) and module path std as @module (Violet)"
         else
-            fail "Neovim Rust import/module capture" "Expected @keyword.import fg=6c71c4 for use and @module for std, got use=${RES[is_rs_use_kw]} fg=${RES[imp_rs_fg]} std=${RES[is_rs_std_mod]}"
+            fail "Neovim Rust import/module capture" "Expected @keyword.import fg=6c71c4 for use and @module for std, got use=${RES[is_rs_use_kw]:-} fg=${RES[imp_rs_fg]:-} std=${RES[is_rs_std_mod]:-}"
         fi
 
-        if [ "${RES[is_rs_map_type]}" = "true" ] && [ "${RES[type_rs_fg]}" = "839496" ] && [ "${RES[type_builtin_rs_fg]}" = "859900" ]; then
+        if [ "${RES[is_rs_map_type]:-}" = "true" ] && [ "${RES[type_rs_fg]:-}" = "839496" ] && [ "${RES[type_builtin_rs_fg]:-}" = "859900" ]; then
             pass "Neovim renders Rust types (HashMap) as @type in calm Base0 (#839496) and primitives in Green (#859900)"
         else
-            fail "Neovim Rust type capture" "Expected @type fg=839496 for HashMap and builtin fg=859900, got ${RES[is_rs_map_type]} fg=${RES[type_rs_fg]} bi=${RES[type_builtin_rs_fg]}"
+            fail "Neovim Rust type capture" "Expected @type fg=839496 for HashMap and builtin fg=859900, got ${RES[is_rs_map_type]:-} fg=${RES[type_rs_fg]:-} bi=${RES[type_builtin_rs_fg]:-}"
         fi
 
-        if [ "${RES[is_rs_drv_attr]}" = "true" ] && [ "${RES[is_rs_inl_attr]}" = "true" ] && [ "${RES[is_rs_hash_attr]}" = "true" ] && [ "${RES[attr_rs_fg]}" = "6c71c4" ]; then
+        if [ "${RES[is_rs_drv_attr]:-}" = "true" ] && [ "${RES[is_rs_inl_attr]:-}" = "true" ] && [ "${RES[is_rs_hash_attr]:-}" = "true" ] && [ "${RES[attr_rs_fg]:-}" = "6c71c4" ]; then
             pass "Neovim renders Rust attributes (#[derive, #[inline) unified as @attribute in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim Rust attribute capture" "Expected @attribute fg=6c71c4 for #[derive and #[inline, got drv=${RES[is_rs_drv_attr]} inl=${RES[is_rs_inl_attr]} hash=${RES[is_rs_hash_attr]} fg=${RES[attr_rs_fg]}"
+            fail "Neovim Rust attribute capture" "Expected @attribute fg=6c71c4 for #[derive and #[inline, got drv=${RES[is_rs_drv_attr]:-} inl=${RES[is_rs_inl_attr]:-} hash=${RES[is_rs_hash_attr]:-} fg=${RES[attr_rs_fg]:-}"
         fi
 
-        if [ "${RES[is_rs_max_const]}" = "true" ] && [ "${RES[is_rs_start_const]}" = "true" ] && [ "${RES[is_rs_self_var]}" = "true" ]; then
+        if [ "${RES[is_rs_max_const]:-}" = "true" ] && [ "${RES[is_rs_start_const]:-}" = "true" ] && [ "${RES[is_rs_self_var]:-}" = "true" ]; then
             pass "Neovim renders Rust constants (MAX_CONNECTIONS, Starting) and self receiver in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Rust constant/receiver captures" "Expected @constant and @variable.builtin, got max=${RES[is_rs_max_const]} start=${RES[is_rs_start_const]} self=${RES[is_rs_self_var]}"
+            fail "Neovim Rust constant/receiver captures" "Expected @constant and @variable.builtin, got max=${RES[is_rs_max_const]:-} start=${RES[is_rs_start_const]:-} self=${RES[is_rs_self_var]:-}"
         fi
 
-        if [ "${RES[is_rs_print_macro]}" = "true" ]; then
+        if [ "${RES[is_rs_print_macro]:-}" = "true" ]; then
             pass "Neovim renders Rust macros (println) as @function.macro in Solarized Blue (#268bd2)"
         else
-            fail "Neovim Rust macro capture" "Expected @function.macro for println, got ${RES[is_rs_print_macro]}"
+            fail "Neovim Rust macro capture" "Expected @function.macro for println, got ${RES[is_rs_print_macro]:-}"
         fi
 
-        if [ "${RES[is_rs_lt_mod]}" = "true" ]; then
+        if [ "${RES[is_rs_lt_mod]:-}" = "true" ]; then
             pass "Neovim renders Rust lifetimes ('a, 'static, '_) unified as @keyword.modifier in Solarized Green (#859900)"
         else
-            fail "Neovim Rust lifetime capture" "Expected @keyword.modifier for 'a, got ${RES[is_rs_lt_mod]}"
+            fail "Neovim Rust lifetime capture" "Expected @keyword.modifier for 'a, got ${RES[is_rs_lt_mod]:-}"
         fi
 
-        if [ "${RES[is_rs_match_kw]}" = "true" ] && [ "${RES[cond_rs_fg]}" = "b58900" ]; then
+        if [ "${RES[is_rs_match_kw]:-}" = "true" ] && [ "${RES[cond_rs_fg]:-}" = "b58900" ]; then
             pass "Neovim renders Rust control flow (match) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim Rust control flow capture" "Expected @keyword.conditional fg=b58900 for match, got ${RES[is_rs_match_kw]} fg=${RES[cond_rs_fg]}"
+            fail "Neovim Rust control flow capture" "Expected @keyword.conditional fg=b58900 for match, got ${RES[is_rs_match_kw]:-} fg=${RES[cond_rs_fg]:-}"
         fi
 
-        if [ "${RES[is_rs_new_call]}" = "true" ] && [ "${RES[fcall_rs_fg]}" = "839496" ]; then
+        if [ "${RES[is_rs_new_call]:-}" = "true" ] && [ "${RES[fcall_rs_fg]:-}" = "839496" ]; then
             pass "Neovim renders Rust function/method calls (ServerNode::new) as @function.call in calm Base0 (#839496)"
         else
-            fail "Neovim Rust function call capture" "Expected @function.call fg=839496 for new, got ${RES[is_rs_new_call]} fg=${RES[fcall_rs_fg]}"
+            fail "Neovim Rust function call capture" "Expected @function.call fg=839496 for new, got ${RES[is_rs_new_call]:-} fg=${RES[fcall_rs_fg]:-}"
         fi
 
-        if [ "${RES[is_sh_ro_kw]}" = "true" ] && [ "${RES[kw_sh_fg]}" = "859900" ]; then
+        if [ "${RES[is_sh_ro_kw]:-}" = "true" ] && [ "${RES[kw_sh_fg]:-}" = "859900" ]; then
             pass "Neovim renders Shell declarations (readonly, local) as @keyword in Solarized Green (#859900)"
         else
-            fail "Neovim Shell keyword capture" "Expected @keyword fg=859900 for readonly, got cap=${RES[is_sh_ro_kw]} fg=${RES[kw_sh_fg]}"
+            fail "Neovim Shell keyword capture" "Expected @keyword fg=859900 for readonly, got cap=${RES[is_sh_ro_kw]:-} fg=${RES[kw_sh_fg]:-}"
         fi
 
-        if [ "${RES[is_sh_if_cond]}" = "true" ] && [ "${RES[is_sh_case_cond]}" = "true" ] && [ "${RES[cond_sh_fg]}" = "b58900" ]; then
+        if [ "${RES[is_sh_if_cond]:-}" = "true" ] && [ "${RES[is_sh_case_cond]:-}" = "true" ] && [ "${RES[cond_sh_fg]:-}" = "b58900" ]; then
             pass "Neovim renders Shell control flow (if, case, for) as @keyword.conditional in Solarized Yellow (#b58900)"
         else
-            fail "Neovim Shell control flow capture" "Expected if and case as @keyword.conditional fg=b58900, got if=${RES[is_sh_if_cond]} case=${RES[is_sh_case_cond]} fg=${RES[cond_sh_fg]}"
+            fail "Neovim Shell control flow capture" "Expected if and case as @keyword.conditional fg=b58900, got if=${RES[is_sh_if_cond]:-} case=${RES[is_sh_case_cond]:-} fg=${RES[cond_sh_fg]:-}"
         fi
 
-        if [ "${RES[is_sh_clean_func]}" = "true" ] && [ "${RES[fn_sh_fg]}" = "268bd2" ]; then
+        if [ "${RES[is_sh_clean_func]:-}" = "true" ] && [ "${RES[fn_sh_fg]:-}" = "268bd2" ]; then
             pass "Neovim renders Shell function declarations (cleanup) as @function in Solarized Blue (#268bd2)"
         else
-            fail "Neovim Shell function declaration capture" "Expected @function fg=268bd2 for cleanup, got cap=${RES[is_sh_clean_func]} fg=${RES[fn_sh_fg]}"
+            fail "Neovim Shell function declaration capture" "Expected @function fg=268bd2 for cleanup, got cap=${RES[is_sh_clean_func]:-} fg=${RES[fn_sh_fg]:-}"
         fi
 
-        if [ "${RES[is_sh_base_func]}" = "true" ] && [ "${RES[fcall_sh_fg]}" = "839496" ]; then
+        if [ "${RES[is_sh_base_func]:-}" = "true" ] && [ "${RES[fcall_sh_fg]:-}" = "839496" ]; then
             pass "Neovim renders Shell command and function invocations (basename, trap) as @function.call in calm Base0 (#839496)"
         else
-            fail "Neovim Shell function call capture" "Expected @function.call fg=839496 for basename, got cap=${RES[is_sh_base_func]} fg=${RES[fcall_sh_fg]}"
+            fail "Neovim Shell function call capture" "Expected @function.call fg=839496 for basename, got cap=${RES[is_sh_base_func]:-} fg=${RES[fcall_sh_fg]:-}"
         fi
 
-        if [ "${RES[is_sh_exit_const]}" = "true" ]; then
+        if [ "${RES[is_sh_exit_const]:-}" = "true" ]; then
             pass "Neovim renders Shell trap signals (EXIT) as @constant.builtin in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Shell signal capture" "Expected @constant.builtin for EXIT in trap, got ${RES[is_sh_exit_const]}"
+            fail "Neovim Shell signal capture" "Expected @constant.builtin for EXIT in trap, got ${RES[is_sh_exit_const]:-}"
         fi
 
-        if [ "${RES[is_sh_gt_op]}" = "true" ] && [ "${RES[is_sh_fd2_num]}" = "true" ]; then
+        if [ "${RES[is_sh_gt_op]:-}" = "true" ] && [ "${RES[is_sh_fd2_num]:-}" = "true" ]; then
             pass "Neovim renders Shell redirection (>&2) with operator in Base0 and file descriptor in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Shell redirection captures" "Expected @operator for >& and @number for 2, got gt=${RES[is_sh_gt_op]} fd2=${RES[is_sh_fd2_num]}"
+            fail "Neovim Shell redirection captures" "Expected @operator for >& and @number for 2, got gt=${RES[is_sh_gt_op]:-} fd2=${RES[is_sh_fd2_num]:-}"
         fi
 
-        if [ "${RES[is_sh_info_param]}" = "true" ] && [ "${RES[is_sh_star_regex]}" = "true" ]; then
+        if [ "${RES[is_sh_info_param]:-}" = "true" ] && [ "${RES[is_sh_star_regex]:-}" = "true" ]; then
             pass "Neovim renders Shell case branch labels (INFO) in Base0 Grey (#839496) and wildcards (*) in Solarized Magenta (#d33682)"
         else
-            fail "Neovim Shell case pattern captures" "Expected @variable.parameter for INFO and @string.regexp for *, got info=${RES[is_sh_info_param]} star=${RES[is_sh_star_regex]}"
+            fail "Neovim Shell case pattern captures" "Expected @variable.parameter for INFO and @string.regexp for *, got info=${RES[is_sh_info_param]:-} star=${RES[is_sh_star_regex]:-}"
         fi
 
-        if [ "${RES[is_sh_sub_at]}" = "true" ] && [ "${RES[is_sh_pos_at]}" = "true" ]; then
+        if [ "${RES[is_sh_sub_at]:-}" = "true" ] && [ "${RES[is_sh_pos_at]:-}" = "true" ]; then
             pass "Neovim renders Shell array subscript @ in Cyan (@character.special) and positional \$@ in Magenta (@constant)"
         else
-            fail "Neovim Shell @ parameter captures" "Expected @character.special for [@] and @constant for \$@, got sub=${RES[is_sh_sub_at]} pos=${RES[is_sh_pos_at]}"
+            fail "Neovim Shell @ parameter captures" "Expected @character.special for [@] and @constant for \$@, got sub=${RES[is_sh_sub_at]:-} pos=${RES[is_sh_pos_at]:-}"
         fi
 
-        if [ "${RES[is_sh_dollar_punc]}" = "true" ] && [ "${RES[dollar_sh_fg]}" = "839496" ]; then
+        if [ "${RES[is_sh_dollar_punc]:-}" = "true" ] && [ "${RES[dollar_sh_fg]:-}" = "839496" ]; then
             pass "Neovim renders Shell variable expansion prefix ($) as @punctuation.special in calm Base0 Grey (#839496)"
         else
-            fail "Neovim Shell dollar prefix capture" "Expected @punctuation.special fg=839496 for $, got cap=${RES[is_sh_dollar_punc]} fg=${RES[dollar_sh_fg]}"
+            fail "Neovim Shell dollar prefix capture" "Expected @punctuation.special fg=839496 for $, got cap=${RES[is_sh_dollar_punc]:-} fg=${RES[dollar_sh_fg]:-}"
         fi
 
-        if [ "${RES[is_sql_create_kw]}" = "true" ] && \
-           [ "${RES[is_sql_table_type]}" = "true" ] && \
-           [ "${RES[is_sql_serial_type]}" = "true" ] && \
-           [ "${RES[is_sql_default_attr]}" = "true" ] && \
-           [ "${RES[is_sql_null_const]}" = "true" ] && \
-           [ "${RES[is_sql_true_bool]}" = "true" ] && \
-           [ "${RES[is_sql_now_func]}" = "true" ] && \
-           [ "${RES[is_sql_uuid_type]}" = "true" ] && \
-           [ "${RES[is_sql_index_type]}" = "true" ] && \
-           [ "${RES[is_sql_cte_type]}" = "true" ] && \
-           [ "${RES[is_sql_alias_var]}" = "true" ] && \
-           [ "${RES[is_sql_col_member]}" = "true" ] && \
-           [ "${RES[is_sql_count_func]}" = "true" ] && \
-           [ "${RES[is_sql_case_kw]}" = "true" ] && \
-           [ "${RES[is_sql_num_float]}" = "true" ] && \
-           [ "${RES[is_sql_round_func]}" = "true" ] && \
-           [ "${RES[is_sql_rank_func]}" = "true" ] && \
-           [ "${RES[is_sql_over_kw]}" = "true" ] && \
-           [ "${RES[is_sql_desc_attr]}" = "true" ] && \
-           [ "${RES[is_sql_having_kw]}" = "true" ] && \
-           [ "${RES[cond_sql_fg]}" = "b58900" ] && \
-           [ "${RES[type_sql_fg]}" = "839496" ] && \
-           [ "${RES[type_builtin_sql_fg]}" = "859900" ] && \
-           [ "${RES[fcall_sql_fg]}" = "839496" ] && \
-           [ "${RES[attr_sql_fg]}" = "859900" ]; then
+        if [ "${RES[is_sql_create_kw]:-}" = "true" ] && \
+           [ "${RES[is_sql_table_type]:-}" = "true" ] && \
+           [ "${RES[is_sql_serial_type]:-}" = "true" ] && \
+           [ "${RES[is_sql_default_attr]:-}" = "true" ] && \
+           [ "${RES[is_sql_null_const]:-}" = "true" ] && \
+           [ "${RES[is_sql_true_bool]:-}" = "true" ] && \
+           [ "${RES[is_sql_now_func]:-}" = "true" ] && \
+           [ "${RES[is_sql_uuid_type]:-}" = "true" ] && \
+           [ "${RES[is_sql_index_type]:-}" = "true" ] && \
+           [ "${RES[is_sql_cte_type]:-}" = "true" ] && \
+           [ "${RES[is_sql_alias_var]:-}" = "true" ] && \
+           [ "${RES[is_sql_col_member]:-}" = "true" ] && \
+           [ "${RES[is_sql_count_func]:-}" = "true" ] && \
+           [ "${RES[is_sql_case_kw]:-}" = "true" ] && \
+           [ "${RES[is_sql_num_float]:-}" = "true" ] && \
+           [ "${RES[is_sql_round_func]:-}" = "true" ] && \
+           [ "${RES[is_sql_rank_func]:-}" = "true" ] && \
+           [ "${RES[is_sql_over_kw]:-}" = "true" ] && \
+           [ "${RES[is_sql_desc_attr]:-}" = "true" ] && \
+           [ "${RES[is_sql_having_kw]:-}" = "true" ] && \
+           [ "${RES[cond_sql_fg]:-}" = "b58900" ] && \
+           [ "${RES[type_sql_fg]:-}" = "839496" ] && \
+           [ "${RES[type_builtin_sql_fg]:-}" = "859900" ] && \
+           [ "${RES[fcall_sql_fg]:-}" = "839496" ] && \
+           [ "${RES[attr_sql_fg]:-}" = "859900" ]; then
             pass "Neovim highlights modern SQL queries (sample.sql) with Converged Ergonomic Solarized Scheme: DDL keywords (Green), table/index/CTE relations in Base0, data types in Green (#859900), conditionals (Yellow), function calls (Base0), DEFAULT/DESC keywords (Green), NULL sentinels / TRUE / numbers (Magenta), and calm Base0 alias/column qualifiers"
         else
-            fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql (cond=${RES[cond_sql_fg]} type=${RES[type_sql_fg]} builtin=${RES[type_builtin_sql_fg]} fcall=${RES[fcall_sql_fg]} attr=${RES[attr_sql_fg]})"
+            fail "Neovim SQL Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.sql (cond=${RES[cond_sql_fg]:-} type=${RES[type_sql_fg]:-} builtin=${RES[type_builtin_sql_fg]:-} fcall=${RES[fcall_sql_fg]:-} attr=${RES[attr_sql_fg]:-})"
         fi
 
-        if [ "${RES[is_tf_main_kw]}" = "true" ] && \
-           [ "${RES[is_tf_prov_type]}" = "true" ] && \
-           [ "${RES[is_tf_str_type]}" = "true" ] && \
-           [ "${RES[is_tf_cnt_func]}" = "true" ] && \
-           [ "${RES[is_tf_var_kw]}" = "true" ] && \
-           [ "${RES[is_tf_loc_kw]}" = "true" ] && \
-           [ "${RES[is_tf_res_kw]}" = "true" ] && \
-           [ "${RES[is_tf_ref_var]}" = "true" ] && \
-           [ "${RES[is_tf_false_bool]}" = "true" ] && \
-           [ "${RES[is_tf_interp_brack]}" = "true" ] && \
-           [ "${RES[is_tf_prov_hdr_kw]}" = "true" ] && \
-           [ "${RES[is_tf_prov_arg_mbr]}" = "true" ] && \
-           [ "${RES[is_tf_psnr_type]}" = "true" ] && \
-           [ "${RES[is_tf_self_kw]}" = "true" ] && \
-           [ "${RES[is_tf_dir_brack]}" = "true" ] && \
-           [ "${RES[is_tf_strip_brack]}" = "true" ] && \
-           [ "${RES[is_tf_if_kw]}" = "true" ] && \
-           [ "${RES[kw_tf_fg]}" = "859900" ] && \
-           [ "${RES[cond_tf_fg]}" = "b58900" ] && \
-           [ "${RES[type_tf_fg]}" = "839496" ] && \
-           [ "${RES[fn_tf_fg]}" = "839496" ]; then
+        if [ "${RES[is_tf_main_kw]:-}" = "true" ] && \
+           [ "${RES[is_tf_prov_type]:-}" = "true" ] && \
+           [ "${RES[is_tf_str_type]:-}" = "true" ] && \
+           [ "${RES[is_tf_cnt_func]:-}" = "true" ] && \
+           [ "${RES[is_tf_var_kw]:-}" = "true" ] && \
+           [ "${RES[is_tf_loc_kw]:-}" = "true" ] && \
+           [ "${RES[is_tf_res_kw]:-}" = "true" ] && \
+           [ "${RES[is_tf_ref_var]:-}" = "true" ] && \
+           [ "${RES[is_tf_false_bool]:-}" = "true" ] && \
+           [ "${RES[is_tf_interp_brack]:-}" = "true" ] && \
+           [ "${RES[is_tf_prov_hdr_kw]:-}" = "true" ] && \
+           [ "${RES[is_tf_prov_arg_mbr]:-}" = "true" ] && \
+           [ "${RES[is_tf_psnr_type]:-}" = "true" ] && \
+           [ "${RES[is_tf_self_kw]:-}" = "true" ] && \
+           [ "${RES[is_tf_dir_brack]:-}" = "true" ] && \
+           [ "${RES[is_tf_strip_brack]:-}" = "true" ] && \
+           [ "${RES[is_tf_if_kw]:-}" = "true" ] && \
+           [ "${RES[kw_tf_fg]:-}" = "859900" ] && \
+           [ "${RES[cond_tf_fg]:-}" = "b58900" ] && \
+           [ "${RES[type_tf_fg]:-}" = "839496" ] && \
+           [ "${RES[fn_tf_fg]:-}" = "839496" ]; then
             pass "Neovim highlights modern Terraform / HCL configurations (sample.tf) with Converged Ergonomic Solarized Scheme: block declarations and scope keywords (Green), schema blocks and data types in Base0, control flow (Yellow), built-in functions (Base0), booleans/numbers (Magenta), Base0 string interpolation delimiters and resource references"
         else
-            fail "Neovim Terraform Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.tf (kw=${RES[kw_tf_fg]} cond=${RES[cond_tf_fg]} type=${RES[type_tf_fg]} fn=${RES[fn_tf_fg]})"
+            fail "Neovim Terraform Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.tf (kw=${RES[kw_tf_fg]:-} cond=${RES[cond_tf_fg]:-} type=${RES[type_tf_fg]:-} fn=${RES[fn_tf_fg]:-})"
         fi
 
-        if [ "${RES[is_md_h1_txt]}" = "true" ] && [ "${RES[h1_fg]}" = "cb4b16" ] && [ "${RES[h1_bold]}" != "true" ] && \
-           [ "${RES[is_md_h2_txt]}" = "true" ] && [ "${RES[h2_fg]}" = "268bd2" ] && [ "${RES[h2_bold]}" != "true" ] && \
-           [ "${RES[is_md_h3_txt]}" = "true" ] && [ "${RES[h3_fg]}" = "6c71c4" ] && \
-           [ "${RES[is_md_h4_txt]}" = "true" ] && [ "${RES[h4_fg]}" = "93a1a1" ] && \
-           [ "${RES[h5_fg]}" = "839496" ] && [ "${RES[h6_fg]}" = "839496" ] && \
-           [ "${RES[is_md_h1_delim]}" = "true" ] && [ "${RES[h_delim_fg]}" = "586e75" ] && \
-           [ "${RES[is_md_quote_marker]}" = "true" ] && [ "${RES[quote_marker_fg]}" = "586e75" ] && \
-           [ "${RES[quote_fg]}" = "839496" ] && \
-           [ "${RES[is_md_alert_note]}" = "true" ] && \
-           [ "${RES[is_md_alert_tip]}" = "true" ] && \
-           [ "${RES[is_md_alert_warning]}" = "true" ] && \
-           [ "${RES[is_md_task_checked]}" = "true" ] && [ "${RES[task_chk_fg]}" = "859900" ] && \
-           [ "${RES[is_md_task_unchecked]}" = "true" ] && [ "${RES[task_unchk_fg]}" = "586e75" ] && \
-           [ "${RES[is_md_table_delim]}" = "true" ] && [ "${RES[table_delim_fg]}" = "586e75" ] && \
-           [ "${RES[is_md_table_hdr]}" = "true" ] && \
-           [ "${RES[is_md_bash_cmd]}" = "true" ] && \
-           [ "${RES[is_md_go_if_cond]}" = "true" ] && \
-           [ "${RES[is_md_go_blank]}" = "true" ] && \
-           [ "${RES[is_md_go_call]}" = "true" ] && \
-           [ "${RES[is_md_go_nil]}" = "true" ]; then
+        if [ "${RES[is_md_h1_txt]:-}" = "true" ] && [ "${RES[h1_fg]:-}" = "cb4b16" ] && [ "${RES[h1_bold]:-}" != "true" ] && \
+           [ "${RES[is_md_h2_txt]:-}" = "true" ] && [ "${RES[h2_fg]:-}" = "268bd2" ] && [ "${RES[h2_bold]:-}" != "true" ] && \
+           [ "${RES[is_md_h3_txt]:-}" = "true" ] && [ "${RES[h3_fg]:-}" = "6c71c4" ] && \
+           [ "${RES[is_md_h4_txt]:-}" = "true" ] && [ "${RES[h4_fg]:-}" = "93a1a1" ] && \
+           [ "${RES[h5_fg]:-}" = "839496" ] && [ "${RES[h6_fg]:-}" = "839496" ] && \
+           [ "${RES[is_md_h1_delim]:-}" = "true" ] && [ "${RES[h_delim_fg]:-}" = "586e75" ] && \
+           [ "${RES[is_md_quote_marker]:-}" = "true" ] && [ "${RES[quote_marker_fg]:-}" = "586e75" ] && \
+           [ "${RES[quote_fg]:-}" = "839496" ] && \
+           [ "${RES[is_md_alert_note]:-}" = "true" ] && \
+           [ "${RES[is_md_alert_tip]:-}" = "true" ] && \
+           [ "${RES[is_md_alert_warning]:-}" = "true" ] && \
+           [ "${RES[is_md_task_checked]:-}" = "true" ] && [ "${RES[task_chk_fg]:-}" = "859900" ] && \
+           [ "${RES[is_md_task_unchecked]:-}" = "true" ] && [ "${RES[task_unchk_fg]:-}" = "586e75" ] && \
+           [ "${RES[is_md_table_delim]:-}" = "true" ] && [ "${RES[table_delim_fg]:-}" = "586e75" ] && \
+           [ "${RES[is_md_table_hdr]:-}" = "true" ] && \
+           [ "${RES[is_md_bash_cmd]:-}" = "true" ] && \
+           [ "${RES[is_md_go_if_cond]:-}" = "true" ] && \
+           [ "${RES[is_md_go_blank]:-}" = "true" ] && \
+           [ "${RES[is_md_go_call]:-}" = "true" ] && \
+           [ "${RES[is_md_go_nil]:-}" = "true" ]; then
             pass "Neovim highlights modern Markdown documents (sample.md) with Semantic Architecture: H1 Orange (#cb4b16), H2 Blue (#268bd2, unbolded), H3 Violet (#6c71c4), H4 Base1 (#93a1a1), H5/H6 Base0 (#839496), Base01 heading/quote delimiters, calm Base0 blockquotes, GitHub alerts ([!NOTE], [!TIP], [!WARNING]), task checkboxes, Base1 table headers with Base01 delimiters, embedded Bash invocations in calm Base0, and embedded Go with Magenta blank identifier/nil, Base0 method calls (errors.New), and exclusive Yellow control flow"
         else
-            fail "Neovim Markdown highlights" "Expected complete Tree-sitter capture matches in sample.md (h1=${RES[h1_fg]} h2=${RES[h2_fg]} delim=${RES[h_delim_fg]} note=${RES[is_md_alert_note]} tbl_hdr=${RES[is_md_table_hdr]} bash_cmd=${RES[is_md_bash_cmd]} go_if=${RES[is_md_go_if_cond]} go_call=${RES[is_md_go_call]})"
+            fail "Neovim Markdown highlights" "Expected complete Tree-sitter capture matches in sample.md (h1=${RES[h1_fg]:-} h2=${RES[h2_fg]:-} delim=${RES[h_delim_fg]:-} note=${RES[is_md_alert_note]:-} tbl_hdr=${RES[is_md_table_hdr]:-} bash_cmd=${RES[is_md_bash_cmd]:-} go_if=${RES[is_md_go_if_cond]:-} go_call=${RES[is_md_go_call]:-})"
         fi
 
-        if [ "${RES[is_js_date_type]}" = "true" ] && \
-           [ "${RES[is_js_console_builtin]}" = "true" ] && \
-           [ "${RES[is_js_regex_slash]}" = "true" ] && \
-           [ "${RES[is_js_regex_body]}" = "true" ] && \
-           [ "${RES[is_js_regex_flag]}" = "true" ] && \
-           [ "${RES[is_js_gen_star_op]}" = "true" ] && \
-           [ "${RES[is_js_symbol_type]}" = "true" ] && \
-           [ "${RES[is_js_iter_member]}" = "true" ] && \
-           [ "${RES[is_js_inspect_var]}" = "true" ] && \
-           [ "${RES[is_js_of_kw]}" = "true" ] && \
-           [ "${RES[is_js_proc_builtin]}" = "true" ]; then
+        if [ "${RES[is_js_date_type]:-}" = "true" ] && \
+           [ "${RES[is_js_console_builtin]:-}" = "true" ] && \
+           [ "${RES[is_js_regex_slash]:-}" = "true" ] && \
+           [ "${RES[is_js_regex_body]:-}" = "true" ] && \
+           [ "${RES[is_js_regex_flag]:-}" = "true" ] && \
+           [ "${RES[is_js_gen_star_op]:-}" = "true" ] && \
+           [ "${RES[is_js_symbol_type]:-}" = "true" ] && \
+           [ "${RES[is_js_iter_member]:-}" = "true" ] && \
+           [ "${RES[is_js_inspect_var]:-}" = "true" ] && \
+           [ "${RES[is_js_of_kw]:-}" = "true" ] && \
+           [ "${RES[is_js_proc_builtin]:-}" = "true" ]; then
             pass "Neovim highlights modern JavaScript (sample.js) with Converged Ergonomic Solarized Scheme: Date in Base0 Grey (@type), console & process in Magenta (@variable.builtin), regex /^\/health[z]?$/i with Magenta body, Base0 delimiters, and Cyan flags, *[Symbol.iterator] with calm Base0 operator and computed member identifiers, and 'of' in Solarized Yellow (@keyword.repeat)"
         else
-            fail "Neovim JavaScript highlights" "Expected complete Tree-sitter capture matches in sample.js (date=${RES[is_js_date_type]} console=${RES[is_js_console_builtin]} slash=${RES[is_js_regex_slash]} body=${RES[is_js_regex_body]} flag=${RES[is_js_regex_flag]} star=${RES[is_js_gen_star_op]} sym=${RES[is_js_symbol_type]} iter=${RES[is_js_iter_member]} insp=${RES[is_js_inspect_var]} of=${RES[is_js_of_kw]} proc=${RES[is_js_proc_builtin]})"
+            fail "Neovim JavaScript highlights" "Expected complete Tree-sitter capture matches in sample.js (date=${RES[is_js_date_type]:-} console=${RES[is_js_console_builtin]:-} slash=${RES[is_js_regex_slash]:-} body=${RES[is_js_regex_body]:-} flag=${RES[is_js_regex_flag]:-} star=${RES[is_js_gen_star_op]:-} sym=${RES[is_js_symbol_type]:-} iter=${RES[is_js_iter_member]:-} insp=${RES[is_js_inspect_var]:-} of=${RES[is_js_of_kw]:-} proc=${RES[is_js_proc_builtin]:-})"
         fi
 
-        if [ "${RES[is_ts_export_import]}" = "true" ] && \
-           [ "${RES[is_ts_enum_kw]}" = "true" ] && \
-           [ "${RES[is_ts_userrole_type]}" = "true" ] && \
-           [ "${RES[is_ts_type_kw]}" = "true" ] && \
-           [ "${RES[is_ts_interface_kw]}" = "true" ] && \
-           [ "${RES[is_ts_readonly_mod]}" = "true" ] && \
-           [ "${RES[is_ts_bool_builtin]}" = "true" ] && \
-           [ "${RES[is_ts_class_kw]}" = "true" ] && \
-           [ "${RES[is_ts_gateway_type]}" = "true" ] && \
-           [ "${RES[is_ts_async_coro]}" = "true" ] && \
-           [ "${RES[is_ts_request_method]}" = "true" ] && \
-           [ "${RES[is_ts_await_coro]}" = "true" ] && \
-           [ "${RES[is_ts_true_bool]}" = "true" ] && \
-           [ "${RES[is_ts_this_builtin]}" = "true" ]; then
+        if [ "${RES[is_ts_export_import]:-}" = "true" ] && \
+           [ "${RES[is_ts_enum_kw]:-}" = "true" ] && \
+           [ "${RES[is_ts_userrole_type]:-}" = "true" ] && \
+           [ "${RES[is_ts_type_kw]:-}" = "true" ] && \
+           [ "${RES[is_ts_interface_kw]:-}" = "true" ] && \
+           [ "${RES[is_ts_readonly_mod]:-}" = "true" ] && \
+           [ "${RES[is_ts_bool_builtin]:-}" = "true" ] && \
+           [ "${RES[is_ts_class_kw]:-}" = "true" ] && \
+           [ "${RES[is_ts_gateway_type]:-}" = "true" ] && \
+           [ "${RES[is_ts_async_coro]:-}" = "true" ] && \
+           [ "${RES[is_ts_request_method]:-}" = "true" ] && \
+           [ "${RES[is_ts_await_coro]:-}" = "true" ] && \
+           [ "${RES[is_ts_true_bool]:-}" = "true" ] && \
+           [ "${RES[is_ts_this_builtin]:-}" = "true" ]; then
             pass "Neovim highlights modern TypeScript (sample.ts) with Converged Ergonomic Solarized Scheme: exports in Violet (@keyword.import), structural declarations (enum, type, interface, class, readonly) and primitive scalars in Green, method declarations in Blue (@function.method), custom domain types in Base0 Grey (@type), control flow in Yellow (@keyword.coroutine), and constants/this in Magenta (@boolean, @variable.builtin)"
         else
-            fail "Neovim TypeScript highlights" "Expected complete Tree-sitter capture matches in sample.ts (export=${RES[is_ts_export_import]} enum=${RES[is_ts_enum_kw]} role=${RES[is_ts_userrole_type]} type=${RES[is_ts_type_kw]} iface=${RES[is_ts_interface_kw]} ro=${RES[is_ts_readonly_mod]} bool=${RES[is_ts_bool_builtin]} class=${RES[is_ts_class_kw]} gw=${RES[is_ts_gateway_type]} async=${RES[is_ts_async_coro]} req=${RES[is_ts_request_method]} await=${RES[is_ts_await_coro]} true=${RES[is_ts_true_bool]} this=${RES[is_ts_this_builtin]})"
+            fail "Neovim TypeScript highlights" "Expected complete Tree-sitter capture matches in sample.ts (export=${RES[is_ts_export_import]:-} enum=${RES[is_ts_enum_kw]:-} role=${RES[is_ts_userrole_type]:-} type=${RES[is_ts_type_kw]:-} iface=${RES[is_ts_interface_kw]:-} ro=${RES[is_ts_readonly_mod]:-} bool=${RES[is_ts_bool_builtin]:-} class=${RES[is_ts_class_kw]:-} gw=${RES[is_ts_gateway_type]:-} async=${RES[is_ts_async_coro]:-} req=${RES[is_ts_request_method]:-} await=${RES[is_ts_await_coro]:-} true=${RES[is_ts_true_bool]:-} this=${RES[is_ts_this_builtin]:-})"
         fi
 
-        if [ "${RES[is_xml_decl_dir]}" = "true" ] && \
-           [ "${RES[is_xml_pi_dir]}" = "true" ] && \
-           [ "${RES[is_xml_dep_tag]}" = "true" ] && \
-           [ "${RES[is_xml_mon_tag]}" = "true" ] && \
-           [ "${RES[is_xml_xmlns_attr]}" = "true" ] && \
-           [ "${RES[is_xml_ver_str]}" = "true" ] && \
-           [ "${RES[is_xml_amp_const]}" = "true" ] && \
-           [ "${RES[is_xml_cdata_start]}" = "true" ] && \
-           [ "${RES[is_xml_cdata_bracket]}" = "true" ] && \
-           [ "${RES[xml_has_js_tree]}" = "false" ] && \
-           [ "${RES[is_xml_cdata_end]}" = "true" ] && \
-           [ "${RES[is_xml_cdata_block]}" = "true" ] && \
-           [ "${RES[cdata_payload_fg]}" = "839496" ] && \
-           [ "${RES[tag_fg]}" = "268bd2" ] && \
-           [ "${RES[tag_attr_fg]}" = "859900" ] && \
-           [ "${RES[tag_delim_fg]}" = "839496" ]; then
+        if [ "${RES[is_xml_decl_dir]:-}" = "true" ] && \
+           [ "${RES[is_xml_pi_dir]:-}" = "true" ] && \
+           [ "${RES[is_xml_dep_tag]:-}" = "true" ] && \
+           [ "${RES[is_xml_mon_tag]:-}" = "true" ] && \
+           [ "${RES[is_xml_xmlns_attr]:-}" = "true" ] && \
+           [ "${RES[is_xml_ver_str]:-}" = "true" ] && \
+           [ "${RES[is_xml_amp_const]:-}" = "true" ] && \
+           [ "${RES[is_xml_cdata_start]:-}" = "true" ] && \
+           [ "${RES[is_xml_cdata_bracket]:-}" = "true" ] && \
+           [ "${RES[xml_has_js_tree]:-}" = "false" ] && \
+           [ "${RES[is_xml_cdata_end]:-}" = "true" ] && \
+           [ "${RES[is_xml_cdata_block]:-}" = "true" ] && \
+           [ "${RES[cdata_payload_fg]:-}" = "839496" ] && \
+           [ "${RES[tag_fg]:-}" = "268bd2" ] && \
+           [ "${RES[tag_attr_fg]:-}" = "859900" ] && \
+           [ "${RES[tag_delim_fg]:-}" = "839496" ]; then
             pass "Neovim highlights modern XML documents (sample.xml) with Converged Ergonomic Solarized: directives in Orange (@keyword.directive), element tags in Blue (@tag #268bd2), tag attributes in Green (@tag.attribute #859900), tag delimiters in calm Base0 Grey (@tag.delimiter #839496), strings in Cyan (@string), entities in Magenta (@constant.builtin), and CDATA section delimiters in Violet (@module) with calm Base0 payload (@markup.raw.block #839496)"
         else
-            fail "Neovim XML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.xml (decl=${RES[is_xml_decl_dir]} pi=${RES[is_xml_pi_dir]} tag=${RES[is_xml_dep_tag]} mon=${RES[is_xml_mon_tag]} attr=${RES[is_xml_xmlns_attr]} str=${RES[is_xml_ver_str]} amp=${RES[is_xml_amp_const]} cdata_s=${RES[is_xml_cdata_start]} cdata_brk=${RES[is_xml_cdata_bracket]} js_tree=${RES[xml_has_js_tree]} cdata_e=${RES[is_xml_cdata_end]} cdata_blk=${RES[is_xml_cdata_block]} cdata_fg=${RES[cdata_payload_fg]} tag_fg=${RES[tag_fg]} attr_fg=${RES[tag_attr_fg]} delim_fg=${RES[tag_delim_fg]})"
+            fail "Neovim XML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.xml (decl=${RES[is_xml_decl_dir]:-} pi=${RES[is_xml_pi_dir]:-} tag=${RES[is_xml_dep_tag]:-} mon=${RES[is_xml_mon_tag]:-} attr=${RES[is_xml_xmlns_attr]:-} str=${RES[is_xml_ver_str]:-} amp=${RES[is_xml_amp_const]:-} cdata_s=${RES[is_xml_cdata_start]:-} cdata_brk=${RES[is_xml_cdata_bracket]:-} js_tree=${RES[xml_has_js_tree]:-} cdata_e=${RES[is_xml_cdata_end]:-} cdata_blk=${RES[is_xml_cdata_block]:-} cdata_fg=${RES[cdata_payload_fg]:-} tag_fg=${RES[tag_fg]:-} attr_fg=${RES[tag_attr_fg]:-} delim_fg=${RES[tag_delim_fg]:-})"
         fi
 
-        if [ "${RES[is_html_doctype_dir]}" = "true" ] && \
-           [ "${RES[is_html_tag]}" = "true" ] && \
-           [ "${RES[is_html_tag_delim]}" = "true" ] && \
-           [ "${RES[is_html_attr]}" = "true" ] && \
-           [ "${RES[is_html_str]}" = "true" ] && \
-           [ "${RES[is_html_comment]}" = "true" ] && \
-           [ "${RES[html_title_fg]}" = "839496" ] && \
-           [ "${RES[html_h2_fg]}" = "839496" ] && \
-           [ "${RES[html_strong_fg]}" = "839496" ] && \
-           [ "${RES[html_strong_bold]}" = "false" ] && \
-           [ "${RES[html_link_fg]}" = "839496" ] && \
-           [ "${RES[html_url_underline]}" = "false" ] && \
-           [ "${RES[is_html_copy_const]}" = "true" ] && \
-           [ "${RES[is_html_js_doc]}" = "true" ] && \
-           [ "${RES[is_html_js_event]}" = "true" ] && \
-           [ "${RES[is_html_js_const]}" = "true" ] && \
-           [ "${RES[is_html_js_console]}" = "true" ] && \
-           [ "${RES[is_html_js_log]}" = "true" ]; then
+        if [ "${RES[is_html_doctype_dir]:-}" = "true" ] && \
+           [ "${RES[is_html_tag]:-}" = "true" ] && \
+           [ "${RES[is_html_tag_delim]:-}" = "true" ] && \
+           [ "${RES[is_html_attr]:-}" = "true" ] && \
+           [ "${RES[is_html_str]:-}" = "true" ] && \
+           [ "${RES[is_html_comment]:-}" = "true" ] && \
+           [ "${RES[html_title_fg]:-}" = "839496" ] && \
+           [ "${RES[html_h2_fg]:-}" = "839496" ] && \
+           [ "${RES[html_strong_fg]:-}" = "839496" ] && \
+           [ "${RES[html_strong_bold]:-}" = "false" ] && \
+           [ "${RES[html_link_fg]:-}" = "839496" ] && \
+           [ "${RES[html_url_underline]:-}" = "false" ] && \
+           [ "${RES[is_html_copy_const]:-}" = "true" ] && \
+           [ "${RES[is_html_js_doc]:-}" = "true" ] && \
+           [ "${RES[is_html_js_event]:-}" = "true" ] && \
+           [ "${RES[is_html_js_const]:-}" = "true" ] && \
+           [ "${RES[is_html_js_console]:-}" = "true" ] && \
+           [ "${RES[is_html_js_log]:-}" = "true" ]; then
             pass "Neovim highlights modern HTML5 documents (sample.html) with Converged Ergonomic Solarized: doctype in Orange (@keyword.directive), element tags in Blue (@tag #268bd2), tag attributes in Green (@tag.attribute #859900), tag delimiters in Base0 Grey (@tag.delimiter #839496), strings in Cyan (@string), unbolded & un-underlined content (headings, links, strong in calm Base0 Grey #839496), entities in Magenta (@constant.builtin), and embedded <script> matching bat"
         else
-            fail "Neovim HTML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.html (doctype=${RES[is_html_doctype_dir]} tag=${RES[is_html_tag]} delim=${RES[is_html_tag_delim]} attr=${RES[is_html_attr]} str=${RES[is_html_str]} comment=${RES[is_html_comment]} title_fg=${RES[html_title_fg]} h2_fg=${RES[html_h2_fg]} strong_fg=${RES[html_strong_fg]} strong_bold=${RES[html_strong_bold]} link_fg=${RES[html_link_fg]} url_under=${RES[html_url_underline]} copy=${RES[is_html_copy_const]} doc=${RES[is_html_js_doc]} event=${RES[is_html_js_event]} const=${RES[is_html_js_const]} console=${RES[is_html_js_console]} log=${RES[is_html_js_log]})"
+            fail "Neovim HTML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.html (doctype=${RES[is_html_doctype_dir]:-} tag=${RES[is_html_tag]:-} delim=${RES[is_html_tag_delim]:-} attr=${RES[is_html_attr]:-} str=${RES[is_html_str]:-} comment=${RES[is_html_comment]:-} title_fg=${RES[html_title_fg]:-} h2_fg=${RES[html_h2_fg]:-} strong_fg=${RES[html_strong_fg]:-} strong_bold=${RES[html_strong_bold]:-} link_fg=${RES[html_link_fg]:-} url_under=${RES[html_url_underline]:-} copy=${RES[is_html_copy_const]:-} doc=${RES[is_html_js_doc]:-} event=${RES[is_html_js_event]:-} const=${RES[is_html_js_const]:-} console=${RES[is_html_js_console]:-} log=${RES[is_html_js_log]:-})"
         fi
 
-        if [ "${RES[is_json_key_prop]}" = "true" ] && \
-           [ "${RES[is_json_str]}" = "true" ] && \
-           [ "${RES[is_json_num]}" = "true" ] && \
-           [ "${RES[is_json_bool]}" = "true" ] && \
-           [ "${RES[is_json_null]}" = "true" ] && \
-           [ "${RES[is_json_url_str]}" = "true" ] && \
-           [ "${RES[json_url_fg]}" = "2aa198" ] && \
-           [ "${RES[duw_has_fg]}" = "false" ]; then
+        if [ "${RES[is_json_key_prop]:-}" = "true" ] && \
+           [ "${RES[is_json_str]:-}" = "true" ] && \
+           [ "${RES[is_json_num]:-}" = "true" ] && \
+           [ "${RES[is_json_bool]:-}" = "true" ] && \
+           [ "${RES[is_json_null]:-}" = "true" ] && \
+           [ "${RES[is_json_url_str]:-}" = "true" ] && \
+           [ "${RES[json_url_fg]:-}" = "2aa198" ] && \
+           [ "${RES[duw_has_fg]:-}" = "false" ]; then
             pass "Neovim highlights modern JSON documents (sample.json) with Converged Ergonomic Solarized: object keys in Green (@property #859900), strings in Cyan (@string #2aa198, URLs non-clickable and uncorrupted by diagnostic fg), numbers in Magenta (@number), booleans in Magenta (@boolean), and null in Magenta (@constant.builtin)"
         else
-            fail "Neovim JSON Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.json (key=${RES[is_json_key_prop]} str=${RES[is_json_str]} num=${RES[is_json_num]} bool=${RES[is_json_bool]} null=${RES[is_json_null]} url_str=${RES[is_json_url_str]} url_fg=${RES[json_url_fg]} duw_fg=${RES[duw_has_fg]})"
+            fail "Neovim JSON Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.json (key=${RES[is_json_key_prop]:-} str=${RES[is_json_str]:-} num=${RES[is_json_num]:-} bool=${RES[is_json_bool]:-} null=${RES[is_json_null]:-} url_str=${RES[is_json_url_str]:-} url_fg=${RES[json_url_fg]:-} duw_fg=${RES[duw_has_fg]:-})"
         fi
 
-        if [ "${RES[is_yaml_key_prop]}" = "true" ] && \
-           [ "${RES[is_yaml_str]}" = "true" ] && \
-           [ "${RES[is_yaml_type]}" = "true" ] && \
-           [ "${RES[is_yaml_num]}" = "true" ] && \
-           [ "${RES[is_yaml_bool]}" = "true" ] && \
-           [ "${RES[is_yaml_null]}" = "true" ] && \
-           [ "${RES[is_yaml_merge_prop]}" = "true" ] && \
-           [ "${RES[is_yaml_alias_label]}" = "true" ] && \
-           [ "${RES[is_yaml_anchor_label]}" = "true" ]; then
+        if [ "${RES[is_yaml_key_prop]:-}" = "true" ] && \
+           [ "${RES[is_yaml_str]:-}" = "true" ] && \
+           [ "${RES[is_yaml_type]:-}" = "true" ] && \
+           [ "${RES[is_yaml_num]:-}" = "true" ] && \
+           [ "${RES[is_yaml_bool]:-}" = "true" ] && \
+           [ "${RES[is_yaml_null]:-}" = "true" ] && \
+           [ "${RES[is_yaml_merge_prop]:-}" = "true" ] && \
+           [ "${RES[is_yaml_alias_label]:-}" = "true" ] && \
+           [ "${RES[is_yaml_anchor_label]:-}" = "true" ]; then
             pass "Neovim highlights modern YAML documents (sample.yaml) with Converged Ergonomic Solarized: mapping keys & merge keys (<<) in Green (@property #859900), strings in Cyan (@string), explicit type tags in calm Base0 Grey (@type #839496, zero Yellow), anchors & aliases in Base01 Dim (@label #586e75), numbers in Magenta (@number), booleans in Magenta (@boolean), and null in Magenta (@constant.builtin)"
         else
-            fail "Neovim YAML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.yaml (key=${RES[is_yaml_key_prop]} str=${RES[is_yaml_str]} type=${RES[is_yaml_type]} num=${RES[is_yaml_num]} bool=${RES[is_yaml_bool]} null=${RES[is_yaml_null]} merge=${RES[is_yaml_merge_prop]} alias=${RES[is_yaml_alias_label]} anchor=${RES[is_yaml_anchor_label]})"
+            fail "Neovim YAML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.yaml (key=${RES[is_yaml_key_prop]:-} str=${RES[is_yaml_str]:-} type=${RES[is_yaml_type]:-} num=${RES[is_yaml_num]:-} bool=${RES[is_yaml_bool]:-} null=${RES[is_yaml_null]:-} merge=${RES[is_yaml_merge_prop]:-} alias=${RES[is_yaml_alias_label]:-} anchor=${RES[is_yaml_anchor_label]:-})"
         fi
 
-        if [ "${RES[is_toml_tbl_tag]}" = "true" ] && \
-           [ "${RES[is_toml_arr_tag]}" = "true" ] && \
-           [ "${RES[is_toml_key_prop]}" = "true" ] && \
-           [ "${RES[is_toml_dot_prop]}" = "true" ] && \
-           [ "${RES[is_toml_str]}" = "true" ] && \
-           [ "${RES[is_toml_num]}" = "true" ] && \
-           [ "${RES[is_toml_bool]}" = "true" ] && \
-           [ "${RES[is_toml_dt_const]}" = "true" ] && \
-           [ "${RES[toml_tbl_fg]}" = "268bd2" ] && \
-           [ "${RES[toml_key_fg]}" = "859900" ] && \
-           [ "${RES[toml_dt_fg]}" = "d33682" ]; then
+        if [ "${RES[is_toml_tbl_tag]:-}" = "true" ] && \
+           [ "${RES[is_toml_arr_tag]:-}" = "true" ] && \
+           [ "${RES[is_toml_key_prop]:-}" = "true" ] && \
+           [ "${RES[is_toml_dot_prop]:-}" = "true" ] && \
+           [ "${RES[is_toml_str]:-}" = "true" ] && \
+           [ "${RES[is_toml_num]:-}" = "true" ] && \
+           [ "${RES[is_toml_bool]:-}" = "true" ] && \
+           [ "${RES[is_toml_dt_const]:-}" = "true" ] && \
+           [ "${RES[toml_tbl_fg]:-}" = "268bd2" ] && \
+           [ "${RES[toml_key_fg]:-}" = "859900" ] && \
+           [ "${RES[toml_dt_fg]:-}" = "d33682" ]; then
             pass "Neovim highlights modern TOML documents (sample.toml) with Converged Ergonomic Solarized: table headers in Blue (@tag #268bd2), mapping & inline keys in Green (@property #859900), strings in Cyan (@string #2aa198), numbers/booleans/date-times in Magenta (@number, @boolean, @constant.builtin #d33682)"
         else
-            fail "Neovim TOML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.toml (tbl=${RES[is_toml_tbl_tag]} arr=${RES[is_toml_arr_tag]} key=${RES[is_toml_key_prop]} dot=${RES[is_toml_dot_prop]} str=${RES[is_toml_str]} num=${RES[is_toml_num]} bool=${RES[is_toml_bool]} dt=${RES[is_toml_dt_const]} tbl_fg=${RES[toml_tbl_fg]} key_fg=${RES[toml_key_fg]} dt_fg=${RES[toml_dt_fg]})"
+            fail "Neovim TOML Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.toml (tbl=${RES[is_toml_tbl_tag]:-} arr=${RES[is_toml_arr_tag]:-} key=${RES[is_toml_key_prop]:-} dot=${RES[is_toml_dot_prop]:-} str=${RES[is_toml_str]:-} num=${RES[is_toml_num]:-} bool=${RES[is_toml_bool]:-} dt=${RES[is_toml_dt_const]:-} tbl_fg=${RES[toml_tbl_fg]:-} key_fg=${RES[toml_key_fg]:-} dt_fg=${RES[toml_dt_fg]:-})"
         fi
 
-        if [ "${RES[is_css_at_dir]}" = "true" ] && \
-           [ "${RES[is_css_ff_dir]}" = "true" ] && \
-           [ "${RES[is_css_tag]}" = "true" ] && \
-           [ "${RES[is_css_class_type]}" = "true" ] && \
-           [ "${RES[is_css_prop]}" = "true" ] && \
-           [ "${RES[is_css_cust_prop_var]}" = "true" ] && \
-           [ "${RES[is_css_cust_val_var]}" = "true" ] && \
-           [ "${RES[is_css_root_attr]}" = "true" ] && \
-           [ "${RES[is_css_hover_attr]}" = "true" ] && \
-           [ "${RES[is_css_before_attr]}" = "true" ] && \
-           [ "${RES[is_css_str]}" = "true" ] && \
-           [ "${RES[is_css_hex_str]}" = "true" ] && \
-           [ "${RES[is_css_num]}" = "true" ] && \
-           [ "${RES[is_css_uimono_var]}" = "true" ] && \
-           [ "${RES[css_uimono_fg]}" = "839496" ] && \
-           [ "${RES[is_css_auto_var]}" = "true" ] && \
-           [ "${RES[css_auto_fg]}" = "839496" ] && \
-           [ "${RES[is_css_autofill_var]}" = "true" ] && \
-           [ "${RES[css_autofill_fg]}" = "839496" ] && \
-           [ "${RES[css_at_fg]}" = "cb4b16" ] && \
-           [ "${RES[css_class_fg]}" = "268bd2" ] && \
-           [ "${RES[css_tag_fg]}" = "268bd2" ] && \
-           [ "${RES[is_css_nest_op]}" = "true" ] && \
-           [ "${RES[css_nest_fg]}" = "839496" ] && \
-           [ "${RES[is_css_attr_sel_name]}" = "true" ] && \
-           [ "${RES[css_attr_sel_fg]}" = "839496" ] && \
-           [ "${RES[is_css_attr_sel_str]}" = "true" ] && \
-           [ "${RES[css_attr_sel_str_fg]}" = "2aa198" ] && \
-           [ "${RES[is_css_container_dir]}" = "true" ] && \
-           [ "${RES[css_container_fg]}" = "cb4b16" ] && \
-           [ "${RES[is_css_container_name_var]}" = "true" ] && \
-           [ "${RES[css_container_name_fg]}" = "839496" ] && \
-           [ "${RES[is_css_container_num]}" = "true" ] && \
-           [ "${RES[css_container_num_fg]}" = "d33682" ] && \
-           [ "${RES[css_prop_fg]}" = "859900" ] && \
-           [ "${RES[css_var_fg]}" = "839496" ] && \
-           [ "${RES[css_attr_fg]}" = "6c71c4" ] && \
-           [ "${RES[css_hex_hash_fg]}" = "d33682" ] && \
-           [ "${RES[css_hex_fg]}" = "d33682" ]; then
+        if [ "${RES[is_css_at_dir]:-}" = "true" ] && \
+           [ "${RES[is_css_ff_dir]:-}" = "true" ] && \
+           [ "${RES[is_css_tag]:-}" = "true" ] && \
+           [ "${RES[is_css_class_type]:-}" = "true" ] && \
+           [ "${RES[is_css_prop]:-}" = "true" ] && \
+           [ "${RES[is_css_cust_prop_var]:-}" = "true" ] && \
+           [ "${RES[is_css_cust_val_var]:-}" = "true" ] && \
+           [ "${RES[is_css_root_attr]:-}" = "true" ] && \
+           [ "${RES[is_css_hover_attr]:-}" = "true" ] && \
+           [ "${RES[is_css_before_attr]:-}" = "true" ] && \
+           [ "${RES[is_css_str]:-}" = "true" ] && \
+           [ "${RES[is_css_hex_str]:-}" = "true" ] && \
+           [ "${RES[is_css_num]:-}" = "true" ] && \
+           [ "${RES[is_css_uimono_var]:-}" = "true" ] && \
+           [ "${RES[css_uimono_fg]:-}" = "839496" ] && \
+           [ "${RES[is_css_auto_var]:-}" = "true" ] && \
+           [ "${RES[css_auto_fg]:-}" = "839496" ] && \
+           [ "${RES[is_css_autofill_var]:-}" = "true" ] && \
+           [ "${RES[css_autofill_fg]:-}" = "839496" ] && \
+           [ "${RES[css_at_fg]:-}" = "cb4b16" ] && \
+           [ "${RES[css_class_fg]:-}" = "268bd2" ] && \
+           [ "${RES[css_tag_fg]:-}" = "268bd2" ] && \
+           [ "${RES[is_css_nest_op]:-}" = "true" ] && \
+           [ "${RES[css_nest_fg]:-}" = "839496" ] && \
+           [ "${RES[is_css_attr_sel_name]:-}" = "true" ] && \
+           [ "${RES[css_attr_sel_fg]:-}" = "839496" ] && \
+           [ "${RES[is_css_attr_sel_str]:-}" = "true" ] && \
+           [ "${RES[css_attr_sel_str_fg]:-}" = "2aa198" ] && \
+           [ "${RES[is_css_container_dir]:-}" = "true" ] && \
+           [ "${RES[css_container_fg]:-}" = "cb4b16" ] && \
+           [ "${RES[is_css_container_name_var]:-}" = "true" ] && \
+           [ "${RES[css_container_name_fg]:-}" = "839496" ] && \
+           [ "${RES[is_css_container_num]:-}" = "true" ] && \
+           [ "${RES[css_container_num_fg]:-}" = "d33682" ] && \
+           [ "${RES[css_prop_fg]:-}" = "859900" ] && \
+           [ "${RES[css_var_fg]:-}" = "839496" ] && \
+           [ "${RES[css_attr_fg]:-}" = "6c71c4" ] && \
+           [ "${RES[css_hex_hash_fg]:-}" = "d33682" ] && \
+           [ "${RES[css_hex_fg]:-}" = "d33682" ]; then
             pass "Neovim highlights modern CSS documents (sample.css) with Converged Ergonomic Solarized: at-rules in Orange (@keyword.directive #cb4b16), selectors in Blue (@tag, @type.css #268bd2), pseudo-selectors in Violet (@attribute #6c71c4), nesting parent '&' and attribute selector names in calm Base0 (@operator, @tag.attribute #839496), attribute strings in Cyan (@string #2aa198), container queries (@container in Orange, container-name in Base0, dimensions in Magenta #d33682), properties in Green (@property.css #859900), custom properties & keyword values in Base0 Grey (@variable.css #839496), strings in Cyan (@string), and hex colors & numbers in Magenta (@string.special.css, @number #d33682)"
         else
-            fail "Neovim CSS Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.css (at=${RES[is_css_at_dir]} ff=${RES[is_css_ff_dir]} tag=${RES[is_css_tag]} class=${RES[is_css_class_type]} prop=${RES[is_css_prop]} cust_p=${RES[is_css_cust_prop_var]} cust_v=${RES[is_css_cust_val_var]} root=${RES[is_css_root_attr]} hover=${RES[is_css_hover_attr]} before=${RES[is_css_before_attr]} str=${RES[is_css_str]} hex=${RES[is_css_hex_str]} num=${RES[is_css_num]} uimono=${RES[is_css_uimono_var]} uimono_fg=${RES[css_uimono_fg]} auto=${RES[is_css_auto_var]} auto_fg=${RES[css_auto_fg]} autofill=${RES[is_css_autofill_var]} autofill_fg=${RES[css_autofill_fg]} nest=${RES[is_css_nest_op]} nest_fg=${RES[css_nest_fg]} attr_sel=${RES[is_css_attr_sel_name]} attr_sel_fg=${RES[css_attr_sel_fg]} attr_sel_str=${RES[is_css_attr_sel_str]} attr_sel_str_fg=${RES[css_attr_sel_str_fg]} container=${RES[is_css_container_dir]} container_fg=${RES[css_container_fg]} cname=${RES[is_css_container_name_var]} cname_fg=${RES[css_container_name_fg]} cnum=${RES[is_css_container_num]} cnum_fg=${RES[css_container_num_fg]} at_fg=${RES[css_at_fg]} class_fg=${RES[css_class_fg]} tag_fg=${RES[css_tag_fg]} prop_fg=${RES[css_prop_fg]} var_fg=${RES[css_var_fg]} attr_fg=${RES[css_attr_fg]} hex_fg=${RES[css_hex_fg]})"
+            fail "Neovim CSS Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.css (at=${RES[is_css_at_dir]:-} ff=${RES[is_css_ff_dir]:-} tag=${RES[is_css_tag]:-} class=${RES[is_css_class_type]:-} prop=${RES[is_css_prop]:-} cust_p=${RES[is_css_cust_prop_var]:-} cust_v=${RES[is_css_cust_val_var]:-} root=${RES[is_css_root_attr]:-} hover=${RES[is_css_hover_attr]:-} before=${RES[is_css_before_attr]:-} str=${RES[is_css_str]:-} hex=${RES[is_css_hex_str]:-} num=${RES[is_css_num]:-} uimono=${RES[is_css_uimono_var]:-} uimono_fg=${RES[css_uimono_fg]:-} auto=${RES[is_css_auto_var]:-} auto_fg=${RES[css_auto_fg]:-} autofill=${RES[is_css_autofill_var]:-} autofill_fg=${RES[css_autofill_fg]:-} nest=${RES[is_css_nest_op]:-} nest_fg=${RES[css_nest_fg]:-} attr_sel=${RES[is_css_attr_sel_name]:-} attr_sel_fg=${RES[css_attr_sel_fg]:-} attr_sel_str=${RES[is_css_attr_sel_str]:-} attr_sel_str_fg=${RES[css_attr_sel_str_fg]:-} container=${RES[is_css_container_dir]:-} container_fg=${RES[css_container_fg]:-} cname=${RES[is_css_container_name_var]:-} cname_fg=${RES[css_container_name_fg]:-} cnum=${RES[is_css_container_num]:-} cnum_fg=${RES[css_container_num_fg]:-} at_fg=${RES[css_at_fg]:-} class_fg=${RES[css_class_fg]:-} tag_fg=${RES[css_tag_fg]:-} prop_fg=${RES[css_prop_fg]:-} var_fg=${RES[css_var_fg]:-} attr_fg=${RES[css_attr_fg]:-} hex_fg=${RES[css_hex_fg]:-})"
         fi
 
-        if [ "${RES[is_prop_key]}" = "true" ] && \
-           [ "${RES[prop_key_fg]}" = "859900" ] && \
-           [ "${RES[is_prop_eq_op]}" = "true" ] && \
-           [ "${RES[prop_eq_fg]}" = "839496" ] && \
-           [ "${RES[is_prop_val_str]}" = "true" ] && \
-           [ "${RES[prop_str_fg]}" = "2aa198" ] && \
-           [ "${RES[is_prop_val_num]}" = "true" ] && \
-           [ "${RES[prop_num_fg]}" = "d33682" ] && \
-           [ "${RES[is_prop_val_bool]}" = "true" ] && \
-           [ "${RES[prop_bool_fg]}" = "d33682" ] && \
-           [ "${RES[is_prop_val_float]}" = "true" ] && \
-           [ "${RES[prop_float_fg]}" = "d33682" ] && \
-           [ "${RES[is_prop_interp_delim]}" = "true" ] && \
-           [ "${RES[prop_interp_delim_fg]}" = "839496" ] && \
-           [ "${RES[is_prop_interp_var]}" = "true" ] && \
-           [ "${RES[prop_var_fg]}" = "839496" ] && \
-           [ "${RES[is_prop_excl_comment]}" = "true" ]; then
+        if [ "${RES[is_prop_key]:-}" = "true" ] && \
+           [ "${RES[prop_key_fg]:-}" = "859900" ] && \
+           [ "${RES[is_prop_eq_op]:-}" = "true" ] && \
+           [ "${RES[prop_eq_fg]:-}" = "839496" ] && \
+           [ "${RES[is_prop_val_str]:-}" = "true" ] && \
+           [ "${RES[prop_str_fg]:-}" = "2aa198" ] && \
+           [ "${RES[is_prop_val_num]:-}" = "true" ] && \
+           [ "${RES[prop_num_fg]:-}" = "d33682" ] && \
+           [ "${RES[is_prop_val_bool]:-}" = "true" ] && \
+           [ "${RES[prop_bool_fg]:-}" = "d33682" ] && \
+           [ "${RES[is_prop_val_float]:-}" = "true" ] && \
+           [ "${RES[prop_float_fg]:-}" = "d33682" ] && \
+           [ "${RES[is_prop_interp_delim]:-}" = "true" ] && \
+           [ "${RES[prop_interp_delim_fg]:-}" = "839496" ] && \
+           [ "${RES[is_prop_interp_var]:-}" = "true" ] && \
+           [ "${RES[prop_var_fg]:-}" = "839496" ] && \
+           [ "${RES[is_prop_excl_comment]:-}" = "true" ]; then
             pass "Neovim highlights Java Properties documents (sample.properties) with Converged Ergonomic Solarized: keys in Green (@property.properties #859900), delimiters in Base0 (@operator #839496), strings in Cyan (@string #2aa198), integers/booleans/floats in Magenta (@number, @boolean, @number.float #d33682), variable interpolation delimiters and keys in calm Base0 (@punctuation.special, @variable.properties #839496), and comments in Base01 Dim (@comment)"
         else
-            fail "Neovim Java Properties Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.properties (key=${RES[is_prop_key]} key_fg=${RES[prop_key_fg]} eq=${RES[is_prop_eq_op]} eq_fg=${RES[prop_eq_fg]} str=${RES[is_prop_val_str]} str_fg=${RES[prop_str_fg]} num=${RES[is_prop_val_num]} num_fg=${RES[prop_num_fg]} bool=${RES[is_prop_val_bool]} bool_fg=${RES[prop_bool_fg]} float=${RES[is_prop_val_float]} float_fg=${RES[prop_float_fg]} interp_delim=${RES[is_prop_interp_delim]} interp_delim_fg=${RES[prop_interp_delim_fg]} var=${RES[is_prop_interp_var]} var_fg=${RES[prop_var_fg]} comment=${RES[is_prop_excl_comment]})"
+            fail "Neovim Java Properties Tree-sitter highlights" "Expected complete Tree-sitter capture matches in sample.properties (key=${RES[is_prop_key]:-} key_fg=${RES[prop_key_fg]:-} eq=${RES[is_prop_eq_op]:-} eq_fg=${RES[prop_eq_fg]:-} str=${RES[is_prop_val_str]:-} str_fg=${RES[prop_str_fg]:-} num=${RES[is_prop_val_num]:-} num_fg=${RES[prop_num_fg]:-} bool=${RES[is_prop_val_bool]:-} bool_fg=${RES[prop_bool_fg]:-} float=${RES[is_prop_val_float]:-} float_fg=${RES[prop_float_fg]:-} interp_delim=${RES[is_prop_interp_delim]:-} interp_delim_fg=${RES[prop_interp_delim_fg]:-} var=${RES[is_prop_interp_var]:-} var_fg=${RES[prop_var_fg]:-} comment=${RES[is_prop_excl_comment]:-})"
         fi
 
-        if [ "${RES[ui_curline_nr_fg]}" = "93a1a1" ] && \
-           [ "${RES[ui_curline_nr_bg]}" = "073642" ] && \
-           [ "${RES[ui_curline_nr_bold]}" = "true" ] && \
-           [ "${RES[ui_linenr_fg]}" = "586e75" ] && \
-           [ "${RES[ui_linenr_bg]}" = "002b36" ] && \
-           [ "${RES[ui_winsep_fg]}" = "586e75" ] && \
-           [ "${RES[ui_vertsplit_fg]}" = "586e75" ] && \
-           [ "${RES[ui_floatborder_fg]}" = "586e75" ] && \
-           [ "${RES[ui_matchparen_fg]}" = "93a1a1" ] && \
-           [ "${RES[ui_matchparen_bg]}" = "073642" ] && \
-           [ "${RES[ui_matchparen_bold]}" = "true" ] && \
-           [ "${RES[ui_search_fg]}" = "93a1a1" ] && \
-           [ "${RES[ui_search_bg]}" = "364725" ] && \
-           [ "${RES[ui_visual_bg]}" = "2c4e56" ] && \
-           [ "${RES[ui_diag_hint_fg]}" = "2aa198" ] && \
-           [ "${RES[ui_diag_sign_hint_fg]}" = "2aa198" ] && \
-           [ "${RES[ui_diffadd_fg]}" = "859900" ] && \
-           [ "${RES[ui_diffadd_bg]}" = "274c25" ] && \
-           [ "${RES[ui_diffdel_fg]}" = "dc322f" ] && \
-           [ "${RES[ui_diffdel_bg]}" = "422d33" ] && \
-           [ "${RES[ui_diffchg_fg]}" = "b58900" ] && \
-           [ "${RES[ui_diffchg_bg]}" = "364725" ] && \
-           [ "${RES[ui_difftext_fg]}" = "268bd2" ] && \
-           [ "${RES[ui_difftext_bg]}" = "0b4764" ]; then
+        if [ "${RES[ui_curline_nr_fg]:-}" = "93a1a1" ] && \
+           [ "${RES[ui_curline_nr_bg]:-}" = "073642" ] && \
+           [ "${RES[ui_curline_nr_bold]:-}" = "true" ] && \
+           [ "${RES[ui_linenr_fg]:-}" = "586e75" ] && \
+           [ "${RES[ui_linenr_bg]:-}" = "002b36" ] && \
+           [ "${RES[ui_winsep_fg]:-}" = "586e75" ] && \
+           [ "${RES[ui_vertsplit_fg]:-}" = "586e75" ] && \
+           [ "${RES[ui_floatborder_fg]:-}" = "586e75" ] && \
+           [ "${RES[ui_matchparen_fg]:-}" = "93a1a1" ] && \
+           [ "${RES[ui_matchparen_bg]:-}" = "073642" ] && \
+           [ "${RES[ui_matchparen_bold]:-}" = "true" ] && \
+           [ "${RES[ui_search_fg]:-}" = "93a1a1" ] && \
+           [ "${RES[ui_search_bg]:-}" = "364725" ] && \
+           [ "${RES[ui_visual_bg]:-}" = "2c4e56" ] && \
+           [ "${RES[ui_diag_hint_fg]:-}" = "2aa198" ] && \
+           [ "${RES[ui_diag_sign_hint_fg]:-}" = "2aa198" ] && \
+           [ "${RES[ui_diffadd_fg]:-}" = "859900" ] && \
+           [ "${RES[ui_diffadd_bg]:-}" = "274c25" ] && \
+           [ "${RES[ui_diffdel_fg]:-}" = "dc322f" ] && \
+           [ "${RES[ui_diffdel_bg]:-}" = "422d33" ] && \
+           [ "${RES[ui_diffchg_fg]:-}" = "b58900" ] && \
+           [ "${RES[ui_diffchg_bg]:-}" = "364725" ] && \
+           [ "${RES[ui_difftext_fg]:-}" = "268bd2" ] && \
+           [ "${RES[ui_difftext_bg]:-}" = "0b4764" ]; then
             pass "Neovim highlights Editor UI & Framing Architecture with Converged Ergonomic Solarized: CursorLineNr in Base1 Bold (#93a1a1) on Base02 (#073642), LineNr in Base01 (#586e75), WinSeparator/FloatBorder in calm Base01 (#586e75), MatchParen in Base1 Bold on Base02, Search in mix_yellow (#364725) distinct from Visual in mix_base1 (#2c4e56), DiagnosticHint in Cyan (#2aa198), and DiffAdd/Delete/Change/Text with soft background tints"
         else
-            fail "Neovim UI highlights" "Expected complete UI highlight matches (curline_nr=${RES[ui_curline_nr_fg]}/${RES[ui_curline_nr_bg]} linenr=${RES[ui_linenr_fg]} winsep=${RES[ui_winsep_fg]} floatborder=${RES[ui_floatborder_fg]} matchparen=${RES[ui_matchparen_fg]}/${RES[ui_matchparen_bg]} search=${RES[ui_search_bg]} visual=${RES[ui_visual_bg]} hint=${RES[ui_diag_hint_fg]} diffadd=${RES[ui_diffadd_fg]}/${RES[ui_diffadd_bg]})"
+            fail "Neovim UI highlights" "Expected complete UI highlight matches (curline_nr=${RES[ui_curline_nr_fg]:-}/${RES[ui_curline_nr_bg]:-} linenr=${RES[ui_linenr_fg]:-} winsep=${RES[ui_winsep_fg]:-} floatborder=${RES[ui_floatborder_fg]:-} matchparen=${RES[ui_matchparen_fg]:-}/${RES[ui_matchparen_bg]:-} search=${RES[ui_search_bg]:-} visual=${RES[ui_visual_bg]:-} hint=${RES[ui_diag_hint_fg]:-} diffadd=${RES[ui_diffadd_fg]:-}/${RES[ui_diffadd_bg]:-})"
         fi
     fi
 else

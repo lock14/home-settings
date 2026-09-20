@@ -1,8 +1,8 @@
 #!/bin/zsh
 
 # Solarized Dark TrueColor (Ethan Schoonover palette) for CLI Syntax Highlighting & ZLE
-typeset -A ZSH_HIGHLIGHT_STYLES
-ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
+typeset -gA ZSH_HIGHLIGHT_STYLES
+typeset -ga ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
 
 # Commands & Builtins (Solarized Green #859900 - unbolded, zero-jitter)
 ZSH_HIGHLIGHT_STYLES[command]='fg=#859900'

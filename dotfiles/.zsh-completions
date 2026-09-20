@@ -7,12 +7,15 @@ if [ -d "$HOME/.zsh/completions" ]; then
 
     # If compinit has already run, register custom completion bindings
     if (( $+functions[compdef] )); then
-        for comp_file in "$HOME/.zsh/completions"/_*; do
-            [ -f "$comp_file" ] || continue
-            local cmd_name="${comp_file:t}"
-            cmd_name="${cmd_name#_}"
-            autoload -Uz "${comp_file:t}"
-            compdef "${comp_file:t}" "$cmd_name" 2>/dev/null || true
-        done
+        () {
+            local comp_file cmd_name
+            for comp_file in "$HOME/.zsh/completions"/_*(N); do
+                [ -f "$comp_file" ] || continue
+                cmd_name="${comp_file:t}"
+                cmd_name="${cmd_name#_}"
+                autoload -Uz "${comp_file:t}"
+                compdef "${comp_file:t}" "$cmd_name" 2>/dev/null || true
+            done
+        }
     fi
 fi

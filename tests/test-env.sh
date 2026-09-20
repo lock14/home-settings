@@ -167,18 +167,297 @@ fi
 export PATH="$OLD_MOCK_PATH"
 rm -rf "$MOCK_BIN"
 
-# Test 3: Verify bashrc-addendum sourcing
-echo -e "\n[3/4] Testing dotfiles/.bashrc-addendum..."
+# Test 3: Verify bashrc-addendum sourcing & standalone server fallback mode
+echo -e "\n[3/4] Testing dotfiles/.bashrc-addendum (full workstation & standalone server modes)..."
 cp "$SCRIPT_DIR/dotfiles/.environment-variables" "$HOME/.environment-variables"
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
 
 if [ "${EDITOR:-}" = "vim" ] || [ "${EDITOR:-}" = "nvim" ] || [ "${EDITOR:-}" = "vi" ]; then
-    pass "bashrc-addendum sourced .environment-variables"
+    pass "bashrc-addendum sourced .environment-variables when present"
 else
     fail "bashrc-addendum sourcing" ".environment-variables was not sourced (EDITOR=${EDITOR:-})"
 fi
+
+# Test standalone server mode in a fresh empty HOME with zero sibling dotfiles
+STANDALONE_HOME=$(mktemp -d)
+(
+    export HOME="$STANDALONE_HOME"
+    unset EDITOR VISUAL COLORTERM LS_COLORS LSCOLORS HISTSIZE HISTFILESIZE HISTCONTROL LESS_TERMCAP_md LESS_TERMCAP_us SSH_CLIENT SSH_TTY SSH_CONNECTION
+    shopt -s expand_aliases
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
+
+    if [ "${COLORTERM:-}" = "truecolor" ] && [ -n "${EDITOR:-}" ] && [ "${VISUAL:-}" = "${EDITOR:-}" ] && \
+       [ "${GOPATH:-}" = "$STANDALONE_HOME/.local/share/go" ] && [ "${GOCACHE:-}" = "$STANDALONE_HOME/.cache/go-build" ] && \
+       [ "${HISTSIZE:-}" = "50000" ] && [ "${HISTFILESIZE:-}" = "100000" ] && \
+       [[ "${HISTCONTROL:-}" == *"ignoreboth"* ]] && [ -n "${LESS_TERMCAP_md:-}" ] && [ -n "${LESS_TERMCAP_us:-}" ]; then
+        echo "PASS:Standalone .bashrc-addendum exports COLORTERM, EDITOR/VISUAL, XDG GOPATH/GOCACHE, history settings, and Solarized LESS_TERMCAP manpage colors"
+    else
+        echo "FAIL:Standalone env fallback:Missing expected exports (COLORTERM=${COLORTERM:-}, EDITOR=${EDITOR:-}, GOPATH=${GOPATH:-}, HISTSIZE=${HISTSIZE:-})"
+    fi
+
+    if [[ "${LS_COLORS:-}" == *"di=34:"* ]] && [[ "${LS_COLORS:-}" == *"ln=36:"* ]] && \
+       [[ "${LS_COLORS:-}" == *"ex=32:"* ]] && [[ "${LS_COLORS:-}" == *"*.tar=91:"* ]] && \
+       [[ "${LS_COLORS:-}" == *"*.png=95:"* ]] && [[ "${LS_COLORS:-}" == *"*.key=35:"* ]] && \
+       [[ "${LS_COLORS:-}" == *"*.pem=35:"* ]] && [[ "${LS_COLORS:-}" == *"*.txt=00:"* ]] && \
+       [ "${LSCOLORS:-}" = "exgxfxdxcxfxfxegedabagacad" ]; then
+        echo "PASS:Standalone .bashrc-addendum configures calibrated inline Solarized Dark LS_COLORS and LSCOLORS"
+    else
+        echo "FAIL:Standalone LS_COLORS:Unexpected LS_COLORS or LSCOLORS in standalone mode"
+    fi
+
+    if alias gcommit >/dev/null 2>&1 && alias gamend >/dev/null 2>&1 && \
+       alias gprune >/dev/null 2>&1 && alias gpurge >/dev/null 2>&1 && \
+       alias guser-branch >/dev/null 2>&1 && alias ll >/dev/null 2>&1 && \
+       alias grep >/dev/null 2>&1 && declare -F gsync >/dev/null 2>&1; then
+        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gprune, gpurge, guser-branch), ls/grep aliases, and gsync function"
+    else
+        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases or gsync function"
+    fi
+
+    # Test Solarized Dark PS1 shelf prompt states (local vs SSH, clean vs dirty git, detached HEAD, non-git dir, TERM=linux fallback, exit status 0 vs non-zero)
+    cd "$STANDALONE_HOME"
+    true
+    _solarized_bash_prompt
+    ps1_nongit_ok="$PS1"
+
+    MOCK_REPO="$STANDALONE_HOME/repo"
+    mkdir -p "$MOCK_REPO"
+    cd "$MOCK_REPO"
+    git init -b main >/dev/null 2>&1
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    git config commit.gpgsign false
+    echo "init" > README.md
+    git add README.md && git commit -m "initial" >/dev/null 2>&1
+    short_sha=$(git rev-parse --short HEAD)
+
+    true
+    _solarized_bash_prompt
+    ps1_clean_ok="$PS1"
+
+    git checkout --detach HEAD >/dev/null 2>&1
+    true
+    _solarized_bash_prompt
+    ps1_detached_ok="$PS1"
+    git checkout main >/dev/null 2>&1
+
+    cd "$MOCK_REPO/.git"
+    true
+    _solarized_bash_prompt
+    ps1_dotgit_dir="$PS1"
+    cd "$MOCK_REPO"
+
+    git checkout -q -b 'feat/$(echo_INJECTED)'
+    true
+    _solarized_bash_prompt
+    ps1_branch_escaped="${PS1@P}"
+    git checkout -q main
+    git branch -D 'feat/$(echo_INJECTED)' >/dev/null 2>&1
+
+    OSTYPE=darwin23 _solarized_bash_prompt
+    ps1_macos="$PS1"
+
+    COLORTERM="" TERM=xterm-256color _solarized_bash_prompt
+    ps1_16color_utf8="$PS1"
+
+    TERM=linux _solarized_bash_prompt
+    ps1_linux_vt="$PS1"
+
+    export SSH_CONNECTION="192.0.2.1 54321 192.0.2.2 22"
+    echo "dirty" >> README.md
+    false || _solarized_bash_prompt
+    ps1_ssh_dirty_err="$PS1"
+
+    if [[ "$ps1_clean_ok" == *"48;2;7;54;66m"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;131;148;150m\\]"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;88;110;117m\\]"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;38;139;210m\\]\\w"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;7;54;66m\\]"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;133;153;0m\\]❯"* ]] && \
+       [[ "$ps1_clean_ok" != *"│"* ]] && \
+       [[ "$ps1_macos" == *"38;2;131;148;150m\\]"* ]] && \
+       [[ "$ps1_16color_utf8" == *"\\e[40m\\]"* ]] && \
+       [[ "$ps1_16color_utf8" == *"\\e[90m\\]"* ]] && \
+       [[ "$ps1_16color_utf8" == *"\\e[0m\\e[30m\\]"* ]] && \
+       [[ "$ps1_nongit_ok" == *"48;2;7;54;66m"* ]] && \
+       [[ "$ps1_nongit_ok" == *"38;2;38;139;210m\\]\\w \\["* ]] && \
+       [[ "$ps1_nongit_ok" != *""* ]] && \
+       [[ "$ps1_dotgit_dir" != *""* ]] && \
+       [[ "$ps1_branch_escaped" == *'feat/$(echo_INJECTED)'* ]] && \
+       [[ "$ps1_detached_ok" == *"38;2;133;153;0m\\]  ${short_sha}"* ]] && \
+       [[ "$ps1_linux_vt" == *"\\e[40m\\]"* ]] && \
+       [[ "$ps1_linux_vt" == *"\\e[90m\\]>"* ]] && \
+       [[ "$ps1_linux_vt" == *"\\e[32m\\]>"* ]] && \
+       [[ "$ps1_linux_vt" != *""* ]] && \
+       [[ "$ps1_linux_vt" != *""* ]] && \
+       [[ "$ps1_linux_vt" != *""* ]] && \
+       [[ "$ps1_linux_vt" != *""* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;131;148;150m\\]"* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;181;137;0m\\]\\u@\\h"* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;181;137;0m\\]  main*"* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;7;54;66m\\]"* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;220;50;47m\\]❯"* ]] && \
+       [[ "$ps1_ssh_dirty_err" != *"│"* ]]; then
+        echo 'PASS:Standalone _solarized_bash_prompt renders Base02 (#073642) shelf, Base01 (#586E75) \uE0B1 () directional chevrons, Base02 \uE0B0 () end-cap, Base0 OS icon + Base0/Yellow host, Blue dir, Green/Yellow \uF1D3/\uF126 ( ) git status, TERM=linux fallback, and zero box-drawing bars (│)'
+    else
+        echo "FAIL:Standalone PS1 shelf prompt:Unexpected PS1 sequences (clean=$ps1_clean_ok | nongit=$ps1_nongit_ok | dotgit=$ps1_dotgit_dir | escaped=$ps1_branch_escaped | detached=$ps1_detached_ok | linux=$ps1_linux_vt | ssh_dirty=$ps1_ssh_dirty_err)"
+    fi
+
+    # Test VCS remote host icons (GitHub \uF113 , GitLab \uF296 , Bitbucket \uF171 , generic Git \uF1D3 , tracked branch remote, inline comments, linked worktree, and TERM=linux)
+    unset SSH_CONNECTION
+    git checkout -- README.md
+    git remote add origin "https://github.com/octocat/Hello-World.git"
+    true
+    _solarized_bash_prompt
+    ps1_gh_clean="$PS1"
+
+    echo "dirty" >> README.md
+    true
+    _solarized_bash_prompt
+    ps1_gh_dirty="$PS1"
+    git checkout -- README.md
+
+    TERM=linux _solarized_bash_prompt
+    ps1_gh_linux="$PS1"
+
+    git remote set-url origin "git@gitlab.com:gitlab-org/gitlab.git"
+    true
+    _solarized_bash_prompt
+    ps1_gl_clean="$PS1"
+
+    git remote set-url origin "https://bitbucket.org/atlassian/stash.git"
+    true
+    _solarized_bash_prompt
+    ps1_bb_clean="$PS1"
+
+    git remote remove origin
+    cat > "$STANDALONE_HOME/.gitconfig" <<'EOF'
+[url "https://github.com/"]
+	insteadOf = gh:
+[url "https://gitlab.com/"]
+	insteadOf = forge:
+[includeIf "gitdir:~/repo/"]
+	path = ~/work-includeif.cfg
+EOF
+    cat > "$STANDALONE_HOME/work-includeif.cfg" <<'EOF'
+[url "https://[::1]/bitbucket/"]
+	insteadOf = bb6:
+EOF
+    cat > "$STANDALONE_HOME/included-remotes.cfg" <<'EOF'
+[remote "corp/gitlab"]
+	url = \
+		https://gitlab.com/corp/service.git ; gitlab instance
+EOF
+    cat >> "$MOCK_REPO/.git/config" <<'EOF'
+[include]
+	path = ../../included-remotes.cfg
+[url "https://github.com/"]
+	insteadOf = forge:
+[remote "origin"] # primary remote with inline comment
+	url = https://git.example.com/team/project.git # mirror of github (inline comment must be ignored)
+[remote "upstream"]
+	url = https://gitlab.com/team/project.git ; upstream gitlab
+EOF
+    true
+    _solarized_bash_prompt
+    ps1_generic_comment="$PS1"
+
+    git config branch.main.remote "corp/gitlab"
+    true
+    _solarized_bash_prompt
+    ps1_tracked_upstream="$PS1"
+    git config --unset branch.main.remote
+
+    git config remote.origin.url "gh:lock14/home-settings.git"
+    true
+    _solarized_bash_prompt
+    ps1_insteadof_gh="$PS1"
+
+    git config remote.origin.url "forge:lock14/home-settings.git"
+    true
+    _solarized_bash_prompt
+    ps1_insteadof_override="$PS1"
+
+    git config remote.origin.url "bb6:atlassian/stash.git"
+    true
+    _solarized_bash_prompt
+    ps1_includeif_bb6="$PS1"
+
+    git config remote.origin.url "https://github.com/lock14/home-settings.git"
+    git config --add remote.origin.url "https://backup.internal.example/lock14/home-settings.git"
+    true
+    _solarized_bash_prompt
+    ps1_multi_url_gh="$PS1"
+
+    rm -f "$STANDALONE_HOME/.gitconfig" "$STANDALONE_HOME/work-includeif.cfg" "$STANDALONE_HOME/included-remotes.cfg"
+
+    git config --replace-all remote.origin.url "git@github.com:lock14/home-settings.git"
+    WT_REPO="$STANDALONE_HOME/wt-repo"
+    git worktree add -b wt-branch "$WT_REPO" >/dev/null 2>&1
+    cd "$WT_REPO"
+    true
+    _solarized_bash_prompt
+    ps1_wt_gh="$PS1"
+    cd "$MOCK_REPO"
+    git worktree remove --force "$WT_REPO" >/dev/null 2>&1 || rm -rf "$WT_REPO"
+
+    if [[ "$ps1_gh_clean" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_gh_dirty" == *"38;2;181;137;0m\\]  main*"* ]] && \
+       [[ "$ps1_gl_clean" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_bb_clean" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_generic_comment" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_tracked_upstream" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_insteadof_gh" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_insteadof_override" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_includeif_bb6" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_multi_url_gh" == *"38;2;133;153;0m\\]  main"* ]] && \
+       [[ "$ps1_wt_gh" == *"38;2;133;153;0m\\]  wt-branch"* ]] && \
+       [[ "$ps1_gh_linux" != *""* ]] && \
+       [[ "$ps1_gh_linux" != *""* ]] && \
+       [[ "$ps1_gh_linux" == *"\\e[32m\\]main"* ]]; then
+        echo 'PASS:Standalone _solarized_bash_prompt resolves .git/config (and worktree commondir) in pure Bash for GitHub (), GitLab (), Bitbucket (), and default Git () icons'
+    else
+        echo "FAIL:Standalone PS1 remote host icons:Unexpected remote icons (gh=$ps1_gh_clean | gh_dirty=$ps1_gh_dirty | gl=$ps1_gl_clean | bb=$ps1_bb_clean | generic=$ps1_generic_comment | tracked=$ps1_tracked_upstream | insteadof=$ps1_insteadof_gh | override=$ps1_insteadof_override | includeif=$ps1_includeif_bb6 | multi=$ps1_multi_url_gh | wt=$ps1_wt_gh | linux=$ps1_gh_linux)"
+    fi
+
+    # Test interactive Bash PROMPT_COMMAND coexistence with zoxide/mise and exit status propagation
+    interactive_out=$(HOME="$STANDALONE_HOME" bash --norc -i -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; false; eval \"\$PROMPT_COMMAND\"; p_err=\"\$PS1\"; true; eval \"\$PROMPT_COMMAND\"; p_ok=\"\$PS1\"; printf 'PC=%s\nERR=%s\nOK=%s\n' \"\${PROMPT_COMMAND[*]}\" \"\$p_err\" \"\$p_ok\"" 2>/dev/null)
+    if grep -Fq "_solarized_bash_prompt" <<< "$interactive_out" && \
+       grep -Fq "220;50;47m" <<< "$interactive_out" && \
+       grep -Fq "133;153;0m" <<< "$interactive_out" && \
+       { ! command -v zoxide >/dev/null 2>&1 || grep -Fq "__zoxide_hook" <<< "$interactive_out"; } && \
+       { ! command -v mise >/dev/null 2>&1 || grep -Fq "_mise_hook" <<< "$interactive_out"; }; then
+        echo "PASS:Interactive .bashrc-addendum preserves zoxide/mise PROMPT_COMMAND hooks and propagates command exit status"
+    else
+        echo "FAIL:Interactive PROMPT_COMMAND:Missing hooks or exit status propagation ($interactive_out)"
+    fi
+
+    # Test minimal server vi-only fallback (neither nvim nor vim installed)
+    VI_ONLY_BIN="$STANDALONE_HOME/vi-only-bin"
+    mkdir -p "$VI_ONLY_BIN"
+    ln -s "$(command -v uname)" "$VI_ONLY_BIN/uname"
+    touch "$VI_ONLY_BIN/vi" && chmod +x "$VI_ONLY_BIN/vi"
+    vi_only_out=$(HOME="$STANDALONE_HOME" PATH="$VI_ONLY_BIN" "$BASH" -c "shopt -s expand_aliases; source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; printf 'EDITOR=%s|ALIAS_VI=%s|ALIAS_V=%s\n' \"\${EDITOR:-}\" \"\$(alias vi 2>/dev/null || echo none)\" \"\$(alias v 2>/dev/null || echo none)\"")
+    if [[ "$vi_only_out" == *"EDITOR=vi|ALIAS_VI=none|ALIAS_V=alias v='vi'"* ]]; then
+        echo "PASS:Standalone .bashrc-addendum preserves working vi and aliases v='vi' when nvim and vim are absent"
+    else
+        echo "FAIL:Standalone vi-only fallback:Unexpected alias/editor state ($vi_only_out)"
+    fi
+) > "$STANDALONE_HOME/results.txt"
+
+while IFS= read -r line; do
+    if [[ "$line" == PASS:* ]]; then
+        pass "${line#PASS:}"
+    elif [[ "$line" == FAIL:* ]]; then
+        rest="${line#FAIL:}"
+        fail "${rest%%:*}" "${rest#*:}"
+    fi
+done < "$STANDALONE_HOME/results.txt"
+rm -rf "$STANDALONE_HOME"
 
 cleanup_env_test
 trap - EXIT

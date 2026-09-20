@@ -101,15 +101,19 @@ System & Package Options:
 
 Database Options (Client tools installed by default):
   --db <engine>           Database server engine to install: postgres, mariadb, all, none (default: none)
-  --with-postgres         Install PostgreSQL server & client tools
+  --with-postgres, --with-postgresql
+                          Install PostgreSQL server & client tools
   --with-mariadb          Install MariaDB server & client tools
   --skip-db               Skip all database client and server installations
 
 GUI & Desktop Options (Optional, disabled by default):
   --with-gui              Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code)
   --with-ghostty          Install Ghostty terminal emulator
+  --skip-ghostty          Skip Ghostty terminal emulator installation
   --with-chrome           Install Google Chrome
+  --skip-chrome           Skip Google Chrome installation
   --with-apps             Install desktop apps (VS Code / IDE)
+  --skip-apps             Skip desktop apps installation (VS Code / IDE)
   -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
 
 User Environment Options:
@@ -122,7 +126,7 @@ User Environment Options:
   --skip-bash             Skip Bash configuration and environment variables
   --skip-bin              Skip ~/.local/bin user utilities synchronization
   --skip-completions      Skip CLI tab completions generation
-  --skip-terminal         Skip terminal emulator profile configuration (GNOME Terminal)
+  --skip-terminal         Skip terminal emulator profile configuration (GNOME Terminal & macOS Terminal.app)
 
 General Options:
   -h, --help              Show this help message
