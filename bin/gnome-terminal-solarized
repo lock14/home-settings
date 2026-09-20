@@ -126,4 +126,13 @@ print(repr(l))
 dconf write /org/gnome/terminal/legacy/profiles:/list "$NEW_LIST"
 dconf write /org/gnome/terminal/legacy/profiles:/default "'$PROFILE_UUID'"
 
+# Ensure no profile (in list or lingering) retains a broken/missing font that triggers proportional fallback
+for prof in $(dconf list /org/gnome/terminal/legacy/profiles:/ 2>/dev/null | grep '^:' | tr -d ':/' || true); do
+    p_font="$(dconf read "/org/gnome/terminal/legacy/profiles:/:$prof/font" 2>/dev/null || true)"
+    if [ "$p_font" = "'MesloLGS Nerd Font 12'" ]; then
+        dconf write "/org/gnome/terminal/legacy/profiles:/:$prof/font" "'MesloLGS NF 12'"
+    fi
+done
+
 echo "  GNOME Terminal profile '$PROFILE_NAME' successfully configured as default."
+

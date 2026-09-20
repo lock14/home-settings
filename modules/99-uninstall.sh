@@ -137,6 +137,7 @@ uninstall_fonts() {
         echo "  [DryRun] rm -f $font_dir/MesloLGS-NF-*.ttf $font_dir/MesloLGS NF*.ttf $font_dir/MesloLGSNerdFont*.ttf"
     else
         rm -f "$font_dir"/MesloLGS-NF-*.ttf "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf || true
+        rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d/10-meslo-nerd-font.conf"
         if command -v fc-cache >/dev/null 2>&1; then
             fc-cache -f "$font_dir" >/dev/null 2>&1 || true
         fi

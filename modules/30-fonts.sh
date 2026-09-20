@@ -30,10 +30,23 @@ else
     CACHE_DIR="${HOME_SETTINGS_FONT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/home-settings/fonts}"
     mkdir -p "$CACHE_DIR"
 
-    # Remove any conflicting Nerd Fonts v3 or hyphenated files and fontconfig alias symlinks
+    # Remove any conflicting Nerd Fonts v3 or hyphenated files
     rm -f "$FONT_DIR"/MesloLGSNerdFont-*.ttf "$CACHE_DIR"/MesloLGSNerdFont-*.ttf
     rm -f "$FONT_DIR"/MesloLGS-NF-*.ttf
-    rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d/10-meslo-nerd-font.conf"
+
+    # Ensure fontconfig alias is provisioned on Linux
+    if [ "$OS" != "macos" ]; then
+        fontconfig_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d"
+        mkdir -p "$fontconfig_dir"
+        fc_alias_src="$REPO_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+        fc_alias_dest="$fontconfig_dir/10-meslo-nerd-font.conf"
+        if [ -f "$fc_alias_src" ] && [ ! -e "$fc_alias_dest" ]; then
+            cp -f "$fc_alias_src" "$fc_alias_dest"
+        fi
+    fi
+
+
+
 
     BASE_FONT_URL="https://github.com/romkatv/powerlevel10k-media/raw/master"
     FONTS=(
@@ -99,5 +112,9 @@ else
     fi
     if command -v fc-cache &>/dev/null; then
         fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
+        if [ "$OS" != "macos" ] && [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig" ]; then
+            fc-cache -f "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig" >/dev/null 2>&1 || true
+        fi
     fi
+
 fi

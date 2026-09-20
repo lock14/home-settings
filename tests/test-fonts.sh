@@ -65,6 +65,39 @@ if command -v fc-query >/dev/null 2>&1; then
     fi
 fi
 
+if [ -f "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ]; then
+    pass "Fontconfig alias 10-meslo-nerd-font.conf installed"
+else
+    fail "Fontconfig alias missing" "Expected $TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+fi
+
+if command -v fc-match >/dev/null 2>&1; then
+    fc_conf="$TEMP_HOME/test-fc.conf"
+    cat << EOF > "$fc_conf"
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <include>/etc/fonts/fonts.conf</include>
+  <dir>$TEMP_HOME/.local/share/fonts</dir>
+  <include>$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf</include>
+</fontconfig>
+EOF
+    matched_nf="$(FONTCONFIG_FILE="$fc_conf" fc-match --format='%{family}|%{file}\n' "MesloLGS NF" 2>/dev/null || true)"
+    matched_v3="$(FONTCONFIG_FILE="$fc_conf" fc-match --format='%{family}|%{file}\n' "MesloLGS Nerd Font" 2>/dev/null || true)"
+    if grep -Fq "MesloLGS NF" <<< "$matched_nf" && grep -Fq "MesloLGS NF Regular.ttf" <<< "$matched_nf"; then
+        pass "fc-match resolves 'MesloLGS NF' to MesloLGS NF Regular.ttf"
+    else
+        fail "fc-match 'MesloLGS NF'" "Expected MesloLGS NF Regular.ttf, got: $matched_nf"
+    fi
+    if grep -Fq "MesloLGS NF" <<< "$matched_v3" && grep -Fq "MesloLGS NF Regular.ttf" <<< "$matched_v3"; then
+        pass "fc-match resolves 'MesloLGS Nerd Font' alias to MesloLGS NF Regular.ttf"
+    else
+        fail "fc-match 'MesloLGS Nerd Font' alias" "Expected MesloLGS NF Regular.ttf, got: $matched_v3"
+    fi
+    rm -f "$fc_conf"
+fi
+
+
 # Verify that any conflicting MesloLGSNerdFont-*.ttf or MesloLGS-NF-*.ttf files are cleaned up and replaced with romkatv MesloLGS NF *.ttf
 printf "conflicting-v3-font" > "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf"
 printf "conflicting-hyphen-font" > "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf"
