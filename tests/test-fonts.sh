@@ -86,25 +86,30 @@ for path in sys.argv[1:]:
     num_tables = struct.unpack(">H", data[4:6])[0]
     tables = {data[12+i*16:16+i*16].decode("latin1"): struct.unpack(">II", data[20+i*16:28+i*16]) for i in range(num_tables)}
     os2_off = tables["OS/2"][0]
+    post_off = tables["post"][0]
+    os2_ver = struct.unpack(">H", data[os2_off:os2_off+2])[0]
     fs_sel = struct.unpack(">H", data[os2_off+62:os2_off+64])[0]
     typo_asc, typo_desc, typo_gap = struct.unpack(">hhh", data[os2_off+68:os2_off+74])
-    assert (fs_sel & 0x0080) == 0, f"USE_TYPO_METRICS still set in {path}"
+    is_fixed = struct.unpack(">I", data[post_off+12:post_off+16])[0]
+    assert os2_ver == 3, f"Expected OS/2 version 3 in {path}, got {os2_ver}"
+    assert fs_sel == 0x0040, f"Expected Regular fsSelection 0x0040 in {path}, got {hex(fs_sel)}"
     assert (typo_asc, typo_desc, typo_gap) == (1556, -492, 0), f"Unexpected OS/2 typo metrics in {path}: {(typo_asc, typo_desc, typo_gap)}"
+    assert is_fixed == 1, f"Expected post.isFixedPitch=1 in {path}, got {is_fixed}"
 PYEOF
     then
-        pass "OpenType OS/2 vertical metrics (sTypoAscender=1556, sTypoDescender=-492, USE_TYPO_METRICS=False) and Powerline contours calibrated in both font families"
+        pass "OpenType OS/2 (version=3, fsSelection=0x0040 Regular, sTypoAscender=1556, sTypoDescender=-492), post.isFixedPitch=1, and Powerline contours calibrated"
     else
-        fail "OpenType OS/2 & Powerline calibration check" "OS/2 or Powerline metrics did not match romkatv MesloLGS NF specification"
+        fail "OpenType OS/2 & Powerline calibration check" "OS/2, post.isFixedPitch, or Powerline metrics did not match romkatv MesloLGS NF specification"
     fi
 fi
 
 if command -v fc-match >/dev/null 2>&1; then
-    fc_v3_family="$(HOME="$TEMP_HOME" XDG_DATA_HOME="$TEMP_HOME/.local/share" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" fc-match --format='%{family}' "MesloLGS Nerd Font" 2>/dev/null || true)"
-    fc_nf_family="$(HOME="$TEMP_HOME" XDG_DATA_HOME="$TEMP_HOME/.local/share" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" fc-match --format='%{family}' "MesloLGS NF" 2>/dev/null || true)"
-    if [[ "$fc_v3_family" == *"MesloLGS Nerd Font"* ]] && [[ "$fc_nf_family" == *"MesloLGS"* ]]; then
-        pass "fc-match resolves both 'MesloLGS Nerd Font' and 'MesloLGS NF' to patched Nerd Fonts v3"
+    fc_v3_match="$(HOME="$TEMP_HOME" XDG_DATA_HOME="$TEMP_HOME/.local/share" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" fc-match --format='%{family}|%{style}|%{slant}' "MesloLGS Nerd Font" 2>/dev/null || true)"
+    fc_nf_match="$(HOME="$TEMP_HOME" XDG_DATA_HOME="$TEMP_HOME/.local/share" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" fc-match --format='%{family}|%{style}|%{slant}' "MesloLGS NF" 2>/dev/null || true)"
+    if [[ "$fc_v3_match" == *"MesloLGS Nerd Font|Regular|0"* ]] && [[ "$fc_nf_match" == *"MesloLGS NF|Regular|0"* ]]; then
+        pass "fc-match resolves both 'MesloLGS Nerd Font' and 'MesloLGS NF' to upright Regular (slant=0)"
     else
-        fail "fc-match fontconfig alias resolution" "Got MesloLGS Nerd Font='$fc_v3_family', MesloLGS NF='$fc_nf_family'"
+        fail "fc-match Regular style resolution" "Got MesloLGS Nerd Font='$fc_v3_match', MesloLGS NF='$fc_nf_match'"
     fi
 fi
 

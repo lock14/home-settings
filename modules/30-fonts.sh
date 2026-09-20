@@ -73,7 +73,7 @@ else
         fi
     fi
     if command -v python3 >/dev/null 2>&1; then
-        python3 - "$FONT_DIR" "${FONT_SPECS[@]}" << 'PYEOF'
+        python3 - "$FONT_DIR" "$CACHE_DIR" "${FONT_SPECS[@]}" << 'PYEOF'
 import array, os, struct, sys
 
 def calc_checksum(b):
@@ -96,7 +96,7 @@ def patch_ttf(data, rename_to_nf=False):
             tag = data[off:off+4].decode("latin1")
             t_off, t_len = struct.unpack(">II", data[off+8:off+16])
             tables[tag] = (i, t_off, t_len)
-        for req in ("OS/2", "cmap", "loca", "glyf", "hmtx", "name", "head"):
+        for req in ("OS/2", "cmap", "loca", "glyf", "hmtx", "name", "head", "post"):
             if req not in tables:
                 return data
     except Exception:
@@ -104,14 +104,20 @@ def patch_ttf(data, rename_to_nf=False):
 
     buf = bytearray(data)
 
-    # 1. Calibrate OS/2 vertical metrics to match romkatv/powerlevel10k-media MesloLGS NF 1:1
-    #    Clears USE_TYPO_METRICS (bit 7) and sets sTypoAscender=1556, sTypoDescender=-492, sTypoLineGap=0
+    # 1. Calibrate OS/2 version, fsSelection, and vertical metrics to match romkatv MesloLGS NF 1:1
+    #    Sets version=3, clears USE_TYPO_METRICS (bit 7) and WWS (bit 8) so fsSelection is 0x0040 (Regular),
+    #    0x0020 (Bold), 0x0001 (Italic), 0x0021 (BoldItalic), and sets sTypoAscender=1556, sTypoDescender=-492, sTypoLineGap=0
     _, os2_off, _ = tables["OS/2"]
+    struct.pack_into(">H", buf, os2_off, 3)
     fs_sel = struct.unpack(">H", buf[os2_off+62:os2_off+64])[0]
-    struct.pack_into(">H", buf, os2_off+62, fs_sel & ~0x0080)
+    struct.pack_into(">H", buf, os2_off+62, fs_sel & ~0x0180)
     struct.pack_into(">hhh", buf, os2_off+68, 1556, -492, 0)
 
-    # 2. Transplant romkatv's hand-calibrated U+E0B0..U+E0B3 Powerline glyph contours and bearings
+    # 2. Mark post.isFixedPitch = 1 so CoreText / Cocoa / Ghostty classify all faces as fixed-pitch monospace
+    _, post_off, _ = tables["post"]
+    struct.pack_into(">I", buf, post_off + 12, 1)
+
+    # 3. Transplant romkatv's hand-calibrated U+E0B0..U+E0B3 Powerline glyph contours and bearings
     #    so shelf endcaps (U+E0B0/U+E0B2) and thin chevrons (U+E0B1/U+E0B3) bleed seamlessly into Base02.
     _, cmap_off, _ = tables["cmap"]
     num_sub = struct.unpack(">H", buf[cmap_off+2:cmap_off+4])[0]
@@ -122,7 +128,7 @@ def patch_ttf(data, rename_to_nf=False):
         if struct.unpack(">H", buf[f_off:f_off+2])[0] == 12:
             n_groups = struct.unpack(">I", buf[f_off+12:f_off+16])[0]
             for g in range(n_groups):
-                sc, ec, sg = struct.unpack(">III", buf[f_off+16+g*12:f_off+28+g*12])
+                sc, ec, sg = struct.unpack(">III", data[f_off+16+g*12:f_off+28+g*12])
                 for cp in (0xE0B0, 0xE0B1, 0xE0B2, 0xE0B3):
                     if sc <= cp <= ec:
                         cmap[cp] = sg + (cp - sc)
@@ -147,9 +153,9 @@ def patch_ttf(data, rename_to_nf=False):
                 buf[glyf_off+g1:glyf_off+g2] = g_bytes + b"\x00" * (slot_len - len(g_bytes))
                 buf[hmtx_off+gid*4:hmtx_off+gid*4+4] = hm_bytes
 
-    # 3. Optionally rebuild OpenType name table for native 'MesloLGS NF' (MesloLGS-NF-*) family lookup
+    # 4. Optionally rebuild OpenType name table in-place for native 'MesloLGS NF' (MesloLGS-NF-*) family lookup
     if rename_to_nf:
-        t_idx, n_off, _ = tables["name"]
+        t_idx, n_off, n_len = tables["name"]
         fmt, count, str_off = struct.unpack(">HHH", buf[n_off:n_off+6])
         records = []
         pool = bytearray()
@@ -170,16 +176,21 @@ def patch_ttf(data, rename_to_nf=False):
         for rec in records:
             new_name.extend(struct.pack(">HHHHHH", *rec))
         new_name.extend(pool)
-        while len(new_name) % 4 != 0:
-            new_name.append(0)
-        while len(buf) % 4 != 0:
-            buf.append(0)
-        new_off = len(buf)
-        buf.extend(new_name)
-        tables["name"] = (t_idx, new_off, len(new_name))
-        struct.pack_into(">II", buf, 12 + t_idx * 16 + 8, new_off, len(new_name))
+        if len(new_name) <= n_len:
+            buf[n_off:n_off+n_len] = new_name + b"\x00" * (n_len - len(new_name))
+            tables["name"] = (t_idx, n_off, len(new_name))
+            struct.pack_into(">II", buf, 12 + t_idx * 16 + 8, n_off, len(new_name))
+        else:
+            while len(new_name) % 4 != 0:
+                new_name.append(0)
+            while len(buf) % 4 != 0:
+                buf.append(0)
+            new_off = len(buf)
+            buf.extend(new_name)
+            tables["name"] = (t_idx, new_off, len(new_name))
+            struct.pack_into(">II", buf, 12 + t_idx * 16 + 8, new_off, len(new_name))
 
-    for tag in ("OS/2", "glyf", "hmtx", "name"):
+    for tag in ("OS/2", "post", "glyf", "hmtx", "name"):
         t_idx, t_off, t_len = tables[tag]
         cs = calc_checksum(bytes(buf[t_off:t_off+t_len]))
         struct.pack_into(">I", buf, 12 + t_idx * 16 + 4, cs)
@@ -193,13 +204,16 @@ def patch_ttf(data, rename_to_nf=False):
     return bytes(buf)
 
 font_dir = sys.argv[1]
-for spec in sys.argv[2:]:
+cache_dir = sys.argv[2]
+for spec in sys.argv[3:]:
     _, v3_font, legacy_font = spec.split("|")
     v3_path = os.path.join(font_dir, v3_font)
     legacy_path = os.path.join(font_dir, legacy_font)
-    if not os.path.isfile(v3_path):
+    cache_path = os.path.join(cache_dir, v3_font)
+    src_path = cache_path if os.path.isfile(cache_path) and os.path.getsize(cache_path) > 1024 else v3_path
+    if not os.path.isfile(src_path):
         continue
-    with open(v3_path, "rb") as f:
+    with open(src_path, "rb") as f:
         raw = f.read()
     patched_v3 = patch_ttf(raw, rename_to_nf=False)
     patched_nf = patch_ttf(raw, rename_to_nf=True)
@@ -231,7 +245,12 @@ PYEOF
             fi
         done
     fi
+    if [ "$OS" = "macos" ] && command -v atsutil &>/dev/null; then
+        atsutil databases -removeUser >/dev/null 2>&1 || true
+        atsutil server -shutdown >/dev/null 2>&1 || true
+        atsutil server -ping >/dev/null 2>&1 || true
+    fi
     if command -v fc-cache &>/dev/null; then
-        fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
+        fc-cache -rf "$FONT_DIR" >/dev/null 2>&1 || fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
     fi
 fi
