@@ -1,6 +1,6 @@
 #!/bin/bash
 # Configures authentic 24-bit Solarized Dark TrueColor profile for GNOME Terminal.
-# Sets MesloLGS Nerd Font 12 font, Solarized Dark palette, base02 highlight, and block cursor.
+# Sets MesloLGS NF 12 font, Solarized Dark palette, base02 highlight, and block cursor.
 
 set -euo pipefail
 
@@ -92,7 +92,7 @@ else
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-background-color" "'#073642'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-foreground-color" "'#93A1A1'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-system-font" "false"
-    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS Nerd Font 12'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS NF 12'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/palette" "['#073642', '#DC322F', '#859900', '#B58900', '#268BD2', '#D33682', '#2AA198', '#EEE8D5', '#586E75', '#CB4B16', '#586E75', '#657B83', '#839496', '#6C71C4', '#93A1A1', '#FDF6E3']"
 fi
 

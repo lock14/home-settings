@@ -261,20 +261,20 @@ The redesigned repository is built for frictionless extension:
 ### 4. Terminal Emulators (Ghostty, GNOME Terminal & macOS Terminal)
 - **Ghostty (`dotfiles/.config/ghostty/config`)**:
   - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`theme = "Solarized Dark"`) with 1:1 RGB palette matching Windows Terminal.
-  - **Typography**: Official Nerd Fonts v3 `MesloLGS Nerd Font` (`font-family = "MesloLGS Nerd Font"`, `font-family = "MesloLGS NF"`, `font-size = 12`) supporting all Powerlevel10k (`nerdfont-v3`) and Plane 15 `eza` glyphs.
+  - **Typography**: Powerlevel10k `MesloLGS NF` (`font-family = "MesloLGS NF"`, `font-size = 12`) with `_home_settings_eza` BMP icon translation for `eza`.
   - **Window & Layout**: Flush edges (zero padding, unconstrained grid) and block cursor.
   - **Productivity**: Auto-split panes (`Ctrl+Shift+D`), navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
   - **Cross-Platform**: Automatically symlinked to `${XDG_CONFIG_HOME:-~/.config}/ghostty/config` and macOS `~/Library/Application Support/com.mitchellh.ghostty/config`.
 - **GNOME Terminal (`colors/gnome-terminal-solarized.dconf` & `bin/gnome-terminal-solarized`)**:
   - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile provisioned into dconf as default.
   - **Palette**: Corrects Color 8 to `base01` (`#586E75`), fixing the common invisible dim text / autosuggestions bug.
-  - **Typography & UI**: `MesloLGS Nerd Font 12` font, Solarized `base02` (`#073642`) text selection highlight, block cursor, and silent bell.
-  - **CLI Management**: Provisioned automatically during setup (`modules/40-terminal.sh`) or manually via `gnome-terminal-solarized`.
+  - **Typography & UI**: `MesloLGS NF 12` font, Solarized `base02` (`#073642`) text selection highlight, block cursor, and silent bell.
+  - **CLI Management**: Provisioned automatically during setup (`modules/70-terminal.sh`) or manually via `gnome-terminal-solarized`.
 - **macOS Terminal.app (`colors/Solarized-Dark.terminal` & `bin/macos-terminal-solarized`)**:
   - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile configured in `com.apple.Terminal.plist` as default.
   - **Palette**: Corrects Color 8 to `base01` (`#586E75`), with `base02` selection highlight and `base03` background.
-  - **Typography**: `MesloLGS Nerd Font` 12 font (`MesloLGSNF-Regular 12pt`), antialiasing enabled.
-  - **CLI Management**: Provisioned automatically on macOS during setup (`modules/40-terminal.sh`) or manually via `macos-terminal-solarized`.
+  - **Typography**: `MesloLGS NF` 12 font (`MesloLGS-NF-Regular 12pt`), antialiasing enabled.
+  - **CLI Management**: Provisioned automatically on macOS during setup (`modules/70-terminal.sh`) or manually via `macos-terminal-solarized`.
 
 ---
 
