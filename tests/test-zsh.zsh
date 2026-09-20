@@ -236,7 +236,10 @@ test_addendum() {
     cp "$SCRIPT_DIR/dotfiles/.zsh-functions" "$HOME/.zsh-functions"
     cp "$SCRIPT_DIR/dotfiles/.p10k.zsh" "$HOME/.p10k.zsh"
 
-    source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
+    _source_zshrc_addendum() {
+        source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
+    }
+    _source_zshrc_addendum
 
     if [ "${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-}" = "fg=#586E75" ]; then
         echo "PASS:ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE set correctly"
@@ -374,14 +377,15 @@ test_addendum() {
         echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
     fi
 
-    if [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
+    if [ "${POWERLEVEL9K_MODE:-}" = "nerdfont-v3" ] && \
+       [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
        [ "${POWERLEVEL9K_TERRAFORM_ICON:-}" = $'\U000F1062' ] && \
        [ "${POWERLEVEL9K_NODE_ICON:-}" = $'\uE718' ] && \
        [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ] && \
        [ "${POWERLEVEL9K_JAVA_ICON:-}" = $'\uF0F4' ]; then
-        echo "PASS:p10k modern Nerd Font icons configured (solid Go gopher, HashiCorp Terraform, Node hexagon, Ruby gem, solid Java mug)"
+        echo "PASS:p10k configured with POWERLEVEL9K_MODE=nerdfont-v3 and modern Nerd Font v3 icons (solid Go gopher, HashiCorp Terraform, Node hexagon, Ruby gem, solid Java mug)"
     else
-        echo "FAIL:p10k modern Nerd Font icons:Expected modern glyphs for Go, Terraform, Node, Ruby, and Java"
+        echo "FAIL:p10k modern Nerd Font icons:Expected POWERLEVEL9K_MODE=nerdfont-v3 and modern glyphs for Go, Terraform, Node, Ruby, and Java"
     fi
 
     if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
@@ -434,6 +438,201 @@ test_addendum() {
     else
         echo "FAIL:zshrc-addendum sourcing:.zsh-functions was not sourced"
     fi
+
+    if [ "${POWERLEVEL9K_DISABLE_GITSTATUS:-}" = "true" ] && typeset -f prompt_vcs >/dev/null 2>&1; then
+        echo "PASS:p10k gitstatusd retired (POWERLEVEL9K_DISABLE_GITSTATUS=true) with native prompt_vcs defined"
+    else
+        echo "FAIL:p10k gitstatusd retirement:Expected POWERLEVEL9K_DISABLE_GITSTATUS=true and prompt_vcs function"
+    fi
+
+    # Test native prompt_vcs across disabled workdir (~), standard files repo, and reftable repo
+    typeset -g P10K_SEG_STATE="" P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
+    p10k() {
+        if [ "${1:-}" = "segment" ]; then
+            shift
+            local opt OPTARG
+            local -i OPTIND=1
+            while getopts ':s:b:f:i:c:t:reh' opt; do
+                case "$opt" in
+                    s) P10K_SEG_STATE="$OPTARG" ;;
+                    b) P10K_SEG_BG="$OPTARG" ;;
+                    f) P10K_SEG_FG="$OPTARG" ;;
+                    i) P10K_SEG_ICON="$OPTARG" ;;
+                    t) P10K_SEG_TEXT="$OPTARG" ;;
+                esac
+            done
+        fi
+    }
+
+    # 1. Disabled workdir (~) and non-repo subdirectories of ~ should skip rendering even if $HOME/.git exists
+    git init -b main "$HOME" >/dev/null 2>&1
+    mkdir -p "$HOME/disabled-subdir"
+    P10K_SEG_TEXT=""
+    (cd "$HOME" && prompt_vcs)
+    local home_seg="$P10K_SEG_TEXT"
+    P10K_SEG_TEXT=""
+    (cd "$HOME/disabled-subdir" && prompt_vcs)
+    local subdir_seg="$P10K_SEG_TEXT"
+    rm -rf "$HOME/.git" "$HOME/disabled-subdir"
+    if [ -z "$home_seg" ] && [ -z "$subdir_seg" ]; then
+        echo "PASS:prompt_vcs respects POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN (~) in both \$HOME and non-repo subdirectories"
+    else
+        echo "FAIL:prompt_vcs disabled workdir:Expected empty segment in \$HOME ('$home_seg') and subdirectory ('$subdir_seg')"
+    fi
+
+    # 2. Standard files-backend Git repo (clean, dirty, percent-escaped branch, detached, and remote icons)
+    local vcs_test_dir="$TEMP_HOME/vcs-files-repo"
+    mkdir -p "$vcs_test_dir"
+    (
+        cd "$vcs_test_dir"
+        git init -b main >/dev/null 2>&1
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git config commit.gpgsign false
+        echo "hello" > tracked.txt
+        git add tracked.txt && git commit -m "initial" >/dev/null 2>&1
+
+        P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
+        prompt_vcs
+        if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#859900" ] && \
+           [ "$P10K_SEG_ICON" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" main"* ]]; then
+            echo "PASS:prompt_vcs renders clean standard Git repo with default Git icon () on Base02 (#073642) shelf in Solarized Green (#859900)"
+        else
+            echo "FAIL:prompt_vcs clean files repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
+        fi
+
+        # Verify remote URL icon mapping (GitHub, GitLab, Bitbucket, generic Git, and linked worktree)
+        git remote add origin "https://github.com/octocat/Hello-World.git"
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local gh_icon="$P10K_SEG_ICON"
+
+        git remote set-url origin "git@gitlab.com:gitlab-org/gitlab.git"
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local gl_icon="$P10K_SEG_ICON"
+
+        git remote set-url origin "https://bitbucket.org/atlassian/stash.git"
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local bb_icon="$P10K_SEG_ICON"
+
+        git remote set-url origin "https://git.example.com/team/project.git"
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local generic_icon="$P10K_SEG_ICON"
+
+        git remote set-url origin "git@github.com:lock14/home-settings.git"
+        local wt_dir="$TEMP_HOME/vcs-linked-worktree"
+        git worktree add -b wt-branch "$wt_dir" >/dev/null 2>&1
+        local wt_icon
+        wt_icon=$(cd "$wt_dir" && P10K_SEG_ICON="" && prompt_vcs && print -r -- "$P10K_SEG_ICON")
+        git worktree remove --force "$wt_dir" >/dev/null 2>&1 || rm -rf "$wt_dir"
+
+        if [ "$gh_icon" = $'\uF113' ] && [ "$gl_icon" = $'\uF296' ] && \
+           [ "$bb_icon" = $'\uF171' ] && [ "$generic_icon" = $'\uF1D3' ] && [ "$wt_icon" = $'\uF113' ]; then
+            echo "PASS:prompt_vcs resolves .git/config (and worktree commondir) in pure Zsh for GitHub (), GitLab (), Bitbucket (), and default Git () icons"
+        else
+            echo "FAIL:prompt_vcs remote icons:Got github='$gh_icon' gitlab='$gl_icon' bitbucket='$bb_icon' generic='$generic_icon' worktree='$wt_icon'"
+        fi
+
+        # Verify edge cases: inline #/; comments, backslash continuations, [include] path, url.<base>.insteadOf, and slash-containing remote names
+        cat > "$HOME/.gitconfig" <<'EOF'
+[url "https://github.com/"]
+	insteadOf = gh:
+EOF
+        cat > "$vcs_test_dir/included-remotes.cfg" <<'EOF'
+[remote "corp/gitlab"]
+	url = \
+		https://gitlab.com/corp/service.git ; gitlab instance
+EOF
+        git remote remove origin
+        cat >> "$vcs_test_dir/.git/config" <<'EOF'
+[include]
+	path = ../included-remotes.cfg
+[remote "origin"] # primary remote with inline comment
+	url = https://git.example.com/team/project.git # mirror of github (inline comment must be ignored)
+EOF
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local inline_comment_icon="$P10K_SEG_ICON"
+
+        git config branch.main.remote "corp/gitlab"
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local include_slash_icon="$P10K_SEG_ICON"
+
+        git config --unset branch.main.remote
+        git config remote.origin.url "gh:lock14/home-settings.git"
+        P10K_SEG_ICON=""
+        prompt_vcs
+        local insteadof_icon="$P10K_SEG_ICON"
+        rm -f "$HOME/.gitconfig" "$vcs_test_dir/included-remotes.cfg"
+
+        if [ "$inline_comment_icon" = $'\uF1D3' ] && [ "$include_slash_icon" = $'\uF296' ] && [ "$insteadof_icon" = $'\uF113' ]; then
+            echo "PASS:prompt_vcs handles inline comments, backslash line continuations, [include] directives, slash remote names, and url.<base>.insteadOf rewrites"
+        else
+            echo "FAIL:prompt_vcs config edge cases:Got inline_comment='$inline_comment_icon' include_slash='$include_slash_icon' insteadof='$insteadof_icon'"
+        fi
+
+        git checkout -b "feature%20test" >/dev/null 2>&1
+        echo "staged" > staged.txt
+        git add staged.txt
+        echo "modified" >> tracked.txt
+        echo "untracked" > untracked.txt
+        P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_TEXT=""
+        prompt_vcs
+        if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#B58900" ] && \
+           [[ "$P10K_SEG_TEXT" == *" feature%%20test"* ]] && [[ "$P10K_SEG_TEXT" == *"+1"* ]] && \
+           [[ "$P10K_SEG_TEXT" == *"!1"* ]] && [[ "$P10K_SEG_TEXT" == *"?1"* ]]; then
+            echo "PASS:prompt_vcs renders dirty counts (+1 !1 ?1) and %% branch escaping in Solarized Yellow (#B58900) on Base02 shelf"
+        else
+            echo "FAIL:prompt_vcs dirty files repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' text='$P10K_SEG_TEXT'"
+        fi
+
+        git checkout --detach HEAD >/dev/null 2>&1
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        if [[ "$P10K_SEG_TEXT" == *" %F{#586E75}@"* ]]; then
+            echo "PASS:prompt_vcs renders detached HEAD short SHA with Base01 @ prefix"
+        else
+            echo "FAIL:prompt_vcs detached HEAD:Got text='$P10K_SEG_TEXT'"
+        fi
+    )
+
+    # 3. Reftable Git repository (both synthetic reftable repo and home-settings workspace)
+    local reftable_dir="$TEMP_HOME/vcs-reftable-repo"
+    mkdir -p "$reftable_dir"
+    if git init --ref-format=reftable -b main "$reftable_dir" >/dev/null 2>&1; then
+        (
+            cd "$reftable_dir"
+            git config user.email "test@example.com"
+            git config user.name "Test User"
+            git config commit.gpgsign false
+            echo "reftable" > file.txt
+            git add file.txt && git commit -m "reftable init" >/dev/null 2>&1
+            echo "dirty" >> file.txt
+            P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
+            prompt_vcs
+            if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#B58900" ] && \
+               [ "$P10K_SEG_ICON" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" main"* ]] && [[ "$P10K_SEG_TEXT" == *"!1"* ]]; then
+                echo "PASS:prompt_vcs renders reftable (extensions.refstorage = reftable) Git repository on Base02 shelf"
+            else
+                echo "FAIL:prompt_vcs reftable repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
+            fi
+        )
+    fi
+
+    (
+        cd "$SCRIPT_DIR"
+        P10K_SEG_BG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
+        prompt_vcs
+        if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_ICON" = $'\uF113' ] && [[ "$P10K_SEG_TEXT" == *" "* ]]; then
+            echo "PASS:prompt_vcs renders home-settings repository segment with GitHub icon () on Base02 (#073642) shelf"
+        else
+            echo "FAIL:prompt_vcs home-settings repo:Got bg='$P10K_SEG_BG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
+        fi
+    )
 }
 
 while IFS= read -r line; do

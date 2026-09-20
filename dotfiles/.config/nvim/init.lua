@@ -596,17 +596,26 @@ lazy.setup({
             }
 
             -- Pin tree-sitter-css to revision with Container Query support (PR #96)
-            local parsers_meta_ok, parsers_meta = pcall(require, "nvim-treesitter.parsers")
-            if parsers_meta_ok then
-                if parsers_meta.css and parsers_meta.css.install_info then
-                    parsers_meta.css.install_info.revision = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
-                elseif parsers_meta.get_parser_configs then
-                    local pconfigs = parsers_meta.get_parser_configs()
-                    if pconfigs.css and pconfigs.css.install_info then
-                        pconfigs.css.install_info.revision = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+            local css_pinned_rev = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+            local function pin_parsers()
+                local parsers_meta_ok, parsers_meta = pcall(require, "nvim-treesitter.parsers")
+                if parsers_meta_ok then
+                    if parsers_meta.css and parsers_meta.css.install_info then
+                        parsers_meta.css.install_info.revision = css_pinned_rev
+                    elseif parsers_meta.get_parser_configs then
+                        local pconfigs = parsers_meta.get_parser_configs()
+                        if pconfigs.css and pconfigs.css.install_info then
+                            pconfigs.css.install_info.revision = css_pinned_rev
+                        end
                     end
                 end
             end
+            pin_parsers()
+            vim.api.nvim_create_autocmd("User", {
+                group = vim.api.nvim_create_augroup("SolarizedTreesitterPin", { clear = true }),
+                pattern = "TSUpdate",
+                callback = pin_parsers,
+            })
 
             -- Support legacy nvim-treesitter.configs if present
             local ts_configs_ok, ts_configs = pcall(require, "nvim-treesitter.configs")
@@ -634,15 +643,29 @@ lazy.setup({
                 for _, p in ipairs(nts.get_installed()) do
                     installed[p] = true
                 end
+                local css_rev_file = vim.fn.stdpath("data") .. "/site/parser-info/css.revision"
+                local current_css_rev = ""
+                if vim.fn.filereadable(css_rev_file) == 1 then
+                    local rev_lines = vim.fn.readfile(css_rev_file)
+                    if rev_lines and #rev_lines > 0 then
+                        current_css_rev = vim.trim(rev_lines[1])
+                    end
+                end
+                local need_css_install = (not installed["css"]) or (current_css_rev ~= css_pinned_rev)
                 local to_install = {}
                 for _, p in ipairs(parsers) do
-                    if not installed[p] then
+                    if not installed[p] and p ~= "css" then
                         table.insert(to_install, p)
                     end
                 end
                 if #to_install > 0 then
                     pcall(function()
                         nts.install(to_install)
+                    end)
+                end
+                if need_css_install and type(nts.install) == "function" then
+                    pcall(function()
+                        nts.install({ "css" }, { force = true }):pwait(60000)
                     end)
                 end
             end
@@ -751,11 +774,12 @@ lazy.setup({
                 "jsonls",
                 "jdtls",
             },
-            automatic_installation = true,
             automatic_enable = false,
         },
         config = function(_, opts)
-            require("mason-lspconfig").setup(opts)
+            if #vim.api.nvim_list_uis() > 0 then
+                require("mason-lspconfig").setup(opts)
+            end
 
             -- Keybindings and Semantic Token cleanup on LSP attach
             vim.api.nvim_create_autocmd("LspAttach", {
@@ -839,16 +863,55 @@ lazy.setup({
             -- Configure servers using modern vim.lsp.config (Neovim 0.11+) with legacy fallback
             -- Note: jdtls is managed on-demand via ftplugin/java.lua with nvim-jdtls
             local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls" }
+            local server_bins = {
+                clangd = "clangd",
+                rust_analyzer = "rust-analyzer",
+                gopls = "gopls",
+                pyright = "pyright-langserver",
+                lua_ls = "lua-language-server",
+                bashls = "bash-language-server",
+                terraformls = "terraform-ls",
+                yamlls = "yaml-language-server",
+                jsonls = "vscode-json-language-server",
+            }
+            local mason_bin_dir = vim.fn.stdpath("data") .. "/mason/bin"
+            if not (vim.env.PATH or ""):find(mason_bin_dir, 1, true) then
+                vim.env.PATH = mason_bin_dir .. ":" .. (vim.env.PATH or "")
+            end
             if vim.lsp.config and vim.lsp.enable then
                 for _, s in ipairs(servers) do
                     vim.lsp.config[s] = server_configs[s] or {}
                 end
-                vim.lsp.enable(servers)
-            else
-                local lspconfig = require("lspconfig")
+            end
+            local already_enabled = {}
+            local function enable_installed_servers()
+                local newly_enabled = {}
                 for _, s in ipairs(servers) do
-                    lspconfig[s].setup(server_configs[s] or {})
+                    if not already_enabled[s] then
+                        local bin = server_bins[s] or s
+                        if vim.fn.executable(bin) == 1 or vim.fn.executable(mason_bin_dir .. "/" .. bin) == 1 then
+                            already_enabled[s] = true
+                            table.insert(newly_enabled, s)
+                        end
+                    end
                 end
+                if #newly_enabled > 0 then
+                    if vim.lsp.config and vim.lsp.enable then
+                        vim.lsp.enable(newly_enabled)
+                    else
+                        local lspconfig = require("lspconfig")
+                        for _, s in ipairs(newly_enabled) do
+                            lspconfig[s].setup(server_configs[s] or {})
+                        end
+                    end
+                end
+            end
+            enable_installed_servers()
+            if #vim.api.nvim_list_uis() > 0 then
+                pcall(function()
+                    local registry = require("mason-registry")
+                    registry:on("package:install:success", vim.schedule_wrap(enable_installed_servers))
+                end)
             end
         end,
     },

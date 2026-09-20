@@ -78,6 +78,8 @@ local config = {
     on_attach = function(client, bufnr)
         -- Disable LSP semantic token overrides so Treesitter handles syntax highlighting
         client.server_capabilities.semanticTokensProvider = nil
+        -- Disable documentLinkProvider to eliminate rogue clickable hyperlink metadata and spurious link highlights
+        client.server_capabilities.documentLinkProvider = nil
 
         local bufmap = function(keys, func, desc)
             vim.keymap.set("n", keys, func, { buffer = bufnr, desc = "Java LSP: " .. desc })

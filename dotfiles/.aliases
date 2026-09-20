@@ -70,11 +70,19 @@ fi
 
 # Source custom alias drop-ins (~/.aliases.d/*.sh)
 if [ -d "$HOME/.aliases.d" ]; then
-    for f in "$HOME/.aliases.d"/*.sh; do
-        if [ -r "$f" ]; then
-            # shellcheck source=/dev/null
-            . "$f"
+    _source_alias_dropins() {
+        if [ -n "${ZSH_VERSION:-}" ]; then
+            setopt local_options null_glob
         fi
-    done
+        for _f in "$HOME/.aliases.d"/*.sh; do
+            if [ -r "$_f" ]; then
+                # shellcheck source=/dev/null
+                . "$_f"
+            fi
+        done
+        unset _f
+    }
+    _source_alias_dropins
+    unset -f _source_alias_dropins
 fi
 

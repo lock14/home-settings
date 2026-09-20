@@ -110,7 +110,7 @@
   )
 
   # Defines character set used by powerlevel10k. It's best to let `p10k configure` set it for you.
-  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
+  typeset -g POWERLEVEL9K_MODE=nerdfont-v3
   # When set to `moderate`, some icons will have an extra space after them. This is meant to avoid
   # icon overlap when using non-monospace fonts. When set to `none`, spaces are not added.
   typeset -g POWERLEVEL9K_ICON_PADDING=none
@@ -491,10 +491,327 @@
   # Multiple patterns can be combined with '|': '~(|/foo)|/bar/baz/*'.
   typeset -g POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN='~'
 
+  # Retire frozen 2022 gitstatusd daemon (libgit2 lacks support for Git 2.45+ reftable extensions)
+  # in favor of native single-fork `git --no-optional-locks status --porcelain=v2 --branch`.
+  typeset -g POWERLEVEL9K_DISABLE_GITSTATUS=true
+  (( $+functions[gitstatus_stop_p9k_] )) && gitstatus_stop_p9k_ POWERLEVEL9K
+  unset _p9k_preinit
+  unfunction _p9k_preinit instant_prompt_vcs 2>/dev/null
+
+  # Native Powerlevel10k VCS segment powered by `git status --porcelain=v2 --branch`.
+  # Supports all modern Git repository extensions (reftable, SHA-256, worktrees) in a single fork.
+  function _p9k_solarized_prompt_vcs() {
+    emulate -L zsh -o extended_glob
+    typeset -g my_git_format=''
+
+    [[ $PWD == /google/src/cloud/* ]] && return 0
+
+    local pat=''
+    if [[ -n ${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN:-} ]]; then
+      pat=${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN//(#b)(^|[|(])\~/${match[1]}$HOME}
+      [[ $PWD == $~pat ]] && return 0
+    fi
+
+    # Discover Git worktree root in pure Zsh (zero forks) to skip non-repo directories
+    # and enforce POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN even inside subdirectories.
+    local workdir=$PWD
+    if [[ -n ${GIT_WORK_TREE:-} ]]; then
+      workdir=${GIT_WORK_TREE:A}
+    elif [[ -z ${GIT_DIR:-} ]]; then
+      while [[ $workdir != / && ! -e "$workdir/.git" && ! -L "$workdir/.git" ]]; do
+        workdir=${workdir:h}
+      done
+      [[ -e "$workdir/.git" || -L "$workdir/.git" ]] || return 0
+    fi
+    [[ -n $pat && $workdir == $~pat ]] && return 0
+
+    command -v git >/dev/null 2>&1 || return 0
+
+    local status_out
+    status_out=$(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null) || return 0
+
+    local branch='' oid='' upstream='' line ab a_str b_str
+    local -i ahead=0 behind=0 staged=0 unstaged=0 untracked=0 conflicted=0
+
+    for line in "${(@f)status_out}"; do
+      if [[ $line == '# branch.head '* ]]; then
+        branch=${line#'# branch.head '}
+      elif [[ $line == '# branch.oid '* ]]; then
+        oid=${line#'# branch.oid '}
+      elif [[ $line == '# branch.upstream '* ]]; then
+        upstream=${line#'# branch.upstream '}
+      elif [[ $line == '# branch.ab '* ]]; then
+        ab=${line#'# branch.ab '}
+        a_str=${ab%% *}
+        b_str=${ab#* }
+        ahead=${a_str#+}
+        behind=${b_str#-}
+      elif [[ $line == [12]\ * ]]; then
+        [[ ${line[3]} == [MTADRC] ]] && (( ++staged ))
+        [[ ${line[4]} == [MTADRC] ]] && (( ++unstaged ))
+      elif [[ $line == u\ * ]]; then
+        (( ++conflicted ))
+      elif [[ $line == \?\ * ]]; then
+        (( ++untracked ))
+      fi
+    done
+
+    # Resolve .git directory (and commondir for linked worktrees) in pure Zsh (zero forks)
+    # to extract remote URL and render the appropriate GitHub / GitLab / Bitbucket / Git icon.
+    local gitdir=''
+    if [[ -n ${GIT_DIR:-} ]]; then
+      gitdir=${GIT_DIR:A}
+    elif [[ -d "$workdir/.git" ]]; then
+      gitdir="$workdir/.git"
+    elif [[ -r "$workdir/.git" ]]; then
+      local gd_line=''
+      read -r gd_line < "$workdir/.git"
+      gd_line=${gd_line%$'\r'}
+      if [[ $gd_line == 'gitdir: '* ]]; then
+        gd_line=${gd_line#'gitdir: '}
+        if [[ $gd_line == /* ]]; then
+          gitdir=$gd_line
+        else
+          gitdir="$workdir/$gd_line"
+        fi
+      fi
+    fi
+
+    local -A remote_urls=() instead_of=() seen_cfgs=()
+    local first_remote_name='' branch_remote=''
+    function _p9k_vcs_parse_cfg() {
+      local cfg_file=$1 is_repo_cfg=${2:-0} depth=${3:-0}
+      (( depth > 4 )) || [[ ! -r $cfg_file ]] && return 0
+      seen_cfgs[$cfg_file]=1
+      local section_type='' section_name='' seen_url_in_section=0 cfg_line='' next_line='' pre_bracket='' hdr='' key='' val=''
+      while IFS= read -r cfg_line || [[ -n $cfg_line ]]; do
+        cfg_line=${cfg_line%$'\r'}
+        while [[ $cfg_line == *\\ ]]; do
+          next_line=''
+          IFS= read -r next_line || break
+          next_line=${next_line%$'\r'}
+          cfg_line="${cfg_line%\\}${next_line##[[:space:]]#}"
+        done
+        cfg_line=${cfg_line##[[:space:]]#}
+        [[ -z $cfg_line || $cfg_line == [#\;]* ]] && continue
+        if [[ $cfg_line == \[*\]* ]]; then
+          seen_url_in_section=0
+          pre_bracket=${${cfg_line#\[}%%\]*}
+          if [[ $pre_bracket == *\"* ]]; then
+            hdr=${${cfg_line#\[}%%\"\]*}
+            hdr=${hdr##[[:space:]]#}
+            section_type=${(L)hdr%%[[:space:]\"]*}
+            section_name=${${hdr#*\"}%\"}
+          else
+            hdr=${pre_bracket##[[:space:]]#}
+            hdr=${hdr%%[[:space:]]#}
+            if [[ $hdr == *.* ]]; then
+              section_type=${(L)hdr%%.*}
+              section_name=${hdr#*.}
+            else
+              section_type=${(L)hdr}
+              section_name=''
+            fi
+          fi
+          if [[ $section_type == 'includeif' ]]; then
+            section_type=''
+            local cond_pat='' cond_icase=0
+            if [[ $section_name == gitdir/i:* ]]; then
+              cond_pat=${section_name#gitdir/i:}
+              cond_icase=1
+            elif [[ $section_name == gitdir:* ]]; then
+              cond_pat=${section_name#gitdir:}
+            elif [[ $section_name == onbranch:* ]]; then
+              cond_pat=${section_name#onbranch:}
+              [[ $cond_pat == */ ]] && cond_pat="${cond_pat}*"
+              [[ $branch == $~cond_pat ]] && section_type='include'
+              cond_pat=''
+            fi
+            if [[ -n $cond_pat ]]; then
+              [[ $cond_pat == \~/* ]] && cond_pat="$HOME/${cond_pat#\~/}"
+              [[ $cond_pat == ./* ]] && cond_pat="${cfg_file:h}/${cond_pat#./}"
+              [[ $cond_pat != /* ]] && cond_pat="*/$cond_pat"
+              [[ $cond_pat == */ ]] && cond_pat="${cond_pat}*"
+              local cond_pat_alt=${cond_pat//\/\*\*\//\/}
+              if (( cond_icase )); then
+                [[ "${(L)gitdir}/" == ${(L)~cond_pat} || "${(L)workdir}/.git/" == ${(L)~cond_pat} || "${(L)gitdir}/" == ${(L)~cond_pat_alt} || "${(L)workdir}/.git/" == ${(L)~cond_pat_alt} ]] && section_type='include'
+              else
+                [[ "$gitdir/" == $~cond_pat || "$workdir/.git/" == $~cond_pat || "$gitdir/" == $~cond_pat_alt || "$workdir/.git/" == $~cond_pat_alt ]] && section_type='include'
+              fi
+            fi
+          elif [[ $section_type != (remote|branch|url|include) ]]; then
+            section_type=''
+            section_name=''
+          fi
+          continue
+        fi
+        [[ -z $section_type || $cfg_line != *=* ]] && continue
+        key=${(L)${cfg_line%%=*}%%[[:space:]]#}
+        val=${${cfg_line#*=}##[[:space:]]#}
+        if [[ $val == \"* ]]; then
+          val=${val#\"}
+          val=${val%%\"*}
+        else
+          val=${val%%[#\;]*}
+          val=${val%%[[:space:]]#}
+        fi
+        [[ -z $val ]] && continue
+        if [[ $section_type == 'remote' && $key == 'url' ]]; then
+          if (( ! seen_url_in_section )); then
+            remote_urls[$section_name]=$val
+            seen_url_in_section=1
+            (( is_repo_cfg )) && : ${first_remote_name:=$section_name}
+          fi
+        elif [[ $section_type == 'branch' && $section_name == "$branch" && $key == 'remote' ]]; then
+          branch_remote=$val
+        elif [[ $section_type == 'url' && $key == 'insteadof' ]]; then
+          instead_of[$val]=$section_name
+        elif [[ $section_type == 'include' && $key == 'path' ]]; then
+          local inc_path=$val
+          [[ $inc_path == \~/* ]] && inc_path="$HOME/${inc_path#\~/}"
+          [[ $inc_path != /* ]] && inc_path="${cfg_file:h}/$inc_path"
+          [[ -z ${seen_cfgs[$inc_path]:-} ]] && _p9k_vcs_parse_cfg "$inc_path" "$is_repo_cfg" $(( depth + 1 ))
+        fi
+      done < "$cfg_file"
+    }
+
+    if [[ -n ${GIT_CONFIG_GLOBAL:-} ]]; then
+      _p9k_vcs_parse_cfg "$GIT_CONFIG_GLOBAL" 0
+    else
+      _p9k_vcs_parse_cfg "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" 0
+      _p9k_vcs_parse_cfg "$HOME/.gitconfig" 0
+    fi
+    if [[ -n $gitdir ]]; then
+      if [[ -r "$gitdir/commondir" ]]; then
+        local common_line=''
+        read -r common_line < "$gitdir/commondir"
+        common_line=${common_line%$'\r'}
+        if [[ -n $common_line ]]; then
+          local commondir
+          if [[ $common_line == /* ]]; then
+            commondir=$common_line
+          else
+            commondir="$gitdir/$common_line"
+          fi
+          [[ "${commondir:A}/config" != "${gitdir:A}/config" ]] && _p9k_vcs_parse_cfg "$commondir/config" 1
+        fi
+      fi
+      _p9k_vcs_parse_cfg "$gitdir/config" 1
+      _p9k_vcs_parse_cfg "$gitdir/config.worktree" 1
+    fi
+    unfunction _p9k_vcs_parse_cfg 2>/dev/null
+
+    local remote_name=''
+    if [[ -n $branch_remote && $branch_remote != '.' && -n ${remote_urls[$branch_remote]:-} ]]; then
+      remote_name=$branch_remote
+    elif [[ $upstream == */* && -n ${remote_urls[${upstream%%/*}]:-} ]]; then
+      remote_name=${upstream%%/*}
+    elif [[ -n $branch_remote && $branch_remote != '.' ]]; then
+      remote_name=$branch_remote
+    elif [[ $upstream == */* ]]; then
+      remote_name=${upstream%%/*}
+    else
+      remote_name='origin'
+    fi
+    local first_remote_url=${first_remote_name:+${remote_urls[$first_remote_name]:-}}
+    local remote_url=${remote_urls[$remote_name]:-${remote_urls[origin]:-$first_remote_url}}
+    if [[ -n $remote_url ]] && (( $#instead_of > 0 )); then
+      local pfx best_pfx=''
+      for pfx in "${(@k)instead_of}"; do
+        if [[ $remote_url == "$pfx"* ]] && (( $#pfx > $#best_pfx )); then
+          best_pfx=$pfx
+        fi
+      done
+      [[ -n $best_pfx ]] && remote_url="${instead_of[$best_pfx]}${remote_url#$best_pfx}"
+    fi
+    typeset -g VCS_STATUS_REMOTE_URL=$remote_url
+
+    local vcs_icon
+    case $remote_url in
+      (#i)*github*)
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_GITHUB_ICON:-$'\uF113'}
+        ;;
+      (#i)*gitlab*)
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_GITLAB_ICON:-$'\uF296'}
+        ;;
+      (#i)*bitbucket*)
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_BITBUCKET_ICON:-$'\uF171'}
+        ;;
+      *)
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_ICON:-$'\uF1D3'}
+        ;;
+    esac
+    [[ ${POWERLEVEL9K_ICON_PADDING:-none} == none ]] && vcs_icon=${vcs_icon%% #}
+
+    local       meta='%F{#586E75}' # Base01
+    local      clean='%F{#859900}' # Solarized Green
+    local   modified='%F{#B58900}' # Solarized Yellow
+    local conflicted_c='%F{#CB4B16}' # Solarized Orange
+
+    local state='CLEAN'
+    local state_hex='#859900'
+    local state_color=$clean
+    if (( staged > 0 || unstaged > 0 || untracked > 0 )); then
+      state='MODIFIED'
+      state_hex='#B58900'
+      state_color=$modified
+    fi
+    if (( conflicted > 0 )); then
+      state='CONFLICTED'
+      state_hex='#CB4B16'
+      state_color=$conflicted_c
+    fi
+
+    local branch_icon=${(g::)POWERLEVEL9K_VCS_BRANCH_ICON:-$'\uF126 '}
+    local untracked_icon=${(g::)POWERLEVEL9K_VCS_UNTRACKED_ICON:-'?'}
+    local res=''
+
+    if [[ -n $branch && $branch != '(detached)' ]]; then
+      local clean_branch=${(V)branch}
+      (( $#clean_branch > 32 )) && clean_branch[13,-13]="…"
+      res+="${state_color}${branch_icon}${clean_branch//\%/%%}"
+      local remote_branch=${upstream#*/}
+      if [[ -n $upstream && $remote_branch != "$branch" ]]; then
+        res+="${meta}:${state_color}${(V)remote_branch//\%/%%}"
+      fi
+    else
+      res+="${state_color}${branch_icon}${meta}@${state_color}${oid[1,8]}"
+    fi
+
+    (( behind > 0 )) && res+=" ${state_color}⇣${behind}"
+    (( ahead > 0 && behind == 0 )) && res+=" "
+    (( ahead > 0 )) && res+="${state_color}⇡${ahead}"
+    (( conflicted > 0 )) && res+=" ${state_color}~${conflicted}"
+    (( staged > 0 )) && res+=" ${state_color}+${staged}"
+    (( unstaged > 0 )) && res+=" ${state_color}!${unstaged}"
+    (( untracked > 0 )) && res+=" ${state_color}${untracked_icon}${untracked}"
+
+    typeset -g my_git_format=$res
+    if (( $+functions[p10k] )); then
+      if [[ -n ${_p9k__prompt_side:-} ]] || [[ ${functions[p10k]} != *_p9k__prompt_side* ]]; then
+        p10k segment -s "$state" -b '#073642' -f "$state_hex" -i "$vcs_icon" -t "$res"
+      else
+        local _p9k__prompt_side=left _p9k__segment_name=vcs
+        local -i _p9k__segment_index=3 _p9k__line_index=1
+        p10k segment -s "$state" -b '#073642' -f "$state_hex" -i "$vcs_icon" -t "$res"
+      fi
+    fi
+  }
+
+  function prompt_vcs() {
+    _p9k_solarized_prompt_vcs "$@"
+  }
+
+  function p10k-on-init() {
+    if (( $+functions[_p9k_solarized_prompt_vcs] )); then
+      functions[prompt_vcs]=$functions[_p9k_solarized_prompt_vcs]
+    fi
+  }
+
   # Disable the default Git status formatting.
   typeset -g POWERLEVEL9K_VCS_DISABLE_GITSTATUS_FORMATTING=true
-  # Install our own Git status formatter.
-  typeset -g POWERLEVEL9K_VCS_CONTENT_EXPANSION='${$((my_git_formatter()))+${my_git_format}}'
+  # Use segment content directly (while keeping my_git_formatter available).
+  typeset -g POWERLEVEL9K_VCS_CONTENT_EXPANSION='${P9K_CONTENT}'
   # Enable counters for staged, unstaged, etc.
   typeset -g POWERLEVEL9K_VCS_{STAGED,UNSTAGED,UNTRACKED,CONFLICTED,COMMITS_AHEAD,COMMITS_BEHIND}_MAX_NUM=-1
 

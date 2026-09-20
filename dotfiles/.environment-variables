@@ -60,10 +60,18 @@ fi
 
 # Source custom environment drop-ins (~/.environment-variables.d/*.sh)
 if [ -d "$HOME/.environment-variables.d" ]; then
-    for f in "$HOME/.environment-variables.d"/*.sh; do
-        if [ -r "$f" ]; then
-            # shellcheck source=/dev/null
-            . "$f"
+    _source_env_dropins() {
+        if [ -n "${ZSH_VERSION:-}" ]; then
+            setopt local_options null_glob
         fi
-    done
+        for _f in "$HOME/.environment-variables.d"/*.sh; do
+            if [ -r "$_f" ]; then
+                # shellcheck source=/dev/null
+                . "$_f"
+            fi
+        done
+        unset _f
+    }
+    _source_env_dropins
+    unset -f _source_env_dropins
 fi

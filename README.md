@@ -18,6 +18,8 @@ home-settings/
 │
 ├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
+│   ├── gnome-terminal-solarized     # GNOME Terminal Solarized Dark profile provisioner
+│   ├── macos-terminal-solarized     # macOS Terminal.app Solarized Dark profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   └── sum                          # High-performance AWK number summation & stats
 │
@@ -32,9 +34,14 @@ home-settings/
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
 │   └── .config/
+│       ├── clangd/config.yaml       # Modern C23 / C++20 fallback compiler flags for clangd
+│       ├── ghostty/                 # Ghostty terminal configuration & Solarized Dark theme
 │       └── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
 │           ├── init.lua
-│           └── lazy-lock.json
+│           ├── lazy-lock.json
+│           ├── ftplugin/java.lua
+│           ├── queries/
+│           └── after/queries/
 │
 ├── lib/                             # Shared helper libraries
 │   ├── log.sh                       # Terminal logging & dry-run runner
@@ -48,15 +55,33 @@ home-settings/
 │   ├── 30-fonts.sh                  # MesloLGS NF font downloader with disk cache
 │   ├── 40-mise.sh                   # Mise runtime manager & polyglot toolchains
 │   ├── 60-shell.sh                  # Oh-My-Zsh, plugins, shellrc hooks, completions
+│   ├── 70-terminal.sh               # Terminal emulator profile provisioning (GNOME Terminal & macOS)
 │   └── 99-uninstall.sh              # Clean uninstallation of managed components
 │
-├── colors/                          # 24-bit TrueColor TextMate themes
-│   └── Solarized-Dark-TrueColor.tmTheme  # Canonical Solarized Dark theme for bat
+├── colors/                          # 24-bit TrueColor themes & terminal profiles
+│   ├── Solarized-Dark-TrueColor.tmTheme  # Canonical Solarized Dark theme for bat
+│   ├── Solarized-Dark.terminal           # macOS Terminal.app Solarized Dark profile
+│   └── gnome-terminal-solarized.dconf    # GNOME Terminal Solarized Dark dconf profile
 │
-├── syntaxes/                        # Enhanced Sublime syntax packages for bat
+├── syntaxes/                        # Enhanced Sublime syntax packages for bat (18 languages)
+│   ├── Bash.sublime-syntax          # Bash / POSIX shell syntax
 │   ├── C.sublime-syntax             # Modern C syntax with granular declaration scopes
 │   ├── C++.sublime-syntax           # Modern C++ syntax with concept/template support
-│   └── Diff.sublime-syntax          # Standalone Git & Unified Diff syntax for bat
+│   ├── CSS.sublime-syntax           # Modern CSS3 / Container Queries syntax
+│   ├── Diff.sublime-syntax          # Standalone Git & Unified Diff syntax for bat
+│   ├── Go.sublime-syntax            # Go syntax with calm Base0 qualifiers & struct tags
+│   ├── HTML.sublime-syntax          # HTML5 syntax with attribute-guarded script injections
+│   ├── JSON.sublime-syntax          # JSON / JSONC declarative hierarchy syntax
+│   ├── Java.sublime-syntax          # Modern Java (records, pattern matching, annotations)
+│   ├── JavaProperties.sublime-syntax# Java .properties configuration syntax
+│   ├── Markdown.sublime-syntax      # Semantic Architecture Markdown syntax
+│   ├── Python.sublime-syntax        # Modern Python 3 syntax with type annotations
+│   ├── Rust.sublime-syntax          # Rust syntax with unified attributes & lifetimes
+│   ├── SQL.sublime-syntax           # ANSI / PostgreSQL / MySQL declarative syntax
+│   ├── TOML.sublime-syntax          # TOML syntax with Blue table headers & Green keys
+│   ├── Terraform.sublime-syntax     # Terraform / HCL2 infrastructure syntax
+│   ├── TypeScript.sublime-syntax    # TypeScript / JavaScript ES2024+ syntax
+│   └── XML.sublime-syntax           # XML syntax with namespaces, directives & CDATA
 │
 └── tests/                           # Automated test suites (160+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
@@ -97,7 +122,11 @@ The following tools should be available on the host machine:
   - **Maven**: Modern Maven build toolchain (`maven = "latest"`)
   - **Terraform**: Latest Terraform binary (`terraform = "latest"`)
   - **Rust**: Latest Rust toolchain (`rust = "latest"`)
+  - **Neovim**: Latest stable Neovim editor (`neovim = "latest"`)
+  - **eza**: Modern `ls` replacement (`eza = "latest"`)
+  - **bat**: Syntax-highlighting pager (`bat = "latest"`)
   - **Glow**: Modern terminal markdown reader (`glow = "latest"`)
+  - **Tree-sitter**: AST parser generator CLI (`tree-sitter = "latest"`)
 
 ---
 
@@ -164,13 +193,16 @@ make lint
 | `--uninstall-bin` | *disabled* | Remove symlinked user utilities from `~/.local/bin` only |
 | `--os <distro>` | *auto* | Target OS family override: `ubuntu` (Debian/apt), `fedora` (RHEL/dnf), `macos` (Homebrew) |
 | `--db <engine>` | `none` | Database server engine to install: `postgres`, `mariadb`, `all`, `none` |
-| `--with-postgres` | *disabled* | Install PostgreSQL server and client tools |
+| `--with-postgres`, `--with-postgresql` | *disabled* | Install PostgreSQL server and client tools |
 | `--with-mariadb` | *disabled* | Install MariaDB server and client tools |
 | `--skip-db` | *disabled* | Skip all database client and server installations |
 | `--with-gui` | *disabled* | Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code) |
 | `--with-ghostty` | *disabled* | Install Ghostty terminal emulator (macOS cask, Snap on Ubuntu, COPR on Fedora) |
+| `--skip-ghostty` | *disabled* | Skip Ghostty terminal emulator installation |
 | `--with-chrome` | *disabled* | Install Google Chrome |
+| `--skip-chrome` | *disabled* | Skip Google Chrome installation |
 | `--with-apps` | *disabled* | Install desktop apps (VS Code / IDE) |
+| `--skip-apps` | *disabled* | Skip desktop apps installation (VS Code / IDE) |
 | `-i, --ide <name>` | `none` | IDE to install: `intellij`, `intellij-ultimate`, `code`, `none` |
 | `--skip-system` | *disabled* | Skip OS package updates and system provisioning |
 | `--skip-packages` | *disabled* | Skip core system package manager installs |
@@ -183,7 +215,7 @@ make lint
 | `--skip-bash` | *disabled* | Skip Bash configuration and environment variables |
 | `--skip-bin` | *disabled* | Skip `~/.local/bin` user utilities synchronization |
 | `--skip-completions`| *disabled* | Skip CLI tab completions generation |
-| `--skip-terminal` | *disabled* | Skip terminal emulator profile configuration (GNOME Terminal) |
+| `--skip-terminal` | *disabled* | Skip terminal emulator profile configuration (GNOME Terminal & macOS Terminal.app) |
 
 ---
 
@@ -229,20 +261,20 @@ The redesigned repository is built for frictionless extension:
 ### 4. Terminal Emulators (Ghostty, GNOME Terminal & macOS Terminal)
 - **Ghostty (`dotfiles/.config/ghostty/config`)**:
   - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`theme = "Solarized Dark"`) with 1:1 RGB palette matching Windows Terminal.
-  - **Typography**: MesloLGS NF font (`font-family = "MesloLGS NF"`, `font-size = 12`) and supporting all Powerlevel10k and Git status glyphs.
+  - **Typography**: Official Nerd Fonts v3 `MesloLGS Nerd Font` (`font-family = "MesloLGS Nerd Font"`, `font-family = "MesloLGS NF"`, `font-size = 12`) supporting all Powerlevel10k (`nerdfont-v3`) and Plane 15 `eza` glyphs.
   - **Window & Layout**: Flush edges (zero padding, unconstrained grid) and block cursor.
   - **Productivity**: Auto-split panes (`Ctrl+Shift+D`), navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
   - **Cross-Platform**: Automatically symlinked to `${XDG_CONFIG_HOME:-~/.config}/ghostty/config` and macOS `~/Library/Application Support/com.mitchellh.ghostty/config`.
 - **GNOME Terminal (`colors/gnome-terminal-solarized.dconf` & `bin/gnome-terminal-solarized`)**:
   - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile provisioned into dconf as default.
   - **Palette**: Corrects Color 8 to `base01` (`#586E75`), fixing the common invisible dim text / autosuggestions bug.
-  - **Typography & UI**: MesloLGS NF 12 font, Solarized `base02` (`#073642`) text selection highlight, block cursor, and silent bell.
-  - **CLI Management**: Provisioned automatically during setup (`modules/70-terminal.sh`) or manually via `gnome-terminal-solarized`.
+  - **Typography & UI**: `MesloLGS Nerd Font 12` font, Solarized `base02` (`#073642`) text selection highlight, block cursor, and silent bell.
+  - **CLI Management**: Provisioned automatically during setup (`modules/40-terminal.sh`) or manually via `gnome-terminal-solarized`.
 - **macOS Terminal.app (`colors/Solarized-Dark.terminal` & `bin/macos-terminal-solarized`)**:
   - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile configured in `com.apple.Terminal.plist` as default.
   - **Palette**: Corrects Color 8 to `base01` (`#586E75`), with `base02` selection highlight and `base03` background.
-  - **Typography**: MesloLGS NF 12 font (`MesloLGS-NF-Regular 12pt`), antialiasing enabled.
-  - **CLI Management**: Provisioned automatically on macOS during setup (`modules/70-terminal.sh`) or manually via `macos-terminal-solarized`.
+  - **Typography**: `MesloLGS Nerd Font` 12 font (`MesloLGSNF-Regular 12pt`), antialiasing enabled.
+  - **CLI Management**: Provisioned automatically on macOS during setup (`modules/40-terminal.sh`) or manually via `macos-terminal-solarized`.
 
 ---
 
@@ -288,6 +320,8 @@ The redesigned repository is built for frictionless extension:
 | Script | Description |
 |---|---|
 | `gen-passwd` | Generate random passwords with configurable character sets (`-u`, `-l`, `-n`, `-s`) and lengths |
+| `gnome-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in GNOME Terminal (`dconf`) |
+| `macos-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in macOS `Terminal.app` |
 | `sum` | Sum numbers from stdin/args with CSV parsing, column filtering (`-k`), human byte units (`-H`), averages (`-a`), and stats (`-s`) |
 | `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
 

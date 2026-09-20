@@ -1,6 +1,6 @@
 #!/bin/bash
 # Configures authentic 24-bit Solarized Dark TrueColor profile for GNOME Terminal.
-# Sets MesloLGS NF 12 font, Solarized Dark palette, base02 highlight, and block cursor.
+# Sets MesloLGS Nerd Font 12 font, Solarized Dark palette, base02 highlight, and block cursor.
 
 set -euo pipefail
 
@@ -51,7 +51,13 @@ if ! command -v dconf >/dev/null 2>&1 || ! command -v gsettings >/dev/null 2>&1;
     exit 0
 fi
 
-if ! gsettings list-schemas 2>/dev/null | grep -q "org.gnome.Terminal.ProfilesList"; then
+uid_val="$(id -u)"
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "/run/user/$uid_val/bus" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid_val/bus"
+fi
+
+schemas="$(gsettings list-schemas 2>/dev/null || true)"
+if ! grep -Fq "org.gnome.Terminal.ProfilesList" <<< "$schemas"; then
     echo "  GNOME Terminal schema not installed; skipping GNOME Terminal configuration."
     exit 0
 fi
@@ -86,7 +92,7 @@ else
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-background-color" "'#073642'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-foreground-color" "'#93A1A1'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-system-font" "false"
-    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS NF 12'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS Nerd Font 12'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/palette" "['#073642', '#DC322F', '#859900', '#B58900', '#268BD2', '#D33682', '#2AA198', '#EEE8D5', '#586E75', '#CB4B16', '#586E75', '#657B83', '#839496', '#6C71C4', '#93A1A1', '#FDF6E3']"
 fi
 

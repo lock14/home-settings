@@ -32,9 +32,11 @@ trap 'rm -rf "$TEMP_HOME"' EXIT
 
 OLD_HOME="$HOME"
 export HOME="$TEMP_HOME"
+export XDG_CONFIG_HOME="$TEMP_HOME/.config"
+export XDG_CACHE_HOME="$TEMP_HOME/.cache"
 
 # Run setup (dotfiles only)
-if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
     :
 else
     fail "setup.sh dotfiles-only" "Execution failed: $output"
@@ -52,6 +54,16 @@ else
     fail "Directory missing" "Expected ~/.zsh/completions"
 fi
 
+# Verify sourcing .zsh-completions with an empty ~/.zsh/completions directory under Zsh NOMATCH
+EMPTY_COMP_HOME=$(mktemp -d)
+mkdir -p "$EMPTY_COMP_HOME/.zsh/completions"
+if zsh -c "setopt NOMATCH; HOME='$EMPTY_COMP_HOME'; compdef() { :; }; source '$SCRIPT_DIR/dotfiles/.zsh-completions'" >/dev/null 2>&1; then
+    pass ".zsh-completions handles empty ~/.zsh/completions cleanly under Zsh NOMATCH"
+else
+    fail ".zsh-completions empty directory" "Failed under Zsh NOMATCH with empty ~/.zsh/completions"
+fi
+rm -rf "$EMPTY_COMP_HOME"
+
 # Test 3: CLI completion generator with mock CLI
 echo -e "\n[3/3] Testing CLI generator with mock CLI..."
 MOCK_BIN="$TEMP_HOME/mock_bin"
@@ -65,7 +77,7 @@ fi
 EOF
 chmod +x "$MOCK_BIN/gh"
 
-if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh 2>&1); then
+if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
     :
 else
     fail "setup.sh completions generation" "Execution failed: $output"
@@ -78,7 +90,7 @@ else
 fi
 
 # Idempotency check
-if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-zsh 2>&1); then
+if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
     pass "setup.sh completions are idempotent"
 else
     fail "setup.sh idempotency" "Second run failed: $output"

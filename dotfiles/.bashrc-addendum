@@ -1,10 +1,527 @@
 #!/bin/bash
-# custom env variables
-[ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
-[ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
+# Bash Addendum & Zero-Dependency Server Fallback Configuration
+# Works both alongside the full home-settings suite and standalone when copied
+# with .vimrc to remote servers or restricted environments.
 
+# 1. Environment Variables & Standalone Server Fallbacks
+if [ -f "$HOME/.environment-variables" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.environment-variables"
+else
+    export COLORTERM="${COLORTERM:-truecolor}"
+    case ":$PATH:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) export PATH="$HOME/.local/bin:$PATH" ;;
+    esac
+
+    export GOPATH="${XDG_DATA_HOME:-$HOME/.local/share}/go"
+    export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
+    case ":$PATH:" in
+        *":$GOPATH/bin:"*) ;;
+        *) export PATH="$GOPATH/bin:$PATH" ;;
+    esac
+
+    if command -v nvim >/dev/null 2>&1; then
+        export EDITOR=nvim
+    elif command -v vim >/dev/null 2>&1; then
+        export EDITOR=vim
+    else
+        export EDITOR=vi
+    fi
+    export VISUAL="$EDITOR"
+
+    export BAT_THEME="${BAT_THEME:-Solarized-Dark-TrueColor}"
+    export BAT_OPTS="${BAT_OPTS:---italic-text=always}"
+    export LSCOLORS="${LSCOLORS:-exgxfxdxcxfxfxegedabagacad}"
+    export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:---color=bg+:#073642,bg:#002B36,spinner:#859900,hl:#586E75 --color=fg:#839496,header:#586E75,info:#B58900,pointer:#859900 --color=marker:#859900,fg+:#93A1A1,prompt:#B58900,hl+:#268BD2 --layout=reverse --border=rounded --info=inline}"
+    export EZA_COLORS="${EZA_COLORS:-di=38;2;38;139;210:ex=38;2;133;153;0:fi=38;2;131;148;150:pi=38;2;181;137;0:so=38;2;211;54;130:bd=38;2;211;54;130:cd=38;2;211;54;130:ln=38;2;42;161;152:or=38;2;220;50;47:xx=38;2;88;110;117:da=38;2;131;148;150:hd=4;38;2;147;161;161:lp=38;2;131;148;150:cc=38;2;203;75;22:bO=38;2;220;50;47:in=38;2;88;110;117:bl=38;2;88;110;117:oc=38;2;131;148;150:ur=38;2;131;148;150:uw=38;2;131;148;150:ux=38;2;131;148;150:ue=38;2;131;148;150:gr=38;2;131;148;150:gw=38;2;131;148;150:gx=38;2;131;148;150:tr=38;2;131;148;150:tw=38;2;131;148;150:tx=38;2;131;148;150:su=38;2;131;148;150:sf=38;2;131;148;150:xa=38;2;131;148;150:sn=38;2;131;148;150:nb=38;2;88;110;117:nk=38;2;131;148;150:nm=38;2;181;137;0:ng=38;2;203;75;22:nt=38;2;220;50;47:sb=38;2;131;148;150:ub=38;2;88;110;117:uk=38;2;131;148;150:um=38;2;181;137;0:ug=38;2;203;75;22:ut=38;2;220;50;47:df=38;2;131;148;150:ds=38;2;131;148;150:uu=38;2;131;148;150:uR=38;2;220;50;47:un=38;2;131;148;150:gu=38;2;131;148;150:gR=38;2;220;50;47:gn=38;2;131;148;150:lc=38;2;131;148;150:lm=38;2;181;137;0:ga=38;2;133;153;0:gm=38;2;181;137;0:gd=38;2;220;50;47:gv=38;2;131;148;150:gt=38;2;131;148;150:gi=38;2;88;110;117:gc=38;2;220;50;47:Gm=38;2;133;153;0:Go=38;2;38;139;210:Gc=38;2;133;153;0:Gd=38;2;181;137;0:sp=38;2;203;75;22:mp=38;2;38;139;210:im=38;2;108;113;196:vi=38;2;108;113;196:mu=38;2;108;113;196:lo=38;2;108;113;196:cr=38;2;211;54;130:do=38;2;131;148;150:co=38;2;203;75;22:tm=38;2;88;110;117:cm=38;2;88;110;117:bu=38;2;133;153;0:sc=38;2;131;148;150:Sn=38;2;88;110;117:Su=38;2;131;148;150:Sr=38;2;131;148;150:St=38;2;131;148;150:Sl=38;2;131;148;150:ff=38;2;131;148;150}"
+    export EXA_COLORS="$EZA_COLORS"
+fi
+
+# Bash History & Solarized Dark Manpage / Pager Colors (less / man)
+export HISTSIZE="${HISTSIZE:-50000}"
+export HISTFILESIZE="${HISTFILESIZE:-100000}"
+export HISTCONTROL="${HISTCONTROL:-ignoreboth:erasedups}"
+export LESS="${LESS:--R}"
+export LESS_TERMCAP_mb=$'\e[38;2;220;50;47m'                  # blink -> Solarized Red (#DC322F)
+export LESS_TERMCAP_md=$'\e[1;38;2;38;139;210m'               # bold headings -> Solarized Blue (#268BD2)
+export LESS_TERMCAP_me=$'\e[0m'                               # reset bold/blink
+export LESS_TERMCAP_so=$'\e[38;2;147;161;161;48;2;7;54;66m'   # standout/search -> Base1 (#93A1A1) on Base02 (#073642)
+export LESS_TERMCAP_se=$'\e[0m'                               # reset standout
+export LESS_TERMCAP_us=$'\e[4;38;2;42;161;152m'               # underline/flags -> Solarized Cyan (#2AA198)
+export LESS_TERMCAP_ue=$'\e[0m'                               # reset underline
+
+# 2. Directory & Filesystem Colors (dircolors database with inline Solarized Dark fallback)
 if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ]; then
     eval "$(dircolors "$HOME/.dir-colors/dircolors")"
+else
+    # Calibrated Solarized Dark LS_COLORS:
+    # Directories Blue (34), Symlinks Cyan (36), Executables unbolded Green (32),
+    # Archives Orange (91), Media Violet (95), Crypto/Keys Magenta (35), Text/Code Base0 (00), Temp/Logs Base01 (90)
+    export LS_COLORS="rs=0:di=34:ln=36:mh=00:pi=33:so=35:do=35:bd=35:cd=35:or=31:mi=31:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;40:st=37;44:ex=32:*.tar=91:*.tgz=91:*.arc=91:*.arj=91:*.taz=91:*.lha=91:*.lz4=91:*.lzh=91:*.lzma=91:*.tlz=91:*.txz=91:*.tzo=91:*.t7z=91:*.zip=91:*.z=91:*.dz=91:*.gz=91:*.lrz=91:*.lz=91:*.lzo=91:*.xz=91:*.zst=91:*.tzst=91:*.bz2=91:*.bz=91:*.tbz=91:*.tbz2=91:*.tz=91:*.deb=91:*.rpm=91:*.jar=91:*.war=91:*.ear=91:*.sar=91:*.rar=91:*.7z=91:*.cab=91:*.dmg=91:*.iso=91:*.apk=91:*.gem=91:*.msi=91:*.xpi=91:*.jpg=95:*.jpeg=95:*.gif=95:*.bmp=95:*.pbm=95:*.pgm=95:*.ppm=95:*.tga=95:*.xbm=95:*.xpm=95:*.tif=95:*.tiff=95:*.png=95:*.svg=95:*.svgz=95:*.webp=95:*.mov=95:*.mpg=95:*.mpeg=95:*.mkv=95:*.webm=95:*.mp4=95:*.m4v=95:*.avi=95:*.flv=95:*.wmv=95:*.aac=95:*.flac=95:*.m4a=95:*.mid=95:*.midi=95:*.mka=95:*.mp3=95:*.ogg=95:*.wav=95:*.key=35:*.pem=35:*.crt=35:*.cer=35:*.gpg=35:*.pgp=35:*.asc=35:*.3des=35:*.aes=35:*.enc=35:*.txt=00:*.md=00:*.mkd=00:*.markdown=00:*.json=00:*.yaml=00:*.yml=00:*.toml=00:*.xml=00:*.html=00:*.css=00:*.sh=00:*.bash=00:*.zsh=00:*.py=00:*.go=00:*.rs=00:*.c=00:*.cc=00:*.cpp=00:*.h=00:*.hpp=00:*.java=00:*.js=00:*.ts=00:*.sql=00:*.tf=00:*.bak=90:*.old=90:*.orig=90:*.swp=90:*.swo=90:*.log=90:"
+    export LSCOLORS="${LSCOLORS:-exgxfxdxcxfxfxegedabagacad}"
+fi
+
+# 3. Aliases & Git Workflow Helpers (sources ~/.aliases or provides standalone server fallbacks)
+if [ -f "$HOME/.aliases" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.aliases"
+else
+    alias gcommit='git add -A && git commit'
+    alias gamend='git add -A && git commit --amend --no-edit'
+    alias gfetch='git fetch'
+    alias gpush='git push origin HEAD'
+    alias gpushf='git push --force-with-lease origin HEAD'
+    alias gpull='git pull --rebase --autostash'
+    alias gup='gfetch && gpull'
+    # shellcheck disable=SC2154
+    alias gprune='git fetch --prune 2>/dev/null; target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --merged "$target" | sed "s/^[ *]*//" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -d "$b"; done'
+    # shellcheck disable=SC2154
+    alias gpurge='target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --format="%(refname:short)" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
+    # shellcheck disable=SC2154
+    alias guser-branch='b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -z "$b" ] || [ "$b" = "HEAD" ]; then echo "Error: not on a valid branch" >&2; false; elif [ "$b" = "main" ] || [ "$b" = "master" ] || [ "$b" = "trunk" ]; then echo "Error: refusing to prefix $b branch" >&2; false; else git branch -m "${USER:-$(whoami)}/$(echo "$b" | sed -E "s|^(${USER:-$(whoami)}/)+||")"; fi'
+
+    if command -v nvim >/dev/null 2>&1; then
+        alias vi='nvim'
+        alias vim='nvim'
+        alias v='nvim'
+    elif command -v vim >/dev/null 2>&1; then
+        alias vi='vim'
+        alias v='vim'
+    else
+        alias v='vi'
+    fi
+
+    if command -v bat >/dev/null 2>&1; then
+        alias b='bat'
+    elif command -v batcat >/dev/null 2>&1; then
+        alias bat='batcat'
+        alias b='batcat'
+    fi
+
+    if [ "$(uname -s)" = "Darwin" ]; then
+        alias ls='ls -G'
+        alias ll='ls -alFG'
+        alias la='ls -AG'
+        alias l='ls -CFG'
+    else
+        alias ls='ls --color=auto'
+        alias ll='ls -alF'
+        alias la='ls -A'
+        alias l='ls -CF'
+    fi
+
+    if command -v eza >/dev/null 2>&1; then
+        alias e='eza --icons=auto --group-directories-first'
+        alias el='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso'
+    fi
+fi
+
+alias grep='grep --color=auto'
+alias egrep='grep -E --color=auto'
+alias fgrep='grep -F --color=auto'
+
+# Provide gsync workflow helper in Bash if not already defined
+if ! declare -F gsync >/dev/null 2>&1; then
+    gsync() {
+        local current_branch target_branch
+        current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || {
+            echo "Error: not in a git repository" >&2
+            return 1
+        }
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+            echo "Error: working directory has uncommitted changes. Please stash or commit before running gsync." >&2
+            return 1
+        fi
+        if git show-ref --verify --quiet refs/heads/main; then
+            target_branch="main"
+        elif git show-ref --verify --quiet refs/heads/master; then
+            target_branch="master"
+        else
+            echo "Error: neither 'main' nor 'master' branch found locally." >&2
+            return 1
+        fi
+        if [ "$current_branch" = "$target_branch" ]; then
+            git pull --rebase origin "$target_branch"
+        else
+            git checkout "$target_branch" && \
+            git pull --rebase origin "$target_branch" && \
+            git checkout "$current_branch" && \
+            git rebase "$target_branch"
+        fi
+    }
+fi
+
+# Helper to parse Git config files in pure Bash (zero subprocess forks)
+_solarized_parse_git_config() {
+    local cfg_file="$1" is_repo_cfg="${2:-0}" depth="${3:-0}"
+    if [ "$depth" -gt 4 ] || [ ! -r "$cfg_file" ]; then
+        return 0
+    fi
+    local s
+    for s in "${seen_cfgs[@]}"; do
+        [ "$s" = "$cfg_file" ] && return 0
+    done
+    seen_cfgs+=("$cfg_file")
+
+    local section_type="" section_name="" seen_url_in_section=0 cfg_line="" next_line="" pre_bracket="" hdr="" key="" val=""
+    while IFS= read -r cfg_line || [ -n "$cfg_line" ]; do
+        cfg_line="${cfg_line%$'\r'}"
+        while [[ "$cfg_line" == *\\ ]]; do
+            next_line=""
+            IFS= read -r next_line || break
+            next_line="${next_line%$'\r'}"
+            next_line="${next_line#"${next_line%%[![:space:]]*}"}"
+            cfg_line="${cfg_line%\\}${next_line}"
+        done
+        cfg_line="${cfg_line#"${cfg_line%%[![:space:]]*}"}"
+        [[ -z "$cfg_line" || "$cfg_line" == [#\;]* ]] && continue
+
+        if [[ "$cfg_line" == \[*\]* ]]; then
+            seen_url_in_section=0
+            pre_bracket="${cfg_line#\[}"
+            pre_bracket="${pre_bracket%%\]*}"
+            if [[ "$pre_bracket" == *\"* ]]; then
+                hdr="${cfg_line#\[}"
+                hdr="${hdr%%\"\]*}"
+                hdr="${hdr#"${hdr%%[![:space:]]*}"}"
+                section_type="${hdr%%[[:space:]\"]*}"
+                section_name="${hdr#*\"}"
+                section_name="${section_name%\"*}"
+            else
+                hdr="$pre_bracket"
+                hdr="${hdr#"${hdr%%[![:space:]]*}"}"
+                hdr="${hdr%"${hdr##*[![:space:]]}"}"
+                if [[ "$hdr" == *.* ]]; then
+                    section_type="${hdr%%.*}"
+                    section_name="${hdr#*.}"
+                else
+                    section_type="$hdr"
+                    section_name=""
+                fi
+            fi
+            case "$section_type" in
+                [rR][eE][mM][oO][tT][eE])           section_type="remote" ;;
+                [bB][rR][aA][nN][cC][hH])           section_type="branch" ;;
+                [uU][rR][lL])                       section_type="url" ;;
+                [iI][nN][cC][lL][uU][dD][eE])       section_type="include" ;;
+                [iI][nN][cC][lL][uU][dD][eE][iI][fF])
+                    section_type=""
+                    local cond_pat="" cond_icase=0
+                    if [[ "$section_name" == gitdir/i:* ]]; then
+                        cond_pat="${section_name#gitdir/i:}"
+                        cond_icase=1
+                    elif [[ "$section_name" == gitdir:* ]]; then
+                        cond_pat="${section_name#gitdir:}"
+                    elif [[ "$section_name" == onbranch:* ]]; then
+                        cond_pat="${section_name#onbranch:}"
+                        [[ "$cond_pat" == */ ]] && cond_pat="${cond_pat}*"
+                        # shellcheck disable=SC2053
+                        if [[ "$raw_branch" == $cond_pat ]]; then
+                            section_type="include"
+                        fi
+                        cond_pat=""
+                    fi
+                    if [ -n "$cond_pat" ]; then
+                        if [[ "$cond_pat" == \~/* ]]; then
+                            cond_pat="$HOME/${cond_pat#\~/}"
+                        elif [[ "$cond_pat" == ./* ]]; then
+                            cond_pat="${cfg_file%/*}/${cond_pat#./}"
+                        elif [[ "$cond_pat" != /* ]]; then
+                            cond_pat="*/$cond_pat"
+                        fi
+                        [[ "$cond_pat" == */ ]] && cond_pat="${cond_pat}*"
+                        local cond_pat_alt="${cond_pat//\/\*\*\//\/}"
+                        local had_nocase=0
+                        shopt -q nocasematch && had_nocase=1
+                        [ "$cond_icase" = "1" ] && shopt -s nocasematch
+                        # shellcheck disable=SC2053
+                        if [[ "$gitdir/" == $cond_pat || "$workdir/.git/" == $cond_pat || "$gitdir/" == $cond_pat_alt || "$workdir/.git/" == $cond_pat_alt ]]; then
+                            section_type="include"
+                        fi
+                        [ "$cond_icase" = "1" ] && [ "$had_nocase" = "0" ] && shopt -u nocasematch
+                    fi
+                    ;;
+                *)                                  section_type="" ;;
+            esac
+            continue
+        fi
+
+        [[ -z "$section_type" || "$cfg_line" != *=* ]] && continue
+        key="${cfg_line%%=*}"
+        key="${key%"${key##*[![:space:]]}"}"
+        case "$key" in
+            [uU][rR][lL])                         key="url" ;;
+            [rR][eE][mM][oO][tT][eE])             key="remote" ;;
+            [iI][nN][sS][tT][eE][aA][dD][oO][fF]) key="insteadof" ;;
+            [pP][aA][tT][hH])                     key="path" ;;
+            *)                                    continue ;;
+        esac
+        val="${cfg_line#*=}"
+        val="${val#"${val%%[![:space:]]*}"}"
+        if [[ "$val" == \"* ]]; then
+            val="${val#\"}"
+            val="${val%%\"*}"
+        else
+            val="${val%%[#\;]*}"
+            val="${val%"${val##*[![:space:]]}"}"
+        fi
+        [ -z "$val" ] && continue
+
+        if [ "$section_type" = "remote" ] && [ "$key" = "url" ]; then
+            if [ "$seen_url_in_section" = "0" ]; then
+                remote_names+=("$section_name")
+                remote_urls+=("$val")
+                seen_url_in_section=1
+                if [ "$is_repo_cfg" = "1" ] && [ -z "$first_remote_name" ]; then
+                    first_remote_name="$section_name"
+                fi
+            fi
+        elif [ "$section_type" = "branch" ] && [ "$section_name" = "$raw_branch" ] && [ "$key" = "remote" ]; then
+            branch_remote="$val"
+        elif [ "$section_type" = "url" ] && [ "$key" = "insteadof" ]; then
+            insteadof_prefixes+=("$val")
+            insteadof_bases+=("$section_name")
+        elif [ "$section_type" = "include" ] && [ "$key" = "path" ]; then
+            local inc_path="$val"
+            if [[ "$inc_path" == \~/* ]]; then
+                inc_path="$HOME/${inc_path#\~/}"
+            elif [[ "$inc_path" != /* ]]; then
+                inc_path="${cfg_file%/*}/$inc_path"
+            fi
+            _solarized_parse_git_config "$inc_path" "$is_repo_cfg" "$((depth + 1))"
+        fi
+    done < "$cfg_file"
+}
+
+# 4. Zero-Dependency Solarized Dark Single-Line Shelf Prompt Builder
+_solarized_bash_prompt() {
+    local exit_code=$?
+    local c_reset='\[\e[0m\]'
+    local bg_shelf='\[\e[48;2;7;54;66m\]'
+    local c_shelf_cap='\[\e[0m\e[38;2;7;54;66m\]'
+    local c_base01='\[\e[38;2;88;110;117m\]'
+    local c_base0='\[\e[38;2;131;148;150m\]'
+    local c_blue='\[\e[38;2;38;139;210m\]'
+    local c_green='\[\e[38;2;133;153;0m\]'
+    local c_yellow='\[\e[38;2;181;137;0m\]'
+    local c_red='\[\e[38;2;220;50;47m\]'
+    local subsep=''   # \uE0B1 thin directional chevron
+    local endcap=''   # \uE0B0 solid right-pointing wedge cap
+    local git_icon=' ' # \uF126 branch icon
+    local sym='❯'
+    local os_icon=''  # \uF17C Linux
+    if [[ "${OSTYPE:-}" == darwin* ]] || { [ -z "${OSTYPE:-}" ] && [ "$(uname -s 2>/dev/null)" = "Darwin" ]; }; then
+        os_icon=''    # \uF179 macOS
+    fi
+
+    if [ "${TERM:-}" = "linux" ] || { [ "${COLORTERM:-}" != "truecolor" ] && [ "${COLORTERM:-}" != "24bit" ]; }; then
+        bg_shelf='\[\e[40m\]'
+        c_shelf_cap='\[\e[0m\e[30m\]'
+        c_base01='\[\e[90m\]'
+        c_base0='\[\e[37m\]'
+        c_blue='\[\e[34m\]'
+        c_green='\[\e[32m\]'
+        c_yellow='\[\e[33m\]'
+        c_red='\[\e[31m\]'
+        if [ "${TERM:-}" = "linux" ]; then
+            subsep='>'
+            endcap=''
+            git_icon=''
+            os_icon=''
+            sym='>'
+        fi
+    fi
+
+    local host_color="$c_base0"
+    if [ -n "${SSH_CLIENT:-}${SSH_TTY:-}${SSH_CONNECTION:-}" ]; then
+        host_color="$c_yellow"
+    fi
+
+    local context_segment="${host_color}\u@\h"
+    if [ -n "$os_icon" ]; then
+        context_segment="${c_base0}${os_icon} ${host_color}\u@\h"
+    fi
+
+    local sep=" ${c_base01}${subsep} "
+    local git_segment=""
+    local workdir="${GIT_WORK_TREE:-$PWD}"
+    local gitdir="${GIT_DIR:-}"
+    if [ -z "$gitdir" ] && { [ -n "${GIT_WORK_TREE:-}" ] || [[ "$PWD" != */.git && "$PWD" != */.git/* ]]; }; then
+        while [ -n "$workdir" ] && [ "$workdir" != "/" ] && [ ! -e "$workdir/.git" ] && [ ! -L "$workdir/.git" ]; do
+            workdir="${workdir%/*}"
+            [ -n "$workdir" ] || workdir="/"
+        done
+        if [ -d "$workdir/.git" ]; then
+            gitdir="$workdir/.git"
+        elif [ -r "$workdir/.git" ]; then
+            local gd_line=""
+            IFS= read -r gd_line < "$workdir/.git" || true
+            gd_line="${gd_line%$'\r'}"
+            if [[ "$gd_line" == "gitdir: "* ]]; then
+                gd_line="${gd_line#gitdir: }"
+                if [[ "$gd_line" == /* ]]; then
+                    gitdir="$gd_line"
+                else
+                    gitdir="$workdir/$gd_line"
+                fi
+            fi
+        fi
+    fi
+
+    if [ -n "$gitdir" ] && command -v git >/dev/null 2>&1; then
+        local status_out=""
+        if status_out=$(git --no-optional-locks status --porcelain=v2 --branch --ignore-submodules=dirty 2>/dev/null); then
+            local raw_branch="" branch_oid="" branch_upstream="" is_dirty=0 s_line="" branch=""
+            while IFS= read -r s_line || [ -n "$s_line" ]; do
+                if [[ "$s_line" == "# branch.head "* ]]; then
+                    raw_branch="${s_line#\# branch.head }"
+                elif [[ "$s_line" == "# branch.oid "* ]]; then
+                    branch_oid="${s_line#\# branch.oid }"
+                elif [[ "$s_line" == "# branch.upstream "* ]]; then
+                    branch_upstream="${s_line#\# branch.upstream }"
+                elif [[ "$s_line" != \#* ]]; then
+                    is_dirty=1
+                    break
+                fi
+            done <<< "$status_out"
+
+            if [ "$raw_branch" = "(detached)" ]; then
+                raw_branch=$(git rev-parse --short HEAD 2>/dev/null || printf '%s' "${branch_oid:0:7}")
+            fi
+
+            if [ -n "$raw_branch" ]; then
+                local vcs_host_icon=""
+                if [ "${TERM:-}" != "linux" ]; then
+                    local commondir="$gitdir"
+                    if [ -r "$gitdir/commondir" ]; then
+                        local common_line=""
+                        IFS= read -r common_line < "$gitdir/commondir" || true
+                        common_line="${common_line%$'\r'}"
+                        if [ -n "$common_line" ] && [ "$common_line" != "." ] && [ "$common_line" != "./" ]; then
+                            if [[ "$common_line" == /* ]]; then
+                                commondir="$common_line"
+                            else
+                                commondir="$gitdir/$common_line"
+                            fi
+                        fi
+                    fi
+
+                    local branch_remote="" first_remote_name=""
+                    local -a remote_names=() remote_urls=() insteadof_prefixes=() insteadof_bases=() seen_cfgs=()
+                    if [ -n "${GIT_CONFIG_GLOBAL:-}" ]; then
+                        _solarized_parse_git_config "$GIT_CONFIG_GLOBAL" 0
+                    else
+                        _solarized_parse_git_config "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" 0
+                        _solarized_parse_git_config "$HOME/.gitconfig" 0
+                    fi
+                    if [ -n "$commondir" ]; then
+                        _solarized_parse_git_config "$commondir/config" 1
+                    fi
+                    if [ -n "$gitdir" ]; then
+                        if [ "$gitdir" != "$commondir" ]; then
+                            _solarized_parse_git_config "$gitdir/config" 1
+                        fi
+                        _solarized_parse_git_config "$gitdir/config.worktree" 1
+                    fi
+
+                    local upstream_remote=""
+                    if [[ "$branch_upstream" == */* ]]; then
+                        upstream_remote="${branch_upstream%%/*}"
+                    fi
+
+                    local target_remote="origin"
+                    if [ -n "$branch_remote" ] && [ "$branch_remote" != "." ]; then
+                        target_remote="$branch_remote"
+                    elif [ -n "$upstream_remote" ]; then
+                        target_remote="$upstream_remote"
+                    fi
+
+                    local target_url="" upstream_url="" origin_url="" first_remote_url="" i
+                    for ((i = 0; i < ${#remote_names[@]}; i++)); do
+                        if [ "${remote_names[$i]}" = "$target_remote" ]; then
+                            target_url="${remote_urls[$i]}"
+                        fi
+                        if [ -n "$upstream_remote" ] && [ "${remote_names[$i]}" = "$upstream_remote" ]; then
+                            upstream_url="${remote_urls[$i]}"
+                        fi
+                        if [ "${remote_names[$i]}" = "origin" ]; then
+                            origin_url="${remote_urls[$i]}"
+                        fi
+                        if [ -n "$first_remote_name" ] && [ "${remote_names[$i]}" = "$first_remote_name" ]; then
+                            first_remote_url="${remote_urls[$i]}"
+                        fi
+                    done
+
+                    local remote_url="${target_url:-${upstream_url:-${origin_url:-$first_remote_url}}}"
+                    if [ -n "$remote_url" ] && [ "${#insteadof_prefixes[@]}" -gt 0 ]; then
+                        local best_pfx="" best_base="" pfx
+                        for ((i = 0; i < ${#insteadof_prefixes[@]}; i++)); do
+                            pfx="${insteadof_prefixes[$i]}"
+                            if [[ "$remote_url" == "$pfx"* ]] && [ "${#pfx}" -ge "${#best_pfx}" ]; then
+                                best_pfx="$pfx"
+                                best_base="${insteadof_bases[$i]}"
+                            fi
+                        done
+                        if [ -n "$best_pfx" ]; then
+                            remote_url="${best_base}${remote_url#"$best_pfx"}"
+                        fi
+                    fi
+
+                    case "$remote_url" in
+                        *[gG][iI][tT][hH][uU][bB]*)                 vcs_host_icon=' ' ;; # \uF113 GitHub
+                        *[gG][iI][tT][lL][aA][bB]*)                 vcs_host_icon=' ' ;; # \uF296 GitLab
+                        *[bB][iI][tT][bB][uU][cC][kK][eE][tT]*)     vcs_host_icon=' ' ;; # \uF171 Bitbucket
+                        *)                                          vcs_host_icon=' ' ;; # \uF1D3 Default Git
+                    esac
+                fi
+
+                branch="${raw_branch//\\/\\\\}"
+                branch="${branch//\$/\\\\\$}"
+                branch="${branch//\`/\\\\\`}"
+                if [ "$is_dirty" = "1" ]; then
+                    git_segment="${sep}${c_yellow}${vcs_host_icon}${git_icon}${branch}*"
+                else
+                    git_segment="${sep}${c_green}${vcs_host_icon}${git_icon}${branch}"
+                fi
+            fi
+        fi
+    fi
+
+    local shelf_end="${c_reset}"
+    if [ -n "$endcap" ]; then
+        shelf_end="${c_shelf_cap}${endcap}${c_reset}"
+    fi
+
+    local prompt_symbol="${c_green}${sym}${c_reset}"
+    if [ "$exit_code" -ne 0 ]; then
+        prompt_symbol="${c_red}${sym}${c_reset}"
+    fi
+
+    PS1="${bg_shelf} ${context_segment}${sep}${c_blue}\w${git_segment} ${shelf_end} ${prompt_symbol} "
+}
+
+# Initialize default Solarized Dark PS1
+_solarized_bash_prompt
+
+# 5. Interactive Shell Ergonomics & Optional Tool Integrations (zoxide, mise, fzf)
+if [[ "$-" == *i* ]]; then
+    shopt -s histappend checkwinsize
+    shopt -s autocd dirspell cdspell 2>/dev/null || true
+
+    bind 'set completion-ignore-case on' 2>/dev/null || true
+    bind 'set show-all-if-ambiguous on' 2>/dev/null || true
+    bind '"\e[A": history-search-backward' 2>/dev/null || true
+    bind '"\e[B": history-search-forward' 2>/dev/null || true
+
+    # shellcheck disable=SC2128,SC2178
+    if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+        if [[ " ${PROMPT_COMMAND[*]} " != *" _solarized_bash_prompt "* ]]; then
+            PROMPT_COMMAND=("_solarized_bash_prompt" "${PROMPT_COMMAND[@]}")
+        fi
+    elif [[ ";${PROMPT_COMMAND:-};" != *";_solarized_bash_prompt;"* ]]; then
+        PROMPT_COMMAND="_solarized_bash_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+    fi
 fi
 
 if command -v zoxide >/dev/null 2>&1; then
@@ -17,10 +534,14 @@ fi
 
 if [[ "$-" == *i* ]] && command -v fzf >/dev/null 2>&1; then
     if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+        # shellcheck source=/dev/null
         source /usr/share/doc/fzf/examples/key-bindings.bash
+        # shellcheck source=/dev/null
         [ -f /usr/share/doc/fzf/examples/completion.bash ] && source /usr/share/doc/fzf/examples/completion.bash || true
     elif [ -f /usr/share/fzf/key-bindings.bash ]; then
+        # shellcheck source=/dev/null
         source /usr/share/fzf/key-bindings.bash
+        # shellcheck source=/dev/null
         [ -f /usr/share/fzf/completion.bash ] && source /usr/share/fzf/completion.bash || true
     elif fzf --bash >/dev/null 2>&1; then
         eval "$(fzf --bash)"
