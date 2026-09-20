@@ -62,6 +62,15 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
             link_file "$item" "$XDG_CONFIG/$target_name"
         fi
     done
+    # Prune dangling symlinks in $XDG_CONFIG pointing into dotfiles/.config
+    for existing in "$XDG_CONFIG"/*; do
+        if [ -L "$existing" ] && [ ! -e "$existing" ]; then
+            target_link="$(readlink "$existing" 2>/dev/null || true)"
+            if [[ "$target_link" == *"$DOTFILES_DIR/.config"* ]]; then
+                rm -f "$existing"
+            fi
+        fi
+    done
 fi
 
 # 4. Ghostty macOS Application Support compatibility symlink

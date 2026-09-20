@@ -41,10 +41,6 @@ else
 fi
 
 expected_fonts=(
-    "MesloLGSNerdFont-Regular.ttf"
-    "MesloLGSNerdFont-Bold.ttf"
-    "MesloLGSNerdFont-Italic.ttf"
-    "MesloLGSNerdFont-BoldItalic.ttf"
     "MesloLGS NF Regular.ttf"
     "MesloLGS NF Bold.ttf"
     "MesloLGS NF Italic.ttf"
@@ -61,48 +57,74 @@ for font in "${expected_fonts[@]}"; do
 done
 
 if command -v fc-query >/dev/null 2>&1; then
-    font_charset="$(fc-query --format='%{family}\n%{postscriptname}\n%{charset}\n' "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" 2>/dev/null || true)"
-    if grep -Fq "MesloLGS Nerd Font" <<< "$font_charset" && grep -Fq "MesloLGSNF-Regular" <<< "$font_charset" && grep -Eq "f0001-f1[0-9a-f]{3}" <<< "$font_charset"; then
-        pass "fc-query confirms MesloLGS Nerd Font v3 (postscriptname MesloLGSNF-Regular) includes Plane 15 glyphs (U+F0001..U+F1AF0, covering U+F03E3, U+F0683, U+F1062)"
+    nf_charset="$(fc-query --format='%{family}\n%{postscriptname}\n' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" 2>/dev/null || true)"
+    if grep -Fq "MesloLGS NF" <<< "$nf_charset" && grep -Fq "MesloLGS-NF-Regular" <<< "$nf_charset"; then
+        pass "fc-query confirms romkatv MesloLGS NF (postscriptname MesloLGS-NF-Regular) is installed"
     else
-        fail "fc-query Nerd Fonts v3 Plane 15 check" "Expected MesloLGS Nerd Font family, MesloLGSNF-Regular postscriptname, and f0001-f1af0 charset range"
+        fail "fc-query MesloLGS NF check" "Expected MesloLGS NF family and MesloLGS-NF-Regular postscriptname, got: $nf_charset"
     fi
+fi
+
+if [ -f "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ]; then
+    pass "Fontconfig alias 10-meslo-nerd-font.conf installed"
+else
+    fail "Fontconfig alias missing" "Expected $TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
 fi
 
 if command -v fc-match >/dev/null 2>&1; then
-    fc_v3_family="$(HOME="$TEMP_HOME" XDG_DATA_HOME="$TEMP_HOME/.local/share" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" fc-match --format='%{family}' "MesloLGS Nerd Font" 2>/dev/null || true)"
-    fc_nf_family="$(HOME="$TEMP_HOME" XDG_DATA_HOME="$TEMP_HOME/.local/share" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" fc-match --format='%{family}' "MesloLGS NF" 2>/dev/null || true)"
-    if [[ "$fc_v3_family" == *"MesloLGS Nerd Font"* ]] && [[ "$fc_nf_family" == *"MesloLGS Nerd Font"* ]]; then
-        pass "fc-match resolves both 'MesloLGS Nerd Font' and 'MesloLGS NF' to Nerd Fonts v3 via 10-meslo-nerd-font.conf"
+    fc_conf="$TEMP_HOME/test-fc.conf"
+    cat << EOF > "$fc_conf"
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <include>/etc/fonts/fonts.conf</include>
+  <dir>$TEMP_HOME/.local/share/fonts</dir>
+  <include>$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf</include>
+</fontconfig>
+EOF
+    matched_nf="$(FONTCONFIG_FILE="$fc_conf" fc-match --format='%{family}|%{file}\n' "MesloLGS NF" 2>/dev/null || true)"
+    matched_v3="$(FONTCONFIG_FILE="$fc_conf" fc-match --format='%{family}|%{file}\n' "MesloLGS Nerd Font" 2>/dev/null || true)"
+    if grep -Fq "MesloLGS NF" <<< "$matched_nf" && grep -Fq "MesloLGS NF Regular.ttf" <<< "$matched_nf"; then
+        pass "fc-match resolves 'MesloLGS NF' to MesloLGS NF Regular.ttf"
     else
-        fail "fc-match fontconfig alias resolution" "Got MesloLGS Nerd Font='$fc_v3_family', MesloLGS NF='$fc_nf_family'"
+        fail "fc-match 'MesloLGS NF'" "Expected MesloLGS NF Regular.ttf, got: $matched_nf"
     fi
+    if grep -Fq "MesloLGS NF" <<< "$matched_v3" && grep -Fq "MesloLGS NF Regular.ttf" <<< "$matched_v3"; then
+        pass "fc-match resolves 'MesloLGS Nerd Font' alias to MesloLGS NF Regular.ttf"
+    else
+        fail "fc-match 'MesloLGS Nerd Font' alias" "Expected MesloLGS NF Regular.ttf, got: $matched_v3"
+    fi
+    rm -f "$fc_conf"
 fi
 
-# Verify legacy v2 MesloLGS NF *.ttf files are automatically upgraded in-place to Nerd Fonts v3
-# Case A: When MesloLGSNerdFont-Regular.ttf already exists in $FONT_DIR
-printf "legacy-v2-font-stub" > "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"
+# Verify that any conflicting MesloLGSNerdFont-*.ttf, MesloLGS-NF-*.ttf, or stray numbered [0-9]MesloLGS*.ttf files and dangling fontconfig symlinks are cleaned up and replaced with romkatv MesloLGS NF *.ttf
+printf "conflicting-v3-font" > "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf"
+printf "conflicting-hyphen-font" > "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf"
+printf "stray-numbered-font" > "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf"
+ln -sfn "$TEMP_HOME/nonexistent-fontconfig" "$TEMP_HOME/.config/fontconfig"
+printf "stub" > "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
-    if cmp -s "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"; then
-        pass "Font installation upgrades legacy v2 MesloLGS NF Regular.ttf even when MesloLGSNerdFont-Regular.ttf is already present"
+    nf_size=$(wc -c < "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" | tr -d ' ')
+    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2000000 ] && [ "$nf_size" -lt 2700000 ]; then
+        pass "Font setup removes conflicting MesloLGSNerdFont-*.ttf, MesloLGS-NF-*.ttf, stray numbered fonts, and resolves broken fontconfig symlink, restoring authentic romkatv MesloLGS NF Regular.ttf ($nf_size bytes)"
     else
-        fail "Legacy v2 font upgrade (existing v3)" "MesloLGS NF Regular.ttf did not match MesloLGSNerdFont-Regular.ttf after upgrade"
+        fail "Font cleanup and restoration" "Expected conflicting/stray files removed, broken symlink resolved, and 2.0M < size < 2.7M (got size=$nf_size)"
     fi
 else
-    fail "Font setup upgrade (existing v3)" "Run failed: $output"
+    fail "Font setup cleanup run" "Second run failed: $output"
 fi
 
-# Case B: When MesloLGSNerdFont-Regular.ttf is absent and only legacy v2 MesloLGS NF Regular.ttf is present
-printf "legacy-v2-font-stub" > "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"
-rm -f "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf"
+# Verify font inode preservation on repeated runs (prevents unlinking fonts out from under running terminal emulators)
+inode_before=$(stat -c '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" 2>/dev/null || stat -f '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf")
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
-    if cmp -s "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"; then
-        pass "Font installation upgrades legacy v2 MesloLGS NF Regular.ttf to Nerd Fonts v3 and remains idempotent"
+    inode_after=$(stat -c '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" 2>/dev/null || stat -f '%i' "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf")
+    if [ "$inode_before" = "$inode_after" ]; then
+        pass "Font setup preserves existing valid font file inode ($inode_before == $inode_after) without unlinking under running apps"
     else
-        fail "Legacy v2 font upgrade" "MesloLGS NF Regular.ttf did not match MesloLGSNerdFont-Regular.ttf after upgrade"
+        fail "Font inode stability" "Expected unchanged inode $inode_before, got $inode_after"
     fi
 else
-    fail "Font setup idempotency / upgrade" "Second run failed: $output"
+    fail "Font setup idempotency" "Third run failed: $output"
 fi
 
 # Test 3: Font installation on macOS target
@@ -137,10 +159,10 @@ with open(sys.argv[1], "rb") as f:
 arch = plistlib.loads(d["Font"])
 print(arch["$objects"][2])
 ' "$SCRIPT_DIR/colors/Solarized-Dark.terminal" 2>/dev/null || true)"
-    if [ "$mac_ps_name" = "MesloLGSNF-Regular" ]; then
-        pass "colors/Solarized-Dark.terminal archived NSFont PostScript name is MesloLGSNF-Regular (matching Nerd Fonts v3)"
+    if [ "$mac_ps_name" = "MesloLGS-NF-Regular" ]; then
+        pass "colors/Solarized-Dark.terminal archived NSFont PostScript name is MesloLGS-NF-Regular (matching romkatv MesloLGS NF)"
     else
-        fail "colors/Solarized-Dark.terminal PostScript font name" "Expected MesloLGSNF-Regular, got '$mac_ps_name'"
+        fail "colors/Solarized-Dark.terminal PostScript font name" "Expected MesloLGS-NF-Regular, got '$mac_ps_name'"
     fi
 fi
 

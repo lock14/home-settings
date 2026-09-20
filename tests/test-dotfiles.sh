@@ -64,14 +64,6 @@ else
     fail "JS/TS queries symlink" "Expected after/queries/javascript and after/queries/typescript in mirrored .config/nvim"
 fi
 assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
-assert_symlink "$TEMP_HOME/.config/fontconfig" "" "Auto-discovered and symlinked: .config/fontconfig"
-if [ -f "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ] && \
-   grep -q '<family>MesloLGS Nerd Font</family>' "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" && \
-   grep -q '<family>MesloLGS NF</family>' "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"; then
-    pass "fontconfig conf.d alias maps MesloLGS NF <-> MesloLGS Nerd Font"
-else
-    fail "fontconfig alias verification" "Missing or invalid .config/fontconfig/conf.d/10-meslo-nerd-font.conf"
-fi
 assert_symlink "$TEMP_HOME/.config/clangd" "" "Auto-discovered and symlinked: .config/clangd"
 if [ -f "$TEMP_HOME/.config/clangd/config.yaml" ] && \
    grep -q 'std=gnu++20' "$TEMP_HOME/.config/clangd/config.yaml" && \
@@ -81,8 +73,8 @@ else
     fail "clangd config verification" "Missing or invalid .config/clangd/config.yaml"
 fi
 
-if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS Nerd Font"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme and MesloLGS Nerd Font (v3) + MesloLGS NF font families"
+if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS NF"' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme and MesloLGS NF font family"
 else
     fail "Ghostty config verification" "Ghostty config missing expected theme or font"
 fi

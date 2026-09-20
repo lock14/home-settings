@@ -110,14 +110,14 @@
   )
 
   # Defines character set used by powerlevel10k. It's best to let `p10k configure` set it for you.
-  typeset -g POWERLEVEL9K_MODE=nerdfont-v3
+  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
   # When set to `moderate`, some icons will have an extra space after them. This is meant to avoid
   # icon overlap when using non-monospace fonts. When set to `none`, spaces are not added.
   typeset -g POWERLEVEL9K_ICON_PADDING=none
 
   # Modern Nerd Font icon overrides (solid silhouettes and official brand logos replacing legacy 2017 glyphs)
   typeset -g POWERLEVEL9K_GO_ICON=$'\uE627'            # Solid filled Gopher silhouette (replaces hollow E626)
-  typeset -g POWERLEVEL9K_TERRAFORM_ICON=$'\U000F1062' # Official HashiCorp geometric logo (replaces pine tree F1BB)
+  typeset -g POWERLEVEL9K_TERRAFORM_ICON=$'\uF1BB'     # Terraform BMP icon in MesloLGS NF
   typeset -g POWERLEVEL9K_NODE_ICON=$'\uE718'          # Official Node.js hexagon badge with JS (replaces small arch E617)
   typeset -g POWERLEVEL9K_NODEJS_ICON=$'\uE718'
   typeset -g POWERLEVEL9K_RUBY_ICON=$'\uE791'          # Official faceted Ruby gemstone (replaces diamond outline F219)
