@@ -1,6 +1,6 @@
 #!/bin/bash
 # Configures authentic 24-bit Solarized Dark TrueColor profile for macOS Terminal.app.
-# Sets MesloLGS Nerd Font (MesloLGSNF-Regular 12) font, Solarized Dark palette, base02 highlight, and block cursor.
+# Sets MesloLGS Nerd Font Mono (MesloLGSNFM-Regular 12) font, Solarized Dark palette, base02 highlight, and block cursor.
 
 set -euo pipefail
 
@@ -103,7 +103,7 @@ fi
 if command -v osascript >/dev/null 2>&1 && pgrep -x Terminal >/dev/null 2>&1; then
     osascript -e 'tell application "Terminal"
         try
-            set font name of settings set "'"$PROFILE_NAME"'" to "MesloLGSNF-Regular"
+            set font name of settings set "'"$PROFILE_NAME"'" to "MesloLGSNFM-Regular"
             set font size of settings set "'"$PROFILE_NAME"'" to 12
             set font antialiasing of settings set "'"$PROFILE_NAME"'" to true
         end try

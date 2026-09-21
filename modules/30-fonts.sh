@@ -55,10 +55,10 @@ else
     ARCHIVE_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/${ARCHIVE_VERSION}/Meslo.tar.xz"
     CACHED_ARCHIVE="$CACHE_DIR/Meslo-${ARCHIVE_VERSION}.tar.xz"
     FONTS=(
-        "MesloLGSNerdFont-Regular.ttf"
-        "MesloLGSNerdFont-Bold.ttf"
-        "MesloLGSNerdFont-Italic.ttf"
-        "MesloLGSNerdFont-BoldItalic.ttf"
+        "MesloLGSNerdFontMono-Regular.ttf"
+        "MesloLGSNerdFontMono-Bold.ttf"
+        "MesloLGSNerdFontMono-Italic.ttf"
+        "MesloLGSNerdFontMono-BoldItalic.ttf"
     )
 
     # Validate cached archive if present (>4.5MB)

@@ -73,8 +73,8 @@ else
     fail "clangd config verification" "Missing or invalid .config/clangd/config.yaml"
 fi
 
-if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS Nerd Font"' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme and MesloLGS Nerd Font font family"
+if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme and MesloLGS Nerd Font Mono font family"
 else
     fail "Ghostty config verification" "Ghostty config missing expected theme or font"
 fi

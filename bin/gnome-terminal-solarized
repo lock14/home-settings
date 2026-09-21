@@ -1,6 +1,6 @@
 #!/bin/bash
 # Configures authentic 24-bit Solarized Dark TrueColor profile for GNOME Terminal.
-# Sets MesloLGS Nerd Font 12 font, Solarized Dark palette, base02 highlight, and block cursor.
+# Sets MesloLGS Nerd Font Mono 12 font, Solarized Dark palette, base02 highlight, and block cursor.
 
 set -euo pipefail
 
@@ -92,7 +92,7 @@ else
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-background-color" "'#073642'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-foreground-color" "'#93A1A1'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-system-font" "false"
-    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS Nerd Font 12'"
+    dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS Nerd Font Mono 12'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/palette" "['#073642', '#DC322F', '#859900', '#B58900', '#268BD2', '#D33682', '#2AA198', '#EEE8D5', '#586E75', '#CB4B16', '#586E75', '#657B83', '#839496', '#6C71C4', '#93A1A1', '#FDF6E3']"
 fi
 
@@ -129,8 +129,8 @@ dconf write /org/gnome/terminal/legacy/profiles:/default "'$PROFILE_UUID'"
 # Ensure no profile (in list or lingering) retains legacy MesloLGS NF font
 for prof in $(dconf list /org/gnome/terminal/legacy/profiles:/ 2>/dev/null | grep '^:' | tr -d ':/' || true); do
     p_font="$(dconf read "/org/gnome/terminal/legacy/profiles:/:$prof/font" 2>/dev/null || true)"
-    if [ "$p_font" = "'MesloLGS NF 12'" ]; then
-        dconf write "/org/gnome/terminal/legacy/profiles:/:$prof/font" "'MesloLGS Nerd Font 12'"
+    if [ "$p_font" = "'MesloLGS NF 12'" ] || [ "$p_font" = "'MesloLGS Nerd Font 12'" ]; then
+        dconf write "/org/gnome/terminal/legacy/profiles:/:$prof/font" "'MesloLGS Nerd Font Mono 12'"
     fi
 done
 

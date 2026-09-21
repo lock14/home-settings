@@ -113,7 +113,7 @@
   typeset -g POWERLEVEL9K_MODE=nerdfont-v3
   # When set to `moderate`, some icons will have an extra space after them. This is meant to avoid
   # icon overlap when using non-monospace fonts. When set to `none`, spaces are not added.
-  typeset -g POWERLEVEL9K_ICON_PADDING=moderate
+  typeset -g POWERLEVEL9K_ICON_PADDING=none
 
   # Modern Nerd Font icon overrides (solid silhouettes and official brand logos replacing legacy 2017 glyphs)
   typeset -g POWERLEVEL9K_GO_ICON=$'\uE627'            # Solid filled Gopher silhouette (replaces hollow E626)
