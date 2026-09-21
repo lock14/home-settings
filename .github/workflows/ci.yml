@@ -64,7 +64,7 @@ jobs:
           [ -L "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables symlink missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
           [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd missing"; exit 1; }
-          [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
+          [ -f "$HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ] || { echo "FAIL: MesloLGS Nerd Font Mono fonts missing"; exit 1; }
 
           ./setup.sh --uninstall-dotfiles
           [ ! -e "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases still exists"; exit 1; }
@@ -74,7 +74,7 @@ jobs:
           [ ! -e "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd still exists"; exit 1; }
 
           ./setup.sh --uninstall-fonts
-          [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
+          [ ! -e "$HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ] || { echo "FAIL: MesloLGS Nerd Font Mono fonts still exist"; exit 1; }
 
           echo "PASS: setup.sh modular uninstallation succeeded"
 
@@ -82,7 +82,7 @@ jobs:
         run: |
           make install
           # Verify dotfile symlinks and fonts exist
-          [ -f "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts missing"; exit 1; }
+          [ -f "$HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ] || { echo "FAIL: MesloLGS Nerd Font Mono fonts missing"; exit 1; }
           [ -L "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc symlink missing"; exit 1; }
           [ -L "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases symlink missing"; exit 1; }
           [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases should be retired"; exit 1; }
@@ -97,7 +97,7 @@ jobs:
           echo "PASS: make install created all symlinks, fonts, and bin tools"
 
           make uninstall
-          [ ! -e "$HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] || { echo "FAIL: MesloLGS NF fonts still exist"; exit 1; }
+          [ ! -e "$HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ] || { echo "FAIL: MesloLGS Nerd Font Mono fonts still exist"; exit 1; }
           [ ! -e "$HOME/.vimrc" ] || { echo "FAIL: ~/.vimrc still exists"; exit 1; }
           [ ! -e "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases still exists"; exit 1; }
           [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases still exists"; exit 1; }
