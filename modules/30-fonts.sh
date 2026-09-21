@@ -51,70 +51,71 @@ else
         fi
     fi
 
-    BASE_FONT_URL="https://github.com/ryanoasis/nerd-fonts/raw/v3.3.0/patched-fonts/Meslo/S"
+    ARCHIVE_VERSION="v3.5.1"
+    ARCHIVE_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/${ARCHIVE_VERSION}/Meslo.tar.xz"
+    CACHED_ARCHIVE="$CACHE_DIR/Meslo-${ARCHIVE_VERSION}.tar.xz"
     FONTS=(
-        "Regular/MesloLGSNerdFont-Regular.ttf:MesloLGSNerdFont-Regular.ttf"
-        "Bold/MesloLGSNerdFont-Bold.ttf:MesloLGSNerdFont-Bold.ttf"
-        "Italic/MesloLGSNerdFont-Italic.ttf:MesloLGSNerdFont-Italic.ttf"
-        "Bold-Italic/MesloLGSNerdFont-BoldItalic.ttf:MesloLGSNerdFont-BoldItalic.ttf"
+        "MesloLGSNerdFont-Regular.ttf"
+        "MesloLGSNerdFont-Bold.ttf"
+        "MesloLGSNerdFont-Italic.ttf"
+        "MesloLGSNerdFont-BoldItalic.ttf"
     )
-    pids=()
-    for entry in "${FONTS[@]}"; do
-        IFS=":" read -r remote_path local_file <<< "$entry"
-        target="$FONT_DIR/$local_file"
-        cached="$CACHE_DIR/$local_file"
 
-        # Validate cache & target size (>2.0MB for complete Nerd Font v3)
-        if [ -f "$cached" ]; then
-            csize=$(wc -c < "$cached" | tr -d ' ')
-            if [ "$csize" -lt 2000000 ]; then
-                rm -f "$cached"
-            fi
+    # Validate cached archive if present (>4.5MB)
+    if [ -f "$CACHED_ARCHIVE" ]; then
+        asize=$(wc -c < "$CACHED_ARCHIVE" | tr -d ' ')
+        if [ "$asize" -lt 4500000 ]; then
+            rm -f "$CACHED_ARCHIVE"
         fi
-        if [ -f "$target" ]; then
-            tsize=$(wc -c < "$target" | tr -d ' ')
-            if [ "$tsize" -lt 2000000 ]; then
-                rm -f "$target"
-            fi
-        fi
+    fi
 
-        if [ ! -s "$target" ]; then
-            if [ -s "$cached" ]; then
-                target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
-                cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
-            else
-                (
-                    tmp_file="$cached.tmp.$$.${BASHPID:-$RANDOM}"
-                    target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
-                    trap 'rm -f "$tmp_file" "$target_tmp"' EXIT
-                    if curl -fsSL "$BASE_FONT_URL/$remote_path" -o "$tmp_file"; then
-                        mv -f "$tmp_file" "$cached"
-                        cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
-                    else
-                        rm -f "$tmp_file"
-                        exit 1
-                    fi
-                ) &
-                pids+=($!)
+    # Determine if any font needs extraction or download
+    need_download=0
+    for font in "${FONTS[@]}"; do
+        target="$FONT_DIR/$font"
+        cached="$CACHE_DIR/$font"
+        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt 2900000 ]; then
+            if [ ! -s "$cached" ] || [ "$(wc -c < "$cached" | tr -d ' ')" -lt 2900000 ]; then
+                need_download=1
             fi
-        elif [ ! -s "$cached" ]; then
-            cp -f "$target" "$cached"
         fi
     done
-    if [ ${#pids[@]} -gt 0 ]; then
-        download_failed=0
-        for pid in "${pids[@]}"; do
-            if ! wait "$pid"; then
-                download_failed=1
-            fi
-        done
-        if [ "$download_failed" -ne 0 ]; then
+
+    if [ "$need_download" -eq 1 ] && [ ! -s "$CACHED_ARCHIVE" ]; then
+        tmp_archive="$CACHED_ARCHIVE.tmp.$$.${BASHPID:-$RANDOM}"
+        trap 'rm -f "$tmp_archive"' EXIT
+        if curl -fsSL "$ARCHIVE_URL" -o "$tmp_archive"; then
+            mv -f "$tmp_archive" "$CACHED_ARCHIVE"
+        else
+            rm -f "$tmp_archive"
             exit 1
         fi
     fi
 
-    # Clean up legacy unpatched romkatv fonts once v3 is safely in place
+    for font in "${FONTS[@]}"; do
+        target="$FONT_DIR/$font"
+        cached="$CACHE_DIR/$font"
+
+        # Extract from archive into cache if missing
+        if [ ! -s "$cached" ] || [ "$(wc -c < "$cached" | tr -d ' ')" -lt 2900000 ]; then
+            if [ -s "$CACHED_ARCHIVE" ]; then
+                tar -xf "$CACHED_ARCHIVE" -C "$CACHE_DIR" "$font"
+            fi
+        fi
+
+        # Install from cache to target atomically
+        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt 2900000 ]; then
+            if [ -s "$cached" ]; then
+                target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
+                trap 'rm -f "$target_tmp"' EXIT
+                cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
+            fi
+        fi
+    done
+
+    # Clean up legacy unpatched romkatv fonts and symbols fallback font once v3 is safely in place
     rm -f "$FONT_DIR/MesloLGS NF"*.ttf "$CACHE_DIR/MesloLGS NF"*.ttf
+    rm -f "$FONT_DIR"/SymbolsNerdFont*.ttf "$CACHE_DIR"/SymbolsNerdFont*.ttf
 
     if [ "$OS" = "macos" ] && command -v atsutil &>/dev/null; then
         # Ensure the macOS font server is awake (never kill fontd while terminal apps are running)

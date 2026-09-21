@@ -71,6 +71,13 @@ if command -v fc-query >/dev/null 2>&1; then
     else
         fail "fc-query Plane-15 glyph check" "Expected Plane-15 charset range (f0001-f1af0) in font"
     fi
+
+    # Verify modern dev icon coverage for eza (YAML U+E8EB, TOML U+E6B2)
+    if grep -Eiq "(e700-e958|e8eb)" <<< "$raw_cs" && grep -Eiq "(e5fa-e6bb|e6b2)" <<< "$raw_cs"; then
+        pass "fc-query confirms modern dev icon coverage (YAML U+E8EB, TOML U+E6B2) in MesloLGSNerdFont-Regular.ttf"
+    else
+        fail "fc-query YAML/TOML icon check" "Expected ranges covering e8eb and e6b2 in MesloLGSNerdFont-Regular.ttf"
+    fi
 fi
 
 if [ -f "$TEMP_HOME/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ]; then
@@ -113,10 +120,10 @@ ln -sfn "$TEMP_HOME/nonexistent-fontconfig" "$TEMP_HOME/.config/fontconfig"
 printf "stub" > "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf"
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
     nf_size=$(wc -c < "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFont-Regular.ttf" | tr -d ' ')
-    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2000000 ]; then
+    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2900000 ]; then
         pass "Font setup removes conflicting MesloLGS-NF-*.ttf, stray numbered fonts, legacy MesloLGS NF, resolves broken fontconfig symlink, and installs valid MesloLGSNerdFont-Regular.ttf ($nf_size bytes)"
     else
-        fail "Font cleanup and restoration" "Expected conflicting/stray/legacy files removed, broken symlink resolved, and size > 2.0M (got size=$nf_size)"
+        fail "Font cleanup and restoration" "Expected conflicting/stray/legacy files removed, broken symlink resolved, and size > 2.9M (got size=$nf_size)"
     fi
 else
     fail "Font setup cleanup run" "Second run failed: $output"
