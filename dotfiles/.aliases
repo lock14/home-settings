@@ -44,24 +44,14 @@ else
     alias l='ls -CF'
 fi
 
-# optional modern directory listing (eza shortcuts with MesloLGS NF BMP icon translation)
+# optional modern directory listing (eza shortcuts with Nerd Fonts v3 icons)
 if command -v eza >/dev/null 2>&1; then
-    _home_settings_eza() {
-        if [ -t 1 ] && command -v perl >/dev/null 2>&1; then
-            COLUMNS="${COLUMNS:-$(tput cols 2>/dev/null || echo 120)}" command eza "$@" --color=always --icons=always | perl -CS -pe 's/\x{e6b2}|\x{e8eb}|\x{f0683}/\x{e615}/g; s/\x{f02a2}/\x{f1d3}/g; s/\x{f03e3}|\x{f00ba}|\x{f0854}/\x{f48a}/g; s/\x{f1183}|\x{f018d}/\x{f489}/g; s/\x{f0219}/\x{f15c}/g; s/\x{f024b}|\x{f0256}/\x{f07b}/g; s/\x{f031b}/\x{f023}/g; s/[\x{f0000}-\x{f1af0}]/\x{f15b}/g'
-        elif command -v perl >/dev/null 2>&1; then
-            command eza "$@" | perl -CS -pe 's/\x{e6b2}|\x{e8eb}|\x{f0683}/\x{e615}/g; s/\x{f02a2}/\x{f1d3}/g; s/\x{f03e3}|\x{f00ba}|\x{f0854}/\x{f48a}/g; s/\x{f1183}|\x{f018d}/\x{f489}/g; s/\x{f0219}/\x{f15c}/g; s/\x{f024b}|\x{f0256}/\x{f07b}/g; s/\x{f031b}/\x{f023}/g; s/[\x{f0000}-\x{f1af0}]/\x{f15b}/g'
-        else
-            command eza "$@"
-        fi
-    }
-    alias eza='_home_settings_eza'
-    alias e='_home_settings_eza --icons=auto --group-directories-first'
-    alias el='_home_settings_eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso'
-    alias elm='_home_settings_eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso --sort=modified'
-    alias et='_home_settings_eza --tree --level=2 --icons=auto'
-    alias elt='_home_settings_eza -la --tree --level=2 --icons=auto --git --group --time-style=long-iso'
-    alias elx='_home_settings_eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso -H -i -S --extended'
+    alias e='eza --icons=auto --group-directories-first'
+    alias el='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso'
+    alias elm='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso --sort=modified'
+    alias et='eza --tree --level=2 --icons=auto'
+    alias elt='eza -la --tree --level=2 --icons=auto --git --group --time-style=long-iso'
+    alias elx='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso -H -i -S --extended'
 fi
 
 # golang

@@ -377,15 +377,15 @@ test_addendum() {
         echo "FAIL:p10k toolchain version colors:Expected Base02 background with semantic foregrounds"
     fi
 
-    if [ "${POWERLEVEL9K_MODE:-}" = "nerdfont-complete" ] && \
+    if [ "${POWERLEVEL9K_MODE:-}" = "nerdfont-v3" ] && \
        [ "${POWERLEVEL9K_GO_ICON:-}" = $'\uE627' ] && \
        [ "${POWERLEVEL9K_TERRAFORM_ICON:-}" = $'\uF1BB' ] && \
        [ "${POWERLEVEL9K_NODE_ICON:-}" = $'\uE718' ] && \
        [ "${POWERLEVEL9K_RUBY_ICON:-}" = $'\uE791' ] && \
        [ "${POWERLEVEL9K_JAVA_ICON:-}" = $'\uF0F4' ]; then
-        echo "PASS:p10k configured with POWERLEVEL9K_MODE=nerdfont-complete and MesloLGS NF BMP icons (solid Go gopher, Terraform, Node hexagon, Ruby gem, solid Java mug)"
+        echo "PASS:p10k configured with POWERLEVEL9K_MODE=nerdfont-v3 and MesloLGS Nerd Font icons (solid Go gopher, Terraform, Node hexagon, Ruby gem, solid Java mug)"
     else
-        echo "FAIL:p10k MesloLGS NF icons:Expected POWERLEVEL9K_MODE=nerdfont-complete and BMP glyphs for Go, Terraform, Node, Ruby, and Java"
+        echo "FAIL:p10k MesloLGS Nerd Font icons:Expected POWERLEVEL9K_MODE=nerdfont-v3 and glyphs for Go, Terraform, Node, Ruby, and Java"
     fi
 
     if [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_BACKGROUND:-}" = "#073642" ] && [ "${POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND:-}" = "#268BD2" ] && \
@@ -495,7 +495,7 @@ test_addendum() {
         P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
         prompt_vcs
         if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#859900" ] && \
-           [ "$P10K_SEG_ICON" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" main"* ]]; then
+           [ "${P10K_SEG_ICON%% }" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"main"* ]]; then
             echo "PASS:prompt_vcs renders clean standard Git repo with default Git icon () on Base02 (#073642) shelf in Solarized Green (#859900)"
         else
             echo "FAIL:prompt_vcs clean files repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
@@ -529,8 +529,8 @@ test_addendum() {
         wt_icon=$(cd "$wt_dir" && P10K_SEG_ICON="" && prompt_vcs && print -r -- "$P10K_SEG_ICON")
         git worktree remove --force "$wt_dir" >/dev/null 2>&1 || rm -rf "$wt_dir"
 
-        if [ "$gh_icon" = $'\uF113' ] && [ "$gl_icon" = $'\uF296' ] && \
-           [ "$bb_icon" = $'\uF171' ] && [ "$generic_icon" = $'\uF1D3' ] && [ "$wt_icon" = $'\uF113' ]; then
+        if [ "${gh_icon%% }" = $'\uF113' ] && [ "${gl_icon%% }" = $'\uF296' ] && \
+           [ "${bb_icon%% }" = $'\uF171' ] && [ "${generic_icon%% }" = $'\uF1D3' ] && [ "${wt_icon%% }" = $'\uF113' ]; then
             echo "PASS:prompt_vcs resolves .git/config (and worktree commondir) in pure Zsh for GitHub (), GitLab (), Bitbucket (), and default Git () icons"
         else
             echo "FAIL:prompt_vcs remote icons:Got github='$gh_icon' gitlab='$gl_icon' bitbucket='$bb_icon' generic='$generic_icon' worktree='$wt_icon'"
@@ -569,7 +569,7 @@ EOF
         local insteadof_icon="$P10K_SEG_ICON"
         rm -f "$HOME/.gitconfig" "$vcs_test_dir/included-remotes.cfg"
 
-        if [ "$inline_comment_icon" = $'\uF1D3' ] && [ "$include_slash_icon" = $'\uF296' ] && [ "$insteadof_icon" = $'\uF113' ]; then
+        if [ "${inline_comment_icon%% }" = $'\uF1D3' ] && [ "${include_slash_icon%% }" = $'\uF296' ] && [ "${insteadof_icon%% }" = $'\uF113' ]; then
             echo "PASS:prompt_vcs handles inline comments, backslash line continuations, [include] directives, slash remote names, and url.<base>.insteadOf rewrites"
         else
             echo "FAIL:prompt_vcs config edge cases:Got inline_comment='$inline_comment_icon' include_slash='$include_slash_icon' insteadof='$insteadof_icon'"
@@ -583,7 +583,7 @@ EOF
         P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_TEXT=""
         prompt_vcs
         if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#B58900" ] && \
-           [[ "$P10K_SEG_TEXT" == *" feature%%20test"* ]] && [[ "$P10K_SEG_TEXT" == *"+1"* ]] && \
+           [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"feature%%20test"* ]] && [[ "$P10K_SEG_TEXT" == *"+1"* ]] && \
            [[ "$P10K_SEG_TEXT" == *"!1"* ]] && [[ "$P10K_SEG_TEXT" == *"?1"* ]]; then
             echo "PASS:prompt_vcs renders dirty counts (+1 !1 ?1) and %% branch escaping in Solarized Yellow (#B58900) on Base02 shelf"
         else
@@ -593,7 +593,7 @@ EOF
         git checkout --detach HEAD >/dev/null 2>&1
         P10K_SEG_TEXT=""
         prompt_vcs
-        if [[ "$P10K_SEG_TEXT" == *" %F{#586E75}@"* ]]; then
+        if [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"%F{#586E75}@"* ]]; then
             echo "PASS:prompt_vcs renders detached HEAD short SHA with Base01 @ prefix"
         else
             echo "FAIL:prompt_vcs detached HEAD:Got text='$P10K_SEG_TEXT'"
@@ -615,7 +615,7 @@ EOF
             P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
             prompt_vcs
             if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#B58900" ] && \
-               [ "$P10K_SEG_ICON" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" main"* ]] && [[ "$P10K_SEG_TEXT" == *"!1"* ]]; then
+               [ "${P10K_SEG_ICON%% }" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"main"* ]] && [[ "$P10K_SEG_TEXT" == *"!1"* ]]; then
                 echo "PASS:prompt_vcs renders reftable (extensions.refstorage = reftable) Git repository on Base02 shelf"
             else
                 echo "FAIL:prompt_vcs reftable repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
@@ -627,7 +627,7 @@ EOF
         cd "$SCRIPT_DIR"
         P10K_SEG_BG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
         prompt_vcs
-        if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_ICON" = $'\uF113' ] && [[ "$P10K_SEG_TEXT" == *" "* ]]; then
+        if [ "$P10K_SEG_BG" = "#073642" ] && [ "${P10K_SEG_ICON%% }" = $'\uF113' ] && [[ "$P10K_SEG_TEXT" == *" "* ]]; then
             echo "PASS:prompt_vcs renders home-settings repository segment with GitHub icon () on Base02 (#073642) shelf"
         else
             echo "FAIL:prompt_vcs home-settings repo:Got bg='$P10K_SEG_BG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"

@@ -110,7 +110,7 @@
   )
 
   # Defines character set used by powerlevel10k. It's best to let `p10k configure` set it for you.
-  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
+  typeset -g POWERLEVEL9K_MODE=nerdfont-v3
   # When set to `moderate`, some icons will have an extra space after them. This is meant to avoid
   # icon overlap when using non-monospace fonts. When set to `none`, spaces are not added.
   typeset -g POWERLEVEL9K_ICON_PADDING=none
@@ -729,16 +729,16 @@
     local vcs_icon
     case $remote_url in
       (#i)*github*)
-        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_GITHUB_ICON:-$'\uF113'}
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_GITHUB_ICON:-$'\uF113 '}
         ;;
       (#i)*gitlab*)
-        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_GITLAB_ICON:-$'\uF296'}
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_GITLAB_ICON:-$'\uF296 '}
         ;;
       (#i)*bitbucket*)
-        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_BITBUCKET_ICON:-$'\uF171'}
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_BITBUCKET_ICON:-$'\uF171 '}
         ;;
       *)
-        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_ICON:-$'\uF1D3'}
+        vcs_icon=${(g::)POWERLEVEL9K_VCS_GIT_ICON:-$'\uF1D3 '}
         ;;
     esac
     [[ ${POWERLEVEL9K_ICON_PADDING:-none} == none ]] && vcs_icon=${vcs_icon%% #}
@@ -763,6 +763,7 @@
     fi
 
     local branch_icon=${(g::)POWERLEVEL9K_VCS_BRANCH_ICON:-$'\uF126 '}
+    [[ ${POWERLEVEL9K_ICON_PADDING:-none} != none ]] && branch_icon+=' '
     local untracked_icon=${(g::)POWERLEVEL9K_VCS_UNTRACKED_ICON:-'?'}
     local res=''
 
