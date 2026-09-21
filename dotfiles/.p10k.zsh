@@ -2094,3 +2094,7 @@ typeset -g POWERLEVEL9K_CONFIG_FILE=${${(%):-%x}:a}
 
 (( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
 'builtin' 'unset' 'p10k_config_opts'
+
+# Eliminate the 1-character space between right prompt and the edge of the screen.
+# Must be set after prompt expansion (${(%):-%x}) above, which resets ZLE_RPROMPT_INDENT to 1.
+typeset -g ZLE_RPROMPT_INDENT=0

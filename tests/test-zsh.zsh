@@ -347,6 +347,12 @@ test_addendum() {
         echo "FAIL:p10k separators:Expected Base00 thin chevrons (\uE0B1 left, \uE0B3 right) and solid wedge caps (\uE0B0/\uE0B2) on Base02 shelf"
     fi
 
+    if [ "${ZLE_RPROMPT_INDENT:-}" = "0" ]; then
+        echo "PASS:ZLE_RPROMPT_INDENT=0 (right prompt flush with screen edge, zero gap)"
+    else
+        echo "FAIL:ZLE_RPROMPT_INDENT:Expected '0', got '${ZLE_RPROMPT_INDENT:-unset}'"
+    fi
+
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
         echo "PASS:p10k directory OSC 8 hyperlinks disabled for clean text selection"
     else
