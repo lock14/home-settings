@@ -271,14 +271,20 @@ STANDALONE_HOME=$(mktemp -d)
     false || _solarized_bash_prompt
     ps1_ssh_dirty_err="$PS1"
 
+    SOLARIZED_PROMPT_UID=0 _solarized_bash_prompt
+    ps1_root="$PS1"
+
+    expected_host_os_icon="$(_solarized_detect_os_icon)"
+
     if [[ "$ps1_clean_ok" == *"48;2;7;54;66m"* ]] && \
-       [[ "$ps1_clean_ok" == *"38;2;131;148;150m\\]"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;131;148;150m\\]${expected_host_os_icon}"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;88;110;117m\\]"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;38;139;210m\\]\\w"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;133;153;0m\\]  main"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;7;54;66m\\]"* ]] && \
-       [[ "$ps1_clean_ok" == *"38;2;133;153;0m\\]❯"* ]] && \
+       [[ "$ps1_clean_ok" != *"❯"* ]] && \
        [[ "$ps1_clean_ok" != *"│"* ]] && \
+       [[ "$ps1_clean_ok" != *"\\u@\\h"* ]] && \
        [[ "$ps1_macos" == *"38;2;131;148;150m\\]"* ]] && \
        [[ "$ps1_16color_utf8" == *"\\e[40m\\]"* ]] && \
        [[ "$ps1_16color_utf8" == *"\\e[90m\\]"* ]] && \
@@ -286,6 +292,8 @@ STANDALONE_HOME=$(mktemp -d)
        [[ "$ps1_nongit_ok" == *"48;2;7;54;66m"* ]] && \
        [[ "$ps1_nongit_ok" == *"38;2;38;139;210m\\]\\w \\["* ]] && \
        [[ "$ps1_nongit_ok" != *""* ]] && \
+       [[ "$ps1_nongit_ok" != *"\\u@\\h"* ]] && \
+       [[ "$ps1_nongit_ok" != *"❯"* ]] && \
        [[ "$ps1_dotgit_dir" != *""* ]] && \
        [[ "$ps1_branch_escaped" == *'feat/$(echo_INJECTED)'* ]] && \
        [[ "$ps1_detached_ok" == *"38;2;133;153;0m\\]  ${short_sha}"* ]] && \
@@ -296,15 +304,75 @@ STANDALONE_HOME=$(mktemp -d)
        [[ "$ps1_linux_vt" != *""* ]] && \
        [[ "$ps1_linux_vt" != *""* ]] && \
        [[ "$ps1_linux_vt" != *""* ]] && \
-       [[ "$ps1_ssh_dirty_err" == *"38;2;131;148;150m\\]"* ]] && \
-       [[ "$ps1_ssh_dirty_err" == *"38;2;181;137;0m\\]\\u@\\h"* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;131;148;150m\\]${expected_host_os_icon}"* ]] && \
+       [[ "$ps1_ssh_dirty_err" == *"38;2;147;161;161m\\]\\u@\\h"* ]] && \
        [[ "$ps1_ssh_dirty_err" == *"38;2;181;137;0m\\]  main*"* ]] && \
-       [[ "$ps1_ssh_dirty_err" == *"38;2;7;54;66m\\]"* ]] && \
-       [[ "$ps1_ssh_dirty_err" == *"38;2;220;50;47m\\]❯"* ]] && \
-       [[ "$ps1_ssh_dirty_err" != *"│"* ]]; then
-        echo 'PASS:Standalone _solarized_bash_prompt renders Base02 (#073642) shelf, Base01 (#586E75) \uE0B1 () directional chevrons, Base02 \uE0B0 () end-cap, Base0 OS icon + Base0/Yellow host, Blue dir, Green/Yellow \uF1D3/\uF126 ( ) git status, TERM=linux fallback, and zero box-drawing bars (│)'
+       [[ "$ps1_ssh_dirty_err" == *"38;2;220;50;47m\\]"* ]] && \
+       [[ "$ps1_ssh_dirty_err" != *"38;2;7;54;66m\\]"* ]] && \
+       [[ "$ps1_ssh_dirty_err" != *"❯"* ]] && \
+       [[ "$ps1_ssh_dirty_err" != *"│"* ]] && \
+       [[ "$ps1_root" == *"38;2;220;50;47m\\]\\u@\\h"* ]]; then
+        echo 'PASS:Standalone _solarized_bash_prompt renders Base02 (#073642) shelf, Base01 (#586E75) \uE0B1 () directional chevrons, dynamic Base02/Red \uE0B0 () end-cap, Base0 OS icon + Base1 host in SSH, Blue dir, Green/Yellow \uF1D3/\uF126 ( ) git status, TERM=linux fallback, and zero box-drawing bars (│)'
     else
-        echo "FAIL:Standalone PS1 shelf prompt:Unexpected PS1 sequences (clean=$ps1_clean_ok | nongit=$ps1_nongit_ok | dotgit=$ps1_dotgit_dir | escaped=$ps1_branch_escaped | detached=$ps1_detached_ok | linux=$ps1_linux_vt | ssh_dirty=$ps1_ssh_dirty_err)"
+        echo "FAIL:Standalone PS1 shelf prompt:Unexpected PS1 sequences (clean=$ps1_clean_ok | nongit=$ps1_nongit_ok | dotgit=$ps1_dotgit_dir | escaped=$ps1_branch_escaped | detached=$ps1_detached_ok | linux=$ps1_linux_vt | ssh_dirty=$ps1_ssh_dirty_err | root=$ps1_root)"
+    fi
+
+    mock_os_release="$STANDALONE_HOME/mock-os-release"
+
+    echo 'ID=ubuntu' > "$mock_os_release"
+    os_ubuntu=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=debian' > "$mock_os_release"
+    os_debian=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=fedora' > "$mock_os_release"
+    os_fedora=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=arch' > "$mock_os_release"
+    os_arch=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=rocky' > "$mock_os_release"
+    os_rocky=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=almalinux' > "$mock_os_release"
+    os_alma=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=pop' > "$mock_os_release"
+    os_pop=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=alpine' > "$mock_os_release"
+    os_alpine=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=nixos' > "$mock_os_release"
+    os_nixos=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    echo 'ID=custom_distro' > "$mock_os_release"
+    os_unknown=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    printf 'ID=elementary\nID_LIKE=ubuntu\n' > "$mock_os_release"
+    os_idlike=$(SOLARIZED_PROMPT_OS_RELEASE="$mock_os_release" _solarized_detect_os_icon)
+
+    os_darwin=$(OSTYPE=darwin23 _solarized_detect_os_icon)
+    os_freebsd=$(OSTYPE=freebsd14 _solarized_detect_os_icon)
+    os_override=$(SOLARIZED_PROMPT_OS_ICON='⭐' _solarized_detect_os_icon)
+
+    if [ "$os_ubuntu" = "" ] && \
+       [ "$os_debian" = "" ] && \
+       [ "$os_fedora" = "" ] && \
+       [ "$os_arch" = "" ] && \
+       [ "$os_rocky" = "" ] && \
+       [ "$os_alma" = "" ] && \
+       [ "$os_pop" = "" ] && \
+       [ "$os_alpine" = "" ] && \
+       [ "$os_nixos" = "" ] && \
+       [ "$os_unknown" = "" ] && \
+       [ "$os_idlike" = "" ] && \
+       [ "$os_darwin" = "" ] && \
+       [ "$os_freebsd" = "" ] && \
+       [ "$os_override" = "⭐" ]; then
+        echo 'PASS:_solarized_detect_os_icon accurately resolves Ubuntu (), Debian (), Fedora (), Arch (), Rocky (), AlmaLinux (), Pop!_OS (), Alpine (), NixOS (), macOS (), FreeBSD (), ID_LIKE inheritance, and generic Linux fallback ()'
+    else
+        echo "FAIL:_solarized_detect_os_icon:Unexpected icon resolutions (ubuntu=$os_ubuntu debian=$os_debian fedora=$os_fedora arch=$os_arch rocky=$os_rocky alma=$os_alma pop=$os_pop alpine=$os_alpine nixos=$os_nixos unknown=$os_unknown idlike=$os_idlike darwin=$os_darwin freebsd=$os_freebsd override=$os_override)"
     fi
 
     # Test VCS remote host icons (GitHub \uF113 , GitLab \uF296 , Bitbucket \uF171 , generic Git \uF1D3 , tracked branch remote, inline comments, linked worktree, and TERM=linux)
