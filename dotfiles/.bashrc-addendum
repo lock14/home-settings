@@ -294,6 +294,87 @@ _solarized_parse_git_config() {
     done < "$cfg_file"
 }
 
+# 3.5. Intelligent Distro-Aware OS Glyph Resolver (Zero-Fork Pure Bash)
+_solarized_detect_os_icon() {
+    if [ -n "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
+        printf '%s' "$SOLARIZED_PROMPT_OS_ICON"
+        return 0
+    fi
+
+    if [[ "${OSTYPE:-}" == darwin* ]] || { [ -z "${OSTYPE:-}" ] && [ "$(uname -s 2>/dev/null)" = "Darwin" ]; }; then
+        printf '%s' ''    # \uF179 macOS
+        return 0
+    fi
+
+    if [[ "${OSTYPE:-}" == *bsd* ]]; then
+        printf '%s' ''    # \uF30C FreeBSD
+        return 0
+    fi
+
+    local os_file="${SOLARIZED_PROMPT_OS_RELEASE:-}"
+    if [ -z "$os_file" ]; then
+        if [ -r /etc/os-release ]; then
+            os_file="/etc/os-release"
+        elif [ -r /usr/lib/os-release ]; then
+            os_file="/usr/lib/os-release"
+        fi
+    fi
+
+    local id="" id_like="" line=""
+    if [ -n "$os_file" ] && [ -r "$os_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                ID=*)
+                    id="${line#ID=}"
+                    id="${id%\"}"
+                    id="${id#\"}"
+                    id="${id%\'}"
+                    id="${id#\'}"
+                    ;;
+                ID_LIKE=*)
+                    id_like="${line#ID_LIKE=}"
+                    id_like="${id_like%\"}"
+                    id_like="${id_like#\"}"
+                    id_like="${id_like%\'}"
+                    id_like="${id_like#\'}"
+                    ;;
+            esac
+        done < "$os_file"
+    fi
+
+    case "$id" in
+        ubuntu)                 printf '%s' '' ;; # \uF31B
+        debian)                 printf '%s' '' ;; # \uF306
+        fedora)                 printf '%s' '' ;; # \uF30A
+        arch|archarm)           printf '%s' '' ;; # \uF303
+        manjaro)                printf '%s' '' ;; # \uF312
+        pop)                    printf '%s' '' ;; # \uF32A
+        linuxmint|mint)         printf '%s' '' ;; # \uF30E
+        rhel)                   printf '%s' '' ;; # \uF316
+        centos)                 printf '%s' '' ;; # \uF304
+        rocky)                  printf '%s' '' ;; # \uF32B
+        almalinux)              printf '%s' '' ;; # \uF31D
+        opensuse*|suse|sles)    printf '%s' '' ;; # \uF314
+        alpine)                 printf '%s' '' ;; # \uF300
+        nixos)                  printf '%s' '' ;; # \uF313
+        raspbian)               printf '%s' '' ;; # \uF315
+        gentoo)                 printf '%s' '' ;; # \uF30D
+        void)                   printf '%s' '' ;; # \uF32E
+        *)
+            case "$id_like" in
+                *ubuntu*)       printf '%s' '' ;;
+                *debian*)       printf '%s' '' ;;
+                *fedora*)       printf '%s' '' ;;
+                *rhel*)         printf '%s' '' ;;
+                *centos*)       printf '%s' '' ;;
+                *arch*)         printf '%s' '' ;;
+                *suse*)         printf '%s' '' ;;
+                *)              printf '%s' '' ;; # \uF17C Default Linux Tux
+            esac
+            ;;
+    esac
+}
+
 # 4. Zero-Dependency Solarized Dark Single-Line Shelf Prompt Builder
 _solarized_bash_prompt() {
     local exit_code=$?
@@ -302,6 +383,7 @@ _solarized_bash_prompt() {
     local c_shelf_cap='\[\e[0m\e[38;2;7;54;66m\]'
     local c_base01='\[\e[38;2;88;110;117m\]'
     local c_base0='\[\e[38;2;131;148;150m\]'
+    local c_base1='\[\e[38;2;147;161;161m\]'
     local c_blue='\[\e[38;2;38;139;210m\]'
     local c_green='\[\e[38;2;133;153;0m\]'
     local c_yellow='\[\e[38;2;181;137;0m\]'
@@ -310,9 +392,15 @@ _solarized_bash_prompt() {
     local endcap=''   # \uE0B0 solid right-pointing wedge cap
     local git_icon=' ' # \uF126 branch icon
     local sym='❯'
-    local os_icon=''  # \uF17C Linux
-    if [[ "${OSTYPE:-}" == darwin* ]] || { [ -z "${OSTYPE:-}" ] && [ "$(uname -s 2>/dev/null)" = "Darwin" ]; }; then
-        os_icon=''    # \uF179 macOS
+    local os_icon=""
+    if [ -n "${_SOLARIZED_PROMPT_OS_ICON_CACHED:-}" ] && [ "${_SOLARIZED_PROMPT_OSTYPE_CACHED:-}" = "${OSTYPE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_RELEASE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
+        os_icon="$_SOLARIZED_PROMPT_OS_ICON_CACHED"
+    else
+        os_icon="$(_solarized_detect_os_icon)"
+        if [ -z "${SOLARIZED_PROMPT_OS_RELEASE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
+            _SOLARIZED_PROMPT_OS_ICON_CACHED="$os_icon"
+            _SOLARIZED_PROMPT_OSTYPE_CACHED="${OSTYPE:-}"
+        fi
     fi
 
     if [ "${TERM:-}" = "linux" ] || { [ "${COLORTERM:-}" != "truecolor" ] && [ "${COLORTERM:-}" != "24bit" ]; }; then
@@ -320,6 +408,7 @@ _solarized_bash_prompt() {
         c_shelf_cap='\[\e[0m\e[30m\]'
         c_base01='\[\e[90m\]'
         c_base0='\[\e[37m\]'
+        c_base1='\[\e[97m\]'
         c_blue='\[\e[34m\]'
         c_green='\[\e[32m\]'
         c_yellow='\[\e[33m\]'
@@ -333,17 +422,33 @@ _solarized_bash_prompt() {
         fi
     fi
 
-    local host_color="$c_base0"
-    if [ -n "${SSH_CLIENT:-}${SSH_TTY:-}${SSH_CONNECTION:-}" ]; then
-        host_color="$c_yellow"
+    local current_uid="${SOLARIZED_PROMPT_UID:-${EUID:-$(id -u 2>/dev/null || echo 1000)}}"
+    local show_user_host=0
+    local host_color=""
+    if [ "$current_uid" -eq 0 ]; then
+        host_color="$c_red"
+        show_user_host=1
+    elif [ -n "${SSH_CLIENT:-}${SSH_TTY:-}${SSH_CONNECTION:-}" ]; then
+        host_color="$c_base1"
+        show_user_host=1
     fi
 
-    local context_segment="${host_color}\u@\h"
-    if [ -n "$os_icon" ]; then
-        context_segment="${c_base0}${os_icon} ${host_color}\u@\h"
+    local context_segment=""
+    if [ "$show_user_host" -eq 1 ]; then
+        if [ -n "$os_icon" ]; then
+            context_segment="${c_base0}${os_icon} ${host_color}\u@\h"
+        else
+            context_segment="${host_color}\u@\h"
+        fi
+    elif [ -n "$os_icon" ]; then
+        context_segment="${c_base0}${os_icon}"
     fi
 
     local sep=" ${c_base01}${subsep} "
+    local lead_segment=""
+    if [ -n "$context_segment" ]; then
+        lead_segment="${context_segment}${sep}"
+    fi
     local git_segment=""
     local workdir="${GIT_WORK_TREE:-$PWD}"
     local gitdir="${GIT_DIR:-}"
@@ -490,15 +595,22 @@ _solarized_bash_prompt() {
 
     local shelf_end="${c_reset}"
     if [ -n "$endcap" ]; then
+        if [ "$exit_code" -ne 0 ]; then
+            if [ "${TERM:-}" = "linux" ] || { [ "${COLORTERM:-}" != "truecolor" ] && [ "${COLORTERM:-}" != "24bit" ]; }; then
+                c_shelf_cap='\[\e[0m\e[31m\]'
+            else
+                c_shelf_cap='\[\e[0m\e[38;2;220;50;47m\]'
+            fi
+        fi
         shelf_end="${c_shelf_cap}${endcap}${c_reset}"
+        PS1="${bg_shelf} ${lead_segment}${c_blue}\w${git_segment} ${shelf_end} "
+    else
+        local prompt_symbol="${c_green}${sym}${c_reset}"
+        if [ "$exit_code" -ne 0 ]; then
+            prompt_symbol="${c_red}${sym}${c_reset}"
+        fi
+        PS1="${bg_shelf} ${lead_segment}${c_blue}\w${git_segment} ${shelf_end} ${prompt_symbol} "
     fi
-
-    local prompt_symbol="${c_green}${sym}${c_reset}"
-    if [ "$exit_code" -ne 0 ]; then
-        prompt_symbol="${c_red}${sym}${c_reset}"
-    fi
-
-    PS1="${bg_shelf} ${context_segment}${sep}${c_blue}\w${git_segment} ${shelf_end} ${prompt_symbol} "
 }
 
 # Initialize default Solarized Dark PS1
