@@ -59,7 +59,35 @@ opt.undofile = true
 opt.updatetime = 250
 opt.timeoutlen = 300
 
--- System Clipboard Integration
+-- System Clipboard Integration (GNOME Terminal / X11 / Wayland / macOS + OSC 52 SSH fallback)
+if vim.fn.has("linux") == 1 then
+    if (not vim.env.DISPLAY or vim.env.DISPLAY == "") and vim.uv.fs_stat("/tmp/.X11-unix/X0") then
+        vim.env.DISPLAY = ":0"
+    end
+    local uid = (vim.uv.getuid and vim.uv.getuid()) or nil
+    if uid then
+        local run_dir = "/run/user/" .. tostring(uid)
+        if (not vim.env.WAYLAND_DISPLAY or vim.env.WAYLAND_DISPLAY == "") and vim.uv.fs_stat(run_dir .. "/wayland-0") then
+            vim.env.WAYLAND_DISPLAY = "wayland-0"
+        end
+        if not vim.env.XAUTHORITY or vim.env.XAUTHORITY == "" then
+            local auth_files = vim.fn.glob(run_dir .. "/.mutter-Xwaylandauth.*", true, true)
+            if type(auth_files) == "table" and #auth_files > 0 then
+                vim.env.XAUTHORITY = auth_files[1]
+            end
+        end
+    end
+    if (not vim.env.DISPLAY or vim.env.DISPLAY == "") and (not vim.env.WAYLAND_DISPLAY or vim.env.WAYLAND_DISPLAY == "") then
+        local ok_osc, osc52 = pcall(require, "vim.ui.clipboard.osc52")
+        if ok_osc and osc52 then
+            vim.g.clipboard = {
+                name = "OSC 52",
+                copy = { ["+"] = osc52.copy("+"), ["*"] = osc52.copy("*") },
+                paste = { ["+"] = osc52.paste("+"), ["*"] = osc52.paste("*") },
+            }
+        end
+    end
+end
 opt.clipboard = "unnamedplus"
 
 -- Split Windows
@@ -71,16 +99,78 @@ opt.splitbelow = true
 -- -------------------------------------------------------------
 local map = vim.keymap.set
 
+-- Auto-copy mouse visual selection to system clipboard (+ and *) on mouse release
+-- Matches terminal copy-on-select ergonomics and ensures GNOME Terminal Ctrl+Shift+C -> Ctrl+V
+-- works seamlessly while keeping the visual highlight active (gv) for vim operators (d, c, >).
+map("x", "<LeftRelease>", function()
+    if vim.bo.filetype == "ide_tree" then
+        return "<LeftRelease>"
+    end
+    return '<LeftRelease>"+ygv"*ygv'
+end, { expr = true, silent = true, desc = "Auto-copy mouse selection to clipboard and primary" })
+map("x", "<C-c>", '"+y', { silent = true, desc = "Copy visual selection to system clipboard" })
+
+-- Middle-click (<MiddleMouse>) paste from Primary (*) or System Clipboard (+) at clicked position
+local function get_middle_paste_text()
+    for _, reg in ipairs({ "*", "+", '"' }) do
+        local ok, val = pcall(vim.fn.getreg, reg)
+        if ok and type(val) == "string" and val ~= "" then
+            return val
+        end
+    end
+    return ""
+end
+
+map({ "n", "i" }, "<MiddleMouse>", function()
+    local left_click = vim.api.nvim_replace_termcodes("<LeftMouse>", true, false, true)
+    vim.api.nvim_feedkeys(left_click, "nx", false)
+    if vim.bo.filetype == "ide_tree" or not vim.bo.modifiable then
+        return
+    end
+    local text = get_middle_paste_text()
+    if text ~= "" then
+        vim.api.nvim_paste(text, true, -1)
+    end
+end, { silent = true, desc = "Middle-click paste from primary or system clipboard" })
+
+map("x", "<MiddleMouse>", function()
+    if vim.bo.filetype == "ide_tree" or not vim.bo.modifiable then
+        return
+    end
+    local text = get_middle_paste_text()
+    if text ~= "" then
+        vim.api.nvim_paste(text, true, -1)
+    end
+end, { silent = true, desc = "Middle-click replace visual selection from primary or clipboard" })
+
+map("c", "<MiddleMouse>", function()
+    local ok_star, star = pcall(vim.fn.getreg, "*")
+    if ok_star and type(star) == "string" and star ~= "" then
+        return "<C-r>*"
+    end
+    return "<C-r>+"
+end, { expr = true, desc = "Middle-click paste into command line" })
+
+for _, mc in ipairs({ "<2-MiddleMouse>", "<3-MiddleMouse>", "<4-MiddleMouse>" }) do
+    map({ "n", "i", "x", "c" }, mc, "<Nop>", { silent = true })
+end
+
 -- Clear search highlight
 map("n", "<leader>h", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" })
 
 -- Fast Save
 map("n", "<leader>w", "<cmd>w<CR>", { desc = "Save file" })
 
--- Seamless Window & Tmux Pane Navigation (Ctrl + hjkl)
--- Guarded against floating modals (Telescope/LSP/MiniFiles) and zoomed tmux panes
+-- Seamless Window & Role-Aware 3-Pane Tmux Navigation (Ctrl + hjkl & Alt + hjkl)
+-- Guarded against floating modals (Telescope/LSP/MiniFiles) and zoomed tmux panes.
+-- From Left Directory Tree (NVIM_IDE_TREE=1), Right/Up targets Top-Right Main ({top-right})
+-- and Down targets Bottom-Right Shell ({bottom-right}).
 local function smart_tmux_nav(dir, tmux_dir)
     return function()
+        local mode = vim.api.nvim_get_mode().mode
+        if mode == "t" or mode == "i" then
+            vim.cmd("stopinsert")
+        end
         local cur_win = vim.api.nvim_get_current_win()
         local win_cfg = vim.api.nvim_win_get_config(cur_win)
         if win_cfg.relative and win_cfg.relative ~= "" then
@@ -88,21 +178,34 @@ local function smart_tmux_nav(dir, tmux_dir)
         end
         vim.cmd("wincmd " .. dir)
         if vim.api.nvim_get_current_win() == cur_win and vim.env.TMUX then
+            local target_cmd = "select-pane -" .. tmux_dir
+            if vim.env.NVIM_IDE_TREE == "1" then
+                if tmux_dir == "R" or tmux_dir == "U" then
+                    target_cmd = "select-pane -t '{top-right}'"
+                elseif tmux_dir == "D" then
+                    target_cmd = "select-pane -t '{bottom-right}'"
+                end
+            end
             vim.fn.system({
                 "tmux",
                 "if-shell",
                 "-F",
                 "#{==:#{window_zoomed_flag},0}",
-                "select-pane -" .. tmux_dir,
+                target_cmd,
             })
         end
     end
 end
 
-map("n", "<C-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
-map("n", "<C-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
-map("n", "<C-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
-map("n", "<C-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
+map({ "n", "t" }, "<C-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
+map({ "n", "t" }, "<C-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
+map({ "n", "t" }, "<C-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
+map({ "n", "t" }, "<C-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
+
+map({ "n", "i", "v", "t" }, "<M-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
+map({ "n", "i", "v", "t" }, "<M-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
+map({ "n", "i", "v", "t" }, "<M-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
+map({ "n", "i", "v", "t" }, "<M-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
 
 -- Stay in indent mode when shifting
 map("v", "<", "<gv", { desc = "Indent left" })
@@ -133,10 +236,14 @@ local IdeTree = {
     buf = nil,
     ns = vim.api.nvim_create_namespace("SolarizedIdeTree"),
     root = vim.fn.getcwd(),
+    initial_root = vim.env.IDE_INITIAL_ROOT or vim.fn.getcwd(),
     expanded = {},
     entries = {},
+    dir_cache = {},
+    max_entries = 500,
     dotfile_mode = 1, -- 1 = show dotfiles (hide .git), 2 = show all including .git, 0 = hide dotfiles
 }
+_G.IdeTree = IdeTree
 
 local function ide_tree_icon(name, is_dir, is_open)
     if is_dir then
@@ -165,7 +272,18 @@ function IdeTree.should_show(name)
     end
 end
 
+function IdeTree.invalidate_cache(dir)
+    if dir then
+        IdeTree.dir_cache[dir] = nil
+    else
+        IdeTree.dir_cache = {}
+    end
+end
+
 function IdeTree.scan_dir(dir)
+    if IdeTree.dir_cache[dir] then
+        return IdeTree.dir_cache[dir]
+    end
     local uv = vim.uv or vim.loop
     local req = uv.fs_scandir(dir)
     if not req then
@@ -195,7 +313,59 @@ function IdeTree.scan_dir(dir)
     for _, f in ipairs(files) do
         table.insert(dirs, f)
     end
+    IdeTree.dir_cache[dir] = dirs
     return dirs
+end
+
+-- Automatically unfold single-child directory chains (e.g. java/com/google/...) up to 6 levels
+function IdeTree.auto_expand_chain(dir)
+    local cur = dir
+    local last = dir
+    for _ = 1, 6 do
+        local children = IdeTree.scan_dir(cur)
+        if #children == 1 and children[1].is_dir then
+            cur = children[1].path
+            IdeTree.expanded[cur] = true
+            last = cur
+        else
+            break
+        end
+    end
+    return last
+end
+
+function IdeTree.set_root(new_root)
+    if not new_root or new_root == "" then
+        return
+    end
+    local resolved = vim.fn.fnamemodify(new_root, ":p"):gsub("/+$", "")
+    if resolved == "" then
+        resolved = "/"
+    end
+    if vim.fn.isdirectory(resolved) ~= 1 then
+        vim.api.nvim_echo({ { "Directory does not exist: " .. resolved, "ErrorMsg" } }, true, {})
+        return
+    end
+    IdeTree.root = resolved
+    IdeTree.expanded = {}
+    IdeTree.invalidate_cache()
+    pcall(vim.cmd, "cd " .. vim.fn.fnameescape(resolved))
+    IdeTree.auto_expand_chain(resolved)
+    IdeTree.render()
+end
+
+function IdeTree.dive(target_dir)
+    if not target_dir or target_dir == "" then
+        return
+    end
+    local actual_dir = target_dir
+    if target_dir == "--reset" or target_dir == "~" then
+        actual_dir = IdeTree.initial_root
+    end
+    IdeTree.set_root(actual_dir)
+    if vim.env.TMUX then
+        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--cd", actual_dir }, { detach = true })
+    end
 end
 
 function IdeTree.render(target_path)
@@ -214,13 +384,19 @@ function IdeTree.render(target_path)
 
     local root_name = vim.fn.fnamemodify(IdeTree.root, ":t")
     if root_name == "" then root_name = "/" end
-    lines[1] = "  " .. root_name .. "/"
-    IdeTree.entries[1] = { path = IdeTree.root, name = root_name, is_dir = true, depth = -1, parent = nil }
+    local rel_suffix = ""
+    if IdeTree.initial_root and IdeTree.root ~= IdeTree.initial_root and IdeTree.root:sub(1, #IdeTree.initial_root + 1) == (IdeTree.initial_root .. "/") then
+        rel_suffix = " (" .. IdeTree.root:sub(#IdeTree.initial_root + 2) .. ")"
+    end
+    lines[1] = "  " .. root_name .. "/" .. rel_suffix
+    IdeTree.entries[1] = { path = IdeTree.root, name = root_name, is_dir = true, depth = -1, parent = vim.fn.fnamemodify(IdeTree.root, ":h") }
     table.insert(highlights, { line = 0, col_start = 0, col_end = #lines[1], hl = "Directory" })
 
     local function walk(dir, depth)
         local children = IdeTree.scan_dir(dir)
-        for _, item in ipairs(children) do
+        local limit = math.min(#children, IdeTree.max_entries)
+        for i = 1, limit do
+            local item = children[i]
             local lnum = #lines + 1
             local indent = string.rep("  ", depth)
             if item.is_dir then
@@ -258,6 +434,15 @@ function IdeTree.render(target_path)
                 table.insert(highlights, { line = lnum - 1, col_start = 0, col_end = icon_end, hl = "Comment" })
                 table.insert(highlights, { line = lnum - 1, col_start = icon_end, col_end = #text, hl = "Normal" })
             end
+        end
+        if #children > limit then
+            local lnum = #lines + 1
+            local indent = string.rep("  ", depth)
+            local more_cnt = #children - limit
+            local text = " " .. indent .. "  … (+" .. tostring(more_cnt) .. " more — press '>' or D to dive)"
+            lines[lnum] = text
+            IdeTree.entries[lnum] = { path = dir, name = "…", is_dir = true, depth = depth, parent = dir, is_more_hint = true }
+            table.insert(highlights, { line = lnum - 1, col_start = 0, col_end = #text, hl = "Comment" })
         end
     end
 
@@ -311,13 +496,23 @@ function IdeTree.action_enter(focus_editor)
     local lnum = vim.api.nvim_win_get_cursor(0)[1]
     local item = IdeTree.entries[lnum]
     if not item then return end
+    if item.is_more_hint then
+        IdeTree.action_prompt_dive()
+        return
+    end
     if lnum == 1 then
+        IdeTree.invalidate_cache()
         IdeTree.render()
         return
     end
     if item.is_dir then
-        IdeTree.expanded[item.path] = not IdeTree.expanded[item.path]
-        IdeTree.render(item.path)
+        local next_state = not IdeTree.expanded[item.path]
+        IdeTree.expanded[item.path] = next_state
+        local target = item.path
+        if next_state then
+            target = IdeTree.auto_expand_chain(item.path)
+        end
+        IdeTree.render(target)
     else
         IdeTree.dispatch_file(item.path, focus_editor ~= false)
     end
@@ -330,7 +525,8 @@ function IdeTree.action_expand()
     if item.is_dir then
         if not IdeTree.expanded[item.path] then
             IdeTree.expanded[item.path] = true
-            IdeTree.render(item.path)
+            local target = IdeTree.auto_expand_chain(item.path)
+            IdeTree.render(target)
         elseif lnum < #IdeTree.entries then
             vim.api.nvim_win_set_cursor(0, { lnum + 1, 1 })
         end
@@ -342,13 +538,44 @@ end
 function IdeTree.action_collapse()
     local lnum = vim.api.nvim_win_get_cursor(0)[1]
     local item = IdeTree.entries[lnum]
-    if not item or lnum == 1 then return end
+    if not item then return end
+    if lnum == 1 then
+        local parent_dir = vim.fn.fnamemodify(IdeTree.root, ":h")
+        if parent_dir ~= "" and parent_dir ~= IdeTree.root then
+            IdeTree.dive(parent_dir)
+        end
+        return
+    end
     if item.is_dir and IdeTree.expanded[item.path] then
         IdeTree.expanded[item.path] = false
         IdeTree.render(item.path)
     elseif item.parent and item.parent ~= IdeTree.root then
         IdeTree.expanded[item.parent] = false
         IdeTree.render(item.parent)
+    end
+end
+
+function IdeTree.action_dive_cursor()
+    local lnum = vim.api.nvim_win_get_cursor(0)[1]
+    local item = IdeTree.entries[lnum]
+    if not item then return end
+    local target = item.is_dir and item.path or (item.parent or IdeTree.root)
+    if target and target ~= "" then
+        IdeTree.dive(target)
+    end
+end
+
+function IdeTree.action_dive_up()
+    local parent_dir = vim.fn.fnamemodify(IdeTree.root, ":h")
+    if parent_dir and parent_dir ~= "" and parent_dir ~= IdeTree.root then
+        IdeTree.dive(parent_dir)
+    end
+end
+
+function IdeTree.action_prompt_dive()
+    local input = vim.fn.input("Dive IDE to path: ", IdeTree.root .. "/", "dir")
+    if input and input ~= "" then
+        IdeTree.dive(input)
     end
 end
 
@@ -378,6 +605,7 @@ function IdeTree.action_create()
         vim.fn.mkdir(vim.fn.fnamemodify(target, ":h"), "p")
         vim.fn.writefile({}, target)
     end
+    IdeTree.invalidate_cache(base_dir)
     IdeTree.expanded[base_dir] = true
     IdeTree.render(target:gsub("/$", ""))
 end
@@ -390,6 +618,7 @@ function IdeTree.action_rename()
     if new_name == "" or new_name == item.name then return end
     local dest = (item.parent or IdeTree.root) .. "/" .. new_name
     vim.fn.rename(item.path, dest)
+    IdeTree.invalidate_cache(item.parent or IdeTree.root)
     IdeTree.render(dest)
 end
 
@@ -400,6 +629,7 @@ function IdeTree.action_delete()
     local ans = vim.fn.input("Delete '" .. item.name .. "'? (y/N): ")
     if ans:lower() == "y" then
         vim.fn.delete(item.path, "rf")
+        IdeTree.invalidate_cache(item.parent or IdeTree.root)
         IdeTree.render()
     end
 end
@@ -415,6 +645,13 @@ function IdeTree.attach_mappings(buf)
     bmap("h", IdeTree.action_collapse, "Collapse directory or parent")
     bmap("<Left>", IdeTree.action_collapse, "Collapse directory or parent")
     bmap("-", IdeTree.action_collapse, "Collapse directory or parent")
+    bmap(">", IdeTree.action_dive_cursor, "Dive IDE into directory under cursor")
+    bmap("C", IdeTree.action_dive_cursor, "Dive IDE into directory under cursor")
+    bmap("<", IdeTree.action_dive_up, "Dive IDE up to parent directory (..)")
+    bmap("<BS>", IdeTree.action_dive_up, "Dive IDE up to parent directory (..)")
+    bmap("D", IdeTree.action_prompt_dive, "Prompt for path and dive IDE working directory")
+    bmap("~", function() IdeTree.dive("--reset") end, "Reset IDE working directory to initial root")
+    bmap("=", function() IdeTree.dive("--reset") end, "Reset IDE working directory to initial root")
     bmap("<Tab>", function() IdeTree.action_enter(false) end, "Toggle directory or preview file")
     bmap("p", function() IdeTree.action_enter(false) end, "Preview file in Editor")
     bmap("<LeftMouse>", function()
@@ -466,19 +703,26 @@ function IdeTree.attach_mappings(buf)
             end
             IdeTree.last_dir_toggle_ns = now
             IdeTree.last_dir_toggle_path = item.path
-            IdeTree.expanded[item.path] = not IdeTree.expanded[item.path]
-            IdeTree.render(item.path)
+            local next_state = not IdeTree.expanded[item.path]
+            IdeTree.expanded[item.path] = next_state
+            local target = item.path
+            if next_state then
+                target = IdeTree.auto_expand_chain(item.path)
+            end
+            IdeTree.render(target)
         end
     end, "Single-click toggle directory")
     bmap("W", function() IdeTree.expanded = {}; IdeTree.render() end, "Collapse all directories")
     bmap("E", function() IdeTree.action_expand_all() end, "Expand all directories")
-    bmap("R", function() IdeTree.render() end, "Refresh directory tree")
+    bmap("R", function() IdeTree.invalidate_cache(); IdeTree.render() end, "Refresh directory tree")
     bmap(".", function()
         IdeTree.dotfile_mode = (IdeTree.dotfile_mode + 1) % 3
+        IdeTree.invalidate_cache()
         IdeTree.render()
     end, "Cycle hidden dotfiles filter")
     bmap("H", function()
         IdeTree.dotfile_mode = (IdeTree.dotfile_mode + 1) % 3
+        IdeTree.invalidate_cache()
         IdeTree.render()
     end, "Cycle hidden dotfiles filter")
     bmap("a", IdeTree.action_create, "Create file or directory")
@@ -555,12 +799,31 @@ end, { desc = "Toggle Main Pane: Editor <-> AI Agent" })
 
 -- One-Command Quit Everything (:Q, :Quit, :qa, :wqa, Space+q, Alt+q, qide)
 -- While keeping `:q` and `:wq` scoped strictly to closing the active buffer/split in the Editor pane.
+local function count_real_modified_buffers()
+    local cnt = 0
+    for _, b in ipairs(vim.fn.getbufinfo({ bufmodified = 1 })) do
+        local bt = vim.bo[b.bufnr].buftype
+        if bt == "" then
+            if b.name and b.name ~= "" then
+                cnt = cnt + 1
+            else
+                local lines = vim.api.nvim_buf_get_lines(b.bufnr, 0, -1, false)
+                local text = table.concat(lines, ""):gsub("%s+", "")
+                if text ~= "" then
+                    cnt = cnt + 1
+                end
+            end
+        end
+    end
+    return cnt
+end
+
 local function quit_ide_or_nvim(force)
     if vim.env.TMUX and vim.env.NVIM_IDE_SOCKET and vim.env.NVIM_IDE_SOCKET ~= "" then
         if not force then
-            local modified = #vim.fn.getbufinfo({ bufmodified = 1 })
+            local modified = count_real_modified_buffers()
             if modified > 0 then
-                vim.api.nvim_echo({ { "E37: No write since last change in " .. modified .. " buffer(s) (save with :w or use :Q! / :qa! to force)", "ErrorMsg" } }, true, {})
+                vim.api.nvim_echo({ { "E37: No write since last change in " .. modified .. " buffer(s) (save with :wqa or press Alt+Shift+Q / :Q! to force)", "ErrorMsg" } }, true, {})
                 return
             end
         end
@@ -597,8 +860,13 @@ local function ide_close_buffer_or_split(bang, write)
 
     local cur_buf = vim.api.nvim_get_current_buf()
     if vim.bo[cur_buf].modified and not bang then
-        vim.api.nvim_echo({ { "E37: No write since last change (add ! to override)", "ErrorMsg" } }, true, {})
-        return
+        local lines = vim.api.nvim_buf_get_lines(cur_buf, 0, -1, false)
+        local is_blank_unnamed = (vim.api.nvim_buf_get_name(cur_buf) == "" and table.concat(lines, ""):gsub("%s+", "") == "")
+        if not is_blank_unnamed then
+            vim.api.nvim_echo({ { "E37: No write since last change (add ! to override)", "ErrorMsg" } }, true, {})
+            return
+        end
+        bang = true
     end
 
     local listed = vim.fn.getbufinfo({ buflisted = 1 })
@@ -631,9 +899,27 @@ vim.api.nvim_create_user_command("IdeWriteClose", function(opts)
 end, { bang = true, desc = "Write and close current buffer or split without exiting IDE Editor" })
 
 map("n", "<leader>q", function() quit_ide_or_nvim(false) end, { desc = "Quit Entire IDE Workspace" })
-map({ "n", "i", "t" }, "<M-q>", function() quit_ide_or_nvim(false) end, { desc = "Quit Entire IDE Workspace" })
+map({ "n", "i", "v", "t" }, "<M-q>", function() quit_ide_or_nvim(false) end, { desc = "Quit Entire IDE Workspace" })
+map({ "n", "i", "v", "t" }, "<M-Q>", function() quit_ide_or_nvim(true) end, { desc = "Force-Quit Entire IDE Workspace" })
 vim.api.nvim_create_user_command("Q", function(opts) quit_ide_or_nvim(opts.bang) end, { bang = true, desc = "Quit Entire IDE Workspace" })
 vim.api.nvim_create_user_command("Quit", function(opts) quit_ide_or_nvim(opts.bang) end, { bang = true, desc = "Quit Entire IDE Workspace" })
+
+vim.api.nvim_create_user_command("IdeCd", function(opts)
+    local target = vim.trim(opts.args or "")
+    if target == "" then
+        local buf_dir = vim.fn.expand("%:p:h")
+        if buf_dir ~= "" and vim.fn.isdirectory(buf_dir) == 1 then
+            target = buf_dir
+        else
+            target = vim.fn.getcwd()
+        end
+    elseif target ~= "~" and target ~= "--reset" then
+        target = vim.fn.fnamemodify(vim.fn.expand(target), ":p"):gsub("/+$", "")
+    end
+    IdeTree.dive(target)
+end, { nargs = "?", complete = "dir", desc = "Dive IDE Workspace (Tree, Editor, Shell, AI) to directory" })
+
+map("n", "<leader>cd", "<cmd>IdeCd<CR>", { desc = "Dive IDE Workspace to Current Buffer Directory" })
 
 local ide_layout_group = vim.api.nvim_create_augroup("SolarizedIdeLayout", { clear = true })
 
@@ -666,7 +952,6 @@ vim.api.nvim_create_autocmd({ "FocusGained", "WinEnter" }, {
     callback = function()
         if vim.bo.filetype == "ide_tree" then
             IdeTree.focus_gained_ns = (vim.uv or vim.loop).hrtime()
-            IdeTree.render()
         end
     end,
 })
@@ -718,6 +1003,13 @@ if not status_ok then
         highlight CursorLine guibg=#073642
         highlight Comment guifg=#586E75
     ]])
+    return
+end
+
+-- If init.lua is re-sourced inside a running session (e.g. `:source $MYVIMRC` or hot-reload),
+-- all core options, keymaps, commands, and IdeTree have already been refreshed above;
+-- skip re-running `lazy.setup()` which emits "Re-sourcing your config is not supported with lazy.nvim".
+if package.loaded["lazy.core.config"] then
     return
 end
 

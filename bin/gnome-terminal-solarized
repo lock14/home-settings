@@ -126,6 +126,10 @@ print(repr(l))
 dconf write /org/gnome/terminal/legacy/profiles:/list "$NEW_LIST"
 dconf write /org/gnome/terminal/legacy/profiles:/default "'$PROFILE_UUID'"
 
+# Ensure menu bar mnemonics (Alt+f, Alt+e, Alt+h, etc.) are disabled so Alt+h/j/k/l pass cleanly to Tmux/Neovim
+gsettings set org.gnome.Terminal.Legacy.Settings mnemonics-enabled false 2>/dev/null || \
+    dconf write /org/gnome/terminal/legacy/mnemonics-enabled "false" 2>/dev/null || true
+
 # Ensure no profile (in list or lingering) retains legacy MesloLGS NF font
 for prof in $(dconf list /org/gnome/terminal/legacy/profiles:/ 2>/dev/null | grep '^:' | tr -d ':/' || true); do
     p_font="$(dconf read "/org/gnome/terminal/legacy/profiles:/:$prof/font" 2>/dev/null || true)"

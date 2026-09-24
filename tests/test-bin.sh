@@ -228,6 +228,20 @@ if command -v tmux >/dev/null 2>&1; then
             pass "SolarizedIdeTree (NVIM_IDE_TREE=1) skipped headless runtime check (nvim not installed on runner)"
         fi
 
+        # Verify `bin/ide --cd <subdir>` and `bin/ide --cd --reset` update @ide_workdir across the session
+        mkdir -p "$IDE_WS_3P/subdir/sub2"
+        "$SCRIPT_DIR/bin/ide" --cd "$IDE_WS_3P/subdir" "ide-ws_3pane_test" >/dev/null 2>&1
+        wdir_after_dive="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --cd --reset "ide-ws_3pane_test" >/dev/null 2>&1
+        wdir_after_reset="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_workdir 2>/dev/null || true)"
+        expected_dive_dir="$(cd "$IDE_WS_3P/subdir" && pwd -P)"
+        expected_init_dir="$(cd "$IDE_WS_3P" && pwd -P)"
+        if [ "$wdir_after_dive" = "$expected_dive_dir" ] && [ "$wdir_after_reset" = "$expected_init_dir" ]; then
+            pass "bin/ide --cd <dir> and --reset synchronize @ide_workdir across Tree, Editor, Shell, and AI panes"
+        else
+            fail "bin/ide --cd" "Expected dive=$expected_dive_dir reset=$expected_init_dir (got dive=$wdir_after_dive reset=$wdir_after_reset)"
+        fi
+
         "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1
         if ! tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
             pass "bin/ide --quit terminates the entire IDE workspace session cleanly"

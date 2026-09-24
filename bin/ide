@@ -16,6 +16,7 @@
 # ==============================================================================
 
 set -euo pipefail
+export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 
 usage() {
     cat <<'EOF'
@@ -29,6 +30,7 @@ Options:
   --ai, --agent <CLI>      Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
   --open <FILE>            Open <FILE> in the Main Editor pane via RPC and focus Editor
   --preview <FILE>         Preview <FILE> in the Main Editor pane via RPC while keeping focus in Tree
+  cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Tree, Editor, Shell, and AI
   --toggle [SESSION]       Toggle the Main Pane in-place between the Text Editor and the AI Agent
   --show-editor [SESSION]  Ensure the Text Editor pane is swapped into the Main Pane and focused
   --show-ai [SESSION]      Ensure the AI Agent pane is swapped into the Main Pane and focused
@@ -57,6 +59,7 @@ AI_CLI="${IDE_AI_CLI:-agy}"
 AI_CLI_FROM_FLAG="0"
 TARGET_ARG=""
 OPEN_FILE=""
+CD_TARGET=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -100,6 +103,16 @@ while [ $# -gt 0 ]; do
             OPEN_FILE="$2"
             shift 2
             ;;
+        cd|--cd)
+            ACTION="cd"
+            if [ $# -gt 1 ]; then
+                CD_TARGET="$2"
+                shift 2
+            else
+                CD_TARGET="$PWD"
+                shift
+            fi
+            ;;
         --toggle)
             ACTION="toggle"
             if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
@@ -135,6 +148,26 @@ while [ $# -gt 0 ]; do
             else
                 shift
             fi
+            ;;
+        --copy)
+            ACTION="copy"
+            shift
+            ;;
+        --paste)
+            ACTION="paste"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --open-link)
+            ACTION="open-link"
+            LINK_HREF="${2:-}"
+            LINK_WORD="${3:-}"
+            LINK_CWD="${4:-}"
+            shift $(( $# >= 4 ? 4 : $# ))
             ;;
         quit|-q|--quit)
             ACTION="quit"
@@ -419,7 +452,7 @@ toggle_main_pane() {
         tmux rename-window -t "$swap_win" "_swap" 2>/dev/null || true
         tmux rename-window -t "$main_win" "code" 2>/dev/null || true
         if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-            nvim --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+            nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
         fi
         tmux select-window -t "$main_win"
         tmux select-pane -t "$editor_pane"
@@ -444,8 +477,8 @@ open_in_editor() {
     tree_pane="$(get_ide_var "$sess" "@ide_tree_pane" "IDE_TREE_PANE")"
     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        nvim --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1 || true
-        nvim --server "$sock" --remote "$filepath" >/dev/null 2>&1 || true
+        nvim --headless --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1 || true
+        nvim --headless --server "$sock" --remote "$filepath" >/dev/null 2>&1 || true
     fi
     if [ "$focus" = "0" ] && [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
         tmux select-pane -t "$tree_pane"
@@ -467,7 +500,7 @@ run_ai_popup() {
 }
 
 quit_ide() {
-    local sess sock modified
+    local sess sock modified mod_expr
     sess="$(resolve_target_session "$TARGET_ARG")"
     if ! tmux has-session -t "$sess" 2>/dev/null; then
         echo "No active IDE session named '$sess'."
@@ -476,33 +509,301 @@ quit_ide() {
 
     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
     if [ "$FORCE_QUIT" != "1" ] && [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        modified="$(nvim --server "$sock" --remote-expr "len(getbufinfo({'bufmodified': 1}))" 2>/dev/null || echo 0)"
+        mod_expr='len(filter(getbufinfo({"bufmodified": 1}), "getbufvar(v:val.bufnr, \"&buftype\") ==# \"\" && (!empty(v:val.name) || join(getbufline(v:val.bufnr, 1, \"$\"), \"\") !~# \"^\\\\s*$\")"))'
+        modified="$(nvim --headless --server "$sock" --remote-expr "$mod_expr" 2>/dev/null | tr -cd '0-9' || echo 0)"
         if [ "${modified:-0}" -gt 0 ] 2>/dev/null; then
             toggle_main_pane "editor" || true
-            nvim --server "$sock" --remote-expr "execute('echohl ErrorMsg | echom \"Unsaved changes in buffer(s)! Save (:w / :wqa) or use :qa! / ide quit --force\" | echohl None')" >/dev/null 2>&1 || true
-            tmux display-message -t "$sess" "Unsaved changes in Neovim! Save (:wqa) or run 'ide quit --force'" 2>/dev/null || true
-            echo "Aborted quit: unsaved changes in Neovim buffer(s). Save first or use 'ide quit --force'." >&2
+            nvim --headless --server "$sock" --remote-send "<C-\\><C-n>:redraw! | echohl ErrorMsg | echo \"Unsaved changes in ${modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q (:Q!) to force-quit\" | echohl None<CR>" >/dev/null 2>&1 || true
+            tmux display-message -d 4000 -t "$sess" "Unsaved changes in ${modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q to force-quit" 2>/dev/null || true
+            echo "Aborted quit: unsaved changes in Neovim buffer(s). Save first or use 'ide quit --force' (Alt+Shift+Q)." >&2
             return 1
         fi
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        nvim --server "$sock" --remote-send "<C-\\><C-n>:qa!<CR>" >/dev/null 2>&1 || true
+        nvim --headless --server "$sock" --remote-send "<C-\\><C-n>:qa!<CR>" >/dev/null 2>&1 || true
     fi
 
     RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
-    rm -f "$sock" "${RUNTIME_DIR}/nvim-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock"
+    rm -f "$sock" "${sock}.tree" "${RUNTIME_DIR}/nvim-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock.tree"
     tmux kill-session -t "ai-${sess}" 2>/dev/null || true
     tmux kill-session -t "agy-${sess}" 2>/dev/null || true
     tmux kill-session -t "$sess" 2>/dev/null || true
 }
 
-if [ "$ACTION" = "open" ]; then
+cd_ide_workspace() {
+    local raw_target="${1:-$PWD}"
+    local sess init_root cur_workdir target_dir sock tree_sock tree_pane term_pane ai_pane ai_cli ai_run_cmd term_cmd term_path escaped_dir
+    sess="$(resolve_target_session "$TARGET_ARG")"
+    if ! tmux has-session -t "$sess" 2>/dev/null; then
+        echo "Error: No active IDE session '$sess'." >&2
+        return 1
+    fi
+
+    init_root="$(get_ide_var "$sess" "@ide_initial_root" "IDE_INITIAL_ROOT")"
+    cur_workdir="$(get_ide_var "$sess" "@ide_workdir" "IDE_WORKDIR")"
+    [ -z "$cur_workdir" ] && cur_workdir="${init_root:-$PWD}"
+
+    if [ "$raw_target" = "--reset" ] || [ "$raw_target" = "~" ] || [ "$raw_target" = "-" ]; then
+        if [ -n "$init_root" ] && [ -d "$init_root" ]; then
+            target_dir="$init_root"
+        else
+            target_dir="$cur_workdir"
+        fi
+    elif [[ "$raw_target" == /* ]]; then
+        target_dir="$raw_target"
+    else
+        if [ -d "$cur_workdir/$raw_target" ]; then
+            target_dir="$cur_workdir/$raw_target"
+        elif [ -n "$init_root" ] && [ -d "$init_root/$raw_target" ]; then
+            target_dir="$init_root/$raw_target"
+        else
+            target_dir="$PWD/$raw_target"
+        fi
+    fi
+
+    if [ ! -d "$target_dir" ]; then
+        echo "Error: Directory '$target_dir' does not exist." >&2
+        return 1
+    fi
+    target_dir="$(cd "$target_dir" && pwd -P)"
+    [ -z "$init_root" ] && set_ide_var "$sess" "@ide_initial_root" "IDE_INITIAL_ROOT" "$target_dir"
+    set_ide_var "$sess" "@ide_workdir" "IDE_WORKDIR" "$target_dir"
+
+    # 0. Update Tmux session default working directory for new panes/popups
+    tmux attach-session -t "$sess" -c "$target_dir" >/dev/null 2>&1 || true
+
+    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+    tree_sock="${sock}.tree"
+    tree_pane="$(resolve_role_pane "$sess" "tree" "@ide_tree_pane" "IDE_TREE_PANE")"
+    term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
+    ai_pane="$(resolve_role_pane "$sess" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
+    ai_cli="$(get_ide_var "$sess" "@ide_ai_cli" "IDE_AI_CLI")"
+    [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
+
+    escaped_dir="${target_dir//\'/\'\'}"
+
+    # 1. Re-root Left Directory Tree (@ide_role=tree)
+    if [ -n "$sock" ] && [ -S "$tree_sock" ] && command -v nvim >/dev/null 2>&1; then
+        nvim --headless --server "$tree_sock" --remote-expr "v:lua.IdeTree.set_root('$escaped_dir')" >/dev/null 2>&1 || true
+    elif [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+        tmux send-keys -t "$tree_pane" Escape ":lua if _G.IdeTree then _G.IdeTree.set_root('$escaped_dir') end" C-m
+    fi
+
+    # 2. Update Top-Right Main Neovim Editor (@ide_role=editor) working directory
+    if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+        nvim --headless --server "$sock" --remote-expr "execute('cd ' . fnameescape('$escaped_dir'))" >/dev/null 2>&1 || true
+    fi
+
+    # 3. Update Bottom-Right Terminal Shell (@ide_role=term) if idle at zsh/bash prompt
+    if [ "${IDE_CD_SKIP_SHELL:-0}" != "1" ] && [ -n "$term_pane" ] && tmux display-message -p -t "$term_pane" "#{pane_id}" >/dev/null 2>&1; then
+        term_cmd="$(tmux display-message -p -t "$term_pane" "#{pane_current_command}" 2>/dev/null || true)"
+        term_path="$(tmux display-message -p -t "$term_pane" "#{pane_current_path}" 2>/dev/null || true)"
+        if [[ "$term_cmd" == zsh* || "$term_cmd" == bash* || "$term_cmd" == sh* ]] && [ "$term_path" != "$target_dir" ]; then
+            tmux send-keys -t "$term_pane" C-u " builtin cd -- $(printf '%q' "$target_dir")" C-m
+        fi
+    fi
+
+    # 4. Update AI Agent Pane (@ide_role=ai) working directory (respawn in $target_dir with --continue)
+    if [ -n "$ai_pane" ] && tmux display-message -p -t "$ai_pane" "#{pane_id}" >/dev/null 2>&1; then
+        local ai_cwd
+        ai_cwd="$(tmux display-message -p -t "$ai_pane" "#{pane_current_path}" 2>/dev/null || true)"
+        if [ "$ai_cwd" != "$target_dir" ]; then
+            tmux respawn-pane -k -t "$ai_pane" -c "$target_dir" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" 2>/dev/null || \
+                tmux respawn-pane -k -t "$ai_pane" -c "$target_dir" "env IDE_AI_CLI='$ai_cli' NVIM_IDE_SOCKET='$sock' ${SHELL:-/bin/zsh} -l" 2>/dev/null || true
+            if ai_run_cmd="$(resolve_ai_cmd "$ai_cli")"; then
+                case "$ai_run_cmd" in
+                    jetski-cli|claude)
+                        tmux send-keys -t "$ai_pane" "$ai_run_cmd -c || $ai_run_cmd" C-m
+                        ;;
+                    *)
+                        tmux send-keys -t "$ai_pane" "$ai_run_cmd" C-m
+                        ;;
+                esac
+            fi
+        fi
+    fi
+
+    tmux display-message -d 2500 -t "$sess" "IDE Working Directory -> $target_dir" 2>/dev/null || true
+}
+
+copy_to_system_clipboard() {
+    local tmp
+    tmp="$(mktemp "${TMPDIR:-/tmp}/ide-clip.XXXXXX")"
+    cat > "$tmp"
+    if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+        tmux load-buffer "$tmp" 2>/dev/null || true
+    fi
+    if command -v xsel >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+        xsel -ip < "$tmp" 2>/dev/null || true
+        xsel -ib < "$tmp" 2>/dev/null || true
+    elif command -v xclip >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+        nohup xclip -selection primary -i < "$tmp" >/dev/null 2>&1 &
+        nohup xclip -selection clipboard -i < "$tmp" >/dev/null 2>&1 &
+    fi
+    if command -v wl-copy >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        wl-copy --primary < "$tmp" >/dev/null 2>&1 || true
+        wl-copy < "$tmp" >/dev/null 2>&1 || true
+    fi
+    if command -v pbcopy >/dev/null 2>&1; then
+        pbcopy < "$tmp" 2>/dev/null || true
+    fi
+    rm -f "$tmp"
+}
+
+paste_from_system_clipboard() {
+    local target_pane="${1:-}"
+    local tmp
+    tmp="$(mktemp "${TMPDIR:-/tmp}/ide-paste.XXXXXX")"
+    : > "$tmp"
+
+    if command -v xsel >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+        xsel -op > "$tmp" 2>/dev/null || true
+        if [ ! -s "$tmp" ]; then
+            xsel -ob > "$tmp" 2>/dev/null || true
+        fi
+    fi
+    if [ ! -s "$tmp" ] && command -v xclip >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+        xclip -selection primary -t UTF8_STRING -o > "$tmp" 2>/dev/null || \
+            xclip -selection primary -o > "$tmp" 2>/dev/null || \
+            xclip -selection clipboard -t UTF8_STRING -o > "$tmp" 2>/dev/null || \
+            xclip -selection clipboard -o > "$tmp" 2>/dev/null || true
+    fi
+    if [ ! -s "$tmp" ] && command -v wl-paste >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        wl-paste --primary --no-newline > "$tmp" 2>/dev/null || \
+            wl-paste --no-newline > "$tmp" 2>/dev/null || true
+    fi
+    if [ ! -s "$tmp" ] && command -v pbpaste >/dev/null 2>&1; then
+        pbpaste > "$tmp" 2>/dev/null || true
+    fi
+    if [ ! -s "$tmp" ] && command -v tmux >/dev/null 2>&1; then
+        tmux show-buffer > "$tmp" 2>/dev/null || true
+    fi
+
+    if [ -s "$tmp" ] && command -v tmux >/dev/null 2>&1; then
+        tmux load-buffer "$tmp" 2>/dev/null || true
+        if [ -n "$target_pane" ]; then
+            tmux paste-buffer -p -t "$target_pane" 2>/dev/null || true
+        else
+            tmux paste-buffer -p 2>/dev/null || true
+        fi
+    fi
+    rm -f "$tmp"
+}
+
+open_browser_url() {
+    local url="$1"
+    [ -z "$url" ] && return 1
+    if command -v xdg-open >/dev/null 2>&1 && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
+        nohup xdg-open "$url" >/dev/null 2>&1 &
+        return 0
+    elif command -v google-chrome >/dev/null 2>&1 && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
+        nohup google-chrome "$url" >/dev/null 2>&1 &
+        return 0
+    elif command -v open >/dev/null 2>&1; then
+        nohup open "$url" >/dev/null 2>&1 &
+        return 0
+    fi
+    return 1
+}
+
+open_ide_link() {
+    local href="${1:-}"
+    local word="${2:-}"
+    local cwd="${3:-$PWD}"
+
+    # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`) from prompt (`//depot/...`, `@CL`, Git branch) or AI CLI (`file://...`)
+    if [ -n "$href" ]; then
+        if [[ "$href" == file://* ]]; then
+            local fpath="${href#file://}"
+            fpath="${fpath#localhost}"
+            local line=""
+            if [[ "$fpath" == *#L* ]]; then
+                line="${fpath##*#L}"
+                line="${line%%[^0-9]*}"
+                fpath="${fpath%%#*}"
+            fi
+            if [ -f "$fpath" ]; then
+                open_in_editor "$fpath" "1"
+                if [ -n "$line" ]; then
+                    local sock
+                    sock="$(get_ide_var "NVIM_IDE_SOCKET")"
+                    [ -n "$sock" ] && [ -S "$sock" ] && nvim --headless --server "$sock" --remote-expr "execute('$line')" >/dev/null 2>&1 || true
+                fi
+                return 0
+            elif [ -d "$fpath" ]; then
+                cd_ide_workspace "$fpath"
+                return 0
+            fi
+        elif [[ "$href" == http://* || "$href" == https://* ]]; then
+            open_browser_url "$href"
+            return $?
+        fi
+    fi
+
+    # 2. Fallback to clicked word (`#{mouse_word}`) when clicking plain text or prompt tokens
+    word="${word#"${word%%[![:space:]]*}"}"
+    word="${word%"${word##*[![:space:]]}"}"
+    # Strip surrounding punctuation/brackets/quotes
+    word="${word#[\(\[\{\<\"\'\`]}"
+    word="${word%[\)\]\}\>\"\'\`,;.]}"
+    [ -z "$word" ] && return 0
+
+    if [[ "$word" == http://* || "$word" == https://* ]]; then
+        open_browser_url "$word"
+        return $?
+    elif [[ "$word" == //depot* ]]; then
+        local exp_path="$word"
+        exp_path="${exp_path/#\/\/depot\/google3\/j\/c\/g///depot/google3/java/com/google}"
+        exp_path="${exp_path/#\/\/depot\/google3\/jt\/c\/g///depot/google3/javatests/com/google}"
+        open_browser_url "http://cs/piper///depot/${exp_path#//depot/}"
+        return $?
+    elif [[ "$word" =~ ^@?([0-9]{6,10})$ ]]; then
+        open_browser_url "http://cl/${BASH_REMATCH[1]}"
+        return $?
+    elif [[ "$word" =~ ^(cl|b|go)/([A-Za-z0-9_.-]+)$ ]]; then
+        open_browser_url "http://${word}"
+        return $?
+    fi
+
+    # Check if word is a local file path (optionally with :line:col)
+    local clean_file="$word"
+    local file_line=""
+    if [[ "$clean_file" =~ ^([^:]+):([0-9]+)(:[0-9]+)?$ ]]; then
+        clean_file="${BASH_REMATCH[1]}"
+        file_line="${BASH_REMATCH[2]}"
+    fi
+    [[ "$clean_file" == \~/* ]] && clean_file="$HOME/${clean_file#\~/}"
+    [[ "$clean_file" != /* && -n "$cwd" ]] && clean_file="$cwd/$clean_file"
+    if [ -f "$clean_file" ]; then
+        open_in_editor "$clean_file" "1"
+        if [ -n "$file_line" ]; then
+            local sock
+            sock="$(get_ide_var "NVIM_IDE_SOCKET")"
+            [ -n "$sock" ] && [ -S "$sock" ] && nvim --headless --server "$sock" --remote-expr "execute('$file_line')" >/dev/null 2>&1 || true
+        fi
+        return 0
+    fi
+}
+
+if [ "$ACTION" = "copy" ]; then
+    copy_to_system_clipboard
+    exit 0
+elif [ "$ACTION" = "paste" ]; then
+    paste_from_system_clipboard "$TARGET_ARG"
+    exit 0
+elif [ "$ACTION" = "open-link" ]; then
+    open_ide_link "${LINK_HREF:-}" "${LINK_WORD:-}" "${LINK_CWD:-}"
+    exit 0
+elif [ "$ACTION" = "open" ]; then
     open_in_editor "$OPEN_FILE" "1"
     exit 0
 elif [ "$ACTION" = "preview" ]; then
     open_in_editor "$OPEN_FILE" "0"
     exit 0
+elif [ "$ACTION" = "cd" ]; then
+    cd_ide_workspace "$CD_TARGET"
+    exit $?
 elif [ "$ACTION" = "toggle" ]; then
     toggle_main_pane "toggle"
     exit 0
@@ -543,9 +844,28 @@ SESSION="$(sanitize_session_name "$TARGET_DIR")"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 NVIM_SOCKET="${RUNTIME_DIR}/nvim-ide-${SESSION}.sock"
 
+# Ensure X11 / Wayland display & auth variables are populated for Tmux & Neovim clipboard (xclip / wl-copy)
+if [ -z "${DISPLAY:-}" ] && [ -S /tmp/.X11-unix/X0 ]; then
+    export DISPLAY=":0"
+fi
+uid_num="$(id -u 2>/dev/null || true)"
+if [ -n "$uid_num" ] && [ -d "/run/user/$uid_num" ]; then
+    if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S "/run/user/$uid_num/wayland-0" ]; then
+        export WAYLAND_DISPLAY="wayland-0"
+    fi
+    if [ -z "${XAUTHORITY:-}" ]; then
+        for auth_candidate in "/run/user/$uid_num"/.mutter-Xwaylandauth.*; do
+            if [ -f "$auth_candidate" ]; then
+                export XAUTHORITY="$auth_candidate"
+                break
+            fi
+        done
+    fi
+fi
+
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     # Clean up any stale socket from an abnormal exit
-    rm -f "$NVIM_SOCKET"
+    rm -f "$NVIM_SOCKET" "${NVIM_SOCKET}.tree"
 
     COLS="$(tput cols 2>/dev/null || echo 160)"
     LINES="$(tput lines 2>/dev/null || echo 48)"
@@ -553,14 +873,14 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     [ "$LINES" -lt 24 ] && LINES=48
 
     if [ "$LAYOUT_MODE" = "3pane" ]; then
-        PANE_TREE="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "code" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+        PANE_TREE="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "code" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
         MAIN_WIN="$(tmux display-message -p -t "$PANE_TREE" "#{window_id}")"
         tmux set-option -p -t "$PANE_TREE" @ide_role "tree"
         set_ide_var "$SESSION" "@ide_tree_pane" "IDE_TREE_PANE" "$PANE_TREE"
-        PANE_EDITOR="$(tmux split-window -h -P -F "#{pane_id}" -t "$PANE_TREE" -l 80% -c "$TARGET_DIR" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+        PANE_EDITOR="$(tmux split-window -h -P -F "#{pane_id}" -t "$PANE_TREE" -l 80% -c "$TARGET_DIR" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
         NVIM_LAYOUT_ENV="0"
     else
-        PANE_EDITOR="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "code" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+        PANE_EDITOR="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "code" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
         MAIN_WIN="$(tmux display-message -p -t "$PANE_EDITOR" "#{window_id}")"
         NVIM_LAYOUT_ENV="1"
     fi
@@ -568,24 +888,26 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     tmux set-option -p -t "$PANE_EDITOR" @ide_role "editor"
     set_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI" "$IDE_AI_CLI"
     set_ide_var "$SESSION" "@ide_socket" "NVIM_IDE_SOCKET" "$NVIM_SOCKET"
+    set_ide_var "$SESSION" "@ide_initial_root" "IDE_INITIAL_ROOT" "$TARGET_DIR"
+    set_ide_var "$SESSION" "@ide_workdir" "IDE_WORKDIR" "$TARGET_DIR"
     set_ide_var "$SESSION" "@ide_main_win" "IDE_MAIN_WIN" "$MAIN_WIN"
     set_ide_var "$SESSION" "@ide_editor_pane" "NVIM_IDE_PANE" "$PANE_EDITOR"
     set_ide_var "$SESSION" "@ide_layout_mode" "IDE_LAYOUT_MODE" "$LAYOUT_MODE"
 
-    PANE_TERM="$(tmux split-window -v -P -F "#{pane_id}" -t "$PANE_EDITOR" -l 25% -c "$TARGET_DIR" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "NVIM_IDE_PANE=$PANE_EDITOR")"
+    PANE_TERM="$(tmux split-window -v -P -F "#{pane_id}" -t "$PANE_EDITOR" -l 25% -c "$TARGET_DIR" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "NVIM_IDE_PANE=$PANE_EDITOR" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
     tmux set-option -p -t "$PANE_TERM" @ide_role "term"
     set_ide_var "$SESSION" "@ide_term_pane" "IDE_TERM_PANE" "$PANE_TERM"
 
     # Create detached background AI Agent pane for instant in-place swapping (Alt+a)
-    PANE_AI="$(tmux new-window -d -P -F "#{pane_id}" -t "${SESSION}:" -n "_swap" -c "$TARGET_DIR" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+    PANE_AI="$(tmux new-window -d -P -F "#{pane_id}" -t "${SESSION}:" -n "_swap" -c "$TARGET_DIR" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
     tmux set-option -p -t "$PANE_AI" @ide_role "ai"
     set_ide_var "$SESSION" "@ide_ai_pane" "IDE_AI_PANE" "$PANE_AI"
 
     if command -v nvim >/dev/null 2>&1; then
         if [ "$LAYOUT_MODE" = "3pane" ]; then
-            tmux send-keys -t "$PANE_TREE" "NVIM_IDE_TREE=1 NVIM_IDE_SOCKET='$NVIM_SOCKET' nvim ." C-m
+            tmux send-keys -t "$PANE_TREE" "IDE_INITIAL_ROOT='$TARGET_DIR' NVIM_IDE_TREE=1 NVIM_IDE_SOCKET='$NVIM_SOCKET' nvim --listen '${NVIM_SOCKET}.tree' ." C-m
         fi
-        tmux send-keys -t "$PANE_EDITOR" "NVIM_IDE_LAYOUT=$NVIM_LAYOUT_ENV NVIM_IDE_SOCKET='$NVIM_SOCKET' nvim --listen '$NVIM_SOCKET'" C-m
+        tmux send-keys -t "$PANE_EDITOR" "IDE_INITIAL_ROOT='$TARGET_DIR' NVIM_IDE_LAYOUT=$NVIM_LAYOUT_ENV NVIM_IDE_SOCKET='$NVIM_SOCKET' nvim --listen '$NVIM_SOCKET'" C-m
     elif command -v vim >/dev/null 2>&1; then
         if [ "$LAYOUT_MODE" = "3pane" ]; then
             tmux send-keys -t "$PANE_TREE" "vim ." C-m
@@ -617,6 +939,12 @@ else
         fi
     fi
 fi
+
+for display_var in DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS; do
+    if [ -n "${!display_var:-}" ]; then
+        tmux set-environment -t "$SESSION" "$display_var" "${!display_var}" 2>/dev/null || true
+    fi
+done
 
 if [ "$DETACH_MODE" = "1" ]; then
     exit 0
