@@ -146,11 +146,28 @@ let g:netrw_altv = 1
 let g:netrw_winsize = 20
 nnoremap <silent> <leader>e :Lexplore<CR>
 
+if has('clipboard')
+    xnoremap <silent> <LeftRelease> <LeftRelease>"+ygv"*ygv
+    xnoremap <silent> <C-c> "+y
+    nnoremap <silent> <MiddleMouse> <LeftMouse>"*p
+    inoremap <silent> <MiddleMouse> <LeftMouse><C-r><C-o>*
+    xnoremap <silent> <MiddleMouse> "*p
+    cnoremap <MiddleMouse> <C-r>*
+endif
+
 function! s:TmuxNavigate(dir, tmux_dir) abort
     let l:cur_win = winnr()
     execute 'wincmd ' . a:dir
     if winnr() == l:cur_win && !empty($TMUX)
-        call system('tmux if-shell -F "#{==:#{window_zoomed_flag},0}" "select-pane -' . a:tmux_dir . '"')
+        let l:target_cmd = 'select-pane -' . a:tmux_dir
+        if $NVIM_IDE_TREE ==# '1'
+            if a:tmux_dir ==# 'R' || a:tmux_dir ==# 'U'
+                let l:target_cmd = "select-pane -t '{top-right}'"
+            elseif a:tmux_dir ==# 'D'
+                let l:target_cmd = "select-pane -t '{bottom-right}'"
+            endif
+        endif
+        call system('tmux if-shell -F "#{==:#{window_zoomed_flag},0}" "' . l:target_cmd . '"')
     endif
 endfunction
 
@@ -158,3 +175,4 @@ nnoremap <silent> <C-h> :call <SID>TmuxNavigate('h', 'L')<CR>
 nnoremap <silent> <C-j> :call <SID>TmuxNavigate('j', 'D')<CR>
 nnoremap <silent> <C-k> :call <SID>TmuxNavigate('k', 'U')<CR>
 nnoremap <silent> <C-l> :call <SID>TmuxNavigate('l', 'R')<CR>
+

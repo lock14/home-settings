@@ -147,7 +147,7 @@ v() {
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        if nvim --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1; then
+        if nvim --headless --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1; then
             if [ "$#" -gt 0 ]; then
                 local -a abs_args=()
                 local arg dir base
@@ -188,6 +188,34 @@ v() {
         vim "$@"
     else
         vi "$@"
+    fi
+}
+
+# Dive IDE Workspace (`icd [dir|--reset|~]`):
+# Synchronizes the working directory across the current shell, Left Directory Tree,
+# Main Neovim Editor, and AI Agent (`--continue` in new $PWD).
+icd() {
+    local ide_bin="$HOME/.local/bin/ide"
+    if [ ! -x "$ide_bin" ] && command -v ide >/dev/null 2>&1; then
+        ide_bin="$(command -v ide)"
+    fi
+
+    if [ "${1:-}" = "--reset" ] || [ "${1:-}" = "~" ]; then
+        local init_root=""
+        if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+            init_root="$(tmux show-options -qv @ide_initial_root 2>/dev/null || true)"
+        fi
+        if [ -n "$init_root" ] && [ -d "$init_root" ]; then
+            builtin cd -- "$init_root" || return 1
+        else
+            builtin cd || return 1
+        fi
+    elif [ "$#" -gt 0 ]; then
+        builtin cd -- "$1" || return 1
+    fi
+
+    if [ -n "${TMUX:-}" ] && [ -x "$ide_bin" ]; then
+        IDE_CD_SKIP_SHELL=1 "$ide_bin" --cd "$PWD"
     fi
 }
 
