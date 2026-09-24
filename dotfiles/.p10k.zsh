@@ -1030,7 +1030,9 @@
   _p9k_solarized_install_segments
 
   function p10k-on-init() {
-    _p9k_solarized_install_segments
+    if (( $+functions[_p9k_solarized_install_segments] )); then
+      _p9k_solarized_install_segments
+    fi
   }
 
   # Disable the default Git status formatting.

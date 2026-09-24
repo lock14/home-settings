@@ -713,6 +713,17 @@ EOF
         fi
     )
 
+    (
+        unfunction _p9k_solarized_install_segments 2>/dev/null
+        local early_err
+        early_err=$(p10k-on-init 2>&1)
+        if [ -z "$early_err" ]; then
+            echo "PASS:p10k-on-init safely ignores missing _p9k_solarized_install_segments during early instant prompt initialization"
+        else
+            echo "FAIL:p10k-on-init early invocation:Got '$early_err'"
+        fi
+    )
+
     # 5. Verify _p9k_solarized_project_active right-prompt toolchain scoping (suppresses parent package.json in nested terraform/ghes-cluster-gcp)
     local proj_root="$TEMP_HOME/Google"
     mkdir -p "$proj_root/terraform/ghes-cluster-gcp" \
