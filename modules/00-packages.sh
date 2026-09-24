@@ -26,7 +26,7 @@ if [ "$SKIP_PACKAGES" = false ]; then
     echo "  Installing core system packages for $OS..."
     case "$OS" in
         ubuntu)
-            pkgs="git curl wget vim neovim zsh fzf fontconfig dconf-cli shellcheck command-not-found bat fd-find ripgrep zoxide tree"
+            pkgs="git curl wget vim neovim tmux zsh fzf fontconfig dconf-cli shellcheck command-not-found bat fd-find ripgrep zoxide tree"
             if [ "$SKIP_DB" = false ]; then
                 pkgs="$pkgs postgresql-client mariadb-client"
             fi
@@ -35,7 +35,7 @@ if [ "$SKIP_PACKAGES" = false ]; then
             run_cmd sudo apt-get install -y $pkgs
             ;;
         fedora)
-            pkgs="git curl wget vim neovim zsh fzf fontconfig dconf snapd util-linux-user bat fd-find ripgrep zoxide eza tree"
+            pkgs="git curl wget vim neovim tmux zsh fzf fontconfig dconf snapd util-linux-user bat fd-find ripgrep zoxide eza tree"
             if [ "$SKIP_DB" = false ]; then
                 pkgs="$pkgs postgresql mariadb"
             fi
@@ -63,7 +63,7 @@ if [ "$SKIP_PACKAGES" = false ]; then
                     fi
                 fi
             fi
-            pkgs="git curl wget vim neovim zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza tree"
+            pkgs="git curl wget vim neovim tmux zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza tree"
             if [ "$SKIP_DB" = false ]; then
                 pkgs="$pkgs libpq"
             fi

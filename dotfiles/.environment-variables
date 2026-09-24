@@ -31,6 +31,9 @@ elif command -v vi >/dev/null 2>&1; then
 fi
 export VISUAL="$EDITOR"
 
+# Default AI CLI agent for Hybrid IDE workspace (`ide` & Tmux `Alt+a` popup: agy | claude | codex)
+export IDE_AI_CLI="${IDE_AI_CLI:-agy}"
+
 # bat theme and rendering configuration
 export BAT_THEME="Solarized-Dark-TrueColor"
 export BAT_OPTS="--italic-text=always"

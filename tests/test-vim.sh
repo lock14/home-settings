@@ -76,10 +76,12 @@ else
     fail "Vim highlight persistence" "Inline Solarized Dark highlights were reset by :syntax on or :set background=dark"
 fi
 
-# Test 4: Verify Home key mapping
-echo -e "\n[4/6] Testing key mappings..."
+# Test 4: Verify Home key mapping, Netrw project tree sidebar, and TmuxNavigate in .vimrc
+echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
+check_option "get(g:, 'netrw_banner', -1) == 0 && get(g:, 'netrw_liststyle', -1) == 3 && get(g:, 'netrw_browse_split', -1) == 4 && get(g:, 'netrw_winsize', -1) == 20" "Vim Netrw configured as tree sidebar (netrw_liststyle=3, browse_split=4, winsize=20)"
+check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore and <C-h/j/k/l> mapped to s:TmuxNavigate"
 
 # Test 5: Verify fallback Vim zero-external-dependency architecture
 echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."
@@ -99,6 +101,28 @@ if [ -f "$NVIM_CONFIG" ]; then
         pass "Neovim init.lua contains Solarized, Treesitter, Telescope, and Mason LSP"
     else
         fail "Neovim plugins" "Missing expected plugin declarations in init.lua"
+    fi
+
+    if grep -q 'smart_tmux_nav' "$NVIM_CONFIG" && \
+       grep -q 'window_zoomed_flag' "$NVIM_CONFIG" && \
+       grep -q 'netrw_liststyle = 3' "$NVIM_CONFIG" && \
+       grep -q 'NVIM_IDE_LAYOUT' "$NVIM_CONFIG" && \
+       grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
+       grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
+       grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua configures smart_tmux_nav, Netrw tree sidebar (:Lexplore), SolarizedIdeLayout autocmd, and Mini.files navigator (<leader>E)"
+    else
+        fail "Neovim IDE integration" "Missing smart_tmux_nav, Netrw tree sidebar, or Mini.files setup in init.lua"
+    fi
+
+    if grep -q 'nvim_create_user_command("IdeClose"' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_user_command("IdeWriteClose"' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_user_command("Q"' "$NVIM_CONFIG" && \
+       grep -q 'SolarizedIdeTree' "$NVIM_CONFIG" && \
+       ! grep -q 'nvim_create_autocmd("VimLeave"' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua keeps IDE Editor pane alive on :q/:wq (IdeClose/IdeWriteClose) while providing :Q/:qa/<leader>q/<M-q> to quit the entire IDE workspace"
+    else
+        fail "Neovim IDE quit safety" "Expected IdeClose, IdeWriteClose, Q, SolarizedIdeTree, and no VimLeave session-killer in init.lua"
     fi
 
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \

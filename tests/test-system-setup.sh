@@ -88,8 +88,8 @@ fi
 echo -e "\n[3/5] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
-        pass "setup.sh --os ubuntu --dry-run executes cleanly with client DB tools and skips GUI apps"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" == *"tmux"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
+        pass "setup.sh --os ubuntu --dry-run executes cleanly with tmux, client DB tools, and skips GUI apps"
     else
         fail "setup.sh ubuntu dry-run output" "Unexpected output: $output"
     fi

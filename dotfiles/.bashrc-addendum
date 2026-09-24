@@ -29,6 +29,7 @@ else
         export EDITOR=vi
     fi
     export VISUAL="$EDITOR"
+    export IDE_AI_CLI="${IDE_AI_CLI:-agy}"
 
     export BAT_THEME="${BAT_THEME:-Solarized-Dark-TrueColor}"
     export BAT_OPTS="${BAT_OPTS:---italic-text=always}"
@@ -84,12 +85,8 @@ else
     if command -v nvim >/dev/null 2>&1; then
         alias vi='nvim'
         alias vim='nvim'
-        alias v='nvim'
     elif command -v vim >/dev/null 2>&1; then
         alias vi='vim'
-        alias v='vim'
-    else
-        alias v='vi'
     fi
 
     if command -v bat >/dev/null 2>&1; then
@@ -115,7 +112,84 @@ else
         alias e='eza --icons=auto --group-directories-first'
         alias el='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso'
     fi
+    alias ide2='ide --2pane'
+    alias ide3='ide --3pane'
+    alias idek='ide --kill'
+    alias qide='ide --quit'
 fi
+
+# Hybrid IDE RPC-aware editor launcher (`v [files...]`)
+unalias v 2>/dev/null || true
+v() {
+    local sock="${NVIM_IDE_SOCKET:-}"
+    local pane="${NVIM_IDE_PANE:-}"
+    local tmux_sock=""
+    if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+        tmux_sock="$(tmux show-options -qv @ide_socket 2>/dev/null || true)"
+        if [ -z "$tmux_sock" ]; then
+            local env_sock
+            env_sock="$(tmux show-environment NVIM_IDE_SOCKET 2>/dev/null || true)"
+            if [[ "$env_sock" == NVIM_IDE_SOCKET=* ]]; then
+                tmux_sock="${env_sock#NVIM_IDE_SOCKET=}"
+            fi
+        fi
+        [ -z "$sock" ] && sock="$tmux_sock"
+    fi
+    if [ -z "$pane" ] && [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+        pane="$(tmux show-options -qv @ide_editor_pane 2>/dev/null || true)"
+        if [ -z "$pane" ]; then
+            local env_pane
+            env_pane="$(tmux show-environment NVIM_IDE_PANE 2>/dev/null || true)"
+            if [[ "$env_pane" == NVIM_IDE_PANE=* ]]; then
+                pane="${env_pane#NVIM_IDE_PANE=}"
+            fi
+        fi
+    fi
+
+    if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+        if nvim --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1; then
+            if [ "$#" -gt 0 ]; then
+                local -a abs_args=()
+                local arg dir base
+                for arg in "$@"; do
+                    if [[ "$arg" == /* ]]; then
+                        abs_args+=("$arg")
+                    else
+                        dir="$(dirname -- "$arg")"
+                        base="$(basename -- "$arg")"
+                        if [ -d "$dir" ]; then
+                            abs_args+=("$(cd -- "$dir" && pwd -P)/$base")
+                        else
+                            abs_args+=("$PWD/${arg#./}")
+                        fi
+                    fi
+                done
+                nvim --server "$sock" --remote "${abs_args[@]}"
+            fi
+            if [ -n "${TMUX:-}" ] && { [ -z "$tmux_sock" ] || [ "$sock" = "$tmux_sock" ]; }; then
+                if [ -x "$HOME/.local/bin/ide" ]; then
+                    "$HOME/.local/bin/ide" --show-editor >/dev/null 2>&1 || true
+                elif command -v ide >/dev/null 2>&1; then
+                    ide --show-editor >/dev/null 2>&1 || true
+                elif [ -n "$pane" ]; then
+                    tmux select-window -t "$pane" 2>/dev/null || true
+                    tmux select-pane -t "$pane" 2>/dev/null || true
+                fi
+            fi
+            return 0
+        else
+            rm -f "$sock" 2>/dev/null || true
+        fi
+    fi
+
+    if command -v nvim >/dev/null 2>&1; then
+        nvim "$@"
+    elif command -v vim >/dev/null 2>&1; then
+        vim "$@"
+    else
+        vi "$@"
+    fi
+}
 
 alias grep='grep --color=auto'
 alias egrep='grep -E --color=auto'
@@ -302,12 +376,12 @@ _solarized_detect_os_icon() {
     fi
 
     if [[ "${OSTYPE:-}" == darwin* ]] || { [ -z "${OSTYPE:-}" ] && [ "$(uname -s 2>/dev/null)" = "Darwin" ]; }; then
-        printf '%s' ''    # \uF179 macOS
+        printf '%s' $'\xef\x85\xb9'    # \uF179 macOS
         return 0
     fi
 
     if [[ "${OSTYPE:-}" == *bsd* ]]; then
-        printf '%s' ''    # \uF30C FreeBSD
+        printf '%s' $'\xef\x8c\x8c'    # \uF30C FreeBSD
         return 0
     fi
 
@@ -343,33 +417,33 @@ _solarized_detect_os_icon() {
     fi
 
     case "$id" in
-        ubuntu)                 printf '%s' '' ;; # \uF31B
-        debian)                 printf '%s' '' ;; # \uF306
-        fedora)                 printf '%s' '' ;; # \uF30A
-        arch|archarm)           printf '%s' '' ;; # \uF303
-        manjaro)                printf '%s' '' ;; # \uF312
-        pop)                    printf '%s' '' ;; # \uF32A
-        linuxmint|mint)         printf '%s' '' ;; # \uF30E
-        rhel)                   printf '%s' '' ;; # \uF316
-        centos)                 printf '%s' '' ;; # \uF304
-        rocky)                  printf '%s' '' ;; # \uF32B
-        almalinux)              printf '%s' '' ;; # \uF31D
-        opensuse*|suse|sles)    printf '%s' '' ;; # \uF314
-        alpine)                 printf '%s' '' ;; # \uF300
-        nixos)                  printf '%s' '' ;; # \uF313
-        raspbian)               printf '%s' '' ;; # \uF315
-        gentoo)                 printf '%s' '' ;; # \uF30D
-        void)                   printf '%s' '' ;; # \uF32E
+        ubuntu)                 printf '%s' $'\xef\x8c\x9b' ;; # \uF31B
+        debian)                 printf '%s' $'\xef\x8c\x86' ;; # \uF306
+        fedora)                 printf '%s' $'\xef\x8c\x8a' ;; # \uF30A
+        arch|archarm)           printf '%s' $'\xef\x8c\x83' ;; # \uF303
+        manjaro)                printf '%s' $'\xef\x8c\x92' ;; # \uF312
+        pop)                    printf '%s' $'\xef\x8c\xaa' ;; # \uF32A
+        linuxmint|mint)         printf '%s' $'\xef\x8c\x8e' ;; # \uF30E
+        rhel)                   printf '%s' $'\xef\x8c\x96' ;; # \uF316
+        centos)                 printf '%s' $'\xef\x8c\x84' ;; # \uF304
+        rocky)                  printf '%s' $'\xef\x8c\xab' ;; # \uF32B
+        almalinux)              printf '%s' $'\xef\x8c\x9d' ;; # \uF31D
+        opensuse*|suse|sles)    printf '%s' $'\xef\x8c\x94' ;; # \uF314
+        alpine)                 printf '%s' $'\xef\x8c\x80' ;; # \uF300
+        nixos)                  printf '%s' $'\xef\x8c\x93' ;; # \uF313
+        raspbian)               printf '%s' $'\xef\x8c\x95' ;; # \uF315
+        gentoo)                 printf '%s' $'\xef\x8c\x8d' ;; # \uF30D
+        void)                   printf '%s' $'\xef\x8c\xae' ;; # \uF32E
         *)
             case "$id_like" in
-                *ubuntu*)       printf '%s' '' ;;
-                *debian*)       printf '%s' '' ;;
-                *fedora*)       printf '%s' '' ;;
-                *rhel*)         printf '%s' '' ;;
-                *centos*)       printf '%s' '' ;;
-                *arch*)         printf '%s' '' ;;
-                *suse*)         printf '%s' '' ;;
-                *)              printf '%s' '' ;; # \uF17C Default Linux Tux
+                *ubuntu*)       printf '%s' $'\xef\x8c\x9b' ;;
+                *debian*)       printf '%s' $'\xef\x8c\x86' ;;
+                *fedora*)       printf '%s' $'\xef\x8c\x8a' ;;
+                *rhel*)         printf '%s' $'\xef\x8c\x96' ;;
+                *centos*)       printf '%s' $'\xef\x8c\x84' ;;
+                *arch*)         printf '%s' $'\xef\x8c\x83' ;;
+                *suse*)         printf '%s' $'\xef\x8c\x94' ;;
+                *)              printf '%s' $'\xef\x85\xbc' ;; # \uF17C Default Linux Tux
             esac
             ;;
     esac
@@ -388,10 +462,10 @@ _solarized_bash_prompt() {
     local c_green='\[\e[38;2;133;153;0m\]'
     local c_yellow='\[\e[38;2;181;137;0m\]'
     local c_red='\[\e[38;2;220;50;47m\]'
-    local subsep=''   # \uE0B1 thin directional chevron
-    local endcap=''   # \uE0B0 solid right-pointing wedge cap
-    local git_icon=' ' # \uF126 branch icon
-    local sym='❯'
+    local subsep=$'\xee\x82\xb1'   # \uE0B1 thin directional chevron
+    local endcap=$'\xee\x82\xb0'   # \uE0B0 solid right-pointing wedge cap
+    local git_icon=$'\xef\x84\xa6 ' # \uF126 branch icon
+    local sym=$'\xe2\x9d\xaf'      # \u276F prompt chevron (used only in non-endcap fallback)
     local os_icon=""
     if [ -n "${_SOLARIZED_PROMPT_OS_ICON_CACHED:-}" ] && [ "${_SOLARIZED_PROMPT_OSTYPE_CACHED:-}" = "${OSTYPE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_RELEASE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
         os_icon="$_SOLARIZED_PROMPT_OS_ICON_CACHED"
@@ -574,10 +648,10 @@ _solarized_bash_prompt() {
                     fi
 
                     case "$remote_url" in
-                        *[gG][iI][tT][hH][uU][bB]*)                 vcs_host_icon=' ' ;; # \uF113 GitHub
-                        *[gG][iI][tT][lL][aA][bB]*)                 vcs_host_icon=' ' ;; # \uF296 GitLab
-                        *[bB][iI][tT][bB][uU][cC][kK][eE][tT]*)     vcs_host_icon=' ' ;; # \uF171 Bitbucket
-                        *)                                          vcs_host_icon=' ' ;; # \uF1D3 Default Git
+                        *[gG][iI][tT][hH][uU][bB]*)                 vcs_host_icon=$'\xef\x84\x93 ' ;; # \uF113 GitHub
+                        *[gG][iI][tT][lL][aA][bB]*)                 vcs_host_icon=$'\xef\x8a\x96 ' ;; # \uF296 GitLab
+                        *[bB][iI][tT][bB][uU][cC][kK][eE][tT]*)     vcs_host_icon=$'\xef\x85\xb1 ' ;; # \uF171 Bitbucket
+                        *)                                          vcs_host_icon=$'\xef\x87\x93 ' ;; # \uF1D3 Default Git
                     esac
                 fi
 

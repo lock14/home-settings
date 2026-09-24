@@ -1,0 +1,629 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# bin/ide — Hybrid Terminal IDE Workspace Launcher (Tmux + Neovim RPC + AI)
+# ==============================================================================
+# Default Layout (--3pane, 3-pane hybrid with In-Place Main Pane Toggle):
+#   - Left Pane (20% width, full height): Persistent Directory Tree (`SolarizedIdeTree`)
+#   - Top-Right Main Pane (80% width, 75% height): Toggles in-place (Alt+a / Space+a / Ctrl+b a)
+#     between Neovim (listening on $NVIM_IDE_SOCKET) and the AI Agent CLI
+#     controlled by $IDE_AI_CLI (agy | claude | codex)
+#   - Bottom-Right Pane (80% width, 25% height): Permanently anchored interactive shell
+#   - Floating Modal (Alt+Shift+a): Optional overlay popup
+#
+# Optional Layout (--2pane):
+#   - Top Main Pane (75% height): Toggles in-place between Neovim and AI Agent CLI
+#   - Bottom Pane (25% height): Permanently anchored interactive shell
+# ==============================================================================
+
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: ide [OPTIONS] [DIRECTORY]
+
+Launch or attach to a Solarized Dark Tmux + Neovim IDE workspace session.
+
+Options:
+  --3pane                  Launch default 3-pane hybrid layout (Left 20% Directory Tree, Top-Right 80%x75% Main [Editor <-> AI], Bottom-Right 80%x25% Shell)
+  --2pane                  Launch 2-pane hybrid layout (Top 75% Main [Editor <-> AI], Bottom 25% Shell)
+  --ai, --agent <CLI>      Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
+  --open <FILE>            Open <FILE> in the Main Editor pane via RPC and focus Editor
+  --preview <FILE>         Preview <FILE> in the Main Editor pane via RPC while keeping focus in Tree
+  --toggle [SESSION]       Toggle the Main Pane in-place between the Text Editor and the AI Agent
+  --show-editor [SESSION]  Ensure the Text Editor pane is swapped into the Main Pane and focused
+  --show-ai [SESSION]      Ensure the AI Agent pane is swapped into the Main Pane and focused
+  quit, -q, --quit         Safely quit the entire IDE workspace (checks for unsaved Neovim buffers first)
+  -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
+  --detach                 Create/update workspace session in background without attaching
+  --kill [NAME]            Terminate the specified IDE session (or current directory's session)
+  --list                   List active tmux IDE sessions
+  -h, --help               Show this help message and exit
+
+Environment Variables:
+  IDE_AI_CLI               AI CLI tool for the Main Pane toggle: agy (default), claude, or codex
+EOF
+}
+
+if ! command -v tmux >/dev/null 2>&1; then
+    echo "Error: 'tmux' is not installed. Run './setup.sh' to install core packages." >&2
+    exit 1
+fi
+
+LAYOUT_MODE="3pane"
+ACTION="launch"
+DETACH_MODE="${IDE_NO_ATTACH:-0}"
+FORCE_QUIT="0"
+AI_CLI="${IDE_AI_CLI:-agy}"
+AI_CLI_FROM_FLAG="0"
+TARGET_ARG=""
+OPEN_FILE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --2pane)
+            LAYOUT_MODE="2pane"
+            shift
+            ;;
+        --3pane)
+            LAYOUT_MODE="3pane"
+            shift
+            ;;
+        --ai|--agent)
+            if [ $# -lt 2 ] || [[ "$2" == -* ]]; then
+                echo "Error: '$1' requires an argument (agy, claude, or codex)." >&2
+                exit 1
+            fi
+            AI_CLI="$2"
+            AI_CLI_FROM_FLAG="1"
+            shift 2
+            ;;
+        --ai=*|--agent=*)
+            AI_CLI="${1#*=}"
+            AI_CLI_FROM_FLAG="1"
+            shift
+            ;;
+        --open)
+            ACTION="open"
+            if [ $# -lt 2 ]; then
+                echo "Error: '--open' requires a file path." >&2
+                exit 1
+            fi
+            OPEN_FILE="$2"
+            shift 2
+            ;;
+        --preview)
+            ACTION="preview"
+            if [ $# -lt 2 ]; then
+                echo "Error: '--preview' requires a file path." >&2
+                exit 1
+            fi
+            OPEN_FILE="$2"
+            shift 2
+            ;;
+        --toggle)
+            ACTION="toggle"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --show-editor)
+            ACTION="show-editor"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --show-ai)
+            ACTION="show-ai"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --run-ai-popup)
+            ACTION="run-ai-popup"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        quit|-q|--quit)
+            ACTION="quit"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        -f|--force)
+            FORCE_QUIT="1"
+            shift
+            ;;
+        --detach)
+            DETACH_MODE="1"
+            shift
+            ;;
+        --list)
+            ACTION="list"
+            shift
+            ;;
+        --kill)
+            ACTION="kill"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "Error: Unknown option '$1'" >&2
+            usage >&2
+            exit 1
+            ;;
+        *)
+            TARGET_ARG="$1"
+            shift
+            ;;
+    esac
+done
+
+case "$AI_CLI" in
+    agy|claude|codex)
+        export IDE_AI_CLI="$AI_CLI"
+        ;;
+    openai)
+        export IDE_AI_CLI="codex"
+        ;;
+    *)
+        if command -v "$AI_CLI" >/dev/null 2>&1 || [ -x "$AI_CLI" ] || [ "$AI_CLI_FROM_FLAG" = "0" ]; then
+            export IDE_AI_CLI="$AI_CLI"
+        else
+            echo "Error: Invalid AI CLI '$AI_CLI'. Supported values are: agy, claude, codex (or an executable on PATH)." >&2
+            exit 1
+        fi
+        ;;
+esac
+
+resolve_ai_cmd() {
+    local cli="$1"
+    case "$cli" in
+        claude)
+            if command -v claude >/dev/null 2>&1; then
+                printf "claude"
+                return 0
+            fi
+            ;;
+        codex|openai)
+            if command -v codex >/dev/null 2>&1; then
+                printf "codex"
+                return 0
+            fi
+            ;;
+        agy)
+            if command -v agy >/dev/null 2>&1; then
+                printf "agy"
+                return 0
+            fi
+            ;;
+        *)
+            if command -v "$cli" >/dev/null 2>&1 || [ -x "$cli" ]; then
+                printf "%s" "$cli"
+                return 0
+            else
+                printf "%s -ic %q" "${SHELL:-/bin/zsh}" "$cli"
+                return 0
+            fi
+            ;;
+    esac
+
+    # Fallback chain if selected preset is not installed: agy -> claude -> codex
+    if command -v agy >/dev/null 2>&1; then
+        printf "agy"
+        return 0
+    elif command -v claude >/dev/null 2>&1; then
+        printf "claude"
+        return 0
+    elif command -v codex >/dev/null 2>&1; then
+        printf "codex"
+        return 0
+    fi
+    return 1
+}
+
+sanitize_session_name() {
+    local raw="$1"
+    local cleaned
+    cleaned="$(basename "$raw" | tr '.: ' '---' | tr -cd '[:alnum:]_-')"
+    if [ -z "$cleaned" ]; then
+        cleaned="workspace"
+    fi
+    printf "ide-%s" "$cleaned"
+}
+
+resolve_target_session() {
+    local arg="${1:-}"
+    if [ -n "$arg" ]; then
+        if [[ "$arg" == ide-* ]]; then
+            printf "%s" "$arg"
+        elif [ -d "$arg" ]; then
+            sanitize_session_name "$(cd "$arg" && pwd)"
+        else
+            printf "ide-%s" "$(printf "%s" "$arg" | tr '.: ' '---' | tr -cd '[:alnum:]_-')"
+        fi
+    elif [ -n "${TMUX:-}" ]; then
+        tmux display-message -p "#{session_name}" 2>/dev/null || sanitize_session_name "$PWD"
+    else
+        sanitize_session_name "$PWD"
+    fi
+}
+
+get_ide_var() {
+    local sess="$1"
+    local opt_name="$2"
+    local env_name="$3"
+    local val
+    val="$(tmux show-options -qv -t "$sess" "$opt_name" 2>/dev/null || true)"
+    if [ -z "$val" ]; then
+        val="$(tmux show-environment -t "$sess" "$env_name" 2>/dev/null | sed -n "s/^${env_name}=//p")"
+    fi
+    printf "%s" "$val"
+}
+
+set_ide_var() {
+    local sess="$1"
+    local opt_name="$2"
+    local env_name="$3"
+    local val="$4"
+    tmux set-option -q -t "$sess" "$opt_name" "$val" 2>/dev/null || true
+    tmux set-environment -t "$sess" "$env_name" "$val" 2>/dev/null || true
+}
+
+resolve_role_pane() {
+    local sess="$1"
+    local role="$2"
+    local opt_name="$3"
+    local env_name="$4"
+    local pane
+    pane="$(get_ide_var "$sess" "$opt_name" "$env_name")"
+    if [ -z "$pane" ] || ! tmux display-message -p -t "$pane" "#{pane_id}" >/dev/null 2>&1; then
+        pane="$(tmux list-panes -s -t "$sess" -F "#{pane_id} #{@ide_role}" 2>/dev/null | awk -v r="$role" '$2 == r { print $1; exit }')"
+        if [ -n "$pane" ]; then
+            set_ide_var "$sess" "$opt_name" "$env_name" "$pane"
+        fi
+    fi
+    printf "%s" "$pane"
+}
+
+toggle_main_pane() {
+    local mode="${1:-toggle}" # toggle | editor | ai
+    local sess
+    sess="$(resolve_target_session "$TARGET_ARG")"
+    if ! tmux has-session -t "$sess" 2>/dev/null; then
+        echo "Error: No active tmux session '$sess'." >&2
+        return 1
+    fi
+
+    local main_win editor_pane ai_pane term_pane tree_pane layout_mode ai_cli cur_dir sock
+    main_win="$(get_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN")"
+    tree_pane="$(resolve_role_pane "$sess" "tree" "@ide_tree_pane" "IDE_TREE_PANE")"
+    editor_pane="$(resolve_role_pane "$sess" "editor" "@ide_editor_pane" "NVIM_IDE_PANE")"
+    ai_pane="$(resolve_role_pane "$sess" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
+    term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
+    layout_mode="$(get_ide_var "$sess" "@ide_layout_mode" "IDE_LAYOUT_MODE")"
+    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+    ai_cli="$(get_ide_var "$sess" "@ide_ai_cli" "IDE_AI_CLI")"
+    [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
+
+    if [ -z "$main_win" ] || ! tmux display-message -p -t "$main_win" "#{window_id}" >/dev/null 2>&1; then
+        if [ -n "$term_pane" ] && tmux display-message -p -t "$term_pane" "#{window_id}" >/dev/null 2>&1; then
+            main_win="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
+        elif [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{window_id}" >/dev/null 2>&1; then
+            main_win="$(tmux display-message -p -t "$tree_pane" "#{window_id}")"
+        else
+            main_win="$(tmux list-windows -t "$sess" -F "#{window_id} #{window_name}" | awk '$2 != "_swap" { print $1; exit }')"
+        fi
+        set_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN" "$main_win"
+    fi
+
+    # Geometry fallback if session was created before per-pane @ide_role tags existed:
+    # In a 3-pane layout, Left is at left=0, Top-Right Editor is at left>0 && top==0, Bottom-Right Term is at top>0
+    if [ -z "$tree_pane" ] || ! tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+        local win_pane_cnt
+        win_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        if [ "${win_pane_cnt:-0}" -ge 3 ]; then
+            tree_pane="$(tmux list-panes -t "$main_win" -F "#{pane_left} #{pane_top} #{pane_id}" | sort -n -k1,1 -k2,2 | awk 'NR==1 { print $3 }')"
+            tmux set-option -p -t "$tree_pane" @ide_role "tree" 2>/dev/null || true
+            set_ide_var "$sess" "@ide_tree_pane" "IDE_TREE_PANE" "$tree_pane"
+        fi
+    fi
+
+    if [ -z "$editor_pane" ] || [ "$editor_pane" = "$tree_pane" ] || ! tmux display-message -p -t "$editor_pane" "#{pane_id}" >/dev/null 2>&1; then
+        editor_pane="$(tmux list-panes -t "$main_win" -F "#{pane_top} #{pane_left} #{pane_id}" | awk -v tp="$tree_pane" -v tm="$term_pane" '$3 != tp && $3 != tm { print $1, $2, $3 }' | sort -n -k1,1 -k2,2r | awk 'NR==1 { print $3 }')"
+        if [ -n "$editor_pane" ]; then
+            tmux set-option -p -t "$editor_pane" @ide_role "editor" 2>/dev/null || true
+            set_ide_var "$sess" "@ide_editor_pane" "NVIM_IDE_PANE" "$editor_pane"
+        fi
+    fi
+
+    cur_dir="$(tmux display-message -p -t "$editor_pane" "#{pane_current_path}" 2>/dev/null || pwd)"
+
+    # Unzoom main window prior to any split/swap so geometry is preserved
+    if [ "$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}" 2>/dev/null || echo 0)" = "1" ]; then
+        tmux resize-pane -Z -t "$main_win"
+    fi
+
+    # Lazily provision the persistent Left Directory Pane ONLY if main_win has < 3 panes and not in --2pane mode
+    if [ "${layout_mode:-3pane}" != "2pane" ]; then
+        if [ -z "$tree_pane" ] || ! tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+            tree_pane="$(tmux split-window -f -h -b -P -F "#{pane_id}" -t "$main_win" -l 20% -c "$cur_dir")"
+            tmux set-option -p -t "$tree_pane" @ide_role "tree" 2>/dev/null || true
+            set_ide_var "$sess" "@ide_tree_pane" "IDE_TREE_PANE" "$tree_pane"
+            set_ide_var "$sess" "@ide_layout_mode" "IDE_LAYOUT_MODE" "3pane"
+            if command -v nvim >/dev/null 2>&1; then
+                tmux send-keys -t "$tree_pane" "NVIM_IDE_TREE=1 NVIM_IDE_SOCKET='$sock' nvim ." C-m
+            fi
+        fi
+    fi
+
+    # Lazily create or recreate the background AI pane if not yet present
+    if [ -z "$ai_pane" ] || ! tmux display-message -p -t "$ai_pane" "#{pane_id}" >/dev/null 2>&1; then
+        ai_pane="$(tmux new-window -d -P -F "#{pane_id}" -t "${sess}:" -n "_swap" -c "$cur_dir")"
+        tmux set-option -p -t "$ai_pane" @ide_role "ai" 2>/dev/null || true
+        set_ide_var "$sess" "@ide_ai_pane" "IDE_AI_PANE" "$ai_pane"
+        local ai_run_cmd
+        if ai_run_cmd="$(resolve_ai_cmd "$ai_cli")"; then
+            tmux send-keys -t "$ai_pane" "$ai_run_cmd" C-m
+        fi
+    fi
+
+    local editor_win swap_win
+    editor_win="$(tmux display-message -p -t "$editor_pane" "#{window_id}")"
+
+    if [ "$editor_win" = "$main_win" ]; then
+        # Editor is currently occupying the Top-Right Main Pane
+        if [ "$mode" = "editor" ]; then
+            tmux select-window -t "$main_win"
+            tmux select-pane -t "$editor_pane"
+            return 0
+        fi
+        tmux swap-pane -d -s "$editor_pane" -t "$ai_pane"
+        swap_win="$(tmux display-message -p -t "$editor_pane" "#{window_id}")"
+        tmux rename-window -t "$swap_win" "_swap" 2>/dev/null || true
+        tmux rename-window -t "$main_win" "ai" 2>/dev/null || true
+        tmux select-window -t "$main_win"
+        tmux select-pane -t "$ai_pane"
+    else
+        # AI Agent is currently occupying the Top-Right Main Pane
+        if [ "$mode" = "ai" ]; then
+            tmux select-window -t "$main_win"
+            tmux select-pane -t "$ai_pane"
+            return 0
+        fi
+        tmux swap-pane -d -s "$ai_pane" -t "$editor_pane"
+        swap_win="$(tmux display-message -p -t "$ai_pane" "#{window_id}")"
+        tmux rename-window -t "$swap_win" "_swap" 2>/dev/null || true
+        tmux rename-window -t "$main_win" "code" 2>/dev/null || true
+        if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+            nvim --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+        fi
+        tmux select-window -t "$main_win"
+        tmux select-pane -t "$editor_pane"
+    fi
+}
+
+open_in_editor() {
+    local filepath="$1"
+    local focus="${2:-1}"
+    local sess sock tree_pane dir base
+    if [[ "$filepath" != /* ]]; then
+        dir="$(dirname -- "$filepath")"
+        base="$(basename -- "$filepath")"
+        if [ -d "$dir" ]; then
+            filepath="$(cd -- "$dir" && pwd -P)/$base"
+        else
+            filepath="$PWD/${filepath#./}"
+        fi
+    fi
+    sess="$(resolve_target_session "$TARGET_ARG")"
+    toggle_main_pane "editor"
+    tree_pane="$(get_ide_var "$sess" "@ide_tree_pane" "IDE_TREE_PANE")"
+    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+    if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+        nvim --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1 || true
+        nvim --server "$sock" --remote "$filepath" >/dev/null 2>&1 || true
+    fi
+    if [ "$focus" = "0" ] && [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+        tmux select-pane -t "$tree_pane"
+    fi
+}
+
+run_ai_popup() {
+    local sess
+    sess="$(resolve_target_session "$TARGET_ARG")"
+    tmux set-option -t "ai-${sess}" status off >/dev/null 2>&1 || true
+    local ai_cli
+    ai_cli="$(get_ide_var "$sess" "@ide_ai_cli" "IDE_AI_CLI")"
+    [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
+    local ai_cmd
+    if ai_cmd="$(resolve_ai_cmd "$ai_cli")"; then
+        eval "$ai_cmd" || true
+    fi
+    exec "${SHELL:-/bin/zsh}" -l
+}
+
+quit_ide() {
+    local sess sock modified
+    sess="$(resolve_target_session "$TARGET_ARG")"
+    if ! tmux has-session -t "$sess" 2>/dev/null; then
+        echo "No active IDE session named '$sess'."
+        return 0
+    fi
+
+    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+    if [ "$FORCE_QUIT" != "1" ] && [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+        modified="$(nvim --server "$sock" --remote-expr "len(getbufinfo({'bufmodified': 1}))" 2>/dev/null || echo 0)"
+        if [ "${modified:-0}" -gt 0 ] 2>/dev/null; then
+            toggle_main_pane "editor" || true
+            nvim --server "$sock" --remote-expr "execute('echohl ErrorMsg | echom \"Unsaved changes in buffer(s)! Save (:w / :wqa) or use :qa! / ide quit --force\" | echohl None')" >/dev/null 2>&1 || true
+            tmux display-message -t "$sess" "Unsaved changes in Neovim! Save (:wqa) or run 'ide quit --force'" 2>/dev/null || true
+            echo "Aborted quit: unsaved changes in Neovim buffer(s). Save first or use 'ide quit --force'." >&2
+            return 1
+        fi
+    fi
+
+    if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+        nvim --server "$sock" --remote-send "<C-\\><C-n>:qa!<CR>" >/dev/null 2>&1 || true
+    fi
+
+    RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+    rm -f "$sock" "${RUNTIME_DIR}/nvim-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock"
+    tmux kill-session -t "ai-${sess}" 2>/dev/null || true
+    tmux kill-session -t "agy-${sess}" 2>/dev/null || true
+    tmux kill-session -t "$sess" 2>/dev/null || true
+}
+
+if [ "$ACTION" = "open" ]; then
+    open_in_editor "$OPEN_FILE" "1"
+    exit 0
+elif [ "$ACTION" = "preview" ]; then
+    open_in_editor "$OPEN_FILE" "0"
+    exit 0
+elif [ "$ACTION" = "toggle" ]; then
+    toggle_main_pane "toggle"
+    exit 0
+elif [ "$ACTION" = "show-editor" ]; then
+    toggle_main_pane "editor"
+    exit 0
+elif [ "$ACTION" = "show-ai" ]; then
+    toggle_main_pane "ai"
+    exit 0
+elif [ "$ACTION" = "run-ai-popup" ]; then
+    run_ai_popup
+    exit 0
+elif [ "$ACTION" = "quit" ]; then
+    quit_ide
+    exit $?
+fi
+
+if [ "$ACTION" = "list" ]; then
+    tmux list-sessions 2>/dev/null || echo "No active tmux sessions."
+    exit 0
+fi
+
+if [ "$ACTION" = "kill" ]; then
+    FORCE_QUIT="1"
+    quit_ide
+    echo "Terminated IDE session: $(resolve_target_session "$TARGET_ARG")"
+    exit 0
+fi
+
+TARGET_DIR="${TARGET_ARG:-$PWD}"
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: Directory '$TARGET_DIR' does not exist." >&2
+    exit 1
+fi
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+
+SESSION="$(sanitize_session_name "$TARGET_DIR")"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+NVIM_SOCKET="${RUNTIME_DIR}/nvim-ide-${SESSION}.sock"
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    # Clean up any stale socket from an abnormal exit
+    rm -f "$NVIM_SOCKET"
+
+    COLS="$(tput cols 2>/dev/null || echo 160)"
+    LINES="$(tput lines 2>/dev/null || echo 48)"
+    [ "$COLS" -lt 80 ] && COLS=160
+    [ "$LINES" -lt 24 ] && LINES=48
+
+    if [ "$LAYOUT_MODE" = "3pane" ]; then
+        PANE_TREE="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "code" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+        MAIN_WIN="$(tmux display-message -p -t "$PANE_TREE" "#{window_id}")"
+        tmux set-option -p -t "$PANE_TREE" @ide_role "tree"
+        set_ide_var "$SESSION" "@ide_tree_pane" "IDE_TREE_PANE" "$PANE_TREE"
+        PANE_EDITOR="$(tmux split-window -h -P -F "#{pane_id}" -t "$PANE_TREE" -l 80% -c "$TARGET_DIR" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+        NVIM_LAYOUT_ENV="0"
+    else
+        PANE_EDITOR="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "code" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+        MAIN_WIN="$(tmux display-message -p -t "$PANE_EDITOR" "#{window_id}")"
+        NVIM_LAYOUT_ENV="1"
+    fi
+
+    tmux set-option -p -t "$PANE_EDITOR" @ide_role "editor"
+    set_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI" "$IDE_AI_CLI"
+    set_ide_var "$SESSION" "@ide_socket" "NVIM_IDE_SOCKET" "$NVIM_SOCKET"
+    set_ide_var "$SESSION" "@ide_main_win" "IDE_MAIN_WIN" "$MAIN_WIN"
+    set_ide_var "$SESSION" "@ide_editor_pane" "NVIM_IDE_PANE" "$PANE_EDITOR"
+    set_ide_var "$SESSION" "@ide_layout_mode" "IDE_LAYOUT_MODE" "$LAYOUT_MODE"
+
+    PANE_TERM="$(tmux split-window -v -P -F "#{pane_id}" -t "$PANE_EDITOR" -l 25% -c "$TARGET_DIR" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "NVIM_IDE_PANE=$PANE_EDITOR")"
+    tmux set-option -p -t "$PANE_TERM" @ide_role "term"
+    set_ide_var "$SESSION" "@ide_term_pane" "IDE_TERM_PANE" "$PANE_TERM"
+
+    # Create detached background AI Agent pane for instant in-place swapping (Alt+a)
+    PANE_AI="$(tmux new-window -d -P -F "#{pane_id}" -t "${SESSION}:" -n "_swap" -c "$TARGET_DIR" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET")"
+    tmux set-option -p -t "$PANE_AI" @ide_role "ai"
+    set_ide_var "$SESSION" "@ide_ai_pane" "IDE_AI_PANE" "$PANE_AI"
+
+    if command -v nvim >/dev/null 2>&1; then
+        if [ "$LAYOUT_MODE" = "3pane" ]; then
+            tmux send-keys -t "$PANE_TREE" "NVIM_IDE_TREE=1 NVIM_IDE_SOCKET='$NVIM_SOCKET' nvim ." C-m
+        fi
+        tmux send-keys -t "$PANE_EDITOR" "NVIM_IDE_LAYOUT=$NVIM_LAYOUT_ENV NVIM_IDE_SOCKET='$NVIM_SOCKET' nvim --listen '$NVIM_SOCKET'" C-m
+    elif command -v vim >/dev/null 2>&1; then
+        if [ "$LAYOUT_MODE" = "3pane" ]; then
+            tmux send-keys -t "$PANE_TREE" "vim ." C-m
+        fi
+        tmux send-keys -t "$PANE_EDITOR" "vim" C-m
+    fi
+
+    if AI_RUN_CMD="$(resolve_ai_cmd "$IDE_AI_CLI")"; then
+        tmux send-keys -t "$PANE_AI" "$AI_RUN_CMD" C-m
+    fi
+
+    tmux select-window -t "$MAIN_WIN"
+    tmux select-pane -t "$PANE_EDITOR"
+else
+    # Only update IDE_AI_CLI on an existing session when --ai was explicitly passed
+    if [ "$AI_CLI_FROM_FLAG" = "1" ]; then
+        EXISTING_AI_CLI="$(get_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI")"
+        set_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI" "$IDE_AI_CLI"
+        if [ "$IDE_AI_CLI" != "$EXISTING_AI_CLI" ]; then
+            tmux kill-session -t "ai-${SESSION}" 2>/dev/null || true
+            AI_PANE_ID="$(resolve_role_pane "$SESSION" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
+            if [ -n "$AI_PANE_ID" ] && tmux display-message -p -t "$AI_PANE_ID" "#{pane_id}" >/dev/null 2>&1; then
+                tmux respawn-pane -k -t "$AI_PANE_ID" -c "$TARGET_DIR" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" 2>/dev/null || \
+                    tmux respawn-pane -k -t "$AI_PANE_ID" -c "$TARGET_DIR" "env IDE_AI_CLI='$IDE_AI_CLI' NVIM_IDE_SOCKET='$NVIM_SOCKET' ${SHELL:-/bin/zsh} -l" 2>/dev/null || true
+                if AI_RUN_CMD="$(resolve_ai_cmd "$IDE_AI_CLI")"; then
+                    tmux send-keys -t "$AI_PANE_ID" "$AI_RUN_CMD" C-m
+                fi
+            fi
+        fi
+    fi
+fi
+
+if [ "$DETACH_MODE" = "1" ]; then
+    exit 0
+fi
+
+if [ -n "${TMUX:-}" ]; then
+    exec tmux switch-client -t "$SESSION"
+else
+    exec tmux attach-session -t "$SESSION"
+fi
