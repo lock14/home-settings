@@ -40,7 +40,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    local expected_aliases=(gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf yaml-lint vi v ls ll la l)
+    local expected_aliases=(gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf yaml-lint vi ls ll la l)
     if command -v eza >/dev/null 2>&1; then
         expected_aliases+=(e el elm et elt elx)
     fi
@@ -78,13 +78,55 @@ test_functions() {
     source "$SCRIPT_DIR/dotfiles/.aliases"
     source "$SCRIPT_DIR/dotfiles/.zsh-functions"
 
-    for expected_func in fs gsync; do
+    for expected_func in v fs gsync; do
         if typeset -f "$expected_func" >/dev/null 2>&1; then
             echo "PASS:$expected_func"
         else
             echo "FAIL:$expected_func:function not found"
         fi
     done
+
+    # Test v() RPC routing with a live Neovim server socket (including subdirectory relative paths, Netrw sidebar guard, and stale socket cleanup)
+    if command -v nvim >/dev/null 2>&1; then
+        local test_sock="/tmp/nvim-ide-zsh-test-$$.sock"
+        rm -f "$test_sock"
+        (cd "$SCRIPT_DIR" && nvim --headless --listen "$test_sock" -c "Lexplore" >/dev/null 2>&1) &
+        local nvim_pid=$!
+        local tries=0
+        while [ ! -S "$test_sock" ] && [ "$tries" -lt 30 ]; do
+            sleep 0.05
+            tries=$((tries + 1))
+        done
+        if [ -S "$test_sock" ]; then
+            (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$test_sock" v "00-packages.sh" >/dev/null 2>&1) || true
+            local remote_state
+            remote_state="$(nvim --server "$test_sock" --remote-expr 'getwinvar(1, "&filetype") . "|" . winnr() . "|" . expand("%:p")' 2>/dev/null || true)"
+            kill "$nvim_pid" 2>/dev/null || true
+            rm -f "$test_sock"
+            if [ "$remote_state" = "netrw|2|$SCRIPT_DIR/modules/00-packages.sh" ]; then
+                echo "PASS:v() resolves subdirectory relative paths accurately and preserves Netrw sidebar window over RPC"
+            else
+                echo "FAIL:v() RPC routing:Expected 'netrw|2|$SCRIPT_DIR/modules/00-packages.sh', got '$remote_state'"
+            fi
+        else
+            kill "$nvim_pid" 2>/dev/null || true
+            rm -f "$test_sock"
+        fi
+
+        if command -v python3 >/dev/null 2>&1; then
+            local stale_sock="/tmp/nvim-ide-stale-$$.sock"
+            python3 -c "import socket, os; s=socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.bind('$stale_sock'); s.close()" 2>/dev/null || true
+            if [ -S "$stale_sock" ]; then
+                TMUX="" NVIM_IDE_SOCKET="$stale_sock" v --version >/dev/null 2>&1 || true
+                if [ ! -e "$stale_sock" ]; then
+                    echo "PASS:v() detects and cleans up stale NVIM_IDE_SOCKET before falling back to local nvim"
+                else
+                    rm -f "$stale_sock"
+                    echo "FAIL:v() stale socket cleanup:Stale socket '$stale_sock' was not removed"
+                fi
+            fi
+        fi
+    fi
 
     # Test fs execution with aliases active
     if command -v tree >/dev/null 2>&1 && (command -v fd >/dev/null 2>&1 || command -v fdfind >/dev/null 2>&1); then
@@ -501,7 +543,7 @@ test_addendum() {
         P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
         prompt_vcs
         if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#859900" ] && \
-           [ "${P10K_SEG_ICON%% }" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"main"* ]]; then
+           [ "${P10K_SEG_ICON%% }" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *$'\uF126 '* && "$P10K_SEG_TEXT" == *"main"* ]]; then
             echo "PASS:prompt_vcs renders clean standard Git repo with default Git icon () on Base02 (#073642) shelf in Solarized Green (#859900)"
         else
             echo "FAIL:prompt_vcs clean files repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
@@ -589,7 +631,7 @@ EOF
         P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_TEXT=""
         prompt_vcs
         if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#B58900" ] && \
-           [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"feature%%20test"* ]] && [[ "$P10K_SEG_TEXT" == *"+1"* ]] && \
+           [[ "$P10K_SEG_TEXT" == *$'\uF126 '* && "$P10K_SEG_TEXT" == *"feature%%20test"* ]] && [[ "$P10K_SEG_TEXT" == *"+1"* ]] && \
            [[ "$P10K_SEG_TEXT" == *"!1"* ]] && [[ "$P10K_SEG_TEXT" == *"?1"* ]]; then
             echo "PASS:prompt_vcs renders dirty counts (+1 !1 ?1) and %% branch escaping in Solarized Yellow (#B58900) on Base02 shelf"
         else
@@ -599,7 +641,7 @@ EOF
         git checkout --detach HEAD >/dev/null 2>&1
         P10K_SEG_TEXT=""
         prompt_vcs
-        if [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"%F{#586E75}@"* ]]; then
+        if [[ "$P10K_SEG_TEXT" == *$'\uF126 '* && "$P10K_SEG_TEXT" == *"%F{#586E75}@"* ]]; then
             echo "PASS:prompt_vcs renders detached HEAD short SHA with Base01 @ prefix"
         else
             echo "FAIL:prompt_vcs detached HEAD:Got text='$P10K_SEG_TEXT'"
@@ -621,7 +663,7 @@ EOF
             P10K_SEG_BG="" P10K_SEG_FG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
             prompt_vcs
             if [ "$P10K_SEG_BG" = "#073642" ] && [ "$P10K_SEG_FG" = "#B58900" ] && \
-               [ "${P10K_SEG_ICON%% }" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *" "* && "$P10K_SEG_TEXT" == *"main"* ]] && [[ "$P10K_SEG_TEXT" == *"!1"* ]]; then
+               [ "${P10K_SEG_ICON%% }" = $'\uF1D3' ] && [[ "$P10K_SEG_TEXT" == *$'\uF126 '* && "$P10K_SEG_TEXT" == *"main"* ]] && [[ "$P10K_SEG_TEXT" == *"!1"* ]]; then
                 echo "PASS:prompt_vcs renders reftable (extensions.refstorage = reftable) Git repository on Base02 shelf"
             else
                 echo "FAIL:prompt_vcs reftable repo:Got bg='$P10K_SEG_BG' fg='$P10K_SEG_FG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
@@ -633,12 +675,118 @@ EOF
         cd "$SCRIPT_DIR"
         P10K_SEG_BG="" P10K_SEG_ICON="" P10K_SEG_TEXT=""
         prompt_vcs
-        if [ "$P10K_SEG_BG" = "#073642" ] && [ "${P10K_SEG_ICON%% }" = $'\uF113' ] && [[ "$P10K_SEG_TEXT" == *" "* ]]; then
+        if [ "$P10K_SEG_BG" = "#073642" ] && [ "${P10K_SEG_ICON%% }" = $'\uF113' ] && [[ "$P10K_SEG_TEXT" == *$'\uF126 '* ]]; then
             echo "PASS:prompt_vcs renders home-settings repository segment with GitHub icon () on Base02 (#073642) shelf"
         else
             echo "FAIL:prompt_vcs home-settings repo:Got bg='$P10K_SEG_BG' icon='$P10K_SEG_ICON' text='$P10K_SEG_TEXT'"
         fi
     )
+
+    # 4. Verify p10k-on-init does not corrupt UTF-8 ahead/behind arrows (⇡1 / ⇣1) via zsh/parameter metafication
+    local ab_remote="$TEMP_HOME/vcs-ab-remote.git"
+    local ab_local="$TEMP_HOME/vcs-ab-local"
+    git init --bare -b main "$ab_remote" >/dev/null 2>&1
+    git clone "$ab_remote" "$ab_local" >/dev/null 2>&1
+    (
+        cd "$ab_local"
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git config commit.gpgsign false
+        echo "c1" > f.txt && git add f.txt && git commit -m "c1" >/dev/null 2>&1
+        git push -u origin main >/dev/null 2>&1
+        echo "c2" >> f.txt && git commit -am "c2" >/dev/null 2>&1
+        git checkout -b other origin/main >/dev/null 2>&1
+        echo "c3" > other.txt && git add other.txt && git commit -m "c3" >/dev/null 2>&1
+        git push origin other:main >/dev/null 2>&1
+        git checkout main >/dev/null 2>&1
+        git fetch origin >/dev/null 2>&1
+
+        p10k-on-init
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local expected_behind=$'\u21E3''1'
+        local expected_ahead=$'\u21E1''1'
+        if [[ "$P10K_SEG_TEXT" == *"$expected_behind"* && "$P10K_SEG_TEXT" == *"$expected_ahead"* && "$P10K_SEG_TEXT" != *$'\x83'* ]]; then
+            echo "PASS:p10k-on-init preserves byte-exact UTF-8 ahead/behind arrows (⇣1⇡1) in prompt_vcs without metafication corruption"
+        else
+            echo "FAIL:p10k-on-init UTF-8 arrows:Expected byte-exact ⇣1 and ⇡1, got '$P10K_SEG_TEXT'"
+        fi
+    )
+
+    # 5. Verify _p9k_solarized_project_active right-prompt toolchain scoping (suppresses parent package.json in nested terraform/ghes-cluster-gcp)
+    local proj_root="$TEMP_HOME/Google"
+    mkdir -p "$proj_root/terraform/ghes-cluster-gcp" \
+             "$proj_root/src/utils/fixtures" \
+             "$proj_root/src/utils/native" \
+             "$proj_root/support-site/assets" \
+             "$proj_root/packages/my-pkg/native"
+    echo '{"name":"google-workspace","version":"1.0.0"}' > "$proj_root/package.json"
+    echo 'resource "google_compute_instance" "vm" {}' > "$proj_root/terraform/ghes-cluster-gcp/main.tf"
+    echo 'export const x = 1;' > "$proj_root/src/utils/helper.ts"
+    echo '[package]\nname = "utils-native"' > "$proj_root/src/utils/native/Cargo.toml"
+    echo 'console.log("site");' > "$proj_root/support-site/assets/site.js"
+    echo '[package]\nname = "native"' > "$proj_root/packages/my-pkg/native/Cargo.toml"
+    (
+        cd "$proj_root/terraform/ghes-cluster-gcp"
+        if ! _p9k_solarized_project_active node && ! _p9k_solarized_project_active package && _p9k_solarized_project_active terraform; then
+            echo "PASS:_p9k_solarized_project_active suppresses node_version and package in nested terraform/ghes-cluster-gcp while activating terraform_version"
+        else
+            echo "FAIL:_p9k_solarized_project_active in terraform/ghes-cluster-gcp:Expected node=inactive package=inactive terraform=active"
+        fi
+
+        cd "$proj_root/terraform"
+        echo 'module example.com/workspace' > "$proj_root/go.mod"
+        if ! _p9k_solarized_project_active node && ! _p9k_solarized_project_active package && ! _p9k_solarized_project_active go; then
+            echo "PASS:_p9k_solarized_project_active suppresses parent package.json and go.mod bleed in intermediate directory (terraform/) with competing child project (ghes-cluster-gcp/*.tf)"
+        else
+            echo "FAIL:_p9k_solarized_project_active in terraform/:Expected node, package, and go to be inactive"
+        fi
+        rm -f "$proj_root/go.mod"
+
+        cd "$proj_root/src/utils"
+        if _p9k_solarized_project_active node && _p9k_solarized_project_active package && ! _p9k_solarized_project_active terraform; then
+            cd "$proj_root/src/utils/fixtures"
+            if _p9k_solarized_project_active node && _p9k_solarized_project_active package && ! _p9k_solarized_project_active terraform; then
+                echo "PASS:_p9k_solarized_project_active keeps node_version and package aligned inside nested JS/TS subtree (src/utils and src/utils/fixtures)"
+            else
+                echo "FAIL:_p9k_solarized_project_active in src/utils/fixtures:Expected node=active package=active terraform=inactive"
+            fi
+        else
+            echo "FAIL:_p9k_solarized_project_active in src/utils (with child native/Cargo.toml):Expected node=active package=active"
+        fi
+
+        cd "$proj_root/support-site"
+        if _p9k_solarized_project_active node && _p9k_solarized_project_active package; then
+            echo "PASS:_p9k_solarized_project_active activates node_version and package in support-site/ with child assets/site.js"
+        else
+            echo "FAIL:_p9k_solarized_project_active in support-site/:Expected node=active package=active"
+        fi
+
+        cd "$proj_root/packages/my-pkg/native"
+        if ! _p9k_solarized_project_active node && ! _p9k_solarized_project_active package && _p9k_solarized_project_active rust; then
+            echo "PASS:_p9k_solarized_project_active overrides packages/ JS subtree when a closer Cargo.toml exists (packages/my-pkg/native)"
+        else
+            echo "FAIL:_p9k_solarized_project_active in packages/my-pkg/native:Expected node=inactive package=inactive rust=active"
+        fi
+    )
+
+    # 6. Verify POWERLEVEL9K_BATTERY_STAGES uses Nerd Font v3 codepoints and TERRAFORM_VERSION_SHOW_ON_COMMAND='terraform|tf' (with unwrapped prompt_terraform_version)
+    local tf_unwrap_ok=1
+    (
+        _p9k_orig_prompt_terraform_version() { return 42; }
+        prompt_terraform_version() { _p9k_solarized_project_active terraform || return 0; }
+        _p9k_solarized_install_segments
+        prompt_terraform_version
+        [ $? -eq 42 ] && (( ! $+functions[_p9k_orig_prompt_terraform_version] ))
+    ) || tf_unwrap_ok=0
+    if [ "${POWERLEVEL9K_BATTERY_STAGES:-}" = '\UF008E\UF007A\UF007B\UF007C\UF007D\UF007E\UF007F\UF0080\UF0081\UF0082\UF0079' ] && \
+       [ -z "${POWERLEVEL9K_TERRAFORM_VERSION_PROJECT_ONLY:-}" ] && \
+       [ "${POWERLEVEL9K_TERRAFORM_VERSION_SHOW_ON_COMMAND:-}" = "terraform|tf" ] && \
+       [ "$tf_unwrap_ok" -eq 1 ]; then
+        echo "PASS:POWERLEVEL9K_BATTERY_STAGES uses Nerd Font v3 codepoints and TERRAFORM_VERSION_SHOW_ON_COMMAND='terraform|tf'"
+    else
+        echo "FAIL:p10k battery stages & terraform show_on_command:Got battery='${POWERLEVEL9K_BATTERY_STAGES:-}' tf_proj='${POWERLEVEL9K_TERRAFORM_VERSION_PROJECT_ONLY:-}' tf_cmd='${POWERLEVEL9K_TERRAFORM_VERSION_SHOW_ON_COMMAND:-}' tf_unwrap='$tf_unwrap_ok'"
+    fi
 }
 
 while IFS= read -r line; do

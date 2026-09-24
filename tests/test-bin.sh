@@ -94,4 +94,153 @@ printf "15\n25\n" > "$COMMA_FILE"
 SUM_COMMA_FILE_OUT="$("$SCRIPT_DIR/bin/sum" "$COMMA_FILE")"
 assert_eq "$SUM_COMMA_FILE_OUT" "40" "bin/sum reads files whose paths contain commas"
 
+# Test 6: bin/ide CLI validation & headless tmux session orchestration
+echo -e "\n[6/6] Testing bin/ide workspace launcher..."
+if "$SCRIPT_DIR/bin/ide" --help | grep -q -- '--3pane' && "$SCRIPT_DIR/bin/ide" --help | grep -q -- '--kill'; then
+    pass "bin/ide --help displays usage for 2-pane, --3pane, --kill, and --list"
+else
+    fail "bin/ide --help" "Expected --3pane and --kill in bin/ide --help output"
+fi
+
+if "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1; then
+    fail "bin/ide invalid flag" "Expected non-zero exit status on unknown flag"
+else
+    pass "bin/ide rejects unknown CLI flags"
+fi
+
+if "$SCRIPT_DIR/bin/ide" "$TEMP_HOME/does-not-exist-dir" >/dev/null 2>&1; then
+    fail "bin/ide missing directory" "Expected non-zero exit status on non-existent directory"
+else
+    pass "bin/ide rejects non-existent workspace directory"
+fi
+
+if "$SCRIPT_DIR/bin/ide" --ai invalid-agent "$TEMP_HOME" >/dev/null 2>&1; then
+    fail "bin/ide invalid --ai value" "Expected non-zero exit status on unsupported --ai agent"
+else
+    pass "bin/ide rejects unsupported --ai agent values (enforces agy, claude, codex)"
+fi
+
+if command -v tmux >/dev/null 2>&1; then
+    TMUX_TEST_TMPDIR="$(mktemp -d)"
+    export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
+    unset TMUX
+
+    IDE_WS_2P="$TEMP_HOME/ws_2pane_test"
+    IDE_WS_3P="$TEMP_HOME/ws_3pane_test"
+    mkdir -p "$IDE_WS_2P" "$IDE_WS_3P"
+
+    env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --2pane --detach "$IDE_WS_2P"
+    if tmux has-session -t "ide-ws_2pane_test" 2>/dev/null; then
+        pane_cnt="$(tmux list-panes -t "ide-ws_2pane_test" | wc -l | tr -d ' ')"
+        env_out="$(tmux show-environment -t "ide-ws_2pane_test" 2>/dev/null || true)"
+        if [ "$pane_cnt" = "2" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out"; then
+            pass "bin/ide --2pane layout spawns 2 visible panes + background AI pane and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
+        else
+            fail "bin/ide 2-pane layout" "Expected 2 visible panes and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy env vars, got panes=$pane_cnt env=$env_out"
+        fi
+        "$SCRIPT_DIR/bin/ide" --kill "ide-ws_2pane_test" >/dev/null 2>&1
+    else
+        fail "bin/ide 2-pane creation" "Session ide-ws_2pane_test was not created"
+    fi
+
+    "$SCRIPT_DIR/bin/ide" --ai claude --detach "$IDE_WS_3P"
+    if tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
+        pane_cnt_3="$(tmux list-panes -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
+        env_out_3="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
+        if [ "$pane_cnt_3" = "3" ] && grep -q "IDE_TREE_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3"; then
+            pass "bin/ide default layout spawns 3 visible panes (Left Directory Tree, Top-Right Main, Bottom-Right Shell) + background AI pane"
+        else
+            fail "bin/ide 3-pane layout" "Expected 3 panes, IDE_TREE_PANE, and IDE_AI_CLI=claude, got panes=$pane_cnt_3 env=$env_out_3"
+        fi
+
+        # Verify in-place Main Pane toggle (Editor <-> AI Agent) keeps BOTH Left Directory Pane and Bottom Terminal Pane anchored,
+        # even if attach-session update-environment clears NVIM_IDE_PANE / IDE_TREE_PANE env vars
+        tree_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_tree_pane)"
+        ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane)"
+        ai_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_ai_pane)"
+        term_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_term_pane)"
+        main_win="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_main_win)"
+
+        # Simulate outer client attach-session clearing session env vars
+        tmux set-environment -t "ide-ws_3pane_test" -r NVIM_IDE_PANE
+        tmux set-environment -t "ide-ws_3pane_test" -r IDE_TREE_PANE
+
+        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        ai_win_after_t1="$(tmux display-message -p -t "$ai_pane" "#{window_id}")"
+        ed_win_after_t1="$(tmux display-message -p -t "$ed_pane" "#{window_id}")"
+        tree_win_after_t1="$(tmux display-message -p -t "$tree_pane" "#{window_id}")"
+        term_win_after_t1="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
+        pane_cnt_after_t1="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+
+        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        ed_win_after_t2="$(tmux display-message -p -t "$ed_pane" "#{window_id}")"
+        ai_win_after_t2="$(tmux display-message -p -t "$ai_pane" "#{window_id}")"
+        tree_win_after_t2="$(tmux display-message -p -t "$tree_pane" "#{window_id}")"
+        term_win_after_t2="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
+        pane_cnt_after_t2="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+
+        if [ "$pane_cnt_after_t1" = "3" ] && [ "$pane_cnt_after_t2" = "3" ] && \
+           [ "$ai_win_after_t1" = "$main_win" ] && [ "$ed_win_after_t1" != "$main_win" ] && \
+           [ "$tree_win_after_t1" = "$main_win" ] && [ "$term_win_after_t1" = "$main_win" ] && \
+           [ "$ed_win_after_t2" = "$main_win" ] && [ "$ai_win_after_t2" != "$main_win" ] && \
+           [ "$tree_win_after_t2" = "$main_win" ] && [ "$term_win_after_t2" = "$main_win" ]; then
+            pass "bin/ide --toggle strictly swaps Top-Right Editor pane with AI Agent pane (never opening extra panes or swapping the Left Directory Pane)"
+        else
+            fail "bin/ide --toggle" "Expected 3 panes with Editor<->AI swap in $main_win (got cnt1=$pane_cnt_after_t1 cnt2=$pane_cnt_after_t2 ai_win=$ai_win_after_t1 ed_win=$ed_win_after_t2)"
+        fi
+
+        "$SCRIPT_DIR/bin/ide" --ai codex --detach "$IDE_WS_3P"
+        env_out_codex="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --ai openai --detach "$IDE_WS_3P"
+        env_out_openai="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
+        IDE_AI_CLI="agy" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
+        env_out_reattach="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
+        opt_out_reattach="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_ai_cli 2>/dev/null || true)"
+        if grep -q "IDE_AI_CLI=codex" <<< "$env_out_codex" && \
+           grep -q "IDE_AI_CLI=codex" <<< "$env_out_openai" && \
+           grep -q "IDE_AI_CLI=codex" <<< "$env_out_reattach" && \
+           [ "$opt_out_reattach" = "codex" ] && \
+           tmux display-message -p -t "$ai_pane" "#{pane_id}" >/dev/null 2>&1; then
+            pass "bin/ide updates IDE_AI_CLI across codex/openai normalization, keeps AI pane alive on respawn, and preserves @ide_ai_cli on reattach without --ai"
+        else
+            fail "bin/ide IDE_AI_CLI update" "Failed to update/preserve IDE_AI_CLI=codex (opt=$opt_out_reattach)"
+        fi
+
+        # Verify SolarizedIdeTree (NVIM_IDE_TREE=1) expands and collapses directories cleanly
+        if command -v nvim >/dev/null 2>&1; then
+            mkdir -p "$IDE_WS_3P/subdir"
+            echo "hello" > "$IDE_WS_3P/subdir/nested.txt"
+            tree_test_out="$(cd "$IDE_WS_3P" && NVIM_IDE_TREE=1 nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                -c "doautocmd VimEnter" \
+                -c "2" \
+                -c "normal l" \
+                -c "lua _G.expanded_lines = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')" \
+                -c "normal h" \
+                -c "lua _G.collapsed_lines = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')" \
+                -c "lua io.stdout:write('EXP:' .. (_G.expanded_lines:find('nested.txt') and '1' or '0') .. ' COL:' .. (_G.collapsed_lines:find('nested.txt') and '1' or '0'))" \
+                -c "qa!" 2>&1 || true)"
+            if grep -Fq "EXP:1 COL:0" <<< "$tree_test_out"; then
+                pass "SolarizedIdeTree (NVIM_IDE_TREE=1) expands and collapses directories cleanly via l/h/<CR>"
+            else
+                fail "SolarizedIdeTree expand/collapse" "Expected EXP:1 COL:0, got: $tree_test_out"
+            fi
+        else
+            pass "SolarizedIdeTree (NVIM_IDE_TREE=1) skipped headless runtime check (nvim not installed on runner)"
+        fi
+
+        "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1
+        if ! tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
+            pass "bin/ide --quit terminates the entire IDE workspace session cleanly"
+        else
+            fail "bin/ide --quit" "Session ide-ws_3pane_test still exists after --quit"
+            "$SCRIPT_DIR/bin/ide" --kill "ide-ws_3pane_test" >/dev/null 2>&1
+        fi
+    else
+        fail "bin/ide 3-pane creation" "Session ide-ws_3pane_test was not created"
+    fi
+
+    tmux kill-server >/dev/null 2>&1 || true
+    rm -rf "$TMUX_TEST_TMPDIR"
+fi
+
 test_summary

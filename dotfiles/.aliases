@@ -13,14 +13,12 @@ alias gpurge='target=$(git show-ref --verify --quiet refs/heads/main && echo mai
 alias guser-branch='b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -z "$b" ] || [ "$b" = "HEAD" ]; then echo "Error: not on a valid branch" >&2; false; elif [ "$b" = "main" ] || [ "$b" = "master" ] || [ "$b" = "trunk" ]; then echo "Error: refusing to prefix $b branch" >&2; false; else git branch -m "${USER:-$(whoami)}/$(echo "$b" | sed -E "s|^(${USER:-$(whoami)}/)+||")"; fi'
 
 
-# editor shortcuts (Neovim default with Vim fallback)
+# editor shortcuts (Neovim default with Vim fallback; `v` is an RPC-aware function in .zsh-functions / .bashrc-addendum)
 if command -v nvim >/dev/null 2>&1; then
     alias vi='nvim'
     alias vim='nvim'
-    alias v='nvim'
 else
     alias vi='vim'
-    alias v='vim'
 fi
 
 # modern file viewing (bat with TrueColor Solarized Dark; cat remains coreutils)
@@ -63,6 +61,10 @@ alias go-buildall='go build ./...'
 alias tf='terraform'
 
 # Aux
+alias ide2='ide --2pane'
+alias ide3='ide --3pane'
+alias idek='ide --kill'
+alias qide='ide --quit'
 alias yaml-lint='yamllint -d relaxed'
 if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
     alias fd='fdfind'

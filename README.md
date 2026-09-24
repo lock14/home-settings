@@ -19,6 +19,7 @@ home-settings/
 ├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
 │   ├── gnome-terminal-solarized     # GNOME Terminal Solarized Dark profile provisioner
+│   ├── ide                          # Tmux + Neovim + AI Agent (agy/claude/codex) IDE workspace launcher
 │   ├── macos-terminal-solarized     # macOS Terminal.app Solarized Dark profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   └── sum                          # High-performance AWK number summation & stats
@@ -28,9 +29,10 @@ home-settings/
 │   ├── .bashrc-addendum             # Bash integration hook & zoxide
 │   ├── .environment-variables       # Environment, COLORTERM, PATH (+ auto-loads ~/.environment-variables.d/*.sh)
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
+│   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer & IDE pane bindings
 │   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
 │   ├── .zsh-completions             # Fpath completion registration
-│   ├── .zsh-functions               # Git synchronization (gsync), search (fs) (+ auto-loads ~/.zsh-functions.d/*.zsh)
+│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener (v) (+ auto-loads ~/.zsh-functions.d/*.zsh)
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
 │   └── .config/

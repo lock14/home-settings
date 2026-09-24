@@ -36,11 +36,44 @@ expected_top_level=(
     ".zsh-completions"
     ".p10k.zsh"
     ".vimrc"
+    ".tmux.conf"
 )
 
 for df in "${expected_top_level[@]}"; do
     assert_symlink "$TEMP_HOME/$df" "" "Auto-discovered and symlinked: $df"
 done
+
+if [ -f "$TEMP_HOME/.tmux.conf" ] && \
+   grep -q 'default-terminal "tmux-256color"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'RGB:extkeys:usstyle' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'pane-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'pane-active-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'popup-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'mode-style "fg=#93A1A1,bg=#073642"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'status-style "fg=#839496,bg=#073642"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'pane_current_command' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-z resize-pane -Z' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-a' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'claude' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'codex' "$TEMP_HOME/.tmux.conf"; then
+    pass ".tmux.conf configures Solarized Dark framing, TrueColor undercurls, zero-fork Ctrl+hjkl navigation, and Alt+z/Alt+a bindings (with IDE_AI_CLI: agy/claude/codex)"
+else
+    fail ".tmux.conf verification" "Missing expected Solarized Dark, IDE_AI_CLI, or keybinding settings in .tmux.conf"
+fi
+
+if command -v tmux >/dev/null 2>&1; then
+    TMUX_TEST_SOCK="test-tmux-cfg-$$"
+    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test >/dev/null 2>&1; then
+        tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
+        pass ".tmux.conf loads cleanly into live headless tmux server without errors"
+    else
+        tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
+        fail ".tmux.conf live load" "tmux reported errors loading dotfiles/.tmux.conf"
+    fi
+fi
 
 if [ ! -e "$TEMP_HOME/.zsh-aliases" ]; then
     pass "Legacy .zsh-aliases symlink is cleanly retired"
@@ -73,10 +106,13 @@ else
     fail "clangd config verification" "Missing or invalid .config/clangd/config.yaml"
 fi
 
-if [ -f "$TEMP_HOME/.config/ghostty/config" ] && grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme and MesloLGS Nerd Font Mono font family"
+if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
+   grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -q 'macos-option-as-alt = true' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, and macos-option-as-alt = true"
 else
-    fail "Ghostty config verification" "Ghostty config missing expected theme or font"
+    fail "Ghostty config verification" "Ghostty config missing expected theme, font, or macos-option-as-alt"
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then

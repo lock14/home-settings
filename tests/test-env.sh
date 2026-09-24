@@ -76,6 +76,18 @@ else
     fail "BAT_OPTS export" "Expected --italic-text=always in BAT_OPTS, got: ${BAT_OPTS:-}"
 fi
 
+if (unset IDE_AI_CLI && . "$SCRIPT_DIR/dotfiles/.environment-variables" && [ "${IDE_AI_CLI:-}" = "agy" ]); then
+    pass "IDE_AI_CLI defaults to 'agy' in .environment-variables"
+else
+    fail "IDE_AI_CLI export" "Expected 'agy', got: ${IDE_AI_CLI:-}"
+fi
+
+if (IDE_AI_CLI="claude" && . "$SCRIPT_DIR/dotfiles/.environment-variables" && [ "$IDE_AI_CLI" = "claude" ]); then
+    pass "IDE_AI_CLI preserves caller override (claude / codex)"
+else
+    fail "IDE_AI_CLI override" "Expected IDE_AI_CLI override to be preserved"
+fi
+
 if [ -n "${LSCOLORS:-}" ] && [ "${LSCOLORS:-}" = "exgxfxdxcxfxfxegedabagacad" ]; then
     pass "LSCOLORS configured with Solarized Dark palette for macOS BSD ls parity"
 else
@@ -211,10 +223,11 @@ STANDALONE_HOME=$(mktemp -d)
     if alias gcommit >/dev/null 2>&1 && alias gamend >/dev/null 2>&1 && \
        alias gprune >/dev/null 2>&1 && alias gpurge >/dev/null 2>&1 && \
        alias guser-branch >/dev/null 2>&1 && alias ll >/dev/null 2>&1 && \
-       alias grep >/dev/null 2>&1 && declare -F gsync >/dev/null 2>&1; then
-        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gprune, gpurge, guser-branch), ls/grep aliases, and gsync function"
+       alias grep >/dev/null 2>&1 && declare -F gsync >/dev/null 2>&1 && \
+       declare -F v >/dev/null 2>&1; then
+        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gprune, gpurge, guser-branch), ls/grep aliases, gsync, and RPC-aware v() function"
     else
-        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases or gsync function"
+        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases, gsync, or v() function"
     fi
 
     # Test Solarized Dark PS1 shelf prompt states (local vs SSH, clean vs dirty git, detached HEAD, non-git dir, TERM=linux fallback, exit status 0 vs non-zero)
@@ -509,9 +522,9 @@ EOF
     mkdir -p "$VI_ONLY_BIN"
     ln -s "$(command -v uname)" "$VI_ONLY_BIN/uname"
     touch "$VI_ONLY_BIN/vi" && chmod +x "$VI_ONLY_BIN/vi"
-    vi_only_out=$(HOME="$STANDALONE_HOME" PATH="$VI_ONLY_BIN" "$BASH" -c "shopt -s expand_aliases; source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; printf 'EDITOR=%s|ALIAS_VI=%s|ALIAS_V=%s\n' \"\${EDITOR:-}\" \"\$(alias vi 2>/dev/null || echo none)\" \"\$(alias v 2>/dev/null || echo none)\"")
-    if [[ "$vi_only_out" == *"EDITOR=vi|ALIAS_VI=none|ALIAS_V=alias v='vi'"* ]]; then
-        echo "PASS:Standalone .bashrc-addendum preserves working vi and aliases v='vi' when nvim and vim are absent"
+    vi_only_out=$(HOME="$STANDALONE_HOME" PATH="$VI_ONLY_BIN" "$BASH" -c "shopt -s expand_aliases; source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; printf 'EDITOR=%s|ALIAS_VI=%s|FUNC_V=%s\n' \"\${EDITOR:-}\" \"\$(alias vi 2>/dev/null || echo none)\" \"\$(declare -F v 2>/dev/null || echo none)\"")
+    if [[ "$vi_only_out" == *"EDITOR=vi|ALIAS_VI=none|FUNC_V=v"* ]]; then
+        echo "PASS:Standalone .bashrc-addendum preserves working vi and defines v() fallback when nvim and vim are absent"
     else
         echo "FAIL:Standalone vi-only fallback:Unexpected alias/editor state ($vi_only_out)"
     fi

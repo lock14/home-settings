@@ -133,6 +133,28 @@ set background=dark
 silent! colorscheme solarized
 call s:ApplySolarizedDark()
 
-" Navigation
+" Navigation & Hybrid Tmux Split Integration
+let mapleader = " "
 map <Home> ^
 imap <Home> <Esc>^i
+
+" Built-in Netrw Project Tree Sidebar Configuration
+let g:netrw_banner = 0
+let g:netrw_liststyle = 3
+let g:netrw_browse_split = 4
+let g:netrw_altv = 1
+let g:netrw_winsize = 20
+nnoremap <silent> <leader>e :Lexplore<CR>
+
+function! s:TmuxNavigate(dir, tmux_dir) abort
+    let l:cur_win = winnr()
+    execute 'wincmd ' . a:dir
+    if winnr() == l:cur_win && !empty($TMUX)
+        call system('tmux if-shell -F "#{==:#{window_zoomed_flag},0}" "select-pane -' . a:tmux_dir . '"')
+    endif
+endfunction
+
+nnoremap <silent> <C-h> :call <SID>TmuxNavigate('h', 'L')<CR>
+nnoremap <silent> <C-j> :call <SID>TmuxNavigate('j', 'D')<CR>
+nnoremap <silent> <C-k> :call <SID>TmuxNavigate('k', 'U')<CR>
+nnoremap <silent> <C-l> :call <SID>TmuxNavigate('l', 'R')<CR>

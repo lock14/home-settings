@@ -63,6 +63,7 @@ copy-on-select = clipboard
 confirm-close-surface = false
 shell-integration = detect
 mouse-hide-while-typing = true
+macos-option-as-alt = true
 
 # ------------------------------------------------------------------------------
 # 6. Keybindings & Navigation (Split Panes & Tabs)

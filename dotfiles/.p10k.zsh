@@ -250,6 +250,8 @@
     .shorten_folder_marker
     .svn
     .terraform
+    .terraform.lock.hcl
+    .terraform-version
     CVS
     Cargo.toml
     composer.json
@@ -410,7 +412,7 @@
       # If local branch name is at most 32 characters long, show it in full.
       # Otherwise show the first 12 … the last 12.
       # Tip: To always show local branch name in full without truncation, delete the next line.
-      (( $#branch > 32 )) && branch[13,-13]="…"  # <-- this line
+      (( $#branch > 32 )) && branch[13,-13]=$'\u2026'  # <-- this line
       res+="${state_color}${(g::)POWERLEVEL9K_VCS_BRANCH_ICON}${branch//\%/%%}"
     fi
 
@@ -423,7 +425,7 @@
       # If tag name is at most 32 characters long, show it in full.
       # Otherwise show the first 12 … the last 12.
       # Tip: To always show tag name in full without truncation, delete the next line.
-      (( $#tag > 32 )) && tag[13,-13]="…"  # <-- this line
+      (( $#tag > 32 )) && tag[13,-13]=$'\u2026'  # <-- this line
       res+="${meta}#${state_color}${tag//\%/%%}"
     fi
 
@@ -443,15 +445,15 @@
     fi
 
     # ⇣42 if behind the remote.
-    (( VCS_STATUS_COMMITS_BEHIND )) && res+=" ${state_color}⇣${VCS_STATUS_COMMITS_BEHIND}"
+    (( VCS_STATUS_COMMITS_BEHIND )) && res+=" ${state_color}"$'\u21E3'"${VCS_STATUS_COMMITS_BEHIND}"
     # ⇡42 if ahead of the remote; no leading space if also behind the remote: ⇣42⇡42.
     (( VCS_STATUS_COMMITS_AHEAD && !VCS_STATUS_COMMITS_BEHIND )) && res+=" "
-    (( VCS_STATUS_COMMITS_AHEAD  )) && res+="${state_color}⇡${VCS_STATUS_COMMITS_AHEAD}"
+    (( VCS_STATUS_COMMITS_AHEAD  )) && res+="${state_color}"$'\u21E1'"${VCS_STATUS_COMMITS_AHEAD}"
     # ⇠42 if behind the push remote.
-    (( VCS_STATUS_PUSH_COMMITS_BEHIND )) && res+=" ${state_color}⇠${VCS_STATUS_PUSH_COMMITS_BEHIND}"
+    (( VCS_STATUS_PUSH_COMMITS_BEHIND )) && res+=" ${state_color}"$'\u21E0'"${VCS_STATUS_PUSH_COMMITS_BEHIND}"
     (( VCS_STATUS_PUSH_COMMITS_AHEAD && !VCS_STATUS_PUSH_COMMITS_BEHIND )) && res+=" "
     # ⇢42 if ahead of the push remote; no leading space if also behind: ⇠42⇢42.
-    (( VCS_STATUS_PUSH_COMMITS_AHEAD  )) && res+="${state_color}⇢${VCS_STATUS_PUSH_COMMITS_AHEAD}"
+    (( VCS_STATUS_PUSH_COMMITS_AHEAD  )) && res+="${state_color}"$'\u21E2'"${VCS_STATUS_PUSH_COMMITS_AHEAD}"
     # *42 if have stashes.
     (( VCS_STATUS_STASHES        )) && res+=" ${state_color}*${VCS_STATUS_STASHES}"
     # 'merge' if the repo is in an unusual state.
@@ -471,7 +473,7 @@
     # than the number of files in the Git index, or due to bash.showDirtyState being set to false
     # in the repository config. The number of staged and untracked files may also be unknown
     # in this case.
-    (( VCS_STATUS_HAS_UNSTAGED == -1 )) && res+=" ${state_color}─"
+    (( VCS_STATUS_HAS_UNSTAGED == -1 )) && res+=" ${state_color}"$'\u2500'
 
     typeset -g my_git_format=$res
   }
@@ -769,7 +771,7 @@
 
     if [[ -n $branch && $branch != '(detached)' ]]; then
       local clean_branch=${(V)branch}
-      (( $#clean_branch > 32 )) && clean_branch[13,-13]="…"
+      (( $#clean_branch > 32 )) && clean_branch[13,-13]=$'\u2026'
       res+="${state_color}${branch_icon}${clean_branch//\%/%%}"
       local remote_branch=${upstream#*/}
       if [[ -n $upstream && $remote_branch != "$branch" ]]; then
@@ -779,9 +781,9 @@
       res+="${state_color}${branch_icon}${meta}@${state_color}${oid[1,8]}"
     fi
 
-    (( behind > 0 )) && res+=" ${state_color}⇣${behind}"
+    (( behind > 0 )) && res+=" ${state_color}"$'\u21E3'"${behind}"
     (( ahead > 0 && behind == 0 )) && res+=" "
-    (( ahead > 0 )) && res+="${state_color}⇡${ahead}"
+    (( ahead > 0 )) && res+="${state_color}"$'\u21E1'"${ahead}"
     (( conflicted > 0 )) && res+=" ${state_color}~${conflicted}"
     (( staged > 0 )) && res+=" ${state_color}+${staged}"
     (( unstaged > 0 )) && res+=" ${state_color}!${unstaged}"
@@ -799,14 +801,236 @@
     fi
   }
 
-  function prompt_vcs() {
-    _p9k_solarized_prompt_vcs "$@"
+  # Nearest-root project dominance & subtree scoping for right-prompt toolchain segments.
+  # Prevents repo-root package.json files (e.g. ~/Google/package.json) or $HOME files from
+  # bleeding into nested non-Node subdirectories (e.g. ~/Google/terraform/ghes-cluster-gcp).
+  function _p9k_solarized_project_active() {
+    emulate -L zsh -o extended_glob
+    local tool=''
+    case ${1:-} in
+      node|node_version)           tool=node ;;
+      package)                     tool=package ;;
+      terraform|terraform_version) tool=terraform ;;
+      go|go_version)               tool=go ;;
+      rust|rust_version)           tool=rust ;;
+      java|java_version)           tool=java ;;
+      python|python_version)       tool=python ;;
+      *) return 1 ;;
+    esac
+
+    local home_dir=${HOME%/}
+    local cur_dir=${PWD%/}
+    [[ -z $cur_dir ]] && cur_dir=/
+    [[ $cur_dir == "$home_dir" || $cur_dir == / || $cur_dir == /tmp ]] && return 1
+
+    local -a dirs=()
+    local d=$cur_dir
+    while [[ -n $d && $d != / && $d != /tmp && $d != "$home_dir" && $d != "${home_dir:h}" ]]; do
+      dirs+=("$d")
+      local parent=${d:h}
+      [[ $parent == "$d" ]] && break
+      d=$parent
+    done
+    (( $#dirs == 0 )) && return 1
+
+    local node_pat='package.json|package-lock.json|yarn.lock|pnpm-lock.yaml|bun.lockb|.node-version|.nvmrc|tsconfig.json|jsconfig.json|*.(js|mjs|cjs|ts|mts|cts|jsx|tsx)'
+    local pkg_pat='package.json'
+    local node_root_pat='package.json|package-lock.json|yarn.lock|pnpm-lock.yaml|bun.lockb|.node-version|.nvmrc|tsconfig.json|jsconfig.json'
+    local tf_pat='*.tf|*.tfvars|*.tftpl|.terraform.lock.hcl|.terraform-version'
+    local go_pat='go.mod|go.work|*.go'
+    local rust_pat='Cargo.toml|*.rs'
+    local java_pat='pom.xml|build.gradle|build.gradle.kts|build.sbt|deps.edn|project.clj|build.boot|*.(java|gradle|class|jar|clj|cljc)'
+    local py_pat='pyproject.toml|setup.py|Pipfile|*.py'
+
+    local target_pat=''
+    case $tool in
+      node)      target_pat=$node_pat ;;
+      package)   target_pat=$pkg_pat ;;
+      terraform) target_pat=$tf_pat ;;
+      go)        target_pat=$go_pat ;;
+      rust)      target_pat=$rust_pat ;;
+      java)      target_pat=$java_pat ;;
+      python)    target_pat=$py_pat ;;
+    esac
+
+    local -i target_idx=0 i
+    local -a m=()
+    for (( i = 1; i <= $#dirs; ++i )); do
+      m=( "${dirs[i]}"/(${~target_pat})(#qN-.Y1) )
+      if (( $#m > 0 )); then
+        target_idx=$i
+        break
+      fi
+    done
+    (( target_idx == 0 )) && return 1
+    (( target_idx == 1 )) && return 0
+
+    local -i check_idx=$target_idx
+    if [[ $tool == (node|package) ]]; then
+      local -i root_idx=0
+      for (( i = 1; i <= $#dirs; ++i )); do
+        m=( "${dirs[i]}"/(${~node_root_pat})(#qN-.Y1) )
+        if (( $#m > 0 )); then
+          root_idx=$i
+          break
+        fi
+      done
+      (( root_idx == 0 )) && root_idx=$target_idx
+      (( root_idx > check_idx )) && check_idx=$root_idx
+
+      local -i js_subtree_ok=0
+      # Active if any directory strictly below the Node root (1 <= i < root_idx) has Node/JS/TS files
+      for (( i = 1; i < root_idx; ++i )); do
+        m=( "${dirs[i]}"/(${~node_pat})(#qN-.Y1) )
+        if (( $#m > 0 )); then
+          js_subtree_ok=1
+          break
+        fi
+      done
+      # Or if an immediate child directory of $PWD contains Node/JS/TS files (e.g. support-site/assets/site.js)
+      if (( ! js_subtree_ok )); then
+        m=( "${dirs[1]}"/*/(${~node_pat})(#qN-.Y1) )
+        (( $#m > 0 )) && js_subtree_ok=1
+      fi
+      # Or if the top-level subtree under the Node project root is a standard JS/TS directory
+      if (( ! js_subtree_ok )); then
+        local root_dir=${dirs[root_idx]}
+        local rel=${cur_dir#"${root_dir}/"}
+        local top_seg=${rel%%/*}
+        [[ $top_seg == (src|lib|dist|build|out|app|apps|packages|components|pages|routes|public|client|server|web|site|*-site|frontend|backend|scripts|assets|styles|static|config|configs|utils|helpers|hooks|types|test|tests|__tests__|spec|e2e|cypress|playwright|node_modules) ]] && js_subtree_ok=1
+      fi
+      (( js_subtree_ok )) || return 1
+    fi
+
+    local -a other_pats=()
+    [[ $tool != terraform ]] && other_pats+=("$tf_pat")
+    [[ $tool != go ]]        && other_pats+=("$go_pat")
+    [[ $tool != rust ]]      && other_pats+=("$rust_pat")
+    [[ $tool != java ]]      && other_pats+=("$java_pat")
+    [[ $tool != python ]]    && other_pats+=("$py_pat")
+    [[ $tool != (node|package) ]] && other_pats+=("$node_root_pat")
+    local combined_other_pat=${(j:|:)other_pats}
+
+    for (( i = 1; i < check_idx; ++i )); do
+      m=( "${dirs[i]}"/(${~combined_other_pat})(#qN-.Y1) )
+      (( $#m > 0 )) && return 1
+      if (( i == 1 )); then
+        if [[ $tool != (node|package) ]] || () { local -a nm=( "${dirs[1]}"/(${~node_pat})(#qN-.Y1) ); (( $#nm == 0 )); }; then
+          m=( "${dirs[1]}"/*/(${~combined_other_pat})(#qN-.Y1) )
+          (( $#m > 0 )) && return 1
+        fi
+      fi
+    done
+
+    return 0
   }
 
-  function p10k-on-init() {
-    if (( $+functions[_p9k_solarized_prompt_vcs] )); then
-      functions[prompt_vcs]=$functions[_p9k_solarized_prompt_vcs]
+  function _p9k_solarized_install_segments() {
+    function prompt_vcs() {
+      _p9k_solarized_prompt_vcs "$@"
+    }
+
+    if (( $+functions[_p9k_orig_prompt_terraform_version] )); then
+      functions -c _p9k_orig_prompt_terraform_version prompt_terraform_version 2>/dev/null
+      unfunction _p9k_orig_prompt_terraform_version 2>/dev/null
     fi
+
+    if (( $+functions[prompt_node_version] )) && [[ ${functions[prompt_node_version]} != *_p9k_solarized_project_active* ]]; then
+      functions -c prompt_node_version _p9k_orig_prompt_node_version 2>/dev/null
+    fi
+    if (( $+functions[_p9k_orig_prompt_node_version] )); then
+      function prompt_node_version() {
+        if [[ ${POWERLEVEL9K_NODE_VERSION_PROJECT_ONLY:-true} == true ]]; then
+          _p9k_solarized_project_active node || return 0
+        fi
+        local -i _POWERLEVEL9K_NODE_VERSION_PROJECT_ONLY=0
+        setopt local_options no_function_argzero
+        _p9k_orig_prompt_node_version "$@"
+      }
+    fi
+
+    if (( $+functions[prompt_package] )) && [[ ${functions[prompt_package]} != *_p9k_solarized_project_active* ]]; then
+      functions -c prompt_package _p9k_orig_prompt_package 2>/dev/null
+    fi
+    if (( $+functions[_p9k_orig_prompt_package] )); then
+      function prompt_package() {
+        if ! _p9k_solarized_project_active package; then
+          unset P9K_PACKAGE_NAME P9K_PACKAGE_VERSION
+          return 0
+        fi
+        setopt local_options no_function_argzero
+        _p9k_orig_prompt_package "$@"
+      }
+    fi
+
+    if (( $+functions[prompt_go_version] )) && [[ ${functions[prompt_go_version]} != *_p9k_solarized_project_active* ]]; then
+      functions -c prompt_go_version _p9k_orig_prompt_go_version 2>/dev/null
+    fi
+    if (( $+functions[_p9k_orig_prompt_go_version] )); then
+      function prompt_go_version() {
+        if [[ ${POWERLEVEL9K_GO_VERSION_PROJECT_ONLY:-true} == true ]]; then
+          _p9k_solarized_project_active go || return 0
+        fi
+        local -i _POWERLEVEL9K_GO_VERSION_PROJECT_ONLY=0
+        setopt local_options no_function_argzero
+        _p9k_orig_prompt_go_version "$@"
+      }
+    fi
+
+    if (( $+functions[prompt_java_version] )) && [[ ${functions[prompt_java_version]} != *_p9k_solarized_project_active* ]]; then
+      functions -c prompt_java_version _p9k_orig_prompt_java_version 2>/dev/null
+    fi
+    if (( $+functions[_p9k_orig_prompt_java_version] )); then
+      function prompt_java_version() {
+        if [[ ${POWERLEVEL9K_JAVA_VERSION_PROJECT_ONLY:-true} == true ]]; then
+          _p9k_solarized_project_active java || return 0
+        fi
+        local -i _POWERLEVEL9K_JAVA_VERSION_PROJECT_ONLY=0
+        setopt local_options no_function_argzero
+        _p9k_orig_prompt_java_version "$@"
+      }
+    fi
+
+    if (( $+functions[_p9k_rust_version_prefetch] )) && [[ ${functions[_p9k_rust_version_prefetch]} != *_p9k_solarized_project_active* ]]; then
+      functions -c _p9k_rust_version_prefetch _p9k_orig_rust_version_prefetch 2>/dev/null
+    fi
+    if (( $+functions[_p9k_orig_rust_version_prefetch] )); then
+      function _p9k_rust_version_prefetch() {
+        if [[ ${POWERLEVEL9K_RUST_VERSION_PROJECT_ONLY:-true} == true ]]; then
+          if ! _p9k_solarized_project_active rust; then
+            unset P9K_RUST_VERSION
+            return 0
+          fi
+        fi
+        local -i _POWERLEVEL9K_RUST_VERSION_PROJECT_ONLY=0
+        setopt local_options no_function_argzero
+        _p9k_orig_rust_version_prefetch "$@"
+      }
+    fi
+
+    if (( $+functions[prompt_rust_version] )) && [[ ${functions[prompt_rust_version]} != *_p9k_solarized_project_active* ]]; then
+      functions -c prompt_rust_version _p9k_orig_prompt_rust_version 2>/dev/null
+    fi
+    if (( $+functions[_p9k_orig_prompt_rust_version] )); then
+      function prompt_rust_version() {
+        if [[ ${POWERLEVEL9K_RUST_VERSION_PROJECT_ONLY:-true} == true ]]; then
+          if ! _p9k_solarized_project_active rust; then
+            unset P9K_RUST_VERSION
+            return 0
+          fi
+        fi
+        setopt local_options no_function_argzero
+        _p9k_orig_prompt_rust_version "$@"
+        [[ -n ${_p9k__prompt_side:-} ]] && (( ${_p9k__segment_index:-0} )) && \
+          typeset -g "_p9k__segment_val_${_p9k__prompt_side}[_p9k__segment_index]="
+      }
+    fi
+  }
+
+  _p9k_solarized_install_segments
+
+  function p10k-on-init() {
+    _p9k_solarized_install_segments
   }
 
   # Disable the default Git status formatting.
@@ -1218,7 +1442,7 @@
   # Tip: To always display tasks without truncation, delete the following parameter.
   # Tip: To hide task names and display just the icon when time tracking is enabled, set the
   # value of the following parameter to "".
-  typeset -g POWERLEVEL9K_TIMEWARRIOR_CONTENT_EXPANSION='${P9K_CONTENT:0:24}${${P9K_CONTENT:24}:+…}'
+  typeset -g POWERLEVEL9K_TIMEWARRIOR_CONTENT_EXPANSION='${P9K_CONTENT:0:24}${${P9K_CONTENT:24}:+'$'\u2026''}'
 
   # Custom icon.
   # typeset -g POWERLEVEL9K_TIMEWARRIOR_VISUAL_IDENTIFIER_EXPANSION='⭐'
@@ -1651,11 +1875,10 @@
   # Terraform version color.
   typeset -g POWERLEVEL9K_TERRAFORM_VERSION_FOREGROUND='#6C71C4'
   typeset -g POWERLEVEL9K_TERRAFORM_VERSION_BACKGROUND='#073642'
+  # Show terraform version only when the command you are typing invokes terraform or tf.
+  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_SHOW_ON_COMMAND='terraform|tf'
   # Custom icon: official HashiCorp Terraform logo
   typeset -g POWERLEVEL9K_TERRAFORM_VERSION_VISUAL_IDENTIFIER_EXPANSION=$'\U000F1062'
-
-  ################[ terraform_version: It shows active terraform version (https://www.terraform.io) ]#################
-  typeset -g POWERLEVEL9K_TERRAFORM_VERSION_SHOW_ON_COMMAND='terraform|tf'
 
   #############[ kubecontext: current kubernetes context (https://kubernetes.io/) ]#############
   # Show kubecontext only when the command you are typing invokes one of these tools.
@@ -1953,7 +2176,7 @@
   #   P9K_IP_TX_BYTES_DELTA | number of bytes sent since last prompt
   #   P9K_IP_RX_RATE        | receive rate (since last prompt)
   #   P9K_IP_TX_RATE        | send rate (since last prompt)
-  typeset -g POWERLEVEL9K_IP_CONTENT_EXPANSION='${P9K_IP_RX_RATE:+⇣$P9K_IP_RX_RATE }${P9K_IP_TX_RATE:+⇡$P9K_IP_TX_RATE }$P9K_IP_IP'
+  typeset -g POWERLEVEL9K_IP_CONTENT_EXPANSION='${P9K_IP_RX_RATE:+'$'\u21E3''$P9K_IP_RX_RATE }${P9K_IP_TX_RATE:+'$'\u21E1''$P9K_IP_TX_RATE }$P9K_IP_IP'
   # Show information for the first network interface whose name matches this regular expression.
   # Run `ifconfig` or `ip -4 a show` to see the names of all network interfaces.
   typeset -g POWERLEVEL9K_IP_INTERFACE='[ew].*'
@@ -1976,7 +2199,7 @@
   # Show battery in yellow when it's discharging.
   typeset -g POWERLEVEL9K_BATTERY_DISCONNECTED_FOREGROUND='#B58900'
   # Battery pictograms going from low to high level of charge.
-  typeset -g POWERLEVEL9K_BATTERY_STAGES='\uf58d\uf579\uf57a\uf57b\uf57c\uf57d\uf57e\uf57f\uf580\uf581\uf578'
+  typeset -g POWERLEVEL9K_BATTERY_STAGES='\UF008E\UF007A\UF007B\UF007C\UF007D\UF007E\UF007F\UF0080\UF0081\UF0082\UF0079'
   # Don't show the remaining time to charge/discharge.
   typeset -g POWERLEVEL9K_BATTERY_VERBOSE=false
   typeset -g POWERLEVEL9K_BATTERY_BACKGROUND='#073642'
@@ -2030,7 +2253,7 @@
   #
   # Type `p10k help segment` for documentation and a more sophisticated example.
   function prompt_example() {
-    p10k segment -b 1 -f 3 -i '⭐' -t 'hello, %n'
+    p10k segment -b 1 -f 3 -i $'\uF005' -t 'hello, %n'
   }
 
   # User-defined prompt segments may optionally provide an instant_prompt_* function. Its job
