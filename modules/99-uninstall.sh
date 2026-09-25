@@ -138,15 +138,20 @@ uninstall_fonts() {
     else
         rm -f "$font_dir"/MesloLGS-NF-*.ttf "$font_dir/MesloLGS NF"*.ttf "$font_dir/MesloLGSNerdFont"*.ttf "$font_dir"/[0-9]MesloLGS*.ttf || true
         local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
-        if [ -L "$xdg_config/fontconfig" ] && [ ! -e "$xdg_config/fontconfig" ]; then
+        local fc_alias_src="$REPO_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+        local fc_alias_dest="$xdg_config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+        if [ -L "$xdg_config/fontconfig" ]; then
             rm -f "$xdg_config/fontconfig"
+        elif [ -L "$xdg_config/fontconfig/conf.d" ]; then
+            rm -f "$xdg_config/fontconfig/conf.d"
+        elif [ -L "$fc_alias_dest" ] || { [ -e "$fc_alias_dest" ] && ! [ "$fc_alias_dest" -ef "$fc_alias_src" ]; }; then
+            rm -f "$fc_alias_dest"
         fi
-        rm -f "$xdg_config/fontconfig/conf.d/10-meslo-nerd-font.conf"
         if command -v fc-cache >/dev/null 2>&1; then
             fc-cache -f "$font_dir" >/dev/null 2>&1 || true
         fi
     fi
-    echo "  MesloLGS NF fonts uninstalled."
+    echo "  MesloLGS Nerd Font Mono fonts uninstalled."
 }
 
 case "$UNINSTALL_TARGET" in

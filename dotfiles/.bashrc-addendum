@@ -116,6 +116,7 @@ else
     alias ide3='ide --3pane'
     alias idek='ide --kill'
     alias qide='ide --quit'
+    alias update='update-system'
 fi
 
 # Hybrid IDE RPC-aware editor launcher (`v [files...]`)
@@ -483,7 +484,7 @@ _solarized_bash_prompt() {
     local c_reset='\[\e[0m\]'
     local bg_shelf='\[\e[48;2;7;54;66m\]'
     local c_shelf_cap='\[\e[0m\e[38;2;7;54;66m\]'
-    local c_base01='\[\e[38;2;88;110;117m\]'
+    local c_base00='\[\e[38;2;101;123;131m\]'
     local c_base0='\[\e[38;2;131;148;150m\]'
     local c_base1='\[\e[38;2;147;161;161m\]'
     local c_blue='\[\e[38;2;38;139;210m\]'
@@ -508,7 +509,7 @@ _solarized_bash_prompt() {
     if [ "${TERM:-}" = "linux" ] || { [ "${COLORTERM:-}" != "truecolor" ] && [ "${COLORTERM:-}" != "24bit" ]; }; then
         bg_shelf='\[\e[40m\]'
         c_shelf_cap='\[\e[0m\e[30m\]'
-        c_base01='\[\e[90m\]'
+        c_base00='\[\e[90m\]'
         c_base0='\[\e[37m\]'
         c_base1='\[\e[97m\]'
         c_blue='\[\e[34m\]'
@@ -546,7 +547,7 @@ _solarized_bash_prompt() {
         context_segment="${c_base0}${os_icon}"
     fi
 
-    local sep=" ${c_base01}${subsep} "
+    local sep=" ${c_base00}${subsep} "
     local lead_segment=""
     if [ -n "$context_segment" ]; then
         lead_segment="${context_segment}${sep}"

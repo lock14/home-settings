@@ -51,6 +51,7 @@ fi
 # Default configurations
 export ACTION="install"
 export IDE_NAME="none"
+export IDE_EXPLICIT=false
 export TARGET_OS=""
 export DRY_RUN=false
 export BOOTSTRAP_MODE=false
@@ -91,7 +92,7 @@ Primary Workflows:
 
 Granular Uninstallation:
   --uninstall-dotfiles    Remove managed dotfile symlinks only
-  --uninstall-fonts       Remove MesloLGS NF fonts only
+  --uninstall-fonts       Remove MesloLGS Nerd Font Mono fonts only
   --uninstall-bin         Remove symlinked user utilities from ~/.local/bin only
 
 System & Package Options:
@@ -118,7 +119,7 @@ GUI & Desktop Options (Optional, disabled by default):
 
 User Environment Options:
   --skip-user             Skip user dotfiles and environment configuration
-  --skip-fonts            Skip MesloLGS NF font installation
+  --skip-fonts            Skip MesloLGS Nerd Font Mono font installation
   --skip-tools            Skip Mise polyglot toolchain runtime installation
   --skip-nvim             Skip Neovim configuration and plugins
   --skip-vim              Skip fallback Vim configuration (.vimrc)
@@ -187,7 +188,12 @@ while [ $# -gt 0 ]; do
                 exit 1
             fi
             IDE_NAME="$2"
-            INSTALL_APPS=true
+            IDE_EXPLICIT=true
+            if [ "$IDE_NAME" = "none" ]; then
+                INSTALL_APPS=false
+            else
+                INSTALL_APPS=true
+            fi
             shift 2
             ;;
         --db)
@@ -213,8 +219,13 @@ while [ $# -gt 0 ]; do
             ;;
         --with-gui)
             INSTALL_CHROME=true
-            INSTALL_APPS=true
             INSTALL_GHOSTTY=true
+            if [ "$IDE_EXPLICIT" = false ]; then
+                IDE_NAME="code"
+                INSTALL_APPS=true
+            elif [ "$IDE_NAME" != "none" ]; then
+                INSTALL_APPS=true
+            fi
             shift
             ;;
         --with-ghostty)
@@ -230,7 +241,12 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --with-apps)
-            INSTALL_APPS=true
+            if [ "$IDE_EXPLICIT" = false ]; then
+                IDE_NAME="code"
+                INSTALL_APPS=true
+            elif [ "$IDE_NAME" != "none" ]; then
+                INSTALL_APPS=true
+            fi
             shift
             ;;
         --skip-chrome)
@@ -239,6 +255,8 @@ while [ $# -gt 0 ]; do
             ;;
         --skip-apps)
             INSTALL_APPS=false
+            IDE_NAME="none"
+            IDE_EXPLICIT=true
             shift
             ;;
         --skip-packages)

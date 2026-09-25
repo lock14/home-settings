@@ -242,6 +242,60 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide --cd" "Expected dive=$expected_dive_dir reset=$expected_init_dir (got dive=$wdir_after_dive reset=$wdir_after_reset)"
         fi
 
+        # Verify `bin/ide --open-link` resolves session socket via 3-arg get_ide_var for both file://#L<line> and filepath:line
+        printf "line1\nline2\nline3\n" > "$IDE_WS_3P/subdir/nested.txt"
+        sock_3p="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_socket 2>/dev/null || true)"
+        link_nvim_pid=""
+        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ ! -S "$sock_3p" ]; then
+            nvim --headless --listen "$sock_3p" >/dev/null 2>&1 &
+            link_nvim_pid=$!
+            for _ in $(seq 1 30); do
+                [ -S "$sock_3p" ] && break
+                sleep 0.05
+            done
+        fi
+        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        if "$SCRIPT_DIR/bin/ide" --open-link "file://$IDE_WS_3P/subdir/nested.txt#L2" "" "$IDE_WS_3P" "ide-ws_3pane_test"; then
+            line_after_href="2"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                line_after_href="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+            fi
+            if "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/nested.txt:3:1" "$IDE_WS_3P" "ide-ws_3pane_test"; then
+                line_after_word="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_word="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                ed_win_after_link="$(tmux display-message -p -t "$ed_pane" "#{window_id}")"
+                if [ "$ed_win_after_link" = "$main_win" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ]; then
+                    pass "bin/ide --open-link handles file://#L<line> and filepath:line via 3-arg get_ide_var, focuses Editor pane, and jumps to target line numbers"
+                else
+                    fail "bin/ide --open-link focus/line" "Expected Editor pane in $main_win and lines 2/3, got win=$ed_win_after_link href_line=$line_after_href word_line=$line_after_word"
+                fi
+            else
+                fail "bin/ide --open-link filepath:line" "Command failed on filepath:line"
+            fi
+        else
+            fail "bin/ide --open-link file://#L<line>" "Command failed on file://#L<line>"
+        fi
+        if [ -n "$link_nvim_pid" ]; then
+            kill "$link_nvim_pid" 2>/dev/null || true
+            rm -f "$sock_3p"
+        fi
+        tmux kill-pane -t "$tree_pane"
+        if [ -n "$sock_3p" ]; then
+            rm -f "${sock_3p}.tree"
+            echo "stale" > "${sock_3p}.tree"
+        fi
+        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        recreated_tree_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_tree_pane 2>/dev/null || true)"
+        pane_cnt_after_recreate="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        if [ -n "$recreated_tree_pane" ] && [ "$recreated_tree_pane" != "$tree_pane" ] && \
+           [ "$pane_cnt_after_recreate" = "3" ] && [ ! -f "${sock_3p}.tree" ]; then
+            pass "bin/ide --toggle lazily recreates missing Left Directory Tree pane and removes stale .tree socket file"
+        else
+            fail "bin/ide lazy tree recreation" "Expected new tree_pane ($recreated_tree_pane != $tree_pane), 3 panes ($pane_cnt_after_recreate), and stale file removed"
+        fi
+
         "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1
         if ! tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
             pass "bin/ide --quit terminates the entire IDE workspace session cleanly"

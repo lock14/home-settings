@@ -326,6 +326,16 @@ set_ide_var() {
     tmux set-environment -t "$sess" "$env_name" "$val" 2>/dev/null || true
 }
 
+pane_exists() {
+    local pane="${1:-}"
+    [ -n "$pane" ] && [ "$(tmux display-message -p -t "$pane" "#{pane_id}" 2>/dev/null || true)" = "$pane" ]
+}
+
+window_exists() {
+    local win="${1:-}"
+    [ -n "$win" ] && [ "$(tmux display-message -p -t "$win" "#{window_id}" 2>/dev/null || true)" = "$win" ]
+}
+
 resolve_role_pane() {
     local sess="$1"
     local role="$2"
@@ -333,7 +343,7 @@ resolve_role_pane() {
     local env_name="$4"
     local pane
     pane="$(get_ide_var "$sess" "$opt_name" "$env_name")"
-    if [ -z "$pane" ] || ! tmux display-message -p -t "$pane" "#{pane_id}" >/dev/null 2>&1; then
+    if ! pane_exists "$pane"; then
         pane="$(tmux list-panes -s -t "$sess" -F "#{pane_id} #{@ide_role}" 2>/dev/null | awk -v r="$role" '$2 == r { print $1; exit }')"
         if [ -n "$pane" ]; then
             set_ide_var "$sess" "$opt_name" "$env_name" "$pane"
@@ -359,13 +369,14 @@ toggle_main_pane() {
     term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
     layout_mode="$(get_ide_var "$sess" "@ide_layout_mode" "IDE_LAYOUT_MODE")"
     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+    [ -z "$sock" ] && sock="${XDG_RUNTIME_DIR:-/tmp}/nvim-ide-${sess}.sock"
     ai_cli="$(get_ide_var "$sess" "@ide_ai_cli" "IDE_AI_CLI")"
     [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
 
-    if [ -z "$main_win" ] || ! tmux display-message -p -t "$main_win" "#{window_id}" >/dev/null 2>&1; then
-        if [ -n "$term_pane" ] && tmux display-message -p -t "$term_pane" "#{window_id}" >/dev/null 2>&1; then
+    if ! window_exists "$main_win"; then
+        if pane_exists "$term_pane"; then
             main_win="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
-        elif [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{window_id}" >/dev/null 2>&1; then
+        elif pane_exists "$tree_pane"; then
             main_win="$(tmux display-message -p -t "$tree_pane" "#{window_id}")"
         else
             main_win="$(tmux list-windows -t "$sess" -F "#{window_id} #{window_name}" | awk '$2 != "_swap" { print $1; exit }')"
@@ -375,7 +386,7 @@ toggle_main_pane() {
 
     # Geometry fallback if session was created before per-pane @ide_role tags existed:
     # In a 3-pane layout, Left is at left=0, Top-Right Editor is at left>0 && top==0, Bottom-Right Term is at top>0
-    if [ -z "$tree_pane" ] || ! tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+    if ! pane_exists "$tree_pane"; then
         local win_pane_cnt
         win_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         if [ "${win_pane_cnt:-0}" -ge 3 ]; then
@@ -385,7 +396,7 @@ toggle_main_pane() {
         fi
     fi
 
-    if [ -z "$editor_pane" ] || [ "$editor_pane" = "$tree_pane" ] || ! tmux display-message -p -t "$editor_pane" "#{pane_id}" >/dev/null 2>&1; then
+    if ! pane_exists "$editor_pane" || [ "$editor_pane" = "$tree_pane" ]; then
         editor_pane="$(tmux list-panes -t "$main_win" -F "#{pane_top} #{pane_left} #{pane_id}" | awk -v tp="$tree_pane" -v tm="$term_pane" '$3 != tp && $3 != tm { print $1, $2, $3 }' | sort -n -k1,1 -k2,2r | awk 'NR==1 { print $3 }')"
         if [ -n "$editor_pane" ]; then
             tmux set-option -p -t "$editor_pane" @ide_role "editor" 2>/dev/null || true
@@ -402,19 +413,20 @@ toggle_main_pane() {
 
     # Lazily provision the persistent Left Directory Pane ONLY if main_win has < 3 panes and not in --2pane mode
     if [ "${layout_mode:-3pane}" != "2pane" ]; then
-        if [ -z "$tree_pane" ] || ! tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+        if ! pane_exists "$tree_pane"; then
+            [ -n "$sock" ] && rm -f "${sock}.tree"
             tree_pane="$(tmux split-window -f -h -b -P -F "#{pane_id}" -t "$main_win" -l 20% -c "$cur_dir")"
             tmux set-option -p -t "$tree_pane" @ide_role "tree" 2>/dev/null || true
             set_ide_var "$sess" "@ide_tree_pane" "IDE_TREE_PANE" "$tree_pane"
             set_ide_var "$sess" "@ide_layout_mode" "IDE_LAYOUT_MODE" "3pane"
             if command -v nvim >/dev/null 2>&1; then
-                tmux send-keys -t "$tree_pane" "NVIM_IDE_TREE=1 NVIM_IDE_SOCKET='$sock' nvim ." C-m
+                tmux send-keys -t "$tree_pane" "IDE_INITIAL_ROOT='$cur_dir' NVIM_IDE_TREE=1 NVIM_IDE_SOCKET='$sock' nvim --listen '${sock}.tree' ." C-m
             fi
         fi
     fi
 
     # Lazily create or recreate the background AI pane if not yet present
-    if [ -z "$ai_pane" ] || ! tmux display-message -p -t "$ai_pane" "#{pane_id}" >/dev/null 2>&1; then
+    if ! pane_exists "$ai_pane"; then
         ai_pane="$(tmux new-window -d -P -F "#{pane_id}" -t "${sess}:" -n "_swap" -c "$cur_dir")"
         tmux set-option -p -t "$ai_pane" @ide_role "ai" 2>/dev/null || true
         set_ide_var "$sess" "@ide_ai_pane" "IDE_AI_PANE" "$ai_pane"
@@ -480,7 +492,7 @@ open_in_editor() {
         nvim --headless --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1 || true
         nvim --headless --server "$sock" --remote "$filepath" >/dev/null 2>&1 || true
     fi
-    if [ "$focus" = "0" ] && [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+    if [ "$focus" = "0" ] && pane_exists "$tree_pane"; then
         tmux select-pane -t "$tree_pane"
     fi
 }
@@ -586,7 +598,7 @@ cd_ide_workspace() {
     # 1. Re-root Left Directory Tree (@ide_role=tree)
     if [ -n "$sock" ] && [ -S "$tree_sock" ] && command -v nvim >/dev/null 2>&1; then
         nvim --headless --server "$tree_sock" --remote-expr "v:lua.IdeTree.set_root('$escaped_dir')" >/dev/null 2>&1 || true
-    elif [ -n "$tree_pane" ] && tmux display-message -p -t "$tree_pane" "#{pane_id}" >/dev/null 2>&1; then
+    elif pane_exists "$tree_pane"; then
         tmux send-keys -t "$tree_pane" Escape ":lua if _G.IdeTree then _G.IdeTree.set_root('$escaped_dir') end" C-m
     fi
 
@@ -596,7 +608,7 @@ cd_ide_workspace() {
     fi
 
     # 3. Update Bottom-Right Terminal Shell (@ide_role=term) if idle at zsh/bash prompt
-    if [ "${IDE_CD_SKIP_SHELL:-0}" != "1" ] && [ -n "$term_pane" ] && tmux display-message -p -t "$term_pane" "#{pane_id}" >/dev/null 2>&1; then
+    if [ "${IDE_CD_SKIP_SHELL:-0}" != "1" ] && pane_exists "$term_pane"; then
         term_cmd="$(tmux display-message -p -t "$term_pane" "#{pane_current_command}" 2>/dev/null || true)"
         term_path="$(tmux display-message -p -t "$term_pane" "#{pane_current_path}" 2>/dev/null || true)"
         if [[ "$term_cmd" == zsh* || "$term_cmd" == bash* || "$term_cmd" == sh* ]] && [ "$term_path" != "$target_dir" ]; then
@@ -605,7 +617,7 @@ cd_ide_workspace() {
     fi
 
     # 4. Update AI Agent Pane (@ide_role=ai) working directory (respawn in $target_dir with --continue)
-    if [ -n "$ai_pane" ] && tmux display-message -p -t "$ai_pane" "#{pane_id}" >/dev/null 2>&1; then
+    if pane_exists "$ai_pane"; then
         local ai_cwd
         ai_cwd="$(tmux display-message -p -t "$ai_pane" "#{pane_current_path}" 2>/dev/null || true)"
         if [ "$ai_cwd" != "$target_dir" ]; then
@@ -726,9 +738,10 @@ open_ide_link() {
             if [ -f "$fpath" ]; then
                 open_in_editor "$fpath" "1"
                 if [ -n "$line" ]; then
-                    local sock
-                    sock="$(get_ide_var "NVIM_IDE_SOCKET")"
-                    [ -n "$sock" ] && [ -S "$sock" ] && nvim --headless --server "$sock" --remote-expr "execute('$line')" >/dev/null 2>&1 || true
+                    local sess sock
+                    sess="$(resolve_target_session "$TARGET_ARG")"
+                    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+                    [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$line')" >/dev/null 2>&1 || true
                 fi
                 return 0
             elif [ -d "$fpath" ]; then
@@ -778,9 +791,10 @@ open_ide_link() {
     if [ -f "$clean_file" ]; then
         open_in_editor "$clean_file" "1"
         if [ -n "$file_line" ]; then
-            local sock
-            sock="$(get_ide_var "NVIM_IDE_SOCKET")"
-            [ -n "$sock" ] && [ -S "$sock" ] && nvim --headless --server "$sock" --remote-expr "execute('$file_line')" >/dev/null 2>&1 || true
+            local sess sock
+            sess="$(resolve_target_session "$TARGET_ARG")"
+            sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+            [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$file_line')" >/dev/null 2>&1 || true
         fi
         return 0
     fi
@@ -929,7 +943,7 @@ else
         if [ "$IDE_AI_CLI" != "$EXISTING_AI_CLI" ]; then
             tmux kill-session -t "ai-${SESSION}" 2>/dev/null || true
             AI_PANE_ID="$(resolve_role_pane "$SESSION" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
-            if [ -n "$AI_PANE_ID" ] && tmux display-message -p -t "$AI_PANE_ID" "#{pane_id}" >/dev/null 2>&1; then
+            if pane_exists "$AI_PANE_ID"; then
                 tmux respawn-pane -k -t "$AI_PANE_ID" -c "$TARGET_DIR" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" 2>/dev/null || \
                     tmux respawn-pane -k -t "$AI_PANE_ID" -c "$TARGET_DIR" "env IDE_AI_CLI='$IDE_AI_CLI' NVIM_IDE_SOCKET='$NVIM_SOCKET' ${SHELL:-/bin/zsh} -l" 2>/dev/null || true
                 if AI_RUN_CMD="$(resolve_ai_cmd "$IDE_AI_CLI")"; then

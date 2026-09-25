@@ -70,12 +70,22 @@ else
     fi
 
     # Determine if any font needs extraction or download
+    MIN_FONT_BYTES=2500000
+    tmp_archive=""
+    target_tmp=""
+    cleanup_font_tmp() {
+        [ -n "${tmp_archive:-}" ] && rm -f "$tmp_archive"
+        [ -n "${target_tmp:-}" ] && rm -f "$target_tmp"
+        return 0
+    }
+    trap cleanup_font_tmp EXIT
+
     need_download=0
     for font in "${FONTS[@]}"; do
         target="$FONT_DIR/$font"
         cached="$CACHE_DIR/$font"
-        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt 2900000 ]; then
-            if [ ! -s "$cached" ] || [ "$(wc -c < "$cached" | tr -d ' ')" -lt 2900000 ]; then
+        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt "$MIN_FONT_BYTES" ]; then
+            if [ ! -s "$cached" ] || [ "$(wc -c < "$cached" | tr -d ' ')" -lt "$MIN_FONT_BYTES" ]; then
                 need_download=1
             fi
         fi
@@ -83,11 +93,12 @@ else
 
     if [ "$need_download" -eq 1 ] && [ ! -s "$CACHED_ARCHIVE" ]; then
         tmp_archive="$CACHED_ARCHIVE.tmp.$$.${BASHPID:-$RANDOM}"
-        trap 'rm -f "$tmp_archive"' EXIT
         if curl -fsSL "$ARCHIVE_URL" -o "$tmp_archive"; then
             mv -f "$tmp_archive" "$CACHED_ARCHIVE"
+            tmp_archive=""
         else
             rm -f "$tmp_archive"
+            tmp_archive=""
             exit 1
         fi
     fi
@@ -97,18 +108,18 @@ else
         cached="$CACHE_DIR/$font"
 
         # Extract from archive into cache if missing
-        if [ ! -s "$cached" ] || [ "$(wc -c < "$cached" | tr -d ' ')" -lt 2900000 ]; then
+        if [ ! -s "$cached" ] || [ "$(wc -c < "$cached" | tr -d ' ')" -lt "$MIN_FONT_BYTES" ]; then
             if [ -s "$CACHED_ARCHIVE" ]; then
                 tar -xf "$CACHED_ARCHIVE" -C "$CACHE_DIR" "$font"
             fi
         fi
 
         # Install from cache to target atomically
-        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt 2900000 ]; then
+        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt "$MIN_FONT_BYTES" ]; then
             if [ -s "$cached" ]; then
                 target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
-                trap 'rm -f "$target_tmp"' EXIT
                 cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
+                target_tmp=""
             fi
         fi
     done

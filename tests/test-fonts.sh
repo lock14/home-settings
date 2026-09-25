@@ -126,10 +126,10 @@ ln -sfn "$TEMP_HOME/nonexistent-fontconfig" "$TEMP_HOME/.config/fontconfig"
 printf "stub" > "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf"
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
     nf_size=$(wc -c < "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" | tr -d ' ')
-    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2900000 ]; then
+    if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2500000 ]; then
         pass "Font setup removes conflicting MesloLGS-NF-*.ttf, stray numbered fonts, legacy MesloLGS NF, resolves broken fontconfig symlink, and installs valid MesloLGSNerdFontMono-Regular.ttf ($nf_size bytes)"
     else
-        fail "Font cleanup and restoration" "Expected conflicting/stray/legacy files removed, broken symlink resolved, and size > 2.9M (got size=$nf_size)"
+        fail "Font cleanup and restoration" "Expected conflicting/stray/legacy files removed, broken symlink resolved, and size > 2.5M (got size=$nf_size)"
     fi
 else
     fail "Font setup cleanup run" "Second run failed: $output"
@@ -146,6 +146,21 @@ if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --ski
     fi
 else
     fail "Font setup idempotency" "Third run failed: $output"
+fi
+
+# Verify --uninstall-fonts does not traverse ~/.config/fontconfig symlink and delete tracked repo file
+rm -rf "$TEMP_HOME/.config/fontconfig"
+ln -sfn "$SCRIPT_DIR/dotfiles/.config/fontconfig" "$TEMP_HOME/.config/fontconfig"
+if output=$("$SCRIPT_DIR/setup.sh" --uninstall-fonts 2>&1); then
+    if [ -s "$SCRIPT_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ] && \
+       [ ! -L "$TEMP_HOME/.config/fontconfig" ] && \
+       [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ]; then
+        pass "setup.sh --uninstall-fonts unlinks ~/.config/fontconfig symlink without deleting tracked dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+    else
+        fail "setup.sh --uninstall-fonts symlink safety" "Tracked repo fontconfig file was deleted or symlink/fonts remained"
+    fi
+else
+    fail "setup.sh --uninstall-fonts" "Uninstall command failed: $output"
 fi
 
 # Test 3: Font installation on macOS target
