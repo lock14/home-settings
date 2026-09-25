@@ -38,11 +38,12 @@ cleanup_env_test() {
     export PATH="$OLD_PATH"
     if [ -n "$OLD_XDG_DATA_HOME" ]; then export XDG_DATA_HOME="$OLD_XDG_DATA_HOME"; else unset XDG_DATA_HOME; fi
     if [ -n "$OLD_XDG_CACHE_HOME" ]; then export XDG_CACHE_HOME="$OLD_XDG_CACHE_HOME"; else unset XDG_CACHE_HOME; fi
+    export COLORTERM="truecolor"
 }
 trap cleanup_env_test EXIT
 
 export HOME="$TEMP_HOME"
-unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR
+unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
