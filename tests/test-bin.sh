@@ -257,4 +257,127 @@ if command -v tmux >/dev/null 2>&1; then
     rm -rf "$TMUX_TEST_TMPDIR"
 fi
 
+# Test 7: bin/update-system CLI validation & cross-platform dry-run orchestration
+echo -e "\n[7/7] Testing bin/update-system maintenance orchestrator..."
+UPDATE_HELP="$("$SCRIPT_DIR/bin/update-system" --help)"
+if grep -q -- '--dry-run' <<< "$UPDATE_HELP" && \
+   grep -q -- '--system-only' <<< "$UPDATE_HELP" && \
+   grep -q -- '--skip-snaps' <<< "$UPDATE_HELP" && \
+   grep -q -- '--with-dev' <<< "$UPDATE_HELP" && \
+   grep -q -- '--all' <<< "$UPDATE_HELP"; then
+    pass "bin/update-system --help displays complete usage flags and workflows"
+else
+    fail "bin/update-system --help" "Expected complete options in bin/update-system --help output"
+fi
+
+if "$SCRIPT_DIR/bin/update-system" --unrecognized-flag >/dev/null 2>&1; then
+    fail "bin/update-system invalid flag" "Expected non-zero exit status on unknown flag"
+else
+    pass "bin/update-system rejects unknown CLI flags"
+fi
+
+if "$SCRIPT_DIR/bin/update-system" --os >/dev/null 2>&1; then
+    fail "bin/update-system missing --os arg" "Expected non-zero exit status when --os has no argument"
+else
+    pass "bin/update-system rejects --os without argument"
+fi
+
+if "$SCRIPT_DIR/bin/update-system" --os solaris >/dev/null 2>&1; then
+    fail "bin/update-system invalid OS" "Expected non-zero exit status on unsupported OS family"
+else
+    pass "bin/update-system rejects unsupported operating system families"
+fi
+
+# Test Ubuntu dry-run plan
+UBUNTU_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --dry-run)"
+if grep -Fq "apt-get update" <<< "$UBUNTU_OUT" && \
+   grep -Fq "apt-get upgrade -y" <<< "$UBUNTU_OUT" && \
+   grep -Fq "apt-get autoremove -y" <<< "$UBUNTU_OUT" && \
+   grep -Fq "apt-get autoclean" <<< "$UBUNTU_OUT" && \
+   grep -Fq "snap refresh" <<< "$UBUNTU_OUT" && \
+   grep -Fq "flatpak update -y" <<< "$UBUNTU_OUT"; then
+    pass "bin/update-system --os ubuntu --dry-run dispatches apt update, upgrade -y, autoremove, autoclean, snap refresh, and flatpak update"
+else
+    fail "bin/update-system ubuntu dry-run" "Missing expected Ubuntu update commands"
+fi
+
+# Test Fedora dry-run plan
+FEDORA_OUT="$("$SCRIPT_DIR/bin/update-system" --os fedora --dry-run)"
+if grep -Fq "dnf upgrade --refresh -y" <<< "$FEDORA_OUT" && \
+   grep -Fq "dnf autoremove -y" <<< "$FEDORA_OUT" && \
+   grep -Fq "dnf clean packages -y" <<< "$FEDORA_OUT"; then
+    pass "bin/update-system --os fedora --dry-run dispatches dnf upgrade --refresh, autoremove, and package cleanup"
+else
+    fail "bin/update-system fedora dry-run" "Missing expected Fedora dnf update commands"
+fi
+
+# Test macOS dry-run plan
+MACOS_OUT="$("$SCRIPT_DIR/bin/update-system" --os macos --dry-run)"
+if grep -Fq "brew update" <<< "$MACOS_OUT" && \
+   grep -Fq "brew upgrade" <<< "$MACOS_OUT" && \
+   grep -Fq "brew cleanup -s" <<< "$MACOS_OUT" && \
+   grep -Fq "brew autoremove" <<< "$MACOS_OUT" && \
+   grep -Fq "mas upgrade" <<< "$MACOS_OUT" && \
+   ! grep -Fq "sudo brew" <<< "$MACOS_OUT" && \
+   ! grep -Fq "snap refresh" <<< "$MACOS_OUT"; then
+    pass "bin/update-system --os macos --dry-run dispatches user-space brew commands and mas upgrade without sudo brew or snap"
+else
+    fail "bin/update-system macos dry-run" "Missing expected macOS update commands or found privileged brew"
+fi
+
+# Test Arch Linux dry-run plan
+ARCH_OUT="$("$SCRIPT_DIR/bin/update-system" --os arch --dry-run)"
+if grep -Fq "pacman -Syu --noconfirm" <<< "$ARCH_OUT" && \
+   grep -Fq "pacman -Sc --noconfirm" <<< "$ARCH_OUT"; then
+    pass "bin/update-system --os arch --dry-run dispatches pacman -Syu and cache cleanup"
+else
+    fail "bin/update-system arch dry-run" "Missing expected Arch pacman update commands"
+fi
+
+# Test component toggles (--system-only, --skip-snaps, --skip-flatpak, --with-dev, --no-cleanup, -i)
+SYS_ONLY_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --system-only --dry-run)"
+if ! grep -Fq "snap refresh" <<< "$SYS_ONLY_OUT" && ! grep -Fq "flatpak update" <<< "$SYS_ONLY_OUT"; then
+    pass "bin/update-system --system-only cleanly skips Snaps and Flatpaks"
+else
+    fail "bin/update-system --system-only" "Found snap or flatpak commands in system-only mode"
+fi
+
+SKIP_SNAPS_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --skip-snaps --dry-run)"
+if ! grep -Fq "snap refresh" <<< "$SKIP_SNAPS_OUT" && grep -Fq "flatpak update -y" <<< "$SKIP_SNAPS_OUT"; then
+    pass "bin/update-system --skip-snaps selectively skips snap refresh while maintaining flatpak"
+else
+    fail "bin/update-system --skip-snaps" "Failed to selectively skip snap"
+fi
+
+SKIP_FLATPAK_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --skip-flatpak --dry-run)"
+if grep -Fq "snap refresh" <<< "$SKIP_FLATPAK_OUT" && ! grep -Fq "flatpak update" <<< "$SKIP_FLATPAK_OUT"; then
+    pass "bin/update-system --skip-flatpak selectively skips flatpak updates while maintaining snap"
+else
+    fail "bin/update-system --skip-flatpak" "Failed to selectively skip flatpak"
+fi
+
+DEV_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --with-dev --dry-run)"
+if grep -Fq "mise plugins update" <<< "$DEV_OUT" && \
+   grep -Fq "mise upgrade" <<< "$DEV_OUT" && \
+   grep -Fq "rustup update" <<< "$DEV_OUT" && \
+   grep -Fq "upgrade.sh" <<< "$DEV_OUT"; then
+    pass "bin/update-system --with-dev dispatches Mise, Rustup, and Oh-My-Zsh updates"
+else
+    fail "bin/update-system --with-dev" "Missing expected developer toolchain commands"
+fi
+
+NO_CLEANUP_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --no-cleanup --dry-run)"
+if ! grep -Fq "autoremove" <<< "$NO_CLEANUP_OUT" && ! grep -Fq "autoclean" <<< "$NO_CLEANUP_OUT"; then
+    pass "bin/update-system --no-cleanup skips autoremove and cache cleaning phases"
+else
+    fail "bin/update-system --no-cleanup" "Found autoremove or autoclean in --no-cleanup mode"
+fi
+
+INTERACTIVE_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu -i --dry-run)"
+if grep -Fq "apt-get upgrade" <<< "$INTERACTIVE_OUT" && ! grep -Fq "apt-get upgrade -y" <<< "$INTERACTIVE_OUT"; then
+    pass "bin/update-system -i (--interactive) suppresses automatic -y flag for interactive confirmation"
+else
+    fail "bin/update-system -i" "Found automatic -y flag in interactive mode"
+fi
+
 test_summary

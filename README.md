@@ -22,7 +22,8 @@ home-settings/
 │   ├── ide                          # Tmux + Neovim + AI Agent (agy/claude/codex) IDE workspace launcher
 │   ├── macos-terminal-solarized     # macOS Terminal.app Solarized Dark profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
-│   └── sum                          # High-performance AWK number summation & stats
+│   ├── sum                          # High-performance AWK number summation & stats
+│   └── update-system                # Cross-platform system package, Snap, Flatpak & toolchain updater
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, Golang, Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
@@ -326,6 +327,7 @@ The redesigned repository is built for frictionless extension:
 | `macos-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in macOS `Terminal.app` |
 | `sum` | Sum numbers from stdin/args with CSV parsing, column filtering (`-k`), human byte units (`-H`), averages (`-a`), and stats (`-s`) |
 | `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
+| `update-system` | Cross-platform system package & toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, Mise) |
 
 ---
 
