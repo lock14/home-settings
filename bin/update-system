@@ -1,0 +1,461 @@
+#!/bin/bash
+# ==============================================================================
+# bin/update-system — Cross-Platform System & Package Maintenance Utility
+# ==============================================================================
+# Supports Ubuntu/Debian (APT), Fedora/RHEL (DNF), macOS (Homebrew), Arch Linux,
+# Universal packages (Snap, Flatpak, Mac App Store), and Developer Toolchains.
+# ==============================================================================
+
+set -euo pipefail
+
+# ANSI Color Palette (Solarized Dark aligned)
+COLOR_RESET="\033[0m"
+COLOR_INFO="\033[34m"    # Blue (#268BD2)
+COLOR_SUCCESS="\033[32m" # Green (#859900)
+COLOR_WARN="\033[33m"    # Yellow (#B58900)
+COLOR_ERROR="\033[31m"   # Red (#DC322F)
+
+log_header() {
+    echo -e "\n${COLOR_INFO}==>${COLOR_RESET} $*"
+}
+
+log_step() {
+    echo -e "  ${COLOR_INFO}➜${COLOR_RESET} $*"
+}
+
+log_success() {
+    echo -e "  ${COLOR_SUCCESS}✔${COLOR_RESET} $*"
+}
+
+log_warn() {
+    echo -e "  ${COLOR_WARN}⚠${COLOR_RESET} $*" >&2
+}
+
+log_error() {
+    echo -e "  ${COLOR_ERROR}✘${COLOR_RESET} $*" >&2
+}
+
+# Configuration flags
+DRY_RUN=false
+NON_INTERACTIVE=true
+SYSTEM_ONLY=false
+SKIP_SNAPS=false
+SKIP_FLATPAK=false
+WITH_DEV=false
+DO_CLEANUP=true
+INCLUDE_MACOS_SYSTEM=false
+TARGET_OS=""
+
+usage() {
+    cat <<'EOF'
+Usage: update-system [OPTIONS]
+
+Cross-Platform System, Package, and Toolchain Maintenance Utility.
+
+Primary Workflows:
+  (default)            Update native OS packages, Snaps, and Flatpaks non-interactively
+  --all                Full sweep: OS packages, Snaps, Flatpaks, and developer toolchains
+  --system-only        Update only the native OS package manager (skip Snaps/Flatpaks)
+  -n, --dry-run        Preview all commands without modifying the system
+  -i, --interactive    Prompt for confirmation during package updates (disables auto -y)
+
+Component Toggles:
+  --skip-snaps         Skip Snap package refresh
+  --skip-snap          Alias for --skip-snaps
+  --skip-flatpak       Skip Flatpak updates
+  --with-dev, --tools  Include developer toolchains (mise, rustup, Oh-My-Zsh)
+  --no-cleanup         Skip package autoremove and cache cleaning phases
+  --macos-system       Run macOS Apple Software Update (macOS only)
+
+Advanced Options:
+  --os <distro>        Override OS detection: ubuntu, fedora, macos, arch
+  -y, --yes            Force non-interactive confirmation (default)
+  -h, --help           Display this help message and exit
+
+Examples:
+  update-system                      # Routine maintenance of OS + Snaps + Flatpaks
+  update-system --dry-run            # Preview actions without executing
+  update-system --all                # Update OS packages + Snaps + Flatpaks + dev tools
+  update-system --system-only        # Update only apt/dnf/brew packages
+EOF
+}
+
+# Parse CLI arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -n|--dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -y|--yes)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        -i|--interactive)
+            NON_INTERACTIVE=false
+            shift
+            ;;
+        --system-only)
+            SYSTEM_ONLY=true
+            shift
+            ;;
+        --skip-snaps|--skip-snap)
+            SKIP_SNAPS=true
+            shift
+            ;;
+        --skip-flatpak)
+            SKIP_FLATPAK=true
+            shift
+            ;;
+        --with-dev|--dev|--tools)
+            WITH_DEV=true
+            shift
+            ;;
+        --all)
+            WITH_DEV=true
+            SYSTEM_ONLY=false
+            shift
+            ;;
+        --no-cleanup)
+            DO_CLEANUP=false
+            shift
+            ;;
+        --macos-system)
+            INCLUDE_MACOS_SYSTEM=true
+            shift
+            ;;
+        --os)
+            if [ $# -lt 2 ]; then
+                log_error "Option --os requires an argument (e.g. ubuntu, fedora, macos, arch)"
+                exit 1
+            fi
+            TARGET_OS="$2"
+            shift 2
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Detect operating system
+detect_system_os() {
+    if [ -n "$TARGET_OS" ]; then
+        echo "$TARGET_OS"
+        return 0
+    fi
+
+    if [ -n "${TARGET_OS:-}" ]; then
+        echo "$TARGET_OS"
+        return 0
+    fi
+
+    if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+        echo "macos"
+        return 0
+    fi
+
+    if [ -f /etc/os-release ]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        case "${ID:-}" in
+            ubuntu|debian|pop|linuxmint|elementary|kali)
+                echo "ubuntu"
+                return 0
+                ;;
+            fedora|rhel|centos|rocky|almalinux)
+                echo "fedora"
+                return 0
+                ;;
+            arch|manjaro|endeavouros)
+                echo "arch"
+                return 0
+                ;;
+        esac
+
+        case "${ID_LIKE:-}" in
+            *ubuntu*|*debian*)
+                echo "ubuntu"
+                return 0
+                ;;
+            *fedora*|*rhel*)
+                echo "fedora"
+                return 0
+                ;;
+            *arch*)
+                echo "arch"
+                return 0
+                ;;
+        esac
+    fi
+
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "ubuntu"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "fedora"
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "arch"
+    elif command -v brew >/dev/null 2>&1; then
+        echo "macos"
+    else
+        echo "unknown"
+    fi
+}
+
+OS="$(detect_system_os)"
+case "$OS" in
+    ubuntu|fedora|macos|arch) ;;
+    *)
+        log_error "Unsupported operating system family: '$OS'. Supported: ubuntu, fedora, macos, arch."
+        exit 1
+        ;;
+esac
+
+# Execution helpers
+run_cmd() {
+    if [ "$DRY_RUN" = true ]; then
+        echo "  [DryRun] $*"
+    else
+        "$@"
+    fi
+}
+
+run_elevated() {
+    if [ "$DRY_RUN" = true ]; then
+        if [ "$(id -u)" -eq 0 ]; then
+            echo "  [DryRun] $*"
+        else
+            echo "  [DryRun] sudo $*"
+        fi
+    else
+        if [ "$(id -u)" -eq 0 ]; then
+            "$@"
+        else
+            sudo "$@"
+        fi
+    fi
+}
+
+ensure_sudo() {
+    if [ "$DRY_RUN" = false ] && [ "$(id -u)" -ne 0 ]; then
+        if ! sudo -n true 2>/dev/null; then
+            log_step "Elevated permissions required. Authenticating sudo session..."
+            sudo -v
+        fi
+    fi
+}
+
+# Display planned run configuration
+log_header "System Update Orchestrator"
+echo "  Target OS     : $OS"
+echo "  Interactive   : $([ "$NON_INTERACTIVE" = true ] && echo "No (auto -y)" || echo "Yes")"
+echo "  Scope         : $([ "$SYSTEM_ONLY" = true ] && echo "Native OS Packages Only" || echo "System + App Runtimes$([ "$WITH_DEV" = true ] && echo " + Dev Tools" || echo "")")"
+if [ "$DRY_RUN" = true ]; then
+    echo "  Mode          : DRY RUN (Preview only, no system changes)"
+fi
+
+# Pre-authenticate sudo if privileged commands are anticipated
+if [ "$OS" != "macos" ] || [ "$INCLUDE_MACOS_SYSTEM" = true ]; then
+    ensure_sudo
+fi
+
+START_TIME="$(date +%s)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Native OS Package Manager
+# ─────────────────────────────────────────────────────────────────────────────
+log_header "Native OS Package Manager ($OS)"
+
+case "$OS" in
+    ubuntu)
+        log_step "Updating APT package indices..."
+        run_elevated apt-get update
+
+        log_step "Upgrading installed packages..."
+        if [ "$NON_INTERACTIVE" = true ]; then
+            run_elevated apt-get upgrade -y
+        else
+            run_elevated apt-get upgrade
+        fi
+
+        if [ "$DO_CLEANUP" = true ]; then
+            log_step "Autoremoving unused APT packages..."
+            if [ "$NON_INTERACTIVE" = true ]; then
+                run_elevated apt-get autoremove -y
+            else
+                run_elevated apt-get autoremove
+            fi
+
+            log_step "Cleaning APT package cache..."
+            run_elevated apt-get autoclean
+        fi
+        ;;
+
+    fedora)
+        log_step "Updating DNF package metadata and upgrading packages..."
+        if [ "$NON_INTERACTIVE" = true ]; then
+            run_elevated dnf upgrade --refresh -y
+        else
+            run_elevated dnf upgrade --refresh
+        fi
+
+        if [ "$DO_CLEANUP" = true ]; then
+            log_step "Autoremoving unused DNF packages..."
+            if [ "$NON_INTERACTIVE" = true ]; then
+                run_elevated dnf autoremove -y
+            else
+                run_elevated dnf autoremove
+            fi
+
+            log_step "Cleaning DNF package cache..."
+            if [ "$NON_INTERACTIVE" = true ]; then
+                run_elevated dnf clean packages -y
+            else
+                run_elevated dnf clean packages
+            fi
+        fi
+        ;;
+
+    macos)
+        if command -v brew >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+            log_step "Updating Homebrew formulae and casks..."
+            run_cmd brew update
+
+            log_step "Upgrading Homebrew packages and casks..."
+            run_cmd brew upgrade
+
+            if [ "$DO_CLEANUP" = true ]; then
+                log_step "Removing stale Homebrew lockfiles and downloads..."
+                run_cmd brew cleanup -s
+
+                log_step "Autoremoving unused Homebrew dependencies..."
+                run_cmd brew autoremove
+            fi
+        else
+            log_warn "Homebrew (brew) command not found on macOS host."
+        fi
+
+        if [ "$INCLUDE_MACOS_SYSTEM" = true ]; then
+            log_step "Checking Apple Software Update..."
+            run_elevated softwareupdate -ia --verbose
+        fi
+        ;;
+
+    arch)
+        log_step "Upgrading Arch Linux packages (Pacman)..."
+        if [ "$NON_INTERACTIVE" = true ]; then
+            run_elevated pacman -Syu --noconfirm
+        else
+            run_elevated pacman -Syu
+        fi
+
+        if [ "$DO_CLEANUP" = true ]; then
+            log_step "Cleaning Pacman package cache..."
+            if [ "$NON_INTERACTIVE" = true ]; then
+                run_elevated pacman -Sc --noconfirm
+            else
+                run_elevated pacman -Sc
+            fi
+        fi
+        ;;
+esac
+
+log_success "Native OS package management finished."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Universal Application Packages (Snap, Flatpak, Mac App Store)
+# ─────────────────────────────────────────────────────────────────────────────
+if [ "$SYSTEM_ONLY" = false ]; then
+    # Snap packages (Linux only)
+    if [ "$OS" != "macos" ] && [ "$SKIP_SNAPS" = false ]; then
+        if command -v snap >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+            log_header "Snap Packages"
+            log_step "Refreshing installed Snap packages..."
+            run_elevated snap refresh
+            log_success "Snap packages updated."
+        fi
+    fi
+
+    # Flatpak packages (Linux only)
+    if [ "$OS" != "macos" ] && [ "$SKIP_FLATPAK" = false ]; then
+        if command -v flatpak >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+            log_header "Flatpak Packages"
+            log_step "Updating installed Flatpaks..."
+            if [ "$NON_INTERACTIVE" = true ]; then
+                run_cmd flatpak update -y
+            else
+                run_cmd flatpak update
+            fi
+
+            if [ "$DO_CLEANUP" = true ]; then
+                log_step "Uninstalling unused Flatpak runtimes..."
+                if [ "$NON_INTERACTIVE" = true ]; then
+                    run_cmd flatpak uninstall --unused -y
+                else
+                    run_cmd flatpak uninstall --unused
+                fi
+            fi
+            log_success "Flatpak packages updated."
+        fi
+    fi
+
+    # Mac App Store (macOS only)
+    if [ "$OS" = "macos" ] && { command -v mas >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; }; then
+        if command -v mas >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+            log_header "Mac App Store"
+            log_step "Upgrading Mac App Store applications..."
+            run_cmd mas upgrade
+            log_success "Mac App Store applications updated."
+        fi
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Developer Toolchains (Mise, Rustup, Oh-My-Zsh) [Opt-in via --with-dev]
+# ─────────────────────────────────────────────────────────────────────────────
+if [ "$WITH_DEV" = true ]; then
+    log_header "Developer Toolchains & Runtimes"
+
+    # Mise polyglot toolchains
+    if command -v mise >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+        log_step "Updating Mise plugins and toolchain runtimes..."
+        run_cmd mise plugins update
+        run_cmd mise upgrade
+        if [ "$DO_CLEANUP" = true ]; then
+            log_step "Pruning old Mise toolchain versions..."
+            run_cmd mise prune -y
+        fi
+        log_success "Mise toolchains updated."
+    fi
+
+    # Rustup toolchain
+    if command -v rustup >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+        log_step "Updating Rustup toolchains and components..."
+        run_cmd rustup update
+        log_success "Rustup toolchains updated."
+    fi
+
+    # Oh-My-Zsh update
+    omz_dir="${ZSH:-$HOME/.oh-my-zsh}"
+    if [ -d "$omz_dir" ] || [ "$DRY_RUN" = true ]; then
+        log_step "Updating Oh-My-Zsh framework..."
+        if command -v omz >/dev/null 2>&1; then
+            run_cmd omz update --unattended
+        elif [ -f "$omz_dir/tools/upgrade.sh" ] || [ "$DRY_RUN" = true ]; then
+            run_cmd env ZSH="$omz_dir" sh "$omz_dir/tools/upgrade.sh" --unattended
+        fi
+        log_success "Oh-My-Zsh updated."
+    fi
+fi
+
+END_TIME="$(date +%s)"
+DURATION=$((END_TIME - START_TIME))
+
+log_header "Update Complete"
+log_success "All requested updates completed successfully in ${DURATION}s."
