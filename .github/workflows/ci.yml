@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [master, main]
 
+env:
+  COLORTERM: truecolor
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # 1. Lint & Static Analysis
@@ -30,6 +33,8 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      COLORTERM: truecolor
     steps:
       - uses: actions/checkout@v4
 
