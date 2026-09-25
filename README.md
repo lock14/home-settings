@@ -33,11 +33,12 @@ home-settings/
 │   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer & IDE pane bindings
 │   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
 │   ├── .zsh-completions             # Fpath completion registration
-│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener (v) (+ auto-loads ~/.zsh-functions.d/*.zsh)
+│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener/cd (v, icd) (+ auto-loads ~/.zsh-functions.d/*.zsh)
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
 │   └── .config/
 │       ├── clangd/config.yaml       # Modern C23 / C++20 fallback compiler flags for clangd
+│       ├── fontconfig/conf.d/       # Fontconfig alias mapping MesloLGS NF -> MesloLGS Nerd Font Mono
 │       ├── ghostty/                 # Ghostty terminal configuration & Solarized Dark theme
 │       └── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
 │           ├── init.lua
@@ -86,7 +87,7 @@ home-settings/
 │   ├── TypeScript.sublime-syntax    # TypeScript / JavaScript ES2024+ syntax
 │   └── XML.sublime-syntax           # XML syntax with namespaces, directives & CDATA
 │
-└── tests/                           # Automated test suites (160+ tests across 8 modules)
+└── tests/                           # Automated test suites (350+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests
     ├── test-dotfiles.sh             # Declarative dotfiles auto-discovery, backup, & drop-ins
@@ -158,7 +159,7 @@ make system
 # Clean uninstallation of managed dotfiles, binaries, and fonts
 make uninstall
 
-# Run complete test suite (160+ tests across 8 modules)
+# Run complete test suite (350+ tests across 8 modules)
 make test
 
 # Run ShellCheck and shell syntax checks
@@ -248,7 +249,7 @@ The redesigned repository is built for frictionless extension:
 - **`zoxide` (`z`)** frecency-based smart directory jumping.
 
 ### 2. Modern Rust Developer CLI Suite
-- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers and italic rendering (`bat <file>` or `b <file>`; `cat` remains coreutils), featuring custom Solarized Dark styling for Markdown, C/C++, Java, Python, and Git diffs.
+- **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers and italic rendering (`bat <file>` or `b <file>`; `cat` remains coreutils), featuring 18 custom Solarized Dark syntax definitions (Bash, C, C++, CSS, Diff, Go, HTML, Java, Java Properties, JSON, Markdown, Python, Rust, SQL, Terraform, TOML, TypeScript, and XML) with 1:1 Neovim Treesitter parity.
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
@@ -288,7 +289,11 @@ The redesigned repository is built for frictionless extension:
 | `Ctrl+R` | Interactive fuzzy search command history via `fzf` |
 | `z <dir>` | Smart jump to directory via `zoxide` |
 | `b <file>` / `bat` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark (`cat` remains pure coreutils) |
-| `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`) |
+| `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`; inside an `ide` session, `v <file>` opens in the main editor pane) |
+| `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |
+| `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session |
+| `icd [dir\|--reset]` | Change or reset the active directory across all IDE panes (`Tree`, `Editor`, `Shell`, and `AI`) |
+| `update` | Run cross-platform system and toolchain maintenance (`update-system`) |
 | `ls` | Standard directory listing with color (`ls --color=auto`) |
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
 | `la` | List almost all files (`ls -A`) |
@@ -324,6 +329,7 @@ The redesigned repository is built for frictionless extension:
 |---|---|
 | `gen-passwd` | Generate random passwords with configurable character sets (`-u`, `-l`, `-n`, `-s`) and lengths |
 | `gnome-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in GNOME Terminal (`dconf`) |
+| `ide` | Launch and manage multi-pane Tmux + Neovim + AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
 | `macos-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in macOS `Terminal.app` |
 | `sum` | Sum numbers from stdin/args with CSV parsing, column filtering (`-k`), human byte units (`-H`), averages (`-a`), and stats (`-s`) |
 | `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
@@ -336,7 +342,7 @@ The redesigned repository is built for frictionless extension:
 All scripts enforce `set -euo pipefail` for fail-fast safety.
 
 ```bash
-# Run full automated test suite (160+ tests across 8 test modules)
+# Run full automated test suite (350+ tests across 8 test modules)
 make test
 
 # Run syntax & lint validation

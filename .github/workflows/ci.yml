@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [master, main]
 
+env:
+  COLORTERM: truecolor
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # 1. Lint & Static Analysis
@@ -30,15 +33,20 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      COLORTERM: truecolor
     steps:
       - uses: actions/checkout@v4
 
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zsh vim git tree fd-find
+          sudo apt-get install -y zsh vim git tree fd-find bat tmux
           if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
             sudo ln -s "$(which fdfind)" /usr/local/bin/fd
+          fi
+          if command -v batcat &>/dev/null && ! command -v bat &>/dev/null; then
+            sudo ln -s "$(which batcat)" /usr/local/bin/bat
           fi
 
       - name: Run unit tests

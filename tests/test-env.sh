@@ -38,11 +38,12 @@ cleanup_env_test() {
     export PATH="$OLD_PATH"
     if [ -n "$OLD_XDG_DATA_HOME" ]; then export XDG_DATA_HOME="$OLD_XDG_DATA_HOME"; else unset XDG_DATA_HOME; fi
     if [ -n "$OLD_XDG_CACHE_HOME" ]; then export XDG_CACHE_HOME="$OLD_XDG_CACHE_HOME"; else unset XDG_CACHE_HOME; fi
+    export COLORTERM="truecolor"
 }
 trap cleanup_env_test EXIT
 
 export HOME="$TEMP_HOME"
-unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR
+unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
@@ -223,11 +224,14 @@ STANDALONE_HOME=$(mktemp -d)
     if alias gcommit >/dev/null 2>&1 && alias gamend >/dev/null 2>&1 && \
        alias gprune >/dev/null 2>&1 && alias gpurge >/dev/null 2>&1 && \
        alias guser-branch >/dev/null 2>&1 && alias ll >/dev/null 2>&1 && \
-       alias grep >/dev/null 2>&1 && declare -F gsync >/dev/null 2>&1 && \
-       declare -F v >/dev/null 2>&1; then
-        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gprune, gpurge, guser-branch), ls/grep aliases, gsync, and RPC-aware v() function"
+       alias ide2 >/dev/null 2>&1 && alias ide3 >/dev/null 2>&1 && \
+       alias idek >/dev/null 2>&1 && alias qide >/dev/null 2>&1 && \
+       alias update >/dev/null 2>&1 && alias grep >/dev/null 2>&1 && \
+       declare -F gsync >/dev/null 2>&1 && declare -F v >/dev/null 2>&1 && \
+       declare -F icd >/dev/null 2>&1; then
+        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gprune, gpurge, guser-branch), IDE/update shortcuts, ls/grep aliases, gsync, icd(), and RPC-aware v() function"
     else
-        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases, gsync, or v() function"
+        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases, gsync, icd(), or v() function"
     fi
 
     # Test Solarized Dark PS1 shelf prompt states (local vs SSH, clean vs dirty git, detached HEAD, non-git dir, TERM=linux fallback, exit status 0 vs non-zero)
@@ -291,7 +295,7 @@ STANDALONE_HOME=$(mktemp -d)
 
     if [[ "$ps1_clean_ok" == *"48;2;7;54;66m"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;131;148;150m\\]${expected_host_os_icon}"* ]] && \
-       [[ "$ps1_clean_ok" == *"38;2;88;110;117m\\]"* ]] && \
+       [[ "$ps1_clean_ok" == *"38;2;101;123;131m\\]"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;38;139;210m\\]\\w"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;133;153;0m\\]  main"* ]] && \
        [[ "$ps1_clean_ok" == *"38;2;7;54;66m\\]"* ]] && \
@@ -325,7 +329,7 @@ STANDALONE_HOME=$(mktemp -d)
        [[ "$ps1_ssh_dirty_err" != *"❯"* ]] && \
        [[ "$ps1_ssh_dirty_err" != *"│"* ]] && \
        [[ "$ps1_root" == *"38;2;220;50;47m\\]\\u@\\h"* ]]; then
-        echo 'PASS:Standalone _solarized_bash_prompt renders Base02 (#073642) shelf, Base01 (#586E75) \uE0B1 () directional chevrons, dynamic Base02/Red \uE0B0 () end-cap, Base0 OS icon + Base1 host in SSH, Blue dir, Green/Yellow \uF1D3/\uF126 ( ) git status, TERM=linux fallback, and zero box-drawing bars (│)'
+        echo 'PASS:Standalone _solarized_bash_prompt renders Base02 (#073642) shelf, Base00 (#657B83) \uE0B1 () directional chevrons, dynamic Base02/Red \uE0B0 () end-cap, Base0 OS icon + Base1 host in SSH, Blue dir, Green/Yellow \uF1D3/\uF126 ( ) git status, TERM=linux fallback, and zero box-drawing bars (│)'
     else
         echo "FAIL:Standalone PS1 shelf prompt:Unexpected PS1 sequences (clean=$ps1_clean_ok | nongit=$ps1_nongit_ok | dotgit=$ps1_dotgit_dir | escaped=$ps1_branch_escaped | detached=$ps1_detached_ok | linux=$ps1_linux_vt | ssh_dirty=$ps1_ssh_dirty_err | root=$ps1_root)"
     fi

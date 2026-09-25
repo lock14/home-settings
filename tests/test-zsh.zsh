@@ -40,7 +40,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    local expected_aliases=(gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf yaml-lint vi ls ll la l)
+    local expected_aliases=(gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf ide2 ide3 idek qide update yaml-lint vi ls ll la l)
     if command -v eza >/dev/null 2>&1; then
         expected_aliases+=(e el elm et elt elx)
     fi
@@ -78,7 +78,7 @@ test_functions() {
     source "$SCRIPT_DIR/dotfiles/.aliases"
     source "$SCRIPT_DIR/dotfiles/.zsh-functions"
 
-    for expected_func in v fs gsync; do
+    for expected_func in v icd fs gsync; do
         if typeset -f "$expected_func" >/dev/null 2>&1; then
             echo "PASS:$expected_func"
         else

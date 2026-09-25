@@ -1,6 +1,12 @@
 .DEFAULT_GOAL := help
 .PHONY: setup bootstrap install system uninstall test lint check all help
 
+# Force 24-bit TrueColor across test executions
+export COLORTERM ?= truecolor
+ifeq ($(COLORTERM),)
+export COLORTERM := truecolor
+endif
+
 ## setup: Run full machine setup (packages, apps, dotfiles, tools).
 setup:
 	@./setup.sh --system

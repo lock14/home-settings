@@ -201,6 +201,7 @@ elif command -v batcat >/dev/null 2>&1; then
 fi
 
 if [ -n "$BAT_BIN" ]; then
+    export COLORTERM="truecolor"
     MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n#### Header 4\n**bold text**\n" | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always -l md - 2>/dev/null || true)"
     BASE1_BOLD="$(printf "\033[1;38;2;147;161;161m")"
     if grep -Fq "${SOL_BASE01}#" <<< "$MD_OUT" && \

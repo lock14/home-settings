@@ -142,34 +142,26 @@ if [ "$INSTALL_CHROME" = true ]; then
 fi
 
 # Desktop applications (Opt-in)
-if [ "$INSTALL_APPS" = true ]; then
+if [ "$INSTALL_APPS" = true ] && [ "$IDE_NAME" != "none" ]; then
     echo "  Installing developer desktop applications..."
     case "$OS" in
         ubuntu|fedora)
             if command -v snap &>/dev/null || [ "$DRY_RUN" = true ]; then
-                if [ "$IDE_NAME" != "none" ]; then
-                    case "$IDE_NAME" in
-                        intellij) run_cmd sudo snap install intellij-idea-community --classic ;;
-                        intellij-ultimate) run_cmd sudo snap install intellij-idea-ultimate --classic ;;
-                        code) run_cmd sudo snap install code --classic ;;
-                    esac
-                else
-                    run_cmd sudo snap install code --classic
-                fi
+                case "$IDE_NAME" in
+                    intellij) run_cmd sudo snap install intellij-idea-community --classic ;;
+                    intellij-ultimate) run_cmd sudo snap install intellij-idea-ultimate --classic ;;
+                    code) run_cmd sudo snap install code --classic ;;
+                esac
             else
                 echo "  Notice: snap command not found. Skipping Snap applications."
             fi
             ;;
         macos)
-            if [ "$IDE_NAME" != "none" ]; then
-                case "$IDE_NAME" in
-                    intellij) run_cmd brew install --cask intellij-idea-ce ;;
-                    intellij-ultimate) run_cmd brew install --cask intellij-idea ;;
-                    code) run_cmd brew install --cask visual-studio-code ;;
-                esac
-            else
-                run_cmd brew install --cask visual-studio-code
-            fi
+            case "$IDE_NAME" in
+                intellij) run_cmd brew install --cask intellij-idea-ce ;;
+                intellij-ultimate) run_cmd brew install --cask intellij-idea ;;
+                code) run_cmd brew install --cask visual-studio-code ;;
+            esac
             ;;
     esac
 fi

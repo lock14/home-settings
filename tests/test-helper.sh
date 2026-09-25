@@ -9,6 +9,10 @@ COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
 # Ethan Schoonover Solarized Dark TrueColor ANSI 24-bit Escape Sequences
+case "${COLORTERM:-}" in
+    truecolor|24bit) ;;
+    *) export COLORTERM="truecolor" ;;
+esac
 SOL_BASE03=$'\033[38;2;0;43;54m'       # #002B36
 SOL_BASE02=$'\033[38;2;7;54;66m'       # #073642
 SOL_BASE01=$'\033[38;2;88;110;117m'    # #586E75

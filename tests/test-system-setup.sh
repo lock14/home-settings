@@ -42,8 +42,12 @@ done
 # Test 2: CLI Validation on setup.sh
 echo -e "\n[2/5] Testing parameter validation in setup.sh..."
 
-if "$SCRIPT_DIR/setup.sh" --help >/dev/null 2>&1; then
-    pass "setup.sh --help exits cleanly"
+if help_out=$("$SCRIPT_DIR/setup.sh" --help 2>&1); then
+    if grep -Fq "MesloLGS Nerd Font Mono" <<< "$help_out" && ! grep -Fq "MesloLGS NF" <<< "$help_out"; then
+        pass "setup.sh --help exits cleanly and references MesloLGS Nerd Font Mono"
+    else
+        fail "setup.sh --help font name" "Expected 'MesloLGS Nerd Font Mono' (not legacy 'MesloLGS NF') in --help output"
+    fi
 else
     fail "setup.sh --help" "Expected exit code 0"
 fi
@@ -145,6 +149,24 @@ if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2
     fi
 else
     fail "setup.sh with-gui dry-run" "Command failed: $output"
+fi
+
+if out_none=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide none --dry-run 2>&1) && \
+   out_gui_none=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide none --dry-run 2>&1) && \
+   out_none_gui=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide none --with-gui --dry-run 2>&1) && \
+   out_code_skip=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide code --skip-apps --dry-run 2>&1) && \
+   out_skip_gui=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-apps --with-gui --dry-run 2>&1); then
+    if [[ "$out_none" != *"snap install code"* ]] && \
+       [[ "$out_gui_none" == *"google-chrome"* ]] && [[ "$out_gui_none" != *"snap install code"* ]] && \
+       [[ "$out_none_gui" == *"google-chrome"* ]] && [[ "$out_none_gui" != *"snap install code"* ]] && \
+       [[ "$out_code_skip" == *"IDE Choice: none"* ]] && [[ "$out_code_skip" != *"snap install code"* ]] && \
+       [[ "$out_skip_gui" == *"google-chrome"* ]] && [[ "$out_skip_gui" != *"snap install code"* ]]; then
+        pass "setup.sh --ide none and --skip-apps prevent VS Code installation across all flag orderings"
+    else
+        fail "setup.sh --ide none / --skip-apps" "Expected no VS Code installation when --ide none or --skip-apps is specified"
+    fi
+else
+    fail "setup.sh --ide none dry-run" "Command failed"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os macos --with-ghostty --dry-run 2>&1); then
