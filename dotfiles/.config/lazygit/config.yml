@@ -1,0 +1,29 @@
+# Lazygit configuration (XDG-compliant: ~/.config/lazygit/config.yml)
+# Visual Theme: Authentic Ethan Schoonover Solarized Dark (24-bit TrueColor)
+
+gui:
+  theme:
+    activeBorderColor:
+      - '#268bd2'
+      - bold
+    inactiveBorderColor:
+      - '#586e75'
+    optionsTextColor:
+      - '#268bd2'
+    selectedLineBgColor:
+      - '#073642'
+    cherryPickedCommitBgColor:
+      - '#073642'
+    cherryPickedCommitFgColor:
+      - '#2aa198'
+    unstagedChangesColor:
+      - '#dc322f'
+    defaultFgColor:
+      - '#839496'
+    searchingActiveBorderColor:
+      - '#b58900'
+  nerdFontsVersion: "3"
+git:
+  diffRenderers:
+    - colorArg: always
+      command: delta --dark --paging=never
