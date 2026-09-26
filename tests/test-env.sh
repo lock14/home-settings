@@ -43,7 +43,7 @@ cleanup_env_test() {
 trap cleanup_env_test EXIT
 
 export HOME="$TEMP_HOME"
-unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS
+unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS JQ_COLORS
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
@@ -149,6 +149,13 @@ if [[ "${FZF_DEFAULT_OPTS:-}" == *"#002B36"* ]] && [[ "${FZF_DEFAULT_OPTS:-}" ==
     pass "FZF_DEFAULT_OPTS configured with Solarized Dark palette"
 else
     fail "FZF_DEFAULT_OPTS export" "Expected Solarized Dark palette in FZF_DEFAULT_OPTS, got: ${FZF_DEFAULT_OPTS:-}"
+fi
+
+if [ -n "${JQ_COLORS:-}" ] && \
+   [ "${JQ_COLORS}" = "38;2;211;54;130:38;2;211;54;130:38;2;211;54;130:38;2;211;54;130:38;2;42;161;152:38;2;131;148;150:38;2;131;148;150:38;2;133;153;0" ]; then
+    pass "JQ_COLORS configured with authentic 24-bit TrueColor Solarized Dark palette"
+else
+    fail "JQ_COLORS export" "Expected Solarized Dark TrueColor in JQ_COLORS, got: ${JQ_COLORS:-}"
 fi
 
 if command -v rg >/dev/null 2>&1 || command -v fd >/dev/null 2>&1; then

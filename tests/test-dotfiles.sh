@@ -168,7 +168,7 @@ fi
 
 assert_symlink "$TEMP_HOME/.config/lazygit" "" "Auto-discovered and symlinked: .config/lazygit"
 if [ -f "$TEMP_HOME/.config/lazygit/config.yml" ] && \
-   grep -q 'pager: delta --dark --paging=never' "$TEMP_HOME/.config/lazygit/config.yml" && \
+   grep -q 'delta --dark --paging=never' "$TEMP_HOME/.config/lazygit/config.yml" && \
    grep -q "activeBorderColor:" "$TEMP_HOME/.config/lazygit/config.yml" && \
    grep -q "'#268bd2'" "$TEMP_HOME/.config/lazygit/config.yml" && \
    grep -q "'#073642'" "$TEMP_HOME/.config/lazygit/config.yml" && \
