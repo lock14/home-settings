@@ -1,0 +1,64 @@
+// ==============================================================================
+// Zellij Configuration (config.kdl)
+// Modern Terminal Workspace & Multiplexer Architecture
+// Visual Theme: Authentic Ethan Schoonover Solarized Dark (24-bit TrueColor)
+// ==============================================================================
+
+// -----------------------------------------------------------------------------
+// 1. Color Palette & Authentic Solarized Dark TrueColor Theme
+// -----------------------------------------------------------------------------
+theme "solarized-dark"
+
+themes {
+    solarized-dark {
+        fg "#839496"       // Base0 Standard Foreground
+        bg "#002b36"       // Base03 Background
+        black "#073642"    // Base02 Selection & Highlights
+        red "#dc322f"      // Red
+        green "#859900"    // Green
+        yellow "#b58900"   // Yellow
+        blue "#268bd2"     // Blue
+        magenta "#d33682"  // Magenta
+        cyan "#2aa198"     // Cyan
+        white "#eee8d5"    // Base2 Light Foreground
+        orange "#cb4b16"   // Orange
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 2. Core Ergonomics, Scrollback, and Mouse Mode
+// -----------------------------------------------------------------------------
+mouse_mode true
+scroll_buffer_size 50000
+pane_frames true
+auto_layout true
+session_serialization true
+serialize_pane_viewport false
+scrollback_lines_to_serialize 0
+
+// Unified Cross-Platform System Clipboard Sink
+copy_on_select true
+copy_command "if [ -n \"$WAYLAND_DISPLAY\" ] && command -v wl-copy >/dev/null 2>&1; then wl-copy; elif [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null 2>&1; then xclip -selection clipboard; elif command -v pbcopy >/dev/null 2>&1; then pbcopy; fi"
+
+// -----------------------------------------------------------------------------
+// 3. Ergonomic Keybindings (Parity with Tmux & Ghostty Shortcuts)
+// -----------------------------------------------------------------------------
+keybinds {
+    normal {
+        // Vim-style direct pane navigation without mode switching (matching Tmux Alt+h/j/k/l)
+        bind "Alt h" { MoveFocus "Left"; }
+        bind "Alt l" { MoveFocus "Right"; }
+        bind "Alt j" { MoveFocus "Down"; }
+        bind "Alt k" { MoveFocus "Up"; }
+
+        // Pane Zoom / Fullscreen toggle (matching Tmux Alt+z)
+        bind "Alt z" { ToggleFocusFullscreen; }
+
+        // Floating Panes toggle for AI agent or quick modals (matching Alt+w)
+        bind "Alt w" { ToggleFloatingPanes; }
+
+        // Quick Splits (matching Ghostty shortcuts)
+        bind "Alt d" { NewPane "Right"; }
+        bind "Alt Shift d" { NewPane "Down"; }
+    }
+}

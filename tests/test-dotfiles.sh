@@ -155,6 +155,26 @@ else
     fail "btop theme verification" "Missing or invalid solarized_dark.theme in .config/btop/themes"
 fi
 
+assert_symlink "$TEMP_HOME/.config/zellij" "" "Auto-discovered and symlinked: .config/zellij"
+if [ -f "$TEMP_HOME/.config/zellij/config.kdl" ] && \
+   grep -q 'theme "solarized-dark"' "$TEMP_HOME/.config/zellij/config.kdl" && \
+   grep -q 'fg "#839496"' "$TEMP_HOME/.config/zellij/config.kdl" && \
+   grep -q 'bg "#002b36"' "$TEMP_HOME/.config/zellij/config.kdl" && \
+   grep -q 'Alt h' "$TEMP_HOME/.config/zellij/config.kdl"; then
+    pass "zellij config contains Solarized Dark TrueColor theme and ergonomic Alt keybindings"
+else
+    fail "zellij config verification" "Missing expected solarized-dark theme or keybindings in .config/zellij/config.kdl"
+fi
+
+if [ -f "$TEMP_HOME/.config/zellij/layouts/ide.kdl" ] && \
+   grep -q 'name="tree"' "$TEMP_HOME/.config/zellij/layouts/ide.kdl" && \
+   grep -q 'name="editor"' "$TEMP_HOME/.config/zellij/layouts/ide.kdl" && \
+   grep -q 'floating_panes' "$TEMP_HOME/.config/zellij/layouts/ide.kdl"; then
+    pass "zellij IDE layout defines 3-pane tree/editor/terminal split with floating AI modal"
+else
+    fail "zellij layout verification" "Missing or invalid layouts/ide.kdl in .config/zellij"
+fi
+
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked Bat C syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
@@ -1124,7 +1144,7 @@ for df in "${expected_top_level[@]}"; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ]; then
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/zellij" ]; then
     all_unlinked=false
     fail "Unlink check" ".config subtrees still linked"
 fi

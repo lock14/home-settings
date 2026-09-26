@@ -1,0 +1,33 @@
+// ==============================================================================
+// Zellij Hybrid IDE Workspace Layout (layouts/ide.kdl)
+// 3-Pane Hybrid Layout + Floating AI Assistant Modal
+// ==============================================================================
+
+layout {
+    pane size=1 borderless=true {
+        plugin location="tab-bar"
+    }
+    pane split_direction="vertical" {
+        pane size="20%" name="tree" {
+            command "nvim"
+            args "."
+        }
+        pane split_direction="horizontal" {
+            pane size="75%" name="editor" focus=true {
+                command "nvim"
+            }
+            pane size="25%" name="terminal"
+        }
+    }
+    pane size=1 borderless=true {
+        plugin location="status-bar"
+    }
+    floating_panes {
+        pane name="ai-assistant" {
+            width "70%"
+            height "75%"
+            x "15%"
+            y "12%"
+        }
+    }
+}

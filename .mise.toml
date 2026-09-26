@@ -13,6 +13,7 @@ neovim = "latest"
 eza = "latest"
 bat = "latest"
 btop = "latest"
+zellij = "latest"
 glow = "latest"
 tree-sitter = "latest"
 

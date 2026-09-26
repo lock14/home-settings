@@ -43,12 +43,15 @@ home-settings/
 │       ├── clangd/config.yaml       # Modern C23 / C++20 fallback compiler flags for clangd
 │       ├── fontconfig/conf.d/       # Fontconfig alias mapping MesloLGS NF -> MesloLGS Nerd Font Mono
 │       ├── ghostty/                 # Ghostty terminal configuration & Solarized Dark theme
-│       └── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
-│           ├── init.lua
-│           ├── lazy-lock.json
-│           ├── ftplugin/java.lua
-│           ├── queries/
-│           └── after/queries/
+│       ├── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
+│       │   ├── init.lua
+│       │   ├── lazy-lock.json
+│       │   ├── ftplugin/java.lua
+│       │   ├── queries/
+│       │   └── after/queries/
+│       └── zellij/                  # Zellij workspace multiplexer & Solarized Dark IDE layout
+│           ├── config.kdl
+│           └── layouts/ide.kdl
 │
 ├── lib/                             # Shared helper libraries
 │   ├── log.sh                       # Terminal logging & dry-run runner
@@ -290,6 +293,14 @@ The redesigned repository is built for frictionless extension:
   - **Navigation**: Full Vim navigation keys enabled (`vim_keys = true` for `h, j, k, l, g, G`).
   - **Cross-Platform**: Automatically symlinked into `${XDG_CONFIG_HOME:-~/.config}/btop/`.
 
+### 6. Workspace Multiplexers (Zellij & Tmux)
+- **Zellij (`dotfiles/.config/zellij/config.kdl` & `layouts/ide.kdl`)**:
+  - **Theme**: Authentic 24-bit TrueColor Solarized Dark theme with 1:1 color palette parity across status bar, active panes, and frame borders.
+  - **IDE Layout**: Declarative 3-pane IDE layout (`zj-ide` or `zellij --layout ide`) featuring a left file tree (`nvim .`), top-right editor pane (`nvim`), bottom-right shell terminal, and an on-demand floating AI assistant modal (`Alt+w`).
+  - **Ergonomics**: Vi-style pane navigation (`Alt+h/j/k/l`), zoom toggle (`Alt+z`), and native clipboard integration (`wl-copy` / `xclip` / `pbcopy`).
+- **Tmux (`dotfiles/.tmux.conf` & `bin/ide`)**:
+  - Full-featured Tmux IDE workspace session with Solarized Dark TrueColor statusline, persistent session hooks, and automated pane management (`ide`, `ide2`, `ide3`, `icd`, `qide`).
+
 ---
 
 ## Git & Developer Shortcuts
@@ -303,6 +314,7 @@ The redesigned repository is built for frictionless extension:
 | `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |
 | `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session |
 | `icd [dir\|--reset]` | Change or reset the active directory across all IDE panes (`Tree`, `Editor`, `Shell`, and `AI`) |
+| `zj` / `zja` / `zj-ide` | Launch Zellij, attach to session, or launch with 3-pane + AI IDE layout |
 | `update` | Run cross-platform system and toolchain maintenance (`update-system`) |
 | `ls` | Standard directory listing with color (`ls --color=auto`) |
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
