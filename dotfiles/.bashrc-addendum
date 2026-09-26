@@ -748,7 +748,9 @@ if command -v mise >/dev/null 2>&1; then
 fi
 
 if [[ "$-" == *i* ]] && command -v fzf >/dev/null 2>&1; then
-    if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+    if fzf --bash >/dev/null 2>&1; then
+        eval "$(fzf --bash)"
+    elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
         # shellcheck source=/dev/null
         source /usr/share/doc/fzf/examples/key-bindings.bash
         # shellcheck source=/dev/null
@@ -758,8 +760,6 @@ if [[ "$-" == *i* ]] && command -v fzf >/dev/null 2>&1; then
         source /usr/share/fzf/key-bindings.bash
         # shellcheck source=/dev/null
         [ -f /usr/share/fzf/completion.bash ] && source /usr/share/fzf/completion.bash || true
-    elif fzf --bash >/dev/null 2>&1; then
-        eval "$(fzf --bash)"
     fi
 fi
 

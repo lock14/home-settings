@@ -66,6 +66,11 @@ fi
 #          brackets/delimiters in Base0 Grey (#839496), keys in Green (#859900)
 export JQ_COLORS="38;2;211;54;130:38;2;211;54;130:38;2;211;54;130:38;2;211;54;130:38;2;42;161;152:38;2;131;148;150:38;2;131;148;150:38;2;133;153;0"
 
+# zoxide smart directory jumping configuration (z & zi)
+export _ZO_ECHO=1
+export _ZO_RESOLVE_SYMLINKS=1
+export _ZO_FZF_OPTS="--height=50% --layout=reverse --border=rounded --inline-info --preview='eza -la --icons=auto --color=always --group-directories-first {2..} 2>/dev/null || ls -la {2..}' --preview-window='right:50%:wrap'"
+
 # Source custom environment drop-ins (~/.environment-variables.d/*.sh)
 if [ -d "$HOME/.environment-variables.d" ]; then
     _source_env_dropins() {

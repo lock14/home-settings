@@ -260,10 +260,14 @@ The redesigned repository is built for frictionless extension:
 - **`tealdeer` (`tldr`)**: Ultra-fast offline cheatsheet viewer for instant real-world command examples styled in Solarized Dark TrueColor.
 - **`jq`**: Lightweight command-line JSON processor configured with calibrated TrueColor `JQ_COLORS` for Solarized Dark parity.
 - **`yq`**: Portable CLI processor for YAML, JSON, XML, CSV, and Properties files matching terminal ANSI styling.
+- **`sd`**: Modern, intuitive search-and-replace CLI in Rust (`sd 'find' 'replace' <file>`) replacing sed without escaping quirks or macOS/Linux `-i` flags.
+- **`zoxide` (`z` & `zi`)**: Smart directory jumping with destination path echoing (`_ZO_ECHO=1`) and interactive fuzzy navigation (`zi`) featuring live Solarized Dark `eza` directory previews.
+- **`fzf`**: Modern interactive fuzzy finder powering history search (`Ctrl+R`), file finding (`Ctrl+T`), and interactive navigation with Solarized Dark TrueColor theming.
+- **`gh`**: Up-to-date GitHub CLI for pull requests, issues, and workflow inspection.
+- **`fd` / `fs`**: Lightning-fast file and directory tree search (`fd` installed natively across platforms).
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
-- **`fd` / `fs`**: Lightning-fast file and directory tree search.
 
 ### 3. Modern Lua Neovim (`dotfiles/.config/nvim/init.lua`)
 - **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
@@ -304,7 +308,9 @@ The redesigned repository is built for frictionless extension:
 | Shortcut | Description |
 | :--- | :--- |
 | `Ctrl+R` | Interactive fuzzy search command history via `fzf` |
-| `z <dir>` | Smart jump to directory via `zoxide` |
+| `z <dir>` | Smart jump to directory with destination path echo via `zoxide` |
+| `zi` | Interactive fuzzy directory jump with live `eza` preview via `zoxide` + `fzf` |
+| `sd <find> <replace> <file>` | Fast, intuitive regex find-and-replace via `sd` |
 | `b <file>` / `bat` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark (`cat` remains pure coreutils) |
 | `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`; inside an `ide` session, `v <file>` opens in the main editor pane) |
 | `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |

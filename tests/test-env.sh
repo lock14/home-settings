@@ -43,7 +43,7 @@ cleanup_env_test() {
 trap cleanup_env_test EXIT
 
 export HOME="$TEMP_HOME"
-unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS JQ_COLORS
+unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS JQ_COLORS _ZO_ECHO _ZO_RESOLVE_SYMLINKS _ZO_FZF_OPTS
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles/.environment-variables"
 
@@ -156,6 +156,13 @@ if [ -n "${JQ_COLORS:-}" ] && \
     pass "JQ_COLORS configured with authentic 24-bit TrueColor Solarized Dark palette"
 else
     fail "JQ_COLORS export" "Expected Solarized Dark TrueColor in JQ_COLORS, got: ${JQ_COLORS:-}"
+fi
+
+if [ "${_ZO_ECHO:-}" = "1" ] && [ "${_ZO_RESOLVE_SYMLINKS:-}" = "1" ] && \
+   [[ "${_ZO_FZF_OPTS:-}" == *"--preview="* ]] && [[ "${_ZO_FZF_OPTS:-}" == *"eza"* ]]; then
+    pass "Zoxide environment variables configured (_ZO_ECHO=1, _ZO_RESOLVE_SYMLINKS=1, _ZO_FZF_OPTS eza preview)"
+else
+    fail "Zoxide environment variables" "Expected _ZO_ECHO=1, _ZO_RESOLVE_SYMLINKS=1, and _ZO_FZF_OPTS with eza preview"
 fi
 
 if command -v rg >/dev/null 2>&1 || command -v fd >/dev/null 2>&1; then
