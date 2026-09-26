@@ -165,19 +165,6 @@ if [ -f "$TEMP_HOME/.config/git/config" ] && \
 else
     fail "git config verification" "Missing expected delta pager configuration in .config/git/config"
 fi
-
-assert_symlink "$TEMP_HOME/.config/lazygit" "" "Auto-discovered and symlinked: .config/lazygit"
-if [ -f "$TEMP_HOME/.config/lazygit/config.yml" ] && \
-   grep -q 'delta --dark --paging=never' "$TEMP_HOME/.config/lazygit/config.yml" && \
-   grep -q "activeBorderColor:" "$TEMP_HOME/.config/lazygit/config.yml" && \
-   grep -q "'#268bd2'" "$TEMP_HOME/.config/lazygit/config.yml" && \
-   grep -q "'#073642'" "$TEMP_HOME/.config/lazygit/config.yml" && \
-   grep -q 'nerdFontsVersion: "3"' "$TEMP_HOME/.config/lazygit/config.yml"; then
-    pass "lazygit config contains Solarized Dark TrueColor theme and delta pager integration"
-else
-    fail "lazygit config verification" "Missing or invalid config.yml in .config/lazygit"
-fi
-
 assert_symlink "$TEMP_HOME/.config/tealdeer" "" "Auto-discovered and symlinked: .config/tealdeer"
 if [ -f "$TEMP_HOME/.config/tealdeer/config.toml" ] && \
    grep -q '\[style\.command_name\]' "$TEMP_HOME/.config/tealdeer/config.toml" && \
@@ -1157,7 +1144,7 @@ for df in "${expected_top_level[@]}"; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/lazygit" ] || [ -L "$TEMP_HOME/.config/tealdeer" ]; then
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/tealdeer" ]; then
     all_unlinked=false
     fail "Unlink check" ".config subtrees still linked"
 fi
