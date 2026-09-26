@@ -78,6 +78,9 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | **Tmux IDE Configuration** | `dotfiles/.tmux.conf` | `$HOME/.tmux.conf` | `tests/test-dotfiles.sh`, `tests/test-bin.sh` |
 | **Ghostty Terminal Config** | `dotfiles/.config/ghostty/config` | `${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config` | `tests/test-dotfiles.sh` |
 | **Btop System Monitor** | `dotfiles/.config/btop/btop.conf` | `${XDG_CONFIG_HOME:-$HOME/.config}/btop/btop.conf` | `tests/test-dotfiles.sh` |
+| **Delta Git Pager Config** | `dotfiles/.config/git/config` | `${XDG_CONFIG_HOME:-$HOME/.config}/git/config` | `tests/test-dotfiles.sh` |
+| **Lazygit Git TUI Config** | `dotfiles/.config/lazygit/config.yml` | `${XDG_CONFIG_HOME:-$HOME/.config}/lazygit/config.yml` | `tests/test-dotfiles.sh` |
+| **Tealdeer Cheatsheet Config** | `dotfiles/.config/tealdeer/config.toml` | `${XDG_CONFIG_HOME:-$HOME/.config}/tealdeer/config.toml` | `tests/test-dotfiles.sh` |
 | **Legacy Vim Config** | `dotfiles/.vimrc` | `$HOME/.vimrc` | `tests/test-vim.sh` |
 | **Bat TrueColor Theme** | `colors/Solarized-Dark-TrueColor.tmTheme` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
 | **Bat Syntax Packages** | `syntaxes/*.sublime-syntax` (C, C++, Diff, Go, Java, Python, Rust, Bash, SQL, Terraform, Markdown, TypeScript, XML, HTML, JSON, TOML, CSS, Java Properties) | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/syntaxes/` | `tests/test-dotfiles.sh` |

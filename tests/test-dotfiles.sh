@@ -155,6 +155,39 @@ else
     fail "btop theme verification" "Missing or invalid solarized_dark.theme in .config/btop/themes"
 fi
 
+assert_symlink "$TEMP_HOME/.config/git" "" "Auto-discovered and symlinked: .config/git"
+if [ -f "$TEMP_HOME/.config/git/config" ] && \
+   grep -q 'pager = delta' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'syntax-theme = Solarized-Dark-TrueColor' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'line-numbers-plus-style = "#859900"' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'line-numbers-minus-style = "#dc322f"' "$TEMP_HOME/.config/git/config"; then
+    pass "git config configures delta with Solarized-Dark-TrueColor theme and line numbers"
+else
+    fail "git config verification" "Missing expected delta pager configuration in .config/git/config"
+fi
+
+assert_symlink "$TEMP_HOME/.config/lazygit" "" "Auto-discovered and symlinked: .config/lazygit"
+if [ -f "$TEMP_HOME/.config/lazygit/config.yml" ] && \
+   grep -q 'pager: delta --dark --paging=never' "$TEMP_HOME/.config/lazygit/config.yml" && \
+   grep -q "activeBorderColor:" "$TEMP_HOME/.config/lazygit/config.yml" && \
+   grep -q "'#268bd2'" "$TEMP_HOME/.config/lazygit/config.yml" && \
+   grep -q "'#073642'" "$TEMP_HOME/.config/lazygit/config.yml" && \
+   grep -q 'nerdFontsVersion: "3"' "$TEMP_HOME/.config/lazygit/config.yml"; then
+    pass "lazygit config contains Solarized Dark TrueColor theme and delta pager integration"
+else
+    fail "lazygit config verification" "Missing or invalid config.yml in .config/lazygit"
+fi
+
+assert_symlink "$TEMP_HOME/.config/tealdeer" "" "Auto-discovered and symlinked: .config/tealdeer"
+if [ -f "$TEMP_HOME/.config/tealdeer/config.toml" ] && \
+   grep -q '\[style\.command_name\]' "$TEMP_HOME/.config/tealdeer/config.toml" && \
+   grep -q '\[style\.description\]' "$TEMP_HOME/.config/tealdeer/config.toml" && \
+   grep -q 'r = 131, g = 148, b = 150' "$TEMP_HOME/.config/tealdeer/config.toml"; then
+    pass "tealdeer config contains Solarized Dark TrueColor styling"
+else
+    fail "tealdeer config verification" "Missing or invalid config.toml in .config/tealdeer"
+fi
+
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked Bat C syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
@@ -1124,7 +1157,7 @@ for df in "${expected_top_level[@]}"; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ]; then
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/lazygit" ] || [ -L "$TEMP_HOME/.config/tealdeer" ]; then
     all_unlinked=false
     fail "Unlink check" ".config subtrees still linked"
 fi
