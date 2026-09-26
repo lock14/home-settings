@@ -12,6 +12,7 @@ rust = "latest"
 neovim = "latest"
 eza = "latest"
 bat = "latest"
+btop = "latest"
 glow = "latest"
 tree-sitter = "latest"
 

@@ -135,6 +135,26 @@ if command -v ghostty >/dev/null 2>&1; then
     fi
 fi
 
+assert_symlink "$TEMP_HOME/.config/btop" "" "Auto-discovered and symlinked: .config/btop"
+if [ -f "$TEMP_HOME/.config/btop/btop.conf" ] && \
+   grep -q 'color_theme = "solarized_dark"' "$TEMP_HOME/.config/btop/btop.conf" && \
+   grep -q 'truecolor = true' "$TEMP_HOME/.config/btop/btop.conf" && \
+   grep -q 'vim_keys = true' "$TEMP_HOME/.config/btop/btop.conf"; then
+    pass "btop config contains solarized_dark theme, truecolor = true, and vim_keys = true"
+else
+    fail "btop config verification" "Missing expected solarized_dark theme, truecolor, or vim_keys in .config/btop/btop.conf"
+fi
+
+if [ -f "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" ] && \
+   grep -q 'theme\[main_bg\]="#002b36"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
+   grep -q 'theme\[main_fg\]="#839496"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
+   grep -q 'theme\[cpu_box\]="#586e75"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
+   grep -q 'theme\[hi_fg\]="#b58900"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme"; then
+    pass "btop theme contains authentic Solarized Dark palette tokens"
+else
+    fail "btop theme verification" "Missing or invalid solarized_dark.theme in .config/btop/themes"
+fi
+
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C.sublime-syntax" "" "Symlinked Bat C syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/C++.sublime-syntax" "" "Symlinked Bat C++ syntax"
@@ -1104,7 +1124,7 @@ for df in "${expected_top_level[@]}"; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ]; then
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ]; then
     all_unlinked=false
     fail "Unlink check" ".config subtrees still linked"
 fi

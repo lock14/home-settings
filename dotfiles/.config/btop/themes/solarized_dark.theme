@@ -1,0 +1,104 @@
+# ==============================================================================
+# Btop++ Solarized Dark Theme
+# Authentic Ethan Schoonover Solarized Dark Specification (24-bit TrueColor)
+# ==============================================================================
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#002b36"
+
+# Main text color (Solarized Base0)
+theme[main_fg]="#839496"
+
+# Title color for boxes (Solarized Base3)
+theme[title]="#fdf6e3"
+
+# Highlight color for keyboard shortcuts (Solarized Yellow)
+theme[hi_fg]="#b58900"
+
+# Background color of selected items (Solarized Base02)
+theme[selected_bg]="#073642"
+
+# Foreground color of selected items (Solarized Base1 Highlight)
+theme[selected_fg]="#93a1a1"
+
+# Color of inactive/disabled text (Solarized Base01)
+theme[inactive_fg]="#586e75"
+
+# Color of text inside graphs (Solarized Base00)
+theme[graph_text]="#657b83"
+
+# Background color of meter bars (Solarized Base02)
+theme[meter_bg]="#073642"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text (Solarized Cyan)
+theme[proc_misc]="#2aa198"
+
+# Cpu box outline color (Solarized Base01)
+theme[cpu_box]="#586e75"
+
+# Memory/disks box outline color (Solarized Base01)
+theme[mem_box]="#586e75"
+
+# Net up/down box outline color (Solarized Base01)
+theme[net_box]="#586e75"
+
+# Processes box outline color (Solarized Base01)
+theme[proc_box]="#586e75"
+
+# Box divider line and small boxes line color (Solarized Base01)
+theme[div_line]="#586e75"
+
+# Temperature graph colors: Cold Blue -> Warm Yellow -> Hot Red
+theme[temp_start]="#268bd2"
+theme[temp_mid]="#b58900"
+theme[temp_end]="#dc322f"
+
+# CPU graph colors: Low Green -> Mid Yellow -> High Red
+theme[cpu_start]="#859900"
+theme[cpu_mid]="#b58900"
+theme[cpu_end]="#dc322f"
+
+# Mem/Disk free meter (Solarized Green)
+theme[free_start]="#859900"
+theme[free_mid]=""
+theme[free_end]="#859900"
+
+# Mem/Disk cached meter (Solarized Blue)
+theme[cached_start]="#268bd2"
+theme[cached_mid]=""
+theme[cached_end]="#268bd2"
+
+# Mem/Disk available meter (Solarized Cyan)
+theme[available_start]="#2aa198"
+theme[available_mid]=""
+theme[available_end]="#2aa198"
+
+# Mem/Disk used meter: Elevated Orange -> Alert Red
+theme[used_start]="#cb4b16"
+theme[used_mid]=""
+theme[used_end]="#dc322f"
+
+# Download graph colors (Solarized Violet -> Blue -> Cyan)
+theme[download_start]="#6c71c4"
+theme[download_mid]="#268bd2"
+theme[download_end]="#2aa198"
+
+# Upload graph colors (Solarized Magenta -> Orange -> Yellow)
+theme[upload_start]="#d33682"
+theme[upload_mid]="#cb4b16"
+theme[upload_end]="#b58900"
+
+# Process box CPU graph: Low Green -> Mid Yellow -> High Red
+theme[process_start]="#859900"
+theme[process_mid]="#b58900"
+theme[process_end]="#dc322f"
+
+# Process list banner attributes (Process pause / follow banners)
+theme[proc_pause_bg]="#dc322f"
+theme[proc_follow_bg]="#268bd2"
+theme[proc_banner_bg]="#6c71c4"
+theme[proc_banner_fg]="#fdf6e3"
+
+# Process following attributes
+theme[followed_bg]="#073642"
+theme[followed_fg]="#2aa198"
