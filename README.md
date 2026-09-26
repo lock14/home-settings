@@ -37,6 +37,9 @@ home-settings/
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
 │   └── .config/
+│       ├── btop/                    # Btop++ system monitor configuration & Solarized Dark theme
+│       │   ├── btop.conf
+│       │   └── themes/solarized_dark.theme
 │       ├── clangd/config.yaml       # Modern C23 / C++20 fallback compiler flags for clangd
 │       ├── fontconfig/conf.d/       # Fontconfig alias mapping MesloLGS NF -> MesloLGS Nerd Font Mono
 │       ├── ghostty/                 # Ghostty terminal configuration & Solarized Dark theme
@@ -279,6 +282,13 @@ The redesigned repository is built for frictionless extension:
   - **Palette**: Corrects Color 8 to `base01` (`#586E75`), with `base02` selection highlight and `base03` background.
   - **Typography**: `MesloLGS Nerd Font Mono` 12 font (`MesloLGSNFM-Regular 12pt`), antialiasing enabled.
   - **CLI Management**: Provisioned automatically on macOS during setup (`modules/70-terminal.sh`) or manually via `macos-terminal-solarized`.
+
+### 5. System Monitor (Btop++)
+- **Btop++ (`dotfiles/.config/btop/btop.conf`)**:
+  - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`themes/solarized_dark.theme`) with custom gradients for CPU, Memory, Disks, Network, and Processes.
+  - **Layout & Typography**: High-resolution Braille glyphs (`graph_symbol = "braille"`), rounded corners (`rounded_corners = true`), and Solarized Base01 (`#586E75`) split frames matching Ghostty, Tmux, and Neovim.
+  - **Navigation**: Full Vim navigation keys enabled (`vim_keys = true` for `h, j, k, l, g, G`).
+  - **Cross-Platform**: Automatically symlinked into `${XDG_CONFIG_HOME:-~/.config}/btop/`.
 
 ---
 
