@@ -2,19 +2,24 @@
 # Works identically across Ubuntu, Fedora, and macOS (Apple Silicon + Intel)
 
 [tools]
-java = "lts"
-maven = "latest"
-go = "latest"
-python = "latest"
-node = "lts"
-terraform = "latest"
-rust = "latest"
-neovim = "latest"
-eza = "latest"
 bat = "latest"
 btop = "latest"
+delta = "latest"
+dust = "latest"
+eza = "latest"
 glow = "latest"
+go = "latest"
+java = "lts"
+jq = "latest"
+maven = "latest"
+neovim = "latest"
+node = "lts"
+python = "latest"
+rust = "latest"
+tealdeer = "latest"
+terraform = "latest"
 tree-sitter = "latest"
+yq = "latest"
 
 [settings]
 legacy_version_file = true

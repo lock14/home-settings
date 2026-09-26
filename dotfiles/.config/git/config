@@ -1,0 +1,28 @@
+# Git configuration (XDG-compliant: ~/.config/git/config)
+# Configures delta as the default diff and log pager with authentic Solarized Dark TrueColor styling
+
+[core]
+    pager = delta
+
+[interactive]
+    diff-filter = delta --color-only
+
+[delta]
+    navigate = true
+    light = false
+    syntax-theme = Solarized-Dark-TrueColor
+    line-numbers = true
+    side-by-side = false
+    plus-style = syntax "#073642"
+    minus-style = syntax "#073642"
+    plus-emph-style = syntax bold "#1a3b34"
+    minus-emph-style = syntax bold "#3c1f24"
+    line-numbers-plus-style = "#859900"
+    line-numbers-minus-style = "#dc322f"
+    line-numbers-left-style = "#586e75"
+    line-numbers-right-style = "#586e75"
+    line-numbers-zero-style = "#586e75"
+    hunk-header-style = syntax bold
+    hunk-header-decoration-style = "#586e75" box
+    file-style = bold "#268bd2"
+    file-decoration-style = "#586e75" ul

@@ -1,0 +1,23 @@
+# Tealdeer configuration (XDG-compliant: ~/.config/tealdeer/config.toml)
+# Visual Theme: Authentic Ethan Schoonover Solarized Dark (24-bit TrueColor)
+
+[display]
+compact = false
+use_pager = false
+
+[style.description]
+foreground = { rgb = { r = 131, g = 148, b = 150 } } # Base0
+
+[style.command_name]
+foreground = { rgb = { r = 133, g = 153, b = 0 } }   # Green
+bold = true
+
+[style.example_text]
+foreground = { rgb = { r = 38, g = 139, b = 210 } }  # Blue
+
+[style.example_code]
+foreground = { rgb = { r = 42, g = 161, b = 152 } }  # Cyan
+
+[style.example_variable]
+foreground = { rgb = { r = 181, g = 137, b = 0 } }   # Yellow
+underline = true

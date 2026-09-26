@@ -43,12 +43,14 @@ home-settings/
 │       ├── clangd/config.yaml       # Modern C23 / C++20 fallback compiler flags for clangd
 │       ├── fontconfig/conf.d/       # Fontconfig alias mapping MesloLGS NF -> MesloLGS Nerd Font Mono
 │       ├── ghostty/                 # Ghostty terminal configuration & Solarized Dark theme
-│       └── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
-│           ├── init.lua
-│           ├── lazy-lock.json
-│           ├── ftplugin/java.lua
-│           ├── queries/
-│           └── after/queries/
+│       ├── git/config               # XDG Git configuration with Delta Solarized Dark diff pager
+│       ├── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Treesitter, Telescope)
+│       │   ├── init.lua
+│       │   ├── lazy-lock.json
+│       │   ├── ftplugin/java.lua
+│       │   ├── queries/
+│       │   └── after/queries/
+│       └── tealdeer/config.toml     # Tealdeer tldr cheatsheet viewer with Solarized Dark styling
 │
 ├── lib/                             # Shared helper libraries
 │   ├── log.sh                       # Terminal logging & dry-run runner
@@ -251,8 +253,13 @@ The redesigned repository is built for frictionless extension:
 - **`fzf`** interactive fuzzy search (`Ctrl+R`) and tab completion.
 - **`zoxide` (`z`)** frecency-based smart directory jumping.
 
-### 2. Modern Rust Developer CLI Suite
+### 2. Modern Developer CLI Suite
 - **`bat`**: 24-bit TrueColor syntax-highlighted file viewing with Git gutter markers and italic rendering (`bat <file>` or `b <file>`; `cat` remains coreutils), featuring 18 custom Solarized Dark syntax definitions (Bash, C, C++, CSS, Diff, Go, HTML, Java, Java Properties, JSON, Markdown, Python, Rust, SQL, Terraform, TOML, TypeScript, and XML) with 1:1 Neovim Treesitter parity.
+- **`delta` (`git-delta`)**: 24-bit TrueColor syntax-highlighting pager for `git diff`, `git log -p`, and `git show` with word-level diff intra-line highlights, line numbers, and Solarized Dark palette integration.
+- **`dust` (`ds`)**: Graphical proportional disk usage tree visualizer (modern, intuitive Rust alternative to `du -sh`).
+- **`tealdeer` (`tldr`)**: Ultra-fast offline cheatsheet viewer for instant real-world command examples styled in Solarized Dark TrueColor.
+- **`jq`**: Lightweight command-line JSON processor configured with calibrated TrueColor `JQ_COLORS` for Solarized Dark parity.
+- **`yq`**: Portable CLI processor for YAML, JSON, XML, CSV, and Properties files matching terminal ANSI styling.
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
@@ -303,6 +310,8 @@ The redesigned repository is built for frictionless extension:
 | `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |
 | `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session |
 | `icd [dir\|--reset]` | Change or reset the active directory across all IDE panes (`Tree`, `Editor`, `Shell`, and `AI`) |
+| `ds` | Graphical proportional disk space analysis via `dust` |
+| `tldr <cmd>` | Fast, practical syntax-highlighted command cheat sheet via `tealdeer` |
 | `update` | Run cross-platform system and toolchain maintenance (`update-system`) |
 | `ls` | Standard directory listing with color (`ls --color=auto`) |
 | `ll` | Standard long directory listing with hidden files (`ls -alF`) |
