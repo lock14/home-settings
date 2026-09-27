@@ -107,22 +107,38 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'window_zoomed_flag' "$NVIM_CONFIG" && \
        grep -q 'netrw_liststyle = 3' "$NVIM_CONFIG" && \
        grep -q 'NVIM_IDE_LAYOUT' "$NVIM_CONFIG" && \
+       grep -q 'map("n", "<C-h>"' "$NVIM_CONFIG" && \
+       ! grep -q 'map({ "n", "t" }, "<C-h>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "$NVIM_CONFIG" && \
+       grep -q 'map("n", "H", "<cmd>bprevious<CR>"' "$NVIM_CONFIG" && \
+       grep -q 'map("n", "L", "<cmd>bnext<CR>"' "$NVIM_CONFIG" && \
+       grep -q 'move_selection_next' "$NVIM_CONFIG" && \
+       grep -q 'move_selection_previous' "$NVIM_CONFIG" && \
+       grep -q -- '--show-editor' "$NVIM_CONFIG" && \
+       grep -q -- '--show-term' "$NVIM_CONFIG" && \
        grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
        grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
        grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures smart_tmux_nav, Netrw tree sidebar (:Lexplore), SolarizedIdeLayout autocmd, and Mini.files navigator (<leader>E)"
+        pass "Neovim init.lua configures 4-layer smart_tmux_nav (C-hjkl Normal only, M-hjkl all modes, floating guard before stopinsert), H/L buffer cycling, Telescope C-j/C-k, M-e/M-t/M-a role jumps, and Mini.files navigator"
     else
-        fail "Neovim IDE integration" "Missing smart_tmux_nav, Netrw tree sidebar, or Mini.files setup in init.lua"
+        fail "Neovim IDE integration" "Missing expected 4-layer smart_tmux_nav, H/L buffer cycling, Telescope C-j/C-k, or Mini.files setup in init.lua"
     fi
 
     if grep -q 'nvim_create_user_command("IdeClose"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("IdeWriteClose"' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_user_command("IdeFollowToggle"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("Q"' "$NVIM_CONFIG" && \
        grep -q 'SolarizedIdeTree' "$NVIM_CONFIG" && \
+       grep -q 'IdeFollow.start_timer()' "$NVIM_CONFIG" && \
+       grep -q '"<leader>af"' "$NVIM_CONFIG" && \
+       grep -q '"<leader>gs"' "$NVIM_CONFIG" && \
+       grep -q 'winfixwidth = true' "$NVIM_CONFIG" && \
+       grep -q 'non_sidebar_wins' "$NVIM_CONFIG" && \
+       ! grep -q 'NVIM_IDE_TREE' "$NVIM_CONFIG" && \
        ! grep -q 'nvim_create_autocmd("VimLeave"' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua keeps IDE Editor pane alive on :q/:wq (IdeClose/IdeWriteClose) while providing :Q/:qa/<leader>q/<M-q> to quit the entire IDE workspace"
+        pass "Neovim init.lua configures IdeFollow (<leader>af, IdeFollowToggle), <leader>gs git_status, and keeps IDE Editor pane alive on :q/:wq (IdeClose/IdeWriteClose with non_sidebar_wins guard and winfixwidth)"
     else
-        fail "Neovim IDE quit safety" "Expected IdeClose, IdeWriteClose, Q, SolarizedIdeTree, and no VimLeave session-killer in init.lua"
+        fail "Neovim IDE quit safety & live-follow" "Expected IdeClose, IdeWriteClose, IdeFollowToggle, <leader>af, <leader>gs, SolarizedIdeTree, winfixwidth, non_sidebar_wins, and no NVIM_IDE_TREE in init.lua"
     fi
 
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \

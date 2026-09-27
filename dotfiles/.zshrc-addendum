@@ -81,9 +81,10 @@ ZSH_HIGHLIGHT_STYLES[bracket-error]='fg=#DC322F'
 zle_highlight=(region:bg=#073642 special:fg=#D33682 isearch:underline,fg=#268BD2)
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#586E75'
 
-# Oh-My-Zsh non-interactive auto update (avoids startup prompt)
+# Oh-My-Zsh non-interactive auto update (avoids startup prompt) and clean history
 DISABLE_UPDATE_PROMPT="true"
 zstyle ':omz:update' mode auto
+setopt HIST_IGNORE_SPACE
 
 # Source modular config files
 [ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"

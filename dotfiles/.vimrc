@@ -160,13 +160,6 @@ function! s:TmuxNavigate(dir, tmux_dir) abort
     execute 'wincmd ' . a:dir
     if winnr() == l:cur_win && !empty($TMUX)
         let l:target_cmd = 'select-pane -' . a:tmux_dir
-        if $NVIM_IDE_TREE ==# '1'
-            if a:tmux_dir ==# 'R' || a:tmux_dir ==# 'U'
-                let l:target_cmd = "select-pane -t '{top-right}'"
-            elseif a:tmux_dir ==# 'D'
-                let l:target_cmd = "select-pane -t '{bottom-right}'"
-            endif
-        endif
         call system('tmux if-shell -F "#{==:#{window_zoomed_flag},0}" "' . l:target_cmd . '"')
     endif
 endfunction

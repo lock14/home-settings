@@ -46,9 +46,11 @@ done
 if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'default-terminal "tmux-256color"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'RGB:extkeys:usstyle:clipboard' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -s extended-keys on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'allow-passthrough on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'copy-command' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'MouseDragEnd1Pane' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
@@ -56,18 +58,24 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'popup-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'mode-style "fg=#93A1A1,bg=#073642"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'status-style "fg=#839496,bg=#073642"' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'pane_current_command' "$TEMP_HOME/.tmux.conf" && \
-   grep -q '{top-right}' "$TEMP_HOME/.tmux.conf" && \
-   grep -q '{bottom-right}' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q '_swap' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Eq '^[[:space:]]*bind(-key)?[[:space:]]+-n[[:space:]]+C-[hjkl]\b' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-h' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-j' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-k' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-l' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-z resize-pane -Z' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-a' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'claude' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'codex' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark framing, TrueColor undercurls, xclip/OSC52 clipboard pipeline, role-aware 3-pane navigation, and Alt+z/Alt+a bindings"
+   grep -q 'bind -n M-e' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-t' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-1' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-2' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-3' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-H resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
+    pass ".tmux.conf configures Solarized Dark framing, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt+hjkl/e/t/a/1/2/3/z/HJKL navigation, and zero root Ctrl+hjkl traps"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark, clipboard, navigation, or keybinding settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark, extended-keys, clipboard, or 4-layer keybinding settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then

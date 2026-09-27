@@ -153,36 +153,75 @@ v() {
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        if nvim --headless --server "$sock" --remote-expr "execute(\"if (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1; then
-            if [ "$#" -gt 0 ]; then
-                local -a abs_args=()
-                local arg dir base
-                for arg in "$@"; do
-                    if [[ "$arg" == /* ]]; then
-                        abs_args+=("$arg")
+        if nvim --headless --server "$sock" --remote-expr "execute(\"if luaeval('type(_G.IdeTree) == \\\"table\\\" and type(_G.IdeTree.focus_code_win) == \\\"function\\\"') | call v:lua.IdeTree.focus_code_win() | elseif (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1; then
+            local -a abs_args=()
+            local -a plus_cmds=()
+            local local_only=0
+            local expect_cmd=0
+            local end_of_opts=0
+            local arg dir base p_cmd esc_cmd
+            for arg in "$@"; do
+                if [ "$expect_cmd" = "1" ]; then
+                    plus_cmds+=("$arg")
+                    expect_cmd=0
+                    continue
+                fi
+                if [ "$end_of_opts" = "0" ]; then
+                    if [ "$arg" = "--" ]; then
+                        end_of_opts=1
+                        continue
+                    elif [[ "$arg" == +* ]]; then
+                        p_cmd="${arg#+}"
+                        [ -z "$p_cmd" ] && p_cmd="$"
+                        plus_cmds+=("$p_cmd")
+                        continue
+                    elif [ "$arg" = "-c" ] || [ "$arg" = "--cmd" ]; then
+                        expect_cmd=1
+                        continue
+                    elif [[ "$arg" =~ ^(-v|--version|-h|--help|-d|-u|--clean|--headless|-es|-Es|--startuptime)$ ]]; then
+                        local_only=1
+                        break
+                    elif [[ "$arg" == -* ]]; then
+                        continue
+                    fi
+                fi
+                if [[ "$arg" == /* ]]; then
+                    abs_args+=("$arg")
+                else
+                    dir="$(dirname -- "$arg")"
+                    base="$(basename -- "$arg")"
+                    if [ -d "$dir" ]; then
+                        abs_args+=("$(cd -- "$dir" && pwd -P)/$base")
                     else
-                        dir="$(dirname -- "$arg")"
-                        base="$(basename -- "$arg")"
-                        if [ -d "$dir" ]; then
-                            abs_args+=("$(cd -- "$dir" && pwd -P)/$base")
-                        else
-                            abs_args+=("$PWD/${arg#./}")
+                        abs_args+=("$PWD/${arg#./}")
+                    fi
+                fi
+            done
+            if [ "$local_only" = "0" ]; then
+                if [ "${#abs_args[@]}" -gt 0 ]; then
+                    nvim --server "$sock" --remote "${abs_args[@]}"
+                fi
+                for p_cmd in "${plus_cmds[@]}"; do
+                    esc_cmd="${p_cmd//\\/\\\\}"
+                    esc_cmd="${esc_cmd//\"/\\\"}"
+                    nvim --headless --server "$sock" --remote-expr "execute(\"$esc_cmd\")" >/dev/null 2>&1 || true
+                done
+                if [ -n "${TMUX:-}" ] && { [ -z "$tmux_sock" ] || [ "$sock" = "$tmux_sock" ]; }; then
+                    local cur_pane="${TMUX_PANE:-}"
+                    [ -z "$cur_pane" ] && cur_pane="$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)"
+                    if [ -z "$pane" ] || [ "$cur_pane" != "$pane" ]; then
+                        if [ -x "$HOME/.local/bin/ide" ]; then
+                            "$HOME/.local/bin/ide" --focus-editor >/dev/null 2>&1 || true
+                        elif command -v ide >/dev/null 2>&1; then
+                            ide --focus-editor >/dev/null 2>&1 || true
+                        elif [ -n "$pane" ]; then
+                            tmux select-window -t "$pane" 2>/dev/null || true
+                            tmux select-pane -t "$pane" 2>/dev/null || true
                         fi
                     fi
-                done
-                nvim --server "$sock" --remote "${abs_args[@]}"
-            fi
-            if [ -n "${TMUX:-}" ] && { [ -z "$tmux_sock" ] || [ "$sock" = "$tmux_sock" ]; }; then
-                if [ -x "$HOME/.local/bin/ide" ]; then
-                    "$HOME/.local/bin/ide" --show-editor >/dev/null 2>&1 || true
-                elif command -v ide >/dev/null 2>&1; then
-                    ide --show-editor >/dev/null 2>&1 || true
-                elif [ -n "$pane" ]; then
-                    tmux select-window -t "$pane" 2>/dev/null || true
-                    tmux select-pane -t "$pane" 2>/dev/null || true
                 fi
+                return 0
             fi
-            return 0
         else
             rm -f "$sock" 2>/dev/null || true
         fi
@@ -198,8 +237,8 @@ v() {
 }
 
 # Dive IDE Workspace (`icd [dir|--reset|~]`):
-# Synchronizes the working directory across the current shell, Left Directory Tree,
-# Main Neovim Editor, and AI Agent (`--continue` in new $PWD).
+# Synchronizes the working directory across the current shell, in-process IdeTree,
+# and Main Neovim Editor without killing or respawning the active AI Agent pane.
 icd() {
     local ide_bin="$HOME/.local/bin/ide"
     if [ ! -x "$ide_bin" ] && command -v ide >/dev/null 2>&1; then
