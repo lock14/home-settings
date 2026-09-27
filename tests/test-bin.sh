@@ -135,7 +135,7 @@ if command -v tmux >/dev/null 2>&1; then
         win_cnt="$(tmux list-windows -t "ide-ws_2pane_test" | wc -l | tr -d ' ')"
         env_out="$(tmux show-environment -t "ide-ws_2pane_test" 2>/dev/null || true)"
         if [ "$pane_cnt" = "2" ] && [ "$win_cnt" = "1" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out"; then
-            pass "bin/ide --2pane layout spawns 2 side-by-side panes (60% Editor | 40% AI) in a single window and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
+            pass "bin/ide --2pane layout spawns 2 side-by-side panes (50% AI | 50% Editor) in a single window and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
         else
             fail "bin/ide 2-pane layout" "Expected 2 panes in 1 window and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy env vars, got panes=$pane_cnt wins=$win_cnt env=$env_out"
         fi
@@ -149,21 +149,24 @@ if command -v tmux >/dev/null 2>&1; then
         pane_cnt_3="$(tmux list-panes -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
         win_cnt_3="$(tmux list-windows -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
         env_out_3="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
-        if [ "$pane_cnt_3" = "3" ] && [ "$win_cnt_3" = "1" ] && grep -q "IDE_TERM_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3" && ! grep -q "IDE_TREE_PANE=" <<< "$env_out_3"; then
-            pass "bin/ide default 3-pane layout spawns all 3 panes (Top-Left Editor, Bottom-Left Shell, Right AI Agent) in a single window with zero _swap window or second Neovim server"
-        else
-            fail "bin/ide 3-pane layout" "Expected 3 panes in 1 window, IDE_TERM_PANE, IDE_AI_PANE, and IDE_AI_CLI=claude, got panes=$pane_cnt_3 wins=$win_cnt_3 env=$env_out_3"
-        fi
-
         ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane)"
         ai_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_ai_pane)"
         term_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_term_pane)"
         main_win="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_main_win)"
+        initial_active="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        win_width="$(tmux display-message -p -t "$main_win" "#{window_width}")"
+        term_width="$(tmux display-message -p -t "$term_pane" "#{pane_width}")"
+        if [ "$pane_cnt_3" = "3" ] && [ "$win_cnt_3" = "1" ] && [ "$initial_active" = "$ai_pane" ] && [ "$term_width" = "$win_width" ] && grep -q "IDE_TERM_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3" && ! grep -q "IDE_TREE_PANE=" <<< "$env_out_3"; then
+            pass "bin/ide default 3-pane layout spawns all 3 panes (Top-Left 50%x75% AI Agent, Top-Right 50%x75% Editor, Bottom 100%x25% Full-Width Shell) in a single window with initial focus on AI"
+        else
+            fail "bin/ide 3-pane layout" "Expected 3 panes in 1 window, initial_active=$ai_pane (got $initial_active), term_width=$win_width (got $term_width), IDE_TERM_PANE, IDE_AI_PANE, and IDE_AI_CLI=claude, got panes=$pane_cnt_3 wins=$win_cnt_3 env=$env_out_3"
+        fi
 
         # Simulate outer client attach-session clearing session env vars
         tmux set-environment -t "ide-ws_3pane_test" -r NVIM_IDE_PANE
 
         # Test focus toggles (--toggle, --show-term, --show-editor) and zoom preservation
+        # Initial focus is AI ($ai_pane), so first --toggle switches to Editor ($ed_pane), and second returns to AI ($ai_pane)
         "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
         active_after_t1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         pane_cnt_after_t1="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
@@ -192,17 +195,17 @@ if command -v tmux >/dev/null 2>&1; then
         zoom_after_unzoom="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
 
         if [ "$pane_cnt_after_t1" = "3" ] && \
-           [ "$active_after_t1" = "$ai_pane" ] && \
-           [ "$active_after_t2" = "$ed_pane" ] && \
+           [ "$active_after_t1" = "$ed_pane" ] && \
+           [ "$active_after_t2" = "$ai_pane" ] && \
            [ "$active_after_term1" = "$term_pane" ] && \
            [ "$active_after_term2" = "$ed_pane" ] && \
            [ "$zoom_in_ed" = "1" ] && \
            [ "$active_zoom_ai" = "$ai_pane" ] && [ "$zoom_in_ai" = "1" ] && \
            [ "$active_zoom_ed" = "$ed_pane" ] && [ "$zoom_back_ed" = "1" ] && \
            [ "$zoom_after_unzoom" = "0" ]; then
-            pass "bin/ide --toggle, --show-term, and --show-editor switch focus across Editor, AI, and Shell panes while preserving zoom state"
+            pass "bin/ide --toggle, --show-term, and --show-editor switch focus across AI, Editor, and Shell panes while preserving zoom state"
         else
-            fail "bin/ide focus/zoom toggles" "Unexpected focus/zoom state: t1=$active_after_t1(exp $ai_pane) t2=$active_after_t2(exp $ed_pane) term1=$active_after_term1(exp $term_pane) term2=$active_after_term2(exp $ed_pane) z_ed=$zoom_in_ed z_ai=$zoom_in_ai($active_zoom_ai) z_back=$zoom_back_ed($active_zoom_ed) unzoom=$zoom_after_unzoom"
+            fail "bin/ide focus/zoom toggles" "Unexpected focus/zoom state: t1=$active_after_t1(exp $ed_pane) t2=$active_after_t2(exp $ai_pane) term1=$active_after_term1(exp $term_pane) term2=$active_after_term2(exp $ed_pane) z_ed=$zoom_in_ed z_ai=$zoom_in_ai($active_zoom_ai) z_back=$zoom_back_ed($active_zoom_ed) unzoom=$zoom_after_unzoom"
         fi
 
         "$SCRIPT_DIR/bin/ide" --ai codex --detach "$IDE_WS_3P"
@@ -222,8 +225,7 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide IDE_AI_CLI update" "Failed to update/preserve IDE_AI_CLI=codex (opt=$opt_out_reattach)"
         fi
 
-        # Verify in-process SolarizedIdeTree (`IdeTree.toggle_split()`) expands/collapses directories and sets winfixwidth,
-        # and `:IdeClose` (`:q`) with ide_tree open preserves the non-sidebar code window
+        # Verify in-process SolarizedIdeTree (`IdeTree.toggle_split()`), `IdeClose` (`:q`), and `IdeFollow.sync(true)` AI live-follow
         if command -v nvim >/dev/null 2>&1; then
             mkdir -p "$IDE_WS_3P/subdir"
             echo "hello" > "$IDE_WS_3P/subdir/nested.txt"
@@ -235,8 +237,31 @@ if command -v tmux >/dev/null 2>&1; then
             else
                 fail "In-process SolarizedIdeTree / IdeClose" "Expected EXP:1 COL:0 WFW:1 WINS:2 and non-ide_tree ft, got: $tree_test_out"
             fi
+
+            if command -v git >/dev/null 2>&1; then
+                FOLLOW_REPO="$TEMP_HOME/follow_repo_test"
+                mkdir -p "$FOLLOW_REPO"
+                (
+                    cd "$FOLLOW_REPO"
+                    git init -q
+                    git config user.email "test@example.com"
+                    git config user.name "Test"
+                    printf "line1\nline2\nline3\nline4\n" > "$FOLLOW_REPO/tracked.go"
+                    git add tracked.go
+                    git commit -q -m "initial" --no-gpg-sign
+                    printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
+                )
+                follow_out="$(cd "$FOLLOW_REPO" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                    -c "lua IdeFollow.sync(true); io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))" \
+                    -c "qa!" 2>&1 || true)"
+                if grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out"; then
+                    pass "AI Live-Follow Mode (IdeFollow.sync) detects git-modified files, opens them in the Editor pane, and jumps to the latest modified diff hunk line"
+                else
+                    fail "AI Live-Follow Mode (IdeFollow.sync)" "Expected FILE:tracked.go LINE:3, got: $follow_out"
+                fi
+            fi
         else
-            pass "In-process SolarizedIdeTree skipped headless runtime check (nvim not installed on runner)"
+            pass "In-process SolarizedIdeTree and IdeFollow skipped headless runtime check (nvim not installed on runner)"
         fi
 
         # Verify `bin/ide --cd <subdir>` and `bin/ide --cd --reset` update @ide_workdir without respawning the AI pane
@@ -295,16 +320,17 @@ if command -v tmux >/dev/null 2>&1; then
             rm -f "$sock_3p"
         fi
 
-        # Verify self-healing when Editor pane is closed while Shell and AI panes remain
+        # Verify self-healing when Right Full-Height Editor pane is closed while Left AI and Shell panes remain
         tmux kill-pane -t "$ed_pane" 2>/dev/null || true
         "$SCRIPT_DIR/bin/ide" --focus-editor "ide-ws_3pane_test"
         healed_ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane 2>/dev/null || true)"
-        healed_ed_pos="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_left},#{pane_top}" 2>/dev/null || true)"
+        healed_ed_left="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_left}" 2>/dev/null || echo 0)"
+        healed_ed_top="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_top}" 2>/dev/null || echo 1)"
         healed_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
-        if [ "$healed_pane_cnt" = "3" ] && [ "$healed_ed_pos" = "0,0" ]; then
-            pass "bin/ide self-heals Top-Left Editor pane (0,0) and restores 3-pane geometry if closed"
+        if [ "$healed_pane_cnt" = "3" ] && [ "${healed_ed_left:-0}" -gt 0 ] && [ "${healed_ed_top:-1}" = "0" ]; then
+            pass "bin/ide self-heals Right Full-Height Editor pane (left>0, top=0) and restores 3-pane geometry if closed"
         else
-            fail "bin/ide Editor pane self-heal" "Expected 3 panes and healed Editor at 0,0, got panes=$healed_pane_cnt pos=$healed_ed_pos"
+            fail "bin/ide Editor pane self-heal" "Expected 3 panes and healed Right Editor at left>0,top=0, got panes=$healed_pane_cnt left=$healed_ed_left top=$healed_ed_top"
         fi
 
         "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1

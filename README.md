@@ -283,16 +283,18 @@ The redesigned repository is built for frictionless extension:
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
 
 ### 3. Modern Lua Neovim (`dotfiles/.config/nvim/init.lua`) & Hybrid Terminal IDE (`bin/ide`, `dotfiles/.tmux.conf`)
-- **Single-Window 3-Pane & 2-Pane Spatial Geometry**:
-  - `ide` / `ide3` (`--3pane`, default): Top-Left Main Editor (60%×70%, single Neovim server listening on `$NVIM_IDE_SOCKET`), Bottom-Left Interactive Shell (60%×30%), and Right AI Agent (40%×100%, `agy` / `claude` / `codex`) all visible simultaneously in a single window with zero hidden `_swap` parking windows or secondary Neovim processes.
-  - `ide2` (`--2pane`): Side-by-side 60% Main Editor | 40% AI Agent.
+- **Single-Window Inverted-T AI-First 3-Pane & 2-Pane Spatial Geometry**:
+  - `ide` / `ide3` (`--3pane`, default): Top-Left AI Agent (50%×75%, `agy` / `claude` / `codex`, focused on launch), Top-Right Main Editor (50%×75%, single Neovim server listening on `$NVIM_IDE_SOCKET`), and Bottom Full-Width Interactive Shell (100%×25% for unconstrained Powerlevel10k prompts and wide CLI output) all visible simultaneously in a single window with zero hidden `_swap` parking windows or secondary Neovim processes.
+  - `ide2` (`--2pane`): Side-by-side 50% AI Agent | 50% Full-Height Main Editor.
+- **AI Live-Follow Mode (`IdeFollow` / `Space af`)**:
+  - Enabled by default in `ide` sessions: automatically reloads open buffers (`checktime`), opens files newly modified or created by the AI in the Top-Right Editor pane, and scrolls (`normal! zz`) to the latest modified git diff hunk while your cursor stays in the Top-Left AI Agent pane (automatically yielding whenever you enter Insert/Visual mode or have unsaved local edits).
 - **First-Principles 4-Layer Keybinding Architecture**:
   - **Layer 1 (App-Local `Ctrl`)**: `Ctrl+h/j/k/l` are never bound in Tmux's root table, preserving native `Ctrl+L` (clear), `Ctrl+J` (newline), `Ctrl+K` (kill line), and `Ctrl+H` (backspace) in Zsh, Bash, and AI CLIs (`agy`, `claude`, `codex`), while `<C-j>/<C-k>` navigate Telescope pickers and `<C-h/j/k/l>` navigate Neovim Normal-mode splits.
   - **Layer 2 (Spatial `Alt`)**: `Alt+h/j/k/l` move seamlessly across Neovim splits and Tmux panes from any mode (`n/i/v/t`); `Alt+e` (`Alt+1`) focuses or zooms the Editor pane; `Alt+t` (`Alt+2`) toggles focus between Shell and Editor; `Alt+a` (`Alt+3` / `Space a`) toggles focus between Editor and AI Agent (preserving zoom when zoomed); `Alt+z` toggles pane zoom; `Alt+Shift+H/J/K/L` resizes panes; `Alt+q` (`Alt+Shift+Q`) quits the entire IDE workspace.
-  - **Layer 3 (Editor `Space` Leader & In-Process `SolarizedIdeTree`)**: `Space e` toggles the in-process 28-column `SolarizedIdeTree` sidebar (`winfixwidth`), `H`/`L` cycle buffers, and `:q` (`:IdeClose`) closes the active buffer or split without ever collapsing the last code window into the sidebar.
+  - **Layer 3 (Editor `Space` Leader & In-Process `SolarizedIdeTree`)**: `Space e` toggles the in-process 28-column `SolarizedIdeTree` sidebar (`winfixwidth`), `Space af` toggles AI Live-Follow Mode (`:IdeFollowToggle`), `Space gs` opens Telescope `git_status` to review AI-modified files, `H`/`L` cycle buffers, and `:q` (`:IdeClose`) closes the active buffer or split without ever collapsing the last code window into the sidebar.
 - **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
 - **Treesitter**: AST-based syntax highlighting with 1:1 parity matching `bat`.
-- **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`) with `<C-j>` / `<C-k>` selection movement.
+- **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`, `<leader>gs`) with `<C-j>` / `<C-k>` selection movement.
 - **Solarized Dark**: Seamless `#002B36` terminal background matching.
 - **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim` and `+line` support over RPC).
 

@@ -2,17 +2,18 @@
 # ==============================================================================
 # bin/ide — Hybrid Terminal IDE Workspace Launcher (Tmux + Neovim RPC + AI)
 # ==============================================================================
-# Default Layout (--3pane, Single Neovim Server, Zero _swap Window):
-#   - Top-Left Pane (60% width × 70% height): Main Editor (@ide_role=editor)
-#     listening on $NVIM_IDE_SOCKET with in-process SolarizedIdeTree (<leader>e)
-#   - Bottom-Left Pane (60% width × 30% height): Interactive Shell (@ide_role=term)
-#   - Right Pane (40% width × 100% height): AI Agent CLI (@ide_role=ai)
+# Default Layout (--3pane, Inverted-T AI-First, Single Neovim Server, Zero _swap Window):
+#   - Top-Left Pane (50% width × 75% height): AI Agent CLI (@ide_role=ai, initial focus)
 #     controlled by $IDE_AI_CLI (agy | claude | codex)
+#   - Top-Right Pane (50% width × 75% height): Main Editor (@ide_role=editor)
+#     listening on $NVIM_IDE_SOCKET with AI Live-Follow Mode (IdeFollow)
+#     and in-process SolarizedIdeTree (<leader>e)
+#   - Bottom Pane (100% width × 25% height): Full-Width Interactive Shell (@ide_role=term)
 #   - Floating Modal (Alt+Shift+a): Optional overlay popup
 #
 # Optional Layout (--2pane):
-#   - Left Pane (60% width × 100% height): Main Editor (@ide_role=editor)
-#   - Right Pane (40% width × 100% height): AI Agent CLI (@ide_role=ai)
+#   - Left Pane (50% width × 100% height): AI Agent CLI (@ide_role=ai, initial focus)
+#   - Right Pane (50% width × 100% height): Main Editor (@ide_role=editor)
 # ==============================================================================
 
 set -euo pipefail
@@ -25,8 +26,8 @@ Usage: ide [OPTIONS] [DIRECTORY]
 Launch or attach to a Solarized Dark Tmux + Neovim IDE workspace session.
 
 Options:
-  --3pane                  Launch default 3-pane layout (Top-Left 60%x70% Editor, Bottom-Left 60%x30% Shell, Right 40%x100% AI)
-  --2pane                  Launch 2-pane layout (Left 60%x100% Editor, Right 40%x100% AI)
+  --3pane                  Launch default 3-pane layout (Top-Left 50%x75% AI, Top-Right 50%x75% Editor, Bottom 100%x25% Shell)
+  --2pane                  Launch 2-pane layout (Left 50%x100% AI, Right 50%x100% Editor)
   --ai, --agent <CLI>      Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
   --open <FILE>            Open <FILE> in the Main Editor pane via RPC and focus Editor
   --preview <FILE>         Preview <FILE> in the Main Editor pane via RPC without changing focus
@@ -419,19 +420,19 @@ toggle_main_pane() {
     fi
 
     # Geometry fallback if per-pane @ide_role tags were cleared on existing panes:
-    # Top-Left (left==0, top==0) is Editor, Right (left>0) is AI, Bottom-Left (left==0, top>0) is Term
-    if ! pane_exists "$editor_pane"; then
-        editor_pane="$(tmux list-panes -t "$main_win" -F "#{pane_left} #{pane_top} #{pane_id} #{@ide_role}" | sort -n -k1,1 -k2,2 | awk '$4 == "" || $4 == "editor" { print $3; exit }')"
-        if [ -n "$editor_pane" ]; then
-            tmux set-option -p -t "$editor_pane" @ide_role "editor" 2>/dev/null || true
-            set_ide_var "$sess" "@ide_editor_pane" "NVIM_IDE_PANE" "$editor_pane"
-        fi
-    fi
+    # Top-Left (left==0, top==0) is AI, Bottom-Left (left==0, top>0) is Term, Right (left>0) is Editor
     if ! pane_exists "$ai_pane"; then
-        ai_pane="$(tmux list-panes -t "$main_win" -F "#{pane_left} #{pane_top} #{pane_id} #{@ide_role}" | sort -n -k1,1 -k2,2 | awk '$1 > 0 && ($4 == "" || $4 == "ai") { print $3; exit }')"
+        ai_pane="$(tmux list-panes -t "$main_win" -F "#{pane_left} #{pane_top} #{pane_id} #{@ide_role}" | sort -n -k1,1 -k2,2 | awk '$1 == 0 && $2 == 0 && ($4 == "" || $4 == "ai") { print $3; exit }')"
         if [ -n "$ai_pane" ]; then
             tmux set-option -p -t "$ai_pane" @ide_role "ai" 2>/dev/null || true
             set_ide_var "$sess" "@ide_ai_pane" "IDE_AI_PANE" "$ai_pane"
+        fi
+    fi
+    if ! pane_exists "$editor_pane"; then
+        editor_pane="$(tmux list-panes -t "$main_win" -F "#{pane_left} #{pane_top} #{pane_id} #{@ide_role}" | sort -n -k1,1 -k2,2 | awk '$1 > 0 && ($4 == "" || $4 == "editor") { print $3; exit }')"
+        if [ -n "$editor_pane" ]; then
+            tmux set-option -p -t "$editor_pane" @ide_role "editor" 2>/dev/null || true
+            set_ide_var "$sess" "@ide_editor_pane" "NVIM_IDE_PANE" "$editor_pane"
         fi
     fi
     if ! pane_exists "$term_pane"; then
@@ -453,12 +454,12 @@ toggle_main_pane() {
         fi
     fi
 
-    # Self-heal Top-Left Editor pane if closed
+    # Self-heal Top-Right 50%x75% Editor pane if closed
     if ! pane_exists "$editor_pane"; then
-        if pane_exists "$term_pane"; then
-            editor_pane="$(tmux split-window -b -v -P -F "#{pane_id}" -t "$term_pane" -l 70% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
-        elif pane_exists "$ai_pane"; then
-            editor_pane="$(tmux split-window -b -h -P -F "#{pane_id}" -t "$ai_pane" -l 60% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
+        if pane_exists "$ai_pane"; then
+            editor_pane="$(tmux split-window -h -P -F "#{pane_id}" -t "$ai_pane" -l 50% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
+        else
+            editor_pane="$(tmux split-window -b -v -P -F "#{pane_id}" -t "$main_win" -l 75% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
         fi
         if [ -n "$editor_pane" ]; then
             tmux set-option -p -t "$editor_pane" @ide_role "editor" 2>/dev/null || true
@@ -471,20 +472,26 @@ toggle_main_pane() {
         fi
     fi
 
-    # Self-heal Right 40% AI Agent pane if closed
+    # Self-heal Top-Left 50%x75% AI Agent pane if closed
     if ! pane_exists "$ai_pane"; then
-        ai_pane="$(tmux split-window -f -h -P -F "#{pane_id}" -t "$main_win" -l 40% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
-        tmux set-option -p -t "$ai_pane" @ide_role "ai" 2>/dev/null || true
-        set_ide_var "$sess" "@ide_ai_pane" "IDE_AI_PANE" "$ai_pane"
-        local ai_run_cmd
-        if ai_run_cmd="$(resolve_ai_cmd "$ai_cli")"; then
-            tmux send-keys -t "$ai_pane" " $ai_run_cmd" C-m
+        if pane_exists "$editor_pane"; then
+            ai_pane="$(tmux split-window -b -h -P -F "#{pane_id}" -t "$editor_pane" -l 50% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
+        elif pane_exists "$term_pane"; then
+            ai_pane="$(tmux split-window -b -v -P -F "#{pane_id}" -t "$term_pane" -l 75% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
+        fi
+        if [ -n "$ai_pane" ]; then
+            tmux set-option -p -t "$ai_pane" @ide_role "ai" 2>/dev/null || true
+            set_ide_var "$sess" "@ide_ai_pane" "IDE_AI_PANE" "$ai_pane"
+            local ai_run_cmd
+            if ai_run_cmd="$(resolve_ai_cmd "$ai_cli")"; then
+                tmux send-keys -t "$ai_pane" " $ai_run_cmd" C-m
+            fi
         fi
     fi
 
-    # Self-heal Bottom-Left 30% Shell pane if closed (in 3pane mode or when explicitly jumping to term)
+    # Self-heal Bottom 100%x25% Full-Width Shell pane if closed (in 3pane mode or when explicitly jumping to term)
     if ! pane_exists "$term_pane" && { [ "${layout_mode:-3pane}" != "2pane" ] || [ "$mode" = "term" ]; }; then
-        term_pane="$(tmux split-window -v -P -F "#{pane_id}" -t "$editor_pane" -l 30% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
+        term_pane="$(tmux split-window -f -v -P -F "#{pane_id}" -t "$main_win" -l 25% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
         tmux set-option -p -t "$term_pane" @ide_role "term" 2>/dev/null || true
         set_ide_var "$sess" "@ide_term_pane" "IDE_TERM_PANE" "$term_pane"
     fi
@@ -782,7 +789,7 @@ open_ide_link() {
                     local sess sock
                     sess="$(resolve_target_session "$TARGET_ARG")"
                     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
-                    [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$line')" >/dev/null 2>&1 || true
+                    [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$line') . execute('normal! zz')" >/dev/null 2>&1 || true
                 fi
                 return 0
             elif [ -d "$fpath" ]; then
@@ -839,7 +846,7 @@ open_ide_link() {
             local sess sock
             sess="$(resolve_target_session "$TARGET_ARG")"
             sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
-            [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$file_line')" >/dev/null 2>&1 || true
+            [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$file_line') . execute('normal! zz')" >/dev/null 2>&1 || true
         fi
         return 0
     fi
@@ -937,14 +944,14 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     [ "$COLS" -lt 80 ] && COLS=160
     [ "$LINES" -lt 24 ] && LINES=48
 
-    # Create Window 1 with Left Pane as Main Editor (@ide_role=editor)
-    PANE_EDITOR="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "ide" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_SESSION=$SESSION" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
-    MAIN_WIN="$(tmux display-message -p -t "$PANE_EDITOR" "#{window_id}")"
-    tmux set-option -p -t "$PANE_EDITOR" @ide_role "editor"
-
-    # Split horizontally (-h -l 40%) to create Right 40% x 100% height AI Agent pane (@ide_role=ai)
-    PANE_AI="$(tmux split-window -h -P -F "#{pane_id}" -t "$PANE_EDITOR" -l 40% -c "$TARGET_DIR" -e "IDE_SESSION=$SESSION" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "NVIM_IDE_PANE=$PANE_EDITOR" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
+    # Create Window 1 with Top-Left Pane as AI Agent (@ide_role=ai)
+    PANE_AI="$(tmux new-session -d -P -F "#{pane_id}" -s "$SESSION" -n "ide" -c "$TARGET_DIR" -x "$COLS" -y "$LINES" -e "IDE_SESSION=$SESSION" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
+    MAIN_WIN="$(tmux display-message -p -t "$PANE_AI" "#{window_id}")"
     tmux set-option -p -t "$PANE_AI" @ide_role "ai"
+
+    # Split horizontally (-h -l 50%) to create Top-Right 50% Main Editor pane (@ide_role=editor)
+    PANE_EDITOR="$(tmux split-window -h -P -F "#{pane_id}" -t "$PANE_AI" -l 50% -c "$TARGET_DIR" -e "IDE_SESSION=$SESSION" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
+    tmux set-option -p -t "$PANE_EDITOR" @ide_role "editor"
 
     set_ide_var "$SESSION" "@ide_session" "IDE_SESSION" "$SESSION"
     set_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI" "$IDE_AI_CLI"
@@ -957,15 +964,19 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     set_ide_var "$SESSION" "@ide_layout_mode" "IDE_LAYOUT_MODE" "$LAYOUT_MODE"
 
     if [ "$LAYOUT_MODE" = "3pane" ]; then
-        # Split Left Editor pane vertically (-v -l 30%) to create Bottom-Left 60% x 30% height Shell pane (@ide_role=term),
-        # leaving Top-Left Main Editor at 60% width x 70% height
-        PANE_TERM="$(tmux split-window -v -P -F "#{pane_id}" -t "$PANE_EDITOR" -l 30% -c "$TARGET_DIR" -e "IDE_SESSION=$SESSION" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "NVIM_IDE_PANE=$PANE_EDITOR" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
+        # Split full window vertically (-f -v -l 25%) to create Bottom 100% width x 25% height Shell pane (@ide_role=term),
+        # leaving Top-Left AI Agent (50%x75%) and Top-Right Main Editor (50%x75%) side-by-side at eye level
+        PANE_TERM="$(tmux split-window -f -v -P -F "#{pane_id}" -t "$MAIN_WIN" -l 25% -c "$TARGET_DIR" -e "IDE_SESSION=$SESSION" -e "IDE_AI_CLI=$IDE_AI_CLI" -e "NVIM_IDE_SOCKET=$NVIM_SOCKET" -e "NVIM_IDE_PANE=$PANE_EDITOR" -e "IDE_INITIAL_ROOT=$TARGET_DIR")"
         tmux set-option -p -t "$PANE_TERM" @ide_role "term"
         set_ide_var "$SESSION" "@ide_term_pane" "IDE_TERM_PANE" "$PANE_TERM"
     fi
 
     if command -v nvim >/dev/null 2>&1; then
-        tmux send-keys -t "$PANE_EDITOR" " nvim --listen '$NVIM_SOCKET'" C-m
+        if [ -f "$TARGET_DIR/README.md" ]; then
+            tmux send-keys -t "$PANE_EDITOR" " nvim --listen '$NVIM_SOCKET' $(printf '%q' "$TARGET_DIR/README.md")" C-m
+        else
+            tmux send-keys -t "$PANE_EDITOR" " nvim --listen '$NVIM_SOCKET'" C-m
+        fi
     elif command -v vim >/dev/null 2>&1; then
         tmux send-keys -t "$PANE_EDITOR" " vim" C-m
     fi
@@ -975,7 +986,7 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     fi
 
     tmux select-window -t "$MAIN_WIN"
-    tmux select-pane -t "$PANE_EDITOR"
+    tmux select-pane -t "$PANE_AI"
 else
     # Only update IDE_AI_CLI on an existing session when --ai was explicitly passed
     if [ "$AI_CLI_FROM_FLAG" = "1" ]; then

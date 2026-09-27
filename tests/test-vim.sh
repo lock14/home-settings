@@ -126,15 +126,19 @@ if [ -f "$NVIM_CONFIG" ]; then
 
     if grep -q 'nvim_create_user_command("IdeClose"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("IdeWriteClose"' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_user_command("IdeFollowToggle"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("Q"' "$NVIM_CONFIG" && \
        grep -q 'SolarizedIdeTree' "$NVIM_CONFIG" && \
+       grep -q 'IdeFollow.start_timer()' "$NVIM_CONFIG" && \
+       grep -q '"<leader>af"' "$NVIM_CONFIG" && \
+       grep -q '"<leader>gs"' "$NVIM_CONFIG" && \
        grep -q 'winfixwidth = true' "$NVIM_CONFIG" && \
        grep -q 'non_sidebar_wins' "$NVIM_CONFIG" && \
        ! grep -q 'NVIM_IDE_TREE' "$NVIM_CONFIG" && \
        ! grep -q 'nvim_create_autocmd("VimLeave"' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua keeps IDE Editor pane and code split alive on :q/:wq (IdeClose/IdeWriteClose with non_sidebar_wins guard and winfixwidth) while providing :Q/:qa/<leader>q/<M-q> to quit the entire IDE workspace"
+        pass "Neovim init.lua configures IdeFollow (<leader>af, IdeFollowToggle), <leader>gs git_status, and keeps IDE Editor pane alive on :q/:wq (IdeClose/IdeWriteClose with non_sidebar_wins guard and winfixwidth)"
     else
-        fail "Neovim IDE quit safety" "Expected IdeClose, IdeWriteClose, Q, SolarizedIdeTree, winfixwidth, non_sidebar_wins, and no NVIM_IDE_TREE or VimLeave session-killer in init.lua"
+        fail "Neovim IDE quit safety & live-follow" "Expected IdeClose, IdeWriteClose, IdeFollowToggle, <leader>af, <leader>gs, SolarizedIdeTree, winfixwidth, non_sidebar_wins, and no NVIM_IDE_TREE in init.lua"
     fi
 
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \

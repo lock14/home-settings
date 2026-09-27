@@ -792,6 +792,165 @@ map("n", "<leader>e", function()
     IdeTree.toggle_split()
 end, { desc = "Toggle Project Tree Sidebar" })
 
+-- =============================================================================
+-- AI Live-Follow Mode (`IdeFollow`)
+-- Automatically reloads buffers (`checktime`), opens files modified by the AI
+-- in the Right 100%-height Editor pane, and scrolls (`normal! zz`) to the latest
+-- modified git diff hunk while you stay in the Left AI Agent pane.
+-- =============================================================================
+local IdeFollow = {
+    enabled = (vim.env.NVIM_IDE_SOCKET ~= nil and vim.env.NVIM_IDE_SOCKET ~= ""),
+    last_mtime_ns = 0,
+    last_file = "",
+    timer = nil,
+}
+_G.IdeFollow = IdeFollow
+
+local function stat_mtime_ns(path)
+    local uv = vim.uv or vim.loop
+    local st = uv.fs_stat(path)
+    if not st or st.type ~= "file" or not st.mtime then
+        return 0
+    end
+    return (st.mtime.sec or 0) * 1000000000 + (st.mtime.nsec or 0)
+end
+
+function IdeFollow.find_newest_modified(root)
+    root = (root and root ~= "") and root or IdeTree.root or vim.fn.getcwd()
+    local newest_path = nil
+    local newest_mtime = 0
+    local out = vim.fn.systemlist({ "git", "-C", root, "--no-optional-locks", "status", "--porcelain", "-uall" })
+    if vim.v.shell_error == 0 and type(out) == "table" then
+        for _, line in ipairs(out) do
+            if #line > 3 then
+                local rel = line:sub(4)
+                local arrow = rel:find(" -> ", 1, true)
+                if arrow then
+                    rel = rel:sub(arrow + 4)
+                end
+                rel = rel:gsub('^"(.*)"$', "%1")
+                local full = root .. "/" .. rel
+                local mtime = stat_mtime_ns(full)
+                if mtime > newest_mtime then
+                    newest_mtime = mtime
+                    newest_path = full
+                end
+            end
+        end
+    else
+        for _, item in ipairs(IdeTree.scan_dir(root)) do
+            if not item.is_dir then
+                local mtime = stat_mtime_ns(item.path)
+                if mtime > newest_mtime then
+                    newest_mtime = mtime
+                    newest_path = item.path
+                end
+            end
+        end
+    end
+    return newest_path, newest_mtime
+end
+
+function IdeFollow.find_latest_hunk_line(root, filepath)
+    root = (root and root ~= "") and root or IdeTree.root or vim.fn.getcwd()
+    local out = vim.fn.systemlist({ "git", "-C", root, "--no-optional-locks", "diff", "-U0", "--", filepath })
+    local last_line = nil
+    if vim.v.shell_error == 0 and type(out) == "table" then
+        for _, line in ipairs(out) do
+            local plus_start = line:match("^@@ %-[0-9,]+ %+([0-9]+)")
+            if plus_start then
+                local n = tonumber(plus_start)
+                if n and n > 0 then
+                    last_line = n
+                end
+            end
+        end
+    end
+    return last_line
+end
+
+function IdeFollow.sync(force)
+    if vim.api.nvim_get_mode().mode ~= "n" or vim.fn.getcmdwintype() ~= "" then
+        return false
+    end
+    pcall(vim.cmd, "silent! checktime")
+    if not IdeFollow.enabled and not force then
+        return false
+    end
+    if vim.bo.modified then
+        return false
+    end
+    local root = IdeTree.root or vim.fn.getcwd()
+    local newest_path, newest_mtime = IdeFollow.find_newest_modified(root)
+    if not newest_path or newest_mtime == 0 then
+        return false
+    end
+    if not force and newest_mtime <= IdeFollow.last_mtime_ns and newest_path == IdeFollow.last_file then
+        return false
+    end
+    IdeFollow.last_mtime_ns = newest_mtime
+    IdeFollow.last_file = newest_path
+
+    if IdeTree.buf and vim.api.nvim_buf_is_valid(IdeTree.buf) and vim.fn.bufwinid(IdeTree.buf) ~= -1 then
+        IdeTree.invalidate_cache()
+        IdeTree.render()
+    end
+
+    IdeTree.focus_code_win()
+    local cur_name = vim.api.nvim_buf_get_name(0)
+    if cur_name ~= newest_path then
+        vim.cmd("silent! edit " .. vim.fn.fnameescape(newest_path))
+    else
+        pcall(vim.cmd, "silent! checktime")
+    end
+
+    local hunk_line = IdeFollow.find_latest_hunk_line(root, newest_path)
+    if hunk_line then
+        local total = vim.api.nvim_buf_line_count(0)
+        local target = math.max(1, math.min(hunk_line, total))
+        pcall(vim.api.nvim_win_set_cursor, 0, { target, 0 })
+        pcall(vim.cmd, "normal! zz")
+    end
+    return true
+end
+
+function IdeFollow.toggle()
+    IdeFollow.enabled = not IdeFollow.enabled
+    local state = IdeFollow.enabled and "ON (auto-following AI edits)" or "OFF (manual mode)"
+    vim.api.nvim_echo({ { "AI Live-Follow Mode: " .. state, "MoreMsg" } }, false, {})
+end
+
+function IdeFollow.start_timer()
+    if IdeFollow.timer then
+        return
+    end
+    local root = IdeTree.root or vim.fn.getcwd()
+    local init_path, init_mtime = IdeFollow.find_newest_modified(root)
+    if init_path and init_mtime > 0 then
+        IdeFollow.last_file = init_path
+        IdeFollow.last_mtime_ns = init_mtime
+    end
+    local uv = vim.uv or vim.loop
+    if uv and uv.new_timer then
+        IdeFollow.timer = uv.new_timer()
+        if IdeFollow.timer then
+            IdeFollow.timer:start(1500, 1500, vim.schedule_wrap(function()
+                if IdeFollow.enabled then
+                    pcall(IdeFollow.sync, false)
+                end
+            end))
+        end
+    end
+end
+
+vim.api.nvim_create_user_command("IdeFollowToggle", function()
+    IdeFollow.toggle()
+end, { desc = "Toggle AI Live-Follow Mode" })
+
+map("n", "<leader>af", function()
+    IdeFollow.toggle()
+end, { desc = "Toggle AI Live-Follow Mode" })
+
 -- Workspace Role Jump & Toggle Keybindings (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
     if vim.env.TMUX then
@@ -982,6 +1141,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 cnoreabbrev <expr> wqa (getcmdtype() ==# ':' && getcmdline() ==# 'wqa') ? 'wall \| Q' : 'wqa'
                 cnoreabbrev <expr> wqa! (getcmdtype() ==# ':' && getcmdline() ==# 'wqa!') ? 'wall! \| Q!' : 'wqa!'
             ]])
+            IdeFollow.start_timer()
         end
     end,
 })
@@ -1666,6 +1826,7 @@ lazy.setup({
             { "<leader>ff", "<cmd>Telescope find_files<CR>", desc = "Find Files" },
             { "<leader>fg", "<cmd>Telescope live_grep<CR>",  desc = "Live Grep" },
             { "<leader>fb", "<cmd>Telescope buffers<CR>",    desc = "Find Buffers" },
+            { "<leader>gs", "<cmd>Telescope git_status<CR>", desc = "Git Status (AI Modified Files)" },
         },
         opts = {
             defaults = {
