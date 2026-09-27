@@ -161,31 +161,22 @@ map("n", "<leader>h", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" }
 -- Fast Save
 map("n", "<leader>w", "<cmd>w<CR>", { desc = "Save file" })
 
--- Seamless Window & Role-Aware 3-Pane Tmux Navigation (Ctrl + hjkl & Alt + hjkl)
--- Guarded against floating modals (Telescope/LSP/MiniFiles) and zoomed tmux panes.
--- From Left Directory Tree (NVIM_IDE_TREE=1), Right/Up targets Top-Right Main ({top-right})
--- and Down targets Bottom-Right Shell ({bottom-right}).
+-- Seamless Window & 4-Layer Spatial Tmux Navigation (Ctrl + hjkl in Normal, Alt + hjkl in all modes)
+-- Guarded against floating modals (Telescope/LSP/MiniFiles) BEFORE stopinsert() and zoomed tmux panes.
 local function smart_tmux_nav(dir, tmux_dir)
     return function()
-        local mode = vim.api.nvim_get_mode().mode
-        if mode == "t" or mode == "i" then
-            vim.cmd("stopinsert")
-        end
         local cur_win = vim.api.nvim_get_current_win()
         local win_cfg = vim.api.nvim_win_get_config(cur_win)
         if win_cfg.relative and win_cfg.relative ~= "" then
             return
         end
+        local mode = vim.api.nvim_get_mode().mode
+        if mode == "t" or mode == "i" then
+            vim.cmd("stopinsert")
+        end
         vim.cmd("wincmd " .. dir)
         if vim.api.nvim_get_current_win() == cur_win and vim.env.TMUX then
             local target_cmd = "select-pane -" .. tmux_dir
-            if vim.env.NVIM_IDE_TREE == "1" then
-                if tmux_dir == "R" or tmux_dir == "U" then
-                    target_cmd = "select-pane -t '{top-right}'"
-                elseif tmux_dir == "D" then
-                    target_cmd = "select-pane -t '{bottom-right}'"
-                end
-            end
             vim.fn.system({
                 "tmux",
                 "if-shell",
@@ -197,15 +188,19 @@ local function smart_tmux_nav(dir, tmux_dir)
     end
 end
 
-map({ "n", "t" }, "<C-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
-map({ "n", "t" }, "<C-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
-map({ "n", "t" }, "<C-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
-map({ "n", "t" }, "<C-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
+map("n", "<C-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
+map("n", "<C-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
+map("n", "<C-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
+map("n", "<C-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
 
 map({ "n", "i", "v", "t" }, "<M-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
 map({ "n", "i", "v", "t" }, "<M-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
 map({ "n", "i", "v", "t" }, "<M-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
 map({ "n", "i", "v", "t" }, "<M-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
+
+-- Fast Buffer Cycling in Normal Mode (overridden buffer-locally inside SolarizedIdeTree)
+map("n", "H", "<cmd>bprevious<CR>", { silent = true, desc = "Previous buffer" })
+map("n", "L", "<cmd>bnext<CR>", { silent = true, desc = "Next buffer" })
 
 -- Stay in indent mode when shifting
 map("v", "<", "<gv", { desc = "Indent left" })
@@ -224,14 +219,9 @@ vim.g.netrw_winsize = 20
 
 -- =============================================================================
 -- Native Solarized IDE Directory Tree Explorer (`SolarizedIdeTree`)
--- Zero-dependency, instant expand/collapse (`Enter`, `o`, `l`, `h`, Mouse),
--- RPC file open (`Enter`) & preview (`Tab` / `p`) into Top-Right Main Editor
+-- Zero-dependency, in-process sidebar split (`Space+e`), instant expand/collapse
+-- (`Enter`, `o`, `l`, `h`, Mouse), file open (`Enter`) & preview (`Tab` / `p`)
 -- =============================================================================
-if vim.env.NVIM_IDE_TREE == "1" then
-    vim.g.loaded_netrw = 1
-    vim.g.loaded_netrwPlugin = 1
-end
-
 local IdeTree = {
     buf = nil,
     ns = vim.api.nvim_create_namespace("SolarizedIdeTree"),
@@ -475,20 +465,50 @@ function IdeTree.render(target_path)
     end
 end
 
+function IdeTree.focus_code_win()
+    local cur_win = vim.api.nvim_get_current_win()
+    local cur_cfg = vim.api.nvim_win_get_config(cur_win)
+    local cur_ft = vim.bo.filetype
+    if (not cur_cfg.relative or cur_cfg.relative == "") and cur_ft ~= "ide_tree" and cur_ft ~= "netrw" then
+        return cur_win
+    end
+    vim.cmd("wincmd p")
+    local prev_win = vim.api.nvim_get_current_win()
+    local prev_cfg = vim.api.nvim_win_get_config(prev_win)
+    local prev_ft = vim.bo.filetype
+    if prev_win ~= cur_win and (not prev_cfg.relative or prev_cfg.relative == "") and prev_ft ~= "ide_tree" and prev_ft ~= "netrw" then
+        return prev_win
+    end
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local cfg = vim.api.nvim_win_get_config(win)
+        if win ~= cur_win and (not cfg.relative or cfg.relative == "") then
+            local buf = vim.api.nvim_win_get_buf(win)
+            local ft = vim.bo[buf].filetype
+            if ft ~= "ide_tree" and ft ~= "netrw" then
+                vim.api.nvim_set_current_win(win)
+                return win
+            end
+        end
+    end
+    vim.cmd("rightbelow vnew")
+    vim.opt_local.number = true
+    vim.opt_local.relativenumber = true
+    vim.opt_local.signcolumn = "yes"
+    vim.opt_local.winfixwidth = false
+    vim.opt_local.winfixheight = false
+    vim.opt_local.statusline = ""
+    if vim.api.nvim_win_is_valid(cur_win) then
+        pcall(vim.api.nvim_win_set_width, cur_win, 28)
+    end
+    return vim.api.nvim_get_current_win()
+end
+
 function IdeTree.dispatch_file(filepath, focus_editor)
-    if vim.env.NVIM_IDE_TREE == "1" and vim.env.TMUX then
-        local flag = focus_editor and "--open" or "--preview"
-        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), flag, filepath }, { detach = true })
-    else
-        local cur_win = vim.api.nvim_get_current_win()
-        vim.cmd("wincmd p")
-        if vim.api.nvim_get_current_win() == cur_win then
-            vim.cmd("rightbelow vsplit")
-        end
-        vim.cmd("edit " .. vim.fn.fnameescape(filepath))
-        if not focus_editor and vim.api.nvim_win_is_valid(cur_win) then
-            vim.api.nvim_set_current_win(cur_win)
-        end
+    local cur_win = vim.api.nvim_get_current_win()
+    IdeTree.focus_code_win()
+    vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+    if not focus_editor and vim.api.nvim_win_is_valid(cur_win) then
+        vim.api.nvim_set_current_win(cur_win)
     end
 end
 
@@ -745,6 +765,8 @@ function IdeTree.open_in_current_win()
     vim.opt_local.signcolumn = "no"
     vim.opt_local.wrap = false
     vim.opt_local.cursorline = true
+    vim.opt_local.winfixwidth = true
+    vim.opt_local.winfixheight = true
     vim.opt_local.statusline = "  Directory "
     IdeTree.render()
 end
@@ -753,7 +775,11 @@ function IdeTree.toggle_split()
     if IdeTree.buf and vim.api.nvim_buf_is_valid(IdeTree.buf) then
         local win = vim.fn.bufwinid(IdeTree.buf)
         if win ~= -1 then
-            vim.api.nvim_win_close(win, true)
+            if vim.fn.winnr("$") == 1 then
+                vim.api.nvim_set_current_win(win)
+                IdeTree.focus_code_win()
+            end
+            pcall(vim.api.nvim_win_close, win, true)
             return
         end
     end
@@ -761,41 +787,32 @@ function IdeTree.toggle_split()
     IdeTree.open_in_current_win()
 end
 
--- Project Tree Sidebar Toggle: focuses the dedicated Left Directory Pane in Tmux IDE,
--- or toggles the built-in SolarizedIdeTree split when running standalone outside `ide`.
+-- Project Tree Sidebar Toggle: toggles the in-process SolarizedIdeTree split (`Space+e`)
 map("n", "<leader>e", function()
-    if vim.env.TMUX then
-        local tree_pane = vim.fn.system("tmux show-options -qv @ide_tree_pane 2>/dev/null"):gsub("%s+$", "")
-        if tree_pane == "" then
-            tree_pane = vim.fn.system("tmux show-environment IDE_TREE_PANE 2>/dev/null"):gsub("^IDE_TREE_PANE=", ""):gsub("%s+$", "")
-        end
-        local ed_pane = vim.fn.system("tmux show-options -qv @ide_editor_pane 2>/dev/null"):gsub("%s+$", "")
-        if ed_pane == "" then
-            ed_pane = vim.fn.system("tmux show-environment NVIM_IDE_PANE 2>/dev/null"):gsub("^NVIM_IDE_PANE=", ""):gsub("%s+$", "")
-        end
-        if tree_pane ~= "" and not tree_pane:match("^-") then
-            if vim.env.NVIM_IDE_TREE == "1" and ed_pane ~= "" and not ed_pane:match("^-") then
-                vim.fn.system({ "tmux", "select-pane", "-t", ed_pane })
-            else
-                vim.fn.system({ "tmux", "select-pane", "-t", tree_pane })
-            end
-            return
-        end
-    end
     IdeTree.toggle_split()
-end, { desc = "Focus/Toggle Project Tree Sidebar" })
+end, { desc = "Toggle Project Tree Sidebar" })
 
--- In-Place Main Pane Toggle (Editor <-> AI Agent) via Tmux IDE
+-- Workspace Role Jump & Toggle Keybindings (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
     if vim.env.TMUX then
         vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--toggle" }, { detach = true })
     end
-end, { desc = "Toggle Main Pane: Editor <-> AI Agent" })
+end, { desc = "Toggle Focus: Editor <-> AI Agent" })
 map({ "n", "i", "t" }, "<M-a>", function()
     if vim.env.TMUX then
         vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--toggle" }, { detach = true })
     end
-end, { desc = "Toggle Main Pane: Editor <-> AI Agent" })
+end, { desc = "Toggle Focus: Editor <-> AI Agent" })
+map({ "n", "i", "t" }, "<M-e>", function()
+    if vim.env.TMUX then
+        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--show-editor" }, { detach = true })
+    end
+end, { desc = "Focus/Zoom Editor Pane" })
+map({ "n", "i", "t" }, "<M-t>", function()
+    if vim.env.TMUX then
+        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--show-term" }, { detach = true })
+    end
+end, { desc = "Toggle Focus: Shell <-> Editor Pane" })
 
 -- One-Command Quit Everything (:Q, :Quit, :qa, :wqa, Space+q, Alt+q, qide)
 -- While keeping `:q` and `:wq` scoped strictly to closing the active buffer/split in the Editor pane.
@@ -838,9 +855,20 @@ local function quit_ide_or_nvim(force)
 end
 
 -- Smart buffer/split close for `:q`, `:q!`, `:wq`, `:wq!` inside the IDE Editor pane:
--- Closes the active split if multiple splits exist, or closes the current buffer (`:bdelete`)
--- while keeping the Neovim Editor pane alive and listening on $NVIM_IDE_SOCKET.
+-- - If the current window is a sidebar (`ide_tree` or `netrw`), closes that sidebar window.
+-- - If multiple non-sidebar splits exist, closes the active split (`:quit`).
+-- - If this is the last non-sidebar code window (even when `ide_tree` is open beside it),
+--   replaces the buffer in-place and runs `:bdelete` so the code split is never destroyed
+--   and `ide_tree` never stretches across 100% of the Editor pane.
 local function ide_close_buffer_or_split(bang, write)
+    local cur_ft = vim.bo.filetype
+    if cur_ft == "ide_tree" or cur_ft == "netrw" then
+        if vim.fn.winnr("$") > 1 then
+            pcall(vim.cmd, "close")
+        end
+        return
+    end
+
     if write then
         local ok, err = pcall(function()
             vim.cmd(bang and "write!" or "write")
@@ -851,7 +879,19 @@ local function ide_close_buffer_or_split(bang, write)
         end
     end
 
-    if vim.fn.winnr("$") > 1 then
+    local non_sidebar_wins = 0
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        local cfg = vim.api.nvim_win_get_config(win)
+        if not cfg.relative or cfg.relative == "" then
+            local buf = vim.api.nvim_win_get_buf(win)
+            local ft = vim.bo[buf].filetype
+            if ft ~= "ide_tree" and ft ~= "netrw" then
+                non_sidebar_wins = non_sidebar_wins + 1
+            end
+        end
+    end
+
+    if non_sidebar_wins > 1 then
         pcall(function()
             vim.cmd(bang and "quit!" or "quit")
         end)
@@ -917,7 +957,7 @@ vim.api.nvim_create_user_command("IdeCd", function(opts)
         target = vim.fn.fnamemodify(vim.fn.expand(target), ":p"):gsub("/+$", "")
     end
     IdeTree.dive(target)
-end, { nargs = "?", complete = "dir", desc = "Dive IDE Workspace (Tree, Editor, Shell, AI) to directory" })
+end, { nargs = "?", complete = "dir", desc = "Dive IDE Workspace (Tree, Editor, Shell) to directory" })
 
 map("n", "<leader>cd", "<cmd>IdeCd<CR>", { desc = "Dive IDE Workspace to Current Buffer Directory" })
 
@@ -931,7 +971,6 @@ vim.api.nvim_create_autocmd("VimEnter", {
         if vim.env.NVIM_IDE_SOCKET
             and vim.env.NVIM_IDE_SOCKET ~= ""
             and vim.v.servername == vim.env.NVIM_IDE_SOCKET
-            and vim.env.NVIM_IDE_TREE ~= "1"
         then
             vim.cmd([[
                 cnoreabbrev <expr> q (getcmdtype() ==# ':' && getcmdline() ==# 'q') ? 'IdeClose' : 'q'
@@ -956,25 +995,15 @@ vim.api.nvim_create_autocmd({ "FocusGained", "WinEnter" }, {
     end,
 })
 
-if vim.env.NVIM_IDE_TREE == "1" then
-    vim.api.nvim_create_autocmd("VimEnter", {
-        group = ide_layout_group,
-        callback = function()
-            IdeTree.root = vim.fn.getcwd()
-            IdeTree.open_in_current_win()
-        end,
-    })
-else
-    vim.api.nvim_create_autocmd("VimEnter", {
-        group = ide_layout_group,
-        callback = function()
-            if vim.env.NVIM_IDE_LAYOUT == "1" and #vim.api.nvim_list_uis() > 0 and (vim.fn.argc() == 0 or vim.fn.isdirectory(vim.fn.argv(0)) == 0) then
-                IdeTree.toggle_split()
-                vim.cmd("wincmd p")
-            end
-        end,
-    })
-end
+vim.api.nvim_create_autocmd("VimEnter", {
+    group = ide_layout_group,
+    callback = function()
+        if vim.env.NVIM_IDE_LAYOUT == "1" and #vim.api.nvim_list_uis() > 0 and (vim.fn.argc() == 0 or vim.fn.isdirectory(vim.fn.argv(0)) == 0) then
+            IdeTree.toggle_split()
+            vim.cmd("wincmd p")
+        end
+    end,
+})
 
 -- -------------------------------------------------------------
 -- 3. Bootstrap Lazy.nvim Plugin Manager
@@ -1517,8 +1546,8 @@ lazy.setup({
             local ts_configs_ok, ts_configs = pcall(require, "nvim-treesitter.configs")
             if ts_configs_ok then
                 ts_configs.setup({
-                    ensure_installed = (vim.env.NVIM_IDE_TREE ~= "1") and parsers or {},
-                    auto_install = (vim.env.NVIM_IDE_TREE ~= "1"),
+                    ensure_installed = parsers,
+                    auto_install = true,
                     highlight = {
                         enable = true,
                         additional_vim_regex_highlighting = false,
@@ -1535,36 +1564,34 @@ lazy.setup({
                         install_dir = vim.fn.stdpath("data") .. "/site",
                     })
                 end)
-                if vim.env.NVIM_IDE_TREE ~= "1" then
-                    local installed = {}
-                    for _, p in ipairs(nts.get_installed()) do
-                        installed[p] = true
+                local installed = {}
+                for _, p in ipairs(nts.get_installed()) do
+                    installed[p] = true
+                end
+                local css_rev_file = vim.fn.stdpath("data") .. "/site/parser-info/css.revision"
+                local current_css_rev = ""
+                if vim.fn.filereadable(css_rev_file) == 1 then
+                    local rev_lines = vim.fn.readfile(css_rev_file)
+                    if rev_lines and #rev_lines > 0 then
+                        current_css_rev = vim.trim(rev_lines[1])
                     end
-                    local css_rev_file = vim.fn.stdpath("data") .. "/site/parser-info/css.revision"
-                    local current_css_rev = ""
-                    if vim.fn.filereadable(css_rev_file) == 1 then
-                        local rev_lines = vim.fn.readfile(css_rev_file)
-                        if rev_lines and #rev_lines > 0 then
-                            current_css_rev = vim.trim(rev_lines[1])
-                        end
+                end
+                local need_css_install = (not installed["css"]) or (current_css_rev ~= css_pinned_rev)
+                local to_install = {}
+                for _, p in ipairs(parsers) do
+                    if not installed[p] and p ~= "css" then
+                        table.insert(to_install, p)
                     end
-                    local need_css_install = (not installed["css"]) or (current_css_rev ~= css_pinned_rev)
-                    local to_install = {}
-                    for _, p in ipairs(parsers) do
-                        if not installed[p] and p ~= "css" then
-                            table.insert(to_install, p)
-                        end
-                    end
-                    if #to_install > 0 then
-                        pcall(function()
-                            nts.install(to_install)
-                        end)
-                    end
-                    if need_css_install and type(nts.install) == "function" then
-                        pcall(function()
-                            nts.install({ "css" }, { force = true }):pwait(60000)
-                        end)
-                    end
+                end
+                if #to_install > 0 then
+                    pcall(function()
+                        nts.install(to_install)
+                    end)
+                end
+                if need_css_install and type(nts.install) == "function" then
+                    pcall(function()
+                        nts.install({ "css" }, { force = true }):pwait(60000)
+                    end)
                 end
             end
 
@@ -1643,6 +1670,16 @@ lazy.setup({
         opts = {
             defaults = {
                 layout_strategy = "horizontal",
+                mappings = {
+                    i = {
+                        ["<C-j>"] = "move_selection_next",
+                        ["<C-k>"] = "move_selection_previous",
+                    },
+                    n = {
+                        ["<C-j>"] = "move_selection_next",
+                        ["<C-k>"] = "move_selection_previous",
+                    },
+                },
             },
         },
     },
@@ -1675,9 +1712,6 @@ lazy.setup({
             automatic_enable = false,
         },
         config = function(_, opts)
-            if vim.env.NVIM_IDE_TREE == "1" then
-                return
-            end
             if #vim.api.nvim_list_uis() > 0 then
                 local ok_reg, registry = pcall(require, "mason-registry")
                 if ok_reg then

@@ -8,6 +8,11 @@ COLOR_PASS="\033[32m"
 COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
+# Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
+export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
+export MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
+export MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
+
 # Ethan Schoonover Solarized Dark TrueColor ANSI 24-bit Escape Sequences
 case "${COLORTERM:-}" in
     truecolor|24bit) ;;

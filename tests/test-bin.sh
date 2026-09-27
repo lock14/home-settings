@@ -132,11 +132,12 @@ if command -v tmux >/dev/null 2>&1; then
     env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --2pane --detach "$IDE_WS_2P"
     if tmux has-session -t "ide-ws_2pane_test" 2>/dev/null; then
         pane_cnt="$(tmux list-panes -t "ide-ws_2pane_test" | wc -l | tr -d ' ')"
+        win_cnt="$(tmux list-windows -t "ide-ws_2pane_test" | wc -l | tr -d ' ')"
         env_out="$(tmux show-environment -t "ide-ws_2pane_test" 2>/dev/null || true)"
-        if [ "$pane_cnt" = "2" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out"; then
-            pass "bin/ide --2pane layout spawns 2 visible panes + background AI pane and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
+        if [ "$pane_cnt" = "2" ] && [ "$win_cnt" = "1" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out"; then
+            pass "bin/ide --2pane layout spawns 2 side-by-side panes (60% Editor | 40% AI) in a single window and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
         else
-            fail "bin/ide 2-pane layout" "Expected 2 visible panes and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy env vars, got panes=$pane_cnt env=$env_out"
+            fail "bin/ide 2-pane layout" "Expected 2 panes in 1 window and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy env vars, got panes=$pane_cnt wins=$win_cnt env=$env_out"
         fi
         "$SCRIPT_DIR/bin/ide" --kill "ide-ws_2pane_test" >/dev/null 2>&1
     else
@@ -146,16 +147,14 @@ if command -v tmux >/dev/null 2>&1; then
     "$SCRIPT_DIR/bin/ide" --ai claude --detach "$IDE_WS_3P"
     if tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
         pane_cnt_3="$(tmux list-panes -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
+        win_cnt_3="$(tmux list-windows -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
         env_out_3="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
-        if [ "$pane_cnt_3" = "3" ] && grep -q "IDE_TREE_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3"; then
-            pass "bin/ide default layout spawns 3 visible panes (Left Directory Tree, Top-Right Main, Bottom-Right Shell) + background AI pane"
+        if [ "$pane_cnt_3" = "3" ] && [ "$win_cnt_3" = "1" ] && grep -q "IDE_TERM_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3" && ! grep -q "IDE_TREE_PANE=" <<< "$env_out_3"; then
+            pass "bin/ide default 3-pane layout spawns all 3 panes (Top-Left Editor, Bottom-Left Shell, Right AI Agent) in a single window with zero _swap window or second Neovim server"
         else
-            fail "bin/ide 3-pane layout" "Expected 3 panes, IDE_TREE_PANE, and IDE_AI_CLI=claude, got panes=$pane_cnt_3 env=$env_out_3"
+            fail "bin/ide 3-pane layout" "Expected 3 panes in 1 window, IDE_TERM_PANE, IDE_AI_PANE, and IDE_AI_CLI=claude, got panes=$pane_cnt_3 wins=$win_cnt_3 env=$env_out_3"
         fi
 
-        # Verify in-place Main Pane toggle (Editor <-> AI Agent) keeps BOTH Left Directory Pane and Bottom Terminal Pane anchored,
-        # even if attach-session update-environment clears NVIM_IDE_PANE / IDE_TREE_PANE env vars
-        tree_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_tree_pane)"
         ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane)"
         ai_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_ai_pane)"
         term_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_term_pane)"
@@ -163,30 +162,47 @@ if command -v tmux >/dev/null 2>&1; then
 
         # Simulate outer client attach-session clearing session env vars
         tmux set-environment -t "ide-ws_3pane_test" -r NVIM_IDE_PANE
-        tmux set-environment -t "ide-ws_3pane_test" -r IDE_TREE_PANE
 
+        # Test focus toggles (--toggle, --show-term, --show-editor) and zoom preservation
         "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
-        ai_win_after_t1="$(tmux display-message -p -t "$ai_pane" "#{window_id}")"
-        ed_win_after_t1="$(tmux display-message -p -t "$ed_pane" "#{window_id}")"
-        tree_win_after_t1="$(tmux display-message -p -t "$tree_pane" "#{window_id}")"
-        term_win_after_t1="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
+        active_after_t1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         pane_cnt_after_t1="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
 
         "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
-        ed_win_after_t2="$(tmux display-message -p -t "$ed_pane" "#{window_id}")"
-        ai_win_after_t2="$(tmux display-message -p -t "$ai_pane" "#{window_id}")"
-        tree_win_after_t2="$(tmux display-message -p -t "$tree_pane" "#{window_id}")"
-        term_win_after_t2="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
-        pane_cnt_after_t2="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        active_after_t2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
 
-        if [ "$pane_cnt_after_t1" = "3" ] && [ "$pane_cnt_after_t2" = "3" ] && \
-           [ "$ai_win_after_t1" = "$main_win" ] && [ "$ed_win_after_t1" != "$main_win" ] && \
-           [ "$tree_win_after_t1" = "$main_win" ] && [ "$term_win_after_t1" = "$main_win" ] && \
-           [ "$ed_win_after_t2" = "$main_win" ] && [ "$ai_win_after_t2" != "$main_win" ] && \
-           [ "$tree_win_after_t2" = "$main_win" ] && [ "$term_win_after_t2" = "$main_win" ]; then
-            pass "bin/ide --toggle strictly swaps Top-Right Editor pane with AI Agent pane (never opening extra panes or swapping the Left Directory Pane)"
+        "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
+        active_after_term1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
+        active_after_term2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+
+        # Now in Editor ($ed_pane): calling --show-editor when already in Editor toggles zoom ON
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        zoom_in_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
+        # Calling --toggle while zoomed focuses AI and preserves zoom
+        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        active_zoom_ai="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        zoom_in_ai="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
+        # Calling --show-editor from zoomed AI returns to Editor and preserves zoom
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        active_zoom_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        zoom_back_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
+        # Calling --show-editor again while in zoomed Editor unzooms
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        zoom_after_unzoom="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
+
+        if [ "$pane_cnt_after_t1" = "3" ] && \
+           [ "$active_after_t1" = "$ai_pane" ] && \
+           [ "$active_after_t2" = "$ed_pane" ] && \
+           [ "$active_after_term1" = "$term_pane" ] && \
+           [ "$active_after_term2" = "$ed_pane" ] && \
+           [ "$zoom_in_ed" = "1" ] && \
+           [ "$active_zoom_ai" = "$ai_pane" ] && [ "$zoom_in_ai" = "1" ] && \
+           [ "$active_zoom_ed" = "$ed_pane" ] && [ "$zoom_back_ed" = "1" ] && \
+           [ "$zoom_after_unzoom" = "0" ]; then
+            pass "bin/ide --toggle, --show-term, and --show-editor switch focus across Editor, AI, and Shell panes while preserving zoom state"
         else
-            fail "bin/ide --toggle" "Expected 3 panes with Editor<->AI swap in $main_win (got cnt1=$pane_cnt_after_t1 cnt2=$pane_cnt_after_t2 ai_win=$ai_win_after_t1 ed_win=$ed_win_after_t2)"
+            fail "bin/ide focus/zoom toggles" "Unexpected focus/zoom state: t1=$active_after_t1(exp $ai_pane) t2=$active_after_t2(exp $ed_pane) term1=$active_after_term1(exp $term_pane) term2=$active_after_term2(exp $ed_pane) z_ed=$zoom_in_ed z_ai=$zoom_in_ai($active_zoom_ai) z_back=$zoom_back_ed($active_zoom_ed) unzoom=$zoom_after_unzoom"
         fi
 
         "$SCRIPT_DIR/bin/ide" --ai codex --detach "$IDE_WS_3P"
@@ -206,43 +222,40 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide IDE_AI_CLI update" "Failed to update/preserve IDE_AI_CLI=codex (opt=$opt_out_reattach)"
         fi
 
-        # Verify SolarizedIdeTree (NVIM_IDE_TREE=1) expands and collapses directories cleanly
+        # Verify in-process SolarizedIdeTree (`IdeTree.toggle_split()`) expands/collapses directories and sets winfixwidth,
+        # and `:IdeClose` (`:q`) with ide_tree open preserves the non-sidebar code window
         if command -v nvim >/dev/null 2>&1; then
             mkdir -p "$IDE_WS_3P/subdir"
             echo "hello" > "$IDE_WS_3P/subdir/nested.txt"
-            tree_test_out="$(cd "$IDE_WS_3P" && NVIM_IDE_TREE=1 nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
-                -c "doautocmd VimEnter" \
-                -c "2" \
-                -c "normal l" \
-                -c "lua _G.expanded_lines = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')" \
-                -c "normal h" \
-                -c "lua _G.collapsed_lines = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')" \
-                -c "lua io.stdout:write('EXP:' .. (_G.expanded_lines:find('nested.txt') and '1' or '0') .. ' COL:' .. (_G.collapsed_lines:find('nested.txt') and '1' or '0'))" \
+            tree_test_out="$(cd "$IDE_WS_3P" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                -c "edit $IDE_WS_3P/subdir/nested.txt | lua IdeTree.toggle_split(); vim.cmd('2'); vim.cmd('normal l'); local exp = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n'); local wfw = vim.wo.winfixwidth and '1' or '0'; vim.cmd('normal h'); local col = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n'); vim.cmd('wincmd p'); vim.cmd('IdeClose'); io.stdout:write('EXP:' .. (exp:find('nested.txt') and '1' or '0') .. ' COL:' .. (col:find('nested.txt') and '1' or '0') .. ' WFW:' .. wfw .. ' WINS:' .. vim.fn.winnr('$') .. ' FT:' .. vim.bo.filetype)" \
                 -c "qa!" 2>&1 || true)"
-            if grep -Fq "EXP:1 COL:0" <<< "$tree_test_out"; then
-                pass "SolarizedIdeTree (NVIM_IDE_TREE=1) expands and collapses directories cleanly via l/h/<CR>"
+            if grep -Fq "EXP:1 COL:0 WFW:1 WINS:2 FT:" <<< "$tree_test_out" && ! grep -Fq "FT:ide_tree" <<< "$tree_test_out"; then
+                pass "In-process SolarizedIdeTree sets winfixwidth, expands/collapses directories via l/h, and IdeClose (:q) keeps the code split alive beside the sidebar"
             else
-                fail "SolarizedIdeTree expand/collapse" "Expected EXP:1 COL:0, got: $tree_test_out"
+                fail "In-process SolarizedIdeTree / IdeClose" "Expected EXP:1 COL:0 WFW:1 WINS:2 and non-ide_tree ft, got: $tree_test_out"
             fi
         else
-            pass "SolarizedIdeTree (NVIM_IDE_TREE=1) skipped headless runtime check (nvim not installed on runner)"
+            pass "In-process SolarizedIdeTree skipped headless runtime check (nvim not installed on runner)"
         fi
 
-        # Verify `bin/ide --cd <subdir>` and `bin/ide --cd --reset` update @ide_workdir across the session
+        # Verify `bin/ide --cd <subdir>` and `bin/ide --cd --reset` update @ide_workdir without respawning the AI pane
         mkdir -p "$IDE_WS_3P/subdir/sub2"
+        ai_pid_before_cd="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
         "$SCRIPT_DIR/bin/ide" --cd "$IDE_WS_3P/subdir" "ide-ws_3pane_test" >/dev/null 2>&1
         wdir_after_dive="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_workdir 2>/dev/null || true)"
         "$SCRIPT_DIR/bin/ide" --cd --reset "ide-ws_3pane_test" >/dev/null 2>&1
         wdir_after_reset="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_workdir 2>/dev/null || true)"
+        ai_pid_after_cd="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
         expected_dive_dir="$(cd "$IDE_WS_3P/subdir" && pwd -P)"
         expected_init_dir="$(cd "$IDE_WS_3P" && pwd -P)"
-        if [ "$wdir_after_dive" = "$expected_dive_dir" ] && [ "$wdir_after_reset" = "$expected_init_dir" ]; then
-            pass "bin/ide --cd <dir> and --reset synchronize @ide_workdir across Tree, Editor, Shell, and AI panes"
+        if [ "$wdir_after_dive" = "$expected_dive_dir" ] && [ "$wdir_after_reset" = "$expected_init_dir" ] && [ "$ai_pid_before_cd" = "$ai_pid_after_cd" ]; then
+            pass "bin/ide --cd <dir> and --reset synchronize @ide_workdir across Editor, IdeTree, and Shell without killing or respawning the AI Agent pane"
         else
-            fail "bin/ide --cd" "Expected dive=$expected_dive_dir reset=$expected_init_dir (got dive=$wdir_after_dive reset=$wdir_after_reset)"
+            fail "bin/ide --cd" "Expected dive=$expected_dive_dir reset=$expected_init_dir ai_pid=$ai_pid_before_cd==$ai_pid_after_cd (got dive=$wdir_after_dive reset=$wdir_after_reset)"
         fi
 
-        # Verify `bin/ide --open-link` resolves session socket via 3-arg get_ide_var for both file://#L<line> and filepath:line
+        # Verify `bin/ide --open-link` resolves session socket for file://#L<line>, filepath:line, and trailing-colon compiler diagnostics (filepath:line:col:)
         printf "line1\nline2\nline3\n" > "$IDE_WS_3P/subdir/nested.txt"
         sock_3p="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_socket 2>/dev/null || true)"
         link_nvim_pid=""
@@ -260,19 +273,19 @@ if command -v tmux >/dev/null 2>&1; then
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                 line_after_href="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
             fi
-            if "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/nested.txt:3:1" "$IDE_WS_3P" "ide-ws_3pane_test"; then
+            if "$SCRIPT_DIR/bin/ide" --open-link "" "(subdir/nested.txt:3:1):" "$IDE_WS_3P" "ide-ws_3pane_test"; then
                 line_after_word="3"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_word="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                ed_win_after_link="$(tmux display-message -p -t "$ed_pane" "#{window_id}")"
-                if [ "$ed_win_after_link" = "$main_win" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ]; then
-                    pass "bin/ide --open-link handles file://#L<line> and filepath:line via 3-arg get_ide_var, focuses Editor pane, and jumps to target line numbers"
+                active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ]; then
+                    pass "bin/ide --open-link handles file://#L<line> and trailing-colon compiler paths (filepath:line:col:), focuses Editor pane, and jumps to target line numbers"
                 else
-                    fail "bin/ide --open-link focus/line" "Expected Editor pane in $main_win and lines 2/3, got win=$ed_win_after_link href_line=$line_after_href word_line=$line_after_word"
+                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3, got active=$active_after_link href_line=$line_after_href word_line=$line_after_word"
                 fi
             else
-                fail "bin/ide --open-link filepath:line" "Command failed on filepath:line"
+                fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
             fi
         else
             fail "bin/ide --open-link file://#L<line>" "Command failed on file://#L<line>"
@@ -281,19 +294,17 @@ if command -v tmux >/dev/null 2>&1; then
             kill "$link_nvim_pid" 2>/dev/null || true
             rm -f "$sock_3p"
         fi
-        tmux kill-pane -t "$tree_pane"
-        if [ -n "$sock_3p" ]; then
-            rm -f "${sock_3p}.tree"
-            echo "stale" > "${sock_3p}.tree"
-        fi
-        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
-        recreated_tree_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_tree_pane 2>/dev/null || true)"
-        pane_cnt_after_recreate="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
-        if [ -n "$recreated_tree_pane" ] && [ "$recreated_tree_pane" != "$tree_pane" ] && \
-           [ "$pane_cnt_after_recreate" = "3" ] && [ ! -f "${sock_3p}.tree" ]; then
-            pass "bin/ide --toggle lazily recreates missing Left Directory Tree pane and removes stale .tree socket file"
+
+        # Verify self-healing when Editor pane is closed while Shell and AI panes remain
+        tmux kill-pane -t "$ed_pane" 2>/dev/null || true
+        "$SCRIPT_DIR/bin/ide" --focus-editor "ide-ws_3pane_test"
+        healed_ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane 2>/dev/null || true)"
+        healed_ed_pos="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_left},#{pane_top}" 2>/dev/null || true)"
+        healed_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        if [ "$healed_pane_cnt" = "3" ] && [ "$healed_ed_pos" = "0,0" ]; then
+            pass "bin/ide self-heals Top-Left Editor pane (0,0) and restores 3-pane geometry if closed"
         else
-            fail "bin/ide lazy tree recreation" "Expected new tree_pane ($recreated_tree_pane != $tree_pane), 3 panes ($pane_cnt_after_recreate), and stale file removed"
+            fail "bin/ide Editor pane self-heal" "Expected 3 panes and healed Editor at 0,0, got panes=$healed_pane_cnt pos=$healed_ed_pos"
         fi
 
         "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1

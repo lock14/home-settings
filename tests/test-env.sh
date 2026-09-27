@@ -29,6 +29,9 @@ OLD_HOME="$HOME"
 OLD_PATH="$PATH"
 OLD_XDG_DATA_HOME="${XDG_DATA_HOME:-}"
 OLD_XDG_CACHE_HOME="${XDG_CACHE_HOME:-}"
+export MISE_DATA_DIR="${MISE_DATA_DIR:-$OLD_HOME/.local/share/mise}"
+export MISE_CACHE_DIR="${MISE_CACHE_DIR:-$OLD_HOME/.cache/mise}"
+export MISE_STATE_DIR="${MISE_STATE_DIR:-$OLD_HOME/.local/state/mise}"
 TEMP_HOME=$(mktemp -d)
 
 cleanup_env_test() {
@@ -258,6 +261,32 @@ STANDALONE_HOME=$(mktemp -d)
         echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gup, gprune, gpurge, guser-branch), ds/IDE/update shortcuts, ls/grep aliases, gsync, icd(), and RPC-aware v() function"
     else
         echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases, gsync, icd(), or v() function"
+    fi
+
+    if command -v nvim >/dev/null 2>&1; then
+        bash_test_sock="/tmp/nvim-ide-bash-test-$$.sock"
+        rm -f "$bash_test_sock"
+        (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bash_test_sock" -c "let g:netrw_banner=0 | let g:netrw_browse_split=4 | let g:netrw_altv=1 | let g:netrw_winsize=20 | Lexplore" >/dev/null 2>&1) &
+        bash_nvim_pid=$!
+        for _ in $(seq 1 30); do
+            [ -S "$bash_test_sock" ] && break
+            sleep 0.05
+        done
+        if [ -S "$bash_test_sock" ]; then
+            ver_out="$(TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v --version 2>/dev/null | head -n 1 || true)"
+            (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
+            bash_remote_state="$(nvim --headless --server "$bash_test_sock" --remote-expr 'getwinvar(1, "&filetype") . "|" . winnr() . "|" . expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            kill "$bash_nvim_pid" 2>/dev/null || true
+            rm -f "$bash_test_sock"
+            if [ "$bash_remote_state" = "netrw|2|$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$ver_out" == NVIM* ]]; then
+                echo "PASS:Standalone .bashrc-addendum v() resolves relative paths and +line arguments over RPC, preserves sidebar window, and passes --version to local nvim"
+            else
+                echo "FAIL:Standalone v() RPC:Expected 'netrw|2|$SCRIPT_DIR/modules/00-packages.sh|2' and NVIM version, got state='$bash_remote_state' ver='$ver_out'"
+            fi
+        else
+            kill "$bash_nvim_pid" 2>/dev/null || true
+            rm -f "$bash_test_sock"
+        fi
     fi
 
     # Test Solarized Dark PS1 shelf prompt states (local vs SSH, clean vs dirty git, detached HEAD, non-git dir, TERM=linux fallback, exit status 0 vs non-zero)
