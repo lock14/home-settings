@@ -98,6 +98,18 @@
 				<string>#859900</string>
 			</dict>
 		</dict>
+		<!-- Control Flow & Execution Jumps (Solarized Yellow, matching Neovim @keyword.conditional / @keyword.repeat / @keyword.return / @keyword.exception) -->
+		<dict>
+			<key>name</key>
+			<string>Control Flow</string>
+			<key>scope</key>
+			<string>keyword.control, keyword.control.conditional, keyword.control.loop, keyword.control.flow, keyword.control.return, keyword.control.exception</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#B58900</string>
+			</dict>
+		</dict>
 		<!-- Operators (Base0, matching Neovim) -->
 		<dict>
 			<key>name</key>
@@ -122,28 +134,28 @@
 				<string>#859900</string>
 			</dict>
 		</dict>
-		<!-- Built-in Primitive Types (Solarized Yellow) -->
+		<!-- Built-in Primitive Types (Solarized Green, matching Neovim @type.builtin) -->
 		<dict>
 			<key>name</key>
 			<string>Built-in Type</string>
 			<key>scope</key>
-			<string>storage.type, storage.type.primitive, storage.type.built-in, support.type.builtin, support.type.primitive, support.type</string>
+			<string>storage.type.primitive, storage.type.built-in, support.type.builtin, support.type.primitive</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#B58900</string>
+				<string>#859900</string>
 			</dict>
 		</dict>
-		<!-- Custom Types & Struct Names (Solarized Yellow) -->
+		<!-- Custom Types & Struct Names (Base0 Grey, matching Neovim @type) -->
 		<dict>
 			<key>name</key>
 			<string>Custom Type</string>
 			<key>scope</key>
-			<string>entity.name.type, entity.name.class, entity.name.struct, entity.name.enum, entity.name.interface, entity.name.type.parameter, entity.name.concept, variable.other.type, support.class, entity.other.inherited-class</string>
+			<string>storage.type, support.type, entity.name.type, entity.name.class, entity.name.struct, entity.name.enum, entity.name.interface, entity.name.type.parameter, entity.name.concept, variable.other.type, support.class, entity.other.inherited-class</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#B58900</string>
+				<string>#839496</string>
 			</dict>
 		</dict>
 		<!-- Namespaces & Modules (Solarized Violet, matching Neovim @module) -->
@@ -170,16 +182,28 @@
 				<string>#859900</string>
 			</dict>
 		</dict>
-		<!-- Functions (Solarized Blue) -->
+		<!-- Function Declarations (Solarized Blue, matching Neovim @function) -->
 		<dict>
 			<key>name</key>
 			<string>Function name</string>
 			<key>scope</key>
-			<string>entity.name.function, support.function, variable.function</string>
+			<string>entity.name.function</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
 				<string>#268BD2</string>
+			</dict>
+		</dict>
+		<!-- Function & Method Invocations (Base0 Grey, matching Neovim @function.call / @function.builtin) -->
+		<dict>
+			<key>name</key>
+			<string>Function Call</string>
+			<key>scope</key>
+			<string>support.function, variable.function, meta.function-call</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#839496</string>
 			</dict>
 		</dict>
 		<!-- Parameters & Variables (Base0 Upright, matching Neovim @variable) -->
@@ -195,17 +219,31 @@
 			</dict>
 		</dict>
 		<!-- ======================================================= -->
-		<!-- Preprocessors, Annotations & Directives (Solarized Orange) -->
+		<!-- Preprocessors & Directives (Solarized Orange)           -->
 		<!-- ======================================================= -->
 		<dict>
 			<key>name</key>
-			<string>Preprocessor, Directive and Annotation</string>
+			<string>Preprocessor and Directive</string>
 			<key>scope</key>
-			<string>meta.preprocessor keyword.control.directive, keyword.control.directive, keyword.control.import, keyword.control.preprocessor, punctuation.definition.directive, punctuation.definition.preprocessor, entity.name.constant.preprocessor, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator, entity.name.attribute, storage.modifier.attribute, keyword.other.attribute, punctuation.section.attribute, punctuation.definition.attribute, meta.attribute</string>
+			<string>meta.preprocessor, meta.preprocessor keyword.control.directive, keyword.control.directive, keyword.control.preprocessor, punctuation.definition.directive, punctuation.definition.preprocessor, entity.name.constant.preprocessor</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
 				<string>#CB4B16</string>
+			</dict>
+		</dict>
+		<!-- ======================================================= -->
+		<!-- Imports, Annotations, Decorators & Attributes (Violet)  -->
+		<!-- ======================================================= -->
+		<dict>
+			<key>name</key>
+			<string>Imports, Annotations, Decorators and Attributes</string>
+			<key>scope</key>
+			<string>keyword.control.import, storage.type.annotation, variable.annotation, punctuation.definition.annotation, entity.name.function.decorator, entity.name.attribute, storage.modifier.attribute, keyword.other.attribute, punctuation.section.attribute, punctuation.definition.attribute, meta.attribute</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#6C71C4</string>
 			</dict>
 		</dict>
 		<!-- ======================================================= -->
@@ -755,7 +793,7 @@
 			<key>name</key>
 			<string>Java Structural Scaffolding &amp; Modifiers (Solarized Green)</string>
 			<key>scope</key>
-			<string>source.java storage.type.record, source.java storage.type.class, source.java storage.type.interface, source.java storage.type.enum, source.java storage.modifier, source.java storage.modifier.extends, source.java keyword.operator.word, source.java variable.language</string>
+			<string>source.java storage.type.record, source.java storage.type.class, source.java storage.type.interface, source.java storage.type.enum, source.java storage.modifier, source.java storage.modifier.extends, source.java keyword.operator.word</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -815,7 +853,7 @@
 			<key>name</key>
 			<string>Java Annotations &amp; Imports (Solarized Violet)</string>
 			<key>scope</key>
-			<string>source.java storage.type.annotation, source.java storage.type.interface.annotation, source.java punctuation.definition.annotation, source.java keyword.control.import</string>
+			<string>source.java storage.type.annotation, source.java storage.type.interface.annotation, source.java punctuation.definition.annotation, source.java keyword.control.import, source.java entity.name.namespace</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
@@ -827,7 +865,7 @@
 			<key>name</key>
 			<string>Java Numbers, Constants &amp; Sentinels (Solarized Magenta)</string>
 			<key>scope</key>
-			<string>source.java constant.numeric, source.java constant.language, source.java variable.other.constant</string>
+			<string>source.java constant.numeric, source.java constant.language, source.java variable.other.constant, source.java variable.language</string>
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>

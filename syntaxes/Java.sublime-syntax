@@ -8,7 +8,7 @@
 # - Unified numeric literals (1L, 129.50) in Solarized Magenta
 # - Calm Base0 package routing paths in import statements
 # - Declaration keywords (class, interface, record, enum, @interface) in Solarized Green
-# - Annotations (@Service, @Override, @Value) in Solarized Orange
+# - Annotations (@Service, @Override, @Value) in Solarized Violet
 name: Java
 scope: source.java
 version: 2
@@ -234,7 +234,10 @@ contexts:
       scope: constant.language.boolean.java
     - match: '\bnull\b'
       scope: constant.language.null.java
-    # Language keywords: this, super (receiver, field qualifier, or constructor delegation)
+    # Constructor delegation calls: this(...), super(...) -> calm Base0 Grey
+    - match: '\b(this|super)\b(?=\s*\()'
+      scope: variable.function.java
+    # Receiver keywords: this, super (receiver or field qualifier) -> Solarized Magenta
     - match: '\b(this|super)\b'
       scope: variable.language.java
     # Named UPPERCASE constants (e.g. DEFAULT_BUFFER_SIZE, TAX_RATE_MULTIPLIER)

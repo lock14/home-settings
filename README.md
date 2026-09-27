@@ -26,7 +26,7 @@ home-settings/
 │   └── update-system                # Cross-platform system package, Snap, Flatpak & toolchain updater
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
-│   ├── .aliases                     # Full Git suite, Golang, Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
+│   ├── .aliases                     # Full Git suite, CLI & Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
 │   ├── .bashrc-addendum             # Bash integration hook & zoxide
 │   ├── .environment-variables       # Environment, COLORTERM, PATH (+ auto-loads ~/.environment-variables.d/*.sh)
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
@@ -136,6 +136,18 @@ The following tools should be available on the host machine:
   - **bat**: Syntax-highlighting pager (`bat = "latest"`)
   - **Glow**: Modern terminal markdown reader (`glow = "latest"`)
   - **Tree-sitter**: AST parser generator CLI (`tree-sitter = "latest"`)
+  - **zoxide**: Smart directory jumper (`zoxide = "latest"`)
+  - **delta**: Syntax-highlighting Git & diff pager (`delta = "latest"`)
+  - **btop**: Resource & system monitor (`btop = "latest"`)
+  - **ripgrep**: Ultra-fast recursive regex search (`ripgrep = "latest"`)
+  - **fd**: Fast `find` alternative (`fd = "latest"`)
+  - **fzf**: Command-line fuzzy finder (`fzf = "latest"`)
+  - **jq** & **yq**: JSON, YAML, XML & TOML processors (`jq = "latest"`, `yq = "latest"`)
+  - **gh**: GitHub CLI (`gh = "latest"`)
+  - **tealdeer**: Fast `tldr` client (`tealdeer = "latest"`)
+  - **dust**: Intuitive disk usage analyzer (`dust = "latest"`)
+  - **sd**: Intuitive find & replace CLI (`sd = "latest"`)
+  - **ShellCheck**: Shell script static analysis linter (`shellcheck = "latest"`)
 
 ---
 
@@ -264,6 +276,7 @@ The redesigned repository is built for frictionless extension:
 - **`zoxide` (`z` & `zi`)**: Smart directory jumping with destination path echoing (`_ZO_ECHO=1`) and interactive fuzzy navigation (`zi`) featuring live Solarized Dark `eza` directory previews.
 - **`fzf`**: Modern interactive fuzzy finder powering history search (`Ctrl+R`), file finding (`Ctrl+T`), and interactive navigation with Solarized Dark TrueColor theming.
 - **`gh`**: Up-to-date GitHub CLI for pull requests, issues, and workflow inspection.
+- **`ripgrep` (`rg`)**: Ultra-fast recursive regex search powering `fzf` file discovery and Neovim Telescope live grep.
 - **`fd` / `fs`**: Lightning-fast file and directory tree search (`fd` installed natively across platforms).
 - **`ls` / `ll`**: Standard, high-contrast Unix directory listing driven by authentic Solarized `dircolors`.
 - **`eza`**: Available via dedicated modern shortcuts (`el` for Git status long-listing, `et` for tree views).
@@ -332,19 +345,14 @@ The redesigned repository is built for frictionless extension:
 | `fs` | Fast recursive directory tree search (`fd` + `tree --fromfile`) |
 | `gcommit` | `git add -A && git commit` |
 | `gamend` | `git add -A && git commit --amend --no-edit` |
-| `gfetch` | `git fetch` |
 | `gpush` / `gpushf` | `git push origin HEAD` / `--force-with-lease` |
 | `gpull` | `git pull --rebase --autostash` |
-| `gup` | `git fetch && git pull --rebase --autostash` |
+| `gup` | `git pull --rebase --autostash --prune` |
 | `gprune` | Safely delete merged local branches |
 | `gpurge` | Nuclear force-delete (`-D`) local branches except `main`/`master` |
 | `gsync` | Rebase current branch onto latest `main`/`master` |
 | `guser-branch` | Prefix branch with `$USER/` (refusing `main`/`master`) |
-| `go-testall` | `go test ./...` |
-| `go-buildall` | `go build ./...` |
-| `go-lint` | `golangci-lint run` |
 | `tf` | `terraform` |
-| `yaml-lint` | `yamllint -d relaxed` |
 
 ---
 

@@ -1,4 +1,4 @@
-; inherits: bash
+;; extends
 
 ; Authentic Solarized Dark TrueColor Tree-sitter query overrides for Bash / Shell
 

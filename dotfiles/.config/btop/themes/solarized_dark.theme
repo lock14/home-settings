@@ -9,8 +9,8 @@ theme[main_bg]="#002b36"
 # Main text color (Solarized Base0)
 theme[main_fg]="#839496"
 
-# Title color for boxes (Solarized Base3)
-theme[title]="#fdf6e3"
+# Title color for boxes (Solarized Base1)
+theme[title]="#93a1a1"
 
 # Highlight color for keyboard shortcuts (Solarized Yellow)
 theme[hi_fg]="#b58900"
@@ -97,7 +97,7 @@ theme[process_end]="#dc322f"
 theme[proc_pause_bg]="#dc322f"
 theme[proc_follow_bg]="#268bd2"
 theme[proc_banner_bg]="#6c71c4"
-theme[proc_banner_fg]="#fdf6e3"
+theme[proc_banner_fg]="#93a1a1"
 
 # Process following attributes
 theme[followed_bg]="#073642"

@@ -139,15 +139,17 @@ assert_symlink "$TEMP_HOME/.config/btop" "" "Auto-discovered and symlinked: .con
 if [ -f "$TEMP_HOME/.config/btop/btop.conf" ] && \
    grep -q 'color_theme = "solarized_dark"' "$TEMP_HOME/.config/btop/btop.conf" && \
    grep -q 'truecolor = true' "$TEMP_HOME/.config/btop/btop.conf" && \
-   grep -q 'vim_keys = true' "$TEMP_HOME/.config/btop/btop.conf"; then
-    pass "btop config contains solarized_dark theme, truecolor = true, and vim_keys = true"
+   grep -q 'vim_keys = true' "$TEMP_HOME/.config/btop/btop.conf" && \
+   grep -q 'save_config_on_exit = false' "$TEMP_HOME/.config/btop/btop.conf"; then
+    pass "btop config contains solarized_dark theme, truecolor = true, vim_keys = true, and save_config_on_exit = false"
 else
-    fail "btop config verification" "Missing expected solarized_dark theme, truecolor, or vim_keys in .config/btop/btop.conf"
+    fail "btop config verification" "Missing expected solarized_dark theme, truecolor, vim_keys, or save_config_on_exit = false in .config/btop/btop.conf"
 fi
 
 if [ -f "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" ] && \
    grep -q 'theme\[main_bg\]="#002b36"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
    grep -q 'theme\[main_fg\]="#839496"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
+   grep -q 'theme\[title\]="#93a1a1"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
    grep -q 'theme\[cpu_box\]="#586e75"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme" && \
    grep -q 'theme\[hi_fg\]="#b58900"' "$TEMP_HOME/.config/btop/themes/solarized_dark.theme"; then
     pass "btop theme contains authentic Solarized Dark palette tokens"
@@ -158,21 +160,51 @@ fi
 assert_symlink "$TEMP_HOME/.config/git" "" "Auto-discovered and symlinked: .config/git"
 if [ -f "$TEMP_HOME/.config/git/config" ] && \
    grep -q 'pager = delta' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'diffFilter = delta --color-only' "$TEMP_HOME/.config/git/config" && \
    grep -q 'syntax-theme = Solarized-Dark-TrueColor' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'hunk-header-style = line-number syntax' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'hunk-header-line-number-style = "#268bd2"' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'plus-style = syntax "#0d3834"' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'minus-style = syntax "#2d222a"' "$TEMP_HOME/.config/git/config" && \
+   ! grep -Eq '\bbold\b' "$TEMP_HOME/.config/git/config" && \
    grep -q 'line-numbers-plus-style = "#859900"' "$TEMP_HOME/.config/git/config" && \
    grep -q 'line-numbers-minus-style = "#dc322f"' "$TEMP_HOME/.config/git/config"; then
-    pass "git config configures delta with Solarized-Dark-TrueColor theme and line numbers"
+    pass "git config configures delta with Solarized-Dark-TrueColor theme, diffFilter, distinct +/- backgrounds, unbolded typography, and line numbers"
 else
     fail "git config verification" "Missing expected delta pager configuration in .config/git/config"
+fi
+if command -v delta >/dev/null 2>&1; then
+    DELTA_OUT="$(printf 'diff --git a/sample.toml b/sample.toml\n--- a/sample.toml\n+++ b/sample.toml\n@@ -1,1 +1,1 @@\n-bold = true\n+bold = false\n' | GIT_CONFIG_GLOBAL="$TEMP_HOME/.config/git/config" delta --paging=never 2>/dev/null || true)"
+    if grep -Fq $'\033[38;2;38;139;210m1\033[0m:' <<< "$DELTA_OUT" && \
+       grep -Fq $'\033[48;2;45;34;42' <<< "$DELTA_OUT" && \
+       grep -Fq $'\033[48;2;13;56;52' <<< "$DELTA_OUT"; then
+        pass "delta live rendering emits Solarized Blue hunk line numbers (#268bd2) and distinct minus (#2d222a) and plus (#0d3834) line backgrounds"
+    else
+        fail "delta live rendering" "Expected TrueColor hunk line number and distinct +/- background ANSI sequences from delta"
+    fi
 fi
 assert_symlink "$TEMP_HOME/.config/tealdeer" "" "Auto-discovered and symlinked: .config/tealdeer"
 if [ -f "$TEMP_HOME/.config/tealdeer/config.toml" ] && \
    grep -q '\[style\.command_name\]' "$TEMP_HOME/.config/tealdeer/config.toml" && \
+   grep -q 'bold = false' "$TEMP_HOME/.config/tealdeer/config.toml" && \
    grep -q '\[style\.description\]' "$TEMP_HOME/.config/tealdeer/config.toml" && \
-   grep -q 'r = 131, g = 148, b = 150' "$TEMP_HOME/.config/tealdeer/config.toml"; then
-    pass "tealdeer config contains Solarized Dark TrueColor styling"
+   grep -q 'r = 131, g = 148, b = 150' "$TEMP_HOME/.config/tealdeer/config.toml" && \
+   grep -q 'r = 211, g = 54, b = 130' "$TEMP_HOME/.config/tealdeer/config.toml" && \
+   grep -q 'auto_update = true' "$TEMP_HOME/.config/tealdeer/config.toml"; then
+    pass "tealdeer config contains unbolded Solarized Dark TrueColor styling (Magenta variables) and auto_update = true"
 else
     fail "tealdeer config verification" "Missing or invalid config.toml in .config/tealdeer"
+fi
+if command -v tldr >/dev/null 2>&1; then
+    TLDR_SAMPLE="$TEMP_HOME/sample-tldr.md"
+    printf '# tar\n\n> Archiving utility.\n\n- Create an archive:\n\n`tar cf {{target.tar}}`\n' > "$TLDR_SAMPLE"
+    TLDR_OUT="$(tldr --no-auto-update --config-path "$TEMP_HOME/.config/tealdeer/config.toml" --color=always --render "$TLDR_SAMPLE" 2>/dev/null || true)"
+    if grep -Fq $'\033[38;2;133;153;0mtar\033[0m' <<< "$TLDR_OUT" && \
+       grep -Fq $'\033[4;38;2;211;54;130mtarget.tar\033[0m' <<< "$TLDR_OUT"; then
+        pass "tealdeer live rendering emits unbolded Solarized Green command_name (#859900) and underlined Magenta example_variable (#d33682)"
+    else
+        fail "tealdeer live rendering" "Expected unbolded Green command and underlined Magenta variable ANSI sequences from tldr --render"
+    fi
 fi
 
 assert_symlink "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" "" "Symlinked Bat theme"
@@ -184,6 +216,12 @@ assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Java.sublime-syntax" "" "Symlink
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Python.sublime-syntax" "" "Symlinked Bat Python syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Rust.sublime-syntax" "" "Symlinked Bat Rust syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" "" "Symlinked Bat Bash syntax"
+if grep -q '\.bashrc-addendum' "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax" && \
+   grep -q '\.zshrc-addendum' "$TEMP_HOME/.config/bat/syntaxes/Bash.sublime-syntax"; then
+    pass "Bash.sublime-syntax maps .bashrc-addendum and .zshrc-addendum file extensions"
+else
+    fail "Bash.sublime-syntax file_extensions" "Missing .bashrc-addendum or .zshrc-addendum in Bash.sublime-syntax"
+fi
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/SQL.sublime-syntax" "" "Symlinked Bat SQL syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Terraform.sublime-syntax" "" "Symlinked Bat Terraform syntax"
 assert_symlink "$TEMP_HOME/.config/bat/syntaxes/Markdown.sublime-syntax" "" "Symlinked Bat Markdown syntax"
@@ -542,10 +580,10 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_YELLOW}default" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}100.0" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}new" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}this" <<< "$JAVA_SAMPLE_OUT" && \
-       grep -Fq "${SOL_GREEN}super" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}this" <<< "$JAVA_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}super" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}///" <<< "$JAVA_SAMPLE_OUT"; then
-        pass "bat renders Converged Ergonomic Java: structural scaffolding & primitive types (Green public/class/implements/new/this/super/int), control flow (Yellow if/throw/when/default), custom types in calm Base0 (Instant/OrderRecord), method declarations (Blue findById), annotations & imports (Violet @interface/@Service/import), constants & numbers (Magenta DEFAULT_BUFFER_SIZE/1L/100.0), and comments (Base01 ///) matching Neovim"
+        pass "bat renders Converged Ergonomic Java: structural scaffolding & primitive types (Green public/class/implements/new/int), control flow (Yellow if/throw/when/default), constructor delegation (Base0 super), custom types in calm Base0 (Instant/OrderRecord), method declarations (Blue findById), annotations & imports (Violet @interface/@Service/import), constants, numbers & receivers (Magenta DEFAULT_BUFFER_SIZE/1L/100.0/this), and comments (Base01 ///) matching Neovim"
     else
         fail "bat Java rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.java output"
     fi

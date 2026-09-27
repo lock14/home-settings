@@ -5,8 +5,8 @@
 # - Shebang in Solarized Orange (keyword.control.directive.shebang.shell)
 # - Comments in Base01 Dim (comment.line.number-sign.shell)
 # - Declaration keywords (local, readonly, declare, typeset, export) in Solarized Green
-# - Control keywords (if, then, else, elif, fi, for, in, do, done, case, esac) in Solarized Green
-# - Commands, builtins, and functions in Solarized Blue (support.function.builtin.shell / entity.name.function.shell)
+# - Control keywords (if, then, else, elif, fi, for, in, do, done, case, esac) in Solarized Yellow
+# - Function declarations in Solarized Blue (entity.name.function.shell); commands & builtins in Base0 Grey
 # - ALL_CAPS constants and environment variables in Solarized Magenta (variable.other.constant.shell)
 # - Lowercase variables in Base0 Grey (variable.other.shell)
 # - Special & positional parameters ($?, $@, $*, $#, $$, $0, $1, $2) in Solarized Magenta
@@ -30,6 +30,10 @@ file_extensions:
   - ksh
   - .bashrc
   - .zshrc
+  - .bashrc-addendum
+  - .zshrc-addendum
+  - bashrc-addendum
+  - zshrc-addendum
   - .bash_profile
   - .bash_aliases
   - .bash_functions
