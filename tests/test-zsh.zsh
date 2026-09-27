@@ -40,7 +40,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    local expected_aliases=(gcommit gamend gfetch gpush gpushf gpull gup gprune gpurge guser-branch go-lint go-testall go-buildall tf ide2 ide3 idek qide update yaml-lint vi ls ll la l)
+    local expected_aliases=(gcommit gamend gpush gpushf gpull gup gprune gpurge guser-branch tf ide2 ide3 idek qide ds update vi ls ll la l)
     if command -v eza >/dev/null 2>&1; then
         expected_aliases+=(e el elm et elt elx)
     fi
@@ -54,6 +54,19 @@ test_aliases() {
             echo "PASS:$expected_alias"
         else
             echo "FAIL:$expected_alias:alias not found"
+        fi
+    done
+
+    if [ "$(alias gup)" = "gup='git pull --rebase --autostash --prune'" ]; then
+        echo "PASS:gup configured as 'git pull --rebase --autostash --prune'"
+    else
+        echo "FAIL:gup:Expected gup='git pull --rebase --autostash --prune', got $(alias gup 2>/dev/null || echo none)"
+    fi
+
+    local retired_aliases=(gfetch tealdeer go-lint go-testall go-buildall yaml-lint)
+    for retired in "${retired_aliases[@]}"; do
+        if alias "$retired" >/dev/null 2>&1; then
+            echo "FAIL:$retired:$retired should not be aliased"
         fi
     done
 
@@ -301,10 +314,14 @@ test_addendum() {
         echo "FAIL:ZSH_HIGHLIGHT_STYLES reserved-word:Expected 'fg=#B58900', got '${ZSH_HIGHLIGHT_STYLES[reserved-word]:-}'"
     fi
 
-    if [ "${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}" = "fg=#839496" ]; then
-        echo "PASS:ZSH_HIGHLIGHT_STYLES command-substitution-delimiter configured with calm Solarized Base0"
+    if [ "${ZSH_HIGHLIGHT_STYLES[command-substitution]:-}" = "fg=#839496" ] && \
+       [ "${ZSH_HIGHLIGHT_STYLES[command-substitution-quoted]:-}" = "fg=#839496" ] && \
+       [ "${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}" = "fg=#839496" ] && \
+       [ "${ZSH_HIGHLIGHT_STYLES[process-substitution]:-}" = "fg=#839496" ] && \
+       [ "${ZSH_HIGHLIGHT_STYLES[back-quoted-argument]:-}" = "fg=#839496" ]; then
+        echo "PASS:ZSH_HIGHLIGHT_STYLES command/process/backtick substitutions and delimiters configured with calm Solarized Base0"
     else
-        echo "FAIL:ZSH_HIGHLIGHT_STYLES command-substitution-delimiter:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]:-}'"
+        echo "FAIL:ZSH_HIGHLIGHT_STYLES command-substitution:Expected 'fg=#839496', got '${ZSH_HIGHLIGHT_STYLES[command-substitution]:-}'"
     fi
 
     if [ "${ZSH_HIGHLIGHT_STYLES[single-hyphen-option]:-}" = "fg=#839496" ]; then

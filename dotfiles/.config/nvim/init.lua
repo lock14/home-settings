@@ -1129,7 +1129,7 @@ lazy.setup({
                     Float = { fg = colors.magenta },
                     Operator = { fg = colors.base0 },
                     PreProc = { fg = colors.orange },
-                    Include = { fg = colors.orange },
+                    Include = { fg = colors.violet },
                     Define = { fg = colors.orange },
                     Macro = { fg = colors.blue },
                     Special = { fg = colors.violet },
@@ -1330,8 +1330,8 @@ lazy.setup({
                     diffRemoved = { fg = colors.red },
                     diffChanged = { fg = colors.yellow },
                     diffLine = { fg = colors.blue },
-                    diffFile = { fg = colors.orange },
-                    diffNewFile = { fg = colors.yellow },
+                    diffFile = { fg = colors.cyan },
+                    diffNewFile = { fg = colors.cyan },
                     diffIndexLine = { fg = colors.base01 },
                     DiffAdd = { fg = colors.green, bg = colors.mix_green },
                     DiffDelete = { fg = colors.red, bg = colors.mix_red },
@@ -1343,7 +1343,7 @@ lazy.setup({
                     ["@diff.line"] = { fg = colors.blue },
                     -- Legacy Vim Regex Fallbacks (Shell and SQL)
                     shOption = { fg = colors.base0 },
-                    shCommandSub = { fg = colors.orange },
+                    shCommandSub = { fg = colors.base0 },
                     shConditional = { fg = colors.yellow },
                     shRepeat = { fg = colors.yellow },
                     shStatement = { fg = colors.yellow },
@@ -1415,15 +1415,12 @@ lazy.setup({
                     jpropertiesIdentifier = { fg = colors.green },
                     jpropertiesAssignment = { fg = colors.base0 },
                     jpropertiesString = { fg = colors.cyan },
-                    jpropertiesSpecialChar = { fg = colors.violet },
+                    jpropertiesSpecialChar = { fg = colors.cyan },
                     jpropertiesComment = { fg = colors.base01, italic = false },
 
                     -- Language-Specific Tree-sitter Semantic Specializations & Contextual Invariance
                     -- Java (Principle 7 Operational Role Invariance & Module Directives)
                     ["@keyword.directive.java"] = { fg = colors.base0 },
-                    ["@function.builtin.java"] = { fg = colors.green },
-                    ["@variable.builtin.java"] = { fg = colors.green },
-                    ["@module.java"] = { fg = colors.base0 },
 
                     -- Go (Principle 12 Blank Identifier Sentinel)
                     ["@variable.builtin.go"] = { fg = colors.magenta },

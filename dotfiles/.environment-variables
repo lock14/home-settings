@@ -71,6 +71,20 @@ export _ZO_ECHO=1
 export _ZO_RESOLVE_SYMLINKS=1
 export _ZO_FZF_OPTS="--height=50% --layout=reverse --border=rounded --inline-info --preview='eza -la --icons=auto --color=always --group-directories-first {2..} 2>/dev/null || ls -la {2..}' --preview-window='right:50%:wrap'"
 
+# Solarized Dark Manpage / Pager Colors (less / man)
+export LESS="${LESS:--R}"
+export GROFF_NO_SGR=1
+_esc="$(printf '\033')"
+export LESS_TERMCAP_mb="${_esc}[38;2;220;50;47m"                  # blink -> Solarized Red (#DC322F)
+export LESS_TERMCAP_md="${_esc}[1;38;2;38;139;210m"               # bold headings -> Solarized Blue (#268BD2)
+export LESS_TERMCAP_me="${_esc}[0m"                               # reset bold/blink
+export LESS_TERMCAP_so="${_esc}[38;2;147;161;161;48;2;7;54;66m"   # standout/search -> Base1 (#93A1A1) on Base02 (#073642)
+export LESS_TERMCAP_se="${_esc}[0m"                               # reset standout
+export LESS_TERMCAP_us="${_esc}[4;38;2;42;161;152m"               # underline/flags -> Solarized Cyan (#2AA198)
+export LESS_TERMCAP_ue="${_esc}[0m"                               # reset underline
+unset _esc
+
+
 # Source custom environment drop-ins (~/.environment-variables.d/*.sh)
 if [ -d "$HOME/.environment-variables.d" ]; then
     _source_env_dropins() {

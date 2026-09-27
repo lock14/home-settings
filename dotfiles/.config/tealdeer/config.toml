@@ -10,7 +10,7 @@ foreground = { rgb = { r = 131, g = 148, b = 150 } } # Base0
 
 [style.command_name]
 foreground = { rgb = { r = 133, g = 153, b = 0 } }   # Green
-bold = true
+bold = false
 
 [style.example_text]
 foreground = { rgb = { r = 38, g = 139, b = 210 } }  # Blue
@@ -19,5 +19,9 @@ foreground = { rgb = { r = 38, g = 139, b = 210 } }  # Blue
 foreground = { rgb = { r = 42, g = 161, b = 152 } }  # Cyan
 
 [style.example_variable]
-foreground = { rgb = { r = 181, g = 137, b = 0 } }   # Yellow
+foreground = { rgb = { r = 211, g = 54, b = 130 } }  # Magenta
 underline = true
+
+[updates]
+auto_update = true
+

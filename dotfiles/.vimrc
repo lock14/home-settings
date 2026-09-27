@@ -72,7 +72,7 @@ function! s:ApplySolarizedDark() abort
         " Structural Scaffolding, Keywords & Primitive Types (Solarized Green #859900)
         highlight Statement cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
         highlight Keyword cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
-        highlight Operator cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
+        highlight Operator cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=#839496 guibg=NONE
         highlight Type cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
         highlight StorageClass cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
         highlight Structure cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
@@ -89,7 +89,7 @@ function! s:ApplySolarizedDark() abort
         highlight Define cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=#CB4B16 guibg=NONE
         highlight Macro cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=#CB4B16 guibg=NONE
         highlight PreCondit cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=#CB4B16 guibg=NONE
-        highlight Special cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=#CB4B16 guibg=NONE
+        highlight Special cterm=NONE ctermfg=13 ctermbg=NONE gui=NONE guifg=#6C71C4 guibg=NONE
 
         " Strings & Character Literals (Solarized Cyan #2AA198)
         highlight String cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=#2AA198 guibg=NONE

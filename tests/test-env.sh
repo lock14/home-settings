@@ -165,6 +165,14 @@ else
     fail "Zoxide environment variables" "Expected _ZO_ECHO=1, _ZO_RESOLVE_SYMLINKS=1, and _ZO_FZF_OPTS with eza preview"
 fi
 
+if [ "${LESS:-}" = "-R" ] && [ "${GROFF_NO_SGR:-}" = "1" ] && \
+   [ -n "${LESS_TERMCAP_mb:-}" ] && [ -n "${LESS_TERMCAP_md:-}" ] && \
+   [ -n "${LESS_TERMCAP_so:-}" ] && [ -n "${LESS_TERMCAP_us:-}" ]; then
+    pass "Solarized Dark LESS_TERMCAP_* manpage colors and GROFF_NO_SGR=1 exported in .environment-variables"
+else
+    fail "LESS_TERMCAP in .environment-variables" "Expected LESS=-R, GROFF_NO_SGR=1, and LESS_TERMCAP_* in .environment-variables"
+fi
+
 if command -v rg >/dev/null 2>&1 || command -v fd >/dev/null 2>&1; then
     if [ -n "${FZF_DEFAULT_COMMAND:-}" ] && [ -n "${FZF_CTRL_T_COMMAND:-}" ]; then
         pass "FZF_DEFAULT_COMMAND and FZF_CTRL_T_COMMAND cleanly configured ($FZF_DEFAULT_COMMAND)"
@@ -211,7 +219,7 @@ fi
 STANDALONE_HOME=$(mktemp -d)
 (
     export HOME="$STANDALONE_HOME"
-    unset EDITOR VISUAL COLORTERM LS_COLORS LSCOLORS HISTSIZE HISTFILESIZE HISTCONTROL LESS_TERMCAP_md LESS_TERMCAP_us SSH_CLIENT SSH_TTY SSH_CONNECTION
+    unset EDITOR VISUAL COLORTERM LS_COLORS LSCOLORS HISTSIZE HISTFILESIZE HISTCONTROL LESS_TERMCAP_md LESS_TERMCAP_us GROFF_NO_SGR JQ_COLORS _ZO_ECHO _ZO_RESOLVE_SYMLINKS _ZO_FZF_OPTS SSH_CLIENT SSH_TTY SSH_CONNECTION
     shopt -s expand_aliases
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/dotfiles/.bashrc-addendum"
@@ -219,8 +227,10 @@ STANDALONE_HOME=$(mktemp -d)
     if [ "${COLORTERM:-}" = "truecolor" ] && [ -n "${EDITOR:-}" ] && [ "${VISUAL:-}" = "${EDITOR:-}" ] && \
        [ "${GOPATH:-}" = "$STANDALONE_HOME/.local/share/go" ] && [ "${GOCACHE:-}" = "$STANDALONE_HOME/.cache/go-build" ] && \
        [ "${HISTSIZE:-}" = "50000" ] && [ "${HISTFILESIZE:-}" = "100000" ] && \
-       [[ "${HISTCONTROL:-}" == *"ignoreboth"* ]] && [ -n "${LESS_TERMCAP_md:-}" ] && [ -n "${LESS_TERMCAP_us:-}" ]; then
-        echo "PASS:Standalone .bashrc-addendum exports COLORTERM, EDITOR/VISUAL, XDG GOPATH/GOCACHE, history settings, and Solarized LESS_TERMCAP manpage colors"
+       [[ "${HISTCONTROL:-}" == *"ignoreboth"* ]] && [ "${GROFF_NO_SGR:-}" = "1" ] && \
+       [ -n "${LESS_TERMCAP_md:-}" ] && [ -n "${LESS_TERMCAP_us:-}" ] && \
+       [ -n "${JQ_COLORS:-}" ] && [ "${_ZO_ECHO:-}" = "1" ] && [ "${_ZO_RESOLVE_SYMLINKS:-}" = "1" ] && [ -n "${_ZO_FZF_OPTS:-}" ]; then
+        echo "PASS:Standalone .bashrc-addendum exports COLORTERM, EDITOR/VISUAL, XDG GOPATH/GOCACHE, history settings, JQ_COLORS, Zoxide vars, and Solarized LESS_TERMCAP manpage colors"
     else
         echo "FAIL:Standalone env fallback:Missing expected exports (COLORTERM=${COLORTERM:-}, EDITOR=${EDITOR:-}, GOPATH=${GOPATH:-}, HISTSIZE=${HISTSIZE:-})"
     fi
@@ -236,14 +246,16 @@ STANDALONE_HOME=$(mktemp -d)
     fi
 
     if alias gcommit >/dev/null 2>&1 && alias gamend >/dev/null 2>&1 && \
+       alias gup >/dev/null 2>&1 && ! alias gfetch >/dev/null 2>&1 && \
        alias gprune >/dev/null 2>&1 && alias gpurge >/dev/null 2>&1 && \
        alias guser-branch >/dev/null 2>&1 && alias ll >/dev/null 2>&1 && \
+       alias ds >/dev/null 2>&1 && ! alias tealdeer >/dev/null 2>&1 && \
        alias ide2 >/dev/null 2>&1 && alias ide3 >/dev/null 2>&1 && \
        alias idek >/dev/null 2>&1 && alias qide >/dev/null 2>&1 && \
        alias update >/dev/null 2>&1 && alias grep >/dev/null 2>&1 && \
        declare -F gsync >/dev/null 2>&1 && declare -F v >/dev/null 2>&1 && \
        declare -F icd >/dev/null 2>&1; then
-        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gprune, gpurge, guser-branch), IDE/update shortcuts, ls/grep aliases, gsync, icd(), and RPC-aware v() function"
+        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gup, gprune, gpurge, guser-branch), ds/IDE/update shortcuts, ls/grep aliases, gsync, icd(), and RPC-aware v() function"
     else
         echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases, gsync, icd(), or v() function"
     fi

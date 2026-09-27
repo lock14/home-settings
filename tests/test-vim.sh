@@ -54,10 +54,10 @@ check_option "toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#839496' && t
 check_option "toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && synIDattr(hlID('Comment'), 'italic', 'gui') != 1" "Vim Comment group mapped to upright Base01 (#586E75)"
 check_option "toupper(synIDattr(hlID('CursorLineNr'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('CursorLineNr'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('MatchParen'), 'fg#', 'gui')) == '#93A1A1'" "Vim CursorLineNr and MatchParen mapped to Base1 (#93A1A1) on Base02 (#073642)"
 check_option "toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Repeat'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Exception'), 'fg#', 'gui')) == '#B58900'" "Vim control flow (Conditional, Repeat, Exception) mapped to Solarized Yellow (#B58900)"
-check_option "toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Keyword'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Type'), 'fg#', 'gui')) == '#859900'" "Vim scaffolding and types (Statement, Keyword, Type) mapped to Solarized Green (#859900)"
+check_option "toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Keyword'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Type'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Operator'), 'fg#', 'gui')) == '#839496'" "Vim scaffolding and types (Statement, Keyword, Type) mapped to Solarized Green (#859900) and Operator to Base0 (#839496)"
 check_option "toupper(synIDattr(hlID('Function'), 'fg#', 'gui')) == '#268BD2'" "Vim Function declarations mapped to Solarized Blue (#268BD2)"
-check_option "toupper(synIDattr(hlID('Include'), 'fg#', 'gui')) == '#6C71C4'" "Vim Include directives mapped to Solarized Violet (#6C71C4)"
-check_option "toupper(synIDattr(hlID('PreProc'), 'fg#', 'gui')) == '#CB4B16' && toupper(synIDattr(hlID('Special'), 'fg#', 'gui')) == '#CB4B16'" "Vim PreProc and Special mapped to Solarized Orange (#CB4B16)"
+check_option "toupper(synIDattr(hlID('Include'), 'fg#', 'gui')) == '#6C71C4' && toupper(synIDattr(hlID('Special'), 'fg#', 'gui')) == '#6C71C4'" "Vim Include and Special mapped to Solarized Violet (#6C71C4)"
+check_option "toupper(synIDattr(hlID('PreProc'), 'fg#', 'gui')) == '#CB4B16'" "Vim PreProc mapped to Solarized Orange (#CB4B16)"
 check_option "toupper(synIDattr(hlID('String'), 'fg#', 'gui')) == '#2AA198' && toupper(synIDattr(hlID('Character'), 'fg#', 'gui')) == '#2AA198'" "Vim String and Character literals mapped to Solarized Cyan (#2AA198)"
 check_option "toupper(synIDattr(hlID('Constant'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Number'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Boolean'), 'fg#', 'gui')) == '#D33682'" "Vim Constant, Number, and Boolean mapped to Solarized Magenta (#D33682)"
 check_option "toupper(synIDattr(hlID('Error'), 'fg#', 'gui')) == '#DC322F' && toupper(synIDattr(hlID('WarningMsg'), 'fg#', 'gui')) == '#CB4B16'" "Vim Error and WarningMsg mapped to Solarized Red (#DC322F) and Orange (#CB4B16)"
@@ -514,11 +514,19 @@ results["is_j_when_kw"] = tostring(match_capture(java_buf, r, c, "keyword.condit
 
 r, c = find_pos(java_buf, "this.timeoutMs", "this")
 results["is_j_this_var"] = tostring(match_capture(java_buf, r, c, "variable.builtin"))
-hl = vim.api.nvim_get_hl(0, {name = "@variable.builtin", link = false})
+hl = vim.api.nvim_get_hl(0, {name = "@variable.builtin.java", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@variable.builtin", link = false}) end
 results["var_bi_fg"] = string.format("%06x", hl.fg or 0)
 
 r, c = find_pos(java_buf, "super(timeoutMs);", "super")
 results["is_j_super_call"] = tostring(match_capture(java_buf, r, c, "function.builtin"))
+hl = vim.api.nvim_get_hl(0, {name = "@function.builtin.java", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@function.builtin", link = false}) end
+results["func_bi_java_fg"] = string.format("%06x", hl.fg or 0)
+
+hl = vim.api.nvim_get_hl(0, {name = "@module.java", link = false})
+if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@module", link = false}) end
+results["mod_java_fg"] = string.format("%06x", hl.fg or 0)
 
 hl = vim.api.nvim_get_hl(0, {name = "@type.java", link = false})
 if not hl.fg then hl = vim.api.nvim_get_hl(0, {name = "@type", link = false}) end
@@ -1754,10 +1762,10 @@ end
             fail "Neovim Java this keyword" "Expected @variable.builtin fg=d33682, got cap=${RES[is_j_this_var]:-} fg=${RES[var_bi_fg]:-}"
         fi
 
-        if [ "${RES[is_j_super_call]:-}" = "true" ]; then
-            pass "Neovim renders Java constructor delegation 'super(...)' as @function.builtin in Solarized Blue (#268bd2)"
+        if [ "${RES[is_j_super_call]:-}" = "true" ] && [ "${RES[func_bi_java_fg]:-}" = "839496" ] && [ "${RES[mod_java_fg]:-}" = "6c71c4" ]; then
+            pass "Neovim renders Java constructor delegation 'super(...)' as @function.builtin in calm Solarized Base0 (#839496) and @module in Solarized Violet (#6c71c4)"
         else
-            fail "Neovim Java super delegation" "Expected @function.builtin for super(...), got ${RES[is_j_super_call]:-}"
+            fail "Neovim Java super delegation" "Expected @function.builtin fg=839496 and @module fg=6c71c4, got super=${RES[is_j_super_call]:-} fg=${RES[func_bi_java_fg]:-} mod=${RES[mod_java_fg]:-}"
         fi
 
         if [ "${RES[diff_plus_fg]:-}" = "859900" ] && [ "${RES[is_add_plus]:-}" = "true" ]; then

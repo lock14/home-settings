@@ -3,11 +3,10 @@
 # git custom workflows
 alias gcommit='git add -A && git commit'
 alias gamend='git add -A && git commit --amend --no-edit'
-alias gfetch='git fetch'
 alias gpush='git push origin HEAD'
 alias gpushf='git push --force-with-lease origin HEAD'
 alias gpull='git pull --rebase --autostash'
-alias gup='gfetch && gpull'
+alias gup='git pull --rebase --autostash --prune'
 alias gprune='git fetch --prune 2>/dev/null; target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --merged "$target" | sed "s/^[ *]*//" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -d "$b"; done'
 alias gpurge='target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --format="%(refname:short)" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
 alias guser-branch='b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -z "$b" ] || [ "$b" = "HEAD" ]; then echo "Error: not on a valid branch" >&2; false; elif [ "$b" = "main" ] || [ "$b" = "master" ] || [ "$b" = "trunk" ]; then echo "Error: refusing to prefix $b branch" >&2; false; else git branch -m "${USER:-$(whoami)}/$(echo "$b" | sed -E "s|^(${USER:-$(whoami)}/)+||")"; fi'
@@ -52,11 +51,6 @@ if command -v eza >/dev/null 2>&1; then
     alias elx='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso -H -i -S --extended'
 fi
 
-# golang
-alias go-lint='golangci-lint run'
-alias go-testall='go test ./...'
-alias go-buildall='go build ./...'
-
 # terraform
 alias tf='terraform'
 
@@ -66,9 +60,7 @@ alias ide3='ide --3pane'
 alias idek='ide --kill'
 alias qide='ide --quit'
 alias ds='dust'
-alias tealdeer='tldr'
 alias update='update-system'
-alias yaml-lint='yamllint -d relaxed'
 if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
     alias fd='fdfind'
 fi
