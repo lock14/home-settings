@@ -20,6 +20,13 @@ else
     fail "modules/10-dotfiles.sh" "bash -n returned non-zero"
 fi
 
+# The module runs below under a temporary $HOME, so it must never reach live tmux servers or IDE editors
+if ! grep -Eq '^[^#]*(tmux |luafile|--remote-expr|nvim-ide-)' "$SCRIPT_DIR/modules/10-dotfiles.sh"; then
+    pass "modules/10-dotfiles.sh never hot-reloads live tmux servers or Neovim IDE editors (hermetic under a temporary HOME)"
+else
+    fail "modules/10-dotfiles.sh hermeticity" "Found tmux / luafile / --remote-expr / nvim-ide- socket calls that would mutate live sessions from tests"
+fi
+
 # Test 2: Auto-discovery in temporary HOME
 echo -e "\n[2/5] Testing declarative dotfiles auto-discovery..."
 TEMP_HOME=$(mktemp -d)
