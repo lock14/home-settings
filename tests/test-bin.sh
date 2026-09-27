@@ -240,7 +240,8 @@ if command -v tmux >/dev/null 2>&1; then
 
             if command -v git >/dev/null 2>&1; then
                 FOLLOW_REPO="$TEMP_HOME/follow_repo_test"
-                mkdir -p "$FOLLOW_REPO"
+                FOLLOW_BRAIN="$TEMP_HOME/brain_test/conv-123"
+                mkdir -p "$FOLLOW_REPO" "$FOLLOW_BRAIN"
                 (
                     cd "$FOLLOW_REPO"
                     git init -q
@@ -249,15 +250,20 @@ if command -v tmux >/dev/null 2>&1; then
                     printf "line1\nline2\nline3\nline4\n" > "$FOLLOW_REPO/tracked.go"
                     git add tracked.go
                     git commit -q -m "initial" --no-gpg-sign
-                    printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
                 )
-                follow_out="$(cd "$FOLLOW_REPO" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
-                    -c "lua IdeFollow.sync(true); io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))" \
+                printf "# Implementation Plan\n" > "$FOLLOW_BRAIN/plan.md"
+                plan_follow_out="$(cd "$FOLLOW_REPO" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                    -c "lua vim.g.ide_artifact_dirs = { '$TEMP_HOME/brain_test' }; IdeFollow.sync(true); io.stdout:write('PLAN:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'))" \
                     -c "qa!" 2>&1 || true)"
-                if grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out"; then
-                    pass "AI Live-Follow Mode (IdeFollow.sync) detects git-modified files, opens them in the Editor pane, and jumps to the latest modified diff hunk line"
+                sleep 1
+                printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
+                follow_out="$(cd "$FOLLOW_REPO" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                    -c "lua vim.g.ide_artifact_dirs = { '$TEMP_HOME/brain_test' }; IdeFollow.sync(true); io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))" \
+                    -c "qa!" 2>&1 || true)"
+                if grep -Fq "PLAN:plan.md" <<< "$plan_follow_out" && grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out"; then
+                    pass "AI Live-Follow Mode (IdeFollow.sync) follows newly written /plan .md artifacts and git-modified files, jumping to the modified diff hunk line"
                 else
-                    fail "AI Live-Follow Mode (IdeFollow.sync)" "Expected FILE:tracked.go LINE:3, got: $follow_out"
+                    fail "AI Live-Follow Mode (IdeFollow.sync)" "Expected PLAN:plan.md and FILE:tracked.go LINE:3, got plan=$plan_follow_out code=$follow_out"
                 fi
             fi
         else

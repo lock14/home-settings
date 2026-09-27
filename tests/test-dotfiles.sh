@@ -57,7 +57,13 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'pane-active-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'popup-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'mode-style "fg=#93A1A1,bg=#073642"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g status-position top' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'status-style "fg=#839496,bg=#073642"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'client_prefix' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'pane_in_mode' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_role' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind b set-option status' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Eq '\bbold\b' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q '_swap' "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '^[[:space:]]*bind(-key)?[[:space:]]+-n[[:space:]]+C-[hjkl]\b' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-h' "$TEMP_HOME/.tmux.conf" && \
@@ -73,9 +79,9 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-3' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-H resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark framing, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt+hjkl/e/t/a/1/2/3/z/HJKL navigation, and zero root Ctrl+hjkl traps"
+    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, PREFIX/COPY/ZOOM badges, unbolded typography), extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, and 4-layer Alt navigation"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark, extended-keys, clipboard, or 4-layer keybinding settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, extended-keys, clipboard, or 4-layer keybinding settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then

@@ -114,3 +114,19 @@ fi
 if [ -f "$REPO_DIR/.mise.toml" ]; then
     link_file "$REPO_DIR/.mise.toml" "$XDG_CONFIG/mise/config.toml"
 fi
+
+# 7. Hot-reload active Tmux server and Neovim IDE sessions if running
+if [ "$DRY_RUN" = false ]; then
+    if [ -f "$HOME/.tmux.conf" ] && command -v tmux >/dev/null 2>&1; then
+        if tmux list-sessions >/dev/null 2>&1; then
+            tmux source-file "$HOME/.tmux.conf" >/dev/null 2>&1 || true
+        fi
+    fi
+    if [ -f "$XDG_CONFIG/nvim/init.lua" ] && command -v nvim >/dev/null 2>&1; then
+        for ide_sock in "${XDG_RUNTIME_DIR:-/tmp}"/nvim-ide-*.sock; do
+            if [ -S "$ide_sock" ]; then
+                nvim --headless --server "$ide_sock" --remote-expr "execute('luafile ' . fnameescape('$XDG_CONFIG/nvim/init.lua'))" >/dev/null 2>&1 || true
+            fi
+        done
+    fi
+fi

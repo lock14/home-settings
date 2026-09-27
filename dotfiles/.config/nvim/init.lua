@@ -815,6 +815,31 @@ local function stat_mtime_ns(path)
     return (st.mtime.sec or 0) * 1000000000 + (st.mtime.nsec or 0)
 end
 
+local function scan_md_files_in_dir(dir, newest_path, newest_mtime)
+    local uv = vim.uv or vim.loop
+    local req = uv and uv.fs_scandir(dir)
+    if not req then
+        return newest_path, newest_mtime
+    end
+    while true do
+        local name, ftype = uv.fs_scandir_next(req)
+        if not name then
+            break
+        end
+        if name:sub(1, 1) ~= "." and name:sub(-3) == ".md" then
+            local full = dir .. "/" .. name
+            if not ftype or ftype == "file" or ftype == "link" then
+                local mtime = stat_mtime_ns(full)
+                if mtime > newest_mtime then
+                    newest_mtime = mtime
+                    newest_path = full
+                end
+            end
+        end
+    end
+    return newest_path, newest_mtime
+end
+
 function IdeFollow.find_newest_modified(root)
     root = (root and root ~= "") and root or IdeTree.root or vim.fn.getcwd()
     local newest_path = nil
@@ -848,6 +873,31 @@ function IdeFollow.find_newest_modified(root)
             end
         end
     end
+
+    -- Also follow newly written AI plan & walkthrough artifacts (~/.gemini/jetski/brain/<id>/*.md and ~/.claude/plans/*.md)
+    local uv = vim.uv or vim.loop
+    local artifact_roots = vim.g.ide_artifact_dirs or {
+        vim.fn.expand("~/.gemini/jetski/brain"),
+        vim.fn.expand("~/.claude/plans"),
+    }
+    for _, art_root in ipairs(artifact_roots) do
+        if art_root and art_root ~= "" then
+            newest_path, newest_mtime = scan_md_files_in_dir(art_root, newest_path, newest_mtime)
+            local req = uv and uv.fs_scandir(art_root)
+            if req then
+                while true do
+                    local sub, stype = uv.fs_scandir_next(req)
+                    if not sub then
+                        break
+                    end
+                    if sub:sub(1, 1) ~= "." and sub ~= "scratch" and (not stype or stype == "directory") then
+                        newest_path, newest_mtime = scan_md_files_in_dir(art_root .. "/" .. sub, newest_path, newest_mtime)
+                    end
+                end
+            end
+        end
+    end
+
     return newest_path, newest_mtime
 end
 
