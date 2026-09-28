@@ -590,8 +590,9 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide --quit Editor close" "Expected the Editor's :qa! -> :Q! abbreviation (got: ${quit_abbrev:-none}), no ide calls from the Editor (got: ${quit_log:-none}), ide-quit-editor gone, and both bystanders alive"
         fi
 
-        # Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) starts a detached `ide --quit` that closes this Editor: it
-        # must outlive it and kill exactly its own session (a 2nd pane keeps the session alive like the AI and Shell panes)
+        # Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) starts a detached `ide --quit <its session>` that closes
+        # this Editor: it must outlive it and kill exactly its own session (a 2nd pane keeps the session alive like the AI
+        # and Shell panes). IDE_SESSION is set on the pane the way bin/ide sets it on every pane it creates.
         SELF_HOME="$TEMP_HOME/quit_self_home"
         SELF_LOG="$TEMP_HOME/quit_self.log"
         SELF_SOCK="$TEMP_HOME/quit_self.sock"
@@ -599,7 +600,7 @@ if command -v tmux >/dev/null 2>&1; then
         printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\nexec %q "$@"\n' "$SELF_LOG" "$SCRIPT_DIR/bin/ide" > "$SELF_HOME/.local/bin/ide"
         chmod +x "$SELF_HOME/.local/bin/ide"
         : > "$SELF_LOG"
-        tmux new-session -d -s "ide-quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" \
+        tmux new-session -d -s "ide-quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=ide-quit-self" \
             "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
         tmux split-window -d -t "ide-quit-self:" "sleep 600"
         tmux set-option -t "ide-quit-self" @ide_socket "$SELF_SOCK"
@@ -618,11 +619,46 @@ if command -v tmux >/dev/null 2>&1; then
         done
         sleep 0.5
         self_log="$(cat "$SELF_LOG")"
-        if grep -Fq "'Q!'" <<< "$self_abbrev" && [ "$self_log" = "--quit" ] && ! session_alive "ide-quit-self" && \
+        if grep -Fq "'Q!'" <<< "$self_abbrev" && [ "$self_log" = "--quit ide-quit-self" ] && ! session_alive "ide-quit-self" && \
            all_alive "ide-bystander" "plain-bystander"; then
-            pass "Quitting from inside the Editor (:Q, :qa, <leader>q) runs exactly one ide --quit, which outlives the Editor it closes and kills only its own session"
+            pass "Quitting from inside the Editor (:Q, :qa, <leader>q) runs exactly one ide --quit naming its own session, which outlives the Editor it closes and kills only that session"
         else
-            fail "Editor-initiated ide --quit" "Expected exactly one '--quit' call (got: ${self_log:-none}), ide-quit-self gone, and both bystanders alive; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+            fail "Editor-initiated ide --quit" "Expected exactly one '--quit ide-quit-self' call (got: ${self_log:-none}), ide-quit-self gone, and both bystanders alive; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+        fi
+
+        # Every Editor `ide` call names the Editor's session like the tmux key bindings do, in the argument positions
+        # bin/ide parses (`--quit --force NAME`, `--cd DIR NAME`), and leaves it out without an ide-* $IDE_SESSION
+        ARGS_HOME="$TEMP_HOME/editor_args_home"
+        ARGS_LOG="$TEMP_HOME/editor_args.log"
+        ARGS_DIR="$TEMP_HOME/editor_args_dir"
+        mkdir -p "$ARGS_HOME/.local/bin" "$ARGS_DIR"
+        printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$ARGS_LOG" > "$ARGS_HOME/.local/bin/ide"
+        chmod +x "$ARGS_HOME/.local/bin/ide"
+        : > "$ARGS_LOG"
+        cat > "$TEMP_HOME/editor_args.lua" <<LUA
+vim.env.HOME = [[$ARGS_HOME]]
+local function as(sess, fn) vim.env.IDE_SESSION = sess; pcall(fn) end
+as("ide-args", function() vim.cmd("Q") end)
+as("ide-args", function() vim.cmd("Q!") end)
+as("ide-args", function() IdeTree.dive([[$ARGS_DIR]]) end)
+as("ide-args", function() vim.fn.maparg("<leader>a", "n", false, true).callback() end)
+as(nil, function() vim.cmd("Q") end)
+as("args", function() vim.cmd("Q") end)
+vim.cmd("qa!")
+LUA
+        # A TMUX value naming no server: the stub never calls tmux, and nothing here can reach a real one
+        env TMUX="$TEMP_HOME/no-such-tmux,1,0" NVIM_IDE_SOCKET="$TEMP_HOME/no-such.sock" timeout 30 \
+            nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" -c "source $TEMP_HOME/editor_args.lua" -c 'qa!' >/dev/null 2>&1 || true
+        for _ in $(seq 1 50); do
+            [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 6 ] && break
+            sleep 0.1
+        done
+        args_log="$(LC_ALL=C sort "$ARGS_LOG")"
+        args_expected="$(printf '%s\n' "--cd $ARGS_DIR ide-args" "--quit" "--quit" "--quit --force ide-args" "--quit ide-args" "--toggle ide-args" | LC_ALL=C sort)"
+        if [ "$args_log" = "$args_expected" ]; then
+            pass "The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME) and omits it without an ide-* \$IDE_SESSION"
+        else
+            fail "Editor ide call arguments" "Expected: $(tr '\n' '|' <<< "$args_expected") got: $(tr '\n' '|' <<< "$args_log")"
         fi
     else
         pass "bin/ide --quit Editor close skipped headless runtime check (nvim not installed on runner)"
