@@ -235,7 +235,6 @@
   # Don't shorten directories that contain any of these files. They are anchors.
   local anchor_files=(
     .bzr
-    .citc
     .git
     .hg
     .node-version
@@ -506,11 +505,10 @@
     emulate -L zsh -o extended_glob
     typeset -g my_git_format=''
 
-    [[ $PWD == /google/src/cloud/* ]] && return 0
-
     local pat=''
     if [[ -n ${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN:-} ]]; then
-      pat=${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN//(#b)(^|[|(])\~/${match[1]}$HOME}
+      # Expand `~` at the start of the pattern or of any `|`/`(` alternative (e.g. '~|/extra/*').
+      pat=${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN//(#b)((#s)|[|(])\~/${match[1]}$HOME}
       [[ $PWD == $~pat ]] && return 0
     fi
 
@@ -2308,6 +2306,12 @@
   # can slow down prompt by 1-2 milliseconds, so it's better to keep it turned off unless you
   # really need it.
   typeset -g POWERLEVEL9K_DISABLE_HOT_RELOAD=true
+
+  # Machine-local overrides that stay out of this repository (e.g. extra directory anchors or
+  # workdirs to skip VCS status in). The untracked file runs here, after the defaults above and
+  # before reload, so `typeset -g POWERLEVEL9K_*` settings in it are re-applied on every source.
+  local p10k_local=${XDG_CONFIG_HOME:-$HOME/.config}/zsh/p10k.local.zsh
+  [[ -r $p10k_local ]] && source $p10k_local
 
   # If p10k is already loaded, reload configuration.
   # This works even with POWERLEVEL9K_DISABLE_HOT_RELOAD=true.

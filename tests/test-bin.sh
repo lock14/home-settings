@@ -120,6 +120,47 @@ else
     pass "bin/ide rejects unsupported --ai agent values (enforces agy, claude, codex)"
 fi
 
+# Ctrl+click link rules come only from an untracked rules file (default ~/.config/ide/links.sh, or $IDE_LINK_RULES)
+LINK_TEST_DIR="$TEMP_HOME/link-rules-test"
+LINK_LOG="$LINK_TEST_DIR/opened.log"
+mkdir -p "$LINK_TEST_DIR/bin" "$TEMP_HOME/.config/ide"
+cat > "$LINK_TEST_DIR/bin/xdg-open" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$1" >> "$LINK_LOG"
+EOF
+chmod +x "$LINK_TEST_DIR/bin/xdg-open"
+cat > "$TEMP_HOME/.config/ide/links.sh" <<'EOF'
+ide_resolve_link() {
+    if [[ "$1" =~ ^tkt/([0-9]+)$ ]]; then
+        printf 'https://tickets.example.test/%s\n' "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    return 1
+}
+EOF
+run_link_rules_case() {
+    env -u XDG_CONFIG_HOME -u IDE_LINK_RULES HOME="$TEMP_HOME" PATH="$LINK_TEST_DIR/bin:$PATH" DISPLAY=:99 "$@" \
+        >/dev/null 2>&1 || true
+}
+# Default rules location; surrounding punctuation is stripped from the clicked word
+run_link_rules_case "$SCRIPT_DIR/bin/ide" --open-link "" "(tkt/4242)," "$LINK_TEST_DIR"
+# Words the rules decline fall through to local file handling (no such file, so nothing opens)
+run_link_rules_case "$SCRIPT_DIR/bin/ide" --open-link "" "tkt/draft" "$LINK_TEST_DIR"
+# $IDE_LINK_RULES replaces the default location; a missing rules file means no private rules at all
+run_link_rules_case env IDE_LINK_RULES="$LINK_TEST_DIR/missing.sh" "$SCRIPT_DIR/bin/ide" --open-link "" "tkt/4343" "$LINK_TEST_DIR"
+for _ in $(seq 1 40); do
+    [ -s "$LINK_LOG" ] && break
+    sleep 0.05
+done
+sleep 0.2
+link_log_out="$(cat "$LINK_LOG" 2>/dev/null || true)"
+if [ "$link_log_out" = "https://tickets.example.test/4242" ]; then
+    pass "bin/ide --open-link resolves Ctrl+click words through untracked ide_resolve_link rules (~/.config/ide/links.sh or \$IDE_LINK_RULES) and falls through when they decline"
+else
+    fail "bin/ide private link rules" "Expected only https://tickets.example.test/4242 to be opened, got: ${link_log_out:-<nothing>}"
+fi
+rm -rf "$LINK_TEST_DIR" "$TEMP_HOME/.config/ide"
+
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_TMPDIR="$(mktemp -d)"
     export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
