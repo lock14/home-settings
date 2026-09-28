@@ -45,6 +45,8 @@ Options:
 
 Environment Variables:
   IDE_AI_CLI               AI CLI tool for the AI Agent pane: agy (default), claude, or codex
+  IDE_LINK_RULES           Untracked Ctrl+click link rules (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
+                           defining `ide_resolve_link WORD CWD`, which prints a URL to open for WORD
 EOF
 }
 
@@ -765,12 +767,28 @@ open_browser_url() {
     return 1
 }
 
+# Machine-local link rules keep private hostnames and path conventions out of this repository.
+# The rules file ($IDE_LINK_RULES, default ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh) is an
+# untracked Bash snippet defining `ide_resolve_link WORD CWD`, which prints the URL to open for
+# WORD and returns 0, or returns non-zero to fall through to local file handling.
+resolve_private_link() {
+    local link_word="$1" link_cwd="$2"
+    local rules="${IDE_LINK_RULES:-${XDG_CONFIG_HOME:-$HOME/.config}/ide/links.sh}"
+    [ -r "$rules" ] || return 1
+    (
+        # shellcheck source=/dev/null
+        . "$rules"
+        declare -F ide_resolve_link >/dev/null || exit 1
+        ide_resolve_link "$link_word" "$link_cwd"
+    )
+}
+
 open_ide_link() {
     local href="${1:-}"
     local word="${2:-}"
     local cwd="${3:-$PWD}"
 
-    # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`) from prompt (`//depot/...`, `@CL`, Git branch) or AI CLI (`file://...`)
+    # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`) from the prompt or an AI CLI (`file://...`, `https://...`)
     if [ -n "$href" ]; then
         if [[ "$href" == file://* ]]; then
             local fpath="${href#file://}"
@@ -818,17 +836,12 @@ open_ide_link() {
     if [[ "$word" == http://* || "$word" == https://* ]]; then
         open_browser_url "$word"
         return $?
-    elif [[ "$word" == //depot* ]]; then
-        local exp_path="$word"
-        exp_path="${exp_path/#\/\/depot\/google3\/j\/c\/g///depot/google3/java/com/google}"
-        exp_path="${exp_path/#\/\/depot\/google3\/jt\/c\/g///depot/google3/javatests/com/google}"
-        open_browser_url "http://cs/piper///depot/${exp_path#//depot/}"
-        return $?
-    elif [[ "$word" =~ ^@?([0-9]{6,10})$ ]]; then
-        open_browser_url "http://cl/${BASH_REMATCH[1]}"
-        return $?
-    elif [[ "$word" =~ ^(cl|b|go)/([A-Za-z0-9_.-]+)$ ]]; then
-        open_browser_url "http://${word}"
+    fi
+
+    # Machine-local link rules (see resolve_private_link) take precedence over local paths
+    local private_url=""
+    if private_url="$(resolve_private_link "$word" "$cwd")" && [ -n "$private_url" ]; then
+        open_browser_url "$private_url"
         return $?
     fi
 

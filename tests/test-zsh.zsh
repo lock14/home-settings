@@ -547,6 +547,41 @@ test_addendum() {
         echo "FAIL:prompt_vcs disabled workdir:Expected empty segment in \$HOME ('$home_seg') and subdirectory ('$subdir_seg')"
     fi
 
+    # 1b. Untracked machine-local overrides (~/.config/zsh/p10k.local.zsh) are applied on every (re)source:
+    #     a combined '~|<dir>/*' pattern skips VCS status in both $HOME and <dir>, and extra anchors extend the marker
+    local private_ws="$TEMP_HOME/private-ws"
+    mkdir -p "$private_ws/repo" "$HOME/.config/zsh"
+    (
+        cd "$private_ws/repo"
+        git init -b main >/dev/null 2>&1
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git config commit.gpgsign false
+        echo "hello" > tracked.txt
+        git add tracked.txt && git commit -m "initial" >/dev/null 2>&1
+    )
+    local local_before="" local_after=""
+    local_before=$(cd "$private_ws/repo" && { P10K_SEG_TEXT=""; prompt_vcs; print -r -- "SEG=[$P10K_SEG_TEXT]"; }) || true
+    git init -b main "$HOME" >/dev/null 2>&1
+    cat > "$HOME/.config/zsh/p10k.local.zsh" <<EOF
+typeset -g POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="\${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN}|$private_ws/*"
+typeset -g POWERLEVEL9K_SHORTEN_FOLDER_MARKER="(.private-anchor|\${POWERLEVEL9K_SHORTEN_FOLDER_MARKER:1:-1})"
+EOF
+    local_after=$(
+        unset XDG_CONFIG_HOME
+        source "$HOME/.p10k.zsh"
+        local repo_seg="" home_seg=""
+        cd "$private_ws/repo" && { P10K_SEG_TEXT=""; prompt_vcs; repo_seg="$P10K_SEG_TEXT"; }
+        cd "$HOME" && { P10K_SEG_TEXT=""; prompt_vcs; home_seg="$P10K_SEG_TEXT"; }
+        print -r -- "REPO=[$repo_seg] HOME=[$home_seg] MARKER=[$POWERLEVEL9K_SHORTEN_FOLDER_MARKER]"
+    ) || true
+    rm -rf "$private_ws" "$HOME/.config/zsh" "$HOME/.git"
+    if [[ "$local_before" == *"main"* && "$local_after" == "REPO=[] HOME=[] MARKER=[(.private-anchor|.bzr|.git|"* ]]; then
+        echo "PASS:p10k sources untracked ~/.config/zsh/p10k.local.zsh on (re)load: '~|<dir>/*' skips VCS status in both \$HOME and <dir>, and extra anchors extend POWERLEVEL9K_SHORTEN_FOLDER_MARKER"
+    else
+        echo "FAIL:p10k local overrides:Expected before=*main* and after='REPO=[] HOME=[] MARKER=[(.private-anchor|.bzr|.git|...', got before='$local_before' after='$local_after'"
+    fi
+
     # 2. Standard files-backend Git repo (clean, dirty, percent-escaped branch, detached, and remote icons)
     local vcs_test_dir="$TEMP_HOME/vcs-files-repo"
     mkdir -p "$vcs_test_dir"

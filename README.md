@@ -250,6 +250,8 @@ The redesigned repository is built for frictionless extension:
    - `~/.environment-variables.d/*.sh`: Custom exports and paths (sourced by `.environment-variables`).
    - `~/.aliases.d/*.sh`: Custom aliases (sourced by `.aliases`).
    - `~/.zsh-functions.d/*.zsh`: Custom Zsh functions (sourced by `.zsh-functions`).
+   - `~/.config/ide/links.sh` (or `$IDE_LINK_RULES`): Private Ctrl+click link rules for `ide`. Define `ide_resolve_link WORD CWD` to print a URL for a clicked word (e.g. an internal ticket ID or short link) and return 0; return non-zero to fall through to the default file handling.
+   - `~/.config/zsh/p10k.local.zsh`: Machine-local Powerlevel10k overrides (sourced by `.p10k.zsh` before reload), e.g. extra anchors appended to `POWERLEVEL9K_SHORTEN_FOLDER_MARKER`, or `POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN}|/slow/network/fs/*"` to skip Git status on slow filesystems.
 4. **Add a Provisioning Stage**: Drop a new numbered script into `modules/` (e.g. `modules/70-docker.sh`).
 
 ---
