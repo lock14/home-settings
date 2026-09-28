@@ -61,6 +61,7 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'Hls@' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-active-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'popup-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \

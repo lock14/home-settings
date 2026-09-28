@@ -620,11 +620,30 @@ if command -v tmux >/dev/null 2>&1; then
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_base="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
+                # Collapsed 3-arg invocation (when unquoted empty #{q:mouse_hyperlink} vanished), AI transcript `[`sym`](file://...#L2)`, and `Read(...)` wrapper
+                "$SCRIPT_DIR/bin/ide" --open-link "nested.txt:3" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_collapsed="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_collapsed="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                mkdir -p "$TEMP_HOME/.gemini/app/cli" "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/logs"
+                printf '{"timestamp":9000,"workspace":"%s","conversationId":"conv-link-test"}\n' "$IDE_WS_3P" >> "$TEMP_HOME/.gemini/app/cli/history.jsonl"
+                printf '{"type":"PLANNER_RESPONSE","content":"See [`my_func_sym`](file://%s/subdir/nested.txt#L2-L3) for details."}\n' "$IDE_WS_3P" > "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/logs/transcript.jsonl"
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "my_func_sym." "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_aisym="2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_aisym="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                "$SCRIPT_DIR/bin/ide" --open-link "" "Read($IDE_WS_3P/subdir/nested.txt:1)" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_tool="1"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_tool="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
                 active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ]; then
-                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), line-wrapped markdown labels, and workspace basenames (unparking Editor if hidden)"
+                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_aisym" = "2" ] && [ "$line_after_tool" = "1" ]; then
+                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), AI transcript stripped [symbol](file:///...#L2) labels, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
                 else
-                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3/1/3/2, got active=$active_after_link href_line=$line_after_href word_line=$line_after_word md_line=$line_after_md wrap_line=$line_after_wrap base_line=$line_after_base"
+                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3/1/3/2/3/2/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed aisym=$line_after_aisym tool=$line_after_tool"
                 fi
             else
                 fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
@@ -838,7 +857,7 @@ LUA
         IDE_WS_MOUSE="$TEMP_HOME/ws_mouse"
         MOUSE_CLICK_LOG="$TEMP_HOME/mouse_click.log"
         mkdir -p "$IDE_WS_MOUSE" "$TEMP_HOME/.local/bin"
-        printf '#!/usr/bin/env bash\nif [ "${1:-}" = "--open-link" ]; then printf "%%s\\n" "$*" >> %q; fi\nexec %q "$@"\n' \
+        printf '#!/usr/bin/env bash\nif [ "${1:-}" = "--open-link" ]; then printf "argc=%%s 2=<%%s> 3=<%%s> 4=<%%s> 5=<%%s>\\n" "$#" "${2:-}" "${3:-}" "${4:-}" "${5:-}" >> %q; fi\nexec %q "$@"\n' \
             "$MOUSE_CLICK_LOG" "$SCRIPT_DIR/bin/ide" > "$TEMP_HOME/.local/bin/ide"
         chmod +x "$TEMP_HOME/.local/bin/ide"
         : > "$MOUSE_CLICK_LOG"
@@ -874,12 +893,13 @@ client = subprocess.Popen(["tmux", "attach-session", "-t", f"={sess}"], stdin=sl
                           preexec_fn=controlling_tty, env=dict(os.environ, TERM="xterm-256color"))
 os.close(slave)
 attached = True
+outer_bytes = bytearray()
 
 def drain():  # keep reading so tmux never blocks on a full pty
     while attached:
         if select.select([master], [], [], 0.05)[0]:
             try:
-                os.read(master, 65536)
+                outer_bytes.extend(os.read(master, 65536))
             except OSError:
                 return
 
@@ -921,18 +941,26 @@ tmux("resize-pane", "-Z", "-t", panes[1])
 tmux("resize-pane", "-Z", "-t", panes[1])
 kept = sizes()
 
-# Emit an OSC 8 hyperlink in row 0 of the AI pane and plain-click it via SGR mouse (MouseDown1Pane)
-tmux("respawn-pane", "-k", "-t", panes[0], "printf '\\033[2J\\033[H\\033]8;;file:///tmp/osc8_target.lua#L42\\033\\\\OSC8LINK\\033]8;;\\033\\\\'; sleep 30")
+# Emit an OSC 8 hyperlink on row 0 and a plain-text token on row 1 of the AI pane, then plain-click row 0 and Ctrl+LeftClick row 1
+outer_bytes.clear()
+tmux("respawn-pane", "-k", "-t", panes[0], "printf '\\033[2J\\033[H\\033]8;;file:///tmp/osc8_target.lua#L42\\033\\\\OSC8LINK\\033]8;;\\033\\\\\\nPLAINWORD.lua:7\\n'; sleep 30")
 time.sleep(0.3)
+outer_osc8 = "leaked" if b"\x1b]8;" in outer_bytes else "none"
 send("\x1b[<0;2;2M\x1b[<0;2;2m")
 for _ in range(30):
-    if os.path.exists(click_log) and os.path.getsize(click_log) > 0:
+    if os.path.exists(click_log) and open(click_log).read().count("\n") >= 1:
+        break
+    time.sleep(0.05)
+time.sleep(0.4)
+send("\x1b[<16;2;3M\x1b[<16;2;3m")
+for _ in range(30):
+    if os.path.exists(click_log) and open(click_log).read().count("\n") >= 2:
         break
     time.sleep(0.05)
 
 attached = False
 client.terminate()
-print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept}")
+print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept} outer_osc8={outer_osc8}")
 PY
         )" || true
         tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
@@ -940,11 +968,12 @@ PY
         MOUSE_TMPDIR=""
         mouse_click_logged="$(cat "$MOUSE_CLICK_LOG" 2>/dev/null || true)"
         if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && \
-           grep -q '^drag=ok kept=ok$' <<< "$mouse_out" && \
-           grep -Fq 'file:///tmp/osc8_target.lua#L42' <<< "$mouse_click_logged"; then
-            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom) and routes plain-clicks on OSC 8 hyperlinks via MouseDown1Pane to ide --open-link"
+           grep -q '^drag=ok kept=ok outer_osc8=none$' <<< "$mouse_out" && \
+           grep -Fq 'argc=5 2=<file:///tmp/osc8_target.lua#L42> 3=<OSC8LINK>' <<< "$mouse_click_logged" && \
+           grep -Fq 'argc=5 2=<> 3=<PLAINWORD.lua:7>' <<< "$mouse_click_logged"; then
+            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom), captures OSC 8 hyperlinks in #{mouse_hyperlink} without leaking outer OSC 8 to SSH clients (*:Hls@), and preserves empty mouse_hyperlink on Ctrl+LeftClick (C-MouseDown1Pane)"
         else
-            fail "tmux mouse border resize & OSC 8 click" "Expected MouseDrag1Border resize-pane -M, drag=ok kept=ok, and OSC 8 MouseDown1Pane click logged; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
+            fail "tmux mouse border resize & OSC 8 / Ctrl+LeftClick" "Expected MouseDrag1Border resize-pane -M, drag=ok kept=ok outer_osc8=none, OSC 8 plain-click, and C-MouseDown1Pane argc=5 2=<> 3=<PLAINWORD.lua:7>; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
         fi
     fi
 

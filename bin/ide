@@ -249,10 +249,49 @@ while [ $# -gt 0 ]; do
             ;;
         --open-link)
             ACTION="open-link"
-            LINK_HREF="${2:-}"
-            LINK_WORD="${3:-}"
-            LINK_CWD="${4:-}"
-            shift $(( $# >= 4 ? 4 : $# ))
+            if [ $# -ge 4 ] && [ -d "${4:-}" ]; then
+                LINK_HREF="${2:-}"
+                LINK_WORD="${3:-}"
+                LINK_CWD="${4:-}"
+                if [ $# -ge 5 ]; then
+                    TARGET_ARG="${5:-}"
+                    shift 5
+                else
+                    shift 4
+                fi
+            elif [ $# -ge 3 ] && [ -d "${3:-}" ]; then
+                # Unquoted empty #{q:mouse_hyperlink} collapsed: --open-link <word> <cwd> [session]
+                LINK_HREF=""
+                LINK_WORD="${2:-}"
+                LINK_CWD="${3:-}"
+                if [ $# -ge 4 ]; then
+                    TARGET_ARG="${4:-}"
+                    shift 4
+                else
+                    shift 3
+                fi
+            elif [ $# -ge 2 ] && [ -d "${2:-}" ]; then
+                # Both #{q:mouse_hyperlink} and #{q:mouse_word} collapsed: --open-link <cwd> [session]
+                LINK_HREF=""
+                LINK_WORD=""
+                LINK_CWD="${2:-}"
+                if [ $# -ge 3 ]; then
+                    TARGET_ARG="${3:-}"
+                    shift 3
+                else
+                    shift 2
+                fi
+            else
+                LINK_HREF="${2:-}"
+                LINK_WORD="${3:-}"
+                LINK_CWD="${4:-}"
+                if [ $# -ge 5 ]; then
+                    TARGET_ARG="${5:-}"
+                    shift 5
+                else
+                    shift $(( $# >= 4 ? 4 : $# ))
+                fi
+            fi
             ;;
         quit|-q|--quit)
             ACTION="quit"
@@ -1512,6 +1551,148 @@ parse_file_target() {
     PARSE_PATH="$raw"
 }
 
+resolve_ai_brain_dirs() {
+    local cwd="${1:-$PWD}"
+    local sess workdir="" init_root=""
+    sess="$(resolve_target_session "$TARGET_ARG" 2>/dev/null || true)"
+    if session_exists "$sess"; then
+        workdir="$(get_ide_var "$sess" "@ide_workdir" "IDE_WORKDIR")"
+        init_root="$(get_ide_var "$sess" "@ide_initial_root" "IDE_INITIAL_ROOT")"
+    fi
+
+    local roots_list="" d phys
+    for d in "$init_root" "$workdir" "$cwd"; do
+        [ -n "$d" ] || continue
+        d="${d%/}"
+        roots_list="${roots_list}|${d}|"
+        if [ -d "$d" ]; then
+            phys="$(cd "$d" 2>/dev/null && pwd -P || true)"
+            [ -n "$phys" ] && roots_list="${roots_list}|${phys%/}|"
+        fi
+    done
+
+    local hist brain_base cid
+    for hist in "$HOME"/.gemini/*/cli/history.jsonl; do
+        [ -f "$hist" ] || continue
+        brain_base="${hist%/cli/history.jsonl}/brain"
+        [ -d "$brain_base" ] || continue
+        while IFS= read -r cid; do
+            [ -n "$cid" ] && [ -d "$brain_base/$cid" ] && printf "%s\n" "$brain_base/$cid"
+        done < <(awk -v roots="$roots_list" '
+            index($0, "\"conversationId\"") && index($0, "\"workspace\"") {
+                cid = ""; ws = ""
+                if (match($0, /"conversationId"[[:space:]]*:[[:space:]]*"[^"]+"/)) {
+                    s = substr($0, RSTART, RLENGTH)
+                    sub(/^.*"conversationId"[[:space:]]*:[[:space:]]*"/, "", s)
+                    sub(/"$/, "", s)
+                    cid = s
+                }
+                if (match($0, /"workspace"[[:space:]]*:[[:space:]]*"[^"]+"/)) {
+                    s = substr($0, RSTART, RLENGTH)
+                    sub(/^.*"workspace"[[:space:]]*:[[:space:]]*"/, "", s)
+                    sub(/"$/, "", s)
+                    sub(/^file:\/\//, "", s)
+                    sub(/\/+$/, "", s)
+                    ws = s
+                }
+                if (cid != "" && ws != "" && index(roots, "|" ws "|") > 0) {
+                    order[++n] = cid
+                    seen[cid] = n
+                }
+            }
+            END {
+                for (i = n; i >= 1; i--) {
+                    c = order[i]
+                    if (seen[c] == i) {
+                        print c
+                    }
+                }
+            }
+        ' "$hist" 2>/dev/null)
+    done
+}
+
+resolve_ai_markdown_link() {
+    local target_label="$1"
+    local cwd="${2:-$PWD}"
+    [ -n "$target_label" ] || return 1
+
+    local -a search_files=()
+    local bdir f
+    while IFS= read -r bdir; do
+        [ -n "$bdir" ] || continue
+        [ -f "$bdir/.system_generated/logs/transcript.jsonl" ] && search_files+=("$bdir/.system_generated/logs/transcript.jsonl")
+        for f in "$bdir"/*.md; do
+            [ -f "$f" ] && search_files+=("$f")
+        done
+    done < <(resolve_ai_brain_dirs "$cwd")
+
+    if [ "${#search_files[@]}" -eq 0 ]; then
+        local newest_t=""
+        for f in "$HOME"/.gemini/*/brain/*/.system_generated/logs/transcript.jsonl; do
+            [ -f "$f" ] || continue
+            if [ -z "$newest_t" ] || [ "$f" -nt "$newest_t" ]; then
+                newest_t="$f"
+            fi
+        done
+        if [ -n "$newest_t" ]; then
+            search_files+=("$newest_t")
+            bdir="${newest_t%/.system_generated/logs/transcript.jsonl}"
+            for f in "$bdir"/*.md; do
+                [ -f "$f" ] && search_files+=("$f")
+            done
+        fi
+    fi
+
+    [ "${#search_files[@]}" -gt 0 ] || return 1
+
+    local matched_url=""
+    matched_url="$(awk -v target="$target_label" '
+        index($0, "](file://") {
+            line = $0
+            while ((p = index(line, "](file://")) > 0) {
+                prefix = substr(line, 1, p - 1)
+                rest = substr(line, p + 2)
+                lb = 0
+                for (i = length(prefix); i >= 1; i--) {
+                    if (substr(prefix, i, 1) == "[") {
+                        lb = i
+                        break
+                    }
+                }
+                endp = match(rest, /[)[:space:]"'\''\\]/)
+                url = (endp > 0) ? substr(rest, 1, endp - 1) : rest
+                if (lb > 0 && url ~ /^file:\/\//) {
+                    lbl = substr(prefix, lb + 1)
+                    gsub(/^[`*]+|[`*]+$/, "", lbl)
+                    if (lbl == target) {
+                        best = url
+                    } else {
+                        stem = lbl
+                        sub(/^.*\/+/, "", stem)
+                        sub(/^\.+/, "", stem)
+                        sub(/\.[A-Za-z0-9_+-]+$/, "", stem)
+                        if (stem != "" && stem == target) {
+                            stem_best = url
+                        }
+                    }
+                }
+                line = (endp > 0) ? substr(rest, endp) : ""
+            }
+        }
+        END {
+            if (best != "") print best
+            else if (stem_best != "") print stem_best
+        }
+    ' "${search_files[@]}" 2>/dev/null || true)"
+
+    if [ -n "$matched_url" ]; then
+        printf "%s" "$matched_url"
+        return 0
+    fi
+    return 1
+}
+
 resolve_workspace_file() {
     local cand="$1"
     local cwd="${2:-$PWD}"
@@ -1584,13 +1765,24 @@ resolve_workspace_file() {
 
     # Fallback to AI artifact directories (`~/.gemini/*/brain/*/<cand>` and `~/.claude/plans/<cand>`) for bare plan filenames
     if [[ "$cand" != */* ]]; then
-        local artifact
-        for artifact in "$HOME"/.gemini/*/brain/*/"$cand" "${IDE_CLAUDE_DIR:-$HOME/.claude}/plans/$cand"; do
-            if [ -f "$artifact" ]; then
-                printf "%s" "$artifact"
+        local bdir artifact newest_artifact=""
+        while IFS= read -r bdir; do
+            if [ -n "$bdir" ] && [ -f "$bdir/$cand" ]; then
+                printf "%s" "$bdir/$cand"
                 return 0
             fi
+        done < <(resolve_ai_brain_dirs "$cwd")
+        for artifact in "$HOME"/.gemini/*/brain/*/"$cand" "${IDE_CLAUDE_DIR:-$HOME/.claude}/plans/$cand"; do
+            if [ -f "$artifact" ]; then
+                if [ -z "$newest_artifact" ] || [ "$artifact" -nt "$newest_artifact" ]; then
+                    newest_artifact="$artifact"
+                fi
+            fi
         done
+        if [ -n "$newest_artifact" ]; then
+            printf "%s" "$newest_artifact"
+            return 0
+        fi
     fi
     return 1
 }
@@ -1634,6 +1826,7 @@ open_ide_link() {
     local href="${1:-}"
     local word="${2:-}"
     local cwd="${3:-$PWD}"
+    tmux set-option -gq word-separators " ()[]{}<>\"'\`,;*" 2>/dev/null || true
 
     # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`) from the prompt or an AI CLI (`file://...`, `https://...`)
     if [ -n "$href" ]; then
@@ -1680,6 +1873,13 @@ open_ide_link() {
         word="${BASH_REMATCH[1]}"
     fi
 
+    # Strip AI CLI tool-call wrappers such as `Read(~/path/file)` or `Edit(~/.gemini/.../walkthrough.md)`
+    local tool_wrap_re='^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$'
+    if [[ "$word" =~ $tool_wrap_re ]]; then
+        word="${BASH_REMATCH[2]}"
+        word="${word%)}"
+    fi
+
     # Strip surrounding punctuation/brackets/quotes and trailing colons (e.g. file.rs:42:13:, (file.rs:42:13):)
     while [[ "$word" == [\(\[\{\<\"\'\`]* ]]; do
         word="${word#?}"
@@ -1701,9 +1901,32 @@ open_ide_link() {
         return $?
     fi
 
+    # Check if the clicked token is the rendered label of a `[label](file:///path#Lline)` link in the AI conversation
+    local ai_md_url=""
+    if ai_md_url="$(resolve_ai_markdown_link "$word" "$cwd")" && [ -n "$ai_md_url" ]; then
+        if resolve_and_open_target "$ai_md_url" "$cwd"; then
+            return 0
+        fi
+    fi
+
     # Check if word is a local file path (optionally with #L<line>, :line:col, or :start-end ranges)
     if resolve_and_open_target "$word" "$cwd"; then
         return 0
+    fi
+
+    # If a tool-call path was middle-truncated with `...` (e.g. `~/.gemini/.../walkthrough.md`), try its basename
+    if [[ "$word" == *...* ]] && [[ "$word" == */* ]]; then
+        local trunc_base="${word##*/}"
+        if [ -n "$trunc_base" ] && [ "$trunc_base" != "$word" ]; then
+            if ai_md_url="$(resolve_ai_markdown_link "$trunc_base" "$cwd")" && [ -n "$ai_md_url" ]; then
+                if resolve_and_open_target "$ai_md_url" "$cwd"; then
+                    return 0
+                fi
+            fi
+            if resolve_and_open_target "$trunc_base" "$cwd"; then
+                return 0
+            fi
+        fi
     fi
 
     # If a markdown link wrapped across terminal lines (truncating the URL), fall back to its `[label]`
