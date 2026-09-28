@@ -36,12 +36,15 @@ Options:
   --show-editor [SESSION]  Focus the Text Editor pane (or toggle zoom if already focused)
   --show-ai [SESSION]      Focus the AI Agent pane (preserving zoom if zoomed)
   --show-term [SESSION]    Focus the Interactive Shell pane (or bounce back to Editor if already focused)
-  quit, -q, --quit         Safely quit the entire IDE workspace (checks for unsaved Neovim buffers first)
+  quit, -q, --quit [NAME]  Safely quit IDE session NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
-  --kill [NAME]            Terminate the specified IDE session (or current directory's session)
+  --kill [NAME]            Force-quit IDE session NAME without the unsaved-buffer check
   --list                   List active tmux IDE sessions
   -h, --help               Show this help message and exit
+
+Without NAME / SESSION, session commands act only on the ide-* session of the calling pane
+(outside tmux: the current directory's session), never on any other tmux session.
 
 Environment Variables:
   IDE_AI_CLI               AI CLI tool for the AI Agent pane: agy (default), claude, or codex
@@ -310,6 +313,44 @@ sanitize_session_name() {
     printf "ide-%s" "$cleaned"
 }
 
+# Exact session lookup: when no session is named exactly NAME, a bare `-t NAME` falls back to
+# prefix and pattern matching (`ide-api` would hit `ide-api-gateway`); `-t =NAME` never does.
+# Pane- and window-type commands (show-options, set-option, display-message, list-panes) need
+# `-t =NAME:` instead: tmux applies the `=` only to the part of the target the command expects.
+session_exists() {
+    [ -n "${1:-}" ] && tmux has-session -t "=$1" 2>/dev/null
+}
+
+missing_session_msg() {
+    if [ -n "${1:-}" ]; then
+        printf "No active IDE session named '%s'." "$1"
+    else
+        printf "Not inside an ide session (pass a session name, e.g. 'ide --quit ide-<dir>')."
+    fi
+}
+
+# The ide session owning the calling pane ($TMUX_PANE), or the session a run-shell job was started
+# for (the id at the end of $TMUX), looked up by exact id. tmux is never asked for "the current
+# session" untargeted: once the caller's pane is gone (like the `ide --quit` job of an Editor whose
+# session is being killed), it answers with the most recently used session, so a quit would land
+# on an unrelated session and cascade through all of them. Prints nothing outside ide-* sessions.
+current_ide_session() {
+    local server_pid target found
+    server_pid="${TMUX%,*}"
+    server_pid="${server_pid##*,}"
+    if [ -n "${TMUX_PANE:-}" ]; then
+        target="$TMUX_PANE"
+    else
+        target="\$${TMUX##*,}"
+    fi
+    found="$(tmux display-message -p -t "$target" "#{pid} #{session_name}" 2>/dev/null || true)"
+    # Another server pid means the caller's server is gone and a new one took over its socket
+    [ "${found%% *}" = "$server_pid" ] || return 0
+    case "${found#* }" in
+        ide-*) printf "%s" "${found#* }" ;;
+    esac
+}
+
 resolve_target_session() {
     local arg="${1:-}"
     if [ -n "$arg" ]; then
@@ -321,7 +362,7 @@ resolve_target_session() {
             printf "ide-%s" "$(printf "%s" "$arg" | tr '.: ' '---' | tr -cd '[:alnum:]_-')"
         fi
     elif [ -n "${TMUX:-}" ]; then
-        tmux display-message -p "#{session_name}" 2>/dev/null || sanitize_session_name "$PWD"
+        current_ide_session
     else
         sanitize_session_name "$PWD"
     fi
@@ -332,9 +373,9 @@ get_ide_var() {
     local opt_name="$2"
     local env_name="$3"
     local val
-    val="$(tmux show-options -qv -t "$sess" "$opt_name" 2>/dev/null || true)"
+    val="$(tmux show-options -qv -t "=${sess}:" "$opt_name" 2>/dev/null || true)"
     if [ -z "$val" ]; then
-        val="$(tmux show-environment -t "$sess" "$env_name" 2>/dev/null | sed -n "s/^${env_name}=//p")"
+        val="$(tmux show-environment -t "=$sess" "$env_name" 2>/dev/null | sed -n "s/^${env_name}=//p")"
     fi
     printf "%s" "$val"
 }
@@ -344,8 +385,8 @@ set_ide_var() {
     local opt_name="$2"
     local env_name="$3"
     local val="$4"
-    tmux set-option -q -t "$sess" "$opt_name" "$val" 2>/dev/null || true
-    tmux set-environment -t "$sess" "$env_name" "$val" 2>/dev/null || true
+    tmux set-option -q -t "=${sess}:" "$opt_name" "$val" 2>/dev/null || true
+    tmux set-environment -t "=$sess" "$env_name" "$val" 2>/dev/null || true
 }
 
 pane_exists() {
@@ -366,7 +407,7 @@ resolve_role_pane() {
     local pane
     pane="$(get_ide_var "$sess" "$opt_name" "$env_name")"
     if ! pane_exists "$pane"; then
-        pane="$(tmux list-panes -s -t "$sess" -F "#{pane_id} #{@ide_role}" 2>/dev/null | awk -v r="$role" '$2 == r { print $1; exit }')"
+        pane="$(tmux list-panes -s -t "=${sess}:" -F "#{pane_id} #{@ide_role}" 2>/dev/null | awk -v r="$role" '$2 == r { print $1; exit }')"
         if [ -n "$pane" ]; then
             set_ide_var "$sess" "$opt_name" "$env_name" "$pane"
         fi
@@ -390,8 +431,8 @@ toggle_main_pane() {
     local mode="${1:-toggle}" # toggle | editor | focus-editor | ai | term
     local sess
     sess="$(resolve_target_session "$TARGET_ARG")"
-    if ! tmux has-session -t "$sess" 2>/dev/null; then
-        echo "Error: No active tmux session '$sess'." >&2
+    if ! session_exists "$sess"; then
+        echo "Error: $(missing_session_msg "$sess")" >&2
         return 1
     fi
 
@@ -407,7 +448,7 @@ toggle_main_pane() {
     ai_cli="$(get_ide_var "$sess" "@ide_ai_cli" "IDE_AI_CLI")"
     [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
     init_root="$(get_ide_var "$sess" "@ide_initial_root" "IDE_INITIAL_ROOT")"
-    tmux set-option -q -t "$sess" status-position top 2>/dev/null || true
+    tmux set-option -q -t "=${sess}:" status-position top 2>/dev/null || true
 
     if ! window_exists "$main_win"; then
         if pane_exists "$editor_pane"; then
@@ -417,7 +458,7 @@ toggle_main_pane() {
         elif pane_exists "$term_pane"; then
             main_win="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
         else
-            main_win="$(tmux list-windows -t "$sess" -F "#{window_id}" | head -n 1)"
+            main_win="$(tmux list-windows -t "=$sess" -F "#{window_id}" | head -n 1)"
         fi
         set_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN" "$main_win"
     fi
@@ -561,7 +602,11 @@ open_in_editor() {
         fi
     fi
     sess="$(resolve_target_session "$TARGET_ARG")"
-    prev_pane="$(tmux display-message -p -t "$sess" "#{pane_id}" 2>/dev/null || true)"
+    if ! session_exists "$sess"; then
+        echo "Error: $(missing_session_msg "$sess")" >&2
+        return 1
+    fi
+    prev_pane="$(tmux display-message -p -t "=${sess}:" "#{pane_id}" 2>/dev/null || true)"
     if [ "$focus" = "1" ]; then
         toggle_main_pane "focus-editor"
     fi
@@ -578,7 +623,7 @@ open_in_editor() {
 run_ai_popup() {
     local sess
     sess="$(resolve_target_session "$TARGET_ARG")"
-    tmux set-option -t "ai-${sess}" status off >/dev/null 2>&1 || true
+    tmux set-option -t "=ai-${sess}:" status off >/dev/null 2>&1 || true
     local ai_cli
     ai_cli="$(get_ide_var "$sess" "@ide_ai_cli" "IDE_AI_CLI")"
     [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
@@ -592,8 +637,9 @@ run_ai_popup() {
 quit_ide() {
     local sess sock modified mod_expr
     sess="$(resolve_target_session "$TARGET_ARG")"
-    if ! tmux has-session -t "$sess" 2>/dev/null; then
-        echo "No active IDE session named '$sess'."
+    if ! session_exists "$sess"; then
+        missing_session_msg "$sess"
+        echo
         return 0
     fi
 
@@ -604,29 +650,43 @@ quit_ide() {
         if [ "${modified:-0}" -gt 0 ] 2>/dev/null; then
             toggle_main_pane "focus-editor" || true
             nvim --headless --server "$sock" --remote-send "<C-\\><C-n>:redraw! | echohl ErrorMsg | echo \"Unsaved changes in ${modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q (:Q!) to force-quit\" | echohl None<CR>" >/dev/null 2>&1 || true
-            tmux display-message -d 4000 -t "$sess" "Unsaved changes in ${modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q to force-quit" 2>/dev/null || true
+            tmux display-message -d 4000 -t "=${sess}:" "Unsaved changes in ${modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q to force-quit" 2>/dev/null || true
             echo "Aborted quit: unsaved changes in Neovim buffer(s). Save first or use 'ide quit --force' (Alt+Shift+Q)." >&2
             return 1
         fi
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        nvim --headless --server "$sock" --remote-send "<C-\\><C-n>:qa!<CR>" >/dev/null 2>&1 || true
+        # <Cmd> runs :qall! without entering the command line, so the Editor's `:qa` -> `:Q` abbreviations
+        # never fire: `:Q` spawns its own `ide --quit`, which would outlive this session and quit another.
+        if nvim --headless --server "$sock" --remote-send "<C-\\><C-n><Cmd>qall!<CR>" >/dev/null 2>&1; then
+            # Let the Editor exit cleanly (it removes its socket) before its pane is killed, without waiting on a wedged one
+            for _ in $(seq 1 30); do
+                [ -S "$sock" ] || break
+                sleep 0.1
+            done
+        fi
     fi
 
     RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
-    rm -f "$sock" "${sock}.tree" "${RUNTIME_DIR}/nvim-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock.tree"
-    tmux kill-session -t "ai-${sess}" 2>/dev/null || true
-    tmux kill-session -t "agy-${sess}" 2>/dev/null || true
-    tmux kill-session -t "$sess" 2>/dev/null || true
+    if [ -n "$sock" ]; then
+        rm -f "$sock" "${sock}.tree"
+    fi
+    rm -f "${RUNTIME_DIR}/nvim-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock" "${RUNTIME_DIR}/nvim-ide-${sess}.sock.tree"
+    tmux kill-session -t "=ai-${sess}" 2>/dev/null || true
+    tmux kill-session -t "=agy-${sess}" 2>/dev/null || true
+    tmux kill-session -t "=$sess" 2>/dev/null || true
+    if [ "$ACTION" = "kill" ]; then
+        echo "Terminated IDE session: $sess"
+    fi
 }
 
 cd_ide_workspace() {
     local raw_target="${1:-$PWD}"
     local sess init_root cur_workdir target_dir sock term_pane term_cmd term_path escaped_dir
     sess="$(resolve_target_session "$TARGET_ARG")"
-    if ! tmux has-session -t "$sess" 2>/dev/null; then
-        echo "Error: No active IDE session '$sess'." >&2
+    if ! session_exists "$sess"; then
+        echo "Error: $(missing_session_msg "$sess")" >&2
         return 1
     fi
 
@@ -661,7 +721,7 @@ cd_ide_workspace() {
     set_ide_var "$sess" "@ide_workdir" "IDE_WORKDIR" "$target_dir"
 
     # 0. Update Tmux session default working directory for new panes/popups
-    tmux attach-session -t "$sess" -c "$target_dir" >/dev/null 2>&1 || true
+    tmux attach-session -t "=$sess" -c "$target_dir" >/dev/null 2>&1 || true
 
     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
     term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
@@ -684,7 +744,7 @@ cd_ide_workspace() {
         fi
     fi
 
-    tmux display-message -d 2500 -t "$sess" "IDE Working Directory -> $target_dir" 2>/dev/null || true
+    tmux display-message -d 2500 -t "=${sess}:" "IDE Working Directory -> $target_dir" 2>/dev/null || true
 }
 
 copy_to_system_clipboard() {
@@ -803,7 +863,7 @@ open_ide_link() {
                 line="${BASH_REMATCH[2]}"
             fi
             if [ -f "$fpath" ]; then
-                open_in_editor "$fpath" "1"
+                open_in_editor "$fpath" "1" || return 0
                 if [ -n "$line" ]; then
                     local sess sock
                     sess="$(resolve_target_session "$TARGET_ARG")"
@@ -812,7 +872,7 @@ open_ide_link() {
                 fi
                 return 0
             elif [ -d "$fpath" ]; then
-                cd_ide_workspace "$fpath"
+                cd_ide_workspace "$fpath" || true
                 return 0
             fi
         elif [[ "$href" == http://* || "$href" == https://* ]]; then
@@ -855,7 +915,7 @@ open_ide_link() {
     [[ "$clean_file" == \~/* ]] && clean_file="$HOME/${clean_file#\~/}"
     [[ "$clean_file" != /* && -n "$cwd" ]] && clean_file="$cwd/$clean_file"
     if [ -f "$clean_file" ]; then
-        open_in_editor "$clean_file" "1"
+        open_in_editor "$clean_file" "1" || return 0
         if [ -n "$file_line" ]; then
             local sess sock
             sess="$(resolve_target_session "$TARGET_ARG")"
@@ -915,7 +975,6 @@ fi
 if [ "$ACTION" = "kill" ]; then
     FORCE_QUIT="1"
     quit_ide
-    echo "Terminated IDE session: $(resolve_target_session "$TARGET_ARG")"
     exit 0
 fi
 
@@ -949,7 +1008,7 @@ if [ -n "$uid_num" ] && [ -d "/run/user/$uid_num" ]; then
     fi
 fi
 
-if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+if ! session_exists "$SESSION"; then
     # Clean up any stale socket from an abnormal exit
     rm -f "$NVIM_SOCKET" "${NVIM_SOCKET}.tree"
 
@@ -1007,7 +1066,7 @@ else
         EXISTING_AI_CLI="$(get_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI")"
         set_ide_var "$SESSION" "@ide_ai_cli" "IDE_AI_CLI" "$IDE_AI_CLI"
         if [ "$IDE_AI_CLI" != "$EXISTING_AI_CLI" ]; then
-            tmux kill-session -t "ai-${SESSION}" 2>/dev/null || true
+            tmux kill-session -t "=ai-${SESSION}" 2>/dev/null || true
             AI_PANE_ID="$(resolve_role_pane "$SESSION" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
             ED_PANE_ID="$(resolve_role_pane "$SESSION" "editor" "@ide_editor_pane" "NVIM_IDE_PANE")"
             INIT_ROOT_VAL="$(get_ide_var "$SESSION" "@ide_initial_root" "IDE_INITIAL_ROOT")"
@@ -1025,21 +1084,21 @@ fi
 
 for display_var in DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS; do
     if [ -n "${!display_var:-}" ]; then
-        tmux set-environment -t "$SESSION" "$display_var" "${!display_var}" 2>/dev/null || true
+        tmux set-environment -t "=$SESSION" "$display_var" "${!display_var}" 2>/dev/null || true
     fi
 done
 
 if [ -f "$HOME/.tmux.conf" ]; then
     tmux source-file "$HOME/.tmux.conf" >/dev/null 2>&1 || true
 fi
-tmux set-option -q -t "$SESSION" status-position top 2>/dev/null || true
+tmux set-option -q -t "=${SESSION}:" status-position top 2>/dev/null || true
 
 if [ "$DETACH_MODE" = "1" ]; then
     exit 0
 fi
 
 if [ -n "${TMUX:-}" ]; then
-    exec tmux switch-client -t "$SESSION"
+    exec tmux switch-client -t "=$SESSION"
 else
-    exec tmux attach-session -t "$SESSION"
+    exec tmux attach-session -t "=$SESSION"
 fi

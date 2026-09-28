@@ -340,7 +340,7 @@ The redesigned repository is built for frictionless extension:
 | `b <file>` / `bat` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark (`cat` remains pure coreutils) |
 | `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`; inside an `ide` session, `v [+line] <file>` opens in the main editor pane) |
 | `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |
-| `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session |
+| `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session (only that exact `ide-*` session: other tmux sessions are never touched) |
 | `icd [dir\|--reset]` | Non-destructively synchronize the active directory across IDE `Editor`, `IdeTree`, and `Shell` panes without respawning the AI Agent |
 | `ds` | Graphical proportional disk space analysis via `dust` |
 | `tldr <cmd>` | Fast, practical syntax-highlighted command cheat sheet via `tealdeer` |
