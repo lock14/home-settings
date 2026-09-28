@@ -57,6 +57,7 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'allow-passthrough on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'copy-command' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'MouseDragEnd1Pane' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
@@ -69,10 +70,15 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'client_prefix' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane_in_mode' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_role' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '_ide_park_' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind b set-option status' "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '\bbold\b' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q '_swap' "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '^[[:space:]]*bind(-key)?[[:space:]]+-n[[:space:]]+C-[hjkl]\b' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Eq '^[[:space:]]*bind(-key)?[[:space:]]+-n[[:space:]]+M-[123]\b' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'unbind -n M-1' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'unbind -n M-2' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'unbind -n M-3' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-h' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-j' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-k' "$TEMP_HOME/.tmux.conf" && \
@@ -81,15 +87,18 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-a' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-e' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-t' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-1' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-2' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-3' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-H resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-E.*--toggle-editor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-T.*--toggle-term' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-H.*--swap left' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-J.*--swap down' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-K.*--swap up' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-L.*--swap right' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-Left resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDrag1Border resize-pane -M' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, PREFIX/COPY/ZOOM badges, unbolded typography), extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt navigation, and mouse border resizing"
+    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, _ide_park_ filter, PREFIX/COPY/ZOOM badges, unbolded typography), extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, extended-keys, clipboard, 4-layer keybinding, or mouse border resize settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then

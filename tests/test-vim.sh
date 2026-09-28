@@ -81,7 +81,7 @@ echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 check_option "get(g:, 'netrw_banner', -1) == 0 && get(g:, 'netrw_liststyle', -1) == 3 && get(g:, 'netrw_browse_split', -1) == 4 && get(g:, 'netrw_winsize', -1) == 20" "Vim Netrw configured as tree sidebar (netrw_liststyle=3, browse_split=4, winsize=20)"
-check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore and <C-h/j/k/l> mapped to s:TmuxNavigate"
+check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'v') =~# 'TmuxNavigate' && maparg('<M-h>', 'i') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore and both <C-h/j/k/l> and <M-h/j/k/l> mapped to s:TmuxNavigate"
 
 # Test 5: Verify fallback Vim zero-external-dependency architecture
 echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."
@@ -104,24 +104,37 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     if grep -q 'smart_tmux_nav' "$NVIM_CONFIG" && \
+       grep -q 'internal_split_nav' "$NVIM_CONFIG" && \
        grep -q 'window_zoomed_flag' "$NVIM_CONFIG" && \
        grep -q 'netrw_liststyle = 3' "$NVIM_CONFIG" && \
        grep -q 'NVIM_IDE_LAYOUT' "$NVIM_CONFIG" && \
-       grep -q 'map("n", "<C-h>"' "$NVIM_CONFIG" && \
+       grep -q 'map("n", "<C-h>", internal_split_nav("h")' "$NVIM_CONFIG" && \
        ! grep -q 'map({ "n", "t" }, "<C-h>"' "$NVIM_CONFIG" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "v", "o" }, "<Home>", "^"' "$NVIM_CONFIG" && \
+       grep -q 'map("i", "<Home>", "<Esc>^i"' "$NVIM_CONFIG" && \
+       grep -q 'function IdeTree.action_help()' "$NVIM_CONFIG" && \
+       grep -q 'bmap("?", IdeTree.action_help' "$NVIM_CONFIG" && \
+       grep -q 'bmap("g?", IdeTree.action_help' "$NVIM_CONFIG" && \
        grep -q 'map("n", "H", "<cmd>bprevious<CR>"' "$NVIM_CONFIG" && \
        grep -q 'map("n", "L", "<cmd>bnext<CR>"' "$NVIM_CONFIG" && \
        grep -q 'move_selection_next' "$NVIM_CONFIG" && \
        grep -q 'move_selection_previous' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-a>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-H>"' "$NVIM_CONFIG" && \
        grep -q -- '--show-editor' "$NVIM_CONFIG" && \
        grep -q -- '--show-term' "$NVIM_CONFIG" && \
+       grep -q -- '--toggle-editor' "$NVIM_CONFIG" && \
+       grep -q -- '--toggle-term' "$NVIM_CONFIG" && \
+       grep -q -- '--swap' "$NVIM_CONFIG" && \
        grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
        grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
        grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures 4-layer smart_tmux_nav (C-hjkl Normal only, M-hjkl all modes, floating guard before stopinsert), H/L buffer cycling, Telescope C-j/C-k, M-e/M-t/M-a role jumps, and Mini.files navigator"
+        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, IdeTree ?/g? help, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files)"
     else
-        fail "Neovim IDE integration" "Missing expected 4-layer smart_tmux_nav, H/L buffer cycling, Telescope C-j/C-k, or Mini.files setup in init.lua"
+        fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, IdeTree help, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup in init.lua"
     fi
 
     if grep -q 'nvim_create_user_command("IdeClose"' "$NVIM_CONFIG" && \

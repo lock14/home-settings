@@ -32,10 +32,14 @@ Options:
   --open <FILE>            Open <FILE> in the Main Editor pane via RPC and focus Editor
   --preview <FILE>         Preview <FILE> in the Main Editor pane via RPC without changing focus
   cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
-  --toggle [SESSION]       Toggle focus (or zoomed view) between the Text Editor and the AI Agent
-  --show-editor [SESSION]  Focus the Text Editor pane (or toggle zoom if already focused)
-  --show-ai [SESSION]      Focus the AI Agent pane (preserving zoom if zoomed)
-  --show-term [SESSION]    Focus the Interactive Shell pane (or bounce back to Editor if already focused)
+  --toggle [SESSION]       Toggle focus between the AI Agent and the Text Editor (unparking if hidden)
+  --show-editor [SESSION]  Focus the Text Editor pane (unparking if hidden), or bounce back if already focused
+  --show-ai [SESSION]      Focus the AI Agent pane (unparking if hidden), or bounce back if already focused
+  --show-term [SESSION]    Focus the Interactive Shell pane (unparking if hidden), or bounce back if already focused
+  --toggle-editor [SESSION] Hide or reappear the Text Editor pane (Alt+Shift+E)
+  --toggle-ai [SESSION]    Hide or reappear the AI Agent pane
+  --toggle-term [SESSION]  Hide or reappear the Interactive Shell pane (Alt+Shift+T)
+  --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
   quit, -q, --quit [NAME]  Safely quit IDE session NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
@@ -67,6 +71,7 @@ AI_CLI_FROM_FLAG="0"
 TARGET_ARG=""
 OPEN_FILE=""
 CD_TARGET=""
+SWAP_DIR=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -158,6 +163,61 @@ while [ $# -gt 0 ]; do
             ;;
         --show-term)
             ACTION="show-term"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --toggle-editor)
+            ACTION="toggle-editor"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --toggle-ai)
+            ACTION="toggle-ai"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --toggle-term)
+            ACTION="toggle-term"
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+                TARGET_ARG="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --swap)
+            ACTION="swap"
+            if [ $# -lt 2 ] || [[ "$2" == -* ]]; then
+                echo "Error: '--swap' requires a direction (left, down, up, or right)." >&2
+                exit 1
+            fi
+            SWAP_DIR="$2"
+            if [ $# -gt 2 ] && [[ "$3" != -* ]]; then
+                TARGET_ARG="$3"
+                shift 3
+            else
+                shift 2
+            fi
+            ;;
+        --swap=*)
+            ACTION="swap"
+            SWAP_DIR="${1#*=}"
+            if [ -z "$SWAP_DIR" ]; then
+                echo "Error: '--swap' requires a direction (left, down, up, or right)." >&2
+                exit 1
+            fi
             if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
                 TARGET_ARG="$2"
                 shift 2
@@ -399,6 +459,55 @@ window_exists() {
     [ -n "$win" ] && [ "$(tmux display-message -p -t "$win" "#{window_id}" 2>/dev/null || true)" = "$win" ]
 }
 
+pane_in_win() {
+    local pane="${1:-}"
+    local win="${2:-}"
+    [ -n "$pane" ] && [ -n "$win" ] && [ "$(tmux display-message -p -t "$pane" "#{window_id}" 2>/dev/null || true)" = "$win" ]
+}
+
+pane_is_parked() {
+    local pane="${1:-}"
+    local win="${2:-}"
+    pane_exists "$pane" && [ -n "$win" ] && [ "$(tmux display-message -p -t "$pane" "#{window_id}" 2>/dev/null || true)" != "$win" ]
+}
+
+resolve_main_win() {
+    local sess="$1"
+    local editor_pane="${2:-}"
+    local ai_pane="${3:-}"
+    local term_pane="${4:-}"
+    local main_win wname p
+    main_win="$(get_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN")"
+    if window_exists "$main_win"; then
+        wname="$(tmux display-message -p -t "$main_win" "#{window_name}" 2>/dev/null || true)"
+        if [[ "$wname" != _ide_park_* ]]; then
+            printf "%s" "$main_win"
+            return 0
+        fi
+    fi
+    for p in "$editor_pane" "$ai_pane" "$term_pane"; do
+        if pane_exists "$p"; then
+            wname="$(tmux display-message -p -t "$p" "#{window_name}" 2>/dev/null || true)"
+            if [[ "$wname" != _ide_park_* ]]; then
+                main_win="$(tmux display-message -p -t "$p" "#{window_id}" 2>/dev/null || true)"
+                if [ -n "$main_win" ]; then
+                    set_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN" "$main_win"
+                    printf "%s" "$main_win"
+                    return 0
+                fi
+            fi
+        fi
+    done
+    main_win="$(tmux list-windows -t "=$sess" -F "#{window_id} #{window_name}" 2>/dev/null | awk '$2 !~ /^_ide_park_/ { print $1; exit }')"
+    if [ -z "$main_win" ]; then
+        main_win="$(tmux list-windows -t "=$sess" -F "#{window_id}" 2>/dev/null | head -n 1)"
+    fi
+    if [ -n "$main_win" ]; then
+        set_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN" "$main_win"
+    fi
+    printf "%s" "$main_win"
+}
+
 resolve_role_pane() {
     local sess="$1"
     local role="$2"
@@ -418,7 +527,11 @@ resolve_role_pane() {
 focus_pane_preserving_zoom() {
     local win="$1"
     local target_pane="$2"
-    local was_zoomed
+    local cur_pane was_zoomed
+    cur_pane="$(tmux display-message -p -t "$win" "#{pane_id}" 2>/dev/null || true)"
+    if [ -n "$cur_pane" ] && [ "$cur_pane" != "$target_pane" ]; then
+        tmux set-option -w -t "$win" @ide_last_pane "$cur_pane" 2>/dev/null || true
+    fi
     was_zoomed="$(tmux display-message -p -t "$win" "#{window_zoomed_flag}" 2>/dev/null || echo 0)"
     tmux select-window -t "$win" 2>/dev/null || true
     tmux select-pane -t "$target_pane"
@@ -427,8 +540,483 @@ focus_pane_preserving_zoom() {
     fi
 }
 
+clamp_dim() {
+    local val="${1:-0}"
+    local total="${2:-100}"
+    local fallback="${3:-50}"
+    local min_v=$(( total / 10 ))
+    [ "$min_v" -lt 4 ] && min_v=4
+    local max_v=$(( total - min_v ))
+    [ "$max_v" -lt "$min_v" ] && max_v="$min_v"
+    if ! [[ "$val" =~ ^[0-9]+$ ]] || [ "$val" -le 0 ]; then
+        val="$fallback"
+    fi
+    [ "$val" -lt "$min_v" ] && val="$min_v"
+    [ "$val" -gt "$max_v" ] && val="$max_v"
+    printf "%s" "$val"
+}
+
+pane_for_role() {
+    local role="$1"
+    local ai_pane="$2"
+    local editor_pane="$3"
+    local term_pane="$4"
+    case "$role" in
+        ai)     printf "%s" "$ai_pane" ;;
+        editor) printf "%s" "$editor_pane" ;;
+        term)   printf "%s" "$term_pane" ;;
+    esac
+}
+
+LAYOUT_BAR_ROLE="term"
+LAYOUT_BAR_BEFORE="0"
+LAYOUT_LEFT_ROLE="ai"
+LAYOUT_RIGHT_ROLE="editor"
+resolve_layout_roles() {
+    local sess="$1"
+    local ed_before term_before
+    ed_before="$(get_ide_var "$sess" "@ide_editor_before" "IDE_EDITOR_BEFORE")"
+    term_before="$(get_ide_var "$sess" "@ide_term_before" "IDE_TERM_BEFORE")"
+    LAYOUT_BAR_ROLE="$(get_ide_var "$sess" "@ide_bar_role" "IDE_BAR_ROLE")"
+    LAYOUT_BAR_BEFORE="$(get_ide_var "$sess" "@ide_bar_before" "IDE_BAR_BEFORE")"
+    LAYOUT_LEFT_ROLE="$(get_ide_var "$sess" "@ide_left_role" "IDE_LEFT_ROLE")"
+    LAYOUT_RIGHT_ROLE="$(get_ide_var "$sess" "@ide_right_role" "IDE_RIGHT_ROLE")"
+
+    [ -z "$LAYOUT_BAR_ROLE" ] && LAYOUT_BAR_ROLE="term"
+    [ -z "$LAYOUT_BAR_BEFORE" ] && LAYOUT_BAR_BEFORE="${term_before:-0}"
+
+    if [ -z "$LAYOUT_LEFT_ROLE" ] || [ -z "$LAYOUT_RIGHT_ROLE" ] || \
+       [ "$LAYOUT_LEFT_ROLE" = "$LAYOUT_RIGHT_ROLE" ] || \
+       [ "$LAYOUT_LEFT_ROLE" = "$LAYOUT_BAR_ROLE" ] || \
+       [ "$LAYOUT_RIGHT_ROLE" = "$LAYOUT_BAR_ROLE" ]; then
+        case "$LAYOUT_BAR_ROLE" in
+            term)
+                if [ "$ed_before" = "1" ]; then
+                    LAYOUT_LEFT_ROLE="editor"
+                    LAYOUT_RIGHT_ROLE="ai"
+                else
+                    LAYOUT_LEFT_ROLE="ai"
+                    LAYOUT_RIGHT_ROLE="editor"
+                fi
+                ;;
+            ai)
+                if [ "$ed_before" = "1" ]; then
+                    LAYOUT_LEFT_ROLE="editor"
+                    LAYOUT_RIGHT_ROLE="term"
+                else
+                    LAYOUT_LEFT_ROLE="term"
+                    LAYOUT_RIGHT_ROLE="editor"
+                fi
+                ;;
+            editor)
+                LAYOUT_LEFT_ROLE="ai"
+                LAYOUT_RIGHT_ROLE="term"
+                ;;
+        esac
+    fi
+}
+
+record_main_geometry() {
+    local sess="$1"
+    local main_win="$2"
+    local ai_pane="$3"
+    local editor_pane="$4"
+    local term_pane="$5"
+    local ai_in=0 ed_in=0 term_in=0
+    local ai_left=0 ai_top=0 ai_w=0 ai_h=0
+    local ed_left=0 ed_top=0 ed_w=0 ed_h=0
+    local term_left=0 term_top=0 term_w=0 term_h=0
+
+    if pane_in_win "$ai_pane" "$main_win"; then
+        ai_in=1
+        read -r ai_left ai_top ai_w ai_h <<< "$(tmux display-message -p -t "$ai_pane" "#{pane_left} #{pane_top} #{pane_width} #{pane_height}" 2>/dev/null || echo "0 0 0 0")"
+    fi
+    if pane_in_win "$editor_pane" "$main_win"; then
+        ed_in=1
+        read -r ed_left ed_top ed_w ed_h <<< "$(tmux display-message -p -t "$editor_pane" "#{pane_left} #{pane_top} #{pane_width} #{pane_height}" 2>/dev/null || echo "0 0 0 0")"
+    fi
+    if pane_in_win "$term_pane" "$main_win"; then
+        term_in=1
+        read -r term_left term_top term_w term_h <<< "$(tmux display-message -p -t "$term_pane" "#{pane_left} #{pane_top} #{pane_width} #{pane_height}" 2>/dev/null || echo "0 0 0 0")"
+    fi
+
+    if [ "$ai_in" = "1" ] && [ "$ed_in" = "1" ] && [ "$term_in" = "1" ]; then
+        local pair_a="" pair_b="" bar_role=""
+        local pa_left=0 pa_top=0 pa_w=0 pb_left=0 pb_w=0 bar_top=0 bar_h=0
+        if [ "${ai_top:-0}" -eq "${ed_top:-0}" ] && [ "${term_top:-0}" -ne "${ai_top:-0}" ]; then
+            pair_a="ai"; pa_left="${ai_left:-0}"; pa_top="${ai_top:-0}"; pa_w="${ai_w:-0}"
+            pair_b="editor"; pb_left="${ed_left:-0}"; pb_w="${ed_w:-0}"
+            bar_role="term"; bar_top="${term_top:-0}"; bar_h="${term_h:-0}"
+        elif [ "${ed_top:-0}" -eq "${term_top:-0}" ] && [ "${ai_top:-0}" -ne "${ed_top:-0}" ]; then
+            pair_a="editor"; pa_left="${ed_left:-0}"; pa_top="${ed_top:-0}"; pa_w="${ed_w:-0}"
+            pair_b="term"; pb_left="${term_left:-0}"; pb_w="${term_w:-0}"
+            bar_role="ai"; bar_top="${ai_top:-0}"; bar_h="${ai_h:-0}"
+        elif [ "${ai_top:-0}" -eq "${term_top:-0}" ] && [ "${ed_top:-0}" -ne "${ai_top:-0}" ]; then
+            pair_a="ai"; pa_left="${ai_left:-0}"; pa_top="${ai_top:-0}"; pa_w="${ai_w:-0}"
+            pair_b="term"; pb_left="${term_left:-0}"; pb_w="${term_w:-0}"
+            bar_role="editor"; bar_top="${ed_top:-0}"; bar_h="${ed_h:-0}"
+        fi
+
+        if [ -n "$bar_role" ]; then
+            local left_role right_role left_w right_w bar_before="0"
+            if [ "$pa_left" -le "$pb_left" ]; then
+                left_role="$pair_a"; left_w="$pa_w"
+                right_role="$pair_b"; right_w="$pb_w"
+            else
+                left_role="$pair_b"; left_w="$pb_w"
+                right_role="$pair_a"; right_w="$pa_w"
+            fi
+            [ "$bar_top" -lt "$pa_top" ] && bar_before="1"
+
+            set_ide_var "$sess" "@ide_bar_role" "IDE_BAR_ROLE" "$bar_role"
+            set_ide_var "$sess" "@ide_bar_before" "IDE_BAR_BEFORE" "$bar_before"
+            set_ide_var "$sess" "@ide_term_before" "IDE_TERM_BEFORE" "$bar_before"
+            if [ "${bar_h:-0}" -gt 0 ]; then
+                set_ide_var "$sess" "@ide_bar_height" "IDE_BAR_HEIGHT" "$bar_h"
+                set_ide_var "$sess" "@ide_term_height" "IDE_TERM_HEIGHT" "$bar_h"
+            fi
+            set_ide_var "$sess" "@ide_left_role" "IDE_LEFT_ROLE" "$left_role"
+            set_ide_var "$sess" "@ide_right_role" "IDE_RIGHT_ROLE" "$right_role"
+            [ "${left_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_left_width" "IDE_LEFT_WIDTH" "$left_w"
+            [ "${right_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_right_width" "IDE_RIGHT_WIDTH" "$right_w"
+
+            if [ "$bar_role" = "term" ]; then
+                [ "${ed_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_editor_width" "IDE_EDITOR_WIDTH" "$ed_w"
+                [ "${ai_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_ai_width" "IDE_AI_WIDTH" "$ai_w"
+            elif [ "$left_role" = "editor" ] || [ "$right_role" = "editor" ]; then
+                [ "${ed_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_editor_width" "IDE_EDITOR_WIDTH" "$ed_w"
+            elif [ "$left_role" = "ai" ] || [ "$right_role" = "ai" ]; then
+                [ "${ai_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_ai_width" "IDE_AI_WIDTH" "$ai_w"
+            fi
+
+            if [ "$left_role" = "editor" ]; then
+                set_ide_var "$sess" "@ide_editor_before" "IDE_EDITOR_BEFORE" "1"
+            else
+                set_ide_var "$sess" "@ide_editor_before" "IDE_EDITOR_BEFORE" "0"
+            fi
+            if [ "$bar_role" = "term" ] && [ "$bar_before" = "0" ] && [ "$left_role" = "ai" ]; then
+                set_ide_var "$sess" "@ide_swapped" "IDE_SWAPPED" "0"
+            else
+                set_ide_var "$sess" "@ide_swapped" "IDE_SWAPPED" "1"
+            fi
+            return 0
+        fi
+    fi
+
+    local r1="" r2="" r3="" l1=0 t1=0 w1=0 h1=0 l2=0 t2=0 w2=0 h2=0
+    if [ "$ai_in" = "1" ] && [ "$ed_in" = "1" ] && [ "$term_in" = "0" ]; then
+        r1="ai"; l1="${ai_left:-0}"; t1="${ai_top:-0}"; w1="${ai_w:-0}"; h1="${ai_h:-0}"
+        r2="editor"; l2="${ed_left:-0}"; t2="${ed_top:-0}"; w2="${ed_w:-0}"; h2="${ed_h:-0}"
+        r3="term"
+    elif [ "$ai_in" = "1" ] && [ "$term_in" = "1" ] && [ "$ed_in" = "0" ]; then
+        r1="ai"; l1="${ai_left:-0}"; t1="${ai_top:-0}"; w1="${ai_w:-0}"; h1="${ai_h:-0}"
+        r2="term"; l2="${term_left:-0}"; t2="${term_top:-0}"; w2="${term_w:-0}"; h2="${term_h:-0}"
+        r3="editor"
+    elif [ "$ed_in" = "1" ] && [ "$term_in" = "1" ] && [ "$ai_in" = "0" ]; then
+        r1="editor"; l1="${ed_left:-0}"; t1="${ed_top:-0}"; w1="${ed_w:-0}"; h1="${ed_h:-0}"
+        r2="term"; l2="${term_left:-0}"; t2="${term_top:-0}"; w2="${term_w:-0}"; h2="${term_h:-0}"
+        r3="ai"
+    fi
+
+    if [ -n "$r1" ] && [ -n "$r2" ]; then
+        if [ "$t1" -eq "$t2" ]; then
+            local left_role right_role left_w right_w
+            if [ "$l1" -le "$l2" ]; then
+                left_role="$r1"; left_w="$w1"
+                right_role="$r2"; right_w="$w2"
+            else
+                left_role="$r2"; left_w="$w2"
+                right_role="$r1"; right_w="$w1"
+            fi
+            set_ide_var "$sess" "@ide_bar_role" "IDE_BAR_ROLE" "$r3"
+            set_ide_var "$sess" "@ide_left_role" "IDE_LEFT_ROLE" "$left_role"
+            set_ide_var "$sess" "@ide_right_role" "IDE_RIGHT_ROLE" "$right_role"
+            [ "${left_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_left_width" "IDE_LEFT_WIDTH" "$left_w"
+            [ "${right_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_right_width" "IDE_RIGHT_WIDTH" "$right_w"
+            if [ "$r3" = "term" ]; then
+                [ "${ed_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_editor_width" "IDE_EDITOR_WIDTH" "$ed_w"
+                [ "${ai_w:-0}" -gt 0 ] && set_ide_var "$sess" "@ide_ai_width" "IDE_AI_WIDTH" "$ai_w"
+            fi
+            if [ "$left_role" = "editor" ]; then
+                set_ide_var "$sess" "@ide_editor_before" "IDE_EDITOR_BEFORE" "1"
+                set_ide_var "$sess" "@ide_swapped" "IDE_SWAPPED" "1"
+            else
+                set_ide_var "$sess" "@ide_editor_before" "IDE_EDITOR_BEFORE" "0"
+                [ "$r3" = "term" ] && set_ide_var "$sess" "@ide_swapped" "IDE_SWAPPED" "0"
+            fi
+        else
+            resolve_layout_roles "$sess"
+            local bar_h=0 bar_before="0"
+            if [ "$r1" = "$LAYOUT_BAR_ROLE" ]; then
+                bar_h="$h1"
+                [ "$t1" -lt "$t2" ] && bar_before="1"
+            elif [ "$r2" = "$LAYOUT_BAR_ROLE" ]; then
+                bar_h="$h2"
+                [ "$t2" -lt "$t1" ] && bar_before="1"
+            else
+                set_ide_var "$sess" "@ide_bar_role" "IDE_BAR_ROLE" "$r2"
+                bar_h="$h2"
+                [ "$t2" -lt "$t1" ] && bar_before="1"
+            fi
+            set_ide_var "$sess" "@ide_bar_before" "IDE_BAR_BEFORE" "$bar_before"
+            set_ide_var "$sess" "@ide_term_before" "IDE_TERM_BEFORE" "$bar_before"
+            if [ "${bar_h:-0}" -gt 0 ]; then
+                set_ide_var "$sess" "@ide_bar_height" "IDE_BAR_HEIGHT" "$bar_h"
+                set_ide_var "$sess" "@ide_term_height" "IDE_TERM_HEIGHT" "$bar_h"
+            fi
+        fi
+    fi
+}
+
+unpark_role_pane() {
+    local sess="$1"
+    local role="$2"
+    local main_win="$3"
+    local ai_pane="$4"
+    local editor_pane="$5"
+    local term_pane="$6"
+    local sock="${7:-}"
+    local target_pane
+    target_pane="$(pane_for_role "$role" "$ai_pane" "$editor_pane" "$term_pane")"
+    pane_is_parked "$target_pane" "$main_win" || return 0
+
+    if [ "$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}" 2>/dev/null || echo 0)" = "1" ]; then
+        tmux resize-pane -Z -t "$main_win" 2>/dev/null || true
+    fi
+
+    local win_w win_h
+    read -r win_w win_h <<< "$(tmux display-message -p -t "$main_win" "#{window_width} #{window_height}" 2>/dev/null || echo "160 48")"
+    [ "${win_w:-0}" -lt 20 ] && win_w=160
+    [ "${win_h:-0}" -lt 10 ] && win_h=48
+
+    resolve_layout_roles "$sess"
+
+    if [ "$role" = "$LAYOUT_BAR_ROLE" ]; then
+        local saved_h bar_h anchor_pane
+        saved_h="$(get_ide_var "$sess" "@ide_bar_height" "IDE_BAR_HEIGHT")"
+        [ -z "$saved_h" ] && saved_h="$(get_ide_var "$sess" "@ide_term_height" "IDE_TERM_HEIGHT")"
+        bar_h="$(clamp_dim "$saved_h" "$win_h" "$(( win_h / 4 ))")"
+        anchor_pane="$(tmux list-panes -t "$main_win" -F "#{pane_id}" 2>/dev/null | head -n 1)"
+        if [ "$LAYOUT_BAR_BEFORE" = "1" ]; then
+            tmux join-pane -d -f -b -v -l "$bar_h" -s "$target_pane" -t "$anchor_pane"
+        else
+            tmux join-pane -d -f -v -l "$bar_h" -s "$target_pane" -t "$anchor_pane"
+        fi
+    else
+        local sibling_role join_before="0" sibling_pane
+        if [ "$role" = "$LAYOUT_LEFT_ROLE" ]; then
+            sibling_role="$LAYOUT_RIGHT_ROLE"
+            join_before="1"
+        else
+            sibling_role="$LAYOUT_LEFT_ROLE"
+            join_before="0"
+        fi
+        sibling_pane="$(pane_for_role "$sibling_role" "$ai_pane" "$editor_pane" "$term_pane")"
+        if pane_in_win "$sibling_pane" "$main_win"; then
+            local saved_w target_w
+            if [ "$join_before" = "1" ]; then
+                saved_w="$(get_ide_var "$sess" "@ide_left_width" "IDE_LEFT_WIDTH")"
+            else
+                saved_w="$(get_ide_var "$sess" "@ide_right_width" "IDE_RIGHT_WIDTH")"
+            fi
+            if [ -z "$saved_w" ]; then
+                if [ "$role" = "editor" ]; then
+                    saved_w="$(get_ide_var "$sess" "@ide_editor_width" "IDE_EDITOR_WIDTH")"
+                elif [ "$role" = "ai" ]; then
+                    saved_w="$(get_ide_var "$sess" "@ide_ai_width" "IDE_AI_WIDTH")"
+                fi
+            fi
+            target_w="$(clamp_dim "$saved_w" "$win_w" "$(( win_w / 2 ))")"
+            if [ "$join_before" = "1" ]; then
+                tmux join-pane -d -b -h -l "$target_w" -s "$target_pane" -t "$sibling_pane"
+            else
+                tmux join-pane -d -h -l "$target_w" -s "$target_pane" -t "$sibling_pane"
+            fi
+        else
+            local saved_bh bar_h pair_h anchor_pane
+            saved_bh="$(get_ide_var "$sess" "@ide_bar_height" "IDE_BAR_HEIGHT")"
+            [ -z "$saved_bh" ] && saved_bh="$(get_ide_var "$sess" "@ide_term_height" "IDE_TERM_HEIGHT")"
+            bar_h="$(clamp_dim "$saved_bh" "$win_h" "$(( win_h / 4 ))")"
+            pair_h="$(clamp_dim "$(( win_h - bar_h ))" "$win_h" "$(( win_h * 3 / 4 ))")"
+            anchor_pane="$(tmux list-panes -t "$main_win" -F "#{pane_id}" 2>/dev/null | head -n 1)"
+            if [ "$LAYOUT_BAR_BEFORE" = "1" ]; then
+                tmux join-pane -d -f -v -l "$pair_h" -s "$target_pane" -t "$anchor_pane"
+            else
+                tmux join-pane -d -f -b -v -l "$pair_h" -s "$target_pane" -t "$anchor_pane"
+            fi
+        fi
+    fi
+
+    if [ "$role" = "editor" ] && [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+        nvim --headless --server "$sock" --remote-expr "execute('checktime') . execute('normal! zz')" >/dev/null 2>&1 || true
+    fi
+}
+
+heal_split_for_role() {
+    local sess="$1"
+    local role="$2"
+    local main_win="$3"
+    local ai_pane="$4"
+    local editor_pane="$5"
+    local term_pane="$6"
+    local cur_dir="$7"
+    shift 7
+    resolve_layout_roles "$sess"
+
+    if [ "$role" = "$LAYOUT_BAR_ROLE" ]; then
+        if [ "$LAYOUT_BAR_BEFORE" = "1" ]; then
+            tmux split-window -b -f -v -P -F "#{pane_id}" -t "$main_win" -l 25% -c "$cur_dir" "$@"
+        else
+            tmux split-window -f -v -P -F "#{pane_id}" -t "$main_win" -l 25% -c "$cur_dir" "$@"
+        fi
+    else
+        local sibling_role join_before="0" sibling_pane
+        if [ "$role" = "$LAYOUT_LEFT_ROLE" ]; then
+            sibling_role="$LAYOUT_RIGHT_ROLE"
+            join_before="1"
+        else
+            sibling_role="$LAYOUT_LEFT_ROLE"
+            join_before="0"
+        fi
+        sibling_pane="$(pane_for_role "$sibling_role" "$ai_pane" "$editor_pane" "$term_pane")"
+        if pane_in_win "$sibling_pane" "$main_win"; then
+            if [ "$join_before" = "1" ]; then
+                tmux split-window -b -h -P -F "#{pane_id}" -t "$sibling_pane" -l 50% -c "$cur_dir" "$@"
+            else
+                tmux split-window -h -P -F "#{pane_id}" -t "$sibling_pane" -l 50% -c "$cur_dir" "$@"
+            fi
+        else
+            if [ "$LAYOUT_BAR_BEFORE" = "1" ]; then
+                tmux split-window -f -v -P -F "#{pane_id}" -t "$main_win" -l 75% -c "$cur_dir" "$@"
+            else
+                tmux split-window -b -f -v -P -F "#{pane_id}" -t "$main_win" -l 75% -c "$cur_dir" "$@"
+            fi
+        fi
+    fi
+}
+
+park_role_pane() {
+    local sess="$1"
+    local role="$2"
+    local main_win="$3"
+    local ai_pane="$4"
+    local editor_pane="$5"
+    local term_pane="$6"
+    local sock="${7:-}"
+    local target_pane
+    target_pane="$(pane_for_role "$role" "$ai_pane" "$editor_pane" "$term_pane")"
+    pane_in_win "$target_pane" "$main_win" || return 0
+
+    local vis_cnt
+    vis_cnt="$(tmux list-panes -t "$main_win" 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "${vis_cnt:-0}" -le 1 ]; then
+        tmux display-message -d 2500 -t "=${sess}:" "Cannot hide the last visible IDE pane" 2>/dev/null || true
+        return 0
+    fi
+
+    if [ "$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}" 2>/dev/null || echo 0)" = "1" ]; then
+        tmux resize-pane -Z -t "$main_win" 2>/dev/null || true
+    fi
+
+    record_main_geometry "$sess" "$main_win" "$ai_pane" "$editor_pane" "$term_pane"
+
+    local active_pane last_pane fallback_pane=""
+    active_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
+    last_pane="$(tmux show-options -wqv -t "$main_win" @ide_last_pane 2>/dev/null || true)"
+    if [ "$active_pane" = "$target_pane" ]; then
+        if [ -n "$last_pane" ] && [ "$last_pane" != "$target_pane" ] && pane_in_win "$last_pane" "$main_win"; then
+            fallback_pane="$last_pane"
+        else
+            case "$role" in
+                term)
+                    if pane_in_win "$editor_pane" "$main_win"; then
+                        fallback_pane="$editor_pane"
+                    elif pane_in_win "$ai_pane" "$main_win"; then
+                        fallback_pane="$ai_pane"
+                    fi
+                    ;;
+                editor)
+                    if pane_in_win "$ai_pane" "$main_win"; then
+                        fallback_pane="$ai_pane"
+                    elif pane_in_win "$term_pane" "$main_win"; then
+                        fallback_pane="$term_pane"
+                    fi
+                    ;;
+                ai)
+                    if pane_in_win "$editor_pane" "$main_win"; then
+                        fallback_pane="$editor_pane"
+                    elif pane_in_win "$term_pane" "$main_win"; then
+                        fallback_pane="$term_pane"
+                    fi
+                    ;;
+            esac
+        fi
+    fi
+
+    tmux break-pane -d -s "$target_pane" -n "_ide_park_${role}" 2>/dev/null || true
+    local park_win
+    park_win="$(tmux display-message -p -t "$target_pane" "#{window_id}" 2>/dev/null || true)"
+    if [ -n "$park_win" ] && [ "$park_win" != "$main_win" ]; then
+        tmux set-option -w -t "$park_win" automatic-rename off 2>/dev/null || true
+        tmux set-option -w -t "$park_win" allow-rename off 2>/dev/null || true
+    fi
+    if [ -n "$fallback_pane" ] && pane_in_win "$fallback_pane" "$main_win"; then
+        tmux select-window -t "$main_win" 2>/dev/null || true
+        tmux select-pane -t "$fallback_pane" 2>/dev/null || true
+        if [ "$fallback_pane" = "$editor_pane" ] && [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+            nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
+swap_ide_pane() {
+    local raw_dir="${1:-}"
+    local dir_flag=""
+    case "${raw_dir,,}" in
+        left|l|-l)   dir_flag="-L" ;;
+        down|d|-d)   dir_flag="-D" ;;
+        up|u|-u)     dir_flag="-U" ;;
+        right|r|-r)  dir_flag="-R" ;;
+        *)
+            echo "Error: Invalid swap direction '$raw_dir'. Expected: left, down, up, or right." >&2
+            return 1
+            ;;
+    esac
+
+    local sess
+    sess="$(resolve_target_session "$TARGET_ARG")"
+    if ! session_exists "$sess"; then
+        echo "Error: $(missing_session_msg "$sess")" >&2
+        return 1
+    fi
+
+    local main_win editor_pane ai_pane term_pane
+    editor_pane="$(resolve_role_pane "$sess" "editor" "@ide_editor_pane" "NVIM_IDE_PANE")"
+    ai_pane="$(resolve_role_pane "$sess" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
+    term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
+    main_win="$(resolve_main_win "$sess" "$editor_pane" "$ai_pane" "$term_pane")"
+    [ -n "$main_win" ] || return 1
+
+    if [ "$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}" 2>/dev/null || echo 0)" = "1" ]; then
+        tmux resize-pane -Z -t "$main_win" 2>/dev/null || true
+    fi
+
+    local src_pane dst_pane
+    src_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
+    [ -n "$src_pane" ] || return 0
+
+    tmux select-pane -t "$src_pane" "$dir_flag" 2>/dev/null || true
+    dst_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
+
+    if [ -n "$dst_pane" ] && [ "$dst_pane" != "$src_pane" ]; then
+        tmux swap-pane -s "$src_pane" -t "$dst_pane"
+        tmux select-pane -t "$src_pane"
+        record_main_geometry "$sess" "$main_win" "$ai_pane" "$editor_pane" "$term_pane"
+    fi
+}
+
 toggle_main_pane() {
-    local mode="${1:-toggle}" # toggle | editor | focus-editor | ai | term
+    local mode="${1:-toggle}" # toggle | editor | focus-editor | ai | term | toggle-editor | toggle-ai | toggle-term
     local sess
     sess="$(resolve_target_session "$TARGET_ARG")"
     if ! session_exists "$sess"; then
@@ -437,10 +1025,10 @@ toggle_main_pane() {
     fi
 
     local main_win editor_pane ai_pane term_pane layout_mode ai_cli cur_dir init_root sock
-    main_win="$(get_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN")"
     editor_pane="$(resolve_role_pane "$sess" "editor" "@ide_editor_pane" "NVIM_IDE_PANE")"
     ai_pane="$(resolve_role_pane "$sess" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
     term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
+    main_win="$(resolve_main_win "$sess" "$editor_pane" "$ai_pane" "$term_pane")"
     layout_mode="$(get_ide_var "$sess" "@ide_layout_mode" "IDE_LAYOUT_MODE")"
     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
     [ -z "$sock" ] && sock="${XDG_RUNTIME_DIR:-/tmp}/nvim-ide-${sess}.sock"
@@ -449,19 +1037,6 @@ toggle_main_pane() {
     [ -z "$ai_cli" ] && ai_cli="${IDE_AI_CLI:-agy}"
     init_root="$(get_ide_var "$sess" "@ide_initial_root" "IDE_INITIAL_ROOT")"
     tmux set-option -q -t "=${sess}:" status-position top 2>/dev/null || true
-
-    if ! window_exists "$main_win"; then
-        if pane_exists "$editor_pane"; then
-            main_win="$(tmux display-message -p -t "$editor_pane" "#{window_id}")"
-        elif pane_exists "$ai_pane"; then
-            main_win="$(tmux display-message -p -t "$ai_pane" "#{window_id}")"
-        elif pane_exists "$term_pane"; then
-            main_win="$(tmux display-message -p -t "$term_pane" "#{window_id}")"
-        else
-            main_win="$(tmux list-windows -t "=$sess" -F "#{window_id}" | head -n 1)"
-        fi
-        set_ide_var "$sess" "@ide_main_win" "IDE_MAIN_WIN" "$main_win"
-    fi
 
     # Geometry fallback if per-pane @ide_role tags were cleared on existing panes:
     # Top-Left (left==0, top==0) is AI, Bottom-Left (left==0, top>0) is Term, Right (left>0) is Editor
@@ -491,21 +1066,19 @@ toggle_main_pane() {
     [ -z "$init_root" ] && init_root="$cur_dir"
 
     local was_zoomed_before_heal="0"
-    if ! pane_exists "$editor_pane" || ! pane_exists "$ai_pane" || { ! pane_exists "$term_pane" && { [ "${layout_mode:-3pane}" != "2pane" ] || [ "$mode" = "term" ]; }; }; then
+    local ed_just_healed="0" ai_just_healed="0" term_just_healed="0"
+    if ! pane_exists "$editor_pane" || ! pane_exists "$ai_pane" || { ! pane_exists "$term_pane" && { [ "${layout_mode:-3pane}" != "2pane" ] || [ "$mode" = "term" ] || [ "$mode" = "toggle-term" ]; }; }; then
         was_zoomed_before_heal="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}" 2>/dev/null || echo 0)"
         if [ "$was_zoomed_before_heal" = "1" ]; then
             tmux resize-pane -Z -t "$main_win"
         fi
     fi
 
-    # Self-heal Top-Right 50%x75% Editor pane if closed
+    # Self-heal Editor pane if closed
     if ! pane_exists "$editor_pane"; then
-        if pane_exists "$ai_pane"; then
-            editor_pane="$(tmux split-window -h -P -F "#{pane_id}" -t "$ai_pane" -l 50% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
-        else
-            editor_pane="$(tmux split-window -b -v -P -F "#{pane_id}" -t "$main_win" -l 75% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
-        fi
+        editor_pane="$(heal_split_for_role "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "IDE_INITIAL_ROOT=$init_root")"
         if [ -n "$editor_pane" ]; then
+            ed_just_healed="1"
             tmux set-option -p -t "$editor_pane" @ide_role "editor" 2>/dev/null || true
             set_ide_var "$sess" "@ide_editor_pane" "NVIM_IDE_PANE" "$editor_pane"
             if command -v nvim >/dev/null 2>&1; then
@@ -516,14 +1089,11 @@ toggle_main_pane() {
         fi
     fi
 
-    # Self-heal Top-Left 50%x75% AI Agent pane if closed
+    # Self-heal AI Agent pane if closed
     if ! pane_exists "$ai_pane"; then
-        if pane_exists "$editor_pane"; then
-            ai_pane="$(tmux split-window -b -h -P -F "#{pane_id}" -t "$editor_pane" -l 50% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
-        elif pane_exists "$term_pane"; then
-            ai_pane="$(tmux split-window -b -v -P -F "#{pane_id}" -t "$term_pane" -l 75% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
-        fi
+        ai_pane="$(heal_split_for_role "$sess" "ai" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
         if [ -n "$ai_pane" ]; then
+            ai_just_healed="1"
             tmux set-option -p -t "$ai_pane" @ide_role "ai" 2>/dev/null || true
             set_ide_var "$sess" "@ide_ai_pane" "IDE_AI_PANE" "$ai_pane"
             local ai_run_cmd
@@ -533,9 +1103,10 @@ toggle_main_pane() {
         fi
     fi
 
-    # Self-heal Bottom 100%x25% Full-Width Shell pane if closed (in 3pane mode or when explicitly jumping to term)
-    if ! pane_exists "$term_pane" && { [ "${layout_mode:-3pane}" != "2pane" ] || [ "$mode" = "term" ]; }; then
-        term_pane="$(tmux split-window -f -v -P -F "#{pane_id}" -t "$main_win" -l 25% -c "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
+    # Self-heal Shell pane if closed (in 3pane mode or when explicitly jumping to/toggling term)
+    if ! pane_exists "$term_pane" && { [ "${layout_mode:-3pane}" != "2pane" ] || [ "$mode" = "term" ] || [ "$mode" = "toggle-term" ]; }; then
+        term_pane="$(heal_split_for_role "$sess" "term" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$cur_dir" -e "IDE_SESSION=$sess" -e "IDE_AI_CLI=$ai_cli" -e "NVIM_IDE_SOCKET=$sock" -e "NVIM_IDE_PANE=$editor_pane" -e "IDE_INITIAL_ROOT=$init_root")"
+        term_just_healed="1"
         tmux set-option -p -t "$term_pane" @ide_role "term" 2>/dev/null || true
         set_ide_var "$sess" "@ide_term_pane" "IDE_TERM_PANE" "$term_pane"
     fi
@@ -544,25 +1115,47 @@ toggle_main_pane() {
         tmux resize-pane -Z -t "$main_win"
     fi
 
-    local active_pane active_role
+    local active_pane active_role last_pane
     active_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
     active_role="$(tmux show-options -pqv -t "$active_pane" @ide_role 2>/dev/null || true)"
+    last_pane="$(tmux show-options -wqv -t "$main_win" @ide_last_pane 2>/dev/null || true)"
 
     case "$mode" in
-        toggle)
+        toggle|ai)
             if [ "$active_pane" = "$ai_pane" ] || [ "$active_role" = "ai" ]; then
-                if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-                    nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+                if pane_is_parked "$editor_pane" "$main_win" && ! pane_in_win "$term_pane" "$main_win"; then
+                    unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
                 fi
-                focus_pane_preserving_zoom "$main_win" "$editor_pane"
+                if pane_in_win "$editor_pane" "$main_win"; then
+                    if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+                        nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+                    fi
+                    focus_pane_preserving_zoom "$main_win" "$editor_pane"
+                elif pane_in_win "$term_pane" "$main_win"; then
+                    focus_pane_preserving_zoom "$main_win" "$term_pane"
+                else
+                    unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+                    focus_pane_preserving_zoom "$main_win" "$editor_pane"
+                fi
             else
+                unpark_role_pane "$sess" "ai" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
                 focus_pane_preserving_zoom "$main_win" "$ai_pane"
             fi
             ;;
         editor)
             if [ "$active_pane" = "$editor_pane" ] || [ "$active_role" = "editor" ]; then
-                tmux resize-pane -Z -t "$editor_pane"
+                if [ -n "$last_pane" ] && [ "$last_pane" != "$editor_pane" ] && pane_in_win "$last_pane" "$main_win"; then
+                    focus_pane_preserving_zoom "$main_win" "$last_pane"
+                elif pane_in_win "$ai_pane" "$main_win"; then
+                    focus_pane_preserving_zoom "$main_win" "$ai_pane"
+                elif pane_in_win "$term_pane" "$main_win"; then
+                    focus_pane_preserving_zoom "$main_win" "$term_pane"
+                else
+                    unpark_role_pane "$sess" "ai" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+                    focus_pane_preserving_zoom "$main_win" "$ai_pane"
+                fi
             else
+                unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
                 if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
                     nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
                 fi
@@ -570,19 +1163,57 @@ toggle_main_pane() {
             fi
             ;;
         focus-editor)
+            unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
             if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
                 nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
             fi
             focus_pane_preserving_zoom "$main_win" "$editor_pane"
             ;;
-        ai)
-            focus_pane_preserving_zoom "$main_win" "$ai_pane"
-            ;;
         term)
             if [ "$active_pane" = "$term_pane" ] || [ "$active_role" = "term" ]; then
+                if [ -n "$last_pane" ] && [ "$last_pane" != "$term_pane" ] && pane_in_win "$last_pane" "$main_win"; then
+                    if [ "$last_pane" = "$editor_pane" ] && [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+                        nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+                    fi
+                    focus_pane_preserving_zoom "$main_win" "$last_pane"
+                elif pane_in_win "$editor_pane" "$main_win"; then
+                    if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
+                        nvim --headless --server "$sock" --remote-expr "execute('checktime')" >/dev/null 2>&1 || true
+                    fi
+                    focus_pane_preserving_zoom "$main_win" "$editor_pane"
+                elif pane_in_win "$ai_pane" "$main_win"; then
+                    focus_pane_preserving_zoom "$main_win" "$ai_pane"
+                else
+                    unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+                    focus_pane_preserving_zoom "$main_win" "$editor_pane"
+                fi
+            else
+                unpark_role_pane "$sess" "term" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+                focus_pane_preserving_zoom "$main_win" "$term_pane"
+            fi
+            ;;
+        toggle-editor)
+            if [ "$ed_just_healed" = "1" ] || pane_is_parked "$editor_pane" "$main_win"; then
+                unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
                 focus_pane_preserving_zoom "$main_win" "$editor_pane"
             else
+                park_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+            fi
+            ;;
+        toggle-ai)
+            if [ "$ai_just_healed" = "1" ] || pane_is_parked "$ai_pane" "$main_win"; then
+                unpark_role_pane "$sess" "ai" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+                focus_pane_preserving_zoom "$main_win" "$ai_pane"
+            else
+                park_role_pane "$sess" "ai" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+            fi
+            ;;
+        toggle-term)
+            if [ "$term_just_healed" = "1" ] || pane_is_parked "$term_pane" "$main_win"; then
+                unpark_role_pane "$sess" "term" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
                 focus_pane_preserving_zoom "$main_win" "$term_pane"
+            else
+                park_role_pane "$sess" "term" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
             fi
             ;;
     esac
@@ -607,8 +1238,20 @@ open_in_editor() {
         return 1
     fi
     prev_pane="$(tmux display-message -p -t "=${sess}:" "#{pane_id}" 2>/dev/null || true)"
+    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
     if [ "$focus" = "1" ]; then
         toggle_main_pane "focus-editor"
+    else
+        local main_win editor_pane ai_pane term_pane
+        editor_pane="$(resolve_role_pane "$sess" "editor" "@ide_editor_pane" "NVIM_IDE_PANE")"
+        ai_pane="$(resolve_role_pane "$sess" "ai" "@ide_ai_pane" "IDE_AI_PANE")"
+        term_pane="$(resolve_role_pane "$sess" "term" "@ide_term_pane" "IDE_TERM_PANE")"
+        main_win="$(resolve_main_win "$sess" "$editor_pane" "$ai_pane" "$term_pane")"
+        if pane_is_parked "$editor_pane" "$main_win"; then
+            unpark_role_pane "$sess" "editor" "$main_win" "$ai_pane" "$editor_pane" "$term_pane" "$sock"
+        elif ! pane_exists "$editor_pane"; then
+            toggle_main_pane "focus-editor"
+        fi
     fi
     sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
@@ -843,6 +1486,150 @@ resolve_private_link() {
     )
 }
 
+PARSE_PATH=""
+PARSE_LINE=""
+parse_file_target() {
+    local raw="$1"
+    PARSE_PATH=""
+    PARSE_LINE=""
+    if [[ "$raw" == file://* ]]; then
+        raw="${raw#file://}"
+        raw="${raw#localhost}"
+    fi
+    if [ ! -e "$raw" ] && [[ "$raw" == *%[0-9A-Fa-f][0-9A-Fa-f]* ]]; then
+        raw="$(printf '%b' "${raw//%/\\x}")"
+    fi
+    if [[ "$raw" =~ ^(.+)#L?([0-9]+)([-:][Ll]?[0-9]+)?$ ]]; then
+        raw="${BASH_REMATCH[1]}"
+        PARSE_LINE="${BASH_REMATCH[2]}"
+    elif [ ! -e "$raw" ] && [[ "$raw" =~ ^([^:]+):([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$ ]]; then
+        raw="${BASH_REMATCH[1]}"
+        PARSE_LINE="${BASH_REMATCH[2]}"
+    fi
+    if [ ! -e "$raw" ] && [[ "$raw" == *%[0-9A-Fa-f][0-9A-Fa-f]* ]]; then
+        raw="$(printf '%b' "${raw//%/\\x}")"
+    fi
+    PARSE_PATH="$raw"
+}
+
+resolve_workspace_file() {
+    local cand="$1"
+    local cwd="${2:-$PWD}"
+    [ -z "$cand" ] && return 1
+    [[ "$cand" == \~/* ]] && cand="$HOME/${cand#\~/}"
+    if [[ "$cand" == /* ]]; then
+        if [ -f "$cand" ] || [ -d "$cand" ]; then
+            printf "%s" "$cand"
+            return 0
+        fi
+        return 1
+    fi
+
+    local sess workdir="" init_root=""
+    sess="$(resolve_target_session "$TARGET_ARG" 2>/dev/null || true)"
+    if session_exists "$sess"; then
+        workdir="$(get_ide_var "$sess" "@ide_workdir" "IDE_WORKDIR")"
+        init_root="$(get_ide_var "$sess" "@ide_initial_root" "IDE_INITIAL_ROOT")"
+    fi
+
+    local base_dir
+    for base_dir in "$cwd" "$workdir" "$init_root"; do
+        if [ -n "$base_dir" ] && { [ -f "$base_dir/$cand" ] || [ -d "$base_dir/$cand" ]; }; then
+            printf "%s" "$base_dir/$cand"
+            return 0
+        fi
+    done
+
+    # Basename / partial-path fallback via git ls-files when an AI link renders only `[init.lua:191-194]`
+    if command -v git >/dev/null 2>&1; then
+        local git_root rel
+        for base_dir in "$cwd" "$workdir" "$init_root"; do
+            [ -n "$base_dir" ] && [ -d "$base_dir" ] || continue
+            git_root="$(git -C "$base_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+            [ -n "$git_root" ] || continue
+            if [ -f "$git_root/$cand" ] || [ -d "$git_root/$cand" ]; then
+                printf "%s" "$git_root/$cand"
+                return 0
+            fi
+            if [[ "$cand" == */* ]] && { [ -f "$git_root/${cand#*/}" ] || [ -d "$git_root/${cand#*/}" ]; }; then
+                printf "%s" "$git_root/${cand#*/}"
+                return 0
+            fi
+            local -a matches=()
+            while IFS= read -r rel; do
+                [ -n "$rel" ] && [ -f "$git_root/$rel" ] && matches+=("$git_root/$rel")
+            done < <(git -C "$git_root" ls-files --cached --others --exclude-standard 2>/dev/null | awk -v t="$cand" '$0 == t || index($0, "/" t) == length($0) - length(t) + 1 { print }')
+            if [ "${#matches[@]}" -eq 1 ]; then
+                printf "%s" "${matches[0]}"
+                return 0
+            fi
+            break
+        done
+    fi
+
+    # Non-git workspace fallback (e.g. Mercurial or plain directory): check non-hidden subdirectories up to 3 levels deep
+    for base_dir in "$init_root" "$workdir" "$cwd"; do
+        [ -n "$base_dir" ] && [ -d "$base_dir" ] || continue
+        local -a glob_matches=()
+        local m
+        for m in "$base_dir"/*/"$cand" "$base_dir"/*/*/"$cand" "$base_dir"/*/*/*/"$cand"; do
+            [ -f "$m" ] && glob_matches+=("$m")
+        done
+        if [ "${#glob_matches[@]}" -eq 1 ]; then
+            printf "%s" "${glob_matches[0]}"
+            return 0
+        fi
+        break
+    done
+
+    # Fallback to AI artifact directories (`~/.gemini/*/brain/*/<cand>` and `~/.claude/plans/<cand>`) for bare plan filenames
+    if [[ "$cand" != */* ]]; then
+        local artifact
+        for artifact in "$HOME"/.gemini/*/brain/*/"$cand" "${IDE_CLAUDE_DIR:-$HOME/.claude}/plans/$cand"; do
+            if [ -f "$artifact" ]; then
+                printf "%s" "$artifact"
+                return 0
+            fi
+        done
+    fi
+    return 1
+}
+
+open_file_or_dir_target() {
+    local fpath="$1"
+    local line="${2:-}"
+    if [ -f "$fpath" ]; then
+        open_in_editor "$fpath" "1" || return 0
+        if [ -n "$line" ]; then
+            local sess sock
+            sess="$(resolve_target_session "$TARGET_ARG")"
+            sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
+            [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && \
+                nvim --headless --server "$sock" --remote-expr "execute('$line') . execute('normal! zz')" >/dev/null 2>&1 || true
+        fi
+        return 0
+    elif [ -d "$fpath" ]; then
+        cd_ide_workspace "$fpath" || true
+        return 0
+    fi
+    return 1
+}
+
+resolve_and_open_target() {
+    local raw_target="$1"
+    local cwd="$2"
+    parse_file_target "$raw_target"
+    [ -n "$PARSE_PATH" ] || return 1
+    if open_file_or_dir_target "$PARSE_PATH" "$PARSE_LINE"; then
+        return 0
+    fi
+    local resolved=""
+    if resolved="$(resolve_workspace_file "$PARSE_PATH" "$cwd")" && [ -n "$resolved" ]; then
+        open_file_or_dir_target "$resolved" "$PARSE_LINE" && return 0
+    fi
+    return 1
+}
+
 open_ide_link() {
     local href="${1:-}"
     local word="${2:-}"
@@ -851,28 +1638,7 @@ open_ide_link() {
     # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`) from the prompt or an AI CLI (`file://...`, `https://...`)
     if [ -n "$href" ]; then
         if [[ "$href" == file://* ]]; then
-            local fpath="${href#file://}"
-            fpath="${fpath#localhost}"
-            local line=""
-            if [[ "$fpath" == *#L* ]]; then
-                line="${fpath##*#L}"
-                line="${line%%[^0-9]*}"
-                fpath="${fpath%%#*}"
-            elif [ ! -e "$fpath" ] && [[ "$fpath" =~ ^([^:]+):([0-9]+)(:[0-9]+)?$ ]]; then
-                fpath="${BASH_REMATCH[1]}"
-                line="${BASH_REMATCH[2]}"
-            fi
-            if [ -f "$fpath" ]; then
-                open_in_editor "$fpath" "1" || return 0
-                if [ -n "$line" ]; then
-                    local sess sock
-                    sess="$(resolve_target_session "$TARGET_ARG")"
-                    sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
-                    [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$line') . execute('normal! zz')" >/dev/null 2>&1 || true
-                fi
-                return 0
-            elif [ -d "$fpath" ]; then
-                cd_ide_workspace "$fpath" || true
+            if resolve_and_open_target "$href" "$cwd"; then
                 return 0
             fi
         elif [[ "$href" == http://* || "$href" == https://* ]]; then
@@ -881,9 +1647,39 @@ open_ide_link() {
         fi
     fi
 
-    # 2. Fallback to clicked word (`#{mouse_word}`) when clicking plain text or prompt tokens
+    # 2. Fallback to clicked word (`#{mouse_word}`) when clicking plain text, markdown `[label](file://...)`, or prompt tokens
     word="${word#"${word%%[![:space:]]*}"}"
     word="${word%"${word##*[![:space:]]}"}"
+    [ -z "$word" ] && return 0
+
+    local bracket_label=""
+    local md_label_re='\[([^]]+)\]\('
+    if [[ "$word" =~ $md_label_re ]]; then
+        bracket_label="${BASH_REMATCH[1]}"
+        while [[ "$bracket_label" == [\(\[\{\<\"\'\`]* ]]; do
+            bracket_label="${bracket_label#?}"
+        done
+        while [[ "$bracket_label" == *[\)\]\}\>\"\'\`,\;.:] ]]; do
+            bracket_label="${bracket_label%?}"
+        done
+    fi
+
+    local file_url_re='(file://[^])>"'\''`[:space:]]+)'
+    if [[ "$word" =~ $file_url_re ]]; then
+        local embedded_href="${BASH_REMATCH[1]}"
+        while [[ "$embedded_href" == *[,\;.] ]] && [ ! -e "${embedded_href#file://}" ]; do
+            embedded_href="${embedded_href%?}"
+        done
+        if resolve_and_open_target "$embedded_href" "$cwd"; then
+            return 0
+        fi
+    fi
+
+    local md_link_re='\[[^]]*\]\(([^)[:space:]]+)\)'
+    if [[ "$word" =~ $md_link_re ]]; then
+        word="${BASH_REMATCH[1]}"
+    fi
+
     # Strip surrounding punctuation/brackets/quotes and trailing colons (e.g. file.rs:42:13:, (file.rs:42:13):)
     while [[ "$word" == [\(\[\{\<\"\'\`]* ]]; do
         word="${word#?}"
@@ -905,24 +1701,16 @@ open_ide_link() {
         return $?
     fi
 
-    # Check if word is a local file path (optionally with :line:col)
-    local clean_file="$word"
-    local file_line=""
-    if [[ "$clean_file" =~ ^([^:]+):([0-9]+)(:[0-9]+)?$ ]]; then
-        clean_file="${BASH_REMATCH[1]}"
-        file_line="${BASH_REMATCH[2]}"
-    fi
-    [[ "$clean_file" == \~/* ]] && clean_file="$HOME/${clean_file#\~/}"
-    [[ "$clean_file" != /* && -n "$cwd" ]] && clean_file="$cwd/$clean_file"
-    if [ -f "$clean_file" ]; then
-        open_in_editor "$clean_file" "1" || return 0
-        if [ -n "$file_line" ]; then
-            local sess sock
-            sess="$(resolve_target_session "$TARGET_ARG")"
-            sock="$(get_ide_var "$sess" "@ide_socket" "NVIM_IDE_SOCKET")"
-            [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1 && nvim --headless --server "$sock" --remote-expr "execute('$file_line') . execute('normal! zz')" >/dev/null 2>&1 || true
-        fi
+    # Check if word is a local file path (optionally with #L<line>, :line:col, or :start-end ranges)
+    if resolve_and_open_target "$word" "$cwd"; then
         return 0
+    fi
+
+    # If a markdown link wrapped across terminal lines (truncating the URL), fall back to its `[label]`
+    if [ -n "$bracket_label" ] && [ "$bracket_label" != "$word" ]; then
+        if resolve_and_open_target "$bracket_label" "$cwd"; then
+            return 0
+        fi
     fi
 }
 
@@ -959,6 +1747,18 @@ elif [ "$ACTION" = "show-ai" ]; then
 elif [ "$ACTION" = "show-term" ]; then
     toggle_main_pane "term"
     exit 0
+elif [ "$ACTION" = "toggle-editor" ]; then
+    toggle_main_pane "toggle-editor"
+    exit 0
+elif [ "$ACTION" = "toggle-ai" ]; then
+    toggle_main_pane "toggle-ai"
+    exit 0
+elif [ "$ACTION" = "toggle-term" ]; then
+    toggle_main_pane "toggle-term"
+    exit 0
+elif [ "$ACTION" = "swap" ]; then
+    swap_ide_pane "$SWAP_DIR"
+    exit $?
 elif [ "$ACTION" = "run-ai-popup" ]; then
     run_ai_popup
     exit 0

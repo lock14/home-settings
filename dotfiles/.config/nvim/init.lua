@@ -161,8 +161,24 @@ map("n", "<leader>h", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" }
 -- Fast Save
 map("n", "<leader>w", "<cmd>w<CR>", { desc = "Save file" })
 
--- Seamless Window & 4-Layer Spatial Tmux Navigation (Ctrl + hjkl in Normal, Alt + hjkl in all modes)
--- Guarded against floating modals (Telescope/LSP/MiniFiles) BEFORE stopinsert() and zoomed tmux panes.
+-- Smart Home: jump to first non-blank character of line (matching .vimrc)
+map({ "n", "v", "o" }, "<Home>", "^", { desc = "Move to first non-blank character of line" })
+map("i", "<Home>", "<Esc>^i", { desc = "Move to first non-blank character of line" })
+
+-- Layer 1 (Ctrl + hjkl in Normal mode): internal Neovim split navigation only (guarded against floating modals)
+local function internal_split_nav(dir)
+    return function()
+        local cur_win = vim.api.nvim_get_current_win()
+        local win_cfg = vim.api.nvim_win_get_config(cur_win)
+        if win_cfg.relative and win_cfg.relative ~= "" then
+            return
+        end
+        vim.cmd("wincmd " .. dir)
+    end
+end
+
+-- Layer 2a (Alt + hjkl in all modes): seamless 2D spatial navigation across Neovim splits and Tmux panes
+-- Guarded against floating modals (Telescope/LSP/MiniFiles) BEFORE mode exit and zoomed tmux panes.
 local function smart_tmux_nav(dir, tmux_dir)
     return function()
         local cur_win = vim.api.nvim_get_current_win()
@@ -173,6 +189,8 @@ local function smart_tmux_nav(dir, tmux_dir)
         local mode = vim.api.nvim_get_mode().mode
         if mode == "t" or mode == "i" then
             vim.cmd("stopinsert")
+        elseif mode == "v" or mode == "V" or mode == "\22" then
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
         end
         vim.cmd("wincmd " .. dir)
         if vim.api.nvim_get_current_win() == cur_win and vim.env.TMUX then
@@ -188,10 +206,10 @@ local function smart_tmux_nav(dir, tmux_dir)
     end
 end
 
-map("n", "<C-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
-map("n", "<C-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
-map("n", "<C-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
-map("n", "<C-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
+map("n", "<C-h>", internal_split_nav("h"), { desc = "Move to left split" })
+map("n", "<C-j>", internal_split_nav("j"), { desc = "Move to lower split" })
+map("n", "<C-k>", internal_split_nav("k"), { desc = "Move to upper split" })
+map("n", "<C-l>", internal_split_nav("l"), { desc = "Move to right split" })
 
 map({ "n", "i", "v", "t" }, "<M-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
 map({ "n", "i", "v", "t" }, "<M-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
@@ -786,6 +804,21 @@ function IdeTree.attach_mappings(buf)
     bmap("a", IdeTree.action_create, "Create file or directory")
     bmap("r", IdeTree.action_rename, "Rename file or directory")
     bmap("d", IdeTree.action_delete, "Delete file or directory")
+    bmap("?", IdeTree.action_help, "Show SolarizedIdeTree keybindings")
+    bmap("g?", IdeTree.action_help, "Show SolarizedIdeTree keybindings")
+end
+
+function IdeTree.action_help()
+    local msg = table.concat({
+        "SolarizedIdeTree Keys:",
+        "  Enter / o / l  Open file or expand dir    | h / - / Left  Collapse dir",
+        "  Tab / p        Preview file in Editor     | > / C         Dive root into dir",
+        "  < / BS         Dive up to parent (..)     | ~ / =         Reset to initial root",
+        "  D              Prompt path to dive        | . / H         Cycle dotfile filter",
+        "  a / r / d      Create / Rename / Delete   | E / W / R     Expand / Collapse / Refresh",
+        "  Space+e / :q   Close tree sidebar",
+    }, "\n")
+    vim.api.nvim_echo({ { msg, "MoreMsg" } }, false, {})
 end
 
 function IdeTree.open_in_current_win()
@@ -1711,27 +1744,57 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     end,
 })
 
--- Workspace Role Jump & Toggle Keybindings (Editor <-> AI Agent <-> Shell)
+-- Workspace Role Jump, Visibility Toggle & Directional Swap Keybindings (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
     if vim.env.TMUX then
         ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
-map({ "n", "i", "t" }, "<M-a>", function()
+map({ "n", "i", "v", "t" }, "<M-a>", function()
     if vim.env.TMUX then
         ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
-map({ "n", "i", "t" }, "<M-e>", function()
+map({ "n", "i", "v", "t" }, "<M-e>", function()
     if vim.env.TMUX then
         ide_job("--show-editor")
     end
-end, { desc = "Focus/Zoom Editor Pane" })
-map({ "n", "i", "t" }, "<M-t>", function()
+end, { desc = "Focus Editor Pane (or bounce back)" })
+map({ "n", "i", "v", "t" }, "<M-t>", function()
     if vim.env.TMUX then
         ide_job("--show-term")
     end
 end, { desc = "Toggle Focus: Shell <-> Editor Pane" })
+map({ "n", "i", "v", "t" }, "<M-E>", function()
+    if vim.env.TMUX then
+        ide_job("--toggle-editor")
+    end
+end, { desc = "Toggle Editor Pane Visibility" })
+map({ "n", "i", "v", "t" }, "<M-T>", function()
+    if vim.env.TMUX then
+        ide_job("--toggle-term")
+    end
+end, { desc = "Toggle Shell Pane Visibility" })
+map({ "n", "i", "v", "t" }, "<M-H>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "left")
+    end
+end, { desc = "Swap Active Pane Left" })
+map({ "n", "i", "v", "t" }, "<M-J>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "down")
+    end
+end, { desc = "Swap Active Pane Down" })
+map({ "n", "i", "v", "t" }, "<M-K>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "up")
+    end
+end, { desc = "Swap Active Pane Up" })
+map({ "n", "i", "v", "t" }, "<M-L>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "right")
+    end
+end, { desc = "Swap Active Pane Right" })
 
 -- One-Command Quit Everything (:Q, :Quit, :qa, :wqa, Space+q, Alt+q, qide)
 -- While keeping `:q` and `:wq` scoped strictly to closing the active buffer/split in the Editor pane.

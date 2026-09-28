@@ -168,4 +168,22 @@ nnoremap <silent> <C-h> :call <SID>TmuxNavigate('h', 'L')<CR>
 nnoremap <silent> <C-j> :call <SID>TmuxNavigate('j', 'D')<CR>
 nnoremap <silent> <C-k> :call <SID>TmuxNavigate('k', 'U')<CR>
 nnoremap <silent> <C-l> :call <SID>TmuxNavigate('l', 'R')<CR>
+if !has('nvim')
+    silent! execute "set <M-h>=\<Esc>h"
+    silent! execute "set <M-j>=\<Esc>j"
+    silent! execute "set <M-k>=\<Esc>k"
+    silent! execute "set <M-l>=\<Esc>l"
+endif
+nnoremap <silent> <M-h> :call <SID>TmuxNavigate('h', 'L')<CR>
+nnoremap <silent> <M-j> :call <SID>TmuxNavigate('j', 'D')<CR>
+nnoremap <silent> <M-k> :call <SID>TmuxNavigate('k', 'U')<CR>
+nnoremap <silent> <M-l> :call <SID>TmuxNavigate('l', 'R')<CR>
+vnoremap <silent> <M-h> :<C-u>call <SID>TmuxNavigate('h', 'L')<CR>
+vnoremap <silent> <M-j> :<C-u>call <SID>TmuxNavigate('j', 'D')<CR>
+vnoremap <silent> <M-k> :<C-u>call <SID>TmuxNavigate('k', 'U')<CR>
+vnoremap <silent> <M-l> :<C-u>call <SID>TmuxNavigate('l', 'R')<CR>
+inoremap <silent> <M-h> <Esc>:call <SID>TmuxNavigate('h', 'L')<CR>
+inoremap <silent> <M-j> <Esc>:call <SID>TmuxNavigate('j', 'D')<CR>
+inoremap <silent> <M-k> <Esc>:call <SID>TmuxNavigate('k', 'U')<CR>
+inoremap <silent> <M-l> <Esc>:call <SID>TmuxNavigate('l', 'R')<CR>
 

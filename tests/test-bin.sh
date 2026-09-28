@@ -112,16 +112,28 @@ assert_eq "$SUM_COMMA_FILE_OUT" "40" "bin/sum reads files whose paths contain co
 
 # Test 6: bin/ide CLI validation & headless tmux session orchestration
 echo -e "\n[6/6] Testing bin/ide workspace launcher..."
-if "$SCRIPT_DIR/bin/ide" --help | grep -q -- '--3pane' && "$SCRIPT_DIR/bin/ide" --help | grep -q -- '--kill'; then
-    pass "bin/ide --help displays usage for 2-pane, --3pane, --kill, and --list"
+IDE_HELP="$("$SCRIPT_DIR/bin/ide" --help)"
+if grep -q -- '--3pane' <<< "$IDE_HELP" && \
+   grep -q -- '--kill' <<< "$IDE_HELP" && \
+   grep -q -- '--toggle-editor' <<< "$IDE_HELP" && \
+   grep -q -- '--toggle-term' <<< "$IDE_HELP" && \
+   grep -q -- '--toggle-ai' <<< "$IDE_HELP" && \
+   grep -q -- '--swap' <<< "$IDE_HELP"; then
+    pass "bin/ide --help displays usage for 2-pane, --3pane, --toggle-editor/term/ai, --swap, --kill, and --list"
 else
-    fail "bin/ide --help" "Expected --3pane and --kill in bin/ide --help output"
+    fail "bin/ide --help" "Expected --3pane, --toggle-editor/term/ai, --swap, and --kill in bin/ide --help output"
 fi
 
 if "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1; then
     fail "bin/ide invalid flag" "Expected non-zero exit status on unknown flag"
 else
     pass "bin/ide rejects unknown CLI flags"
+fi
+
+if "$SCRIPT_DIR/bin/ide" --swap diagonal >/dev/null 2>&1; then
+    fail "bin/ide invalid --swap direction" "Expected non-zero exit status on invalid --swap direction"
+else
+    pass "bin/ide rejects invalid --swap directions (enforces left, right, up, down)"
 fi
 
 if "$SCRIPT_DIR/bin/ide" "$TEMP_HOME/does-not-exist-dir" >/dev/null 2>&1; then
@@ -222,7 +234,7 @@ if command -v tmux >/dev/null 2>&1; then
         # Simulate outer client attach-session clearing session env vars
         tmux set-environment -t "ide-ws_3pane_test" -r NVIM_IDE_PANE
 
-        # Test focus toggles (--toggle, --show-term, --show-editor) and zoom preservation
+        # Test focus toggles (--toggle, --show-term, --show-editor), bounce-back, and zoom preservation
         # Initial focus is AI ($ai_pane), so first --toggle switches to Editor ($ed_pane), and second returns to AI ($ai_pane)
         "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
         active_after_t1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
@@ -236,33 +248,115 @@ if command -v tmux >/dev/null 2>&1; then
         "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
         active_after_term2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
 
-        # Now in Editor ($ed_pane): calling --show-editor when already in Editor toggles zoom ON
+        # From AI ($ai_pane): first --show-editor focuses Editor ($ed_pane), second bounces back to AI ($ai_pane) without zooming
         "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        active_after_ed1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        active_after_ed2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        zoom_no_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
+
+        # Focus Editor and zoom via tmux (Alt+z): --toggle and --show-editor preserve zoom state across panes
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        tmux resize-pane -Z -t "$ed_pane"
         zoom_in_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
-        # Calling --toggle while zoomed focuses AI and preserves zoom
         "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
         active_zoom_ai="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         zoom_in_ai="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
-        # Calling --show-editor from zoomed AI returns to Editor and preserves zoom
         "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
         active_zoom_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         zoom_back_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
-        # Calling --show-editor again while in zoomed Editor unzooms
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        tmux resize-pane -Z -t "$ed_pane"
         zoom_after_unzoom="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
 
         if [ "$pane_cnt_after_t1" = "3" ] && \
            [ "$active_after_t1" = "$ed_pane" ] && \
            [ "$active_after_t2" = "$ai_pane" ] && \
            [ "$active_after_term1" = "$term_pane" ] && \
-           [ "$active_after_term2" = "$ed_pane" ] && \
+           [ "$active_after_term2" = "$ai_pane" ] && \
+           [ "$active_after_ed1" = "$ed_pane" ] && \
+           [ "$active_after_ed2" = "$ai_pane" ] && \
+           [ "$zoom_no_ed" = "0" ] && \
            [ "$zoom_in_ed" = "1" ] && \
            [ "$active_zoom_ai" = "$ai_pane" ] && [ "$zoom_in_ai" = "1" ] && \
            [ "$active_zoom_ed" = "$ed_pane" ] && [ "$zoom_back_ed" = "1" ] && \
            [ "$zoom_after_unzoom" = "0" ]; then
-            pass "bin/ide --toggle, --show-term, and --show-editor switch focus across AI, Editor, and Shell panes while preserving zoom state"
+            pass "bin/ide --toggle, --show-term, and --show-editor focus and bounce back across AI, Editor, and Shell panes while preserving zoom state"
         else
-            fail "bin/ide focus/zoom toggles" "Unexpected focus/zoom state: t1=$active_after_t1(exp $ed_pane) t2=$active_after_t2(exp $ai_pane) term1=$active_after_term1(exp $term_pane) term2=$active_after_term2(exp $ed_pane) z_ed=$zoom_in_ed z_ai=$zoom_in_ai($active_zoom_ai) z_back=$zoom_back_ed($active_zoom_ed) unzoom=$zoom_after_unzoom"
+            fail "bin/ide focus/zoom toggles" "Unexpected focus/zoom state: t1=$active_after_t1(exp $ed_pane) t2=$active_after_t2(exp $ai_pane) term1=$active_after_term1(exp $term_pane) term2=$active_after_term2(exp $ai_pane) ed1=$active_after_ed1 ed2=$active_after_ed2 z_no=$zoom_no_ed z_ed=$zoom_in_ed z_ai=$zoom_in_ai($active_zoom_ai) z_back=$zoom_back_ed($active_zoom_ed) unzoom=$zoom_after_unzoom"
+        fi
+
+        # Test non-destructive pane parking/unparking (--toggle-term, --toggle-editor, --toggle-ai) and last-pane guard
+        ed_pid_0="$(tmux display-message -p -t "$ed_pane" "#{pane_pid}")"
+        term_pid_0="$(tmux display-message -p -t "$term_pane" "#{pane_pid}")"
+        ai_pid_0="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
+        term_h_0="$(tmux display-message -p -t "$term_pane" "#{pane_height}")"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        panes_after_park_term="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        park_term_win="$(tmux display-message -p -t "$term_pane" "#{window_name}" 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
+        panes_after_park_ed="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        park_ed_win="$(tmux display-message -p -t "$ed_pane" "#{window_name}" 2>/dev/null || true)"
+        # Refuses to hide the last visible pane (AI)
+        "$SCRIPT_DIR/bin/ide" --toggle-ai "ide-ws_3pane_test"
+        panes_after_last_guard="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        # --show-editor unparks Editor and focuses it; --toggle-term unparks Shell at the bottom full-width
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        active_after_unpark_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        panes_after_unpark_all="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+        term_w_restored="$(tmux display-message -p -t "$term_pane" "#{pane_width}")"
+        term_h_restored="$(tmux display-message -p -t "$term_pane" "#{pane_height}")"
+        ed_pid_1="$(tmux display-message -p -t "$ed_pane" "#{pane_pid}")"
+        term_pid_1="$(tmux display-message -p -t "$term_pane" "#{pane_pid}")"
+        ai_pid_1="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
+        if [ "$panes_after_park_term" = "2" ] && [ "$park_term_win" = "_ide_park_term" ] && \
+           [ "$panes_after_park_ed" = "1" ] && [ "$park_ed_win" = "_ide_park_editor" ] && \
+           [ "$panes_after_last_guard" = "1" ] && [ "$active_after_unpark_ed" = "$ed_pane" ] && \
+           [ "$panes_after_unpark_all" = "3" ] && [ "$term_w_restored" = "$win_width" ] && [ "$term_h_restored" = "$term_h_0" ] && \
+           [ "$ed_pid_0" = "$ed_pid_1" ] && [ "$term_pid_0" = "$term_pid_1" ] && [ "$ai_pid_0" = "$ai_pid_1" ]; then
+            pass "bin/ide --toggle-term, --toggle-editor, and --toggle-ai non-destructively park/unpark panes via _ide_park_<role>, guard the last visible pane, and restore geometry and PIDs"
+        else
+            fail "bin/ide pane parking/unparking" "Unexpected state: park_term=$panes_after_park_term($park_term_win) park_ed=$panes_after_park_ed($park_ed_win) guard=$panes_after_last_guard unpark_ed=$active_after_unpark_ed all=$panes_after_unpark_all w=$term_w_restored/$win_width h=$term_h_restored/$term_h_0 pids=$ed_pid_0/$ed_pid_1,$term_pid_0/$term_pid_1,$ai_pid_0/$ai_pid_1"
+        fi
+
+        # Test directional pane swapping (--swap right|left|down|up) including horizontal wrap,
+        # plus parking/unparking both top panes while vertically swapped (`--swap down`)
+        tmux select-pane -t "$ai_pane"
+        "$SCRIPT_DIR/bin/ide" --swap right "ide-ws_3pane_test"
+        ed_left_swap1="$(tmux display-message -p -t "$ed_pane" "#{pane_left}")"
+        ai_left_swap1="$(tmux display-message -p -t "$ai_pane" "#{pane_left}")"
+        swapped_flag1="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_swapped 2>/dev/null || true)"
+        # Calling --swap right again from the right-most top pane wraps horizontally back to the left
+        "$SCRIPT_DIR/bin/ide" --swap right "ide-ws_3pane_test"
+        ed_left_swap2="$(tmux display-message -p -t "$ed_pane" "#{pane_left}")"
+        ai_left_swap2="$(tmux display-message -p -t "$ai_pane" "#{pane_left}")"
+        # Vertical swap down to Shell ([Shell | Editor] on top, [AI] full-width on bottom), then park & unpark both top panes
+        "$SCRIPT_DIR/bin/ide" --swap down "ide-ws_3pane_test"
+        ai_top_down="$(tmux display-message -p -t "$ai_pane" "#{pane_top}")"
+        term_top_down="$(tmux display-message -p -t "$term_pane" "#{pane_top}")"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        park_allow_rename="$(tmux show-options -wqv -t "$term_pane" allow-rename 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        term_top_restored="$(tmux display-message -p -t "$term_pane" "#{pane_top}")"
+        ed_top_restored="$(tmux display-message -p -t "$ed_pane" "#{pane_top}")"
+        ai_top_restored="$(tmux display-message -p -t "$ai_pane" "#{pane_top}")"
+        ai_w_restored="$(tmux display-message -p -t "$ai_pane" "#{pane_width}")"
+        tmux select-pane -t "$ai_pane"
+        "$SCRIPT_DIR/bin/ide" --swap up "ide-ws_3pane_test"
+        ai_top_up="$(tmux display-message -p -t "$ai_pane" "#{pane_top}")"
+        term_top_up="$(tmux display-message -p -t "$term_pane" "#{pane_top}")"
+        if [ "$ed_left_swap1" = "0" ] && [ "${ai_left_swap1:-0}" -gt 0 ] && [ "$swapped_flag1" = "1" ] && \
+           [ "$ai_left_swap2" = "0" ] && [ "${ed_left_swap2:-0}" -gt 0 ] && \
+           [ "${ai_top_down:-0}" -gt 0 ] && [ "$term_top_down" = "0" ] && \
+           [ "$park_allow_rename" = "off" ] && \
+           [ "$term_top_restored" = "0" ] && [ "$ed_top_restored" = "0" ] && \
+           [ "${ai_top_restored:-0}" -gt 0 ] && [ "$ai_w_restored" = "$win_width" ] && \
+           [ "$ai_top_up" = "0" ] && [ "${term_top_up:-0}" -gt 0 ]; then
+            pass "bin/ide --swap right/left/down/up directionally swaps panes, wraps horizontally across the top split, and preserves vertically-swapped layouts across multi-pane parking/unparking"
+        else
+            fail "bin/ide --swap" "Unexpected swap coordinates: swap1(ed=$ed_left_swap1,ai=$ai_left_swap1,flag=$swapped_flag1) swap2(ed=$ed_left_swap2,ai=$ai_left_swap2) down(ai_top=$ai_top_down,term_top=$term_top_down) restored(term_top=$term_top_restored,ed_top=$ed_top_restored,ai_top=$ai_top_restored,ai_w=$ai_w_restored/$win_width,rename=$park_allow_rename) up(ai_top=$ai_top_up,term_top=$term_top_up)"
         fi
 
         "$SCRIPT_DIR/bin/ide" --ai codex --detach "$IDE_WS_3P"
@@ -485,7 +579,8 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide --cd" "Expected dive=$expected_dive_dir reset=$expected_init_dir ai_pid=$ai_pid_before_cd==$ai_pid_after_cd (got dive=$wdir_after_dive reset=$wdir_after_reset)"
         fi
 
-        # Verify `bin/ide --open-link` resolves session socket for file://#L<line>, filepath:line, and trailing-colon compiler diagnostics (filepath:line:col:)
+        # Verify `bin/ide --open-link` resolves session socket for file://#L<line>, filepath:line, trailing-colon compiler diagnostics (filepath:line:col:),
+        # markdown [label](file:///...#L<start>-L<end>) in word, line-wrapped markdown [`label`](file:///truncated..., percent-encoded %23L<line>, and workspace basename resolution (unparking Editor if hidden)
         printf "line1\nline2\nline3\n" > "$IDE_WS_3P/subdir/nested.txt"
         sock_3p="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_socket 2>/dev/null || true)"
         link_nvim_pid=""
@@ -508,11 +603,28 @@ if command -v tmux >/dev/null 2>&1; then
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_word="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
+                # Markdown [label](file:///...#L1-L3) in $word, line-wrapped [`nested.txt:3`](file:///truncated, and basename nested.txt#L2-L3 while Editor is parked
+                "$SCRIPT_DIR/bin/ide" --open-link "" "[nested.txt](file://$IDE_WS_3P/subdir/nested.txt#L1-L3)" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_md="1"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_md="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                "$SCRIPT_DIR/bin/ide" --open-link "" "[\`nested.txt:3\`](file://$IDE_WS_3P/subdir/truncated_wrap" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_wrap="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_wrap="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "nested.txt#L2-L3" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_base="2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_base="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
                 active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ]; then
-                    pass "bin/ide --open-link handles file://#L<line> and trailing-colon compiler paths (filepath:line:col:), focuses Editor pane, and jumps to target line numbers"
+                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ]; then
+                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), line-wrapped markdown labels, and workspace basenames (unparking Editor if hidden)"
                 else
-                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3, got active=$active_after_link href_line=$line_after_href word_line=$line_after_word"
+                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3/1/3/2, got active=$active_after_link href_line=$line_after_href word_line=$line_after_word md_line=$line_after_md wrap_line=$line_after_wrap base_line=$line_after_base"
                 fi
             else
                 fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
@@ -646,6 +758,8 @@ as("ide-args", function() vim.cmd("Q") end)
 as("ide-args", function() vim.cmd("Q!") end)
 as("ide-args", function() IdeTree.dive([[$ARGS_DIR]]) end)
 as("ide-args", function() vim.fn.maparg("<leader>a", "n", false, true).callback() end)
+as("ide-args", function() vim.fn.maparg("<M-E>", "n", false, true).callback() end)
+as("ide-args", function() vim.fn.maparg("<M-H>", "n", false, true).callback() end)
 as(nil, function() vim.cmd("Q") end)
 as("args", function() vim.cmd("Q") end)
 vim.cmd("qa!")
@@ -654,13 +768,13 @@ LUA
         env TMUX="$TEMP_HOME/no-such-tmux,1,0" NVIM_IDE_SOCKET="$TEMP_HOME/no-such.sock" timeout 30 \
             nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" -c "source $TEMP_HOME/editor_args.lua" -c 'qa!' >/dev/null 2>&1 || true
         for _ in $(seq 1 50); do
-            [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 6 ] && break
+            [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 8 ] && break
             sleep 0.1
         done
         args_log="$(LC_ALL=C sort "$ARGS_LOG")"
-        args_expected="$(printf '%s\n' "--cd $ARGS_DIR ide-args" "--quit" "--quit" "--quit --force ide-args" "--quit ide-args" "--toggle ide-args" | LC_ALL=C sort)"
+        args_expected="$(printf '%s\n' "--cd $ARGS_DIR ide-args" "--quit" "--quit" "--quit --force ide-args" "--quit ide-args" "--swap left ide-args" "--toggle ide-args" "--toggle-editor ide-args" | LC_ALL=C sort)"
         if [ "$args_log" = "$args_expected" ]; then
-            pass "The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME) and omits it without an ide-* \$IDE_SESSION"
+            pass "The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME, --toggle-editor NAME, --swap DIR NAME) and omits it without an ide-* \$IDE_SESSION"
         else
             fail "Editor ide call arguments" "Expected: $(tr '\n' '|' <<< "$args_expected") got: $(tr '\n' '|' <<< "$args_log")"
         fi
@@ -715,22 +829,29 @@ LUA
     fi
     "$SCRIPT_DIR/bin/ide" --kill "ide-api" >/dev/null 2>&1 || true
 
-    # Mouse resizing: in a real terminal client (a python3 pty speaking SGR mouse), dragging the AI | Editor border and
-    # the Shell's top edge resizes panes under the repo's .tmux.conf, and focus switches (--toggle / --show-term) plus a
-    # zoom round trip keep the dragged sizes. Its own private server starts with -f so the config is loaded explicitly.
+    # Mouse resizing & OSC 8 hyperlink clicking: in a real terminal client (a python3 pty speaking SGR mouse), dragging the
+    # AI | Editor border and the Shell's top edge resizes panes under the repo's .tmux.conf, focus switches (--toggle /
+    # --show-term), parking/unparking (--toggle-editor / --toggle-term), and a zoom round trip keep the dragged sizes, and
+    # plain-clicking an OSC 8 hyperlink in the AI pane routes through MouseDown1Pane to `ide --open-link`.
     if command -v python3 >/dev/null 2>&1; then
         MOUSE_TMPDIR="$(mktemp -d)"
         IDE_WS_MOUSE="$TEMP_HOME/ws_mouse"
-        mkdir -p "$IDE_WS_MOUSE"
+        MOUSE_CLICK_LOG="$TEMP_HOME/mouse_click.log"
+        mkdir -p "$IDE_WS_MOUSE" "$TEMP_HOME/.local/bin"
+        printf '#!/usr/bin/env bash\nif [ "${1:-}" = "--open-link" ]; then printf "%%s\\n" "$*" >> %q; fi\nexec %q "$@"\n' \
+            "$MOUSE_CLICK_LOG" "$SCRIPT_DIR/bin/ide" > "$TEMP_HOME/.local/bin/ide"
+        chmod +x "$TEMP_HOME/.local/bin/ide"
+        : > "$MOUSE_CLICK_LOG"
         mouse_out="$(
             export TMUX_TMPDIR="$MOUSE_TMPDIR"
+            export HOME="$TEMP_HOME"
             tmux -f "$SCRIPT_DIR/dotfiles/.tmux.conf" new-session -d -s mouse-holder -x 120 -y 40
             env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_MOUSE" >/dev/null 2>&1
             echo "binding=$(tmux list-keys -T root MouseDrag1Border 2>&1)"
-            python3 - "$SCRIPT_DIR/bin/ide" "ide-ws_mouse" 2>&1 <<'PY'
+            python3 - "$SCRIPT_DIR/bin/ide" "ide-ws_mouse" "$MOUSE_CLICK_LOG" 2>&1 <<'PY'
 import fcntl, os, select, struct, subprocess, sys, termios, threading, time
 
-ide, sess = sys.argv[1], sys.argv[2]
+ide, sess, click_log = sys.argv[1], sys.argv[2], sys.argv[3]
 
 def tmux(*args):
     return subprocess.run(["tmux", *args], capture_output=True, text=True).stdout.strip()
@@ -785,11 +906,30 @@ drag(al + aw, at + 3, al + aw - 10, at + 3)  # AI | Editor border, 10 columns le
 drag(2, st - 1, 2, st - 6)                    # Shell's top edge, 5 rows up
 dragged = sizes()
 drag_ok = dragged[0][2] == aw - 10 and dragged[1][2] == ew + 10 and dragged[2][3] == sh + 5
-for args in (["--toggle", sess], ["--show-term", sess], ["--show-term", sess], ["--toggle", sess]):
+for args in (
+    ["--toggle", sess],
+    ["--show-term", sess],
+    ["--show-term", sess],
+    ["--toggle", sess],
+    ["--toggle-editor", sess],
+    ["--toggle-editor", sess],
+    ["--toggle-term", sess],
+    ["--toggle-term", sess],
+):
     subprocess.run([ide, *args], capture_output=True)
 tmux("resize-pane", "-Z", "-t", panes[1])
 tmux("resize-pane", "-Z", "-t", panes[1])
 kept = sizes()
+
+# Emit an OSC 8 hyperlink in row 0 of the AI pane and plain-click it via SGR mouse (MouseDown1Pane)
+tmux("respawn-pane", "-k", "-t", panes[0], "printf '\\033[2J\\033[H\\033]8;;file:///tmp/osc8_target.lua#L42\\033\\\\OSC8LINK\\033]8;;\\033\\\\'; sleep 30")
+time.sleep(0.3)
+send("\x1b[<0;2;2M\x1b[<0;2;2m")
+for _ in range(30):
+    if os.path.exists(click_log) and os.path.getsize(click_log) > 0:
+        break
+    time.sleep(0.05)
+
 attached = False
 client.terminate()
 print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept}")
@@ -798,10 +938,13 @@ PY
         tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
         rm -rf "$MOUSE_TMPDIR"
         MOUSE_TMPDIR=""
-        if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && grep -q '^drag=ok kept=ok$' <<< "$mouse_out"; then
-            pass "tmux resizes IDE panes by mouse: dragging the AI | Editor border and the Shell's top edge in a terminal client moves them, and --toggle / --show-term / zoom keep the dragged sizes"
+        mouse_click_logged="$(cat "$MOUSE_CLICK_LOG" 2>/dev/null || true)"
+        if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && \
+           grep -q '^drag=ok kept=ok$' <<< "$mouse_out" && \
+           grep -Fq 'file:///tmp/osc8_target.lua#L42' <<< "$mouse_click_logged"; then
+            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom) and routes plain-clicks on OSC 8 hyperlinks via MouseDown1Pane to ide --open-link"
         else
-            fail "tmux mouse border resize" "Expected MouseDrag1Border resize-pane -M, both drags applied, and sizes kept across focus switches and zoom; got: $mouse_out"
+            fail "tmux mouse border resize & OSC 8 click" "Expected MouseDrag1Border resize-pane -M, drag=ok kept=ok, and OSC 8 MouseDown1Pane click logged; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
         fi
     fi
 
