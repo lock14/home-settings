@@ -590,7 +590,7 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide --quit Editor close" "Expected the Editor's :qa! -> :Q! abbreviation (got: ${quit_abbrev:-none}), no ide calls from the Editor (got: ${quit_log:-none}), ide-quit-editor gone, and both bystanders alive"
         fi
 
-        # Quitting from inside the Editor (`:Q`, Alt+q) starts a detached `ide --quit` that closes this very Editor: it
+        # Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) starts a detached `ide --quit` that closes this Editor: it
         # must outlive it and kill exactly its own session (a 2nd pane keeps the session alive like the AI and Shell panes)
         SELF_HOME="$TEMP_HOME/quit_self_home"
         SELF_LOG="$TEMP_HOME/quit_self.log"
@@ -620,7 +620,7 @@ if command -v tmux >/dev/null 2>&1; then
         self_log="$(cat "$SELF_LOG")"
         if grep -Fq "'Q!'" <<< "$self_abbrev" && [ "$self_log" = "--quit" ] && ! session_alive "ide-quit-self" && \
            all_alive "ide-bystander" "plain-bystander"; then
-            pass "Quitting from inside the Editor (:Q, Alt+q) runs exactly one ide --quit, which outlives the Editor it closes and kills only its own session"
+            pass "Quitting from inside the Editor (:Q, :qa, <leader>q) runs exactly one ide --quit, which outlives the Editor it closes and kills only its own session"
         else
             fail "Editor-initiated ide --quit" "Expected exactly one '--quit' call (got: ${self_log:-none}), ide-quit-self gone, and both bystanders alive; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
         fi
