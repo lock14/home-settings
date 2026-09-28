@@ -794,12 +794,18 @@ end, { desc = "Toggle Project Tree Sidebar" })
 
 -- =============================================================================
 -- AI Live-Follow Mode (`IdeFollow`)
--- Automatically reloads buffers (`checktime`), opens files modified by the AI
--- in the Top-Right Editor pane, and scrolls (`normal! zz`) to the latest
--- modified git diff hunk while you stay in the Top-Left AI Agent pane.
--- Session-scoped: follows this workspace's git changes plus only the plan &
--- walkthrough artifacts written by AI conversations launched in this IDE
--- session's root, so concurrent `ide` sessions never drive each other's Editor.
+-- Automatically reloads buffers (`checktime`), opens the files the AI edits in
+-- the Top-Right Editor pane, and centers (`normal! zz`) the line it changed
+-- while you stay in the Top-Left AI Agent pane.
+-- Session-scoped: only AI conversations launched in this IDE session's root
+-- drive the Editor, so concurrent `ide` sessions never move each other.
+-- Follow signals (the 1.5 s tick never waits on a subprocess):
+--   1. Edit logs: each file-edit tool call this session's AI records (agy
+--      `transcript_full.jsonl`, Claude Code project transcripts) names the
+--      exact file and line, in any workspace (git, Mercurial, or none).
+--   2. Plan & walkthrough artifacts written by those conversations.
+--   3. A background `git status` (adaptive backoff) for edits the AI makes
+--      through shell commands (`sed -i`, formatters, code generators).
 -- =============================================================================
 local IdeFollow = _G.IdeFollow or {
     enabled = (vim.env.NVIM_IDE_SOCKET ~= nil and vim.env.NVIM_IDE_SOCKET ~= ""),
@@ -809,15 +815,28 @@ local IdeFollow = _G.IdeFollow or {
 }
 -- Reuse the live table on `:source` so the running follow timer and `Space af` keep sharing state
 _G.IdeFollow = IdeFollow
-IdeFollow.git_toplevels = IdeFollow.git_toplevels or {}
 IdeFollow.agy_history = IdeFollow.agy_history or {} -- per agy prompt log: { offset, partial, convs }
 IdeFollow.plan_verdicts = IdeFollow.plan_verdicts or {}
+IdeFollow.workspace_roots = IdeFollow.workspace_roots or {}
+-- Edit logs being tailed ([log path] = read state) and the files they recently edited ([path] = hint)
+IdeFollow.edit_logs = IdeFollow.edit_logs or {}
+IdeFollow.edits = IdeFollow.edits or {}
+IdeFollow.edit_seq = IdeFollow.edit_seq or 0
+-- Background `git status` of the current root (`paths`: most recently modified dirty files of the last scan)
+IdeFollow.vcs = IdeFollow.vcs or { root = nil, toplevel = nil, paths = {}, inflight = false, next_ns = 0, gen = 0, scans = 0 }
+IdeFollow.jumps = IdeFollow.jumps or 0 -- bumped on every follow so stale async hunk lookups are dropped
 
+local IDE_FOLLOW_TICK_MS = 1500
 local IDE_FOLLOW_MAX_CONVERSATIONS = 8 -- most recent AI conversations per workspace to watch
 local IDE_FOLLOW_MAX_SUBAGENT_DEPTH = 2 -- nested subagent levels watched below each conversation
 local IDE_FOLLOW_MAX_DIRS = 32 -- conversation directories scanned per tick (newest first)
 local IDE_FOLLOW_FRESH_SECONDS = 120 -- keep re-checking ownership of brand-new plans this long
 local IDE_FOLLOW_TRANSCRIPT_TAIL = 2 * 1024 * 1024 -- transcript bytes searched for a plan reference
+local IDE_FOLLOW_EDIT_LOG_TAIL = 256 * 1024 -- bytes of a newly discovered edit log parsed for recent edits
+local IDE_FOLLOW_MAX_EDITS = 16 -- recently edited files kept as follow candidates
+local IDE_FOLLOW_MAX_CLAUDE_LOGS = 4 -- most recently active Claude Code transcripts tailed per project
+local IDE_FOLLOW_MAX_VCS_PATHS = 64 -- most recently modified dirty files re-checked on every tick
+local IDE_FOLLOW_VCS_BACKOFF = 4 -- idle time between git scans, as a multiple of the last scan's duration
 local IDE_FOLLOW_AGY_RESCAN_SECONDS = 30 -- how often ~/.gemini is re-listed for agy data directories
 
 local function stat_mtime_ns(path)
@@ -841,32 +860,36 @@ local function read_bytes(path, offset, len)
     return data
 end
 
--- Runs a git command synchronously and returns its stdout lines, or nil when it fails
--- (unlike `vim.fn.systemlist()`, stderr never leaks into the parsed output).
-local function git_lines(args)
-    local ok, res = pcall(function()
-        return vim.system(args, { text = true }):wait()
-    end)
-    if not ok or not res or res.code ~= 0 then
-        return nil
-    end
-    return vim.split(res.stdout or "", "\n", { trimempty = true })
+-- Wall-clock time in the same nanosecond units as file mtimes.
+local function now_ns()
+    local uv = vim.uv or vim.loop
+    local t = uv.clock_gettime and uv.clock_gettime("realtime")
+    return t and (t.sec * 1000000000 + t.nsec) or os.time() * 1000000000
 end
 
 local function strip_trailing_slash(path)
     return (path:gsub("(.)/+$", "%1"))
 end
 
--- Repository toplevel for `root`, cached per root (false when `root` is not inside a git work tree).
--- `git status --porcelain` paths are always relative to it, even when `icd` moved the root deeper.
-function IdeFollow.git_toplevel(root)
-    local hit = IdeFollow.git_toplevels[root]
+-- Workspace containing `dir`: its nearest ancestor holding a `.git` or `.hg` marker (a git or Mercurial
+-- work tree), else `dir` itself. Cached per directory; a few stats on first use.
+local function workspace_root(dir)
+    local hit = IdeFollow.workspace_roots[dir]
     if hit == nil then
-        local out = git_lines({ "git", "-C", root, "rev-parse", "--show-toplevel" })
-        hit = (out and out[1]) or false
-        IdeFollow.git_toplevels[root] = hit
+        local uv = vim.uv or vim.loop
+        hit = dir
+        local cur = dir
+        while cur do
+            if uv.fs_stat(cur .. "/.git") or uv.fs_stat(cur .. "/.hg") then
+                hit = cur
+                break
+            end
+            local parent = vim.fs.dirname(cur)
+            cur = (parent and parent ~= cur) and parent or nil
+        end
+        IdeFollow.workspace_roots[dir] = hit
     end
-    return hit or nil
+    return hit
 end
 
 -- Spellings (as launched and symlink-resolved) of the directory this IDE session was started in
@@ -1009,15 +1032,12 @@ function IdeFollow.agy_conversation_dirs(roots)
     return dirs
 end
 
--- Claude Code keeps every project's plans in one shared `~/.claude/plans/` directory, so a plan
--- belongs to this session only when a transcript of a Claude session launched in one of `roots`
--- (`~/.claude/projects/<root with non-alphanumerics as '-'>/<session>.jsonl`) references it.
-local function claude_plan_in_session(plan_path, plan_mtime, roots)
+-- Claude Code transcripts (`~/.claude/projects/<root with non-alphanumerics as '-'>/<session>.jsonl`) of
+-- sessions launched in one of `roots`, most recently active first (at most `limit` when given).
+local function claude_session_logs(roots, limit)
     local uv = vim.uv or vim.loop
-    local needle = vim.fn.fnamemodify(plan_path, ":t")
-    local plan_sec = math.floor(plan_mtime / 1000000000)
     local projects = claude_dir() .. "/projects/"
-    local tried = {}
+    local logs, tried = {}, {}
     for root in pairs(roots) do
         for _, encoded in ipairs({ (root:gsub("[^%w]", "-")), (root:gsub("/", "-")) }) do
             local req = not tried[encoded] and uv.fs_scandir(projects .. encoded)
@@ -1027,16 +1047,36 @@ local function claude_plan_in_session(plan_path, plan_mtime, roots)
                 if not name then
                     break
                 end
-                local transcript = projects .. encoded .. "/" .. name
-                local st = name:sub(-6) == ".jsonl" and uv.fs_stat(transcript)
-                -- Only sessions still writing when the plan was saved can own it; search their recent tail
-                if st and st.mtime and st.mtime.sec + 60 >= plan_sec then
-                    local offset = math.max(0, st.size - IDE_FOLLOW_TRANSCRIPT_TAIL)
-                    local tail = read_bytes(transcript, offset, st.size - offset)
-                    if tail and tail:find(needle, 1, true) then
-                        return true
-                    end
+                local path = projects .. encoded .. "/" .. name
+                local st = name:sub(-6) == ".jsonl" and uv.fs_stat(path)
+                if st and st.mtime then
+                    logs[#logs + 1] = { path = path, st = st, mtime = st.mtime.sec * 1000000000 + (st.mtime.nsec or 0) }
                 end
+            end
+        end
+    end
+    table.sort(logs, function(a, b)
+        return a.mtime > b.mtime
+    end)
+    for i = #logs, (limit or #logs) + 1, -1 do
+        logs[i] = nil
+    end
+    return logs
+end
+
+-- Claude Code keeps every project's plans in one shared `~/.claude/plans/` directory, so a plan
+-- belongs to this session only when a transcript of a Claude session launched in one of `roots`
+-- references it.
+local function claude_plan_in_session(plan_path, plan_mtime, roots)
+    local needle = vim.fn.fnamemodify(plan_path, ":t")
+    local plan_sec = math.floor(plan_mtime / 1000000000)
+    for _, log in ipairs(claude_session_logs(roots)) do
+        -- Only sessions still writing when the plan was saved can own it; search their recent tail
+        if log.st.mtime.sec + 60 >= plan_sec then
+            local offset = math.max(0, log.st.size - IDE_FOLLOW_TRANSCRIPT_TAIL)
+            local tail = read_bytes(log.path, offset, log.st.size - offset)
+            if tail and tail:find(needle, 1, true) then
+                return true
             end
         end
     end
@@ -1079,12 +1119,13 @@ end
 
 -- Newest plan / walkthrough artifact written by an AI conversation that belongs to this IDE session:
 -- agy artifacts in `<agy dir>/brain/<id>/*.md` and Claude Code plans in `~/.claude/plans/`.
-function IdeFollow.find_newest_artifact(newest_path, newest_mtime)
+-- `conv_dirs` (this tick's `agy_conversation_dirs()`) is resolved when omitted.
+function IdeFollow.find_newest_artifact(newest_path, newest_mtime, conv_dirs)
     local roots, roots_key = IdeFollow.session_roots()
     if not roots_key then
         return newest_path, newest_mtime
     end
-    for _, conv_dir in ipairs(IdeFollow.agy_conversation_dirs(roots)) do
+    for _, conv_dir in ipairs(conv_dirs or IdeFollow.agy_conversation_dirs(roots)) do
         newest_path, newest_mtime = scan_markdown(conv_dir, nil, newest_path, newest_mtime)
     end
     return scan_markdown(claude_dir() .. "/plans", function(path, mtime)
@@ -1092,61 +1133,411 @@ function IdeFollow.find_newest_artifact(newest_path, newest_mtime)
     end, newest_path, newest_mtime)
 end
 
-function IdeFollow.find_newest_modified(root)
-    root = (root and root ~= "") and root or IdeTree.root or vim.fn.getcwd()
-    local newest_path = nil
-    local newest_mtime = 0
-    local toplevel = IdeFollow.git_toplevel(root)
-    local status = toplevel and git_lines({ "git", "-C", toplevel, "--no-optional-locks", "status", "--porcelain", "-uall" })
-    if status then
-        for _, line in ipairs(status) do
-            if #line > 3 then
-                local rel = line:sub(4)
-                local arrow = rel:find(" -> ", 1, true)
-                if arrow then
-                    rel = rel:sub(arrow + 4)
-                end
-                rel = rel:gsub('^"(.*)"$', "%1")
-                local full = toplevel .. "/" .. rel
-                local mtime = stat_mtime_ns(full)
-                if mtime > newest_mtime then
-                    newest_mtime = mtime
-                    newest_path = full
-                end
-            end
-        end
-    else
-        for _, item in ipairs(IdeTree.scan_dir(root)) do
-            if not item.is_dir then
-                local mtime = stat_mtime_ns(item.path)
-                if mtime > newest_mtime then
-                    newest_mtime = mtime
-                    newest_path = item.path
-                end
-            end
+-- -----------------------------------------------------------------------------
+-- Edit logs: every file edit this session's AI records, and where in the file it landed
+-- -----------------------------------------------------------------------------
+
+-- First line of `text` with at least 4 non-blank characters (trimmed) and its 1-based line index:
+-- distinctive enough to spot where an edit landed.
+local function edit_needle(text)
+    local index = 0
+    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+        index = index + 1
+        local trimmed = vim.trim((line:gsub("\r$", "")))
+        if #trimmed >= 4 then
+            return trimmed, index
         end
     end
-
-    -- Also follow AI plan & walkthrough artifacts, scoped to this IDE session's own conversations
-    return IdeFollow.find_newest_artifact(newest_path, newest_mtime)
+    return nil, nil
 end
 
-function IdeFollow.find_latest_hunk_line(root, filepath)
-    root = (root and root ~= "") and root or IdeTree.root or vim.fn.getcwd()
-    local out = vim.fn.systemlist({ "git", "-C", root, "--no-optional-locks", "diff", "-U0", "--", filepath })
-    local last_line = nil
-    if vim.v.shell_error == 0 and type(out) == "table" then
-        for _, line in ipairs(out) do
-            local plus_start = line:match("^@@ %-[0-9,]+ %+([0-9]+)")
-            if plus_start then
-                local n = tonumber(plus_start)
-                if n and n > 0 then
-                    last_line = n
+local AGY_EDIT_TOOLS = { write_to_file = true, replace_file_content = true, multi_replace_file_content = true }
+
+-- Path + landing hint of one agy file-edit tool call. `encoded`: the arguments come from the compact
+-- `transcript.jsonl`, which JSON-encodes every value.
+local function agy_edit(call, encoded)
+    local args = type(call) == "table" and AGY_EDIT_TOOLS[call.name] and call.args
+    if type(args) ~= "table" then
+        return nil
+    end
+    local function arg(key)
+        local v = args[key]
+        if encoded and type(v) == "string" then
+            local ok, decoded = pcall(vim.json.decode, v)
+            return ok and decoded or v
+        end
+        return v
+    end
+    local path = arg("TargetFile")
+    if type(path) ~= "string" or path:sub(1, 1) ~= "/" then
+        return nil
+    end
+    if call.name == "write_to_file" then
+        -- Appends land on the new last line; whole-file writes on line 1 (refined to the last `git diff`
+        -- hunk when git tracks the file)
+        return path, arg("Append") == true and { line = -1 } or { line = 1, whole = true }
+    end
+    -- replace_file_content: its single chunk; multi_replace_file_content: its topmost chunk (the
+    -- only one whose StartLine later chunks cannot shift)
+    local chunk = { StartLine = arg("StartLine"), EndLine = arg("EndLine"), ReplacementContent = arg("ReplacementContent") }
+    local chunks = arg("ReplacementChunks")
+    if type(chunks) == "table" then
+        for _, c in ipairs(chunks) do
+            local start = type(c) == "table" and tonumber(c.StartLine)
+            if start and not (tonumber(chunk.StartLine) and tonumber(chunk.StartLine) <= start) then
+                chunk = c
+            end
+        end
+    end
+    local first, last = tonumber(chunk.StartLine), tonumber(chunk.EndLine)
+    local text = type(chunk.ReplacementContent) == "string" and chunk.ReplacementContent or ""
+    local _, newlines = text:gsub("\n", "")
+    return path, { line = first, text = text, span = first and ((last or first) - first + newlines + 1) or nil }
+end
+
+-- Path + landing hint of one Claude Code `tool_use` block (`Edit`, `MultiEdit`, `Write`, `NotebookEdit`).
+local function claude_edit(block)
+    local input = type(block) == "table" and block.type == "tool_use" and block.input
+    if type(input) ~= "table" then
+        return nil
+    end
+    local path = input.file_path or input.notebook_path
+    if type(path) ~= "string" or path:sub(1, 1) ~= "/" then
+        return nil
+    end
+    if block.name == "Write" then
+        return path, { line = 1, whole = true }
+    elseif block.name == "Edit" then
+        return path, { text = input.new_string }
+    elseif block.name == "MultiEdit" then
+        local first = type(input.edits) == "table" and input.edits[1]
+        return path, { text = type(first) == "table" and first.new_string or nil }
+    elseif block.name == "NotebookEdit" then
+        return path, {}
+    end
+    return nil
+end
+
+-- Directories an edit must fall under to drive this session's Editor: the workspaces of the session
+-- root (as launched and symlink-resolved) and of the current `icd` root, minus the AI tools' own state
+-- (`~/.gemini`, agy's data directories, `~/.claude`: scratch files, plans and transcripts are not
+-- project edits).
+local function edit_scope(roots)
+    local scope = { include = {}, exclude = { vim.fs.normalize("~/.gemini"), claude_dir() } }
+    for _, dir in ipairs(agy_dirs()) do
+        scope.exclude[#scope.exclude + 1] = dir
+    end
+    for root in pairs(roots) do
+        scope.include[workspace_root(root)] = true
+    end
+    if type(IdeTree.root) == "string" and IdeTree.root ~= "" then
+        scope.include[workspace_root(strip_trailing_slash(IdeTree.root))] = true
+    end
+    return scope
+end
+
+local function under(path, dir)
+    return dir == "/" or path:sub(1, #dir + 1) == dir .. "/"
+end
+
+local function in_scope(path, scope)
+    for _, dir in ipairs(scope.exclude) do
+        if under(path, dir) then
+            return false
+        end
+    end
+    for dir in pairs(scope.include) do
+        if under(path, dir) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Remembers the latest in-scope edit per file, keeping the IDE_FOLLOW_MAX_EDITS most recent files.
+local function note_edit(scope, path, hint)
+    if not path or not in_scope(path, scope) then
+        return
+    end
+    IdeFollow.edit_seq = IdeFollow.edit_seq + 1
+    hint.seq = IdeFollow.edit_seq
+    IdeFollow.edits[path] = hint
+    local count, oldest = 0, nil
+    for p, h in pairs(IdeFollow.edits) do
+        count = count + 1
+        if not oldest or h.seq < IdeFollow.edits[oldest].seq then
+            oldest = p
+        end
+    end
+    if count > IDE_FOLLOW_MAX_EDITS then
+        IdeFollow.edits[oldest] = nil
+    end
+end
+
+-- Records the file edits in complete, newly appended log lines (a substring check gates JSON decoding).
+local function record_edits(text, kind, encoded, scope)
+    local marker = kind == "agy" and '"TargetFile"' or '"tool_use"'
+    for line in text:gmatch("[^\n]+") do
+        if line:find(marker, 1, true) then
+            local ok, entry = pcall(vim.json.decode, line)
+            if ok and type(entry) == "table" then
+                if kind == "agy" then
+                    for _, call in ipairs(type(entry.tool_calls) == "table" and entry.tool_calls or {}) do
+                        note_edit(scope, agy_edit(call, encoded))
+                    end
+                elseif type(entry.message) == "table" and type(entry.message.content) == "table" then
+                    for _, block in ipairs(entry.message.content) do
+                        note_edit(scope, claude_edit(block))
+                    end
                 end
             end
         end
     end
-    return last_line
+end
+
+-- Parses what the log at `path` gained since the last tick. A log seen for the first time is read
+-- from its last IDE_FOLLOW_EDIT_LOG_TAIL bytes; `prime` skips to its end instead (activity from
+-- before the Editor started is not followed).
+local function tail_edit_log(path, size, kind, encoded, scope, prime)
+    local state = IdeFollow.edit_logs[path]
+    if prime or not state or size < state.offset then
+        local start = prime and size or math.max(0, size - IDE_FOLLOW_EDIT_LOG_TAIL)
+        -- Starting mid-line: the first (partial) line is skipped
+        state = { offset = start, partial = "", skip = start > 0 and read_bytes(path, start - 1, 1) ~= "\n" }
+        IdeFollow.edit_logs[path] = state
+    end
+    if size <= state.offset then
+        return
+    end
+    local chunk = read_bytes(path, state.offset, size - state.offset)
+    if not chunk or chunk == "" then
+        return
+    end
+    state.offset = state.offset + #chunk
+    local text = state.partial .. chunk
+    local last_nl = text:match("^.*()\n")
+    state.partial = last_nl and text:sub(last_nl + 1) or text
+    if not last_nl then
+        return
+    end
+    text = text:sub(1, last_nl)
+    if state.skip then
+        text = text:gsub("^[^\n]*\n", "", 1)
+        state.skip = false
+    end
+    record_edits(text, kind, encoded, scope)
+end
+
+-- Tails this session's edit logs: the agy transcripts of its conversations and their subagents
+-- (`<brain>/<id>/.system_generated/logs/transcript_full.jsonl`) and its most recently active Claude
+-- Code transcripts, recording the in-scope file edits they gained since the last tick.
+function IdeFollow.read_edit_logs(roots, conv_dirs, prime)
+    local uv = vim.uv or vim.loop
+    local scope = edit_scope(roots)
+    for _, dir in ipairs(conv_dirs) do
+        local logs = dir .. "/.system_generated/logs/"
+        local path, encoded = logs .. "transcript_full.jsonl", false
+        local st = uv.fs_stat(path)
+        if not st then
+            path, encoded = logs .. "transcript.jsonl", true
+            st = uv.fs_stat(path)
+        end
+        if st then
+            tail_edit_log(path, st.size, "agy", encoded, scope, prime)
+        end
+    end
+    for _, log in ipairs(claude_session_logs(roots, IDE_FOLLOW_MAX_CLAUDE_LOGS)) do
+        tail_edit_log(log.path, log.st.size, "claude", false, scope, prime)
+    end
+end
+
+-- Newest file among the logged edits. An edit waiting on a permission prompt stays a candidate until
+-- it lands (or IDE_FOLLOW_MAX_EDITS newer edits evict it).
+local function newest_logged_edit(newest_path, newest_mtime)
+    for path in pairs(IdeFollow.edits) do
+        local mtime = stat_mtime_ns(path)
+        if mtime > newest_mtime then
+            newest_path, newest_mtime = path, mtime
+        end
+    end
+    return newest_path, newest_mtime
+end
+
+-- Line of the current buffer a logged edit landed on: the first distinctive line of its replacement
+-- block where that block now sits (else where that line alone first appears), searched from the tool
+-- call's StartLine through the replaced range (the whole buffer for Claude Code edits, which carry no
+-- line numbers); else StartLine itself.
+local function edit_landing_line(hint)
+    local total = vim.api.nvim_buf_line_count(0)
+    if hint.line == -1 then
+        return total
+    end
+    local first = hint.line and math.max(1, math.min(hint.line, total)) or 1
+    local last = hint.line and math.min(total, first + (hint.span or 0) + 2) or total
+    local text = type(hint.text) == "string" and (hint.text:gsub("\r", ""):gsub("\n+$", "")) or ""
+    if text ~= "" then
+        local lines = vim.api.nvim_buf_get_lines(0, first - 1, last, false)
+        local needle, lead = edit_needle(text)
+        local joined = table.concat(lines, "\n")
+        local pos = joined:find(text, 1, true)
+        if pos then
+            local _, before = joined:sub(1, pos - 1):gsub("\n", "")
+            return first + before + (lead or 1) - 1
+        end
+        for i, line in ipairs(needle and lines or {}) do
+            if line:find(needle, 1, true) then
+                return first + i - 1
+            end
+        end
+    end
+    return hint.line and first or nil
+end
+
+local function center_line(line)
+    local total = vim.api.nvim_buf_line_count(0)
+    pcall(vim.api.nvim_win_set_cursor, 0, { math.max(1, math.min(line, total)), 0 })
+    pcall(vim.cmd, "normal! zz")
+end
+
+-- -----------------------------------------------------------------------------
+-- Background `git status`: catches edits made through shell commands. Never awaited by the tick:
+-- one scan in flight at a time, each starting no sooner than one tick, or (1 + IDE_FOLLOW_VCS_BACKOFF)
+-- x the previous scan's duration, after the previous one started.
+-- -----------------------------------------------------------------------------
+
+-- Dirty paths of `git status --porcelain -z` output (renames / copies list the new path first).
+local function porcelain_paths(out, toplevel)
+    local paths = {}
+    local fields = vim.split(out or "", "\0", { plain = true })
+    local i = 1
+    while i <= #fields do
+        local field = fields[i]
+        if #field > 3 then
+            paths[#paths + 1] = toplevel .. "/" .. field:sub(4)
+            if field:sub(1, 2):find("[RC]") then
+                i = i + 1
+            end
+        end
+        i = i + 1
+    end
+    return paths
+end
+
+-- The IDE_FOLLOW_MAX_VCS_PATHS most recently modified existing files of `paths`.
+local function freshest(paths)
+    local stamped = {}
+    for _, path in ipairs(paths) do
+        local mtime = stat_mtime_ns(path)
+        if mtime > 0 then
+            stamped[#stamped + 1] = { path = path, mtime = mtime }
+        end
+    end
+    table.sort(stamped, function(a, b)
+        return a.mtime > b.mtime
+    end)
+    local out = {}
+    for i = 1, math.min(#stamped, IDE_FOLLOW_MAX_VCS_PATHS) do
+        out[i] = stamped[i].path
+    end
+    return out
+end
+
+-- Starts the next background scan of `root` when due (`force`: now, unless one is in flight). The
+-- first run resolves the git toplevel; porcelain paths are relative to it even after `icd`.
+function IdeFollow.refresh_vcs(root, force)
+    local uv = vim.uv or vim.loop
+    local vcs = IdeFollow.vcs
+    if vcs.root ~= root then
+        vcs.gen = vcs.gen + 1
+        vcs.root, vcs.toplevel, vcs.paths, vcs.inflight, vcs.next_ns = root, nil, {}, false, 0
+    end
+    if vcs.inflight or vcs.toplevel == false or (not force and uv.hrtime() < vcs.next_ns) then
+        return
+    end
+    local gen, started = vcs.gen, uv.hrtime()
+    local cmd = vcs.toplevel and { "git", "-C", vcs.toplevel, "--no-optional-locks", "status", "--porcelain", "-z", "-uall" }
+        or { "git", "-C", root, "rev-parse", "--show-toplevel" }
+    vcs.inflight = true
+    local ok = pcall(vim.system, cmd, {}, vim.schedule_wrap(function(res)
+        if gen ~= vcs.gen then
+            return -- the root changed (`icd`) while git was running
+        end
+        vcs.inflight = false
+        if not vcs.toplevel then
+            local top = res.code == 0 and vim.trim(res.stdout or "") or ""
+            vcs.toplevel = top ~= "" and top or false
+            if vcs.toplevel then
+                IdeFollow.refresh_vcs(root, true) -- straight on to the first status scan
+            end
+            return
+        end
+        if res.code == 0 then
+            vcs.paths = freshest(porcelain_paths(res.stdout, vcs.toplevel))
+        end
+        vcs.scans = vcs.scans + 1
+        local took = uv.hrtime() - started
+        vcs.next_ns = started + math.max((IDE_FOLLOW_TICK_MS - 250) * 1000000, (1 + IDE_FOLLOW_VCS_BACKOFF) * took)
+    end))
+    if not ok then
+        vcs.inflight, vcs.toplevel = false, false -- git is not installed
+    end
+end
+
+-- Last hunk start (`@@ -a,b +c,d @@`) of `git diff -U0` output.
+local function last_hunk_line(diff)
+    local last = nil
+    for n in (diff or ""):gmatch("\n@@ %-[0-9,]+ %+([0-9]+)") do
+        n = tonumber(n)
+        if n and n > 0 then
+            last = n
+        end
+    end
+    return last
+end
+
+-- `path` as it sits under the git work tree `toplevel` (which `rev-parse` reports symlink-resolved),
+-- or nil when the file is outside it.
+local function repo_path(path, toplevel)
+    if under(path, toplevel) then
+        return path
+    end
+    local real = (vim.uv or vim.loop).fs_realpath(path)
+    return real and under(real, toplevel) and real or nil
+end
+
+-- Centers the last `git diff` hunk of `path` once git answers, unless you have moved on since.
+local function jump_to_git_hunk(path, toplevel)
+    local jump, buf, cursor = IdeFollow.jumps, vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(0)
+    pcall(vim.system, { "git", "-C", toplevel, "--no-optional-locks", "diff", "-U0", "--", path }, {},
+        vim.schedule_wrap(function(res)
+            local line = res.code == 0 and last_hunk_line(res.stdout)
+            if line and jump == IdeFollow.jumps and vim.api.nvim_get_mode().mode == "n"
+                and vim.api.nvim_get_current_buf() == buf and vim.deep_equal(vim.api.nvim_win_get_cursor(0), cursor)
+            then
+                center_line(line)
+            end
+        end))
+end
+
+-- Newest follow candidate across this session's logged AI edits, the freshest dirty files of the last
+-- background `git status`, and this session's plan / walkthrough artifacts (stats and small reads only).
+function IdeFollow.find_newest_modified(root)
+    root = (root and root ~= "") and root or IdeTree.root or vim.fn.getcwd()
+    local roots, roots_key = IdeFollow.session_roots()
+    local conv_dirs = roots_key and IdeFollow.agy_conversation_dirs(roots) or {}
+    if roots_key then
+        IdeFollow.read_edit_logs(roots, conv_dirs)
+    end
+    local newest_path, newest_mtime = newest_logged_edit(nil, 0)
+    if IdeFollow.vcs.root == root then
+        for _, path in ipairs(IdeFollow.vcs.paths) do
+            local mtime = stat_mtime_ns(path)
+            if mtime > newest_mtime then
+                newest_path, newest_mtime = path, mtime
+            end
+        end
+    end
+    return IdeFollow.find_newest_artifact(newest_path, newest_mtime, conv_dirs)
 end
 
 function IdeFollow.sync(force)
@@ -1161,6 +1552,7 @@ function IdeFollow.sync(force)
         return false
     end
     local root = IdeTree.root or vim.fn.getcwd()
+    IdeFollow.refresh_vcs(root, force) -- background: its dirty files feed a later tick
     local newest_path, newest_mtime = IdeFollow.find_newest_modified(root)
     if not newest_path or newest_mtime == 0 then
         return false
@@ -1172,6 +1564,7 @@ function IdeFollow.sync(force)
     end
     IdeFollow.last_mtime_ns = newest_mtime
     IdeFollow.last_file = newest_path
+    IdeFollow.jumps = IdeFollow.jumps + 1
 
     if IdeTree.buf and vim.api.nvim_buf_is_valid(IdeTree.buf) and vim.fn.bufwinid(IdeTree.buf) ~= -1 then
         IdeTree.invalidate_cache()
@@ -1186,14 +1579,17 @@ function IdeFollow.sync(force)
         pcall(vim.cmd, "silent! checktime")
     end
 
-    local toplevel = IdeFollow.git_toplevel(root)
-    local hunk_line = toplevel and newest_path:sub(1, #toplevel + 1) == toplevel .. "/"
-        and IdeFollow.find_latest_hunk_line(root, newest_path)
-    if hunk_line then
-        local total = vim.api.nvim_buf_line_count(0)
-        local target = math.max(1, math.min(hunk_line, total))
-        pcall(vim.api.nvim_win_set_cursor, 0, { target, 0 })
-        pcall(vim.cmd, "normal! zz")
+    -- Land on the changed line: the logged edit's own line; files the AI changed only through the
+    -- shell (or rewrote whole) move on to their last `git diff` hunk once git answers
+    local hint = IdeFollow.edits[newest_path]
+    local line = hint and edit_landing_line(hint)
+    if line then
+        center_line(line)
+    end
+    local toplevel = IdeFollow.vcs.toplevel
+    local git_path = (not line or hint.whole) and toplevel and repo_path(newest_path, toplevel)
+    if git_path then
+        jump_to_git_hunk(git_path, toplevel)
     end
     return true
 end
@@ -1208,17 +1604,23 @@ function IdeFollow.start_timer()
     if IdeFollow.timer then
         return
     end
-    local root = IdeTree.root or vim.fn.getcwd()
-    local ok, init_path, init_mtime = pcall(IdeFollow.find_newest_modified, root)
-    if ok and init_path and init_mtime > 0 then
-        IdeFollow.last_file = init_path
-        IdeFollow.last_mtime_ns = init_mtime
-    end
+    -- Only activity from now on is followed: the baseline is the current time, and this session's
+    -- existing edit logs are skipped to their end (deferred out of startup: indexing the prompt
+    -- history can take tens of milliseconds)
+    IdeFollow.last_mtime_ns = math.max(IdeFollow.last_mtime_ns, now_ns())
+    vim.schedule(function()
+        pcall(function()
+            local roots, roots_key = IdeFollow.session_roots()
+            if roots_key then
+                IdeFollow.read_edit_logs(roots, IdeFollow.agy_conversation_dirs(roots), true)
+            end
+        end)
+    end)
     local uv = vim.uv or vim.loop
     if uv and uv.new_timer then
         IdeFollow.timer = uv.new_timer()
         if IdeFollow.timer then
-            IdeFollow.timer:start(1500, 1500, vim.schedule_wrap(function()
+            IdeFollow.timer:start(IDE_FOLLOW_TICK_MS, IDE_FOLLOW_TICK_MS, vim.schedule_wrap(function()
                 if IdeFollow.enabled then
                     pcall(IdeFollow.sync, false)
                 end
