@@ -141,6 +141,21 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim IDE quit safety & live-follow" "Expected IdeClose, IdeWriteClose, IdeFollowToggle, <leader>af, <leader>gs, SolarizedIdeTree, winfixwidth, non_sidebar_wins, and no NVIM_IDE_TREE in init.lua"
     fi
 
+    if grep -q 'function IdeFollow.session_roots()' "$NVIM_CONFIG" && \
+       grep -q 'cli/history.jsonl' "$NVIM_CONFIG" && \
+       grep -q '/.system_generated/subagents' "$NVIM_CONFIG" && \
+       grep -q 'function IdeFollow.git_toplevel(root)' "$NVIM_CONFIG" && \
+       grep -q 'local IdeFollow = _G.IdeFollow or {' "$NVIM_CONFIG" && \
+       grep -q 'local IdeTree = _G.IdeTree or {' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_autocmd("BufWritePost"' "$NVIM_CONFIG" && \
+       ! grep -q 'ide_artifact_dirs' "$NVIM_CONFIG" && \
+       grep -q 'local function agy_dirs()' "$NVIM_CONFIG" && \
+       ! grep -q 'gemini/[^"]*/brain"' "$NVIM_CONFIG"; then
+        pass "Neovim IdeFollow is session-scoped (only this root's agy conversations in the auto-detected ~/.gemini data dir, subagents, and Claude plans), joins porcelain paths to the git toplevel, ignores your own saves, and survives :source without orphaning its timer"
+    else
+        fail "Neovim IdeFollow session scoping" "Expected session_roots(), cli/history.jsonl ownership, subagent records, git_toplevel(), reload-safe _G tables, a BufWritePost baseline, and no global brain scan in init.lua"
+    fi
+
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \
        grep -q '@markup.heading\.2.*colors\.blue' "$NVIM_CONFIG" && \
        grep -q '@markup.heading\.3.*colors\.violet' "$NVIM_CONFIG" && \

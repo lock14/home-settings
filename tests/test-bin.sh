@@ -240,8 +240,12 @@ if command -v tmux >/dev/null 2>&1; then
 
             if command -v git >/dev/null 2>&1; then
                 FOLLOW_REPO="$TEMP_HOME/follow_repo_test"
-                FOLLOW_BRAIN="$TEMP_HOME/brain_test/conv-123"
-                mkdir -p "$FOLLOW_REPO" "$FOLLOW_BRAIN"
+                # agy's data directory is auto-detected as the ~/.gemini/* entry holding cli/history.jsonl
+                FOLLOW_HOME="$TEMP_HOME/follow_home"
+                FOLLOW_AGY="$FOLLOW_HOME/.gemini/agy_test"
+                FOLLOW_CLAUDE="$TEMP_HOME/claude_test"
+                mkdir -p "$FOLLOW_REPO/pkg" "$FOLLOW_AGY/cli" "$FOLLOW_AGY/brain/conv-own/.system_generated/subagents" \
+                    "$FOLLOW_AGY/brain/conv-sub" "$FOLLOW_AGY/brain/conv-foreign" "$FOLLOW_HOME/.gemini/unrelated" "$FOLLOW_CLAUDE/plans"
                 (
                     cd "$FOLLOW_REPO"
                     git init -q
@@ -251,19 +255,64 @@ if command -v tmux >/dev/null 2>&1; then
                     git add tracked.go
                     git commit -q -m "initial" --no-gpg-sign
                 )
-                printf "# Implementation Plan\n" > "$FOLLOW_BRAIN/plan.md"
-                plan_follow_out="$(cd "$FOLLOW_REPO" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
-                    -c "lua vim.g.ide_artifact_dirs = { '$TEMP_HOME/brain_test' }; IdeFollow.sync(true); io.stdout:write('PLAN:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'))" \
-                    -c "qa!" 2>&1 || true)"
-                sleep 1
-                printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
-                follow_out="$(cd "$FOLLOW_REPO" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
-                    -c "lua vim.g.ide_artifact_dirs = { '$TEMP_HOME/brain_test' }; IdeFollow.sync(true); io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))" \
-                    -c "qa!" 2>&1 || true)"
-                if grep -Fq "PLAN:plan.md" <<< "$plan_follow_out" && grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out"; then
-                    pass "AI Live-Follow Mode (IdeFollow.sync) follows newly written /plan .md artifacts and git-modified files, jumping to the modified diff hunk line"
+                FOLLOW_REPO_REAL="$(cd "$FOLLOW_REPO" && pwd -P)"
+                CLAUDE_PROJECT="$FOLLOW_CLAUDE/projects/$(printf '%s' "$FOLLOW_REPO_REAL" | LC_ALL=C sed 's/[^[:alnum:]]/-/g')"
+                mkdir -p "$CLAUDE_PROJECT"
+
+                # Two concurrent `ide` sessions: conv-own was launched in this session's root, conv-foreign in another
+                printf '{"display":"plan it","timestamp":1000,"workspace":"%s","conversationId":"conv-own"}\n' "$FOLLOW_REPO" > "$FOLLOW_AGY/cli/history.jsonl"
+                printf '{"display":"other","timestamp":2000,"workspace":"%s","conversationId":"conv-foreign"}\n' "$TEMP_HOME/other_repo" >> "$FOLLOW_AGY/cli/history.jsonl"
+                printf '{"conversationId":"conv-sub"}\n' > "$FOLLOW_AGY/brain/conv-own/.system_generated/subagents/conv-sub.json"
+                printf "# Implementation Plan\n" > "$FOLLOW_AGY/brain/conv-own/plan.md"
+                printf "# Other Session Plan\n" > "$FOLLOW_AGY/brain/conv-foreign/foreign_plan.md"
+                touch -t 202001010000.10 "$FOLLOW_AGY/brain/conv-own/plan.md"
+                touch -t 202001010000.30 "$FOLLOW_AGY/brain/conv-foreign/foreign_plan.md"
+
+                # HOME is swapped only after init.lua ran, so lazy.nvim still loads from the real data dir
+                follow_nvim() {
+                    local cwd="$1"
+                    local lua_cmd="$2"
+                    (cd "$cwd" && env -u NVIM_IDE_SOCKET IDE_INITIAL_ROOT="$FOLLOW_REPO" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                        -c "lua vim.env.HOME = '$FOLLOW_HOME'; vim.g.ide_claude_dir = '$FOLLOW_CLAUDE'; $lua_cmd" \
+                        -c "qa!" 2>&1 || true)
+                }
+                follow_plan_lua="IdeFollow.sync(true); io.stdout:write('PLAN:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'))"
+
+                own_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
+
+                printf "# Subagent Report\n" > "$FOLLOW_AGY/brain/conv-sub/sub_report.md"
+                touch -t 202001010000.40 "$FOLLOW_AGY/brain/conv-sub/sub_report.md"
+                sub_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
+
+                # Claude Code shares ~/.claude/plans across projects; only plans named in this root's transcripts belong here
+                printf "# Claude Plan\n" > "$FOLLOW_CLAUDE/plans/own-claude-plan.md"
+                printf "# Other Claude Plan\n" > "$FOLLOW_CLAUDE/plans/foreign-claude-plan.md"
+                printf '{"type":"assistant","cwd":"%s","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"%s"}}]}}\n' \
+                    "$FOLLOW_REPO_REAL" "$FOLLOW_CLAUDE/plans/own-claude-plan.md" > "$CLAUDE_PROJECT/session-1.jsonl"
+                touch -t 202001010000.50 "$FOLLOW_CLAUDE/plans/own-claude-plan.md"
+                touch -t 202001010000.55 "$CLAUDE_PROJECT/session-1.jsonl"
+                touch -t 202001010001.00 "$FOLLOW_CLAUDE/plans/foreign-claude-plan.md"
+                claude_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
+
+                if grep -Fq "PLAN:plan.md" <<< "$own_follow_out" && \
+                   grep -Fq "PLAN:sub_report.md" <<< "$sub_follow_out" && \
+                   grep -Fq "PLAN:own-claude-plan.md" <<< "$claude_follow_out"; then
+                    pass "AI Live-Follow Mode (IdeFollow.sync) follows only this session's /plan artifacts (own agy conversation in the auto-detected ~/.gemini data dir, its subagents, and Claude plans named in this root's transcripts) while ignoring newer artifacts of concurrent ide sessions"
                 else
-                    fail "AI Live-Follow Mode (IdeFollow.sync)" "Expected PLAN:plan.md and FILE:tracked.go LINE:3, got plan=$plan_follow_out code=$follow_out"
+                    fail "IdeFollow session-scoped artifacts" "Expected PLAN:plan.md, PLAN:sub_report.md, PLAN:own-claude-plan.md; got own=$own_follow_out sub=$sub_follow_out claude=$claude_follow_out"
+                fi
+
+                # AI edit resolved from an `icd` subdirectory root (porcelain paths are toplevel-relative)
+                printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
+                follow_out="$(follow_nvim "$FOLLOW_REPO/pkg" "IdeFollow.sync(true); io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))")"
+
+                # Your own :w is not AI activity: the follow baseline advances and the cursor stays put
+                self_save_out="$(follow_nvim "$FOLLOW_REPO" "IdeFollow.enabled = true; vim.cmd('edit $FOLLOW_REPO/tracked.go'); vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'line1_user_edit' }); vim.cmd('silent write'); vim.api.nvim_win_set_cursor(0, { 1, 0 }); local moved = IdeFollow.sync(false); io.stdout:write('SELFSAVE:' .. tostring(moved) .. ' LINE:' .. vim.fn.line('.'))")"
+
+                if grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out" && grep -Fq "SELFSAVE:false LINE:1" <<< "$self_save_out"; then
+                    pass "AI Live-Follow Mode follows git-modified files from an icd subdirectory root to the modified diff hunk line, and never re-jumps after your own :w saves"
+                else
+                    fail "IdeFollow git follow / self-save" "Expected FILE:tracked.go LINE:3 and SELFSAVE:false LINE:1, got code=$follow_out save=$self_save_out"
                 fi
             fi
         else
