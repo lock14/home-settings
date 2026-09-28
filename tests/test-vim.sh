@@ -2335,6 +2335,178 @@ end
             fail "Neovim UI highlights" "Expected complete UI highlight matches (curline_nr=${RES[ui_curline_nr_fg]:-}/${RES[ui_curline_nr_bg]:-} linenr=${RES[ui_linenr_fg]:-} winsep=${RES[ui_winsep_fg]:-} floatborder=${RES[ui_floatborder_fg]:-} matchparen=${RES[ui_matchparen_fg]:-}/${RES[ui_matchparen_bg]:-} search=${RES[ui_search_bg]:-} visual=${RES[ui_visual_bg]:-} hint=${RES[ui_diag_hint_fg]:-} diffadd=${RES[ui_diffadd_fg]:-}/${RES[ui_diffadd_bg]:-})"
         fi
     fi
+
+    # Mouse resizing inside the Editor: dragging the SolarizedIdeTree edge resizes the sidebar even while the tree has
+    # focus (its buffer-local mouse maps must hand separator presses back to Neovim instead of acting on the row under
+    # the cursor), plain clicks on tree rows keep working, and the dragged width survives hiding and reopening the tree
+    if command -v nvim >/dev/null 2>&1; then
+        MOUSE_NVIM_DIR="$(mktemp -d)"
+        ln -sfn "$SCRIPT_DIR/dotfiles/.config/nvim" "$MOUSE_NVIM_DIR/nvim"
+        mkdir -p "$MOUSE_NVIM_DIR/work/alpha/beta" "$MOUSE_NVIM_DIR/work/gamma"
+        touch "$MOUSE_NVIM_DIR/work/alpha/beta/deep.txt" "$MOUSE_NVIM_DIR/work/gamma/g.txt" "$MOUSE_NVIM_DIR/work/readme.txt"
+        cat > "$MOUSE_NVIM_DIR/mouse.lua" <<'LUA'
+-- Each mouse event is injected in its own deferred step so Neovim processes it before the next one arrives
+local IdeTree = _G.IdeTree
+local res, steps = {}, {}
+local function add(fn) steps[#steps + 1] = fn end
+local function tree_win()
+    local win = vim.fn.bufwinid(IdeTree.buf or -1)
+    return win ~= -1 and win or nil
+end
+local function code_win()
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if vim.api.nvim_win_get_config(win).relative == "" and vim.api.nvim_win_get_buf(win) ~= IdeTree.buf then
+            return win
+        end
+    end
+end
+local function tree_lines() return vim.api.nvim_buf_line_count(IdeTree.buf) end
+local function row_of(pred)
+    for lnum = 2, tree_lines() do
+        local item = IdeTree.entries[lnum]
+        if item and pred(item) then return lnum, item end
+    end
+end
+local function mouse(action, row, col) vim.api.nvim_input_mouse("left", action, "", 0, row, col) end
+-- 0-based grid cell on the tree's right edge (its vertical separator), a few rows down
+local function edge()
+    local win = tree_win()
+    local pos = vim.fn.win_screenpos(win)
+    return pos[1] + 2, pos[2] - 1 + vim.api.nvim_win_get_width(win)
+end
+local function drag_edge_steps(delta)
+    local row, col
+    add(function() row, col = edge(); mouse("press", row, col) end)
+    add(function() mouse("drag", row, col + math.floor(delta / 2)) end)
+    add(function() mouse("drag", row, col + delta) end)
+    add(function() mouse("release", row, col + delta) end)
+end
+
+add(function() IdeTree.toggle_split() end)
+-- A: drag the edge while the tree has focus, with the tree cursor parked on a folder row
+local a_lines
+add(function()
+    local win = tree_win()
+    vim.api.nvim_set_current_win(win)
+    vim.api.nvim_win_set_cursor(win, { (row_of(function(item) return item.is_dir end)), 0 })
+    res.a_before, a_lines = vim.api.nvim_win_get_width(win), tree_lines()
+end)
+add(function() end)
+drag_edge_steps(12)
+add(function()
+    res.a_after = vim.api.nvim_win_get_width(tree_win())
+    res.a_toggled = tree_lines() ~= a_lines
+end)
+-- B: drag the edge while the code window has focus
+add(function()
+    vim.api.nvim_win_set_width(tree_win(), 28)
+    vim.api.nvim_set_current_win(code_win())
+    res.b_before = vim.api.nvim_win_get_width(tree_win())
+end)
+drag_edge_steps(8)
+add(function() res.b_after = vim.api.nvim_win_get_width(tree_win()) end)
+-- C: a plain click on a collapsed folder row still expands it. Focus the tree first and outlast its
+-- 150 ms click-to-focus latch (a click that only brings the tree into focus never toggles a folder)
+local c_lines, c_row, c_col
+add(function() vim.api.nvim_set_current_win(tree_win()) end)
+add(function() end)
+add(function()
+    local win = tree_win()
+    local lnum = row_of(function(item) return item.is_dir and not IdeTree.expanded[item.path] end)
+    local pos = vim.fn.screenpos(win, lnum, 1)
+    c_lines, c_row, c_col = tree_lines(), pos.row - 1, pos.col + 2
+    mouse("press", c_row, c_col)
+end)
+add(function() mouse("release", c_row, c_col) end)
+add(function() res.c_expanded = tree_lines() > c_lines end)
+-- D: double-clicking the edge while the tree cursor sits on a file opens nothing
+local d_row, d_col, d_buf, d_path
+add(function()
+    local win = tree_win()
+    vim.api.nvim_set_current_win(win)
+    local lnum, item = row_of(function(item) return not item.is_dir end)
+    vim.api.nvim_win_set_cursor(win, { lnum, 0 })
+    d_path, d_buf = item.path, vim.api.nvim_win_get_buf(code_win())
+end)
+add(function() end)
+add(function() d_row, d_col = edge(); mouse("press", d_row, d_col) end)
+add(function() mouse("release", d_row, d_col) end)
+add(function() mouse("press", d_row, d_col) end)
+add(function() mouse("release", d_row, d_col) end)
+add(function()
+    res.d_opened = vim.api.nvim_win_get_buf(code_win()) ~= d_buf or vim.fn.bufloaded(d_path) == 1
+end)
+-- E: hiding and reopening the tree keeps a dragged width, capped at half the screen
+add(function()
+    vim.api.nvim_win_set_width(tree_win(), 33)
+    IdeTree.toggle_split()
+end)
+add(function()
+    IdeTree.toggle_split()
+    res.e_reopen = vim.api.nvim_win_get_width(tree_win())
+    IdeTree.toggle_split()
+    IdeTree.width = 70
+    IdeTree.toggle_split()
+    res.e_capped, res.e_cap = vim.api.nvim_win_get_width(tree_win()), math.floor(vim.o.columns / 2)
+end)
+add(function()
+    local out = {}
+    for k, v in pairs(res) do out[#out + 1] = k .. "=" .. tostring(v) end
+    vim.fn.writefile(out, vim.env.MOUSE_OUT)
+    vim.cmd("qall!")
+end)
+
+local i = 0
+local function run()
+    i = i + 1
+    if not steps[i] then return end
+    local ok, err = pcall(steps[i])
+    if not ok then
+        vim.fn.writefile({ "err=step " .. i .. ": " .. tostring(err) }, vim.env.MOUSE_OUT)
+        vim.cmd("qall!")
+        return
+    end
+    vim.defer_fn(run, 150)
+end
+vim.defer_fn(run, 500)
+LUA
+        (cd "$MOUSE_NVIM_DIR/work" && env -u TMUX -u TMUX_PANE -u IDE_SESSION -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE \
+            -u IDE_INITIAL_ROOT -u IDE_AI_CLI -u NVIM_IDE_LAYOUT MOUSE_OUT="$MOUSE_NVIM_DIR/out" XDG_CONFIG_HOME="$MOUSE_NVIM_DIR" \
+            timeout 60 nvim --headless -i NONE -u "$NVIM_CONFIG" -c "luafile $MOUSE_NVIM_DIR/mouse.lua" >/dev/null 2>&1) || true
+        declare -A MOUSE=()
+        if [ -f "$MOUSE_NVIM_DIR/out" ]; then
+            while IFS='=' read -r k v; do
+                [ -n "$k" ] && MOUSE["$k"]="$v"
+            done < "$MOUSE_NVIM_DIR/out"
+        fi
+        rm -rf "$MOUSE_NVIM_DIR"
+
+        if [ -n "${MOUSE[a_before]:-}" ] && [ "${MOUSE[a_after]:-}" = "$(( ${MOUSE[a_before]:-0} + 12 ))" ] && [ "${MOUSE[a_toggled]:-}" = "false" ]; then
+            pass "Neovim SolarizedIdeTree edge resizes by mouse drag while the tree has focus, without toggling the folder under the cursor"
+        else
+            fail "Neovim tree-focused edge drag" "Expected tree width ${MOUSE[a_before]:-?} +12 with no folder toggled, got width=${MOUSE[a_after]:-?} toggled=${MOUSE[a_toggled]:-?} ${MOUSE[err]:-}"
+        fi
+        if [ -n "${MOUSE[b_before]:-}" ] && [ "${MOUSE[b_after]:-}" = "$(( ${MOUSE[b_before]:-0} + 8 ))" ]; then
+            pass "Neovim SolarizedIdeTree edge resizes by mouse drag while the code window has focus"
+        else
+            fail "Neovim code-focused edge drag" "Expected tree width ${MOUSE[b_before]:-?} +8, got ${MOUSE[b_after]:-?} ${MOUSE[err]:-}"
+        fi
+        if [ "${MOUSE[c_expanded]:-}" = "true" ]; then
+            pass "Neovim SolarizedIdeTree still expands a folder on a plain single click"
+        else
+            fail "Neovim tree single-click" "Expected a click on a collapsed folder row to expand it, got c_expanded=${MOUSE[c_expanded]:-?} ${MOUSE[err]:-}"
+        fi
+        if [ "${MOUSE[d_opened]:-}" = "false" ]; then
+            pass "Neovim SolarizedIdeTree ignores double-clicks on its edge (no file opens from the row under the cursor)"
+        else
+            fail "Neovim tree edge double-click" "Expected a double-click on the tree edge to open nothing, got d_opened=${MOUSE[d_opened]:-?} ${MOUSE[err]:-}"
+        fi
+        if [ "${MOUSE[e_reopen]:-}" = "33" ] && [ -n "${MOUSE[e_cap]:-}" ] && [ "${MOUSE[e_capped]:-}" = "${MOUSE[e_cap]}" ]; then
+            pass "Neovim SolarizedIdeTree reopens at its dragged width (Space e), capped at half the screen"
+        else
+            fail "Neovim tree width memory" "Expected reopen width 33 and a 70-column width capped to ${MOUSE[e_cap]:-?}, got reopen=${MOUSE[e_reopen]:-?} capped=${MOUSE[e_capped]:-?} ${MOUSE[err]:-}"
+        fi
+    fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"
 fi

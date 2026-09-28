@@ -244,6 +244,7 @@ local IdeTree = _G.IdeTree or {
     dir_cache = {},
     max_entries = 500,
     dotfile_mode = 1, -- 1 = show dotfiles (hide .git), 2 = show all including .git, 0 = hide dotfiles
+    width = 28, -- sidebar columns; follows the last width you dragged (see IdeTree.split_width)
 }
 _G.IdeTree = IdeTree
 
@@ -510,7 +511,7 @@ function IdeTree.focus_code_win()
     vim.opt_local.winfixheight = false
     vim.opt_local.statusline = ""
     if vim.api.nvim_win_is_valid(cur_win) then
-        pcall(vim.api.nvim_win_set_width, cur_win, 28)
+        pcall(vim.api.nvim_win_set_width, cur_win, IdeTree.split_width())
     end
     return vim.api.nvim_get_current_win()
 end
@@ -686,7 +687,23 @@ function IdeTree.attach_mappings(buf)
     bmap("=", function() IdeTree.dive("--reset") end, "Reset IDE working directory to initial root")
     bmap("<Tab>", function() IdeTree.action_enter(false) end, "Toggle directory or preview file")
     bmap("p", function() IdeTree.action_enter(false) end, "Preview file in Editor")
+    -- Presses on a window separator or status line (getmousepos().line == 0) belong to Neovim's
+    -- native drag-to-resize: replay them unmapped and let their release through, so dragging the
+    -- tree edge resizes the sidebar instead of acting on the row under the cursor
+    local function native_mouse(key)
+        local pos = vim.fn.getmousepos()
+        if pos and (pos.line or 0) > 0 then
+            return false
+        end
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), "ni", false)
+        return true
+    end
     bmap("<LeftMouse>", function()
+        -- Only single presses set the flag: a double-click's release arrives as the unmapped <2-LeftRelease>
+        IdeTree.native_drag = native_mouse("<LeftMouse>")
+        if IdeTree.native_drag then
+            return
+        end
         local now = (vim.uv or vim.loop).hrtime()
         local pos = vim.fn.getmousepos()
         if pos and pos.winid and pos.winid > 0 and vim.api.nvim_win_is_valid(pos.winid) then
@@ -708,6 +725,9 @@ function IdeTree.attach_mappings(buf)
         end
     end, "Position cursor and latch focus state on mouse down")
     bmap("<2-LeftMouse>", function()
+        if native_mouse("<2-LeftMouse>") then
+            return
+        end
         local lnum = vim.api.nvim_win_get_cursor(0)[1]
         local item = IdeTree.entries[lnum]
         if item and not item.is_dir then
@@ -715,6 +735,12 @@ function IdeTree.attach_mappings(buf)
         end
     end, "Open file on double-click")
     bmap("<LeftRelease>", function()
+        if IdeTree.native_drag then
+            IdeTree.native_drag = false
+            IdeTree.suppress_release = false
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<LeftRelease>", true, false, true), "ni", false)
+            return
+        end
         if IdeTree.suppress_release then
             IdeTree.suppress_release = false
             return
@@ -783,6 +809,13 @@ function IdeTree.open_in_current_win()
     IdeTree.render()
 end
 
+-- Sidebar width for a fresh tree split: the last width it had (28 by default), capped at half the
+-- screen so a tree dragged wide on a big terminal never swallows the Editor on a smaller one
+function IdeTree.split_width()
+    local width = tonumber(IdeTree.width) or 28
+    return math.max(12, math.min(width, math.floor(vim.o.columns / 2)))
+end
+
 function IdeTree.toggle_split()
     if IdeTree.buf and vim.api.nvim_buf_is_valid(IdeTree.buf) then
         local win = vim.fn.bufwinid(IdeTree.buf)
@@ -795,9 +828,24 @@ function IdeTree.toggle_split()
             return
         end
     end
-    vim.cmd("topleft 28vnew")
+    vim.cmd("topleft " .. IdeTree.split_width() .. "vnew")
     IdeTree.open_in_current_win()
 end
+
+-- Remember the width the tree had when its window closes (Space e, :q, :close), so a width dragged
+-- with the mouse survives hiding and reopening. A full-width tree (the last window) is not a choice
+vim.api.nvim_create_autocmd("WinClosed", {
+    group = vim.api.nvim_create_augroup("SolarizedIdeTreeWidth", { clear = true }),
+    callback = function(args)
+        local win = tonumber(args.match)
+        if win and IdeTree.buf and args.buf == IdeTree.buf and vim.api.nvim_win_is_valid(win) then
+            local width = vim.api.nvim_win_get_width(win)
+            if width < vim.o.columns then
+                IdeTree.width = width
+            end
+        end
+    end,
+})
 
 -- Project Tree Sidebar Toggle: toggles the in-process SolarizedIdeTree split (`Space+e`)
 map("n", "<leader>e", function()

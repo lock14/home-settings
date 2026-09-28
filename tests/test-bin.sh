@@ -34,13 +34,17 @@ done
 echo -e "\n[2/4] Testing binaries symlinking into ~/.local/bin..."
 TEMP_HOME=$(mktemp -d)
 TMUX_TEST_TMPDIR=""
-# Tear down the isolated tmux server (by its explicit socket, never via $TMUX) even when a check aborts
+MOUSE_TMPDIR=""
+# Tear down the isolated tmux servers (by their explicit sockets, never via $TMUX) even when a check aborts
 # or the run is interrupted, so no test server or Editor outlives the suite
 cleanup_test_bin() {
-    if [ -n "$TMUX_TEST_TMPDIR" ]; then
-        tmux -S "$TMUX_TEST_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
-        rm -rf "$TMUX_TEST_TMPDIR"
-    fi
+    local dir
+    for dir in "$TMUX_TEST_TMPDIR" "$MOUSE_TMPDIR"; do
+        if [ -n "$dir" ]; then
+            tmux -S "$dir/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+            rm -rf "$dir"
+        fi
+    done
     rm -rf "$TEMP_HOME"
 }
 trap cleanup_test_bin EXIT
@@ -710,6 +714,96 @@ LUA
         fail "bin/ide exact session names" "Expected ide-foo gone and ide-foobar (1 pane), ai-ide-foobar, ide-api, ide-api-gateway (1 pane) alive; got foobar_panes=$foobar_panes gateway_panes=$gateway_panes sessions: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
     fi
     "$SCRIPT_DIR/bin/ide" --kill "ide-api" >/dev/null 2>&1 || true
+
+    # Mouse resizing: in a real terminal client (a python3 pty speaking SGR mouse), dragging the AI | Editor border and
+    # the Shell's top edge resizes panes under the repo's .tmux.conf, and focus switches (--toggle / --show-term) plus a
+    # zoom round trip keep the dragged sizes. Its own private server starts with -f so the config is loaded explicitly.
+    if command -v python3 >/dev/null 2>&1; then
+        MOUSE_TMPDIR="$(mktemp -d)"
+        IDE_WS_MOUSE="$TEMP_HOME/ws_mouse"
+        mkdir -p "$IDE_WS_MOUSE"
+        mouse_out="$(
+            export TMUX_TMPDIR="$MOUSE_TMPDIR"
+            tmux -f "$SCRIPT_DIR/dotfiles/.tmux.conf" new-session -d -s mouse-holder -x 120 -y 40
+            env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_MOUSE" >/dev/null 2>&1
+            echo "binding=$(tmux list-keys -T root MouseDrag1Border 2>&1)"
+            python3 - "$SCRIPT_DIR/bin/ide" "ide-ws_mouse" 2>&1 <<'PY'
+import fcntl, os, select, struct, subprocess, sys, termios, threading, time
+
+ide, sess = sys.argv[1], sys.argv[2]
+
+def tmux(*args):
+    return subprocess.run(["tmux", *args], capture_output=True, text=True).stdout.strip()
+
+panes = [tmux("show-options", "-qv", "-t", f"={sess}:", o) for o in ("@ide_ai_pane", "@ide_editor_pane", "@ide_term_pane")]
+
+def sizes():
+    fmt = "#{pane_left} #{pane_top} #{pane_width} #{pane_height}"
+    return [tuple(int(v) for v in tmux("display-message", "-p", "-t", p, fmt).split()) for p in panes]
+
+# A 120x41 terminal: the top status bar plus 40 pane rows
+master, slave = os.openpty()
+fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 41, 120, 0, 0))
+
+def controlling_tty():
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+client = subprocess.Popen(["tmux", "attach-session", "-t", f"={sess}"], stdin=slave, stdout=slave, stderr=slave,
+                          preexec_fn=controlling_tty, env=dict(os.environ, TERM="xterm-256color"))
+os.close(slave)
+attached = True
+
+def drain():  # keep reading so tmux never blocks on a full pty
+    while attached:
+        if select.select([master], [], [], 0.05)[0]:
+            try:
+                os.read(master, 65536)
+            except OSError:
+                return
+
+threading.Thread(target=drain, daemon=True).start()
+for _ in range(50):
+    if tmux("display-message", "-p", "-t", panes[0], "#{window_width}x#{window_height}") == "120x40":
+        break
+    time.sleep(0.1)
+
+def send(seq):
+    os.write(master, seq.encode())
+    time.sleep(0.2)
+
+def drag(x0, y0, x1, y1):
+    # SGR mouse reports use 1-based cells, and window row y sits on screen row y + 1 below the top status bar
+    send(f"\x1b[<0;{x0 + 1};{y0 + 2}M")
+    send(f"\x1b[<32;{(x0 + x1) // 2 + 1};{(y0 + y1) // 2 + 2}M")
+    send(f"\x1b[<32;{x1 + 1};{y1 + 2}M")
+    send(f"\x1b[<0;{x1 + 1};{y1 + 2}m")
+
+before = sizes()
+(al, at, aw, ah), (el, et, ew, eh), (sl, st, sw, sh) = before
+drag(al + aw, at + 3, al + aw - 10, at + 3)  # AI | Editor border, 10 columns left
+drag(2, st - 1, 2, st - 6)                    # Shell's top edge, 5 rows up
+dragged = sizes()
+drag_ok = dragged[0][2] == aw - 10 and dragged[1][2] == ew + 10 and dragged[2][3] == sh + 5
+for args in (["--toggle", sess], ["--show-term", sess], ["--show-term", sess], ["--toggle", sess]):
+    subprocess.run([ide, *args], capture_output=True)
+tmux("resize-pane", "-Z", "-t", panes[1])
+tmux("resize-pane", "-Z", "-t", panes[1])
+kept = sizes()
+attached = False
+client.terminate()
+print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept}")
+PY
+        )" || true
+        tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+        rm -rf "$MOUSE_TMPDIR"
+        MOUSE_TMPDIR=""
+        if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && grep -q '^drag=ok kept=ok$' <<< "$mouse_out"; then
+            pass "tmux resizes IDE panes by mouse: dragging the AI | Editor border and the Shell's top edge in a terminal client moves them, and --toggle / --show-term / zoom keep the dragged sizes"
+        else
+            fail "tmux mouse border resize" "Expected MouseDrag1Border resize-pane -M, both drags applied, and sizes kept across focus switches and zoom; got: $mouse_out"
+        fi
+    fi
 
     tmux kill-server >/dev/null 2>&1 || true
     rm -rf "$TMUX_TEST_TMPDIR"

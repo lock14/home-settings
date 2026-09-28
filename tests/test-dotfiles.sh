@@ -85,10 +85,11 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-2' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-3' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-H resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDrag1Border resize-pane -M' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, PREFIX/COPY/ZOOM badges, unbolded typography), extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, and 4-layer Alt navigation"
+    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, PREFIX/COPY/ZOOM badges, unbolded typography), extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt navigation, and mouse border resizing"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, extended-keys, clipboard, or 4-layer keybinding settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, extended-keys, clipboard, 4-layer keybinding, or mouse border resize settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
