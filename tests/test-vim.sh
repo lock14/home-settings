@@ -144,7 +144,7 @@ if [ -f "$NVIM_CONFIG" ]; then
     if grep -q 'function IdeFollow.session_roots()' "$NVIM_CONFIG" && \
        grep -q 'cli/history.jsonl' "$NVIM_CONFIG" && \
        grep -q '/.system_generated/subagents' "$NVIM_CONFIG" && \
-       grep -q 'function IdeFollow.git_toplevel(root)' "$NVIM_CONFIG" && \
+       grep -q 'function IdeFollow.refresh_vcs(root, force)' "$NVIM_CONFIG" && \
        grep -q 'local IdeFollow = _G.IdeFollow or {' "$NVIM_CONFIG" && \
        grep -q 'local IdeTree = _G.IdeTree or {' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_autocmd("BufWritePost"' "$NVIM_CONFIG" && \
@@ -153,7 +153,22 @@ if [ -f "$NVIM_CONFIG" ]; then
        ! grep -q 'gemini/[^"]*/brain"' "$NVIM_CONFIG"; then
         pass "Neovim IdeFollow is session-scoped (only this root's agy conversations in the auto-detected ~/.gemini data dir, subagents, and Claude plans), joins porcelain paths to the git toplevel, ignores your own saves, and survives :source without orphaning its timer"
     else
-        fail "Neovim IdeFollow session scoping" "Expected session_roots(), cli/history.jsonl ownership, subagent records, git_toplevel(), reload-safe _G tables, a BufWritePost baseline, and no global brain scan in init.lua"
+        fail "Neovim IdeFollow session scoping" "Expected session_roots(), cli/history.jsonl ownership, subagent records, refresh_vcs(), reload-safe _G tables, a BufWritePost baseline, and no global brain scan in init.lua"
+    fi
+
+    # The follow tick must never block the Editor: edit logs are tailed in-process and git only runs in the background
+    IDE_FOLLOW_SECTION="$(sed -n '/^-- AI Live-Follow Mode (`IdeFollow`)/,/nvim_create_user_command("IdeFollowToggle"/p' "$NVIM_CONFIG")"
+    if grep -q 'function IdeFollow.read_edit_logs(roots, conv_dirs, prime)' <<< "$IDE_FOLLOW_SECTION" && \
+       grep -q 'transcript_full.jsonl' <<< "$IDE_FOLLOW_SECTION" && \
+       grep -q '"tool_use"' <<< "$IDE_FOLLOW_SECTION" && \
+       grep -q 'pcall(vim.system, cmd, {}, vim.schedule_wrap(function(res)' <<< "$IDE_FOLLOW_SECTION" && \
+       grep -q 'IDE_FOLLOW_VCS_BACKOFF' <<< "$IDE_FOLLOW_SECTION" && \
+       ! grep -q ':wait(' <<< "$IDE_FOLLOW_SECTION" && \
+       ! grep -Eq 'vim\.fn\.system(list)?\(' <<< "$IDE_FOLLOW_SECTION" && \
+       ! grep -q 'IdeTree.scan_dir' <<< "$IDE_FOLLOW_SECTION"; then
+        pass "Neovim IdeFollow follows AI edit logs (agy transcripts, Claude Code tool_use records) to the exact line and runs git only in the background with adaptive backoff, never blocking the tick"
+    else
+        fail "Neovim IdeFollow non-blocking tick" "Expected read_edit_logs(), transcript_full.jsonl and tool_use parsing, async vim.system callbacks with IDE_FOLLOW_VCS_BACKOFF, and no :wait(), vim.fn.system*, or IdeTree.scan_dir in the IdeFollow section"
     fi
 
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \

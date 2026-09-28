@@ -272,11 +272,13 @@ if command -v tmux >/dev/null 2>&1; then
                 follow_nvim() {
                     local cwd="$1"
                     local lua_cmd="$2"
-                    (cd "$cwd" && env -u NVIM_IDE_SOCKET IDE_INITIAL_ROOT="$FOLLOW_REPO" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                    local root="${3:-$FOLLOW_REPO}"
+                    (cd "$cwd" && env -u NVIM_IDE_SOCKET IDE_INITIAL_ROOT="$root" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
                         -c "lua vim.env.HOME = '$FOLLOW_HOME'; vim.g.ide_claude_dir = '$FOLLOW_CLAUDE'; $lua_cmd" \
                         -c "qa!" 2>&1 || true)
                 }
                 follow_plan_lua="IdeFollow.sync(true); io.stdout:write('PLAN:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'))"
+                follow_report="io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))"
 
                 own_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
 
@@ -302,17 +304,108 @@ if command -v tmux >/dev/null 2>&1; then
                     fail "IdeFollow session-scoped artifacts" "Expected PLAN:plan.md, PLAN:sub_report.md, PLAN:own-claude-plan.md; got own=$own_follow_out sub=$sub_follow_out claude=$claude_follow_out"
                 fi
 
-                # AI edit resolved from an `icd` subdirectory root (porcelain paths are toplevel-relative)
+                # Shell-driven edit (no edit-log record) caught by the background `git status` from an `icd` subdirectory
+                # root (porcelain paths are toplevel-relative), landing on its last diff hunk once git answers
                 printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
-                follow_out="$(follow_nvim "$FOLLOW_REPO/pkg" "IdeFollow.sync(true); io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))")"
+                follow_out="$(follow_nvim "$FOLLOW_REPO/pkg" "IdeFollow.enabled = true; vim.wait(8000, function() IdeFollow.sync(false); return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') == 'tracked.go' and vim.fn.line('.') == 3 end, 50); $follow_report")"
 
-                # Your own :w is not AI activity: the follow baseline advances and the cursor stays put
-                self_save_out="$(follow_nvim "$FOLLOW_REPO" "IdeFollow.enabled = true; vim.cmd('edit $FOLLOW_REPO/tracked.go'); vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'line1_user_edit' }); vim.cmd('silent write'); vim.api.nvim_win_set_cursor(0, { 1, 0 }); local moved = IdeFollow.sync(false); io.stdout:write('SELFSAVE:' .. tostring(moved) .. ' LINE:' .. vim.fn.line('.'))")"
+                # Your own :w is not AI activity: even once the background scan reports the file dirty, the cursor stays put
+                self_save_out="$(follow_nvim "$FOLLOW_REPO" "IdeFollow.enabled = true; vim.cmd('edit $FOLLOW_REPO/tracked.go'); vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'line1_user_edit' }); vim.cmd('silent write'); vim.api.nvim_win_set_cursor(0, { 1, 0 }); local moved = IdeFollow.sync(false); vim.wait(8000, function() return IdeFollow.vcs.scans >= 1 end, 20); moved = IdeFollow.sync(false) or moved; io.stdout:write('SELFSAVE:' .. tostring(moved) .. ' LINE:' .. vim.fn.line('.') .. ' SCANS:' .. IdeFollow.vcs.scans)")"
 
-                if grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out" && grep -Fq "SELFSAVE:false LINE:1" <<< "$self_save_out"; then
-                    pass "AI Live-Follow Mode follows git-modified files from an icd subdirectory root to the modified diff hunk line, and never re-jumps after your own :w saves"
+                if grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out" && grep -Eq "SELFSAVE:false LINE:1 SCANS:[1-9]" <<< "$self_save_out"; then
+                    pass "AI Live-Follow Mode follows shell-driven edits found by the background git status from an icd subdirectory root to their diff hunk, and never re-jumps after your own :w saves"
                 else
-                    fail "IdeFollow git follow / self-save" "Expected FILE:tracked.go LINE:3 and SELFSAVE:false LINE:1, got code=$follow_out save=$self_save_out"
+                    fail "IdeFollow git fallback / self-save" "Expected FILE:tracked.go LINE:3 and SELFSAVE:false LINE:1 after a scan, got code=$follow_out save=$self_save_out"
+                fi
+
+                # Edit-log records land on the exact edited line while git takes 3 s to answer: the tick never waits on a subprocess
+                REAL_GIT="$(command -v git)"
+                SLOW_GIT_DIR="$TEMP_HOME/slow_git_bin"
+                mkdir -p "$SLOW_GIT_DIR" "$FOLLOW_AGY/brain/conv-own/.system_generated/logs"
+                printf '#!/usr/bin/env bash\nset -euo pipefail\nsleep 3\nexec "%s" "$@"\n' "$REAL_GIT" > "$SLOW_GIT_DIR/git"
+                chmod +x "$SLOW_GIT_DIR/git"
+                printf 'l1\nl2\nl3\nl4\nl5\n}\n\tagyEdited := true\nl8\n' > "$FOLLOW_REPO/pkg/fast.go"
+                printf '{"step_index":7,"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"%s","StartLine":6,"EndLine":6,"ReplacementContent":"}\\n\\tagyEdited := true"}}]}\n' \
+                    "$FOLLOW_REPO/pkg/fast.go" > "$FOLLOW_AGY/brain/conv-own/.system_generated/logs/transcript_full.jsonl"
+                fast_out="$(PATH="$SLOW_GIT_DIR:$PATH" follow_nvim "$FOLLOW_REPO" "local uv = vim.uv or vim.loop; local t0 = uv.hrtime(); IdeFollow.sync(true); local ms = (uv.hrtime() - t0) / 1e6; $follow_report; io.stdout:write(' FAST:' .. (ms < 500 and 1 or 0))")"
+
+                # Claude Code `Edit` records carry no line numbers: the whole replacement block is located, not an earlier decoy of its first line
+                printf 'package pkg\n// see func claudeEdited() {\n// decoy\nfunc claudeEdited() {\n\treturn\n}\n' > "$FOLLOW_REPO/pkg/claude.go"
+                printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"%s","old_string":"func old() {","new_string":"func claudeEdited() {\\n\\treturn\\n}"}}]}}\n' \
+                    "$FOLLOW_REPO_REAL/pkg/claude.go" > "$CLAUDE_PROJECT/session-2.jsonl"
+                claude_edit_out="$(follow_nvim "$FOLLOW_REPO" "IdeFollow.sync(true); $follow_report")"
+
+                if grep -Fq "FILE:fast.go LINE:7 FAST:1" <<< "$fast_out" && grep -Fq "FILE:claude.go LINE:4" <<< "$claude_edit_out"; then
+                    pass "AI Live-Follow Mode lands agy and Claude Code edit-log records on the exact edited line without waiting on a slow git"
+                else
+                    fail "IdeFollow edit logs" "Expected FILE:fast.go LINE:7 FAST:1 and FILE:claude.go LINE:4, got agy=$fast_out claude=$claude_edit_out"
+                fi
+
+                # Mercurial-style workspace without git (`.hg` marker): this session's edit in a sibling directory of its root is
+                # followed, while newer edits by another session's conversation, to AI scratch files, and outside the workspace are not
+                HG_WS="$TEMP_HOME/hg_ws_test"
+                HG_ROOT="$HG_WS/src/experimental/app"
+                HG_LOG="$FOLLOW_AGY/brain/conv-hg/.system_generated/logs/transcript_full.jsonl"
+                mkdir -p "$HG_WS/.hg" "$HG_ROOT" "$HG_WS/src/configs" "$TEMP_HOME/outside" \
+                    "$FOLLOW_AGY/brain/conv-hg/.system_generated/logs" "$FOLLOW_AGY/brain/conv-hg/scratch" \
+                    "$FOLLOW_AGY/brain/conv-foreign/.system_generated/logs" "$FOLLOW_AGY/brain/conv-hg2/.system_generated/logs"
+                printf '{"display":"hg","timestamp":3000,"workspace":"%s","conversationId":"conv-hg"}\n' "$HG_ROOT" >> "$FOLLOW_AGY/cli/history.jsonl"
+                printf 'a1\na2\na3\n}\nhg_edit_marker = 1\na6\n' > "$HG_WS/src/configs/app.cfg"
+                printf 'foreign\n' > "$HG_WS/src/configs/foreign.cfg"
+                printf 'print(1)\n' > "$FOLLOW_AGY/brain/conv-hg/scratch/probe.lua"
+                printf 'notes\n' > "$TEMP_HOME/outside/notes.txt"
+                {
+                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"%s","StartLine":4,"EndLine":4,"ReplacementContent":"}\\nhg_edit_marker = 1"}}]}\n' "$HG_WS/src/configs/app.cfg"
+                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"print(1)"}}]}\n' "$FOLLOW_AGY/brain/conv-hg/scratch/probe.lua"
+                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"notes"}}]}\n' "$TEMP_HOME/outside/notes.txt"
+                } > "$HG_LOG"
+                printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"foreign"}}]}\n' \
+                    "$HG_WS/src/configs/foreign.cfg" > "$FOLLOW_AGY/brain/conv-foreign/.system_generated/logs/transcript_full.jsonl"
+                touch -t 202101010000.10 "$HG_WS/src/configs/app.cfg"
+                touch -t 202101010000.20 "$HG_WS/src/configs/foreign.cfg"
+                touch -t 202101010000.30 "$FOLLOW_AGY/brain/conv-hg/scratch/probe.lua"
+                touch -t 202101010000.40 "$TEMP_HOME/outside/notes.txt"
+                hg_out="$(follow_nvim "$HG_ROOT" "IdeFollow.sync(true); $follow_report" "$HG_ROOT")"
+
+                # A conversation with only the compact `transcript.jsonl` (every argument value JSON-encoded)
+                printf '{"display":"hg2","timestamp":4000,"workspace":"%s","conversationId":"conv-hg2"}\n' "$HG_ROOT" >> "$FOLLOW_AGY/cli/history.jsonl"
+                printf 'c1\ncompact_marker = 2\nc3\n' > "$HG_WS/src/configs/compact.cfg"
+                printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"\\"%s\\"","StartLine":"2","EndLine":"2","ReplacementContent":"\\"compact_marker = 2\\""}}],"truncated_fields":["tool_calls"]}\n' \
+                    "$HG_WS/src/configs/compact.cfg" > "$FOLLOW_AGY/brain/conv-hg2/.system_generated/logs/transcript.jsonl"
+                touch -t 202101010000.50 "$HG_WS/src/configs/compact.cfg"
+                hg2_out="$(follow_nvim "$HG_ROOT" "IdeFollow.sync(true); $follow_report" "$HG_ROOT")"
+
+                # A running Editor follows only what is logged after it started: existing records are skipped, new ones followed
+                LATE_CFG="$HG_WS/src/configs/late.cfg"
+                late_out="$(follow_nvim "$HG_ROOT" "IdeFollow.start_timer(); vim.wait(200); local primed = vim.tbl_count(IdeFollow.edits); IdeFollow.enabled = true; vim.fn.writefile({ vim.json.encode({ type = 'PLANNER_RESPONSE', tool_calls = { { name = 'replace_file_content', args = { TargetFile = '$LATE_CFG', StartLine = 3, EndLine = 3, ReplacementContent = 'late_marker = 3' } } } }) }, '$HG_LOG', 'a'); vim.fn.writefile({ 'l1', 'l2', 'late_marker = 3', 'l4' }, '$LATE_CFG'); IdeFollow.sync(false); $follow_report; io.stdout:write(' PRIMED:' .. primed .. ' EDITS:' .. vim.tbl_count(IdeFollow.edits))" "$HG_ROOT")"
+
+                if grep -Fq "FILE:app.cfg LINE:5" <<< "$hg_out" && \
+                   grep -Fq "FILE:compact.cfg LINE:2" <<< "$hg2_out" && \
+                   grep -Fq "FILE:late.cfg LINE:3 PRIMED:0 EDITS:1" <<< "$late_out"; then
+                    pass "AI Live-Follow Mode follows this session's edit logs in a Mercurial-style workspace without git (full and compact transcripts), ignores other sessions, AI scratch files, and paths outside the workspace, and skips edits logged before the Editor started"
+                else
+                    fail "IdeFollow Mercurial edit logs" "Expected FILE:app.cfg LINE:5, FILE:compact.cfg LINE:2, FILE:late.cfg LINE:3 PRIMED:0 EDITS:1; got hg=$hg_out compact=$hg2_out late=$late_out"
+                fi
+
+                # A session launched in $HOME itself: its workspace contains ~/.gemini, yet the AI's own state (a newer
+                # scratch file in its data dir) is still never followed, only the project edit
+                HOME_LOG="$FOLLOW_AGY/brain/conv-home/.system_generated/logs/transcript_full.jsonl"
+                mkdir -p "$FOLLOW_HOME/notes" "$FOLLOW_AGY/brain/conv-home/.system_generated/logs" "$FOLLOW_AGY/brain/conv-home/scratch"
+                printf '{"display":"home","timestamp":5000,"workspace":"%s","conversationId":"conv-home"}\n' "$FOLLOW_HOME" >> "$FOLLOW_AGY/cli/history.jsonl"
+                printf 'h1\nhome_marker = 1\nh3\n' > "$FOLLOW_HOME/notes/todo.cfg"
+                printf 'print(2)\n' > "$FOLLOW_AGY/brain/conv-home/scratch/probe2.lua"
+                {
+                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"%s","StartLine":2,"EndLine":2,"ReplacementContent":"home_marker = 1"}}]}\n' "$FOLLOW_HOME/notes/todo.cfg"
+                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"print(2)"}}]}\n' "$FOLLOW_AGY/brain/conv-home/scratch/probe2.lua"
+                } > "$HOME_LOG"
+                touch -t 202101010001.00 "$FOLLOW_HOME/notes/todo.cfg"
+                touch -t 202101010001.10 "$FOLLOW_AGY/brain/conv-home/scratch/probe2.lua"
+                home_out="$(follow_nvim "$FOLLOW_HOME" "IdeFollow.sync(true); $follow_report" "$FOLLOW_HOME")"
+
+                if grep -Fq "FILE:todo.cfg LINE:2" <<< "$home_out"; then
+                    pass "AI Live-Follow Mode never follows the AI tools' own state (~/.gemini, agy's data dir), even when the session's workspace contains it"
+                else
+                    fail "IdeFollow AI-state exclusion" "Expected FILE:todo.cfg LINE:2, got: $home_out"
                 fi
             fi
         else
