@@ -217,6 +217,18 @@ vim.g.netrw_browse_split = 4
 vim.g.netrw_altv = 1
 vim.g.netrw_winsize = 20
 
+-- Runs `ide` for this Editor's own workspace. Like the tmux key bindings (`#{session_name}`), it names
+-- the session explicitly, so `ide` never has to work out which session called it. Without an `ide-*`
+-- $IDE_SESSION (an Editor started outside `ide`), `ide` falls back to looking up this pane's session.
+local function ide_job(...)
+    local cmd = { vim.fn.expand("$HOME/.local/bin/ide"), ... }
+    local sess = vim.env.IDE_SESSION
+    if sess and sess:match("^ide%-") then
+        table.insert(cmd, sess)
+    end
+    vim.fn.jobstart(cmd, { detach = true })
+end
+
 -- =============================================================================
 -- Native Solarized IDE Directory Tree Explorer (`SolarizedIdeTree`)
 -- Zero-dependency, in-process sidebar split (`Space+e`), instant expand/collapse
@@ -354,7 +366,7 @@ function IdeTree.dive(target_dir)
     end
     IdeTree.set_root(actual_dir)
     if vim.env.TMUX then
-        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--cd", actual_dir }, { detach = true })
+        ide_job("--cd", actual_dir)
     end
 end
 
@@ -1654,22 +1666,22 @@ vim.api.nvim_create_autocmd("BufWritePost", {
 -- Workspace Role Jump & Toggle Keybindings (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
     if vim.env.TMUX then
-        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--toggle" }, { detach = true })
+        ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
 map({ "n", "i", "t" }, "<M-a>", function()
     if vim.env.TMUX then
-        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--toggle" }, { detach = true })
+        ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
 map({ "n", "i", "t" }, "<M-e>", function()
     if vim.env.TMUX then
-        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--show-editor" }, { detach = true })
+        ide_job("--show-editor")
     end
 end, { desc = "Focus/Zoom Editor Pane" })
 map({ "n", "i", "t" }, "<M-t>", function()
     if vim.env.TMUX then
-        vim.fn.jobstart({ vim.fn.expand("$HOME/.local/bin/ide"), "--show-term" }, { detach = true })
+        ide_job("--show-term")
     end
 end, { desc = "Toggle Focus: Shell <-> Editor Pane" })
 
@@ -1703,11 +1715,11 @@ local function quit_ide_or_nvim(force)
                 return
             end
         end
-        local cmd = { vim.fn.expand("$HOME/.local/bin/ide"), "--quit" }
         if force then
-            table.insert(cmd, "--force")
+            ide_job("--quit", "--force")
+        else
+            ide_job("--quit")
         end
-        vim.fn.jobstart(cmd, { detach = true })
     else
         vim.cmd(force and "qa!" or "confirm qa")
     end

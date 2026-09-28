@@ -33,7 +33,19 @@ done
 # Test 2: Symlink creation into temporary HOME
 echo -e "\n[2/4] Testing binaries symlinking into ~/.local/bin..."
 TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"' EXIT
+TMUX_TEST_TMPDIR=""
+# Tear down the isolated tmux server (by its explicit socket, never via $TMUX) even when a check aborts
+# or the run is interrupted, so no test server or Editor outlives the suite
+cleanup_test_bin() {
+    if [ -n "$TMUX_TEST_TMPDIR" ]; then
+        tmux -S "$TMUX_TEST_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+        rm -rf "$TMUX_TEST_TMPDIR"
+    fi
+    rm -rf "$TEMP_HOME"
+}
+trap cleanup_test_bin EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
 HOME="$TEMP_HOME" "$SCRIPT_DIR/modules/20-bin.sh" >/dev/null 2>&1
 
@@ -164,7 +176,7 @@ rm -rf "$LINK_TEST_DIR" "$TEMP_HOME/.config/ide"
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_TMPDIR="$(mktemp -d)"
     export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
-    unset TMUX
+    unset TMUX TMUX_PANE
 
     IDE_WS_2P="$TEMP_HOME/ws_2pane_test"
     IDE_WS_3P="$TEMP_HOME/ws_3pane_test"
@@ -532,6 +544,172 @@ if command -v tmux >/dev/null 2>&1; then
     else
         fail "bin/ide 3-pane creation" "Session ide-ws_3pane_test was not created"
     fi
+
+    # `ide --quit` stays inside its own session. It used to type `:qa!` into the Editor, whose `:qa` -> `:Q`
+    # abbreviation spawned a second, untargeted `ide --quit`; by the time that ran its session was gone, tmux
+    # answered "the current session" with the most recently used one, and one quit cascaded through every
+    # session on the server. Bare `-t NAME` targets also prefix-matched other sessions (`ide-foo` -> `ide-foobar`).
+    session_alive() { tmux has-session -t "=$1" 2>/dev/null; }
+    all_alive() {
+        local s
+        for s in "$@"; do session_alive "$s" || return 1; done
+    }
+    pane_of() { tmux display-message -p -t "$1:" '#{pane_id}' 2>/dev/null || true; }
+    # $TMUX as a pane (or run-shell job) of session $1 sees it: "<socket>,<server pid>,<session id>"
+    tmux_env_of() { tmux display-message -p -t "$1:" '#{socket_path},#{pid},#{session_id}' 2>/dev/null | tr -d '$' || true; }
+    tmux new-session -d -s "plain-bystander" -x 120 -y 40
+    tmux new-session -d -s "ide-bystander" -x 120 -y 40
+
+    if command -v nvim >/dev/null 2>&1; then
+        QUIT_HOME="$TEMP_HOME/quit_stub_home"
+        QUIT_LOG="$TEMP_HOME/quit_stub.log"
+        QUIT_SOCK="$TEMP_HOME/quit_editor.sock"
+        mkdir -p "$QUIT_HOME/.local/bin"
+        printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$QUIT_LOG" > "$QUIT_HOME/.local/bin/ide"
+        chmod +x "$QUIT_HOME/.local/bin/ide"
+        : > "$QUIT_LOG"
+        # The Editor's `:Q` runs `$HOME/.local/bin/ide --quit`: HOME is swapped to a logging stub after init.lua ran
+        tmux new-session -d -s "ide-quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" \
+            "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$QUIT_SOCK' -c \"lua vim.env.HOME = '$QUIT_HOME'\""
+        tmux set-option -t "ide-quit-editor" @ide_socket "$QUIT_SOCK"
+        quit_abbrev=""
+        for _ in $(seq 1 100); do
+            if [ -S "$QUIT_SOCK" ]; then
+                quit_abbrev="$(nvim --headless --server "$QUIT_SOCK" --remote-expr "execute('cabbrev qa!')" 2>/dev/null || true)"
+                grep -Fq "'Q!'" <<< "$quit_abbrev" && break
+            fi
+            sleep 0.1
+        done
+        "$SCRIPT_DIR/bin/ide" --quit "ide-quit-editor" >/dev/null 2>&1 || true
+        sleep 1
+        quit_log="$(cat "$QUIT_LOG")"
+        if grep -Fq "'Q!'" <<< "$quit_abbrev" && [ -z "$quit_log" ] && ! session_alive "ide-quit-editor" && \
+           all_alive "ide-bystander" "plain-bystander"; then
+            pass "bin/ide --quit closes the Editor past its :qa! -> :Q! abbreviation, so the Editor never spawns a second, untargeted ide --quit and other sessions survive"
+        else
+            fail "bin/ide --quit Editor close" "Expected the Editor's :qa! -> :Q! abbreviation (got: ${quit_abbrev:-none}), no ide calls from the Editor (got: ${quit_log:-none}), ide-quit-editor gone, and both bystanders alive"
+        fi
+
+        # Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) starts a detached `ide --quit <its session>` that closes
+        # this Editor: it must outlive it and kill exactly its own session (a 2nd pane keeps the session alive like the AI
+        # and Shell panes). IDE_SESSION is set on the pane the way bin/ide sets it on every pane it creates.
+        SELF_HOME="$TEMP_HOME/quit_self_home"
+        SELF_LOG="$TEMP_HOME/quit_self.log"
+        SELF_SOCK="$TEMP_HOME/quit_self.sock"
+        mkdir -p "$SELF_HOME/.local/bin"
+        printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\nexec %q "$@"\n' "$SELF_LOG" "$SCRIPT_DIR/bin/ide" > "$SELF_HOME/.local/bin/ide"
+        chmod +x "$SELF_HOME/.local/bin/ide"
+        : > "$SELF_LOG"
+        tmux new-session -d -s "ide-quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=ide-quit-self" \
+            "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
+        tmux split-window -d -t "ide-quit-self:" "sleep 600"
+        tmux set-option -t "ide-quit-self" @ide_socket "$SELF_SOCK"
+        self_abbrev=""
+        for _ in $(seq 1 100); do
+            if [ -S "$SELF_SOCK" ]; then
+                self_abbrev="$(nvim --headless --server "$SELF_SOCK" --remote-expr "execute('cabbrev qa!')" 2>/dev/null || true)"
+                grep -Fq "'Q!'" <<< "$self_abbrev" && break
+            fi
+            sleep 0.1
+        done
+        nvim --headless --server "$SELF_SOCK" --remote-send "<C-\\><C-n>:Q<CR>" >/dev/null 2>&1 || true
+        for _ in $(seq 1 50); do
+            session_alive "ide-quit-self" || break
+            sleep 0.1
+        done
+        sleep 0.5
+        self_log="$(cat "$SELF_LOG")"
+        if grep -Fq "'Q!'" <<< "$self_abbrev" && [ "$self_log" = "--quit ide-quit-self" ] && ! session_alive "ide-quit-self" && \
+           all_alive "ide-bystander" "plain-bystander"; then
+            pass "Quitting from inside the Editor (:Q, :qa, <leader>q) runs exactly one ide --quit naming its own session, which outlives the Editor it closes and kills only that session"
+        else
+            fail "Editor-initiated ide --quit" "Expected exactly one '--quit ide-quit-self' call (got: ${self_log:-none}), ide-quit-self gone, and both bystanders alive; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+        fi
+
+        # Every Editor `ide` call names the Editor's session like the tmux key bindings do, in the argument positions
+        # bin/ide parses (`--quit --force NAME`, `--cd DIR NAME`), and leaves it out without an ide-* $IDE_SESSION
+        ARGS_HOME="$TEMP_HOME/editor_args_home"
+        ARGS_LOG="$TEMP_HOME/editor_args.log"
+        ARGS_DIR="$TEMP_HOME/editor_args_dir"
+        mkdir -p "$ARGS_HOME/.local/bin" "$ARGS_DIR"
+        printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$ARGS_LOG" > "$ARGS_HOME/.local/bin/ide"
+        chmod +x "$ARGS_HOME/.local/bin/ide"
+        : > "$ARGS_LOG"
+        cat > "$TEMP_HOME/editor_args.lua" <<LUA
+vim.env.HOME = [[$ARGS_HOME]]
+local function as(sess, fn) vim.env.IDE_SESSION = sess; pcall(fn) end
+as("ide-args", function() vim.cmd("Q") end)
+as("ide-args", function() vim.cmd("Q!") end)
+as("ide-args", function() IdeTree.dive([[$ARGS_DIR]]) end)
+as("ide-args", function() vim.fn.maparg("<leader>a", "n", false, true).callback() end)
+as(nil, function() vim.cmd("Q") end)
+as("args", function() vim.cmd("Q") end)
+vim.cmd("qa!")
+LUA
+        # A TMUX value naming no server: the stub never calls tmux, and nothing here can reach a real one
+        env TMUX="$TEMP_HOME/no-such-tmux,1,0" NVIM_IDE_SOCKET="$TEMP_HOME/no-such.sock" timeout 30 \
+            nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" -c "source $TEMP_HOME/editor_args.lua" -c 'qa!' >/dev/null 2>&1 || true
+        for _ in $(seq 1 50); do
+            [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 6 ] && break
+            sleep 0.1
+        done
+        args_log="$(LC_ALL=C sort "$ARGS_LOG")"
+        args_expected="$(printf '%s\n' "--cd $ARGS_DIR ide-args" "--quit" "--quit" "--quit --force ide-args" "--quit ide-args" "--toggle ide-args" | LC_ALL=C sort)"
+        if [ "$args_log" = "$args_expected" ]; then
+            pass "The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME) and omits it without an ide-* \$IDE_SESSION"
+        else
+            fail "Editor ide call arguments" "Expected: $(tr '\n' '|' <<< "$args_expected") got: $(tr '\n' '|' <<< "$args_log")"
+        fi
+    else
+        pass "bin/ide --quit Editor close skipped headless runtime check (nvim not installed on runner)"
+    fi
+
+    # Untargeted quits look up the caller's own pane (or a run-shell job's session id) exactly, and only act on ide-* sessions
+    tmux new-session -d -s "ide-gone" -x 120 -y 40
+    gone_pane="$(pane_of "ide-gone")"
+    gone_env="$(tmux_env_of "ide-gone")"
+    tmux kill-session -t "=ide-gone"
+    for s in ide-recent ide-auto-pane ide-auto-job; do
+        tmux new-session -d -s "$s" -x 120 -y 40
+    done
+    # From a pane whose session is gone (the Editor's job above): tmux would guess the most recently used session
+    env TMUX="$gone_env" TMUX_PANE="$gone_pane" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    gone_ok=0
+    all_alive plain-bystander ide-bystander ide-recent ide-auto-pane ide-auto-job && gone_ok=1
+    # From a plain tmux session's own pane
+    env TMUX="$(tmux_env_of plain-bystander)" TMUX_PANE="$(pane_of plain-bystander)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    # When the server named in $TMUX is gone and another one now answers on its socket
+    IFS=, read -r recent_sock _ recent_id <<< "$(tmux_env_of ide-recent)"
+    env TMUX="$recent_sock,1,$recent_id" TMUX_PANE="$(pane_of ide-recent)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    # From an ide pane, and from a run-shell job (no pane, just the session id in $TMUX): exactly that session
+    env TMUX="$(tmux_env_of ide-auto-pane)" TMUX_PANE="$(pane_of ide-auto-pane)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    env -u TMUX_PANE TMUX="$(tmux_env_of ide-auto-job)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    if [ "$gone_ok" = "1" ] && all_alive plain-bystander ide-bystander ide-recent && \
+       ! session_alive "ide-auto-pane" && ! session_alive "ide-auto-job"; then
+        pass "Untargeted bin/ide --quit never guesses: from a pane whose session is gone, a plain tmux session, or a replaced server it quits nothing, and from an ide pane or run-shell job it quits exactly that session"
+    else
+        fail "bin/ide untargeted --quit" "Expected nothing quit from a gone pane (ok=$gone_ok), plain-bystander/ide-bystander/ide-recent alive, ide-auto-pane/ide-auto-job quit; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+    fi
+
+    # Exact session names: quitting ide-foo spares another IDE's ai-ide-foobar popup, a later --kill foo / --toggle foo
+    # never fall back to ide-foobar, and launching in ./api creates ide-api next to ide-api-gateway instead of reusing it
+    for s in ide-foobar ai-ide-foobar ide-foo ide-api-gateway; do
+        tmux new-session -d -s "$s" -x 120 -y 40
+    done
+    "$SCRIPT_DIR/bin/ide" --kill "ide-foo" >/dev/null 2>&1 || true
+    "$SCRIPT_DIR/bin/ide" --kill "foo" >/dev/null 2>&1 || true
+    "$SCRIPT_DIR/bin/ide" --toggle "foo" >/dev/null 2>&1 || true
+    mkdir -p "$TEMP_HOME/api"
+    env -u IDE_AI_CLI XDG_RUNTIME_DIR="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --2pane --detach "$TEMP_HOME/api" >/dev/null 2>&1 || true
+    foobar_panes="$(tmux list-panes -s -t "ide-foobar:" 2>/dev/null | wc -l | tr -d ' ' || true)"
+    gateway_panes="$(tmux list-panes -s -t "ide-api-gateway:" 2>/dev/null | wc -l | tr -d ' ' || true)"
+    if ! session_alive "ide-foo" && all_alive ide-foobar ai-ide-foobar ide-api ide-api-gateway && \
+       [ "$foobar_panes" = "1" ] && [ "$gateway_panes" = "1" ]; then
+        pass "bin/ide targets tmux sessions by exact name (=NAME): no prefix matches when killing, toggling, or launching sessions"
+    else
+        fail "bin/ide exact session names" "Expected ide-foo gone and ide-foobar (1 pane), ai-ide-foobar, ide-api, ide-api-gateway (1 pane) alive; got foobar_panes=$foobar_panes gateway_panes=$gateway_panes sessions: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+    fi
+    "$SCRIPT_DIR/bin/ide" --kill "ide-api" >/dev/null 2>&1 || true
 
     tmux kill-server >/dev/null 2>&1 || true
     rm -rf "$TMUX_TEST_TMPDIR"
