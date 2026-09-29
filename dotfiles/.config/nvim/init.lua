@@ -59,7 +59,7 @@ opt.undofile = true
 opt.updatetime = 250
 opt.timeoutlen = 300
 
--- System Clipboard Integration (GNOME Terminal / X11 / Wayland / macOS + OSC 52 SSH fallback)
+-- System Clipboard Integration (GNOME Terminal / X11 / Wayland / macOS + OSC 52 SSH/Tmux broadcast)
 if vim.fn.has("linux") == 1 then
     if (not vim.env.DISPLAY or vim.env.DISPLAY == "") and vim.uv.fs_stat("/tmp/.X11-unix/X0") then
         vim.env.DISPLAY = ":0"
@@ -77,15 +77,103 @@ if vim.fn.has("linux") == 1 then
             end
         end
     end
-    if (not vim.env.DISPLAY or vim.env.DISPLAY == "") and (not vim.env.WAYLAND_DISPLAY or vim.env.WAYLAND_DISPLAY == "") then
+    local has_display = (vim.env.DISPLAY ~= nil and vim.env.DISPLAY ~= "")
+        or (vim.env.WAYLAND_DISPLAY ~= nil and vim.env.WAYLAND_DISPLAY ~= "")
+    local in_tmux = vim.env.TMUX ~= nil and vim.env.TMUX ~= ""
+    local in_ssh = (vim.env.SSH_CONNECTION ~= nil and vim.env.SSH_CONNECTION ~= "")
+        or (vim.env.SSH_TTY ~= nil and vim.env.SSH_TTY ~= "")
+        or (vim.env.SSH_CLIENT ~= nil and vim.env.SSH_CLIENT ~= "")
+    -- Never let a background /tmp/.X11-unix/X0 (e.g. a remote desktop server) disable OSC 52
+    -- when running inside tmux or over SSH: broadcast yanks to OSC 52, tmux, and local X11/Wayland.
+    if not has_display or in_tmux or in_ssh then
         local ok_osc, osc52 = pcall(require, "vim.ui.clipboard.osc52")
-        if ok_osc and osc52 then
-            vim.g.clipboard = {
-                name = "OSC 52",
-                copy = { ["+"] = osc52.copy("+"), ["*"] = osc52.copy("*") },
-                paste = { ["+"] = osc52.paste("+"), ["*"] = osc52.paste("*") },
-            }
+        local function broadcast_copy(reg)
+            local osc_copy = (ok_osc and osc52) and osc52.copy(reg) or nil
+            return function(lines, regtype)
+                if osc_copy and #vim.api.nvim_list_uis() > 0 then
+                    pcall(osc_copy, lines, regtype)
+                end
+                local text = table.concat(lines or {}, "\n")
+                if vim.env.TMUX and vim.env.TMUX ~= "" and vim.fn.executable("tmux") == 1 then
+                    pcall(vim.fn.system, { "tmux", "load-buffer", "-w", "-" }, text)
+                end
+                if vim.env.DISPLAY and vim.env.DISPLAY ~= "" then
+                    if vim.fn.executable("xsel") == 1 then
+                        local flag = reg == "*" and "-ip" or "-ib"
+                        pcall(vim.fn.system, { "sh", "-c", "xsel " .. flag .. " >/dev/null 2>&1" }, text)
+                    elseif vim.fn.executable("xclip") == 1 then
+                        local sel = reg == "*" and "primary" or "clipboard"
+                        pcall(vim.fn.system, { "sh", "-c", "xclip -selection " .. sel .. " -i >/dev/null 2>&1" }, text)
+                    end
+                end
+                if vim.env.WAYLAND_DISPLAY and vim.env.WAYLAND_DISPLAY ~= "" and vim.fn.executable("wl-copy") == 1 then
+                    local arg = reg == "*" and " --primary" or ""
+                    pcall(vim.fn.system, { "sh", "-c", "wl-copy" .. arg .. " >/dev/null 2>&1" }, text)
+                end
+            end
         end
+        local function broadcast_paste(reg)
+            local osc_paste = (ok_osc and osc52) and osc52.paste(reg) or nil
+            local function try_tmux()
+                if vim.env.TMUX and vim.env.TMUX ~= "" and vim.fn.executable("tmux") == 1 then
+                    local ok, res = pcall(vim.fn.system, { "tmux", "show-buffer" })
+                    if ok and vim.v.shell_error == 0 and type(res) == "string" and res ~= "" then
+                        return res
+                    end
+                end
+                return ""
+            end
+            local function try_display()
+                if vim.env.DISPLAY and vim.env.DISPLAY ~= "" then
+                    if vim.fn.executable("xsel") == 1 then
+                        local ok, res = pcall(vim.fn.system, { "xsel", reg == "*" and "-op" or "-ob" })
+                        if ok and vim.v.shell_error == 0 and type(res) == "string" and res ~= "" then
+                            return res
+                        end
+                    elseif vim.fn.executable("xclip") == 1 then
+                        local ok, res = pcall(vim.fn.system, { "xclip", "-selection", reg == "*" and "primary" or "clipboard", "-o" })
+                        if ok and vim.v.shell_error == 0 and type(res) == "string" and res ~= "" then
+                            return res
+                        end
+                    end
+                end
+                if vim.env.WAYLAND_DISPLAY and vim.env.WAYLAND_DISPLAY ~= "" and vim.fn.executable("wl-paste") == 1 then
+                    local cmd = reg == "*" and { "wl-paste", "--primary", "--no-newline" } or { "wl-paste", "--no-newline" }
+                    local ok, res = pcall(vim.fn.system, cmd)
+                    if ok and vim.v.shell_error == 0 and type(res) == "string" and res ~= "" then
+                        return res
+                    end
+                end
+                return ""
+            end
+            return function()
+                local out = ""
+                if in_ssh then
+                    out = try_tmux()
+                    if out == "" then
+                        out = try_display()
+                    end
+                else
+                    out = try_display()
+                    if out == "" then
+                        out = try_tmux()
+                    end
+                end
+                if out ~= "" then
+                    out = out:gsub("\r\n", "\n"):gsub("\n$", "")
+                    return { vim.split(out, "\n", { plain = true }), "v" }
+                end
+                if osc_paste and #vim.api.nvim_list_uis() > 0 then
+                    return osc_paste()
+                end
+                return { {}, "v" }
+            end
+        end
+        vim.g.clipboard = {
+            name = "OSC 52 + System Broadcast",
+            copy = { ["+"] = broadcast_copy("+"), ["*"] = broadcast_copy("*") },
+            paste = { ["+"] = broadcast_paste("+"), ["*"] = broadcast_paste("*") },
+        }
     end
 end
 opt.clipboard = "unnamedplus"
@@ -161,8 +249,24 @@ map("n", "<leader>h", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" }
 -- Fast Save
 map("n", "<leader>w", "<cmd>w<CR>", { desc = "Save file" })
 
--- Seamless Window & 4-Layer Spatial Tmux Navigation (Ctrl + hjkl in Normal, Alt + hjkl in all modes)
--- Guarded against floating modals (Telescope/LSP/MiniFiles) BEFORE stopinsert() and zoomed tmux panes.
+-- Smart Home: jump to first non-blank character of line (matching .vimrc)
+map({ "n", "v", "o" }, "<Home>", "^", { desc = "Move to first non-blank character of line" })
+map("i", "<Home>", "<Esc>^i", { desc = "Move to first non-blank character of line" })
+
+-- Layer 1 (Ctrl + hjkl in Normal mode): internal Neovim split navigation only (guarded against floating modals)
+local function internal_split_nav(dir)
+    return function()
+        local cur_win = vim.api.nvim_get_current_win()
+        local win_cfg = vim.api.nvim_win_get_config(cur_win)
+        if win_cfg.relative and win_cfg.relative ~= "" then
+            return
+        end
+        vim.cmd("wincmd " .. dir)
+    end
+end
+
+-- Layer 2a (Alt + hjkl in all modes): seamless 2D spatial navigation across Neovim splits and Tmux panes
+-- Guarded against floating modals (Telescope/LSP/MiniFiles) BEFORE mode exit and zoomed tmux panes.
 local function smart_tmux_nav(dir, tmux_dir)
     return function()
         local cur_win = vim.api.nvim_get_current_win()
@@ -173,6 +277,8 @@ local function smart_tmux_nav(dir, tmux_dir)
         local mode = vim.api.nvim_get_mode().mode
         if mode == "t" or mode == "i" then
             vim.cmd("stopinsert")
+        elseif mode == "v" or mode == "V" or mode == "\22" then
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
         end
         vim.cmd("wincmd " .. dir)
         if vim.api.nvim_get_current_win() == cur_win and vim.env.TMUX then
@@ -188,10 +294,10 @@ local function smart_tmux_nav(dir, tmux_dir)
     end
 end
 
-map("n", "<C-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
-map("n", "<C-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
-map("n", "<C-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
-map("n", "<C-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
+map("n", "<C-h>", internal_split_nav("h"), { desc = "Move to left split" })
+map("n", "<C-j>", internal_split_nav("j"), { desc = "Move to lower split" })
+map("n", "<C-k>", internal_split_nav("k"), { desc = "Move to upper split" })
+map("n", "<C-l>", internal_split_nav("l"), { desc = "Move to right split" })
 
 map({ "n", "i", "v", "t" }, "<M-h>", smart_tmux_nav("h", "L"), { desc = "Move to left split or tmux pane" })
 map({ "n", "i", "v", "t" }, "<M-j>", smart_tmux_nav("j", "D"), { desc = "Move to lower split or tmux pane" })
@@ -520,6 +626,9 @@ function IdeTree.dispatch_file(filepath, focus_editor)
     local cur_win = vim.api.nvim_get_current_win()
     IdeTree.focus_code_win()
     vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+    if _G.IdeFollow and _G.IdeFollow.auto_buf == vim.api.nvim_get_current_buf() then
+        _G.IdeFollow.auto_buf = nil
+    end
     if not focus_editor and vim.api.nvim_win_is_valid(cur_win) then
         vim.api.nvim_set_current_win(cur_win)
     end
@@ -786,6 +895,21 @@ function IdeTree.attach_mappings(buf)
     bmap("a", IdeTree.action_create, "Create file or directory")
     bmap("r", IdeTree.action_rename, "Rename file or directory")
     bmap("d", IdeTree.action_delete, "Delete file or directory")
+    bmap("?", IdeTree.action_help, "Show SolarizedIdeTree keybindings")
+    bmap("g?", IdeTree.action_help, "Show SolarizedIdeTree keybindings")
+end
+
+function IdeTree.action_help()
+    local msg = table.concat({
+        "SolarizedIdeTree Keys:",
+        "  Enter / o / l  Open file or expand dir    | h / - / Left  Collapse dir",
+        "  Tab / p        Preview file in Editor     | > / C         Dive root into dir",
+        "  < / BS         Dive up to parent (..)     | ~ / =         Reset to initial root",
+        "  D              Prompt path to dive        | . / H         Cycle dotfile filter",
+        "  a / r / d      Create / Rename / Delete   | E / W / R     Expand / Collapse / Refresh",
+        "  Space+e / :q   Close tree sidebar",
+    }, "\n")
+    vim.api.nvim_echo({ { msg, "MoreMsg" } }, false, {})
 end
 
 function IdeTree.open_in_current_win()
@@ -1600,6 +1724,20 @@ function IdeFollow.find_newest_modified(root)
     return IdeFollow.find_newest_artifact(newest_path, newest_mtime, conv_dirs)
 end
 
+local function is_listed_open_buf(path)
+    local uv = vim.uv or vim.loop
+    local target_real = uv.fs_realpath(path) or path
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].buflisted then
+            local bname = vim.api.nvim_buf_get_name(b)
+            if bname ~= "" and (bname == path or (uv.fs_realpath(bname) or bname) == target_real) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 function IdeFollow.sync(force)
     if vim.api.nvim_get_mode().mode ~= "n" or vim.fn.getcmdwintype() ~= "" then
         return false
@@ -1634,7 +1772,16 @@ function IdeFollow.sync(force)
     IdeTree.focus_code_win()
     local cur_name = vim.api.nvim_buf_get_name(0)
     if cur_name ~= newest_path then
+        local was_open = is_listed_open_buf(newest_path)
+        local prev_auto = IdeFollow.auto_buf
         vim.cmd("silent! edit " .. vim.fn.fnameescape(newest_path))
+        local new_buf = vim.api.nvim_get_current_buf()
+        if prev_auto and prev_auto ~= new_buf and vim.api.nvim_buf_is_valid(prev_auto)
+            and not vim.bo[prev_auto].modified and #vim.fn.win_findbuf(prev_auto) == 0
+        then
+            pcall(vim.api.nvim_buf_delete, prev_auto, {})
+        end
+        IdeFollow.auto_buf = not was_open and new_buf or nil
     else
         pcall(vim.cmd, "silent! checktime")
     end
@@ -1697,11 +1844,24 @@ map("n", "<leader>af", function()
     IdeFollow.toggle()
 end, { desc = "Toggle AI Live-Follow Mode" })
 
--- Your own saves are not AI activity: advance the follow baseline on every write so the Editor
--- never snaps the cursor back to the last diff hunk of a file you just saved.
-vim.api.nvim_create_autocmd("BufWritePost", {
-    group = vim.api.nvim_create_augroup("SolarizedIdeFollow", { clear = true }),
+-- Your own edits and saves are not transient AI activity: advance the follow baseline on every write
+-- so the Editor never snaps the cursor back to the last diff hunk of a file you just saved, and
+-- promote any buffer you touch or save out of `IdeFollow.auto_buf` so it is never auto-closed.
+local follow_group = vim.api.nvim_create_augroup("SolarizedIdeFollow", { clear = true })
+vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+    group = follow_group,
     callback = function(args)
+        if IdeFollow.auto_buf == args.buf then
+            IdeFollow.auto_buf = nil
+        end
+    end,
+})
+vim.api.nvim_create_autocmd("BufWritePost", {
+    group = follow_group,
+    callback = function(args)
+        if IdeFollow.auto_buf == args.buf then
+            IdeFollow.auto_buf = nil
+        end
         local path = vim.api.nvim_buf_get_name(args.buf)
         local mtime = stat_mtime_ns(path)
         if mtime > IdeFollow.last_mtime_ns then
@@ -1711,27 +1871,57 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     end,
 })
 
--- Workspace Role Jump & Toggle Keybindings (Editor <-> AI Agent <-> Shell)
+-- Workspace Role Jump, Visibility Toggle & Directional Swap Keybindings (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
     if vim.env.TMUX then
         ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
-map({ "n", "i", "t" }, "<M-a>", function()
+map({ "n", "i", "v", "t" }, "<M-a>", function()
     if vim.env.TMUX then
         ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
-map({ "n", "i", "t" }, "<M-e>", function()
+map({ "n", "i", "v", "t" }, "<M-e>", function()
     if vim.env.TMUX then
         ide_job("--show-editor")
     end
-end, { desc = "Focus/Zoom Editor Pane" })
-map({ "n", "i", "t" }, "<M-t>", function()
+end, { desc = "Focus Editor Pane (or bounce back)" })
+map({ "n", "i", "v", "t" }, "<M-t>", function()
     if vim.env.TMUX then
         ide_job("--show-term")
     end
 end, { desc = "Toggle Focus: Shell <-> Editor Pane" })
+map({ "n", "i", "v", "t" }, "<M-E>", function()
+    if vim.env.TMUX then
+        ide_job("--toggle-editor")
+    end
+end, { desc = "Toggle Editor Pane Visibility" })
+map({ "n", "i", "v", "t" }, "<M-T>", function()
+    if vim.env.TMUX then
+        ide_job("--toggle-term")
+    end
+end, { desc = "Toggle Shell Pane Visibility" })
+map({ "n", "i", "v", "t" }, "<M-H>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "left")
+    end
+end, { desc = "Swap Active Pane Left" })
+map({ "n", "i", "v", "t" }, "<M-J>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "down")
+    end
+end, { desc = "Swap Active Pane Down" })
+map({ "n", "i", "v", "t" }, "<M-K>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "up")
+    end
+end, { desc = "Swap Active Pane Up" })
+map({ "n", "i", "v", "t" }, "<M-L>", function()
+    if vim.env.TMUX then
+        ide_job("--swap", "right")
+    end
+end, { desc = "Swap Active Pane Right" })
 
 -- One-Command Quit Everything (:Q, :Quit, :qa, :wqa, Space+q, Alt+q, qide)
 -- While keeping `:q` and `:wq` scoped strictly to closing the active buffer/split in the Editor pane.
@@ -1902,6 +2092,22 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 cnoreabbrev <expr> wqa! (getcmdtype() ==# ':' && getcmdline() ==# 'wqa!') ? 'wall! \| Q!' : 'wqa!'
             ]])
             IdeFollow.start_timer()
+        end
+    end,
+})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = ide_layout_group,
+    callback = function()
+        if vim.env.TMUX
+            and vim.env.TMUX_PANE
+            and vim.env.TMUX_PANE ~= ""
+            and vim.env.NVIM_IDE_SOCKET
+            and vim.env.NVIM_IDE_SOCKET ~= ""
+            and vim.v.servername == vim.env.NVIM_IDE_SOCKET
+            and vim.system
+        then
+            pcall(vim.system, { "tmux", "set-option", "-p", "-q", "-t", vim.env.TMUX_PANE, "@ide_nvim_launch_ts", "0" })
         end
     end,
 })

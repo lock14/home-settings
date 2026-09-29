@@ -81,7 +81,7 @@ echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 check_option "get(g:, 'netrw_banner', -1) == 0 && get(g:, 'netrw_liststyle', -1) == 3 && get(g:, 'netrw_browse_split', -1) == 4 && get(g:, 'netrw_winsize', -1) == 20" "Vim Netrw configured as tree sidebar (netrw_liststyle=3, browse_split=4, winsize=20)"
-check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore and <C-h/j/k/l> mapped to s:TmuxNavigate"
+check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'v') =~# 'TmuxNavigate' && maparg('<M-h>', 'i') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore and both <C-h/j/k/l> and <M-h/j/k/l> mapped to s:TmuxNavigate"
 
 # Test 5: Verify fallback Vim zero-external-dependency architecture
 echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."
@@ -104,24 +104,37 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     if grep -q 'smart_tmux_nav' "$NVIM_CONFIG" && \
+       grep -q 'internal_split_nav' "$NVIM_CONFIG" && \
        grep -q 'window_zoomed_flag' "$NVIM_CONFIG" && \
        grep -q 'netrw_liststyle = 3' "$NVIM_CONFIG" && \
        grep -q 'NVIM_IDE_LAYOUT' "$NVIM_CONFIG" && \
-       grep -q 'map("n", "<C-h>"' "$NVIM_CONFIG" && \
+       grep -q 'map("n", "<C-h>", internal_split_nav("h")' "$NVIM_CONFIG" && \
        ! grep -q 'map({ "n", "t" }, "<C-h>"' "$NVIM_CONFIG" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "v", "o" }, "<Home>", "^"' "$NVIM_CONFIG" && \
+       grep -q 'map("i", "<Home>", "<Esc>^i"' "$NVIM_CONFIG" && \
+       grep -q 'function IdeTree.action_help()' "$NVIM_CONFIG" && \
+       grep -q 'bmap("?", IdeTree.action_help' "$NVIM_CONFIG" && \
+       grep -q 'bmap("g?", IdeTree.action_help' "$NVIM_CONFIG" && \
        grep -q 'map("n", "H", "<cmd>bprevious<CR>"' "$NVIM_CONFIG" && \
        grep -q 'map("n", "L", "<cmd>bnext<CR>"' "$NVIM_CONFIG" && \
        grep -q 'move_selection_next' "$NVIM_CONFIG" && \
        grep -q 'move_selection_previous' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-a>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "$NVIM_CONFIG" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-H>"' "$NVIM_CONFIG" && \
        grep -q -- '--show-editor' "$NVIM_CONFIG" && \
        grep -q -- '--show-term' "$NVIM_CONFIG" && \
+       grep -q -- '--toggle-editor' "$NVIM_CONFIG" && \
+       grep -q -- '--toggle-term' "$NVIM_CONFIG" && \
+       grep -q -- '--swap' "$NVIM_CONFIG" && \
        grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
        grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
        grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures 4-layer smart_tmux_nav (C-hjkl Normal only, M-hjkl all modes, floating guard before stopinsert), H/L buffer cycling, Telescope C-j/C-k, M-e/M-t/M-a role jumps, and Mini.files navigator"
+        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, IdeTree ?/g? help, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files)"
     else
-        fail "Neovim IDE integration" "Missing expected 4-layer smart_tmux_nav, H/L buffer cycling, Telescope C-j/C-k, or Mini.files setup in init.lua"
+        fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, IdeTree help, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup in init.lua"
     fi
 
     if grep -q 'nvim_create_user_command("IdeClose"' "$NVIM_CONFIG" && \
@@ -2505,6 +2518,59 @@ LUA
             pass "Neovim SolarizedIdeTree reopens at its dragged width (Space e), capped at half the screen"
         else
             fail "Neovim tree width memory" "Expected reopen width 33 and a 70-column width capped to ${MOUSE[e_cap]:-?}, got reopen=${MOUSE[e_reopen]:-?} capped=${MOUSE[e_capped]:-?} ${MOUSE[err]:-}"
+        fi
+
+        # Verify clipboard broadcast when a local DISPLAY (e.g. background X0) coexists with TMUX or SSH_CONNECTION:
+        # yanking must never be trapped exclusively in X0; it must broadcast to OSC 52, `tmux load-buffer -w -`, and `xsel -ib`.
+        # Pasting over SSH prefers `tmux show-buffer`, while pasting on a local desktop (no SSH_*) prefers X11 (`xsel -ob`).
+        CLIP_NVIM_DIR="$(mktemp -d)"
+        mkdir -p "$CLIP_NVIM_DIR/bin"
+        cat > "$CLIP_NVIM_DIR/bin/tmux" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "load-buffer" ] && [ "${2:-}" = "-w" ]; then
+    cat > "$CLIP_TEST_DIR/tmux_buf"
+    exit 0
+fi
+if [ "${1:-}" = "save-buffer" ] || [ "${1:-}" = "show-buffer" ]; then
+    printf "from-tmux-buf"
+    exit 0
+fi
+exit 0
+SH
+        cat > "$CLIP_NVIM_DIR/bin/xsel" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "-ib" ]; then
+    cat > "$CLIP_TEST_DIR/xsel_buf"
+    exit 0
+fi
+if [ "${1:-}" = "-ob" ] || [ "${1:-}" = "-op" ]; then
+    printf "from-xsel-buf"
+    exit 0
+fi
+exit 1
+SH
+        chmod +x "$CLIP_NVIM_DIR/bin/tmux" "$CLIP_NVIM_DIR/bin/xsel"
+        CLIP_NAME="$(env -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI \
+            CLIP_TEST_DIR="$CLIP_NVIM_DIR" PATH="$CLIP_NVIM_DIR/bin:$PATH" DISPLAY=":0" TMUX="/tmp/mock-tmux,1,0" SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" \
+            nvim --headless -i NONE -u "$NVIM_CONFIG" \
+            -c 'lua vim.g.clipboard.copy["+"]({"broadcast-line-1", "broadcast-line-2"}, "v")' \
+            -c 'lua io.write((vim.g.clipboard and vim.g.clipboard.name or "") .. "|" .. table.concat(vim.g.clipboard.paste["+"]()[1], ","))' \
+            -c 'qa!' 2>/dev/null || true)"
+        CLIP_LOCAL="$(env -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT \
+            CLIP_TEST_DIR="$CLIP_NVIM_DIR" PATH="$CLIP_NVIM_DIR/bin:$PATH" DISPLAY=":0" TMUX="/tmp/mock-tmux,1,0" \
+            nvim --headless -i NONE -u "$NVIM_CONFIG" \
+            -c 'lua io.write(table.concat(vim.g.clipboard.paste["+"]()[1], ","))' \
+            -c 'qa!' 2>/dev/null || true)"
+        clip_tmux_got="$(cat "$CLIP_NVIM_DIR/tmux_buf" 2>/dev/null || true)"
+        clip_xsel_got="$(cat "$CLIP_NVIM_DIR/xsel_buf" 2>/dev/null || true)"
+        rm -rf "$CLIP_NVIM_DIR"
+        if [ "$CLIP_NAME" = "OSC 52 + System Broadcast|from-tmux-buf" ] && \
+           [ "$CLIP_LOCAL" = "from-xsel-buf" ] && \
+           [ "$clip_tmux_got" = $'broadcast-line-1\nbroadcast-line-2' ] && \
+           [ "$clip_xsel_got" = $'broadcast-line-1\nbroadcast-line-2' ]; then
+            pass "Neovim clipboard broadcasts yanks across OSC 52, tmux load-buffer -w, and X11 (xsel -ib) even when local DISPLAY/:0 coexists with TMUX or SSH_CONNECTION, and prioritizes tmux paste over SSH vs X11 paste on local desktop"
+        else
+            fail "Neovim clipboard broadcast under TMUX/SSH + DISPLAY" "Expected ssh='OSC 52 + System Broadcast|from-tmux-buf', local='from-xsel-buf', and both tmux_buf and xsel_buf populated, got ssh='$CLIP_NAME' local='$CLIP_LOCAL' tmux='$clip_tmux_got' xsel='$clip_xsel_got'"
         fi
     fi
 else
