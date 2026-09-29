@@ -874,19 +874,66 @@ def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> 
         run_tmux("send-keys", "-t", pane_id, " vim", "C-m")
 
 
+def pane_has_editor_child(pane_pid: str) -> bool:
+    if not pane_pid or not pane_pid.isdigit():
+        return False
+    queue = [pane_pid]
+    seen: set[str] = set()
+    while queue:
+        pid = queue.pop(0)
+        if pid in seen:
+            continue
+        seen.add(pid)
+        children_file = Path(f"/proc/{pid}/task/{pid}/children")
+        child_pids: list[str] = []
+        if children_file.is_file():
+            try:
+                child_pids = children_file.read_text(encoding="utf-8", errors="ignore").split()
+            except OSError:
+                child_pids = []
+        elif shutil.which("pgrep"):
+            res = subprocess.run(
+                ["pgrep", "-P", pid],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0:
+                child_pids = res.stdout.split()
+        for cpid in child_pids:
+            if not cpid.isdigit():
+                continue
+            comm_file = Path(f"/proc/{cpid}/comm")
+            if comm_file.is_file():
+                try:
+                    comm = comm_file.read_text(encoding="utf-8", errors="ignore").strip()
+                    if "nvim" in comm or comm in ("vim", "vi"):
+                        return True
+                except OSError:
+                    pass
+            queue.append(cpid)
+    return False
+
+
 def ensure_editor_nvim_running(editor_pane: str, sock: str, initial_file: str = "") -> bool:
-    if not editor_pane or not sock or is_socket_path(sock):
+    if not editor_pane or not sock:
         return False
-    if not resolve_nvim_bin() and not shutil.which("vim"):
+    if is_socket_path(sock):
         return False
-    info = tmux_out("display-message", "-p", "-t", editor_pane, "#{pane_current_command}\t#{@ide_nvim_launch_ts}")
-    parts = (info.split("\t") + ["", ""])[:2]
-    cmd, launch_ts_str = parts[0].strip(), parts[1].strip()
-    if not cmd or "nvim" in cmd or cmd in ("vim", "vi"):
+    if not resolve_nvim_bin():
+        return False
+    info = tmux_out(
+        "display-message", "-p", "-t", editor_pane, "#{pane_pid}\t#{pane_current_command}\t#{@ide_nvim_launch_ts}"
+    )
+    parts = (info.split("\t") + ["", "", ""])[:3]
+    pane_pid, cmd, launch_ts_str = parts[0].strip(), parts[1].strip(), parts[2].strip()
+    if not cmd or "nvim" in cmd or cmd in ("vim", "vi") or pane_has_editor_child(pane_pid):
         return False
     if launch_ts_str:
         try:
-            if time.time() - float(launch_ts_str) < 2.0:
+            ts_val = float(launch_ts_str)
+            if ts_val > 0 and time.time() - ts_val < 15.0:
                 return False
         except ValueError:
             pass

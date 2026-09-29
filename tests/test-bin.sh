@@ -849,16 +849,15 @@ SH
         healed_ed_left="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_left}" 2>/dev/null || echo 0)"
         healed_ed_top="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_top}" 2>/dev/null || echo 1)"
         healed_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
-        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-            nvim --headless --server "$sock_3p" --remote-send '<C-\><C-n><Cmd>qall!<CR>' >/dev/null 2>&1 || true
-            for _ in $(seq 1 30); do
-                [ ! -S "$sock_3p" ] && break
-                sleep 0.05
-            done
-        fi
+        tmux respawn-pane -k -t "$healed_ed_pane" 2>/dev/null || true
         rm -f "$sock_3p"
         tmux set-option -p -q -t "$healed_ed_pane" @ide_nvim_launch_ts "0" 2>/dev/null || true
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        REVIVE_STUB_DIR="$TEMP_HOME/revive_nvim_stub"
+        mkdir -p "$REVIVE_STUB_DIR"
+        printf '#!/usr/bin/env bash\nexit 0\n' > "$REVIVE_STUB_DIR/nvim"
+        chmod +x "$REVIVE_STUB_DIR/nvim"
+        PATH="$PATH:$REVIVE_STUB_DIR" "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        rm -rf "$REVIVE_STUB_DIR"
         revived_active_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
         revived_launch_ts="$(tmux display-message -p -t "$healed_ed_pane" "#{@ide_nvim_launch_ts}" 2>/dev/null || echo 0)"
         if [ "$recovered_pane_cnt" = "3" ] && [ "$recovered_term_pane" = "$term_pane" ] && \

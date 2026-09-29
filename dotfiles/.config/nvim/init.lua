@@ -2096,6 +2096,22 @@ vim.api.nvim_create_autocmd("VimEnter", {
     end,
 })
 
+vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = ide_layout_group,
+    callback = function()
+        if vim.env.TMUX
+            and vim.env.TMUX_PANE
+            and vim.env.TMUX_PANE ~= ""
+            and vim.env.NVIM_IDE_SOCKET
+            and vim.env.NVIM_IDE_SOCKET ~= ""
+            and vim.v.servername == vim.env.NVIM_IDE_SOCKET
+            and vim.system
+        then
+            pcall(vim.system, { "tmux", "set-option", "-p", "-q", "-t", vim.env.TMUX_PANE, "@ide_nvim_launch_ts", "0" })
+        end
+    end,
+})
+
 vim.api.nvim_create_autocmd({ "FocusGained", "WinEnter" }, {
     group = ide_layout_group,
     callback = function()
