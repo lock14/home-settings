@@ -285,22 +285,50 @@ The redesigned repository is built for frictionless extension:
 - **`COLORTERM=truecolor`**: Global 24-bit TrueColor export preventing color degradation.
 
 ### 3. Modern Lua Neovim (`dotfiles/.config/nvim/init.lua`) & Hybrid Terminal IDE (`bin/ide`, `dotfiles/.tmux.conf`)
-- **Single-Window Inverted-T AI-First 3-Pane & 2-Pane Spatial Geometry**:
-  - `ide` / `ide3` (`--3pane`, default): Top-Left AI Agent (50%×75%, `agy` / `claude` / `codex`, focused on launch), Top-Right Main Editor (50%×75%, single Neovim server listening on `$NVIM_IDE_SOCKET`), and Bottom Full-Width Interactive Shell (100%×25% for unconstrained Powerlevel10k prompts and wide CLI output) all visible simultaneously in a single window (`ide`), with non-destructive pane parking/unparking (`Alt+Shift+E` / `ide --toggle-editor`, `Alt+Shift+T` / `ide --toggle-term`, `ide --toggle-ai`) and directional pane swapping (`Alt+Shift+H/J/K/L` / `ide --swap left|down|up|right`).
-  - `ide2` (`--2pane`): Side-by-side 50% AI Agent | 50% Full-Height Main Editor.
-- **AI Live-Follow Mode (`IdeFollow` / `Space af`)**:
-  - Enabled by default in `ide` sessions: automatically reloads open buffers (`checktime`), opens each file the AI edits in the Top-Right Editor pane, and centers (`normal! zz`) the exact line it changed while your cursor stays in the Top-Left AI Agent pane (automatically yielding whenever you enter Insert/Visual mode or have unsaved local edits).
-  - Edit-log driven & non-blocking: the file and line come from the AI's own edit records (`agy` `transcript_full.jsonl` tool calls, Claude Code `tool_use` records), so following works in any workspace (git, Mercurial, or none) and lands on the replaced block itself. Edits the AI makes through shell commands (`sed -i`, formatters, code generators) are caught by a background `git status` (adaptive backoff: at most every 1.25 s, idling at least 4× each scan's duration) and land on the file's last diff hunk. The 1.5 s follow tick never waits on a subprocess.
-  - Session-scoped: each `ide` session follows only edits recorded by AI conversations launched in that session's directory (and only inside its workspace, the nearest `.git` / `.hg` root), its own repository's git changes, and those conversations' `/plan` & walkthrough artifacts (`agy` conversations resolved via the `cli/history.jsonl` prompt log of its auto-detected data directory under `~/.gemini/` and their subagent records, Claude Code sessions and plans resolved via that project's `~/.claude/projects/` transcripts), so concurrent `ide` sessions never drive each other's Editor, and your own `:w` saves never re-trigger a jump.
+- **Spatial Window Architecture (`bin/ide`, `dotfiles/.tmux.conf`)**:
+  - **Single-Window Geometry**: Built around an AI-first inverted-T layout in a single Tmux window (`ide`) with zero secondary Neovim servers or hidden `_swap` parking windows.
+    - `ide` / `ide3` (`--3pane`, default): Top-Left AI Agent (50%×75%, `agy` / `claude` / `codex`, focused on launch), Top-Right Main Editor (50%×75%, single Neovim server listening on `$NVIM_IDE_SOCKET`), and Bottom Full-Width Interactive Shell (100%×25% for unconstrained Powerlevel10k prompts and wide CLI output).
+    - `ide2` (`--2pane`): Side-by-side 50% AI Agent | 50% Full-Height Main Editor.
+  - **Non-Destructive Pane Parking & Swapping**:
+    - Park and restore panes dynamically without killing running processes (`Alt+Shift+E` / `ide --toggle-editor`, `Alt+Shift+T` / `ide --toggle-term`, `ide --toggle-ai` via hidden windows `_ide_park_<role>`).
+    - Directionally swap active panes on the fly (`Alt+Shift+H/J/K/L` / `ide --swap left|down|up|right`, wrapping horizontally across the top split).
+  - **Mouse & Keyboard Resizing**:
+    - Drag any split border with the mouse (even while focusing the tree or editing) or use `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`).
+    - Custom pane and sidebar dimensions persist across focus switches, parking/unparking, and full-screen zoom (`Alt+z`).
+  - **Safe Session Isolation & Quitting**:
+    - Every IDE command targets its exact session (`=NAME`) to prevent prefix collisions or cascading shutdowns.
+    - Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) or terminal (`ide quit`, `qide`) terminates only that specific workspace session, prompting if unsaved buffers exist (`Alt+Shift+Q` / `ide quit --force`).
+
 - **First-Principles 4-Layer Keybinding Architecture**:
-  - **Layer 1 (App-Local `Ctrl`)**: `Ctrl+h/j/k/l` are never bound in Tmux's root table, preserving native `Ctrl+L` (clear), `Ctrl+J` (newline), `Ctrl+K` (kill line), and `Ctrl+H` (backspace) in Zsh, Bash, and AI CLIs (`agy`, `claude`, `codex`), while `<C-j>/<C-k>` navigate Telescope pickers and `<C-h/j/k/l>` navigate internal Neovim Normal-mode splits.
-  - **Layer 2 (Spatial `Alt`)**: `Alt+h/j/k/l` move focus seamlessly across Neovim splits and Tmux panes from any mode (`n/i/v/t`); `Alt+Shift+H/J/K/L` (`ide --swap left|down|up|right`) directionally swap the active Tmux pane (wrapping horizontally between the two top panes); `Alt+a` / `Alt+e` / `Alt+t` (`Space a`) focus or unpark the AI Agent, Editor, or Shell pane and bounce back to the previous pane on a second press (preserving zoom when zoomed); `Alt+Shift+E` (`ide --toggle-editor`) and `Alt+Shift+T` (`ide --toggle-term`) toggle the Editor or Shell pane's visibility from anywhere without killing its process; `Alt+z` toggles pane zoom; `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`) or dragging any pane border with the mouse resizes panes (sizes survive focus switches, parking/unparking, and zoom); plain-clicking an OSC 8 hyperlink or `Ctrl+Click`ing a `file:///path#L10-L20`, `[label](file:///...)`, `path:line[:col]`, or workspace filename opens it at that line in the Editor pane; `Alt+q` (`Alt+Shift+Q`) quits the entire IDE workspace.
-  - **Layer 3 (Editor `Space` Leader & In-Process `SolarizedIdeTree`)**: `Space e` toggles the in-process `SolarizedIdeTree` sidebar (28 columns, `winfixwidth`; `?` / `g?` opens its keybinding help popup; drag its edge with the mouse to resize it, even while it has focus, and it reopens at that width), `Space af` toggles AI Live-Follow Mode (`:IdeFollowToggle`), `Space gs` opens Telescope `git_status` to review AI-modified files, `H`/`L` cycle buffers, `<Home>` jumps to the first non-blank character, and `:q` (`:IdeClose`) closes the active buffer or split without ever collapsing the last code window into the sidebar.
-- **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
-- **Treesitter**: AST-based syntax highlighting with 1:1 parity matching `bat`.
-- **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`, `<leader>gs`) with `<C-j>` / `<C-k>` selection movement.
-- **Solarized Dark**: Seamless `#002B36` terminal background matching.
-- **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim` and `+line` support over RPC).
+  - **Layer 1: App-Local (`Ctrl`)**: Root Tmux `Ctrl+h/j/k/l` bindings are strictly omitted, preserving native `Ctrl+L` (clear), `Ctrl+J` (newline), `Ctrl+K` (kill line), and `Ctrl+H` (backspace) in Zsh, Bash, and AI CLIs (`agy`, `claude`, `codex`). `<C-j>/<C-k>` navigate Telescope pickers, while `<C-h/j/k/l>` navigate internal Neovim Normal-mode splits.
+  - **Layer 2: Spatial Navigation & Workspace (`Alt`)**:
+    - `Alt+h/j/k/l` move focus seamlessly across Neovim splits and Tmux panes from any mode (`n/i/v/t`).
+    - `Alt+a`, `Alt+e`, `Alt+t` (`Alt+1/2/3`) focus or unpark the AI Agent, Editor, or Shell pane, bouncing back to the previous pane on a second press while preserving zoom state.
+    - `Alt+Shift+E` and `Alt+Shift+T` toggle Editor and Shell pane visibility from anywhere.
+    - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
+  - **Layer 3: Editor & File Tree (`Space` Leader & In-Process `SolarizedIdeTree`)**:
+    - `Space e` toggles the in-process `SolarizedIdeTree` sidebar (28 columns, `winfixwidth`, chain-collapsed folders, `?` help popup, persistent mouse edge resize).
+    - `Space af` toggles AI Live-Follow Mode (`:IdeFollowToggle`).
+    - `Space gs` opens Telescope `git_status` to review AI-modified files.
+    - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character.
+    - `:q` / `:q!` (`:IdeClose`) safely closes the active buffer or split without collapsing the code window into the sidebar.
+  - **Layer 4: Clickable Links & Unified Clipboard**:
+    - Plain-click OSC 8 hyperlinks or `Ctrl+Click` compiler output (`file:line[:col]`), `file:///` URLs, and markdown `[label](...)` links in AI panes to open the target at that line in the Editor.
+    - Hidden-URL `[label](https://...)` web links in AI transcripts and session artifacts route to `$IDE_BROWSER` (or system browser) and copy to the tmux buffer via OSC 52 over SSH.
+    - Clipboard yanks broadcast across OSC 52 (`tmux load-buffer -w`) and local X11/Wayland/macOS clipboards, with automatic X11 priority on local desktops and tmux buffer priority over SSH.
+
+- **AI Live-Follow Mode (`IdeFollow` / `Space af`)**:
+  - **Zero-Friction Follow**: Automatically reloads open buffers (`checktime`), opens files newly edited by the AI in the Editor pane, and centers (`normal! zz`) the exact modified block while cursor focus stays in the AI Agent pane (automatically yielding on Insert/Visual mode or unsaved local edits).
+  - **Edit-Log Driven & Non-Blocking**: Follow targets come directly from the AI's own edit records (`agy` `transcript_full.jsonl` tool calls, Claude Code `tool_use` records) and land on the replacement block itself—working across git, Mercurial, and VCS-less trees alike. Shell-driven edits (`sed -i`, formatters) are caught asynchronously by a background `git status` (adaptive backoff: at most every 1.25 s, idling at least 4× each scan's duration) and land on the last diff hunk. The 1.5 s follow tick never waits on a subprocess.
+  - **Transient Buffer Auto-Cleanup**: Automatically closes previous unmodified transient auto-followed buffers as the AI advances to new files, preventing buffer clutter while strictly preserving user-opened buffers (`was_open`, `IdeTree`) and buffers the user edits or saves.
+  - **Strict Session Isolation**: Each `ide` session follows only edits and `/plan` artifacts belonging to conversations launched in that workspace root, never cross-contaminating concurrent `ide` sessions or following AI internal state directories.
+
+- **Polyglot LSP, Treesitter & Neovim Toolchains**:
+  - **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
+  - **Treesitter**: AST-based syntax highlighting with 1:1 parity matching `bat`.
+  - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`, `<leader>gs`) with `<C-j>` / `<C-k>` selection movement.
+  - **Solarized Dark**: Seamless `#002B36` terminal background matching.
+  - **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim` and `+line` support over RPC).
 
 ### 4. Terminal Emulators (Ghostty, GNOME Terminal & macOS Terminal)
 - **Ghostty (`dotfiles/.config/ghostty/config`)**:
@@ -329,7 +357,34 @@ The redesigned repository is built for frictionless extension:
 
 ---
 
-## Git & Developer Shortcuts
+## IDE Workspace Keybindings & Navigation
+
+| Keybinding / Action | Context | Description |
+| :--- | :--- | :--- |
+| `Alt+h` / `j` / `k` / `l` | Universal (`n/i/v/t`) | Navigate focus across Neovim splits and Tmux panes seamlessly |
+| `Alt+a` / `Alt+3` (`Space a`) | Universal | Focus AI Agent pane (or unpark); bounce back to Editor on second press (zoom-preserving) |
+| `Alt+e` / `Alt+1` | Universal | Focus Editor pane (or unpark); bounce back to previous pane on second press |
+| `Alt+t` / `Alt+2` | Universal | Focus Shell pane (or unpark); bounce back to Editor on second press |
+| `Alt+Shift+E` | Universal | Toggle Editor pane visibility (park to / restore from `_ide_park_editor`) |
+| `Alt+Shift+T` | Universal | Toggle Shell pane visibility (park to / restore from `_ide_park_term`) |
+| `Alt+Shift+H` / `J` / `K` / `L` | Tmux | Directionally swap active pane left, down, up, or right (wraps horizontally across top panes) |
+| `Alt+z` | Tmux | Toggle full-window pane zoom (preserves zoom state across pane switches) |
+| `Alt+Left` / `Down` / `Up` / `Right` | Tmux | Resize active pane by 5 cells in direction (or drag borders with mouse) |
+| `Ctrl+Click` / Plain Click | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or markdown `[label](...)` in Editor |
+| `Alt+q` (`Alt+Shift+Q`) | Universal | Gracefully quit (`:wqa` / `ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
+| `Space e` | Neovim Normal | Toggle in-process `SolarizedIdeTree` file sidebar (`?` opens tree help; drag border to resize) |
+| `Space af` | Neovim Normal | Toggle AI Live-Follow Mode (`:IdeFollowToggle`) |
+| `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
+| `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |
+| `<Home>` | Neovim Normal | Jump to first non-blank character on line |
+| `:q` / `:q!` (`:IdeClose`) | Neovim Command | Close current buffer or split without collapsing code window into sidebar |
+| `:qa` / `:wqa` (`:Q`) | Neovim Command | Quit entire IDE workspace session safely |
+| `icd [dir\|--reset]` | Shell | Synchronize working directory across Editor, File Tree, and Shell without killing AI Agent |
+| `v [+line] <file>` | Shell | Open file in the IDE Editor pane (with optional line jump) via RPC |
+
+---
+
+## Git & Shell Shortcuts
 
 | Shortcut | Description |
 | :--- | :--- |
