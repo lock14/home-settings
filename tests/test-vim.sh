@@ -2519,6 +2519,59 @@ LUA
         else
             fail "Neovim tree width memory" "Expected reopen width 33 and a 70-column width capped to ${MOUSE[e_cap]:-?}, got reopen=${MOUSE[e_reopen]:-?} capped=${MOUSE[e_capped]:-?} ${MOUSE[err]:-}"
         fi
+
+        # Verify clipboard broadcast when a local DISPLAY (e.g. background X0) coexists with TMUX or SSH_CONNECTION:
+        # yanking must never be trapped exclusively in X0; it must broadcast to OSC 52, `tmux load-buffer -w -`, and `xsel -ib`.
+        # Pasting over SSH prefers `tmux show-buffer`, while pasting on a local desktop (no SSH_*) prefers X11 (`xsel -ob`).
+        CLIP_NVIM_DIR="$(mktemp -d)"
+        mkdir -p "$CLIP_NVIM_DIR/bin"
+        cat > "$CLIP_NVIM_DIR/bin/tmux" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "load-buffer" ] && [ "${2:-}" = "-w" ]; then
+    cat > "$CLIP_TEST_DIR/tmux_buf"
+    exit 0
+fi
+if [ "${1:-}" = "save-buffer" ] || [ "${1:-}" = "show-buffer" ]; then
+    printf "from-tmux-buf"
+    exit 0
+fi
+exit 0
+SH
+        cat > "$CLIP_NVIM_DIR/bin/xsel" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "-ib" ]; then
+    cat > "$CLIP_TEST_DIR/xsel_buf"
+    exit 0
+fi
+if [ "${1:-}" = "-ob" ] || [ "${1:-}" = "-op" ]; then
+    printf "from-xsel-buf"
+    exit 0
+fi
+exit 1
+SH
+        chmod +x "$CLIP_NVIM_DIR/bin/tmux" "$CLIP_NVIM_DIR/bin/xsel"
+        CLIP_NAME="$(env -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI \
+            CLIP_TEST_DIR="$CLIP_NVIM_DIR" PATH="$CLIP_NVIM_DIR/bin:$PATH" DISPLAY=":0" TMUX="/tmp/mock-tmux,1,0" SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" \
+            nvim --headless -i NONE -u "$NVIM_CONFIG" \
+            -c 'lua vim.g.clipboard.copy["+"]({"broadcast-line-1", "broadcast-line-2"}, "v")' \
+            -c 'lua io.write((vim.g.clipboard and vim.g.clipboard.name or "") .. "|" .. table.concat(vim.g.clipboard.paste["+"]()[1], ","))' \
+            -c 'qa!' 2>/dev/null || true)"
+        CLIP_LOCAL="$(env -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT \
+            CLIP_TEST_DIR="$CLIP_NVIM_DIR" PATH="$CLIP_NVIM_DIR/bin:$PATH" DISPLAY=":0" TMUX="/tmp/mock-tmux,1,0" \
+            nvim --headless -i NONE -u "$NVIM_CONFIG" \
+            -c 'lua io.write(table.concat(vim.g.clipboard.paste["+"]()[1], ","))' \
+            -c 'qa!' 2>/dev/null || true)"
+        clip_tmux_got="$(cat "$CLIP_NVIM_DIR/tmux_buf" 2>/dev/null || true)"
+        clip_xsel_got="$(cat "$CLIP_NVIM_DIR/xsel_buf" 2>/dev/null || true)"
+        rm -rf "$CLIP_NVIM_DIR"
+        if [ "$CLIP_NAME" = "OSC 52 + System Broadcast|from-tmux-buf" ] && \
+           [ "$CLIP_LOCAL" = "from-xsel-buf" ] && \
+           [ "$clip_tmux_got" = $'broadcast-line-1\nbroadcast-line-2' ] && \
+           [ "$clip_xsel_got" = $'broadcast-line-1\nbroadcast-line-2' ]; then
+            pass "Neovim clipboard broadcasts yanks across OSC 52, tmux load-buffer -w, and X11 (xsel -ib) even when local DISPLAY/:0 coexists with TMUX or SSH_CONNECTION, and prioritizes tmux paste over SSH vs X11 paste on local desktop"
+        else
+            fail "Neovim clipboard broadcast under TMUX/SSH + DISPLAY" "Expected ssh='OSC 52 + System Broadcast|from-tmux-buf', local='from-xsel-buf', and both tmux_buf and xsel_buf populated, got ssh='$CLIP_NAME' local='$CLIP_LOCAL' tmux='$clip_tmux_got' xsel='$clip_xsel_got'"
+        fi
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"

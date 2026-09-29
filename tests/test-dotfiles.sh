@@ -94,19 +94,31 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-J.*--swap down' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-K.*--swap up' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-L.*--swap right' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g @ide_is_editor' "$TEMP_HOME/.tmux.conf" && \
+   [ "$(grep -c '#{E:@ide_is_editor}' "$TEMP_HOME/.tmux.conf")" -ge 6 ] && \
+   [ "$(grep -c 'm/ri:\^g?(view' "$TEMP_HOME/.tmux.conf")" -eq 1 ] && \
    grep -q 'bind -n M-Left resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDrag1Border resize-pane -M' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, _ide_park_ filter, PREFIX/COPY/ZOOM badges, unbolded typography), extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
+    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, _ide_park_ filter, PREFIX/COPY/ZOOM badges, unbolded typography), deduplicated @ide_is_editor predicate, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_is_editor deduplication, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_SOCK="test-tmux-cfg-$$"
-    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test >/dev/null 2>&1; then
+    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test "sleep 30" >/dev/null 2>&1; then
+        cfg_pane="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "=cfg_test:" '#{pane_id}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role editor
+        eval_editor_non_shell="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role ai
+        eval_ai_non_editor="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
-        pass ".tmux.conf loads cleanly into live headless tmux server without errors"
+        if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ]; then
+            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor} across editor and non-editor panes"
+        else
+            fail ".tmux.conf @ide_is_editor evaluation" "Expected editor=1 ai=0, got editor=$eval_editor_non_shell ai=$eval_ai_non_editor"
+        fi
     else
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         fail ".tmux.conf live load" "tmux reported errors loading dotfiles/.tmux.conf"

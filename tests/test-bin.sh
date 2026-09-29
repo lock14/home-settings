@@ -192,6 +192,7 @@ rm -rf "$LINK_TEST_DIR" "$TEMP_HOME/.config/ide"
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_TMPDIR="$(mktemp -d)"
     export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
+    export XDG_RUNTIME_DIR="$TMUX_TEST_TMPDIR"
     unset TMUX TMUX_PANE
 
     IDE_WS_2P="$TEMP_HOME/ws_2pane_test"
@@ -558,6 +559,45 @@ if command -v tmux >/dev/null 2>&1; then
                 else
                     fail "IdeFollow AI-state exclusion" "Expected FILE:todo.cfg LINE:2, got: $home_out"
                 fi
+
+                # Transient auto-followed buffers are cleaned up as IdeFollow advances from file to file, while
+                # pre-existing user-opened buffers and auto-followed buffers the user edits/saves stay buflisted
+                printf 'user kept\n' > "$HG_WS/src/configs/user_kept.cfg"
+                printf 'step 1\n' > "$HG_WS/src/configs/step1.cfg"
+                printf 'step 2\n' > "$HG_WS/src/configs/step2.cfg"
+                printf 'step 3\n' > "$HG_WS/src/configs/step3.cfg"
+                transient_lua="
+                    IdeFollow.enabled = true
+                    vim.cmd('edit $HG_WS/src/configs/user_kept.cfg')
+                    local function touch_and_log(path, sec)
+                        local f = io.open('$HG_LOG', 'a')
+                        f:write(vim.json.encode({ type = 'PLANNER_RESPONSE', tool_calls = { { name = 'write_to_file', args = { TargetFile = path, CodeContent = 'x' } } } }) .. '\\n')
+                        f:close()
+                        vim.uv.fs_utime(path, sec, sec)
+                        IdeFollow.sync(false)
+                    end
+                    touch_and_log('$HG_WS/src/configs/step1.cfg', 1800000001)
+                    touch_and_log('$HG_WS/src/configs/step2.cfg', 1800000002)
+                    -- Promote step2.cfg by saving it as the user, then follow step3.cfg and user_kept.cfg
+                    vim.cmd('silent write')
+                    touch_and_log('$HG_WS/src/configs/step3.cfg', 1800000003)
+                    touch_and_log('$HG_WS/src/configs/user_kept.cfg', 1800000004)
+                    local listed = {}
+                    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+                        if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].buflisted then
+                            local n = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ':t')
+                            if n ~= '' then table.insert(listed, n) end
+                        end
+                    end
+                    table.sort(listed)
+                    io.stdout:write('LISTED:' .. table.concat(listed, ','))
+                "
+                transient_out="$(follow_nvim "$HG_ROOT" "$transient_lua" "$HG_ROOT")"
+                if grep -Fq "LISTED:step2.cfg,user_kept.cfg" <<< "$transient_out"; then
+                    pass "AI Live-Follow Mode automatically closes previous transient auto-followed buffers while preserving pre-existing user-opened and user-saved buffers"
+                else
+                    fail "IdeFollow transient buffer cleanup" "Expected LISTED:step2.cfg,user_kept.cfg (step1.cfg and step3.cfg auto-closed), got: $transient_out"
+                fi
             fi
         else
             pass "In-process SolarizedIdeTree and IdeFollow skipped headless runtime check (nvim not installed on runner)"
@@ -645,6 +685,107 @@ if command -v tmux >/dev/null 2>&1; then
                 else
                     fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3/1/3/2/3/2/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed aisym=$line_after_aisym tool=$line_after_tool"
                 fi
+                # Verify hidden-URL `[label](https://...)` web links in AI transcripts & session artifacts, $IDE_BROWSER / SSH OSC 52 fallback,
+                # and strict cross-session isolation (foreign conversations in ~/.gemini/*/brain/* and unreferenced ~/.claude/plans/* are ignored,
+                # while this session's subagents and Claude Code transcripts + referenced plans are resolved).
+                mkdir -p "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/subagents" \
+                         "$TEMP_HOME/.gemini/app/brain/conv-subagent-test/.system_generated/logs" \
+                         "$TEMP_HOME/.gemini/app/brain/conv-foreign/.system_generated/logs" \
+                         "$TEMP_HOME/.claude/plans"
+                printf '{"id":"conv-subagent-test"}\n' > "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/subagents/sub1.json"
+                printf '{"type":"PLANNER_RESPONSE","content":"Subagent edited [`subagent_sym`](file://%s/subdir/nested.txt#L3) and linked [DesignSpec](https://example.com/design-spec?v=1#sec)."}\n' "$IDE_WS_3P" \
+                    > "$TEMP_HOME/.gemini/app/brain/conv-subagent-test/.system_generated/logs/transcript.jsonl"
+                printf '{"timestamp":9999,"workspace":"/tmp/other-foreign-ws","conversationId":"conv-foreign"}\n' >> "$TEMP_HOME/.gemini/app/cli/history.jsonl"
+                printf "foreign1\nforeign2\n" > "$IDE_WS_3P/subdir/foreign_target.txt"
+                printf '{"type":"PLANNER_RESPONSE","content":"Foreign [`foreign_sym`](file://%s/subdir/foreign_target.txt#L2) and [ForeignWeb](https://example.com/foreign)"}\n' "$IDE_WS_3P" \
+                    > "$TEMP_HOME/.gemini/app/brain/conv-foreign/.system_generated/logs/transcript.jsonl"
+                printf "foreign artifact\n" > "$TEMP_HOME/.gemini/app/brain/conv-foreign/foreign_plan.md"
+                printf "own artifact line 1\nown artifact line 2\n" > "$TEMP_HOME/.gemini/app/brain/conv-link-test/own_plan.md"
+                claude_enc="$(cd "$IDE_WS_3P" && pwd -P | sed 's/[^A-Za-z0-9_-]/-/g')"
+                mkdir -p "$TEMP_HOME/.claude/projects/$claude_enc"
+                printf "claude plan line 1\nclaude plan line 2\n" > "$TEMP_HOME/.claude/plans/session-plan.md"
+                printf "foreign claude plan\n" > "$TEMP_HOME/.claude/plans/unreferenced-foreign-plan.md"
+                printf '{"type":"assistant","message":{"content":[{"type":"text","text":"Updated %s/.claude/plans/session-plan.md and [ClaudeDoc](https://example.com/claude-doc)"}]}}\n' "$TEMP_HOME" \
+                    > "$TEMP_HOME/.claude/projects/$claude_enc/sess1.jsonl"
+
+                BROWSER_LOG="$TEMP_HOME/browser_urls.log"
+                BROWSER_STUB="$TEMP_HOME/browser_stub.sh"
+                printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$BROWSER_LOG" > "$BROWSER_STUB"
+                chmod +x "$BROWSER_STUB"
+                : > "$BROWSER_LOG"
+
+                # 1) Subagent file link `[subagent_sym](file://...#L3)` resolves to line 3
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "subagent_sym" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_subagent="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_subagent="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                # 2) Foreign session's `[foreign_sym](file://...)` and `foreign_plan.md` and `unreferenced-foreign-plan.md` must NOT open in Editor
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "foreign_sym" "$IDE_WS_3P" "ide-ws_3pane_test"
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "foreign_plan.md:1" "$IDE_WS_3P" "ide-ws_3pane_test"
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "unreferenced-foreign-plan.md:1" "$IDE_WS_3P" "ide-ws_3pane_test"
+                buf_after_foreign="nested.txt"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    buf_after_foreign="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                fi
+                # 3) Own session's `own_plan.md:2` and Claude's referenced `session-plan.md:2` DO open in Editor
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "own_plan.md:2" "$IDE_WS_3P" "ide-ws_3pane_test"
+                buf_after_own_plan="own_plan.md"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    buf_after_own_plan="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                fi
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "session-plan.md:2" "$IDE_WS_3P" "ide-ws_3pane_test"
+                buf_after_claude_plan="session-plan.md"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    buf_after_claude_plan="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                fi
+                # 4) Hidden-URL `[DesignSpec](https://...)` and `[ClaudeDoc](https://...)` route to $IDE_BROWSER and copy to tmux buffer, while `[ForeignWeb](https://...)` is ignored.
+                # Also verify balanced parentheses in URLs (`[WikiScheme](https://en.wikipedia.org/wiki/Solarized_(color_scheme))`),
+                # file URLs with parentheses (`[route.ts](file://.../app/(auth)/route.ts#L2)`),
+                # bracketed/call labels (`[`arr[0]`](file://.../subdir/nested.txt#L2)` clicked as `arr`, `[`my_func()`](file://.../subdir/nested.txt#L3)` clicked as `my_func`),
+                # and $IDE_BROWSER with quoted flags containing spaces.
+                mkdir -p "$IDE_WS_3P/app/(auth)"
+                printf "auth1\nauth2\nauth3\n" > "$IDE_WS_3P/app/(auth)/route.ts"
+                printf '{"type":"PLANNER_RESPONSE","content":"See [WikiScheme](https://en.wikipedia.org/wiki/Solarized_(color_scheme)) and [`arr[0]`](file://%s/subdir/nested.txt#L2) and [`my_func()`](file://%s/subdir/nested.txt#L3)"}\n' \
+                    "$IDE_WS_3P" "$IDE_WS_3P" >> "$TEMP_HOME/.gemini/app/brain/conv-subagent-test/.system_generated/logs/transcript.jsonl"
+
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "[route.ts](file://$IDE_WS_3P/app/(auth)/route.ts#L2)" "$IDE_WS_3P" "ide-ws_3pane_test"
+                buf_after_paren_file="route.ts:2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    bname="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                    bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                    buf_after_paren_file="${bname}:${bline}"
+                fi
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "arr" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_arr="2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_arr="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "my_func" "$IDE_WS_3P" "ide-ws_3pane_test"
+                line_after_func="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_func="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+
+                HOME="$TEMP_HOME" IDE_BROWSER="$BROWSER_STUB" "$SCRIPT_DIR/bin/ide" --open-link "" "DesignSpec." "$IDE_WS_3P" "ide-ws_3pane_test"
+                tmux_url_buf="$(tmux show-buffer 2>/dev/null || true)"
+                HOME="$TEMP_HOME" IDE_BROWSER="$BROWSER_STUB" "$SCRIPT_DIR/bin/ide" --open-link "" "ClaudeDoc" "$IDE_WS_3P" "ide-ws_3pane_test"
+                HOME="$TEMP_HOME" IDE_BROWSER="\"$BROWSER_STUB\" --profile \"solarized dark\"" "$SCRIPT_DIR/bin/ide" --open-link "" "WikiScheme" "$IDE_WS_3P" "ide-ws_3pane_test"
+                HOME="$TEMP_HOME" IDE_BROWSER="$BROWSER_STUB" "$SCRIPT_DIR/bin/ide" --open-link "" "ForeignWeb" "$IDE_WS_3P" "ide-ws_3pane_test"
+                for _ in $(seq 1 30); do
+                    [ "$(wc -l < "$BROWSER_LOG" | tr -d ' ')" -ge 3 ] && break
+                    sleep 0.05
+                done
+                browser_logged="$(tr '\n' '|' < "$BROWSER_LOG")"
+                if [ "$line_after_subagent" = "3" ] && [ "$buf_after_foreign" = "nested.txt" ] && \
+                   [ "$buf_after_own_plan" = "own_plan.md" ] && [ "$buf_after_claude_plan" = "session-plan.md" ] && \
+                   [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$line_after_arr" = "2" ] && [ "$line_after_func" = "3" ] && \
+                   [ "$tmux_url_buf" = "https://example.com/design-spec?v=1#sec" ] && \
+                   [ "$browser_logged" = "https://example.com/design-spec?v=1#sec|https://example.com/claude-doc|--profile solarized dark https://en.wikipedia.org/wiki/Solarized_(color_scheme)|" ]; then
+                    pass "bin/ide --open-link resolves hidden-URL [label](https://...) web links (including balanced parentheses in URLs and bracket/call labels) via \$IDE_BROWSER + OSC 52 tmux buffer and enforces strict cross-session transcript/artifact isolation"
+                else
+                    fail "bin/ide --open-link web links & cross-session isolation" "Expected subagent=3 foreign=nested.txt own_plan=own_plan.md claude_plan=session-plan.md paren_file=route.ts:2 arr=2 func=3 tmux_url=https://example.com/design-spec?v=1#sec browser='https://example.com/design-spec?v=1#sec|https://example.com/claude-doc|--profile solarized dark https://en.wikipedia.org/wiki/Solarized_(color_scheme)|', got subagent=$line_after_subagent foreign=$buf_after_foreign own=$buf_after_own_plan claude=$buf_after_claude_plan paren_file=$buf_after_paren_file arr=$line_after_arr func=$line_after_func tmux_url=$tmux_url_buf browser=$browser_logged"
+                fi
             else
                 fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
             fi
@@ -656,17 +797,102 @@ if command -v tmux >/dev/null 2>&1; then
             rm -f "$sock_3p"
         fi
 
-        # Verify self-healing when Right Full-Height Editor pane is closed while Left AI and Shell panes remain
+        # Verify `bin/ide --copy` populates tmux buffer (`load-buffer -w` for OSC 52) AND broadcasts to X11 (`xsel -ib`) after discovering DISPLAY from tmux,
+        # and `bin/ide --paste` prefers X11 on local desktop vs tmux buffer over SSH.
+        COPY_MOCK_DIR="$(mktemp -d)"
+        cat > "$COPY_MOCK_DIR/xsel" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "-ib" ]; then
+    cat > "$COPY_XSEL_OUT"
+    exit 0
+fi
+if [ "${1:-}" = "-op" ] || [ "${1:-}" = "-ob" ]; then
+    printf "from-xsel-selection"
+    exit 0
+fi
+exit 1
+SH
+        chmod +x "$COPY_MOCK_DIR/xsel"
+        tmux set-environment -g DISPLAY ":99"
+        printf "solarized-clipboard-payload" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
+        copy_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
+        copy_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
+        # Local desktop (--paste without SSH_CONNECTION): prefers X11 (`from-xsel-selection`) and loads it into tmux buffer
+        env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
+        paste_local_got="$(tmux show-buffer 2>/dev/null || true)"
+        # SSH session (--paste with SSH_CONNECTION): prefers tmux buffer (`from-tmux-ssh-buf`) over stale background X11
+        tmux set-buffer "from-tmux-ssh-buf"
+        env -u DISPLAY SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
+        paste_ssh_got="$(tmux show-buffer 2>/dev/null || true)"
+        tmux set-environment -gu DISPLAY
+        rm -rf "$COPY_MOCK_DIR"
+        if [ "$copy_tmux_got" = "solarized-clipboard-payload" ] && [ "$copy_xsel_got" = "solarized-clipboard-payload" ] && \
+           [ "$paste_local_got" = "from-xsel-selection" ] && [ "$paste_ssh_got" = "from-tmux-ssh-buf" ]; then
+            pass "bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11, and --paste prioritizes X11 on local desktop and tmux buffer over SSH"
+        else
+            fail "bin/ide --copy / --paste" "Expected copy='solarized-clipboard-payload', paste_local='from-xsel-selection', paste_ssh='from-tmux-ssh-buf', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got'"
+        fi
+
+        # Verify untagged pane recovery when @ide_term_pane and pane's @ide_role are cleared (tests tmux_out preserving trailing \t)
+        tmux set-option -u -t "ide-ws_3pane_test" @ide_term_pane 2>/dev/null || true
+        tmux set-environment -t "ide-ws_3pane_test" -r IDE_TERM_PANE 2>/dev/null || true
+        tmux set-option -p -u -t "$term_pane" @ide_role 2>/dev/null || true
+        "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
+        recovered_term_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_term_pane 2>/dev/null || true)"
+        recovered_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
+
+        # Verify self-healing when Right Full-Height Editor pane is closed while Left AI and Shell panes remain,
+        # AND when Neovim exits back to an interactive shell inside an existing Editor pane (`--show-editor` revives Neovim in-place without bouncing away)
         tmux kill-pane -t "$ed_pane" 2>/dev/null || true
         "$SCRIPT_DIR/bin/ide" --focus-editor "ide-ws_3pane_test"
         healed_ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane 2>/dev/null || true)"
         healed_ed_left="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_left}" 2>/dev/null || echo 0)"
         healed_ed_top="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_top}" 2>/dev/null || echo 1)"
         healed_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
-        if [ "$healed_pane_cnt" = "3" ] && [ "${healed_ed_left:-0}" -gt 0 ] && [ "${healed_ed_top:-1}" = "0" ]; then
-            pass "bin/ide self-heals Right Full-Height Editor pane (left>0, top=0) and restores 3-pane geometry if closed"
+        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+            nvim --headless --server "$sock_3p" --remote-send '<C-\><C-n><Cmd>qall!<CR>' >/dev/null 2>&1 || true
+            for _ in $(seq 1 30); do
+                [ ! -S "$sock_3p" ] && break
+                sleep 0.05
+            done
+        fi
+        rm -f "$sock_3p"
+        tmux set-option -p -q -t "$healed_ed_pane" @ide_nvim_launch_ts "0" 2>/dev/null || true
+        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        revived_active_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
+        revived_launch_ts="$(tmux display-message -p -t "$healed_ed_pane" "#{@ide_nvim_launch_ts}" 2>/dev/null || echo 0)"
+        if [ "$recovered_pane_cnt" = "3" ] && [ "$recovered_term_pane" = "$term_pane" ] && \
+           [ "$healed_pane_cnt" = "3" ] && [ "${healed_ed_left:-0}" -gt 0 ] && [ "${healed_ed_top:-1}" = "0" ] && \
+           [ "$revived_active_pane" = "$healed_ed_pane" ] && [ "$revived_launch_ts" != "0" ] && [ -n "$revived_launch_ts" ]; then
+            pass "bin/ide recovers untagged existing panes without duplicating, self-heals Right Full-Height Editor pane if closed, and revives exited Neovim in-place on --show-editor"
         else
-            fail "bin/ide Editor pane self-heal" "Expected 3 panes and healed Right Editor at left>0,top=0, got panes=$healed_pane_cnt left=$healed_ed_left top=$healed_ed_top"
+            fail "bin/ide Editor pane self-heal / untagged recovery" "Expected recovered_term=$term_pane (got $recovered_term_pane, panes=$recovered_pane_cnt), 3 panes with healed Right Editor at left>0,top=0 (got panes=$healed_pane_cnt left=$healed_ed_left top=$healed_ed_top), and revived Editor active=$healed_ed_pane ts!=0 (got active=$revived_active_pane ts=$revived_launch_ts)"
+        fi
+
+        # Verify resolve_nvim_bin numerical version sorting (0.11.0 chosen over 0.9.5 when multiple versions exist)
+        MISE_SORT_DIR="$(mktemp -d)"
+        mkdir -p "$MISE_SORT_DIR/mise/shims" "$MISE_SORT_DIR/mise/installs/neovim/0.9.5/bin" "$MISE_SORT_DIR/mise/installs/neovim/0.11.0/bin"
+        printf '#!/usr/bin/env bash\nexit 0\n' > "$MISE_SORT_DIR/mise/shims/nvim"
+        printf '#!/usr/bin/env bash\nexit 0\n' > "$MISE_SORT_DIR/mise/installs/neovim/0.9.5/bin/nvim"
+        printf '#!/usr/bin/env bash\nexit 0\n' > "$MISE_SORT_DIR/mise/installs/neovim/0.11.0/bin/nvim"
+        chmod +x "$MISE_SORT_DIR/mise/shims/nvim" "$MISE_SORT_DIR/mise/installs/neovim/0.9.5/bin/nvim" "$MISE_SORT_DIR/mise/installs/neovim/0.11.0/bin/nvim"
+        resolved_ver="$(PATH="$MISE_SORT_DIR/mise/shims:/usr/bin:/bin" python3 - "$SCRIPT_DIR/bin/ide" <<'PYTEST'
+import sys, types
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    lines = f.read().splitlines()
+start = next(i for i, l in enumerate(lines) if "<<'PY'" in l) + 1
+end = next(i for i in range(start, len(lines)) if lines[i] == "PY")
+code = "\n".join(lines[start:end])
+mod = types.ModuleType("ide_mod")
+exec(compile(code, sys.argv[1], "exec"), mod.__dict__)
+print(mod.resolve_nvim_bin() or "")
+PYTEST
+)"
+        rm -rf "$MISE_SORT_DIR"
+        if [[ "$resolved_ver" == *"/0.11.0/bin/nvim" ]]; then
+            pass "bin/ide resolve_nvim_bin sorts mise neovim versions numerically (0.11.0 preferred over 0.9.5)"
+        else
+            fail "bin/ide resolve_nvim_bin version sort" "Expected */0.11.0/bin/nvim, got '$resolved_ver'"
         fi
 
         "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1
