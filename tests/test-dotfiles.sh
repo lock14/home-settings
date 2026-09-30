@@ -102,29 +102,59 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    [ "$(grep -c 'm/ri:\^g?(view' "$TEMP_HOME/.tmux.conf")" -eq 1 ] && \
    grep -q 'bind -n M-Left resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDrag1Border resize-pane -M' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_tab_ai' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_tab_ed' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_tab_term' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_ed_parked' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_term_parked' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-?.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind ?.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1StatusLeft choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1Status.*--status-click' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1StatusRight.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown3Status display-menu' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, _ide_park_ filter, PREFIX/COPY/ZOOM badges, unbolded typography), deduplicated @ide_is_editor predicate, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline (copy-pipe-no-clear, M-c, M-v), 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
+    pass ".tmux.conf configures Solarized Dark top header bar (fixed status-left, 3-state @ide_tab_* role switcher with parked indicators, mode-contextual status-right, Alt+? cheatsheet popup, clickable status bar), deduplicated @ide_is_editor predicate, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_is_editor deduplication, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_tab_* 3-state badges, Alt+? cheatsheet popup, @ide_is_editor deduplication, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_SOCK="test-tmux-cfg-$$"
-    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test "exec sleep 30" >/dev/null 2>&1; then
+    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test -n ide "exec sleep 30" >/dev/null 2>&1; then
         cfg_pane="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "=cfg_test:" '#{pane_id}')"
         for _ in $(seq 1 20); do
             [ "$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{pane_current_command}')" = "sleep" ] && break
             sleep 0.02
         done
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role editor
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_cli agy
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_parked 0
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ed_parked 0
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_term_parked 1
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_initial_root "/tmp/ws"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_workdir "/tmp/ws"
         eval_editor_non_shell="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
+        eval_sleft="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-left}')"
+        eval_wcur="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        eval_sright_root="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_workdir "/tmp/ws/subdir"
+        eval_sright_sub="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role ai
         eval_ai_non_editor="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
-        if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ]; then
-            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor} across editor and non-editor panes"
+        if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
+           grep -Fq "cfg_test" <<< "$eval_sleft" && \
+           grep -Fq "agy (Alt+a)" <<< "$eval_wcur" && \
+           grep -Fq "▸ " <<< "$eval_wcur" && \
+           grep -Fq "Editor (Alt+e)" <<< "$eval_wcur" && \
+           grep -Fq "Shell [Alt+T]" <<< "$eval_wcur" && \
+           grep -Fq "Help (Alt+?)" <<< "$eval_sright_root" && \
+           ! grep -Fq "subdir" <<< "$eval_sright_root" && \
+           grep -Fq "subdir" <<< "$eval_sright_sub"; then
+            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor}, fixed status-left, 3-state window-status-current-format, and conditional status-right"
         else
-            fail ".tmux.conf @ide_is_editor evaluation" "Expected editor=1 ai=0, got editor=$eval_editor_non_shell ai=$eval_ai_non_editor"
+            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor sleft='$eval_sleft' wcur='$eval_wcur' sright_root='$eval_sright_root' sright_sub='$eval_sright_sub'"
         fi
     else
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true

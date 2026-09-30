@@ -118,10 +118,23 @@ if grep -q -- '--3pane' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-editor' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-term' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-ai' <<< "$IDE_HELP" && \
-   grep -q -- '--swap' <<< "$IDE_HELP"; then
-    pass "bin/ide --help displays usage for 2-pane, --3pane, --toggle-editor/term/ai, --swap, --kill, and --list"
+   grep -q -- '--swap' <<< "$IDE_HELP" && \
+   grep -q -- '--keys' <<< "$IDE_HELP"; then
+    pass "bin/ide --help displays usage for 2-pane, --3pane, --toggle-editor/term/ai, --swap, --keys, --kill, and --list"
 else
-    fail "bin/ide --help" "Expected --3pane, --toggle-editor/term/ai, --swap, and --kill in bin/ide --help output"
+    fail "bin/ide --help" "Expected --3pane, --toggle-editor/term/ai, --swap, --keys, and --kill in bin/ide --help output"
+fi
+
+IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" --keys)"
+if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+E" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+T" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT"; then
+    pass "bin/ide --keys renders the Solarized Dark 2-column keybinding cheatsheet (including focus, swap, resize, mini.files, clipboard, and quit shortcuts)"
+else
+    fail "bin/ide --keys" "Missing expected keybinding sections in bin/ide --keys output"
 fi
 
 if "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1; then
@@ -326,33 +339,39 @@ SH
         term_pid_0="$(tmux display-message -p -t "$term_pane" "#{pane_pid}")"
         ai_pid_0="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
         term_h_0="$(tmux display-message -p -t "$term_pane" "#{pane_height}")"
+        main_allow_rename="$(tmux show-options -wqv -t "$main_win" allow-rename 2>/dev/null || true)"
         "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
         panes_after_park_term="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         park_term_win="$(tmux display-message -p -t "$term_pane" "#{window_name}" 2>/dev/null || true)"
+        term_parked_flag1="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_term_parked 2>/dev/null || true)"
         "$SCRIPT_DIR/bin/ide" --toggle-editor "ws_3pane_test"
         panes_after_park_ed="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         park_ed_win="$(tmux display-message -p -t "$ed_pane" "#{window_name}" 2>/dev/null || true)"
+        ed_parked_flag1="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_ed_parked 2>/dev/null || true)"
         # Refuses to hide the last visible pane (AI)
         "$SCRIPT_DIR/bin/ide" --toggle-ai "ws_3pane_test"
         panes_after_last_guard="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
-        # --show-editor unparks Editor and focuses it; --toggle-term unparks Shell at the bottom full-width
-        "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
+        # --status-click on the Editor badge unparks Editor and focuses it; --toggle-term unparks Shell at the bottom full-width
+        "$SCRIPT_DIR/bin/ide" --status-click "45" "ws_3pane_test"
         active_after_unpark_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        ed_parked_flag0="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_ed_parked 2>/dev/null || true)"
         "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
+        term_parked_flag0="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_term_parked 2>/dev/null || true)"
         panes_after_unpark_all="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         term_w_restored="$(tmux display-message -p -t "$term_pane" "#{pane_width}")"
         term_h_restored="$(tmux display-message -p -t "$term_pane" "#{pane_height}")"
         ed_pid_1="$(tmux display-message -p -t "$ed_pane" "#{pane_pid}")"
         term_pid_1="$(tmux display-message -p -t "$term_pane" "#{pane_pid}")"
         ai_pid_1="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
-        if [ "$panes_after_park_term" = "2" ] && [ "$park_term_win" = "_ide_park_term" ] && \
-           [ "$panes_after_park_ed" = "1" ] && [ "$park_ed_win" = "_ide_park_editor" ] && \
-           [ "$panes_after_last_guard" = "1" ] && [ "$active_after_unpark_ed" = "$ed_pane" ] && \
-           [ "$panes_after_unpark_all" = "3" ] && [ "$term_w_restored" = "$win_width" ] && [ "$term_h_restored" = "$term_h_0" ] && \
+        if [ "$main_allow_rename" = "off" ] && \
+           [ "$panes_after_park_term" = "2" ] && [ "$park_term_win" = "_ide_park_term" ] && [ "$term_parked_flag1" = "1" ] && \
+           [ "$panes_after_park_ed" = "1" ] && [ "$park_ed_win" = "_ide_park_editor" ] && [ "$ed_parked_flag1" = "1" ] && \
+           [ "$panes_after_last_guard" = "1" ] && [ "$active_after_unpark_ed" = "$ed_pane" ] && [ "$ed_parked_flag0" = "0" ] && \
+           [ "$panes_after_unpark_all" = "3" ] && [ "$term_parked_flag0" = "0" ] && [ "$term_w_restored" = "$win_width" ] && [ "$term_h_restored" = "$term_h_0" ] && \
            [ "$ed_pid_0" = "$ed_pid_1" ] && [ "$term_pid_0" = "$term_pid_1" ] && [ "$ai_pid_0" = "$ai_pid_1" ]; then
-            pass "bin/ide --toggle-term, --toggle-editor, and --toggle-ai non-destructively park/unpark panes via _ide_park_<role>, guard the last visible pane, and restore geometry and PIDs"
+            pass "bin/ide --toggle-term, --toggle-editor, --toggle-ai, and --status-click non-destructively park/unpark panes via _ide_park_<role>, track @ide_*_parked, lock main_win rename, guard the last visible pane, and restore geometry and PIDs"
         else
-            fail "bin/ide pane parking/unparking" "Unexpected state: park_term=$panes_after_park_term($park_term_win) park_ed=$panes_after_park_ed($park_ed_win) guard=$panes_after_last_guard unpark_ed=$active_after_unpark_ed all=$panes_after_unpark_all w=$term_w_restored/$win_width h=$term_h_restored/$term_h_0 pids=$ed_pid_0/$ed_pid_1,$term_pid_0/$term_pid_1,$ai_pid_0/$ai_pid_1"
+            fail "bin/ide pane parking/unparking" "Unexpected state: main_rename=$main_allow_rename park_term=$panes_after_park_term($park_term_win,flag=$term_parked_flag1->$term_parked_flag0) park_ed=$panes_after_park_ed($park_ed_win,flag=$ed_parked_flag1->$ed_parked_flag0) guard=$panes_after_last_guard unpark_ed=$active_after_unpark_ed all=$panes_after_unpark_all w=$term_w_restored/$win_width h=$term_h_restored/$term_h_0 pids=$ed_pid_0/$ed_pid_1,$term_pid_0/$term_pid_1,$ai_pid_0/$ai_pid_1"
         fi
 
         # Test directional pane swapping (--swap right|left|down|up) including horizontal wrap,

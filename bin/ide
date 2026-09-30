@@ -51,6 +51,7 @@ Options:
   --toggle-ai [SESSION]    Hide or reappear the AI Agent pane
   --toggle-term [SESSION]  Hide or reappear the Interactive Shell pane (Alt+Shift+T)
   --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
+  --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / Prefix+?)
   quit, -q, --quit [NAME]  Safely quit IDE session NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
@@ -779,6 +780,14 @@ def unpark_role_pane(
             else:
                 run_tmux("join-pane", "-d", "-f", "-b", "-v", "-l", str(pair_h), "-s", target_pane, "-t", first_pane)
 
+    park_opt, park_env = {
+        "ai": ("@ide_ai_parked", "IDE_AI_PARKED"),
+        "editor": ("@ide_ed_parked", "IDE_ED_PARKED"),
+        "term": ("@ide_term_parked", "IDE_TERM_PARKED"),
+    }.get(role, ("", ""))
+    if park_opt:
+        set_ide_var(sess, park_opt, park_env, "0")
+
     if role == "editor":
         nvim_remote_expr(sock, "execute('checktime') . execute('normal! zz')")
 
@@ -856,6 +865,13 @@ def park_role_pane(
                     break
 
     run_tmux("break-pane", "-d", "-s", target_pane, "-n", f"_ide_park_{role}")
+    park_opt, park_env = {
+        "ai": ("@ide_ai_parked", "IDE_AI_PARKED"),
+        "editor": ("@ide_ed_parked", "IDE_ED_PARKED"),
+        "term": ("@ide_term_parked", "IDE_TERM_PARKED"),
+    }.get(role, ("", ""))
+    if park_opt:
+        set_ide_var(sess, park_opt, park_env, "1")
     park_win = tmux_out("display-message", "-p", "-t", target_pane, "#{window_id}")
     if park_win and park_win != main_win:
         run_tmux(
@@ -1060,7 +1076,10 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
             if editor_pane:
                 ed_just_healed = True
                 run_tmux("set-option", "-p", "-t", editor_pane, "@ide_role", "editor")
-                set_ide_var(sess, "@ide_editor_pane", "NVIM_IDE_PANE", editor_pane)
+                set_ide_vars(sess, [
+                    ("@ide_editor_pane", "NVIM_IDE_PANE", editor_pane),
+                    ("@ide_ed_parked", "IDE_ED_PARKED", "0"),
+                ])
                 send_editor_launch_keys(editor_pane, sock)
 
         if not ai_pane:
@@ -1071,7 +1090,10 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
             if ai_pane:
                 ai_just_healed = True
                 run_tmux("set-option", "-p", "-t", ai_pane, "@ide_role", "ai")
-                set_ide_var(sess, "@ide_ai_pane", "IDE_AI_PANE", ai_pane)
+                set_ide_vars(sess, [
+                    ("@ide_ai_pane", "IDE_AI_PANE", ai_pane),
+                    ("@ide_ai_parked", "IDE_AI_PARKED", "0"),
+                ])
                 ai_run_cmd = resolve_ai_cmd(ai_cli)
                 if ai_run_cmd:
                     run_tmux("send-keys", "-t", ai_pane, f" {ai_run_cmd}", "C-m")
@@ -1084,7 +1106,10 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
             if term_pane:
                 term_just_healed = True
                 run_tmux("set-option", "-p", "-t", term_pane, "@ide_role", "term")
-                set_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE", term_pane)
+                set_ide_vars(sess, [
+                    ("@ide_term_pane", "IDE_TERM_PANE", term_pane),
+                    ("@ide_term_parked", "IDE_TERM_PARKED", "0"),
+                ])
 
         if was_zoomed_before_heal == "1" and tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") == "0":
             run_tmux("resize-pane", "-Z", "-t", main_win)
@@ -1735,6 +1760,104 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     return 0
 
 
+def show_keys_cheatsheet() -> int:
+    c_orange = "\033[38;2;203;75;22m"
+    c_blue = "\033[38;2;38;139;210m"
+    c_cyan = "\033[38;2;42;161;152m"
+    c_base0 = "\033[38;2;131;148;150m"
+    c_base01 = "\033[38;2;88;110;117m"
+    c_reset = "\033[0m"
+
+    def row(k1: str, d1: str, k2: str, d2: str) -> str:
+        return (
+            f"  {c_cyan}{k1:<18}{c_base0} {d1:<21}  "
+            f"{c_cyan}{k2:<18}{c_base0} {d2}{c_reset}"
+        )
+
+    lines = [
+        f"  {c_orange} IDE Workspace & Editor Keybindings{c_base01}{'':>18}[q / Esc / Space to close]{c_reset}",
+        f"  {c_base01}{'─' * 80}{c_reset}",
+        f"  {c_blue}{'FOCUS & VISIBILITY':<42}{c_blue}LAYOUT, SWAP & RESIZE{c_reset}",
+        row("Alt+h / j / k / l", "Move focus 2D", "Alt+Shift+H/J/K/L", "Swap pane 2D"),
+        row("Alt+a / e / t", "Focus AI/Edit/Shell", "Alt+Arrow Keys", "Resize pane (5 cells)"),
+        row("Alt+Shift+E", "Hide / show Editor", "Alt+z", "Toggle 100% zoom"),
+        row("Alt+Shift+T", "Hide / show Shell", "Mouse drag border", "Resize panes"),
+        row("Click top bar", "Switch role / Help", "Prefix + b", "Toggle top status bar"),
+        "",
+        f"  {c_blue}{'NEOVIM & MINI.FILES (Space = Leader)':<42}{c_blue}CLIPBOARD, LINKS & WORKSPACE{c_reset}",
+        row("Space e / Space E", "Open mini.files", "Mouse drag / 2x", "Select & copy"),
+        row("h / l  (in files)", "Parent / open item", "Alt+c / Alt+v", "Copy & clear / Paste"),
+        row("=      (in files)", "Apply file edits", "Ctrl+LeftClick", "Open link / jump def"),
+        row("g? / q (in files)", "Help / close tree", "icd [dir|--reset]", "Shift workspace dir"),
+        row("Space ff / fg / gs", "Find / Grep / Git", ":Q / Space q", "Quit IDE workspace"),
+        row("H / L  (normal)", "Prev / next buffer", "Alt+q / Alt+Shift+Q", "Quit / Force-quit IDE"),
+        row("Ctrl+h / j / k / l", "Move Neovim splits", "Alt+? / Prefix+?", "This key cheatsheet"),
+    ]
+    sys.stdout.write("\n" + "\n".join(lines) + "\n")
+    sys.stdout.flush()
+
+    if sys.stdin.isatty() and sys.stdout.isatty() and os.environ.get("IDE_KEYS_NO_WAIT", "0") != "1":
+        try:
+            import termios
+            import tty
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                while True:
+                    ch = os.read(fd, 32)
+                    if not ch:
+                        break
+                    if ch in (b"q", b"Q", b"?", b" ", b"\r", b"\n", b"\x03", b"\x04", b"\x1b"):
+                        break
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        except OSError:
+            pass
+    return 0
+
+
+def status_click(x_str: str, target_arg: str) -> int:
+    try:
+        x = int(x_str)
+    except (ValueError, TypeError):
+        return 0
+    sess = resolve_target_session(target_arg)
+    if not sess or not session_exists(sess):
+        return 0
+
+    info = tmux_out(
+        "display-message", "-p", "-t", f"={sess}:",
+        "#{@ide_role}\t#{@ide_ai_cli}\t#{window_zoomed_flag}",
+    )
+    parts = (info.split("\t") + ["", "", ""])[:3]
+    role = parts[0] or "ai"
+    ai_cli = parts[1] or "AI"
+    zoomed = parts[2] == "1"
+
+    left_len = len(sess) + 6
+    rel = x - left_len
+    if rel < 0:
+        return 0
+
+    ai_w = 1 + (2 if role == "ai" else 0) + 2 + len(ai_cli) + 8
+    ed_w = (2 if role == "editor" else 0) + 16
+    term_w = (2 if role == "term" else 0) + 16
+
+    ai_end = ai_w + 1
+    ed_end = ai_w + 3 + ed_w + 1
+    term_end = ai_w + 3 + ed_w + 3 + term_w
+
+    if rel <= ai_end:
+        return toggle_main_pane("ai", sess)
+    if rel <= ed_end:
+        return toggle_main_pane("editor", sess)
+    if rel <= term_end or not zoomed:
+        return toggle_main_pane("term", sess)
+    run_tmux("resize-pane", "-Z", "-t", f"={sess}:")
+    return 0
+
+
 def main() -> int:
     if not shutil.which("tmux"):
         print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
@@ -1750,6 +1873,7 @@ def main() -> int:
     open_file = ""
     cd_target = ""
     swap_dir = ""
+    status_click_x = ""
     link_href = ""
     link_word = ""
     link_cwd = ""
@@ -1846,6 +1970,14 @@ def main() -> int:
                 i += 2
             else:
                 i += 1
+        elif arg in ("--keys", "--help-keys"):
+            action = "keys"
+            i += 1
+        elif arg == "--status-click":
+            action = "status-click"
+            status_click_x = argv[i + 1] if i + 1 < n else "0"
+            target_arg = argv[i + 2] if i + 2 < n else ""
+            i += 3 if i + 2 < n else (2 if i + 1 < n else 1)
         elif arg == "--copy":
             action = "copy"
             i += 1
@@ -1914,6 +2046,11 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+
+    if action == "keys":
+        return show_keys_cheatsheet()
+    if action == "status-click":
+        return status_click(status_click_x, target_arg)
 
     # Populate DISPLAY / WAYLAND_DISPLAY / XAUTHORITY before dispatching --copy, --paste, --open-link, or launch
     if action in ("copy", "paste", "open-link", "launch"):
@@ -2011,6 +2148,9 @@ def main() -> int:
             ("@ide_editor_pane", "NVIM_IDE_PANE", pane_editor),
             ("@ide_ai_pane", "IDE_AI_PANE", pane_ai),
             ("@ide_layout_mode", "IDE_LAYOUT_MODE", layout_mode),
+            ("@ide_ai_parked", "IDE_AI_PARKED", "0"),
+            ("@ide_ed_parked", "IDE_ED_PARKED", "0"),
+            ("@ide_term_parked", "IDE_TERM_PARKED", "0" if layout_mode == "3pane" else "1"),
         ]
 
         pane_term = ""
@@ -2023,6 +2163,10 @@ def main() -> int:
             var_pairs.append(("@ide_term_pane", "IDE_TERM_PANE", pane_term))
 
         role_cmds = [
+            "set-option", "-w", "-t", main_win, "automatic-rename", "off",
+            ";",
+            "set-option", "-w", "-t", main_win, "allow-rename", "off",
+            ";",
             "set-option", "-p", "-t", pane_ai, "@ide_role", "ai",
             ";",
             "set-option", "-p", "-t", pane_editor, "@ide_role", "editor",
