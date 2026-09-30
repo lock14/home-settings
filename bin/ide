@@ -6,8 +6,8 @@
 #   - Top-Left Pane (50% width × 75% height): AI Agent CLI (@ide_role=ai, initial focus)
 #     controlled by $IDE_AI_CLI (agy | claude | codex)
 #   - Top-Right Pane (50% width × 75% height): Main Editor (@ide_role=editor)
-#     listening on $NVIM_IDE_SOCKET with AI Live-Follow Mode (IdeFollow)
-#     and in-process SolarizedIdeTree (<leader>e)
+#     listening on $NVIM_IDE_SOCKET with live buffer reload (autoread/checktime),
+#     mini.files (<leader>e), and Telescope git_status (<leader>gs)
 #   - Bottom Pane (100% width × 25% height): Full-Width Interactive Shell (@ide_role=term)
 #   - Floating Modal (Alt+Shift+a): Optional overlay popup
 #
@@ -20,7 +20,6 @@ set -euo pipefail
 export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
 
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
-import json
 import os
 from pathlib import Path
 import re
@@ -59,14 +58,14 @@ Options:
   --list                   List active tmux IDE sessions
   -h, --help               Show this help message and exit
 
-Without NAME / SESSION, session commands act only on the ide-* session of the calling pane
+Without NAME / SESSION, session commands act only on the ide session of the calling pane
 (outside tmux: the current directory's session), never on any other tmux session.
 
 Environment Variables:
   IDE_AI_CLI               AI CLI tool for the AI Agent pane: agy (default), claude, or codex
   IDE_BROWSER              Optional browser executable for opening http(s):// links
-  IDE_LINK_RULES           Untracked Ctrl+click link rules (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
-                           defining `ide_resolve_link WORD CWD`, which prints a URL to open for WORD"""
+  IDE_LINK_RULES           Untracked Ctrl+click link and session-naming rules (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
+                           defining `ide_resolve_link WORD CWD` and/or `ide_session_name DIR`"""
 
 
 def usage(file=sys.stdout) -> None:
@@ -104,17 +103,37 @@ def is_socket_path(path: str | Path) -> bool:
         return False
 
 
+def is_ssh_session(sess: str = "") -> bool:
+    for var in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"):
+        if os.environ.get(var):
+            return True
+    if sess and session_exists(sess):
+        env_out = tmux_out("show-environment", "-t", f"={sess}")
+        for line in env_out.splitlines():
+            for var in ("SSH_CONNECTION=", "SSH_TTY=", "SSH_CLIENT="):
+                if line.startswith(var) and len(line) > len(var):
+                    return True
+    return False
+
+
 def discover_display_env() -> None:
-    if (not os.environ.get("DISPLAY") or not os.environ.get("WAYLAND_DISPLAY")) and (
-        os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")
-    ) and shutil.which("tmux"):
-        for line in tmux_out("show-environment", "-g").splitlines():
+    if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")) and shutil.which("tmux"):
+        env_lines = tmux_out("show-environment").splitlines() + tmux_out("show-environment", "-g").splitlines()
+        seen_vars: set[str] = set()
+        for line in env_lines:
             for var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
+                if var in seen_vars or os.environ.get(var):
+                    continue
                 prefix = f"{var}="
-                if line.startswith(prefix) and not os.environ.get(var):
+                if line.startswith(prefix):
                     val = line[len(prefix):]
                     if val:
                         os.environ[var] = val
+                        seen_vars.add(var)
+                elif line == f"-{var}":
+                    seen_vars.add(var)
+    if is_ssh_session():
+        return
     if not os.environ.get("DISPLAY") and is_socket_path("/tmp/.X11-unix/X0"):
         os.environ["DISPLAY"] = ":0"
     try:
@@ -223,13 +242,44 @@ def resolve_ai_cmd(cli: str) -> str | None:
     return None
 
 
+def sanitize_name_token(raw: str) -> str:
+    cleaned = re.sub(r"[.: ]", "-", raw)
+    cleaned = re.sub(r"[^A-Za-z0-9_-]", "", cleaned).lstrip("-")
+    return cleaned or "workspace"
+
+
+def resolve_custom_session_name(target_dir: str) -> str:
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    rules = os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
+    try:
+        with open(rules, "r", encoding="utf-8") as f:
+            if "ide_session_name" not in f.read():
+                return ""
+    except OSError:
+        return ""
+    res = subprocess.run(
+        [
+            "bash",
+            "-c",
+            '. "$1" && declare -F ide_session_name >/dev/null && ide_session_name "$2"',
+            "ide",
+            rules,
+            target_dir,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    return (res.stdout or "").strip() if res.returncode == 0 else ""
+
+
 def sanitize_session_name(raw: str) -> str:
+    custom = resolve_custom_session_name(raw)
+    if custom:
+        return sanitize_name_token(custom)
     base = os.path.basename(raw.rstrip("/")) if raw.rstrip("/") else os.path.basename(raw)
-    cleaned = re.sub(r"[.: ]", "-", base)
-    cleaned = re.sub(r"[^A-Za-z0-9_-]", "", cleaned)
-    if not cleaned:
-        cleaned = "workspace"
-    return f"ide-{cleaned}"
+    return sanitize_name_token(base)
 
 
 def session_exists(sess: str) -> bool:
@@ -239,7 +289,7 @@ def session_exists(sess: str) -> bool:
 def missing_session_msg(sess: str) -> str:
     if sess:
         return f"No active IDE session named '{sess}'."
-    return "Not inside an ide session (pass a session name, e.g. 'ide --quit ide-<dir>')."
+    return "Not inside an ide session (pass a session name, e.g. 'ide --quit <dir>')."
 
 
 def current_ide_session() -> str:
@@ -253,24 +303,28 @@ def current_ide_session() -> str:
     last_part = parts[-1]
     tmux_pane = os.environ.get("TMUX_PANE", "")
     target = tmux_pane if tmux_pane else f"${last_part}"
-    found = tmux_out("display-message", "-p", "-t", target, "#{pid} #{session_name}")
-    if not found or " " not in found:
+    found = tmux_out(
+        "display-message", "-p", "-t", target,
+        "#{pid}\t#{session_name}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}",
+    )
+    if not found or "\t" not in found:
         return ""
-    pid, sess_name = found.split(" ", 1)
+    fparts = (found.split("\t") + ["", "", "", "", ""])[:5]
+    pid, sess_name, ide_sess, ide_sock, ide_win = fparts[0], fparts[1], fparts[2], fparts[3], fparts[4]
     if pid != server_pid:
         return ""
-    return sess_name if sess_name.startswith("ide-") else ""
+    if ide_sess or ide_sock or ide_win or sess_name.startswith("ide-"):
+        return sess_name
+    return ""
 
 
 def resolve_target_session(arg: str = "") -> str:
     if arg:
-        if arg.startswith("ide-"):
+        if session_exists(arg):
             return arg
         if os.path.isdir(arg):
             return sanitize_session_name(os.path.abspath(arg))
-        cleaned = re.sub(r"[.: ]", "-", arg)
-        cleaned = re.sub(r"[^A-Za-z0-9_-]", "", cleaned)
-        return f"ide-{cleaned}"
+        return sanitize_name_token(arg)
     if os.environ.get("TMUX"):
         return current_ide_session()
     return sanitize_session_name(os.getcwd())
@@ -649,9 +703,7 @@ def nvim_remote_file(sock: str, filepath: str, line: str = "") -> None:
     line_cmd = f" | silent! {line} | silent! normal! zz" if line else ""
     nvim_remote_expr(
         sock,
-        'execute(["if luaeval(\'type(_G.IdeTree) == \\"table\\" and type(_G.IdeTree.focus_code_win) == \\"function\\"\') | '
-        'call v:lua.IdeTree.focus_code_win() | '
-        'elseif (&filetype ==# \'netrw\' || &filetype ==# \'ide_tree\') && winnr(\'\\$\') > 1 | wincmd p | endif", '
+        'execute(["if &filetype ==# \'netrw\' && winnr(\'\\$\') > 1 | wincmd p | endif", '
         f"'silent! edit ' . fnameescape('{escaped}') . '{line_cmd}'])",
     )
 
@@ -860,9 +912,9 @@ def swap_ide_pane(raw_dir: str, target_arg: str) -> int:
 
 
 def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> None:
-    run_tmux("set-option", "-p", "-q", "-t", pane_id, "@ide_nvim_launch_ts", f"{time.time():.3f}")
     nvim_bin = resolve_nvim_bin()
     if nvim_bin:
+        run_tmux("set-option", "-p", "-t", pane_id, "@ide_nvim_launch_ts", str(int(time.time())))
         path_nvim = shutil.which("nvim")
         use_bare = os.path.basename(nvim_bin) == "nvim" and "/mise/" not in nvim_bin and nvim_bin == path_nvim
         cmd_name = "nvim" if use_bare else shlex.quote(nvim_bin)
@@ -871,49 +923,8 @@ def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> 
         else:
             run_tmux("send-keys", "-t", pane_id, f" {cmd_name} --listen '{sock}'", "C-m")
     elif shutil.which("vim"):
+        run_tmux("set-option", "-p", "-t", pane_id, "@ide_nvim_launch_ts", str(int(time.time())))
         run_tmux("send-keys", "-t", pane_id, " vim", "C-m")
-
-
-def pane_has_editor_child(pane_pid: str) -> bool:
-    if not pane_pid or not pane_pid.isdigit():
-        return False
-    queue = [pane_pid]
-    seen: set[str] = set()
-    while queue:
-        pid = queue.pop(0)
-        if pid in seen:
-            continue
-        seen.add(pid)
-        children_file = Path(f"/proc/{pid}/task/{pid}/children")
-        child_pids: list[str] = []
-        if children_file.is_file():
-            try:
-                child_pids = children_file.read_text(encoding="utf-8", errors="ignore").split()
-            except OSError:
-                child_pids = []
-        elif shutil.which("pgrep"):
-            res = subprocess.run(
-                ["pgrep", "-P", pid],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                check=False,
-            )
-            if res.returncode == 0:
-                child_pids = res.stdout.split()
-        for cpid in child_pids:
-            if not cpid.isdigit():
-                continue
-            comm_file = Path(f"/proc/{cpid}/comm")
-            if comm_file.is_file():
-                try:
-                    comm = comm_file.read_text(encoding="utf-8", errors="ignore").strip()
-                    if "nvim" in comm or comm in ("vim", "vi"):
-                        return True
-                except OSError:
-                    pass
-            queue.append(cpid)
-    return False
 
 
 def ensure_editor_nvim_running(editor_pane: str, sock: str, initial_file: str = "") -> bool:
@@ -923,36 +934,69 @@ def ensure_editor_nvim_running(editor_pane: str, sock: str, initial_file: str = 
         return False
     if not resolve_nvim_bin():
         return False
-    info = tmux_out(
-        "display-message", "-p", "-t", editor_pane, "#{pane_pid}\t#{pane_current_command}\t#{@ide_nvim_launch_ts}"
-    )
-    parts = (info.split("\t") + ["", "", ""])[:3]
-    pane_pid, cmd, launch_ts_str = parts[0].strip(), parts[1].strip(), parts[2].strip()
-    if not cmd or "nvim" in cmd or cmd in ("vim", "vi") or pane_has_editor_child(pane_pid):
+    info = tmux_out("display-message", "-p", "-t", editor_pane, "#{pane_current_command}\t#{@ide_nvim_launch_ts}")
+    parts = (info.split("\t") + ["", ""])[:2]
+    cmd, launch_ts = parts[0].strip(), parts[1].strip()
+    if not cmd or "nvim" in cmd or cmd in ("vim", "vi"):
         return False
-    if launch_ts_str:
-        try:
-            ts_val = float(launch_ts_str)
-            if ts_val > 0 and time.time() - ts_val < 15.0:
-                return False
-        except ValueError:
-            pass
+    if launch_ts.isdigit() and (int(time.time()) - int(launch_ts)) < 5:
+        return False
     send_editor_launch_keys(editor_pane, sock, initial_file)
     return True
 
 
-def toggle_main_pane(mode: str, target_arg: str) -> int:
+def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -> int:
     sess = resolve_target_session(target_arg)
-    if not session_exists(sess):
+    if not sess:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    editor_pane = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
-    ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
-    term_pane = resolve_role_pane(sess, "term", "@ide_term_pane", "IDE_TERM_PANE")
-    main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
-    layout_mode = get_ide_var(sess, "@ide_layout_mode", "IDE_LAYOUT_MODE")
-    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    snap = run_tmux(
+        "display-message", "-p", "-t", f"={sess}:",
+        "OPTS\t#{@ide_editor_pane}\t#{@ide_ai_pane}\t#{@ide_term_pane}\t#{@ide_main_win}\t#{@ide_layout_mode}\t#{@ide_socket}\t#{@ide_ai_cli}\t#{@ide_initial_root}",
+        ";",
+        "list-panes", "-s", "-t", f"={sess}:", "-F",
+        "PANE\t#{pane_id}\t#{window_id}\t#{window_name}\t#{@ide_role}\t#{pane_left}\t#{pane_top}\t#{pane_current_path}",
+    )
+    if snap.returncode != 0 or not snap.stdout:
+        print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
+        return 1
+
+    editor_pane = ai_pane = term_pane = main_win = layout_mode = sock = ai_cli = init_root = ""
+    panes_by_id: dict[str, tuple[str, str, str, int, int, str]] = {}
+    for line in snap.stdout.splitlines():
+        if line.startswith("OPTS\t"):
+            op = (line.split("\t")[1:] + [""] * 8)[:8]
+            editor_pane, ai_pane, term_pane, main_win, layout_mode, sock, ai_cli, init_root = op
+        elif line.startswith("PANE\t"):
+            pp = line.split("\t")
+            if len(pp) >= 8:
+                try:
+                    panes_by_id[pp[1]] = (pp[2], pp[3], pp[4], int(pp[5]), int(pp[6]), pp[7])
+                except ValueError:
+                    pass
+
+    def resolve_cached_role(cur_p: str, role: str, opt_name: str, env_name: str) -> str:
+        if cur_p and cur_p in panes_by_id:
+            return cur_p
+        fallback_p = get_ide_var(sess, opt_name, env_name)
+        if fallback_p and fallback_p in panes_by_id:
+            return fallback_p
+        for pid, (_, _, prole, _, _, _) in panes_by_id.items():
+            if prole == role:
+                set_ide_var(sess, opt_name, env_name, pid)
+                return pid
+        return ""
+
+    editor_pane = resolve_cached_role(editor_pane, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
+    ai_pane = resolve_cached_role(ai_pane, "ai", "@ide_ai_pane", "IDE_AI_PANE")
+    term_pane = resolve_cached_role(term_pane, "term", "@ide_term_pane", "IDE_TERM_PANE")
+
+    if not main_win or not any(wid == main_win and not wname.startswith("_ide_park_") for wid, wname, _, _, _, _ in panes_by_id.values()):
+        main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
+
+    if not sock:
+        sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     if not sock:
         runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
         sock = f"{runtime_dir}/nvim-ide-{sess}.sock"
@@ -960,37 +1004,31 @@ def toggle_main_pane(mode: str, target_arg: str) -> int:
         os.unlink(f"{sock}.tree")
     except OSError:
         pass
-    ai_cli = get_ide_var(sess, "@ide_ai_cli", "IDE_AI_CLI") or os.environ.get("IDE_AI_CLI") or "agy"
-    init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
-    run_tmux("set-option", "-q", "-t", f"={sess}:", "status-position", "top")
+    if not ai_cli:
+        ai_cli = os.environ.get("IDE_AI_CLI") or "agy"
 
-    if not pane_exists(ai_pane) or not pane_exists(editor_pane) or not pane_exists(term_pane):
-        rows = []
-        for line in tmux_out(
-            "list-panes", "-t", main_win, "-F", "#{pane_left}\t#{pane_top}\t#{pane_id}\t#{@ide_role}"
-        ).splitlines():
-            p = line.split("\t")
-            if len(p) == 4:
-                try:
-                    rows.append((int(p[0]), int(p[1]), p[2], p[3]))
-                except ValueError:
-                    pass
+    if not ai_pane or not editor_pane or not term_pane:
+        rows = [
+            (left, top, pid, prole)
+            for pid, (wid, _, prole, left, top, _) in panes_by_id.items()
+            if wid == main_win
+        ]
         rows.sort(key=lambda r: (r[0], r[1]))
-        if not pane_exists(ai_pane):
+        if not ai_pane:
             for l, t, pid, prole in rows:
                 if l == 0 and t == 0 and prole in ("", "ai"):
                     ai_pane = pid
                     run_tmux("set-option", "-p", "-t", ai_pane, "@ide_role", "ai")
                     set_ide_var(sess, "@ide_ai_pane", "IDE_AI_PANE", ai_pane)
                     break
-        if not pane_exists(editor_pane):
+        if not editor_pane:
             for l, t, pid, prole in rows:
                 if l > 0 and prole in ("", "editor"):
                     editor_pane = pid
                     run_tmux("set-option", "-p", "-t", editor_pane, "@ide_role", "editor")
                     set_ide_var(sess, "@ide_editor_pane", "NVIM_IDE_PANE", editor_pane)
                     break
-        if not pane_exists(term_pane):
+        if not term_pane:
             for l, t, pid, prole in rows:
                 if l == 0 and t > 0 and prole in ("", "term"):
                     term_pane = pid
@@ -998,57 +1036,60 @@ def toggle_main_pane(mode: str, target_arg: str) -> int:
                     set_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE", term_pane)
                     break
 
-    cur_dir = tmux_out("display-message", "-p", "-t", editor_pane or main_win, "#{pane_current_path}") or os.getcwd()
+    cur_dir = (
+        (panes_by_id[editor_pane][5] if editor_pane in panes_by_id else "")
+        or (panes_by_id[ai_pane][5] if ai_pane in panes_by_id else "")
+        or os.getcwd()
+    )
     if not init_root:
         init_root = cur_dir
 
     need_term = (layout_mode or "3pane") != "2pane" or mode in ("term", "toggle-term")
-    was_zoomed_before_heal = "0"
-    if not pane_exists(editor_pane) or not pane_exists(ai_pane) or (not pane_exists(term_pane) and need_term):
-        was_zoomed_before_heal = tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") or "0"
-        if was_zoomed_before_heal == "1":
-            run_tmux("resize-pane", "-Z", "-t", main_win)
-
     ed_just_healed = False
     ai_just_healed = False
     term_just_healed = False
 
-    if not pane_exists(editor_pane):
-        editor_pane = heal_split_for_role(
-            sess, "editor", main_win, ai_pane, editor_pane, term_pane, cur_dir,
-            ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
-        )
-        if editor_pane:
-            ed_just_healed = True
-            run_tmux("set-option", "-p", "-t", editor_pane, "@ide_role", "editor")
-            set_ide_var(sess, "@ide_editor_pane", "NVIM_IDE_PANE", editor_pane)
-            send_editor_launch_keys(editor_pane, sock)
+    if not editor_pane or not ai_pane or (not term_pane and need_term):
+        was_zoomed_before_heal = tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") or "0"
+        if was_zoomed_before_heal == "1":
+            run_tmux("resize-pane", "-Z", "-t", main_win)
 
-    if not pane_exists(ai_pane):
-        ai_pane = heal_split_for_role(
-            sess, "ai", main_win, ai_pane, editor_pane, term_pane, cur_dir,
-            ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
-        )
-        if ai_pane:
-            ai_just_healed = True
-            run_tmux("set-option", "-p", "-t", ai_pane, "@ide_role", "ai")
-            set_ide_var(sess, "@ide_ai_pane", "IDE_AI_PANE", ai_pane)
-            ai_run_cmd = resolve_ai_cmd(ai_cli)
-            if ai_run_cmd:
-                run_tmux("send-keys", "-t", ai_pane, f" {ai_run_cmd}", "C-m")
+        if not editor_pane:
+            editor_pane = heal_split_for_role(
+                sess, "editor", main_win, ai_pane, editor_pane, term_pane, cur_dir,
+                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
+            )
+            if editor_pane:
+                ed_just_healed = True
+                run_tmux("set-option", "-p", "-t", editor_pane, "@ide_role", "editor")
+                set_ide_var(sess, "@ide_editor_pane", "NVIM_IDE_PANE", editor_pane)
+                send_editor_launch_keys(editor_pane, sock)
 
-    if not pane_exists(term_pane) and need_term:
-        term_pane = heal_split_for_role(
-            sess, "term", main_win, ai_pane, editor_pane, term_pane, cur_dir,
-            ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
-        )
-        if term_pane:
-            term_just_healed = True
-            run_tmux("set-option", "-p", "-t", term_pane, "@ide_role", "term")
-            set_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE", term_pane)
+        if not ai_pane:
+            ai_pane = heal_split_for_role(
+                sess, "ai", main_win, ai_pane, editor_pane, term_pane, cur_dir,
+                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
+            )
+            if ai_pane:
+                ai_just_healed = True
+                run_tmux("set-option", "-p", "-t", ai_pane, "@ide_role", "ai")
+                set_ide_var(sess, "@ide_ai_pane", "IDE_AI_PANE", ai_pane)
+                ai_run_cmd = resolve_ai_cmd(ai_cli)
+                if ai_run_cmd:
+                    run_tmux("send-keys", "-t", ai_pane, f" {ai_run_cmd}", "C-m")
 
-    if was_zoomed_before_heal == "1" and tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") == "0":
-        run_tmux("resize-pane", "-Z", "-t", main_win)
+        if not term_pane and need_term:
+            term_pane = heal_split_for_role(
+                sess, "term", main_win, ai_pane, editor_pane, term_pane, cur_dir,
+                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
+            )
+            if term_pane:
+                term_just_healed = True
+                run_tmux("set-option", "-p", "-t", term_pane, "@ide_role", "term")
+                set_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE", term_pane)
+
+        if was_zoomed_before_heal == "1" and tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") == "0":
+            run_tmux("resize-pane", "-Z", "-t", main_win)
 
     win_state = tmux_out("display-message", "-p", "-t", main_win, "#{pane_id}\t#{@ide_role}\t#{@ide_last_pane}")
     wparts = (win_state.split("\t") + ["", "", ""])[:3]
@@ -1059,7 +1100,7 @@ def toggle_main_pane(mode: str, target_arg: str) -> int:
             if pane_is_parked(editor_pane, main_win) and not pane_in_win(term_pane, main_win):
                 unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
             if pane_in_win(editor_pane, main_win):
-                if not ensure_editor_nvim_running(editor_pane, sock):
+                if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
                     nvim_remote_expr(sock, "execute('checktime')")
                 focus_pane_preserving_zoom(main_win, editor_pane)
             elif pane_in_win(term_pane, main_win):
@@ -1086,23 +1127,23 @@ def toggle_main_pane(mode: str, target_arg: str) -> int:
                 focus_pane_preserving_zoom(main_win, ai_pane)
         else:
             unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-            if not ensure_editor_nvim_running(editor_pane, sock):
+            if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
                 nvim_remote_expr(sock, "execute('checktime')")
             focus_pane_preserving_zoom(main_win, editor_pane)
     elif mode == "focus-editor":
-        unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-        if not ensure_editor_nvim_running(editor_pane, sock):
+        unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, "" if skip_checktime else sock)
+        if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
             nvim_remote_expr(sock, "execute('checktime')")
         focus_pane_preserving_zoom(main_win, editor_pane)
     elif mode == "term":
         if active_pane == term_pane or active_role == "term":
             if last_pane and last_pane != term_pane and pane_in_win(last_pane, main_win):
                 if last_pane == editor_pane:
-                    if not ensure_editor_nvim_running(editor_pane, sock):
+                    if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
                         nvim_remote_expr(sock, "execute('checktime')")
                 focus_pane_preserving_zoom(main_win, last_pane)
             elif pane_in_win(editor_pane, main_win):
-                if not ensure_editor_nvim_running(editor_pane, sock):
+                if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
                     nvim_remote_expr(sock, "execute('checktime')")
                 focus_pane_preserving_zoom(main_win, editor_pane)
             elif pane_in_win(ai_pane, main_win):
@@ -1151,24 +1192,25 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    prev_pane = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}")
+    prev_pane = "" if focus else tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}")
     sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     if focus:
-        toggle_main_pane("focus-editor", target_arg)
+        toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
     else:
         editor_pane = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
         ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
         term_pane = resolve_role_pane(sess, "term", "@ide_term_pane", "IDE_TERM_PANE")
         main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
         if pane_is_parked(editor_pane, main_win):
-            unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
+            unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, "")
             ensure_editor_nvim_running(editor_pane, sock)
         elif not pane_exists(editor_pane):
-            toggle_main_pane("focus-editor", target_arg)
+            toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
         else:
             ensure_editor_nvim_running(editor_pane, sock)
 
-    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    if not sock:
+        sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     if sock and is_socket_path(sock) and resolve_nvim_bin():
         nvim_remote_file(sock, filepath, line)
     if not focus and pane_exists(prev_pane):
@@ -1287,7 +1329,7 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
     if sock and is_socket_path(sock) and resolve_nvim_bin():
         nvim_remote_expr(
             sock,
-            f"execute('cd ' . fnameescape('{escaped_dir}')) . v:lua.IdeTree.set_root('{escaped_dir}')",
+            f"execute('cd ' . fnameescape('{escaped_dir}'))",
         )
 
     if os.environ.get("IDE_CD_SKIP_SHELL", "0") != "1" and pane_exists(term_pane):
@@ -1341,19 +1383,6 @@ def copy_to_system_clipboard() -> None:
             pass
 
 
-def is_ssh_session(sess: str = "") -> bool:
-    for var in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"):
-        if os.environ.get(var):
-            return True
-    if sess and session_exists(sess):
-        env_out = tmux_out("show-environment", "-t", f"={sess}")
-        for line in env_out.splitlines():
-            for var in ("SSH_CONNECTION=", "SSH_TTY=", "SSH_CLIENT="):
-                if line.startswith(var) and len(line) > len(var):
-                    return True
-    return False
-
-
 def paste_from_system_clipboard(target_pane: str) -> None:
     data = b""
 
@@ -1362,10 +1391,11 @@ def paste_from_system_clipboard(target_pane: str) -> None:
         return res.stdout if res.returncode == 0 and res.stdout else b""
 
     ssh_active = is_ssh_session()
+    has_display = bool(os.environ.get("DISPLAY"))
     if ssh_active and shutil.which("tmux"):
         data = try_cmd(["tmux", "show-buffer"])
 
-    if not data and os.environ.get("DISPLAY"):
+    if not data and has_display:
         if shutil.which("xsel"):
             data = try_cmd(["xsel", "-op"]) or try_cmd(["xsel", "-ob"])
         if not data and shutil.which("xclip"):
@@ -1382,84 +1412,19 @@ def paste_from_system_clipboard(target_pane: str) -> None:
         data = try_cmd(["wl-paste", "--primary", "--no-newline"]) or try_cmd(["wl-paste", "--no-newline"])
     if not data and shutil.which("pbpaste"):
         data = try_cmd(["pbpaste"])
-    if not data and not ssh_active and shutil.which("tmux"):
+    if not data and shutil.which("tmux"):
         data = try_cmd(["tmux", "show-buffer"])
 
     if data and shutil.which("tmux"):
         run_tmux("load-buffer", "-", input_bytes=data)
         if target_pane:
+            if tmux_out("display-message", "-p", "-t", target_pane, "#{pane_in_mode}") == "1":
+                run_tmux("copy-mode", "-q", "-t", target_pane)
             run_tmux("paste-buffer", "-p", "-t", target_pane)
         else:
+            if tmux_out("display-message", "-p", "#{pane_in_mode}") == "1":
+                run_tmux("copy-mode", "-q")
             run_tmux("paste-buffer", "-p")
-
-
-def open_browser_url(url: str, target_arg: str = "") -> bool:
-    if not url:
-        return False
-
-    sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
-    has_tmux = bool(os.environ.get("TMUX")) or (bool(sess) and session_exists(sess))
-    ssh_active = is_ssh_session(sess)
-
-    if has_tmux and shutil.which("tmux"):
-        if run_tmux("load-buffer", "-w", "-", input_bytes=url.encode("utf-8")).returncode != 0:
-            run_tmux("load-buffer", "-", input_bytes=url.encode("utf-8"))
-        if ssh_active:
-            msg = f"Copied URL to clipboard (OSC 52): {url}"
-            if sess and session_exists(sess):
-                run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", msg)
-            else:
-                run_tmux("display-message", "-d", "4000", msg)
-
-    ide_browser = (os.environ.get("IDE_BROWSER") or "").strip()
-    if ide_browser:
-        if os.path.isfile(ide_browser) and os.access(ide_browser, os.X_OK):
-            parts = [ide_browser]
-        else:
-            try:
-                parts = shlex.split(ide_browser)
-            except ValueError:
-                parts = ide_browser.split()
-        if parts and (shutil.which(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
-            subprocess.Popen(
-                [*parts, url],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            return True
-
-    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-    if has_display and shutil.which("xdg-open"):
-        subprocess.Popen(
-            ["xdg-open", url],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return True
-    if has_display and shutil.which("google-chrome"):
-        subprocess.Popen(
-            ["google-chrome", url],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return True
-    if shutil.which("open"):
-        subprocess.Popen(
-            ["open", url],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return True
-
-    return ssh_active and has_tmux
 
 
 def resolve_private_link(link_word: str, link_cwd: str) -> str:
@@ -1505,176 +1470,6 @@ def parse_file_target(raw: str) -> tuple[str, str]:
     return raw, line
 
 
-def collect_session_roots(cwd: str, target_arg: str) -> set[str]:
-    sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
-    workdir = ""
-    init_root = ""
-    if sess and session_exists(sess):
-        workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
-        init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
-
-    roots: set[str] = set()
-    for d in (init_root, workdir, cwd):
-        if not d:
-            continue
-        norm = d.rstrip("/") or "/"
-        roots.add(norm)
-        if os.path.isdir(d):
-            try:
-                real = os.path.realpath(d).rstrip("/") or "/"
-                roots.add(real)
-            except OSError:
-                pass
-    return roots
-
-
-def resolve_ai_brain_dirs(cwd: str, target_arg: str) -> list[str]:
-    roots = collect_session_roots(cwd, target_arg)
-    if not roots:
-        return []
-
-    gemini_dir = Path(os.path.expanduser("~/.gemini"))
-    if not gemini_dir.is_dir():
-        return []
-
-    owned: list[tuple[int, int, Path, str]] = []
-    seq = 0
-    for hist in sorted(gemini_dir.glob("*/cli/history.jsonl")):
-        if not hist.is_file():
-            continue
-        brain_base = hist.parent.parent / "brain"
-        if not brain_base.is_dir():
-            continue
-        cids_in_file: dict[str, tuple[int, int]] = {}
-        try:
-            with open(hist, "r", encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if '"conversationId"' not in line or '"workspace"' not in line:
-                        continue
-                    cid = ""
-                    ws = ""
-                    ts = 0
-                    try:
-                        obj = json.loads(line)
-                        if isinstance(obj, dict):
-                            cid = str(obj.get("conversationId") or "")
-                            ws = str(obj.get("workspace") or "")
-                            ts = int(obj.get("timestamp") or 0)
-                    except Exception:
-                        m_c = re.search(r'"conversationId"\s*:\s*"([^"]+)"', line)
-                        m_w = re.search(r'"workspace"\s*:\s*"([^"]+)"', line)
-                        if m_c and m_w:
-                            cid, ws = m_c.group(1), m_w.group(1)
-                    if not cid or not ws:
-                        continue
-                    if ws.startswith("file://"):
-                        ws = ws[7:]
-                    ws_norm = ws.rstrip("/") or "/"
-                    ws_real = ""
-                    if os.path.isdir(ws_norm):
-                        try:
-                            ws_real = os.path.realpath(ws_norm).rstrip("/") or "/"
-                        except OSError:
-                            pass
-                    if ws_norm in roots or (ws_real and ws_real in roots):
-                        seq += 1
-                        cids_in_file[cid] = (ts, seq)
-        except OSError:
-            continue
-        for cid, (ts, s) in cids_in_file.items():
-            owned.append((ts, s, brain_base, cid))
-
-    owned.sort(key=lambda item: (item[0], item[1]), reverse=True)
-
-    dirs: list[str] = []
-    seen: set[str] = set()
-    for _, _, brain_base, root_cid in owned[:8]:
-        queue: list[tuple[str, int]] = [(root_cid, 0)]
-        head = 0
-        while head < len(queue) and len(dirs) < 32:
-            cid, depth = queue[head]
-            head += 1
-            conv_dir = brain_base / cid
-            conv_str = str(conv_dir)
-            if conv_str in seen or not conv_dir.is_dir():
-                continue
-            seen.add(conv_str)
-            dirs.append(conv_str)
-            if depth < 2:
-                sub_dir = conv_dir / ".system_generated" / "subagents"
-                if sub_dir.is_dir():
-                    for sub_f in sorted(sub_dir.glob("*.json")):
-                        cands = [sub_f.stem]
-                        try:
-                            data = json.loads(sub_f.read_text(encoding="utf-8", errors="replace"))
-                            if isinstance(data, dict):
-                                for k in ("conversationId", "id"):
-                                    v = data.get(k)
-                                    if isinstance(v, str) and v:
-                                        cands.append(v)
-                        except Exception:
-                            pass
-                        for child_id in cands:
-                            if child_id and re.match(r"^[\w-]+$", child_id):
-                                queue.append((child_id, depth + 1))
-    return dirs
-
-
-def resolve_claude_session_files(cwd: str, target_arg: str) -> tuple[list[str], list[str]]:
-    roots = collect_session_roots(cwd, target_arg)
-    if not roots:
-        return [], []
-    claude_dir = Path(os.environ.get("IDE_CLAUDE_DIR") or os.path.expanduser("~/.claude"))
-    projects_dir = claude_dir / "projects"
-    logs_with_mtime: list[tuple[float, str]] = []
-    tried: set[str] = set()
-    if projects_dir.is_dir():
-        for r in roots:
-            for encoded in (
-                re.sub(r"[^A-Za-z0-9]", "-", r),
-                re.sub(r"[^A-Za-z0-9_-]", "-", r),
-                r.replace("/", "-"),
-            ):
-                if encoded in tried:
-                    continue
-                tried.add(encoded)
-                proj = projects_dir / encoded
-                if not proj.is_dir():
-                    continue
-                for jf in proj.glob("*.jsonl"):
-                    try:
-                        st = jf.stat()
-                        logs_with_mtime.append((st.st_mtime, str(jf)))
-                    except OSError:
-                        pass
-    logs_with_mtime.sort(key=lambda x: x[0], reverse=True)
-    transcripts = [p for _, p in logs_with_mtime[:8]]
-
-    owned_plans: list[str] = []
-    plans_dir = claude_dir / "plans"
-    if transcripts and plans_dir.is_dir():
-        transcript_tails: list[str] = []
-        for tpath in transcripts:
-            try:
-                size = os.path.getsize(tpath)
-                with open(tpath, "rb") as f:
-                    if size > 2 * 1024 * 1024:
-                        f.seek(size - 2 * 1024 * 1024)
-                    transcript_tails.append(f.read().decode("utf-8", errors="replace"))
-            except OSError:
-                pass
-        for pf in sorted(plans_dir.glob("*.md"), key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True):
-            name = pf.name
-            if any(name in tail for tail in transcript_tails):
-                owned_plans.append(str(pf))
-    return transcripts, owned_plans
-
-
-_MD_LINK_PATTERN = re.compile(
-    r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(((?:file|https?)://[^()\s\"'`\\]+(?:\([^()\s\"'`\\]*\)[^()\s\"'`\\]*)*)\)"
-)
-
-
 def strip_token_wrappers(s: str) -> str:
     s = s.lstrip("([{\"<'`")
     while s:
@@ -1689,61 +1484,6 @@ def strip_token_wrappers(s: str) -> str:
         else:
             break
     return s
-
-
-def resolve_ai_markdown_link(target_label: str, cwd: str, target_arg: str) -> str:
-    if not target_label:
-        return ""
-
-    search_files: list[str] = []
-    for bdir in resolve_ai_brain_dirs(cwd, target_arg):
-        bpath = Path(bdir)
-        for tname in ("transcript_full.jsonl", "transcript.jsonl"):
-            tf = bpath / ".system_generated" / "logs" / tname
-            if tf.is_file():
-                search_files.append(str(tf))
-        md_files = []
-        for mf in bpath.glob("*.md"):
-            if mf.is_file():
-                try:
-                    md_files.append((mf.stat().st_mtime, str(mf)))
-                except OSError:
-                    pass
-        md_files.sort(key=lambda x: x[0], reverse=True)
-        search_files.extend(p for _, p in md_files)
-
-    claude_logs, claude_plans = resolve_claude_session_files(cwd, target_arg)
-    search_files.extend(claude_logs)
-    search_files.extend(claude_plans)
-
-    if not search_files:
-        return ""
-
-    best = ""
-    stem_best = ""
-    # Process older conversation files first so newer conversation links overwrite them
-    for fpath in reversed(search_files):
-        try:
-            with open(fpath, "r", encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if "](" not in line:
-                        continue
-                    for m in _MD_LINK_PATTERN.finditer(line):
-                        raw_lbl, url = m.group(1), m.group(2)
-                        lbl = raw_lbl.strip("`*_\"'\\ ")
-                        if lbl == target_label:
-                            best = url
-                        else:
-                            lbl_no_call = re.sub(r"(\([^()]*\)|\[[^\[\]]*\])+$", "", lbl)
-                            lbl_no_line = re.sub(r"([#:][Ll]?[0-9].*)$", "", lbl_no_call)
-                            base = lbl_no_line.rsplit("/", 1)[-1].lstrip(".")
-                            stem = re.sub(r"\.[A-Za-z0-9_+-]+$", "", base)
-                            if target_label in (lbl_no_call, lbl_no_line, base, stem):
-                                stem_best = url
-        except OSError:
-            continue
-
-    return best or stem_best
 
 
 def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
@@ -1821,17 +1561,6 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
             return glob_matches[0]
         break
 
-    # Session-scoped AI artifact directories for bare plan/artifact filenames (never global wildcards)
-    if "/" not in cand:
-        for bdir in resolve_ai_brain_dirs(cwd, target_arg):
-            artifact = os.path.join(bdir, cand)
-            if os.path.isfile(artifact):
-                return artifact
-        _, claude_plans = resolve_claude_session_files(cwd, target_arg)
-        for plan_path in claude_plans:
-            if os.path.basename(plan_path) == cand and os.path.isfile(plan_path):
-                return plan_path
-
     return ""
 
 
@@ -1861,13 +1590,10 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     cwd = cwd or os.getcwd()
     run_tmux("set-option", "-gq", "word-separators", " ()[]{}<>\"'`,;*")
 
-    # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`)
-    if href:
-        if href.startswith("file://"):
-            if resolve_and_open_target(href, cwd, target_arg):
-                return 0
-        elif href.startswith(("http://", "https://")):
-            return 0 if open_browser_url(href, target_arg) else 1
+    # 1. Explicit file:// OSC 8 hyperlink (`#{mouse_hyperlink}`)
+    if href and href.startswith("file://"):
+        if resolve_and_open_target(href, cwd, target_arg):
+            return 0
 
     # 2. Fallback to clicked word (`#{mouse_word}`)
     word = word.strip()
@@ -1904,21 +1630,34 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     if not word:
         return 0
 
-    if word.startswith(("http://", "https://")):
-        return 0 if open_browser_url(word, target_arg) else 1
-
     private_url = resolve_private_link(word, cwd)
     if private_url:
         if private_url.startswith("file://") and resolve_and_open_target(private_url, cwd, target_arg):
             return 0
-        return 0 if open_browser_url(private_url, target_arg) else 1
-
-    ai_md_url = resolve_ai_markdown_link(word, cwd, target_arg)
-    if ai_md_url:
-        if ai_md_url.startswith(("http://", "https://")):
-            return 0 if open_browser_url(ai_md_url, target_arg) else 1
-        if resolve_and_open_target(ai_md_url, cwd, target_arg):
-            return 0
+        sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
+        has_tmux = bool(os.environ.get("TMUX")) or (bool(sess) and session_exists(sess))
+        ssh_active = is_ssh_session(sess)
+        if has_tmux and shutil.which("tmux"):
+            if run_tmux("load-buffer", "-w", "-", input_bytes=private_url.encode("utf-8")).returncode != 0:
+                run_tmux("load-buffer", "-", input_bytes=private_url.encode("utf-8"))
+            if ssh_active:
+                msg = f"Copied URL to clipboard (OSC 52): {private_url}"
+                if sess and session_exists(sess):
+                    run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", msg)
+                else:
+                    run_tmux("display-message", "-d", "4000", msg)
+        ide_browser = (os.environ.get("IDE_BROWSER") or "").strip()
+        if ide_browser:
+            parts = [ide_browser] if (os.path.isfile(ide_browser) and os.access(ide_browser, os.X_OK)) else shlex.split(ide_browser)
+            if parts and (shutil.which(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
+                subprocess.Popen([*parts, private_url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                return 0
+        has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        for browser in (("xdg-open", "google-chrome") if has_display else ()) + ("open",):
+            if shutil.which(browser):
+                subprocess.Popen([browser, private_url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                return 0
+        return 0 if (ssh_active and has_tmux) else 1
 
     if resolve_and_open_target(word, cwd, target_arg):
         return 0
@@ -1926,22 +1665,10 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     if "..." in word and "/" in word:
         trunc_base = word.rsplit("/", 1)[-1]
         if trunc_base and trunc_base != word:
-            ai_md_url = resolve_ai_markdown_link(trunc_base, cwd, target_arg)
-            if ai_md_url:
-                if ai_md_url.startswith(("http://", "https://")):
-                    return 0 if open_browser_url(ai_md_url, target_arg) else 1
-                if resolve_and_open_target(ai_md_url, cwd, target_arg):
-                    return 0
             if resolve_and_open_target(trunc_base, cwd, target_arg):
                 return 0
 
     if bracket_label and bracket_label != word:
-        ai_md_url = resolve_ai_markdown_link(bracket_label, cwd, target_arg)
-        if ai_md_url:
-            if ai_md_url.startswith(("http://", "https://")):
-                return 0 if open_browser_url(ai_md_url, target_arg) else 1
-            if resolve_and_open_target(ai_md_url, cwd, target_arg):
-                return 0
         if resolve_and_open_target(bracket_label, cwd, target_arg):
             return 0
 
@@ -2129,7 +1856,8 @@ def main() -> int:
         return 1
 
     # Populate DISPLAY / WAYLAND_DISPLAY / XAUTHORITY before dispatching --copy, --paste, --open-link, or launch
-    discover_display_env()
+    if action in ("copy", "paste", "open-link", "launch"):
+        discover_display_env()
 
     if action == "copy":
         copy_to_system_clipboard()
@@ -2312,4 +2040,8 @@ def main() -> int:
 if __name__ == "__main__":
     sys.exit(main())
 PY
-exec python3 -c "$IDE_PY_SRC" "$@"
+if [ -x /usr/bin/python3 ]; then
+    exec /usr/bin/python3 -c "$IDE_PY_SRC" "$@"
+else
+    exec python3 -c "$IDE_PY_SRC" "$@"
+fi

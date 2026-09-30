@@ -266,7 +266,7 @@ STANDALONE_HOME=$(mktemp -d)
     if command -v nvim >/dev/null 2>&1; then
         bash_test_sock="/tmp/nvim-ide-bash-test-$$.sock"
         rm -f "$bash_test_sock"
-        (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bash_test_sock" -c "let g:netrw_banner=0 | let g:netrw_browse_split=4 | let g:netrw_altv=1 | let g:netrw_winsize=20 | Lexplore" >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bash_test_sock" >/dev/null 2>&1) &
         bash_nvim_pid=$!
         for _ in $(seq 1 30); do
             [ -S "$bash_test_sock" ] && break
@@ -275,13 +275,13 @@ STANDALONE_HOME=$(mktemp -d)
         if [ -S "$bash_test_sock" ]; then
             ver_out="$(TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v --version 2>/dev/null | head -n 1 || true)"
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
-            bash_remote_state="$(nvim --headless --server "$bash_test_sock" --remote-expr 'getwinvar(1, "&filetype") . "|" . winnr() . "|" . expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            bash_remote_state="$(nvim --headless --server "$bash_test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
             kill "$bash_nvim_pid" 2>/dev/null || true
             rm -f "$bash_test_sock"
-            if [ "$bash_remote_state" = "netrw|2|$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$ver_out" == NVIM* ]]; then
-                echo "PASS:Standalone .bashrc-addendum v() resolves relative paths and +line arguments over RPC, preserves sidebar window, and passes --version to local nvim"
+            if [ "$bash_remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$ver_out" == NVIM* ]]; then
+                echo "PASS:Standalone .bashrc-addendum v() resolves relative paths and +line arguments over RPC, and passes --version to local nvim"
             else
-                echo "FAIL:Standalone v() RPC:Expected 'netrw|2|$SCRIPT_DIR/modules/00-packages.sh|2' and NVIM version, got state='$bash_remote_state' ver='$ver_out'"
+                echo "FAIL:Standalone v() RPC:Expected '$SCRIPT_DIR/modules/00-packages.sh|2' and NVIM version, got state='$bash_remote_state' ver='$ver_out'"
             fi
         else
             kill "$bash_nvim_pid" 2>/dev/null || true

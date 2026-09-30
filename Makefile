@@ -26,25 +26,27 @@ install:
 uninstall:
 	@./setup.sh --uninstall
 
-## test: Run unit and integration test suites.
+## test: Run unit and integration test suites in parallel.
 test:
-	@echo "Running System & Cross-Platform Engine tests..."
-	@bash tests/test-system-setup.sh
-	@echo "Running Declarative Dotfiles tests..."
-	@bash tests/test-dotfiles.sh
-	@echo "Running User Binaries tests..."
-	@bash tests/test-bin.sh
-	@echo "Running Environment & Bash tests..."
-	@bash tests/test-env.sh
-	@echo "Running Zsh tests..."
-	@zsh tests/test-zsh.zsh
-	@echo "Running Completions tests..."
-	@bash tests/test-completions.sh
-	@echo "Running Vim & Neovim tests..."
-	@bash tests/test-vim.sh
-	@echo "Running Font tests..."
-	@bash tests/test-fonts.sh
-	@echo "All tests passed successfully."
+	@tmpdir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmpdir"' EXIT INT TERM; \
+	suites="system-setup:bash:tests/test-system-setup.sh dotfiles:bash:tests/test-dotfiles.sh bin:bash:tests/test-bin.sh env:bash:tests/test-env.sh zsh:zsh:tests/test-zsh.zsh completions:bash:tests/test-completions.sh vim:bash:tests/test-vim.sh fonts:bash:tests/test-fonts.sh"; \
+	pids=""; \
+	for spec in $$suites; do \
+		name="$${spec%%:*}"; rest="$${spec#*:}"; runner="$${rest%%:*}"; script="$${rest#*:}"; \
+		( "$$runner" "$$script" > "$$tmpdir/$$name.out" 2>&1; echo $$? > "$$tmpdir/$$name.rc" ) & \
+		pids="$$pids $$!"; \
+	done; \
+	for pid in $$pids; do wait "$$pid" || true; done; \
+	failed=0; \
+	for spec in $$suites; do \
+		name="$${spec%%:*}"; \
+		cat "$$tmpdir/$$name.out"; \
+		rc="$$(cat "$$tmpdir/$$name.rc" 2>/dev/null || echo 1)"; \
+		if [ "$$rc" -ne 0 ]; then failed=1; fi; \
+	done; \
+	if [ "$$failed" -ne 0 ]; then exit 1; fi; \
+	echo "All tests passed successfully."
 
 ## lint: Run syntax validation and shellcheck.
 lint:

@@ -52,16 +52,19 @@ done
 
 if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'default-terminal "tmux-256color"' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'RGB:extkeys:usstyle:clipboard' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'RGB:extkeys:usstyle:clipboard:hyperlinks' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -s extended-keys on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'allow-passthrough on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'copy-command' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'MouseDragEnd1Pane' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'MouseDragEnd1Pane.*copy-pipe-no-clear' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi M-c send-keys -X copy-pipe-and-cancel' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi M-v' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-v' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q 'bind -n MouseDown1Pane' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'Hls@' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q 'Hls@' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-active-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'popup-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
@@ -100,15 +103,19 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-Left resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDrag1Border resize-pane -M' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, _ide_park_ filter, PREFIX/COPY/ZOOM badges, unbolded typography), deduplicated @ide_is_editor predicate, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
+    pass ".tmux.conf configures Solarized Dark top header bar (status-position top, live @ide_role switcher, _ide_park_ filter, PREFIX/COPY/ZOOM badges, unbolded typography), deduplicated @ide_is_editor predicate, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline (copy-pipe-no-clear, M-c, M-v), 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
 else
     fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_is_editor deduplication, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_SOCK="test-tmux-cfg-$$"
-    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test "sleep 30" >/dev/null 2>&1; then
+    if tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test "exec sleep 30" >/dev/null 2>&1; then
         cfg_pane="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "=cfg_test:" '#{pane_id}')"
+        for _ in $(seq 1 20); do
+            [ "$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{pane_current_command}')" = "sleep" ] && break
+            sleep 0.02
+        done
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role editor
         eval_editor_non_shell="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role ai

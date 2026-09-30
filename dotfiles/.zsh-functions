@@ -33,7 +33,7 @@ v() {
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        if nvim --headless --server "$sock" --remote-expr "execute(\"if luaeval('type(_G.IdeTree) == \\\"table\\\" and type(_G.IdeTree.focus_code_win) == \\\"function\\\"') | call v:lua.IdeTree.focus_code_win() | elseif (&filetype ==# 'netrw' || &filetype ==# 'ide_tree') && winnr('\\$') > 1 | wincmd p | endif\")" >/dev/null 2>&1; then
+        if nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
             local -a abs_args=()
             local -a plus_cmds=()
             local local_only=0
@@ -109,8 +109,8 @@ v() {
 }
 
 # Dive IDE Workspace (`icd [dir|--reset|~]`):
-# Synchronizes the working directory across the current shell, in-process IdeTree,
-# and Main Neovim Editor without killing or respawning the active AI Agent pane.
+# Synchronizes the working directory across the current shell and Main Neovim Editor
+# without killing or respawning the active AI Agent pane.
 icd() {
     local ide_bin="$HOME/.local/bin/ide"
     if [ ! -x "$ide_bin" ] && command -v ide >/dev/null 2>&1; then

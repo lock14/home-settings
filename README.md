@@ -129,11 +129,11 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
     - Park and restore panes dynamically without killing running processes (`Alt+Shift+E` / `ide --toggle-editor`, `Alt+Shift+T` / `ide --toggle-term`, `ide --toggle-ai` via hidden windows `_ide_park_<role>`).
     - Directionally swap active panes on the fly (`Alt+Shift+H/J/K/L` / `ide --swap left|down|up|right`, wrapping horizontally across the top split).
   - **Mouse & Keyboard Resizing**:
-    - Drag any split border with the mouse (even while focusing the tree or editing) or use `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`).
-    - Custom pane and sidebar dimensions persist across focus switches, parking/unparking, and full-screen zoom (`Alt+z`).
+    - Drag any split border with the mouse or use `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`).
+    - Custom pane dimensions persist across focus switches, parking/unparking, and full-screen zoom (`Alt+z`).
   - **Safe Session Isolation & Quitting**:
     - Every IDE command targets its exact session (`=NAME`) to prevent prefix collisions or cascading shutdowns.
-    - Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) or terminal (`ide quit`, `qide`) terminates only that specific workspace session, prompting if unsaved buffers exist (`Alt+Shift+Q` / `ide quit --force`).
+    - Standard Neovim `:q`, `:wq`, `:qa`, and `:wqa` work natively on buffers, splits, and the Editor process, while `:Q`, `:Quit`, `Space q`, `Alt+q`, `ide quit`, or `qide` terminate the entire IDE workspace session, prompting if unsaved buffers exist (`:Q!` / `Alt+Shift+Q` / `ide quit --force`).
 
 - **First-Principles 4-Layer Keybinding Architecture**:
   - **Layer 1: App-Local (`Ctrl`)**: Root Tmux `Ctrl+h/j/k/l` bindings are strictly omitted, preserving native `Ctrl+L` (clear), `Ctrl+J` (newline), `Ctrl+K` (kill line), and `Ctrl+H` (backspace) in Zsh, Bash, and AI CLIs (`agy`, `claude`, `codex`). `<C-j>/<C-k>` navigate Telescope pickers, while `<C-h/j/k/l>` navigate internal Neovim Normal-mode splits.
@@ -142,22 +142,15 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
     - `Alt+a`, `Alt+e`, `Alt+t` (`Alt+1/2/3`) focus or unpark the AI Agent, Editor, or Shell pane, bouncing back to the previous pane on a second press while preserving zoom state.
     - `Alt+Shift+E` and `Alt+Shift+T` toggle Editor and Shell pane visibility from anywhere.
     - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
-  - **Layer 3: Editor & File Tree (`Space` Leader & In-Process `SolarizedIdeTree`)**:
-    - `Space e` toggles the in-process `SolarizedIdeTree` sidebar (28 columns, `winfixwidth`, chain-collapsed folders, `?` help popup, persistent mouse edge resize).
-    - `Space af` toggles AI Live-Follow Mode (`:IdeFollowToggle`).
-    - `Space gs` opens Telescope `git_status` to review AI-modified files.
-    - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character.
-    - `:q` / `:q!` (`:IdeClose`) safely closes the active buffer or split without collapsing the code window into the sidebar.
+  - **Layer 3: Editor, File Explorer & Live Auto-Reload (`Space` Leader & `mini.files`)**:
+    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline.
+    - `Space gs` opens Telescope `git_status` to review and jump to AI-modified files.
+    - `opt.autoread` and `SolarizedAutoRead` (`FocusGained`, `BufEnter`, `CursorHold`, `CursorHoldI` -> `silent! checktime`) automatically reload buffers modified on disk by AI agents.
+    - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character; `:IdeCd` (`Space cd`) synchronizes the workspace directory across Editor and Shell.
   - **Layer 4: Clickable Links & Unified Clipboard**:
-    - Plain-click OSC 8 hyperlinks or `Ctrl+Click` compiler output (`file:line[:col]`), `file:///` URLs, and markdown `[label](...)` links in AI panes to open the target at that line in the Editor.
-    - Hidden-URL `[label](https://...)` web links in AI transcripts and session artifacts route to `$IDE_BROWSER` (or system browser) and copy to the tmux buffer via OSC 52 over SSH.
-    - Clipboard yanks broadcast across OSC 52 (`tmux load-buffer -w`) and local X11/Wayland/macOS clipboards, with automatic X11 priority on local desktops and tmux buffer priority over SSH.
-
-- **AI Live-Follow Mode (`IdeFollow` / `Space af`)**:
-  - **Zero-Friction Follow**: Automatically reloads open buffers (`checktime`), opens files newly edited by the AI in the Editor pane, and centers (`normal! zz`) the exact modified block while cursor focus stays in the AI Agent pane (automatically yielding on Insert/Visual mode or unsaved local edits).
-  - **Edit-Log Driven & Non-Blocking**: Follow targets come directly from the AI's own edit records (`agy` `transcript_full.jsonl` tool calls, Claude Code `tool_use` records) and land on the replacement block itself—working across git, Mercurial, and VCS-less trees alike. Shell-driven edits (`sed -i`, formatters) are caught asynchronously by a background `git status` (adaptive backoff: at most every 1.25 s, idling at least 4× each scan's duration) and land on the last diff hunk. The 1.5 s follow tick never waits on a subprocess.
-  - **Transient Buffer Auto-Cleanup**: Automatically closes previous unmodified transient auto-followed buffers as the AI advances to new files, preventing buffer clutter while strictly preserving user-opened buffers (`was_open`, `IdeTree`) and buffers the user edits or saves.
-  - **Strict Session Isolation**: Each `ide` session follows only edits and `/plan` artifacts belonging to conversations launched in that workspace root, never cross-contaminating concurrent `ide` sessions or following AI internal state directories.
+    - Native terminal OSC 8 hyperlinks pass through Tmux (`terminal-features '*:hyperlinks'`) for browser links, while `Ctrl+Click` on compiler output (`file:line[:col]`), `file:///` URLs, markdown `[label](file:///...#L10)` links, or custom `~/.config/ide/links.sh` rules opens the target at that line in the Editor.
+    - Selecting text with the mouse in Tmux or Neovim copies immediately via `copy-pipe-no-clear` / `"+ygv` while keeping the highlight visible (`Alt+c` copies and clears, `Escape` or single click clears, `Alt+v` pastes from the system/OSC 52 clipboard).
+    - SSH sessions strictly avoid probing local `/tmp/.X11-unix/X0` sockets so Neovim's built-in OSC 52 provider and `tmux load-buffer -w` route clipboard yanks back to the remote SSH client.
 
 - **Polyglot LSP, Treesitter & Neovim Toolchains**:
   - **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
@@ -179,16 +172,17 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
 | `Alt+Shift+H` / `J` / `K` / `L` | Tmux | Directionally swap active pane left, down, up, or right (wraps horizontally across top panes) |
 | `Alt+z` | Tmux | Toggle full-window pane zoom (preserves zoom state across pane switches) |
 | `Alt+Left` / `Down` / `Up` / `Right` | Tmux | Resize active pane by 5 cells in direction (or drag borders with mouse) |
-| `Ctrl+Click` / Plain Click | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or markdown `[label](...)` in Editor |
-| `Alt+q` (`Alt+Shift+Q`) | Universal | Gracefully quit (`:wqa` / `ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
-| `Space e` | Neovim Normal | Toggle in-process `SolarizedIdeTree` file sidebar (`?` opens tree help; drag border to resize) |
-| `Space af` | Neovim Normal | Toggle AI Live-Follow Mode (`:IdeFollowToggle`) |
+| `Alt+c` / `Alt+v` | Universal | Copy active selection to system/OSC 52 clipboard and clear highlight / paste from clipboard |
+| `Ctrl+Click` | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor |
+| `Alt+q` (`Alt+Shift+Q`) / `Space q` | Universal | Gracefully quit (`ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
+| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` columnar file explorer at current buffer directory (`Space e`) or cwd (`Space E`) |
 | `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
+| `Space cd` (`:IdeCd [dir]`) | Neovim Normal | Synchronize Editor and Tmux workspace directory (`@ide_workdir`) |
 | `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |
 | `<Home>` | Neovim Normal | Jump to first non-blank character on line |
-| `:q` / `:q!` (`:IdeClose`) | Neovim Command | Close current buffer or split without collapsing code window into sidebar |
-| `:qa` / `:wqa` (`:Q`) | Neovim Command | Quit entire IDE workspace session safely |
-| `icd [dir|--reset]` | Shell | Synchronize working directory across Editor, File Tree, and Shell without killing AI Agent |
+| `:q` / `:wq` / `:qa` / `:wqa` | Neovim Command | Native Neovim window/buffer/editor close (unmodified) |
+| `:Q` / `:Q!` (`:Quit`) | Neovim Command | Quit entire IDE workspace session safely (or force-quit with `!`) |
+| `icd [dir|--reset]` | Shell | Synchronize working directory across Editor and Shell without killing AI Agent |
 | `v [+line] <file>` | Shell | Open file in the IDE Editor pane (with optional line jump) via RPC |
 
 ---
@@ -355,7 +349,7 @@ The redesigned repository is built for frictionless extension:
    - `~/.environment-variables.d/*.sh`: Custom exports and paths (sourced by `.environment-variables`).
    - `~/.aliases.d/*.sh`: Custom aliases (sourced by `.aliases`).
    - `~/.zsh-functions.d/*.zsh`: Custom Zsh functions (sourced by `.zsh-functions`).
-   - `~/.config/ide/links.sh` (or `$IDE_LINK_RULES`): Private Ctrl+click link rules for `ide`. Define `ide_resolve_link WORD CWD` to print a URL for a clicked word (e.g. an internal ticket ID or short link) and return 0; return non-zero to fall through to the default file handling.
+   - `~/.config/ide/links.sh` (or `$IDE_LINK_RULES`): Private Ctrl+click link rules and workspace session naming for `ide`. Define `ide_resolve_link WORD CWD` to print a URL for a clicked word (e.g. an internal ticket ID or short link) and return 0; return non-zero to fall through to the default file handling. Optionally define `ide_session_name DIR` to print a custom tmux session name for a workspace directory (e.g. extracting a parent workspace identifier when `basename "$DIR"` is shared across multiple checkouts).
    - `~/.config/zsh/p10k.local.zsh`: Machine-local Powerlevel10k overrides (sourced by `.p10k.zsh` before reload), e.g. extra anchors appended to `POWERLEVEL9K_SHORTEN_FOLDER_MARKER`, or `POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN}|/slow/network/fs/*"` to skip Git status on slow filesystems.
 4. **Add a Provisioning Stage**: Drop a new numbered script into `modules/` (e.g. `modules/70-docker.sh`).
 
@@ -371,8 +365,8 @@ The redesigned repository is built for frictionless extension:
 | `b <file>` / `bat` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark (`cat` remains pure coreutils) |
 | `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`; inside an `ide` session, `v [+line] <file>` opens in the main editor pane) |
 | `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |
-| `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session (only that exact `ide-*` session: other tmux sessions are never touched) |
-| `icd [dir\|--reset]` | Non-destructively synchronize the active directory across IDE `Editor`, `IdeTree`, and `Shell` panes without respawning the AI Agent |
+| `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session (only that exact `ide`-managed session: other tmux sessions are never touched) |
+| `icd [dir\|--reset]` | Non-destructively synchronize the active directory across IDE `Editor` and `Shell` panes without respawning the AI Agent |
 | `ds` | Graphical proportional disk space analysis via `dust` |
 | `tldr <cmd>` | Fast, practical syntax-highlighted command cheat sheet via `tealdeer` |
 | `update` | Run cross-platform system and toolchain maintenance (`update-system`) |
