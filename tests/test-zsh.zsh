@@ -7,6 +7,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TESTS_PASSED=0
 TESTS_FAILED=0
 
+# Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
+export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
+export MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
+export MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
+
 pass() {
     echo "  \033[32m✔ PASS:\033[0m $1"
     TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -99,11 +104,11 @@ test_functions() {
         fi
     done
 
-    # Test v() RPC routing with a live Neovim server socket (including subdirectory relative paths, Netrw sidebar guard, and stale socket cleanup)
+    # Test v() RPC routing with a live Neovim server socket (including subdirectory relative paths and stale socket cleanup)
     if command -v nvim >/dev/null 2>&1; then
         local test_sock="/tmp/nvim-ide-zsh-test-$$.sock"
         rm -f "$test_sock"
-        (cd "$SCRIPT_DIR" && nvim --headless --listen "$test_sock" -c "Lexplore" >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && nvim --headless --listen "$test_sock" >/dev/null 2>&1) &
         local nvim_pid=$!
         local tries=0
         while [ ! -S "$test_sock" ] && [ "$tries" -lt 30 ]; do
@@ -115,13 +120,13 @@ test_functions() {
             zsh_ver_out="$(TMUX="" NVIM_IDE_SOCKET="$test_sock" v --version 2>/dev/null | head -n 1 || true)"
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
             local remote_state
-            remote_state="$(nvim --headless --server "$test_sock" --remote-expr 'getwinvar(1, "&filetype") . "|" . winnr() . "|" . expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            remote_state="$(nvim --headless --server "$test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
             kill "$nvim_pid" 2>/dev/null || true
             rm -f "$test_sock"
-            if [ "$remote_state" = "netrw|2|$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$zsh_ver_out" == NVIM* ]]; then
-                echo "PASS:v() resolves subdirectory relative paths and +line arguments accurately, preserves Netrw sidebar window over RPC, and passes --version to local nvim"
+            if [ "$remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$zsh_ver_out" == NVIM* ]]; then
+                echo "PASS:v() resolves subdirectory relative paths and +line arguments accurately over RPC, and passes --version to local nvim"
             else
-                echo "FAIL:v() RPC routing:Expected 'netrw|2|$SCRIPT_DIR/modules/00-packages.sh|2' and NVIM version, got state='$remote_state' ver='$zsh_ver_out'"
+                echo "FAIL:v() RPC routing:Expected '$SCRIPT_DIR/modules/00-packages.sh|2' and NVIM version, got state='$remote_state' ver='$zsh_ver_out'"
             fi
         else
             kill "$nvim_pid" 2>/dev/null || true

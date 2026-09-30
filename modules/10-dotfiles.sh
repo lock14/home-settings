@@ -100,12 +100,29 @@ fi
 
 if [ -f "$BAT_THEME_SRC" ] || [ -d "$REPO_DIR/syntaxes" ]; then
     if [ "$DRY_RUN" = false ]; then
-        if command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
-            mise exec -- bat cache --build >/dev/null 2>&1 || true
-        elif command -v bat >/dev/null 2>&1; then
-            bat cache --build >/dev/null 2>&1 || true
-        elif command -v batcat >/dev/null 2>&1; then
-            batcat cache --build >/dev/null 2>&1 || true
+        BAT_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bat"
+        need_bat_build=false
+        if [ ! -f "$BAT_CACHE_DIR/themes.bin" ] || [ ! -f "$BAT_CACHE_DIR/syntaxes.bin" ]; then
+            need_bat_build=true
+        elif [ -f "$BAT_THEME_SRC" ] && [ "$BAT_THEME_SRC" -nt "$BAT_CACHE_DIR/themes.bin" ]; then
+            need_bat_build=true
+        else
+            for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
+                [ -e "$syn" ] || continue
+                if [ "$syn" -nt "$BAT_CACHE_DIR/syntaxes.bin" ]; then
+                    need_bat_build=true
+                    break
+                fi
+            done
+        fi
+        if [ "$need_bat_build" = true ]; then
+            if command -v bat >/dev/null 2>&1; then
+                bat cache --build >/dev/null 2>&1 || true
+            elif command -v batcat >/dev/null 2>&1; then
+                batcat cache --build >/dev/null 2>&1 || true
+            elif command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
+                mise exec -- bat cache --build >/dev/null 2>&1 || true
+            fi
         fi
     fi
 fi

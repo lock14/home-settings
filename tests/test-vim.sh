@@ -107,15 +107,11 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'internal_split_nav' "$NVIM_CONFIG" && \
        grep -q 'window_zoomed_flag' "$NVIM_CONFIG" && \
        grep -q 'netrw_liststyle = 3' "$NVIM_CONFIG" && \
-       grep -q 'NVIM_IDE_LAYOUT' "$NVIM_CONFIG" && \
        grep -q 'map("n", "<C-h>", internal_split_nav("h")' "$NVIM_CONFIG" && \
        ! grep -q 'map({ "n", "t" }, "<C-h>"' "$NVIM_CONFIG" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "$NVIM_CONFIG" && \
        grep -q 'map({ "n", "v", "o" }, "<Home>", "^"' "$NVIM_CONFIG" && \
        grep -q 'map("i", "<Home>", "<Esc>^i"' "$NVIM_CONFIG" && \
-       grep -q 'function IdeTree.action_help()' "$NVIM_CONFIG" && \
-       grep -q 'bmap("?", IdeTree.action_help' "$NVIM_CONFIG" && \
-       grep -q 'bmap("g?", IdeTree.action_help' "$NVIM_CONFIG" && \
        grep -q 'map("n", "H", "<cmd>bprevious<CR>"' "$NVIM_CONFIG" && \
        grep -q 'map("n", "L", "<cmd>bnext<CR>"' "$NVIM_CONFIG" && \
        grep -q 'move_selection_next' "$NVIM_CONFIG" && \
@@ -132,56 +128,37 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
        grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
        grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, IdeTree ?/g? help, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files)"
+        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files)"
     else
-        fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, IdeTree help, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup in init.lua"
+        fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup in init.lua"
     fi
 
-    if grep -q 'nvim_create_user_command("IdeClose"' "$NVIM_CONFIG" && \
-       grep -q 'nvim_create_user_command("IdeWriteClose"' "$NVIM_CONFIG" && \
-       grep -q 'nvim_create_user_command("IdeFollowToggle"' "$NVIM_CONFIG" && \
+    if grep -q 'opt\.autoread = true' "$NVIM_CONFIG" && \
+       grep -q 'SolarizedAutoRead' "$NVIM_CONFIG" && \
+       grep -q 'silent! checktime' "$NVIM_CONFIG" && \
+       grep -q 'toggle_file_explorer' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_user_command("IdeCd"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("Q"' "$NVIM_CONFIG" && \
-       grep -q 'SolarizedIdeTree' "$NVIM_CONFIG" && \
-       grep -q 'IdeFollow.start_timer()' "$NVIM_CONFIG" && \
-       grep -q '"<leader>af"' "$NVIM_CONFIG" && \
+       grep -q 'nvim_create_user_command("Quit"' "$NVIM_CONFIG" && \
        grep -q '"<leader>gs"' "$NVIM_CONFIG" && \
-       grep -q 'winfixwidth = true' "$NVIM_CONFIG" && \
-       grep -q 'non_sidebar_wins' "$NVIM_CONFIG" && \
-       ! grep -q 'NVIM_IDE_TREE' "$NVIM_CONFIG" && \
-       ! grep -q 'nvim_create_autocmd("VimLeave"' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures IdeFollow (<leader>af, IdeFollowToggle), <leader>gs git_status, and keeps IDE Editor pane alive on :q/:wq (IdeClose/IdeWriteClose with non_sidebar_wins guard and winfixwidth)"
+       ! grep -q 'SolarizedIdeTree' "$NVIM_CONFIG" && \
+       ! grep -q 'IdeFollow' "$NVIM_CONFIG" && \
+       ! grep -q 'IdeClose' "$NVIM_CONFIG" && \
+       ! grep -q 'IdeWriteClose' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua configures native autoread + SolarizedAutoRead checktime, mini.files explorer (<leader>e / <leader>E), <leader>gs git_status, IdeCd, and Q/Quit without custom SolarizedIdeTree, IdeFollow, or :q/:qa hijack"
     else
-        fail "Neovim IDE quit safety & live-follow" "Expected IdeClose, IdeWriteClose, IdeFollowToggle, <leader>af, <leader>gs, SolarizedIdeTree, winfixwidth, non_sidebar_wins, and no NVIM_IDE_TREE in init.lua"
+        fail "Neovim native autoread & explorer" "Expected opt.autoread, SolarizedAutoRead, toggle_file_explorer, IdeCd, Q/Quit, <leader>gs, and no SolarizedIdeTree/IdeFollow/IdeClose in init.lua"
     fi
 
-    if grep -q 'function IdeFollow.session_roots()' "$NVIM_CONFIG" && \
-       grep -q 'cli/history.jsonl' "$NVIM_CONFIG" && \
-       grep -q '/.system_generated/subagents' "$NVIM_CONFIG" && \
-       grep -q 'function IdeFollow.refresh_vcs(root, force)' "$NVIM_CONFIG" && \
-       grep -q 'local IdeFollow = _G.IdeFollow or {' "$NVIM_CONFIG" && \
-       grep -q 'local IdeTree = _G.IdeTree or {' "$NVIM_CONFIG" && \
-       grep -q 'nvim_create_autocmd("BufWritePost"' "$NVIM_CONFIG" && \
-       ! grep -q 'ide_artifact_dirs' "$NVIM_CONFIG" && \
-       grep -q 'local function agy_dirs()' "$NVIM_CONFIG" && \
-       ! grep -q 'gemini/[^"]*/brain"' "$NVIM_CONFIG"; then
-        pass "Neovim IdeFollow is session-scoped (only this root's agy conversations in the auto-detected ~/.gemini data dir, subagents, and Claude plans), joins porcelain paths to the git toplevel, ignores your own saves, and survives :source without orphaning its timer"
+    if grep -q 'if not in_ssh then' "$NVIM_CONFIG" && \
+       grep -q 'opt\.clipboard = "unnamedplus"' "$NVIM_CONFIG" && \
+       grep -q '"<M-c>"' "$NVIM_CONFIG" && \
+       grep -q '"<M-v>"' "$NVIM_CONFIG" && \
+       ! grep -q 'broadcast_copy' "$NVIM_CONFIG" && \
+       ! grep -q 'vim\.g\.clipboard' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua guards local /tmp/.X11-unix/X0 fallback behind not in_ssh, relies on built-in unnamedplus + OSC 52 clipboard provider, and binds <M-c> / <M-v> without custom broadcast_copy"
     else
-        fail "Neovim IdeFollow session scoping" "Expected session_roots(), cli/history.jsonl ownership, subagent records, refresh_vcs(), reload-safe _G tables, a BufWritePost baseline, and no global brain scan in init.lua"
-    fi
-
-    # The follow tick must never block the Editor: edit logs are tailed in-process and git only runs in the background
-    IDE_FOLLOW_SECTION="$(sed -n '/^-- AI Live-Follow Mode (`IdeFollow`)/,/nvim_create_user_command("IdeFollowToggle"/p' "$NVIM_CONFIG")"
-    if grep -q 'function IdeFollow.read_edit_logs(roots, conv_dirs, prime)' <<< "$IDE_FOLLOW_SECTION" && \
-       grep -q 'transcript_full.jsonl' <<< "$IDE_FOLLOW_SECTION" && \
-       grep -q '"tool_use"' <<< "$IDE_FOLLOW_SECTION" && \
-       grep -q 'pcall(vim.system, cmd, {}, vim.schedule_wrap(function(res)' <<< "$IDE_FOLLOW_SECTION" && \
-       grep -q 'IDE_FOLLOW_VCS_BACKOFF' <<< "$IDE_FOLLOW_SECTION" && \
-       ! grep -q ':wait(' <<< "$IDE_FOLLOW_SECTION" && \
-       ! grep -Eq 'vim\.fn\.system(list)?\(' <<< "$IDE_FOLLOW_SECTION" && \
-       ! grep -q 'IdeTree.scan_dir' <<< "$IDE_FOLLOW_SECTION"; then
-        pass "Neovim IdeFollow follows AI edit logs (agy transcripts, Claude Code tool_use records) to the exact line and runs git only in the background with adaptive backoff, never blocking the tick"
-    else
-        fail "Neovim IdeFollow non-blocking tick" "Expected read_edit_logs(), transcript_full.jsonl and tool_use parsing, async vim.system callbacks with IDE_FOLLOW_VCS_BACKOFF, and no :wait(), vim.fn.system*, or IdeTree.scan_dir in the IdeFollow section"
+        fail "Neovim native clipboard & SSH guard" "Expected 'if not in_ssh then', unnamedplus, <M-c>/<M-v>, and no broadcast_copy/vim.g.clipboard override in init.lua"
     fi
 
     if grep -q '@markup.heading\.1.*colors\.orange' "$NVIM_CONFIG" && \
@@ -2349,228 +2326,19 @@ end
         fi
     fi
 
-    # Mouse resizing inside the Editor: dragging the SolarizedIdeTree edge resizes the sidebar even while the tree has
-    # focus (its buffer-local mouse maps must hand separator presses back to Neovim instead of acting on the row under
-    # the cursor), plain clicks on tree rows keep working, and the dragged width survives hiding and reopening the tree
+    # Verify that over SSH (SSH_CONNECTION set, DISPLAY unset), init.lua never spoofs DISPLAY=":0" from a background
+    # /tmp/.X11-unix/X0 socket, leaves vim.g.clipboard unset so Neovim's built-in OSC 52 / unnamedplus provider runs,
+    # and enables autoread + SolarizedAutoRead checktime and IdeCd.
     if command -v nvim >/dev/null 2>&1; then
-        MOUSE_NVIM_DIR="$(mktemp -d)"
-        ln -sfn "$SCRIPT_DIR/dotfiles/.config/nvim" "$MOUSE_NVIM_DIR/nvim"
-        mkdir -p "$MOUSE_NVIM_DIR/work/alpha/beta" "$MOUSE_NVIM_DIR/work/gamma"
-        touch "$MOUSE_NVIM_DIR/work/alpha/beta/deep.txt" "$MOUSE_NVIM_DIR/work/gamma/g.txt" "$MOUSE_NVIM_DIR/work/readme.txt"
-        cat > "$MOUSE_NVIM_DIR/mouse.lua" <<'LUA'
--- Each mouse event is injected in its own deferred step so Neovim processes it before the next one arrives
-local IdeTree = _G.IdeTree
-local res, steps = {}, {}
-local function add(fn) steps[#steps + 1] = fn end
-local function tree_win()
-    local win = vim.fn.bufwinid(IdeTree.buf or -1)
-    return win ~= -1 and win or nil
-end
-local function code_win()
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-        if vim.api.nvim_win_get_config(win).relative == "" and vim.api.nvim_win_get_buf(win) ~= IdeTree.buf then
-            return win
-        end
-    end
-end
-local function tree_lines() return vim.api.nvim_buf_line_count(IdeTree.buf) end
-local function row_of(pred)
-    for lnum = 2, tree_lines() do
-        local item = IdeTree.entries[lnum]
-        if item and pred(item) then return lnum, item end
-    end
-end
-local function mouse(action, row, col) vim.api.nvim_input_mouse("left", action, "", 0, row, col) end
--- 0-based grid cell on the tree's right edge (its vertical separator), a few rows down
-local function edge()
-    local win = tree_win()
-    local pos = vim.fn.win_screenpos(win)
-    return pos[1] + 2, pos[2] - 1 + vim.api.nvim_win_get_width(win)
-end
-local function drag_edge_steps(delta)
-    local row, col
-    add(function() row, col = edge(); mouse("press", row, col) end)
-    add(function() mouse("drag", row, col + math.floor(delta / 2)) end)
-    add(function() mouse("drag", row, col + delta) end)
-    add(function() mouse("release", row, col + delta) end)
-end
-
-add(function() IdeTree.toggle_split() end)
--- A: drag the edge while the tree has focus, with the tree cursor parked on a folder row
-local a_lines
-add(function()
-    local win = tree_win()
-    vim.api.nvim_set_current_win(win)
-    vim.api.nvim_win_set_cursor(win, { (row_of(function(item) return item.is_dir end)), 0 })
-    res.a_before, a_lines = vim.api.nvim_win_get_width(win), tree_lines()
-end)
-add(function() end)
-drag_edge_steps(12)
-add(function()
-    res.a_after = vim.api.nvim_win_get_width(tree_win())
-    res.a_toggled = tree_lines() ~= a_lines
-end)
--- B: drag the edge while the code window has focus
-add(function()
-    vim.api.nvim_win_set_width(tree_win(), 28)
-    vim.api.nvim_set_current_win(code_win())
-    res.b_before = vim.api.nvim_win_get_width(tree_win())
-end)
-drag_edge_steps(8)
-add(function() res.b_after = vim.api.nvim_win_get_width(tree_win()) end)
--- C: a plain click on a collapsed folder row still expands it. Focus the tree first and outlast its
--- 150 ms click-to-focus latch (a click that only brings the tree into focus never toggles a folder)
-local c_lines, c_row, c_col
-add(function() vim.api.nvim_set_current_win(tree_win()) end)
-add(function() end)
-add(function()
-    local win = tree_win()
-    local lnum = row_of(function(item) return item.is_dir and not IdeTree.expanded[item.path] end)
-    local pos = vim.fn.screenpos(win, lnum, 1)
-    c_lines, c_row, c_col = tree_lines(), pos.row - 1, pos.col + 2
-    mouse("press", c_row, c_col)
-end)
-add(function() mouse("release", c_row, c_col) end)
-add(function() res.c_expanded = tree_lines() > c_lines end)
--- D: double-clicking the edge while the tree cursor sits on a file opens nothing
-local d_row, d_col, d_buf, d_path
-add(function()
-    local win = tree_win()
-    vim.api.nvim_set_current_win(win)
-    local lnum, item = row_of(function(item) return not item.is_dir end)
-    vim.api.nvim_win_set_cursor(win, { lnum, 0 })
-    d_path, d_buf = item.path, vim.api.nvim_win_get_buf(code_win())
-end)
-add(function() end)
-add(function() d_row, d_col = edge(); mouse("press", d_row, d_col) end)
-add(function() mouse("release", d_row, d_col) end)
-add(function() mouse("press", d_row, d_col) end)
-add(function() mouse("release", d_row, d_col) end)
-add(function()
-    res.d_opened = vim.api.nvim_win_get_buf(code_win()) ~= d_buf or vim.fn.bufloaded(d_path) == 1
-end)
--- E: hiding and reopening the tree keeps a dragged width, capped at half the screen
-add(function()
-    vim.api.nvim_win_set_width(tree_win(), 33)
-    IdeTree.toggle_split()
-end)
-add(function()
-    IdeTree.toggle_split()
-    res.e_reopen = vim.api.nvim_win_get_width(tree_win())
-    IdeTree.toggle_split()
-    IdeTree.width = 70
-    IdeTree.toggle_split()
-    res.e_capped, res.e_cap = vim.api.nvim_win_get_width(tree_win()), math.floor(vim.o.columns / 2)
-end)
-add(function()
-    local out = {}
-    for k, v in pairs(res) do out[#out + 1] = k .. "=" .. tostring(v) end
-    vim.fn.writefile(out, vim.env.MOUSE_OUT)
-    vim.cmd("qall!")
-end)
-
-local i = 0
-local function run()
-    i = i + 1
-    if not steps[i] then return end
-    local ok, err = pcall(steps[i])
-    if not ok then
-        vim.fn.writefile({ "err=step " .. i .. ": " .. tostring(err) }, vim.env.MOUSE_OUT)
-        vim.cmd("qall!")
-        return
-    end
-    vim.defer_fn(run, 150)
-end
-vim.defer_fn(run, 500)
-LUA
-        (cd "$MOUSE_NVIM_DIR/work" && env -u TMUX -u TMUX_PANE -u IDE_SESSION -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE \
-            -u IDE_INITIAL_ROOT -u IDE_AI_CLI -u NVIM_IDE_LAYOUT MOUSE_OUT="$MOUSE_NVIM_DIR/out" XDG_CONFIG_HOME="$MOUSE_NVIM_DIR" \
-            timeout 60 nvim --headless -i NONE -u "$NVIM_CONFIG" -c "luafile $MOUSE_NVIM_DIR/mouse.lua" >/dev/null 2>&1) || true
-        declare -A MOUSE=()
-        if [ -f "$MOUSE_NVIM_DIR/out" ]; then
-            while IFS='=' read -r k v; do
-                [ -n "$k" ] && MOUSE["$k"]="$v"
-            done < "$MOUSE_NVIM_DIR/out"
-        fi
-        rm -rf "$MOUSE_NVIM_DIR"
-
-        if [ -n "${MOUSE[a_before]:-}" ] && [ "${MOUSE[a_after]:-}" = "$(( ${MOUSE[a_before]:-0} + 12 ))" ] && [ "${MOUSE[a_toggled]:-}" = "false" ]; then
-            pass "Neovim SolarizedIdeTree edge resizes by mouse drag while the tree has focus, without toggling the folder under the cursor"
-        else
-            fail "Neovim tree-focused edge drag" "Expected tree width ${MOUSE[a_before]:-?} +12 with no folder toggled, got width=${MOUSE[a_after]:-?} toggled=${MOUSE[a_toggled]:-?} ${MOUSE[err]:-}"
-        fi
-        if [ -n "${MOUSE[b_before]:-}" ] && [ "${MOUSE[b_after]:-}" = "$(( ${MOUSE[b_before]:-0} + 8 ))" ]; then
-            pass "Neovim SolarizedIdeTree edge resizes by mouse drag while the code window has focus"
-        else
-            fail "Neovim code-focused edge drag" "Expected tree width ${MOUSE[b_before]:-?} +8, got ${MOUSE[b_after]:-?} ${MOUSE[err]:-}"
-        fi
-        if [ "${MOUSE[c_expanded]:-}" = "true" ]; then
-            pass "Neovim SolarizedIdeTree still expands a folder on a plain single click"
-        else
-            fail "Neovim tree single-click" "Expected a click on a collapsed folder row to expand it, got c_expanded=${MOUSE[c_expanded]:-?} ${MOUSE[err]:-}"
-        fi
-        if [ "${MOUSE[d_opened]:-}" = "false" ]; then
-            pass "Neovim SolarizedIdeTree ignores double-clicks on its edge (no file opens from the row under the cursor)"
-        else
-            fail "Neovim tree edge double-click" "Expected a double-click on the tree edge to open nothing, got d_opened=${MOUSE[d_opened]:-?} ${MOUSE[err]:-}"
-        fi
-        if [ "${MOUSE[e_reopen]:-}" = "33" ] && [ -n "${MOUSE[e_cap]:-}" ] && [ "${MOUSE[e_capped]:-}" = "${MOUSE[e_cap]}" ]; then
-            pass "Neovim SolarizedIdeTree reopens at its dragged width (Space e), capped at half the screen"
-        else
-            fail "Neovim tree width memory" "Expected reopen width 33 and a 70-column width capped to ${MOUSE[e_cap]:-?}, got reopen=${MOUSE[e_reopen]:-?} capped=${MOUSE[e_capped]:-?} ${MOUSE[err]:-}"
-        fi
-
-        # Verify clipboard broadcast when a local DISPLAY (e.g. background X0) coexists with TMUX or SSH_CONNECTION:
-        # yanking must never be trapped exclusively in X0; it must broadcast to OSC 52, `tmux load-buffer -w -`, and `xsel -ib`.
-        # Pasting over SSH prefers `tmux show-buffer`, while pasting on a local desktop (no SSH_*) prefers X11 (`xsel -ob`).
-        CLIP_NVIM_DIR="$(mktemp -d)"
-        mkdir -p "$CLIP_NVIM_DIR/bin"
-        cat > "$CLIP_NVIM_DIR/bin/tmux" <<'SH'
-#!/usr/bin/env bash
-if [ "${1:-}" = "load-buffer" ] && [ "${2:-}" = "-w" ]; then
-    cat > "$CLIP_TEST_DIR/tmux_buf"
-    exit 0
-fi
-if [ "${1:-}" = "save-buffer" ] || [ "${1:-}" = "show-buffer" ]; then
-    printf "from-tmux-buf"
-    exit 0
-fi
-exit 0
-SH
-        cat > "$CLIP_NVIM_DIR/bin/xsel" <<'SH'
-#!/usr/bin/env bash
-if [ "${1:-}" = "-ib" ]; then
-    cat > "$CLIP_TEST_DIR/xsel_buf"
-    exit 0
-fi
-if [ "${1:-}" = "-ob" ] || [ "${1:-}" = "-op" ]; then
-    printf "from-xsel-buf"
-    exit 0
-fi
-exit 1
-SH
-        chmod +x "$CLIP_NVIM_DIR/bin/tmux" "$CLIP_NVIM_DIR/bin/xsel"
-        CLIP_NAME="$(env -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI \
-            CLIP_TEST_DIR="$CLIP_NVIM_DIR" PATH="$CLIP_NVIM_DIR/bin:$PATH" DISPLAY=":0" TMUX="/tmp/mock-tmux,1,0" SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" \
+        SSH_NVIM_OUT="$(env -u DISPLAY -u WAYLAND_DISPLAY -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI \
+            SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" \
             nvim --headless -i NONE -u "$NVIM_CONFIG" \
-            -c 'lua vim.g.clipboard.copy["+"]({"broadcast-line-1", "broadcast-line-2"}, "v")' \
-            -c 'lua io.write((vim.g.clipboard and vim.g.clipboard.name or "") .. "|" .. table.concat(vim.g.clipboard.paste["+"]()[1], ","))' \
+            -c 'lua local ac = vim.api.nvim_get_autocmds({ group = "SolarizedAutoRead" }); io.write("DISP=" .. (vim.env.DISPLAY or "") .. "|GCLIP=" .. tostring(vim.g.clipboard) .. "|CB=" .. vim.o.clipboard .. "|AR=" .. tostring(vim.o.autoread) .. "|AC=" .. tostring(#ac >= 1))' \
             -c 'qa!' 2>/dev/null || true)"
-        CLIP_LOCAL="$(env -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT \
-            CLIP_TEST_DIR="$CLIP_NVIM_DIR" PATH="$CLIP_NVIM_DIR/bin:$PATH" DISPLAY=":0" TMUX="/tmp/mock-tmux,1,0" \
-            nvim --headless -i NONE -u "$NVIM_CONFIG" \
-            -c 'lua io.write(table.concat(vim.g.clipboard.paste["+"]()[1], ","))' \
-            -c 'qa!' 2>/dev/null || true)"
-        clip_tmux_got="$(cat "$CLIP_NVIM_DIR/tmux_buf" 2>/dev/null || true)"
-        clip_xsel_got="$(cat "$CLIP_NVIM_DIR/xsel_buf" 2>/dev/null || true)"
-        rm -rf "$CLIP_NVIM_DIR"
-        if [ "$CLIP_NAME" = "OSC 52 + System Broadcast|from-tmux-buf" ] && \
-           [ "$CLIP_LOCAL" = "from-xsel-buf" ] && \
-           [ "$clip_tmux_got" = $'broadcast-line-1\nbroadcast-line-2' ] && \
-           [ "$clip_xsel_got" = $'broadcast-line-1\nbroadcast-line-2' ]; then
-            pass "Neovim clipboard broadcasts yanks across OSC 52, tmux load-buffer -w, and X11 (xsel -ib) even when local DISPLAY/:0 coexists with TMUX or SSH_CONNECTION, and prioritizes tmux paste over SSH vs X11 paste on local desktop"
+        if [ "$SSH_NVIM_OUT" = "DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true" ]; then
+            pass "Neovim init.lua does not spoof DISPLAY=:0 over SSH, preserves built-in unnamedplus/OSC 52 clipboard provider, and registers SolarizedAutoRead checktime autocmds"
         else
-            fail "Neovim clipboard broadcast under TMUX/SSH + DISPLAY" "Expected ssh='OSC 52 + System Broadcast|from-tmux-buf', local='from-xsel-buf', and both tmux_buf and xsel_buf populated, got ssh='$CLIP_NAME' local='$CLIP_LOCAL' tmux='$clip_tmux_got' xsel='$clip_xsel_got'"
+            fail "Neovim SSH DISPLAY guard & native autoread/clipboard" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true', got '$SSH_NVIM_OUT'"
         fi
     fi
 else

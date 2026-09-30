@@ -32,6 +32,8 @@ export HOME="$TEMP_HOME"
 export XDG_DATA_HOME="$TEMP_HOME/.local/share"
 export XDG_CONFIG_HOME="$TEMP_HOME/.config"
 export XDG_CACHE_HOME="$TEMP_HOME/.cache"
+mkdir -p "$XDG_CACHE_HOME/bat"
+touch "$XDG_CACHE_HOME/bat/themes.bin" "$XDG_CACHE_HOME/bat/syntaxes.bin"
 
 # Run installer (fonts only)
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
@@ -172,6 +174,8 @@ export HOME="$MAC_TEMP_HOME"
 export XDG_DATA_HOME="$MAC_TEMP_HOME/.local/share"
 export XDG_CONFIG_HOME="$MAC_TEMP_HOME/.config"
 export XDG_CACHE_HOME="$MAC_TEMP_HOME/.cache"
+mkdir -p "$XDG_CACHE_HOME/bat"
+touch "$XDG_CACHE_HOME/bat/themes.bin" "$XDG_CACHE_HOME/bat/syntaxes.bin"
 if output=$("$SCRIPT_DIR/setup.sh" --os macos --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
     pass "setup.sh font installation succeeded on macOS target"
 else

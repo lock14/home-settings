@@ -31,8 +31,14 @@ else
     mkdir -p "$CACHE_DIR"
 
     # Remove any conflicting hyphenated or stray numbered font files
-    rm -f "$FONT_DIR"/MesloLGS-NF-*.ttf "$CACHE_DIR"/MesloLGS-NF-*.ttf
-    rm -f "$FONT_DIR"/[0-9]MesloLGS*.ttf "$CACHE_DIR"/[0-9]MesloLGS*.ttf
+    fonts_changed=0
+    for stale_font in "$FONT_DIR"/MesloLGS-NF-*.ttf "$CACHE_DIR"/MesloLGS-NF-*.ttf \
+                      "$FONT_DIR"/[0-9]MesloLGS*.ttf "$CACHE_DIR"/[0-9]MesloLGS*.ttf; do
+        if [ -e "$stale_font" ]; then
+            rm -f "$stale_font"
+            fonts_changed=1
+        fi
+    done
 
     # Ensure fontconfig alias is provisioned on Linux and clean any dangling symlinks
     if [ "$OS" != "macos" ]; then
@@ -120,23 +126,25 @@ else
                 target_tmp="$target.tmp.$$.${BASHPID:-$RANDOM}"
                 cp -f "$cached" "$target_tmp" && mv -f "$target_tmp" "$target"
                 target_tmp=""
+                fonts_changed=1
             fi
         fi
     done
 
     # Clean up legacy unpatched romkatv fonts and symbols fallback font once v3 is safely in place
-    rm -f "$FONT_DIR/MesloLGS NF"*.ttf "$CACHE_DIR/MesloLGS NF"*.ttf
-    rm -f "$FONT_DIR"/SymbolsNerdFont*.ttf "$CACHE_DIR"/SymbolsNerdFont*.ttf
+    for legacy_font in "$FONT_DIR/MesloLGS NF"*.ttf "$CACHE_DIR/MesloLGS NF"*.ttf \
+                       "$FONT_DIR"/SymbolsNerdFont*.ttf "$CACHE_DIR"/SymbolsNerdFont*.ttf; do
+        if [ -e "$legacy_font" ]; then
+            rm -f "$legacy_font"
+            fonts_changed=1
+        fi
+    done
 
     if [ "$OS" = "macos" ] && command -v atsutil &>/dev/null; then
         # Ensure the macOS font server is awake (never kill fontd while terminal apps are running)
         atsutil server -ping >/dev/null 2>&1 || true
-    fi
-    if command -v fc-cache &>/dev/null; then
-        fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
-        if [ "$OS" != "macos" ] && [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig" ]; then
-            fc-cache -f "${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig" >/dev/null 2>&1 || true
-        fi
+    elif [ "$OS" != "macos" ] && [ "$fonts_changed" -eq 1 ] && command -v fc-cache &>/dev/null; then
+        fc-cache "$FONT_DIR" >/dev/null 2>&1 || true
     fi
 
 fi

@@ -195,34 +195,69 @@ if command -v tmux >/dev/null 2>&1; then
     export XDG_RUNTIME_DIR="$TMUX_TEST_TMPDIR"
     unset TMUX TMUX_PANE
 
+    IDE_AI_STUB_DIR="$TEMP_HOME/ai_stubs"
+    mkdir -p "$IDE_AI_STUB_DIR"
+    for ai_stub in agy claude codex; do
+        printf '#!/bin/sh\nexec sleep 300\n' > "$IDE_AI_STUB_DIR/$ai_stub"
+        chmod +x "$IDE_AI_STUB_DIR/$ai_stub"
+    done
+    OLD_TMUX_PATH="$PATH"
+    OLD_TMUX_SHELL="${SHELL:-}"
+    export PATH="$IDE_AI_STUB_DIR:$PATH"
+    export SHELL="/bin/bash"
+
     IDE_WS_2P="$TEMP_HOME/ws_2pane_test"
     IDE_WS_3P="$TEMP_HOME/ws_3pane_test"
     mkdir -p "$IDE_WS_2P" "$IDE_WS_3P"
 
     env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --2pane --detach "$IDE_WS_2P"
-    if tmux has-session -t "ide-ws_2pane_test" 2>/dev/null; then
-        pane_cnt="$(tmux list-panes -t "ide-ws_2pane_test" | wc -l | tr -d ' ')"
-        win_cnt="$(tmux list-windows -t "ide-ws_2pane_test" | wc -l | tr -d ' ')"
-        env_out="$(tmux show-environment -t "ide-ws_2pane_test" 2>/dev/null || true)"
+    if tmux has-session -t "=ws_2pane_test" 2>/dev/null; then
+        pane_cnt="$(tmux list-panes -t "=ws_2pane_test:" | wc -l | tr -d ' ')"
+        win_cnt="$(tmux list-windows -t "=ws_2pane_test" | wc -l | tr -d ' ')"
+        env_out="$(tmux show-environment -t "=ws_2pane_test" 2>/dev/null || true)"
         if [ "$pane_cnt" = "2" ] && [ "$win_cnt" = "1" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out"; then
             pass "bin/ide --2pane layout spawns 2 side-by-side panes (50% AI | 50% Editor) in a single window and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
         else
             fail "bin/ide 2-pane layout" "Expected 2 panes in 1 window and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy env vars, got panes=$pane_cnt wins=$win_cnt env=$env_out"
         fi
-        "$SCRIPT_DIR/bin/ide" --kill "ide-ws_2pane_test" >/dev/null 2>&1
+        "$SCRIPT_DIR/bin/ide" --kill "ws_2pane_test" >/dev/null 2>&1
     else
-        fail "bin/ide 2-pane creation" "Session ide-ws_2pane_test was not created"
+        fail "bin/ide 2-pane creation" "Session ws_2pane_test was not created"
     fi
 
+    # Verify custom session naming via ide_session_name in $IDE_LINK_RULES
+    CUSTOM_RULES_FILE="$TEMP_HOME/custom_session_rules.sh"
+    CUSTOM_CLIENT_DIR="$TEMP_HOME/cloud_clients/feature_alpha/monorepo_root"
+    mkdir -p "$CUSTOM_CLIENT_DIR"
+    cat > "$CUSTOM_RULES_FILE" <<'SH'
+ide_session_name() {
+    local dir="$1"
+    if [[ "$dir" == */cloud_clients/*/* ]]; then
+        local rem="${dir#*/cloud_clients/}"
+        printf '%s\n' "${rem%%/*}"
+        return 0
+    fi
+    return 1
+}
+SH
+    IDE_LINK_RULES="$CUSTOM_RULES_FILE" "$SCRIPT_DIR/bin/ide" --2pane --detach "$CUSTOM_CLIENT_DIR"
+    if tmux has-session -t "=feature_alpha" 2>/dev/null; then
+        pass "bin/ide derives custom tmux session name via ide_session_name in \$IDE_LINK_RULES"
+        "$SCRIPT_DIR/bin/ide" --kill "feature_alpha" >/dev/null 2>&1
+    else
+        fail "bin/ide ide_session_name hook" "Expected session 'feature_alpha' to be created for $CUSTOM_CLIENT_DIR"
+    fi
+    rm -rf "$CUSTOM_RULES_FILE" "$TEMP_HOME/cloud_clients"
+
     "$SCRIPT_DIR/bin/ide" --ai claude --detach "$IDE_WS_3P"
-    if tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
-        pane_cnt_3="$(tmux list-panes -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
-        win_cnt_3="$(tmux list-windows -t "ide-ws_3pane_test" | wc -l | tr -d ' ')"
-        env_out_3="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
-        ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane)"
-        ai_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_ai_pane)"
-        term_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_term_pane)"
-        main_win="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_main_win)"
+    if tmux has-session -t "=ws_3pane_test" 2>/dev/null; then
+        pane_cnt_3="$(tmux list-panes -t "=ws_3pane_test:" | wc -l | tr -d ' ')"
+        win_cnt_3="$(tmux list-windows -t "=ws_3pane_test" | wc -l | tr -d ' ')"
+        env_out_3="$(tmux show-environment -t "=ws_3pane_test" 2>/dev/null || true)"
+        ed_pane="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_editor_pane)"
+        ai_pane="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_ai_pane)"
+        term_pane="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_term_pane)"
+        main_win="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_main_win)"
         initial_active="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         win_width="$(tmux display-message -p -t "$main_win" "#{window_width}")"
         term_width="$(tmux display-message -p -t "$term_pane" "#{pane_width}")"
@@ -233,37 +268,37 @@ if command -v tmux >/dev/null 2>&1; then
         fi
 
         # Simulate outer client attach-session clearing session env vars
-        tmux set-environment -t "ide-ws_3pane_test" -r NVIM_IDE_PANE
+        tmux set-environment -t "=ws_3pane_test" -r NVIM_IDE_PANE
 
         # Test focus toggles (--toggle, --show-term, --show-editor), bounce-back, and zoom preservation
         # Initial focus is AI ($ai_pane), so first --toggle switches to Editor ($ed_pane), and second returns to AI ($ai_pane)
-        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle "ws_3pane_test"
         active_after_t1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         pane_cnt_after_t1="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
 
-        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle "ws_3pane_test"
         active_after_t2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
 
-        "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-term "ws_3pane_test"
         active_after_term1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-        "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-term "ws_3pane_test"
         active_after_term2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
 
         # From AI ($ai_pane): first --show-editor focuses Editor ($ed_pane), second bounces back to AI ($ai_pane) without zooming
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
         active_after_ed1="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
         active_after_ed2="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         zoom_no_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
 
         # Focus Editor and zoom via tmux (Alt+z): --toggle and --show-editor preserve zoom state across panes
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
         tmux resize-pane -Z -t "$ed_pane"
         zoom_in_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
-        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle "ws_3pane_test"
         active_zoom_ai="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         zoom_in_ai="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
         active_zoom_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         zoom_back_ed="$(tmux display-message -p -t "$main_win" "#{window_zoomed_flag}")"
         tmux resize-pane -Z -t "$ed_pane"
@@ -291,19 +326,19 @@ if command -v tmux >/dev/null 2>&1; then
         term_pid_0="$(tmux display-message -p -t "$term_pane" "#{pane_pid}")"
         ai_pid_0="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
         term_h_0="$(tmux display-message -p -t "$term_pane" "#{pane_height}")"
-        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
         panes_after_park_term="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         park_term_win="$(tmux display-message -p -t "$term_pane" "#{window_name}" 2>/dev/null || true)"
-        "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-editor "ws_3pane_test"
         panes_after_park_ed="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         park_ed_win="$(tmux display-message -p -t "$ed_pane" "#{window_name}" 2>/dev/null || true)"
         # Refuses to hide the last visible pane (AI)
-        "$SCRIPT_DIR/bin/ide" --toggle-ai "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-ai "ws_3pane_test"
         panes_after_last_guard="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         # --show-editor unparks Editor and focuses it; --toggle-term unparks Shell at the bottom full-width
-        "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
         active_after_unpark_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
         panes_after_unpark_all="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         term_w_restored="$(tmux display-message -p -t "$term_pane" "#{pane_width}")"
         term_h_restored="$(tmux display-message -p -t "$term_pane" "#{pane_height}")"
@@ -323,29 +358,29 @@ if command -v tmux >/dev/null 2>&1; then
         # Test directional pane swapping (--swap right|left|down|up) including horizontal wrap,
         # plus parking/unparking both top panes while vertically swapped (`--swap down`)
         tmux select-pane -t "$ai_pane"
-        "$SCRIPT_DIR/bin/ide" --swap right "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --swap right "ws_3pane_test"
         ed_left_swap1="$(tmux display-message -p -t "$ed_pane" "#{pane_left}")"
         ai_left_swap1="$(tmux display-message -p -t "$ai_pane" "#{pane_left}")"
-        swapped_flag1="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_swapped 2>/dev/null || true)"
+        swapped_flag1="$(tmux show-options -qv -t "ws_3pane_test" @ide_swapped 2>/dev/null || true)"
         # Calling --swap right again from the right-most top pane wraps horizontally back to the left
-        "$SCRIPT_DIR/bin/ide" --swap right "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --swap right "ws_3pane_test"
         ed_left_swap2="$(tmux display-message -p -t "$ed_pane" "#{pane_left}")"
         ai_left_swap2="$(tmux display-message -p -t "$ai_pane" "#{pane_left}")"
         # Vertical swap down to Shell ([Shell | Editor] on top, [AI] full-width on bottom), then park & unpark both top panes
-        "$SCRIPT_DIR/bin/ide" --swap down "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --swap down "ws_3pane_test"
         ai_top_down="$(tmux display-message -p -t "$ai_pane" "#{pane_top}")"
         term_top_down="$(tmux display-message -p -t "$term_pane" "#{pane_top}")"
-        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
         park_allow_rename="$(tmux show-options -wqv -t "$term_pane" allow-rename 2>/dev/null || true)"
-        "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
-        "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
-        "$SCRIPT_DIR/bin/ide" --toggle-term "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-editor "ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-editor "ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
         term_top_restored="$(tmux display-message -p -t "$term_pane" "#{pane_top}")"
         ed_top_restored="$(tmux display-message -p -t "$ed_pane" "#{pane_top}")"
         ai_top_restored="$(tmux display-message -p -t "$ai_pane" "#{pane_top}")"
         ai_w_restored="$(tmux display-message -p -t "$ai_pane" "#{pane_width}")"
         tmux select-pane -t "$ai_pane"
-        "$SCRIPT_DIR/bin/ide" --swap up "ide-ws_3pane_test"
+        "$SCRIPT_DIR/bin/ide" --swap up "ws_3pane_test"
         ai_top_up="$(tmux display-message -p -t "$ai_pane" "#{pane_top}")"
         term_top_up="$(tmux display-message -p -t "$term_pane" "#{pane_top}")"
         if [ "$ed_left_swap1" = "0" ] && [ "${ai_left_swap1:-0}" -gt 0 ] && [ "$swapped_flag1" = "1" ] && \
@@ -361,12 +396,12 @@ if command -v tmux >/dev/null 2>&1; then
         fi
 
         "$SCRIPT_DIR/bin/ide" --ai codex --detach "$IDE_WS_3P"
-        env_out_codex="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
+        env_out_codex="$(tmux show-environment -t "ws_3pane_test" 2>/dev/null || true)"
         "$SCRIPT_DIR/bin/ide" --ai openai --detach "$IDE_WS_3P"
-        env_out_openai="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
+        env_out_openai="$(tmux show-environment -t "ws_3pane_test" 2>/dev/null || true)"
         IDE_AI_CLI="agy" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
-        env_out_reattach="$(tmux show-environment -t "ide-ws_3pane_test" 2>/dev/null || true)"
-        opt_out_reattach="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_ai_cli 2>/dev/null || true)"
+        env_out_reattach="$(tmux show-environment -t "ws_3pane_test" 2>/dev/null || true)"
+        opt_out_reattach="$(tmux show-options -qv -t "ws_3pane_test" @ide_ai_cli 2>/dev/null || true)"
         if grep -q "IDE_AI_CLI=codex" <<< "$env_out_codex" && \
            grep -q "IDE_AI_CLI=codex" <<< "$env_out_openai" && \
            grep -q "IDE_AI_CLI=codex" <<< "$env_out_reattach" && \
@@ -377,414 +412,132 @@ if command -v tmux >/dev/null 2>&1; then
             fail "bin/ide IDE_AI_CLI update" "Failed to update/preserve IDE_AI_CLI=codex (opt=$opt_out_reattach)"
         fi
 
-        # Verify in-process SolarizedIdeTree (`IdeTree.toggle_split()`), `IdeClose` (`:q`), and `IdeFollow.sync(true)` AI live-follow
+        # Verify native Neovim auto-reload (`autoread` + `SolarizedAutoRead` `checktime`) and `<leader>e` / `<leader>E` (`mini.files`)
         if command -v nvim >/dev/null 2>&1; then
             mkdir -p "$IDE_WS_3P/subdir"
-            echo "hello" > "$IDE_WS_3P/subdir/nested.txt"
-            tree_test_out="$(cd "$IDE_WS_3P" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
-                -c "edit $IDE_WS_3P/subdir/nested.txt | lua IdeTree.toggle_split(); vim.cmd('2'); vim.cmd('normal l'); local exp = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n'); local wfw = vim.wo.winfixwidth and '1' or '0'; vim.cmd('normal h'); local col = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n'); vim.cmd('wincmd p'); vim.cmd('IdeClose'); io.stdout:write('EXP:' .. (exp:find('nested.txt') and '1' or '0') .. ' COL:' .. (col:find('nested.txt') and '1' or '0') .. ' WFW:' .. wfw .. ' WINS:' .. vim.fn.winnr('$') .. ' FT:' .. vim.bo.filetype)" \
+            printf "before\n" > "$IDE_WS_3P/subdir/nested.txt"
+            autoread_out="$(cd "$IDE_WS_3P" && nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
+                -c "edit $IDE_WS_3P/subdir/nested.txt" \
+                -c "lua vim.fn.writefile({ 'after_external_edit' }, '$IDE_WS_3P/subdir/nested.txt'); vim.cmd('checktime'); local line1 = vim.api.nvim_buf_get_lines(0, 0, 1, false)[1] or ''; local ar = vim.o.autoread and '1' or '0'; local me = vim.fn.maparg('<leader>e', 'n') ~= '' and '1' or '0'; local mE = vim.fn.maparg('<leader>E', 'n') ~= '' and '1' or '0'; io.stdout:write('AR:' .. ar .. ' LINE:' .. line1 .. ' ME:' .. me .. ' MEE:' .. mE)" \
                 -c "qa!" 2>&1 || true)"
-            if grep -Fq "EXP:1 COL:0 WFW:1 WINS:2 FT:" <<< "$tree_test_out" && ! grep -Fq "FT:ide_tree" <<< "$tree_test_out"; then
-                pass "In-process SolarizedIdeTree sets winfixwidth, expands/collapses directories via l/h, and IdeClose (:q) keeps the code split alive beside the sidebar"
+            if grep -Fq "AR:1 LINE:after_external_edit ME:1 MEE:1" <<< "$autoread_out"; then
+                pass "Neovim enables autoread + checktime for external AI edits and binds <leader>e / <leader>E to mini.files explorer"
             else
-                fail "In-process SolarizedIdeTree / IdeClose" "Expected EXP:1 COL:0 WFW:1 WINS:2 and non-ide_tree ft, got: $tree_test_out"
-            fi
-
-            if command -v git >/dev/null 2>&1; then
-                FOLLOW_REPO="$TEMP_HOME/follow_repo_test"
-                # agy's data directory is auto-detected as the ~/.gemini/* entry holding cli/history.jsonl
-                FOLLOW_HOME="$TEMP_HOME/follow_home"
-                FOLLOW_AGY="$FOLLOW_HOME/.gemini/agy_test"
-                FOLLOW_CLAUDE="$TEMP_HOME/claude_test"
-                mkdir -p "$FOLLOW_REPO/pkg" "$FOLLOW_AGY/cli" "$FOLLOW_AGY/brain/conv-own/.system_generated/subagents" \
-                    "$FOLLOW_AGY/brain/conv-sub" "$FOLLOW_AGY/brain/conv-foreign" "$FOLLOW_HOME/.gemini/unrelated" "$FOLLOW_CLAUDE/plans"
-                (
-                    cd "$FOLLOW_REPO"
-                    git init -q
-                    git config user.email "test@example.com"
-                    git config user.name "Test"
-                    printf "line1\nline2\nline3\nline4\n" > "$FOLLOW_REPO/tracked.go"
-                    git add tracked.go
-                    git commit -q -m "initial" --no-gpg-sign
-                )
-                FOLLOW_REPO_REAL="$(cd "$FOLLOW_REPO" && pwd -P)"
-                CLAUDE_PROJECT="$FOLLOW_CLAUDE/projects/$(printf '%s' "$FOLLOW_REPO_REAL" | LC_ALL=C sed 's/[^[:alnum:]]/-/g')"
-                mkdir -p "$CLAUDE_PROJECT"
-
-                # Two concurrent `ide` sessions: conv-own was launched in this session's root, conv-foreign in another
-                printf '{"display":"plan it","timestamp":1000,"workspace":"%s","conversationId":"conv-own"}\n' "$FOLLOW_REPO" > "$FOLLOW_AGY/cli/history.jsonl"
-                printf '{"display":"other","timestamp":2000,"workspace":"%s","conversationId":"conv-foreign"}\n' "$TEMP_HOME/other_repo" >> "$FOLLOW_AGY/cli/history.jsonl"
-                printf '{"conversationId":"conv-sub"}\n' > "$FOLLOW_AGY/brain/conv-own/.system_generated/subagents/conv-sub.json"
-                printf "# Implementation Plan\n" > "$FOLLOW_AGY/brain/conv-own/plan.md"
-                printf "# Other Session Plan\n" > "$FOLLOW_AGY/brain/conv-foreign/foreign_plan.md"
-                touch -t 202001010000.10 "$FOLLOW_AGY/brain/conv-own/plan.md"
-                touch -t 202001010000.30 "$FOLLOW_AGY/brain/conv-foreign/foreign_plan.md"
-
-                # HOME is swapped only after init.lua ran, so lazy.nvim still loads from the real data dir
-                follow_nvim() {
-                    local cwd="$1"
-                    local lua_cmd="$2"
-                    local root="${3:-$FOLLOW_REPO}"
-                    (cd "$cwd" && env -u NVIM_IDE_SOCKET IDE_INITIAL_ROOT="$root" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" \
-                        -c "lua vim.env.HOME = '$FOLLOW_HOME'; vim.g.ide_claude_dir = '$FOLLOW_CLAUDE'; $lua_cmd" \
-                        -c "qa!" 2>&1 || true)
-                }
-                follow_plan_lua="IdeFollow.sync(true); io.stdout:write('PLAN:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t'))"
-                follow_report="io.stdout:write('FILE:' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') .. ' LINE:' .. vim.fn.line('.'))"
-
-                own_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
-
-                printf "# Subagent Report\n" > "$FOLLOW_AGY/brain/conv-sub/sub_report.md"
-                touch -t 202001010000.40 "$FOLLOW_AGY/brain/conv-sub/sub_report.md"
-                sub_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
-
-                # Claude Code shares ~/.claude/plans across projects; only plans named in this root's transcripts belong here
-                printf "# Claude Plan\n" > "$FOLLOW_CLAUDE/plans/own-claude-plan.md"
-                printf "# Other Claude Plan\n" > "$FOLLOW_CLAUDE/plans/foreign-claude-plan.md"
-                printf '{"type":"assistant","cwd":"%s","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"%s"}}]}}\n' \
-                    "$FOLLOW_REPO_REAL" "$FOLLOW_CLAUDE/plans/own-claude-plan.md" > "$CLAUDE_PROJECT/session-1.jsonl"
-                touch -t 202001010000.50 "$FOLLOW_CLAUDE/plans/own-claude-plan.md"
-                touch -t 202001010000.55 "$CLAUDE_PROJECT/session-1.jsonl"
-                touch -t 202001010001.00 "$FOLLOW_CLAUDE/plans/foreign-claude-plan.md"
-                claude_follow_out="$(follow_nvim "$FOLLOW_REPO" "$follow_plan_lua")"
-
-                if grep -Fq "PLAN:plan.md" <<< "$own_follow_out" && \
-                   grep -Fq "PLAN:sub_report.md" <<< "$sub_follow_out" && \
-                   grep -Fq "PLAN:own-claude-plan.md" <<< "$claude_follow_out"; then
-                    pass "AI Live-Follow Mode (IdeFollow.sync) follows only this session's /plan artifacts (own agy conversation in the auto-detected ~/.gemini data dir, its subagents, and Claude plans named in this root's transcripts) while ignoring newer artifacts of concurrent ide sessions"
-                else
-                    fail "IdeFollow session-scoped artifacts" "Expected PLAN:plan.md, PLAN:sub_report.md, PLAN:own-claude-plan.md; got own=$own_follow_out sub=$sub_follow_out claude=$claude_follow_out"
-                fi
-
-                # Shell-driven edit (no edit-log record) caught by the background `git status` from an `icd` subdirectory
-                # root (porcelain paths are toplevel-relative), landing on its last diff hunk once git answers
-                printf "line1\nline2\nline3_ai_edited\nline4\n" > "$FOLLOW_REPO/tracked.go"
-                follow_out="$(follow_nvim "$FOLLOW_REPO/pkg" "IdeFollow.enabled = true; vim.wait(8000, function() IdeFollow.sync(false); return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':t') == 'tracked.go' and vim.fn.line('.') == 3 end, 50); $follow_report")"
-
-                # Your own :w is not AI activity: even once the background scan reports the file dirty, the cursor stays put
-                self_save_out="$(follow_nvim "$FOLLOW_REPO" "IdeFollow.enabled = true; vim.cmd('edit $FOLLOW_REPO/tracked.go'); vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'line1_user_edit' }); vim.cmd('silent write'); vim.api.nvim_win_set_cursor(0, { 1, 0 }); local moved = IdeFollow.sync(false); vim.wait(8000, function() return IdeFollow.vcs.scans >= 1 end, 20); moved = IdeFollow.sync(false) or moved; io.stdout:write('SELFSAVE:' .. tostring(moved) .. ' LINE:' .. vim.fn.line('.') .. ' SCANS:' .. IdeFollow.vcs.scans)")"
-
-                if grep -Fq "FILE:tracked.go LINE:3" <<< "$follow_out" && grep -Eq "SELFSAVE:false LINE:1 SCANS:[1-9]" <<< "$self_save_out"; then
-                    pass "AI Live-Follow Mode follows shell-driven edits found by the background git status from an icd subdirectory root to their diff hunk, and never re-jumps after your own :w saves"
-                else
-                    fail "IdeFollow git fallback / self-save" "Expected FILE:tracked.go LINE:3 and SELFSAVE:false LINE:1 after a scan, got code=$follow_out save=$self_save_out"
-                fi
-
-                # Edit-log records land on the exact edited line while git takes 3 s to answer: the tick never waits on a subprocess
-                REAL_GIT="$(command -v git)"
-                SLOW_GIT_DIR="$TEMP_HOME/slow_git_bin"
-                mkdir -p "$SLOW_GIT_DIR" "$FOLLOW_AGY/brain/conv-own/.system_generated/logs"
-                printf '#!/usr/bin/env bash\nset -euo pipefail\nsleep 3\nexec "%s" "$@"\n' "$REAL_GIT" > "$SLOW_GIT_DIR/git"
-                chmod +x "$SLOW_GIT_DIR/git"
-                printf 'l1\nl2\nl3\nl4\nl5\n}\n\tagyEdited := true\nl8\n' > "$FOLLOW_REPO/pkg/fast.go"
-                printf '{"step_index":7,"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"%s","StartLine":6,"EndLine":6,"ReplacementContent":"}\\n\\tagyEdited := true"}}]}\n' \
-                    "$FOLLOW_REPO/pkg/fast.go" > "$FOLLOW_AGY/brain/conv-own/.system_generated/logs/transcript_full.jsonl"
-                fast_out="$(PATH="$SLOW_GIT_DIR:$PATH" follow_nvim "$FOLLOW_REPO" "local uv = vim.uv or vim.loop; local t0 = uv.hrtime(); IdeFollow.sync(true); local ms = (uv.hrtime() - t0) / 1e6; $follow_report; io.stdout:write(' FAST:' .. (ms < 500 and 1 or 0))")"
-
-                # Claude Code `Edit` records carry no line numbers: the whole replacement block is located, not an earlier decoy of its first line
-                printf 'package pkg\n// see func claudeEdited() {\n// decoy\nfunc claudeEdited() {\n\treturn\n}\n' > "$FOLLOW_REPO/pkg/claude.go"
-                printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"%s","old_string":"func old() {","new_string":"func claudeEdited() {\\n\\treturn\\n}"}}]}}\n' \
-                    "$FOLLOW_REPO_REAL/pkg/claude.go" > "$CLAUDE_PROJECT/session-2.jsonl"
-                claude_edit_out="$(follow_nvim "$FOLLOW_REPO" "IdeFollow.sync(true); $follow_report")"
-
-                if grep -Fq "FILE:fast.go LINE:7 FAST:1" <<< "$fast_out" && grep -Fq "FILE:claude.go LINE:4" <<< "$claude_edit_out"; then
-                    pass "AI Live-Follow Mode lands agy and Claude Code edit-log records on the exact edited line without waiting on a slow git"
-                else
-                    fail "IdeFollow edit logs" "Expected FILE:fast.go LINE:7 FAST:1 and FILE:claude.go LINE:4, got agy=$fast_out claude=$claude_edit_out"
-                fi
-
-                # Mercurial-style workspace without git (`.hg` marker): this session's edit in a sibling directory of its root is
-                # followed, while newer edits by another session's conversation, to AI scratch files, and outside the workspace are not
-                HG_WS="$TEMP_HOME/hg_ws_test"
-                HG_ROOT="$HG_WS/src/experimental/app"
-                HG_LOG="$FOLLOW_AGY/brain/conv-hg/.system_generated/logs/transcript_full.jsonl"
-                mkdir -p "$HG_WS/.hg" "$HG_ROOT" "$HG_WS/src/configs" "$TEMP_HOME/outside" \
-                    "$FOLLOW_AGY/brain/conv-hg/.system_generated/logs" "$FOLLOW_AGY/brain/conv-hg/scratch" \
-                    "$FOLLOW_AGY/brain/conv-foreign/.system_generated/logs" "$FOLLOW_AGY/brain/conv-hg2/.system_generated/logs"
-                printf '{"display":"hg","timestamp":3000,"workspace":"%s","conversationId":"conv-hg"}\n' "$HG_ROOT" >> "$FOLLOW_AGY/cli/history.jsonl"
-                printf 'a1\na2\na3\n}\nhg_edit_marker = 1\na6\n' > "$HG_WS/src/configs/app.cfg"
-                printf 'foreign\n' > "$HG_WS/src/configs/foreign.cfg"
-                printf 'print(1)\n' > "$FOLLOW_AGY/brain/conv-hg/scratch/probe.lua"
-                printf 'notes\n' > "$TEMP_HOME/outside/notes.txt"
-                {
-                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"%s","StartLine":4,"EndLine":4,"ReplacementContent":"}\\nhg_edit_marker = 1"}}]}\n' "$HG_WS/src/configs/app.cfg"
-                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"print(1)"}}]}\n' "$FOLLOW_AGY/brain/conv-hg/scratch/probe.lua"
-                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"notes"}}]}\n' "$TEMP_HOME/outside/notes.txt"
-                } > "$HG_LOG"
-                printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"foreign"}}]}\n' \
-                    "$HG_WS/src/configs/foreign.cfg" > "$FOLLOW_AGY/brain/conv-foreign/.system_generated/logs/transcript_full.jsonl"
-                touch -t 202101010000.10 "$HG_WS/src/configs/app.cfg"
-                touch -t 202101010000.20 "$HG_WS/src/configs/foreign.cfg"
-                touch -t 202101010000.30 "$FOLLOW_AGY/brain/conv-hg/scratch/probe.lua"
-                touch -t 202101010000.40 "$TEMP_HOME/outside/notes.txt"
-                hg_out="$(follow_nvim "$HG_ROOT" "IdeFollow.sync(true); $follow_report" "$HG_ROOT")"
-
-                # A conversation with only the compact `transcript.jsonl` (every argument value JSON-encoded)
-                printf '{"display":"hg2","timestamp":4000,"workspace":"%s","conversationId":"conv-hg2"}\n' "$HG_ROOT" >> "$FOLLOW_AGY/cli/history.jsonl"
-                printf 'c1\ncompact_marker = 2\nc3\n' > "$HG_WS/src/configs/compact.cfg"
-                printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"\\"%s\\"","StartLine":"2","EndLine":"2","ReplacementContent":"\\"compact_marker = 2\\""}}],"truncated_fields":["tool_calls"]}\n' \
-                    "$HG_WS/src/configs/compact.cfg" > "$FOLLOW_AGY/brain/conv-hg2/.system_generated/logs/transcript.jsonl"
-                touch -t 202101010000.50 "$HG_WS/src/configs/compact.cfg"
-                hg2_out="$(follow_nvim "$HG_ROOT" "IdeFollow.sync(true); $follow_report" "$HG_ROOT")"
-
-                # A running Editor follows only what is logged after it started: existing records are skipped, new ones followed
-                LATE_CFG="$HG_WS/src/configs/late.cfg"
-                late_out="$(follow_nvim "$HG_ROOT" "IdeFollow.start_timer(); vim.wait(200); local primed = vim.tbl_count(IdeFollow.edits); IdeFollow.enabled = true; vim.fn.writefile({ vim.json.encode({ type = 'PLANNER_RESPONSE', tool_calls = { { name = 'replace_file_content', args = { TargetFile = '$LATE_CFG', StartLine = 3, EndLine = 3, ReplacementContent = 'late_marker = 3' } } } }) }, '$HG_LOG', 'a'); vim.fn.writefile({ 'l1', 'l2', 'late_marker = 3', 'l4' }, '$LATE_CFG'); IdeFollow.sync(false); $follow_report; io.stdout:write(' PRIMED:' .. primed .. ' EDITS:' .. vim.tbl_count(IdeFollow.edits))" "$HG_ROOT")"
-
-                if grep -Fq "FILE:app.cfg LINE:5" <<< "$hg_out" && \
-                   grep -Fq "FILE:compact.cfg LINE:2" <<< "$hg2_out" && \
-                   grep -Fq "FILE:late.cfg LINE:3 PRIMED:0 EDITS:1" <<< "$late_out"; then
-                    pass "AI Live-Follow Mode follows this session's edit logs in a Mercurial-style workspace without git (full and compact transcripts), ignores other sessions, AI scratch files, and paths outside the workspace, and skips edits logged before the Editor started"
-                else
-                    fail "IdeFollow Mercurial edit logs" "Expected FILE:app.cfg LINE:5, FILE:compact.cfg LINE:2, FILE:late.cfg LINE:3 PRIMED:0 EDITS:1; got hg=$hg_out compact=$hg2_out late=$late_out"
-                fi
-
-                # A session launched in $HOME itself: its workspace contains ~/.gemini, yet the AI's own state (a newer
-                # scratch file in its data dir) is still never followed, only the project edit
-                HOME_LOG="$FOLLOW_AGY/brain/conv-home/.system_generated/logs/transcript_full.jsonl"
-                mkdir -p "$FOLLOW_HOME/notes" "$FOLLOW_AGY/brain/conv-home/.system_generated/logs" "$FOLLOW_AGY/brain/conv-home/scratch"
-                printf '{"display":"home","timestamp":5000,"workspace":"%s","conversationId":"conv-home"}\n' "$FOLLOW_HOME" >> "$FOLLOW_AGY/cli/history.jsonl"
-                printf 'h1\nhome_marker = 1\nh3\n' > "$FOLLOW_HOME/notes/todo.cfg"
-                printf 'print(2)\n' > "$FOLLOW_AGY/brain/conv-home/scratch/probe2.lua"
-                {
-                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"replace_file_content","args":{"TargetFile":"%s","StartLine":2,"EndLine":2,"ReplacementContent":"home_marker = 1"}}]}\n' "$FOLLOW_HOME/notes/todo.cfg"
-                    printf '{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"write_to_file","args":{"TargetFile":"%s","CodeContent":"print(2)"}}]}\n' "$FOLLOW_AGY/brain/conv-home/scratch/probe2.lua"
-                } > "$HOME_LOG"
-                touch -t 202101010001.00 "$FOLLOW_HOME/notes/todo.cfg"
-                touch -t 202101010001.10 "$FOLLOW_AGY/brain/conv-home/scratch/probe2.lua"
-                home_out="$(follow_nvim "$FOLLOW_HOME" "IdeFollow.sync(true); $follow_report" "$FOLLOW_HOME")"
-
-                if grep -Fq "FILE:todo.cfg LINE:2" <<< "$home_out"; then
-                    pass "AI Live-Follow Mode never follows the AI tools' own state (~/.gemini, agy's data dir), even when the session's workspace contains it"
-                else
-                    fail "IdeFollow AI-state exclusion" "Expected FILE:todo.cfg LINE:2, got: $home_out"
-                fi
-
-                # Transient auto-followed buffers are cleaned up as IdeFollow advances from file to file, while
-                # pre-existing user-opened buffers and auto-followed buffers the user edits/saves stay buflisted
-                printf 'user kept\n' > "$HG_WS/src/configs/user_kept.cfg"
-                printf 'step 1\n' > "$HG_WS/src/configs/step1.cfg"
-                printf 'step 2\n' > "$HG_WS/src/configs/step2.cfg"
-                printf 'step 3\n' > "$HG_WS/src/configs/step3.cfg"
-                transient_lua="
-                    IdeFollow.enabled = true
-                    vim.cmd('edit $HG_WS/src/configs/user_kept.cfg')
-                    local function touch_and_log(path, sec)
-                        local f = io.open('$HG_LOG', 'a')
-                        f:write(vim.json.encode({ type = 'PLANNER_RESPONSE', tool_calls = { { name = 'write_to_file', args = { TargetFile = path, CodeContent = 'x' } } } }) .. '\\n')
-                        f:close()
-                        vim.uv.fs_utime(path, sec, sec)
-                        IdeFollow.sync(false)
-                    end
-                    touch_and_log('$HG_WS/src/configs/step1.cfg', 1800000001)
-                    touch_and_log('$HG_WS/src/configs/step2.cfg', 1800000002)
-                    -- Promote step2.cfg by saving it as the user, then follow step3.cfg and user_kept.cfg
-                    vim.cmd('silent write')
-                    touch_and_log('$HG_WS/src/configs/step3.cfg', 1800000003)
-                    touch_and_log('$HG_WS/src/configs/user_kept.cfg', 1800000004)
-                    local listed = {}
-                    for _, b in ipairs(vim.api.nvim_list_bufs()) do
-                        if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].buflisted then
-                            local n = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ':t')
-                            if n ~= '' then table.insert(listed, n) end
-                        end
-                    end
-                    table.sort(listed)
-                    io.stdout:write('LISTED:' .. table.concat(listed, ','))
-                "
-                transient_out="$(follow_nvim "$HG_ROOT" "$transient_lua" "$HG_ROOT")"
-                if grep -Fq "LISTED:step2.cfg,user_kept.cfg" <<< "$transient_out"; then
-                    pass "AI Live-Follow Mode automatically closes previous transient auto-followed buffers while preserving pre-existing user-opened and user-saved buffers"
-                else
-                    fail "IdeFollow transient buffer cleanup" "Expected LISTED:step2.cfg,user_kept.cfg (step1.cfg and step3.cfg auto-closed), got: $transient_out"
-                fi
+                fail "Neovim autoread / mini.files keymaps" "Expected AR:1 LINE:after_external_edit ME:1 MEE:1, got: $autoread_out"
             fi
         else
-            pass "In-process SolarizedIdeTree and IdeFollow skipped headless runtime check (nvim not installed on runner)"
+            pass "Neovim autoread and mini.files skipped headless runtime check (nvim not installed on runner)"
         fi
 
         # Verify `bin/ide --cd <subdir>` and `bin/ide --cd --reset` update @ide_workdir without respawning the AI pane
         mkdir -p "$IDE_WS_3P/subdir/sub2"
         ai_pid_before_cd="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
-        "$SCRIPT_DIR/bin/ide" --cd "$IDE_WS_3P/subdir" "ide-ws_3pane_test" >/dev/null 2>&1
-        wdir_after_dive="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_workdir 2>/dev/null || true)"
-        "$SCRIPT_DIR/bin/ide" --cd --reset "ide-ws_3pane_test" >/dev/null 2>&1
-        wdir_after_reset="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --cd "$IDE_WS_3P/subdir" "ws_3pane_test" >/dev/null 2>&1
+        wdir_after_dive="$(tmux show-options -qv -t "ws_3pane_test" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --cd --reset "ws_3pane_test" >/dev/null 2>&1
+        wdir_after_reset="$(tmux show-options -qv -t "ws_3pane_test" @ide_workdir 2>/dev/null || true)"
         ai_pid_after_cd="$(tmux display-message -p -t "$ai_pane" "#{pane_pid}")"
         expected_dive_dir="$(cd "$IDE_WS_3P/subdir" && pwd -P)"
         expected_init_dir="$(cd "$IDE_WS_3P" && pwd -P)"
         if [ "$wdir_after_dive" = "$expected_dive_dir" ] && [ "$wdir_after_reset" = "$expected_init_dir" ] && [ "$ai_pid_before_cd" = "$ai_pid_after_cd" ]; then
-            pass "bin/ide --cd <dir> and --reset synchronize @ide_workdir across Editor, IdeTree, and Shell without killing or respawning the AI Agent pane"
+            pass "bin/ide --cd <dir> and --reset synchronize @ide_workdir across Editor and Shell without killing or respawning the AI Agent pane"
         else
             fail "bin/ide --cd" "Expected dive=$expected_dive_dir reset=$expected_init_dir ai_pid=$ai_pid_before_cd==$ai_pid_after_cd (got dive=$wdir_after_dive reset=$wdir_after_reset)"
         fi
 
         # Verify `bin/ide --open-link` resolves session socket for file://#L<line>, filepath:line, trailing-colon compiler diagnostics (filepath:line:col:),
-        # markdown [label](file:///...#L<start>-L<end>) in word, line-wrapped markdown [`label`](file:///truncated..., percent-encoded %23L<line>, and workspace basename resolution (unparking Editor if hidden)
+        # markdown [label](file:///...#L<start>-L<end>) in word, line-wrapped markdown [`label`](file:///truncated..., file URLs with parentheses,
+        # Read(...) tool headers, collapsed 3-arg invocations, and workspace basename resolution (unparking Editor if hidden)
         printf "line1\nline2\nline3\n" > "$IDE_WS_3P/subdir/nested.txt"
-        sock_3p="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_socket 2>/dev/null || true)"
+        mkdir -p "$IDE_WS_3P/app/(auth)"
+        printf "auth1\nauth2\nauth3\n" > "$IDE_WS_3P/app/(auth)/route.ts"
+        sock_3p="$(tmux show-options -qv -t "ws_3pane_test" @ide_socket 2>/dev/null || true)"
         link_nvim_pid=""
-        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ ! -S "$sock_3p" ]; then
-            nvim --headless --listen "$sock_3p" >/dev/null 2>&1 &
-            link_nvim_pid=$!
-            for _ in $(seq 1 30); do
+        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ]; then
+            for _ in $(seq 1 40); do
                 [ -S "$sock_3p" ] && break
                 sleep 0.05
             done
+            if [ ! -S "$sock_3p" ]; then
+                nvim --headless --listen "$sock_3p" >/dev/null 2>&1 &
+                link_nvim_pid=$!
+                for _ in $(seq 1 30); do
+                    [ -S "$sock_3p" ] && break
+                    sleep 0.05
+                done
+            fi
         fi
-        "$SCRIPT_DIR/bin/ide" --toggle "ide-ws_3pane_test"
-        if "$SCRIPT_DIR/bin/ide" --open-link "file://$IDE_WS_3P/subdir/nested.txt#L2" "" "$IDE_WS_3P" "ide-ws_3pane_test"; then
+        "$SCRIPT_DIR/bin/ide" --toggle "ws_3pane_test"
+        if "$SCRIPT_DIR/bin/ide" --open-link "file://$IDE_WS_3P/subdir/nested.txt#L2" "" "$IDE_WS_3P" "ws_3pane_test"; then
             line_after_href="2"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                 line_after_href="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
             fi
-            if "$SCRIPT_DIR/bin/ide" --open-link "" "(subdir/nested.txt:3:1):" "$IDE_WS_3P" "ide-ws_3pane_test"; then
+            if "$SCRIPT_DIR/bin/ide" --open-link "" "(subdir/nested.txt:3:1):" "$IDE_WS_3P" "ws_3pane_test"; then
                 line_after_word="3"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_word="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                # Markdown [label](file:///...#L1-L3) in $word, line-wrapped [`nested.txt:3`](file:///truncated, and basename nested.txt#L2-L3 while Editor is parked
-                "$SCRIPT_DIR/bin/ide" --open-link "" "[nested.txt](file://$IDE_WS_3P/subdir/nested.txt#L1-L3)" "$IDE_WS_3P" "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "[nested.txt](file://$IDE_WS_3P/subdir/nested.txt#L1-L3)" "$IDE_WS_3P" "ws_3pane_test"
                 line_after_md="1"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_md="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                "$SCRIPT_DIR/bin/ide" --open-link "" "[\`nested.txt:3\`](file://$IDE_WS_3P/subdir/truncated_wrap" "$IDE_WS_3P" "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "[\`nested.txt:3\`](file://$IDE_WS_3P/subdir/truncated_wrap" "$IDE_WS_3P" "ws_3pane_test"
                 line_after_wrap="3"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_wrap="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                "$SCRIPT_DIR/bin/ide" --toggle-editor "ide-ws_3pane_test"
-                "$SCRIPT_DIR/bin/ide" --open-link "" "nested.txt#L2-L3" "$IDE_WS_3P" "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --toggle-editor "ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "nested.txt#L2-L3" "$IDE_WS_3P" "ws_3pane_test"
                 line_after_base="2"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_base="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                # Collapsed 3-arg invocation (when unquoted empty #{q:mouse_hyperlink} vanished), AI transcript `[`sym`](file://...#L2)`, and `Read(...)` wrapper
-                "$SCRIPT_DIR/bin/ide" --open-link "nested.txt:3" "$IDE_WS_3P" "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "nested.txt:3" "$IDE_WS_3P" "ws_3pane_test"
                 line_after_collapsed="3"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_collapsed="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                mkdir -p "$TEMP_HOME/.gemini/app/cli" "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/logs"
-                printf '{"timestamp":9000,"workspace":"%s","conversationId":"conv-link-test"}\n' "$IDE_WS_3P" >> "$TEMP_HOME/.gemini/app/cli/history.jsonl"
-                printf '{"type":"PLANNER_RESPONSE","content":"See [`my_func_sym`](file://%s/subdir/nested.txt#L2-L3) for details."}\n' "$IDE_WS_3P" > "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/logs/transcript.jsonl"
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "my_func_sym." "$IDE_WS_3P" "ide-ws_3pane_test"
-                line_after_aisym="2"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    line_after_aisym="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
-                fi
-                "$SCRIPT_DIR/bin/ide" --open-link "" "Read($IDE_WS_3P/subdir/nested.txt:1)" "$IDE_WS_3P" "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "Read($IDE_WS_3P/subdir/nested.txt:1)" "$IDE_WS_3P" "ws_3pane_test"
                 line_after_tool="1"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     line_after_tool="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
-                active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_aisym" = "2" ] && [ "$line_after_tool" = "1" ]; then
-                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), AI transcript stripped [symbol](file:///...#L2) labels, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
-                else
-                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane and lines 2/3/1/3/2/3/2/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed aisym=$line_after_aisym tool=$line_after_tool"
-                fi
-                # Verify hidden-URL `[label](https://...)` web links in AI transcripts & session artifacts, $IDE_BROWSER / SSH OSC 52 fallback,
-                # and strict cross-session isolation (foreign conversations in ~/.gemini/*/brain/* and unreferenced ~/.claude/plans/* are ignored,
-                # while this session's subagents and Claude Code transcripts + referenced plans are resolved).
-                mkdir -p "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/subagents" \
-                         "$TEMP_HOME/.gemini/app/brain/conv-subagent-test/.system_generated/logs" \
-                         "$TEMP_HOME/.gemini/app/brain/conv-foreign/.system_generated/logs" \
-                         "$TEMP_HOME/.claude/plans"
-                printf '{"id":"conv-subagent-test"}\n' > "$TEMP_HOME/.gemini/app/brain/conv-link-test/.system_generated/subagents/sub1.json"
-                printf '{"type":"PLANNER_RESPONSE","content":"Subagent edited [`subagent_sym`](file://%s/subdir/nested.txt#L3) and linked [DesignSpec](https://example.com/design-spec?v=1#sec)."}\n' "$IDE_WS_3P" \
-                    > "$TEMP_HOME/.gemini/app/brain/conv-subagent-test/.system_generated/logs/transcript.jsonl"
-                printf '{"timestamp":9999,"workspace":"/tmp/other-foreign-ws","conversationId":"conv-foreign"}\n' >> "$TEMP_HOME/.gemini/app/cli/history.jsonl"
-                printf "foreign1\nforeign2\n" > "$IDE_WS_3P/subdir/foreign_target.txt"
-                printf '{"type":"PLANNER_RESPONSE","content":"Foreign [`foreign_sym`](file://%s/subdir/foreign_target.txt#L2) and [ForeignWeb](https://example.com/foreign)"}\n' "$IDE_WS_3P" \
-                    > "$TEMP_HOME/.gemini/app/brain/conv-foreign/.system_generated/logs/transcript.jsonl"
-                printf "foreign artifact\n" > "$TEMP_HOME/.gemini/app/brain/conv-foreign/foreign_plan.md"
-                printf "own artifact line 1\nown artifact line 2\n" > "$TEMP_HOME/.gemini/app/brain/conv-link-test/own_plan.md"
-                claude_enc="$(cd "$IDE_WS_3P" && pwd -P | sed 's/[^A-Za-z0-9_-]/-/g')"
-                mkdir -p "$TEMP_HOME/.claude/projects/$claude_enc"
-                printf "claude plan line 1\nclaude plan line 2\n" > "$TEMP_HOME/.claude/plans/session-plan.md"
-                printf "foreign claude plan\n" > "$TEMP_HOME/.claude/plans/unreferenced-foreign-plan.md"
-                printf '{"type":"assistant","message":{"content":[{"type":"text","text":"Updated %s/.claude/plans/session-plan.md and [ClaudeDoc](https://example.com/claude-doc)"}]}}\n' "$TEMP_HOME" \
-                    > "$TEMP_HOME/.claude/projects/$claude_enc/sess1.jsonl"
-
-                BROWSER_LOG="$TEMP_HOME/browser_urls.log"
-                BROWSER_STUB="$TEMP_HOME/browser_stub.sh"
-                printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$BROWSER_LOG" > "$BROWSER_STUB"
-                chmod +x "$BROWSER_STUB"
-                : > "$BROWSER_LOG"
-
-                # 1) Subagent file link `[subagent_sym](file://...#L3)` resolves to line 3
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "subagent_sym" "$IDE_WS_3P" "ide-ws_3pane_test"
-                line_after_subagent="3"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    line_after_subagent="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
-                fi
-                # 2) Foreign session's `[foreign_sym](file://...)` and `foreign_plan.md` and `unreferenced-foreign-plan.md` must NOT open in Editor
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "foreign_sym" "$IDE_WS_3P" "ide-ws_3pane_test"
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "foreign_plan.md:1" "$IDE_WS_3P" "ide-ws_3pane_test"
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "unreferenced-foreign-plan.md:1" "$IDE_WS_3P" "ide-ws_3pane_test"
-                buf_after_foreign="nested.txt"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    buf_after_foreign="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                fi
-                # 3) Own session's `own_plan.md:2` and Claude's referenced `session-plan.md:2` DO open in Editor
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "own_plan.md:2" "$IDE_WS_3P" "ide-ws_3pane_test"
-                buf_after_own_plan="own_plan.md"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    buf_after_own_plan="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                fi
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "session-plan.md:2" "$IDE_WS_3P" "ide-ws_3pane_test"
-                buf_after_claude_plan="session-plan.md"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    buf_after_claude_plan="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                fi
-                # 4) Hidden-URL `[DesignSpec](https://...)` and `[ClaudeDoc](https://...)` route to $IDE_BROWSER and copy to tmux buffer, while `[ForeignWeb](https://...)` is ignored.
-                # Also verify balanced parentheses in URLs (`[WikiScheme](https://en.wikipedia.org/wiki/Solarized_(color_scheme))`),
-                # file URLs with parentheses (`[route.ts](file://.../app/(auth)/route.ts#L2)`),
-                # bracketed/call labels (`[`arr[0]`](file://.../subdir/nested.txt#L2)` clicked as `arr`, `[`my_func()`](file://.../subdir/nested.txt#L3)` clicked as `my_func`),
-                # and $IDE_BROWSER with quoted flags containing spaces.
-                mkdir -p "$IDE_WS_3P/app/(auth)"
-                printf "auth1\nauth2\nauth3\n" > "$IDE_WS_3P/app/(auth)/route.ts"
-                printf '{"type":"PLANNER_RESPONSE","content":"See [WikiScheme](https://en.wikipedia.org/wiki/Solarized_(color_scheme)) and [`arr[0]`](file://%s/subdir/nested.txt#L2) and [`my_func()`](file://%s/subdir/nested.txt#L3)"}\n' \
-                    "$IDE_WS_3P" "$IDE_WS_3P" >> "$TEMP_HOME/.gemini/app/brain/conv-subagent-test/.system_generated/logs/transcript.jsonl"
-
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "[route.ts](file://$IDE_WS_3P/app/(auth)/route.ts#L2)" "$IDE_WS_3P" "ide-ws_3pane_test"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "[route.ts](file://$IDE_WS_3P/app/(auth)/route.ts#L2)" "$IDE_WS_3P" "ws_3pane_test"
                 buf_after_paren_file="route.ts:2"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                     bname="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
                     bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     buf_after_paren_file="${bname}:${bline}"
                 fi
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "arr" "$IDE_WS_3P" "ide-ws_3pane_test"
-                line_after_arr="2"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    line_after_arr="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
-                fi
-                HOME="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --open-link "" "my_func" "$IDE_WS_3P" "ide-ws_3pane_test"
-                line_after_func="3"
-                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    line_after_func="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
-                fi
-
-                HOME="$TEMP_HOME" IDE_BROWSER="$BROWSER_STUB" "$SCRIPT_DIR/bin/ide" --open-link "" "DesignSpec." "$IDE_WS_3P" "ide-ws_3pane_test"
-                tmux_url_buf="$(tmux show-buffer 2>/dev/null || true)"
-                HOME="$TEMP_HOME" IDE_BROWSER="$BROWSER_STUB" "$SCRIPT_DIR/bin/ide" --open-link "" "ClaudeDoc" "$IDE_WS_3P" "ide-ws_3pane_test"
-                HOME="$TEMP_HOME" IDE_BROWSER="\"$BROWSER_STUB\" --profile \"solarized dark\"" "$SCRIPT_DIR/bin/ide" --open-link "" "WikiScheme" "$IDE_WS_3P" "ide-ws_3pane_test"
-                HOME="$TEMP_HOME" IDE_BROWSER="$BROWSER_STUB" "$SCRIPT_DIR/bin/ide" --open-link "" "ForeignWeb" "$IDE_WS_3P" "ide-ws_3pane_test"
-                for _ in $(seq 1 30); do
-                    [ "$(wc -l < "$BROWSER_LOG" | tr -d ' ')" -ge 3 ] && break
-                    sleep 0.05
+                # Verify line-wrapped URLs in a tmux pane (e.g. broken after 'home-' onto an indented next line)
+                # are stitched back together when clicking either the first line or the continuation line.
+                WRAP_BROWSER_OUT="$TEMP_HOME/wrap_browser.out"
+                WRAP_BROWSER_BIN="$TEMP_HOME/wrap_browser.sh"
+                printf '#!/usr/bin/env bash\necho "$1" >> "%s"\n' "$WRAP_BROWSER_OUT" > "$WRAP_BROWSER_BIN"
+                chmod +x "$WRAP_BROWSER_BIN"
+                tmux select-pane -t "$term_pane"
+                tmux send-keys -t "$term_pane" " printf '  Submitted PR (https://github.com/lock14/home-\\n  settings/pull/118)\\n'" C-m
+                for _ in $(seq 1 25); do
+                    tmux capture-pane -p -t "$term_pane" 2>/dev/null | grep -Fq "settings/pull/118" && break
+                    sleep 0.02
                 done
-                browser_logged="$(tr '\n' '|' < "$BROWSER_LOG")"
-                if [ "$line_after_subagent" = "3" ] && [ "$buf_after_foreign" = "nested.txt" ] && \
-                   [ "$buf_after_own_plan" = "own_plan.md" ] && [ "$buf_after_claude_plan" = "session-plan.md" ] && \
-                   [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$line_after_arr" = "2" ] && [ "$line_after_func" = "3" ] && \
-                   [ "$tmux_url_buf" = "https://example.com/design-spec?v=1#sec" ] && \
-                   [ "$browser_logged" = "https://example.com/design-spec?v=1#sec|https://example.com/claude-doc|--profile solarized dark https://en.wikipedia.org/wiki/Solarized_(color_scheme)|" ]; then
-                    pass "bin/ide --open-link resolves hidden-URL [label](https://...) web links (including balanced parentheses in URLs and bracket/call labels) via \$IDE_BROWSER + OSC 52 tmux buffer and enforces strict cross-session transcript/artifact isolation"
+                IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "https://github.com/lock14/home-" "$IDE_WS_3P" "ws_3pane_test"
+                IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "settings/pull/118" "$IDE_WS_3P" "ws_3pane_test"
+                for _ in $(seq 1 25); do
+                    [ "$(wc -l < "$WRAP_BROWSER_OUT" 2>/dev/null | tr -d ' ')" = "2" ] && break
+                    sleep 0.02
+                done
+                wrap_url_line1="$(sed -n '1p' "$WRAP_BROWSER_OUT" 2>/dev/null || true)"
+                wrap_url_line2="$(sed -n '2p' "$WRAP_BROWSER_OUT" 2>/dev/null || true)"
+                rm -f "$WRAP_BROWSER_OUT" "$WRAP_BROWSER_BIN"
+                tmux select-pane -t "$ed_pane"
+                active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ]; then
+                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), line-wrapped URLs, file URLs with parentheses, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
                 else
-                    fail "bin/ide --open-link web links & cross-session isolation" "Expected subagent=3 foreign=nested.txt own_plan=own_plan.md claude_plan=session-plan.md paren_file=route.ts:2 arr=2 func=3 tmux_url=https://example.com/design-spec?v=1#sec browser='https://example.com/design-spec?v=1#sec|https://example.com/claude-doc|--profile solarized dark https://en.wikipedia.org/wiki/Solarized_(color_scheme)|', got subagent=$line_after_subagent foreign=$buf_after_foreign own=$buf_after_own_plan claude=$buf_after_claude_plan paren_file=$buf_after_paren_file arr=$line_after_arr func=$line_after_func tmux_url=$tmux_url_buf browser=$browser_logged"
+                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane, paren=route.ts:2, wrapped URLs=https://github.com/lock14/home-settings/pull/118, and lines 2/3/1/3/2/3/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file wrap1=$wrap_url_line1 wrap2=$wrap_url_line2"
                 fi
             else
                 fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
@@ -797,7 +550,8 @@ if command -v tmux >/dev/null 2>&1; then
             rm -f "$sock_3p"
         fi
 
-        # Verify `bin/ide --copy` populates tmux buffer (`load-buffer -w` for OSC 52) AND broadcasts to X11 (`xsel -ib`) after discovering DISPLAY from tmux,
+        # Verify `bin/ide --copy` populates tmux buffer (`load-buffer -w` for OSC 52) AND broadcasts to X11 (`xsel -ib`) after discovering DISPLAY from tmux
+        # (even when the session environment has `-DISPLAY` from headless session creation),
         # and `bin/ide --paste` prefers X11 on local desktop vs tmux buffer over SSH.
         COPY_MOCK_DIR="$(mktemp -d)"
         cat > "$COPY_MOCK_DIR/xsel" <<'SH'
@@ -813,6 +567,7 @@ fi
 exit 1
 SH
         chmod +x "$COPY_MOCK_DIR/xsel"
+        tmux set-environment -t "ws_3pane_test" -r DISPLAY 2>/dev/null || true
         tmux set-environment -g DISPLAY ":99"
         printf "solarized-clipboard-payload" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
         copy_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
@@ -834,38 +589,37 @@ SH
         fi
 
         # Verify untagged pane recovery when @ide_term_pane and pane's @ide_role are cleared (tests tmux_out preserving trailing \t)
-        tmux set-option -u -t "ide-ws_3pane_test" @ide_term_pane 2>/dev/null || true
-        tmux set-environment -t "ide-ws_3pane_test" -r IDE_TERM_PANE 2>/dev/null || true
+        tmux set-option -u -t "ws_3pane_test" @ide_term_pane 2>/dev/null || true
+        tmux set-environment -t "ws_3pane_test" -r IDE_TERM_PANE 2>/dev/null || true
         tmux set-option -p -u -t "$term_pane" @ide_role 2>/dev/null || true
-        "$SCRIPT_DIR/bin/ide" --show-term "ide-ws_3pane_test"
-        recovered_term_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_term_pane 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --show-term "ws_3pane_test"
+        recovered_term_pane="$(tmux show-options -qv -t "ws_3pane_test" @ide_term_pane 2>/dev/null || true)"
         recovered_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
 
         # Verify self-healing when Right Full-Height Editor pane is closed while Left AI and Shell panes remain,
         # AND when Neovim exits back to an interactive shell inside an existing Editor pane (`--show-editor` revives Neovim in-place without bouncing away)
         tmux kill-pane -t "$ed_pane" 2>/dev/null || true
-        "$SCRIPT_DIR/bin/ide" --focus-editor "ide-ws_3pane_test"
-        healed_ed_pane="$(tmux show-options -qv -t "ide-ws_3pane_test" @ide_editor_pane 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --focus-editor "ws_3pane_test"
+        healed_ed_pane="$(tmux show-options -qv -t "ws_3pane_test" @ide_editor_pane 2>/dev/null || true)"
         healed_ed_left="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_left}" 2>/dev/null || echo 0)"
         healed_ed_top="$(tmux display-message -p -t "$healed_ed_pane" "#{pane_top}" 2>/dev/null || echo 1)"
         healed_pane_cnt="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
         tmux respawn-pane -k -t "$healed_ed_pane" 2>/dev/null || true
+        tmux set-option -p -u -t "$healed_ed_pane" @ide_nvim_launch_ts 2>/dev/null || true
         rm -f "$sock_3p"
-        tmux set-option -p -q -t "$healed_ed_pane" @ide_nvim_launch_ts "0" 2>/dev/null || true
         REVIVE_STUB_DIR="$TEMP_HOME/revive_nvim_stub"
         mkdir -p "$REVIVE_STUB_DIR"
         printf '#!/usr/bin/env bash\nexit 0\n' > "$REVIVE_STUB_DIR/nvim"
         chmod +x "$REVIVE_STUB_DIR/nvim"
-        PATH="$PATH:$REVIVE_STUB_DIR" "$SCRIPT_DIR/bin/ide" --show-editor "ide-ws_3pane_test"
+        PATH="$PATH:$REVIVE_STUB_DIR" "$SCRIPT_DIR/bin/ide" --show-editor "ws_3pane_test"
         rm -rf "$REVIVE_STUB_DIR"
         revived_active_pane="$(tmux display-message -p -t "$main_win" "#{pane_id}" 2>/dev/null || true)"
-        revived_launch_ts="$(tmux display-message -p -t "$healed_ed_pane" "#{@ide_nvim_launch_ts}" 2>/dev/null || echo 0)"
         if [ "$recovered_pane_cnt" = "3" ] && [ "$recovered_term_pane" = "$term_pane" ] && \
            [ "$healed_pane_cnt" = "3" ] && [ "${healed_ed_left:-0}" -gt 0 ] && [ "${healed_ed_top:-1}" = "0" ] && \
-           [ "$revived_active_pane" = "$healed_ed_pane" ] && [ "$revived_launch_ts" != "0" ] && [ -n "$revived_launch_ts" ]; then
+           [ "$revived_active_pane" = "$healed_ed_pane" ]; then
             pass "bin/ide recovers untagged existing panes without duplicating, self-heals Right Full-Height Editor pane if closed, and revives exited Neovim in-place on --show-editor"
         else
-            fail "bin/ide Editor pane self-heal / untagged recovery" "Expected recovered_term=$term_pane (got $recovered_term_pane, panes=$recovered_pane_cnt), 3 panes with healed Right Editor at left>0,top=0 (got panes=$healed_pane_cnt left=$healed_ed_left top=$healed_ed_top), and revived Editor active=$healed_ed_pane ts!=0 (got active=$revived_active_pane ts=$revived_launch_ts)"
+            fail "bin/ide Editor pane self-heal / untagged recovery" "Expected recovered_term=$term_pane (got $recovered_term_pane, panes=$recovered_pane_cnt), 3 panes with healed Right Editor at left>0,top=0 (got panes=$healed_pane_cnt left=$healed_ed_left top=$healed_ed_top), and revived Editor active=$healed_ed_pane (got active=$revived_active_pane)"
         fi
 
         # Verify resolve_nvim_bin numerical version sorting (0.11.0 chosen over 0.9.5 when multiple versions exist)
@@ -894,21 +648,19 @@ PYTEST
             fail "bin/ide resolve_nvim_bin version sort" "Expected */0.11.0/bin/nvim, got '$resolved_ver'"
         fi
 
-        "$SCRIPT_DIR/bin/ide" --quit --force "ide-ws_3pane_test" >/dev/null 2>&1
-        if ! tmux has-session -t "ide-ws_3pane_test" 2>/dev/null; then
+        "$SCRIPT_DIR/bin/ide" --quit --force "ws_3pane_test" >/dev/null 2>&1
+        if ! tmux has-session -t "ws_3pane_test" 2>/dev/null; then
             pass "bin/ide --quit terminates the entire IDE workspace session cleanly"
         else
-            fail "bin/ide --quit" "Session ide-ws_3pane_test still exists after --quit"
-            "$SCRIPT_DIR/bin/ide" --kill "ide-ws_3pane_test" >/dev/null 2>&1
+            fail "bin/ide --quit" "Session ws_3pane_test still exists after --quit"
+            "$SCRIPT_DIR/bin/ide" --kill "ws_3pane_test" >/dev/null 2>&1
         fi
     else
-        fail "bin/ide 3-pane creation" "Session ide-ws_3pane_test was not created"
+        fail "bin/ide 3-pane creation" "Session ws_3pane_test was not created"
     fi
 
-    # `ide --quit` stays inside its own session. It used to type `:qa!` into the Editor, whose `:qa` -> `:Q`
-    # abbreviation spawned a second, untargeted `ide --quit`; by the time that ran its session was gone, tmux
-    # answered "the current session" with the most recently used one, and one quit cascaded through every
-    # session on the server. Bare `-t NAME` targets also prefix-matched other sessions (`ide-foo` -> `ide-foobar`).
+    # `ide --quit` stays inside its own session: closing the Editor via `<Cmd>qall!<CR>` never triggers a recursive
+    # `:Q` call, and exact `-t =NAME` targets prevent prefix-matching other sessions (`foo` -> `foobar`).
     session_alive() { tmux has-session -t "=$1" 2>/dev/null; }
     all_alive() {
         local s
@@ -919,6 +671,7 @@ PYTEST
     tmux_env_of() { tmux display-message -p -t "$1:" '#{socket_path},#{pid},#{session_id}' 2>/dev/null | tr -d '$' || true; }
     tmux new-session -d -s "plain-bystander" -x 120 -y 40
     tmux new-session -d -s "ide-bystander" -x 120 -y 40
+    tmux set-option -t "=ide-bystander:" @ide_session "ide-bystander"
 
     if command -v nvim >/dev/null 2>&1; then
         QUIT_HOME="$TEMP_HOME/quit_stub_home"
@@ -929,28 +682,29 @@ PYTEST
         chmod +x "$QUIT_HOME/.local/bin/ide"
         : > "$QUIT_LOG"
         # The Editor's `:Q` runs `$HOME/.local/bin/ide --quit`: HOME is swapped to a logging stub after init.lua ran
-        tmux new-session -d -s "ide-quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" \
+        tmux new-session -d -s "quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" \
             "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$QUIT_SOCK' -c \"lua vim.env.HOME = '$QUIT_HOME'\""
-        tmux set-option -t "ide-quit-editor" @ide_socket "$QUIT_SOCK"
-        quit_abbrev=""
+        tmux set-option -t "=quit-editor:" @ide_socket "$QUIT_SOCK"
         for _ in $(seq 1 100); do
-            if [ -S "$QUIT_SOCK" ]; then
-                quit_abbrev="$(nvim --headless --server "$QUIT_SOCK" --remote-expr "execute('cabbrev qa!')" 2>/dev/null || true)"
-                grep -Fq "'Q!'" <<< "$quit_abbrev" && break
+            if [ -S "$QUIT_SOCK" ] && nvim --headless --server "$QUIT_SOCK" --remote-expr "1" >/dev/null 2>&1; then
+                break
             fi
             sleep 0.1
         done
-        "$SCRIPT_DIR/bin/ide" --quit "ide-quit-editor" >/dev/null 2>&1 || true
-        sleep 1
+        "$SCRIPT_DIR/bin/ide" --quit "quit-editor" >/dev/null 2>&1 || true
+        for _ in $(seq 1 40); do
+            session_alive "quit-editor" || break
+            sleep 0.05
+        done
         quit_log="$(cat "$QUIT_LOG")"
-        if grep -Fq "'Q!'" <<< "$quit_abbrev" && [ -z "$quit_log" ] && ! session_alive "ide-quit-editor" && \
+        if [ -z "$quit_log" ] && ! session_alive "quit-editor" && \
            all_alive "ide-bystander" "plain-bystander"; then
-            pass "bin/ide --quit closes the Editor past its :qa! -> :Q! abbreviation, so the Editor never spawns a second, untargeted ide --quit and other sessions survive"
+            pass "bin/ide --quit closes the Editor via <Cmd>qall!<CR> without spawning a second ide --quit, and other sessions survive"
         else
-            fail "bin/ide --quit Editor close" "Expected the Editor's :qa! -> :Q! abbreviation (got: ${quit_abbrev:-none}), no ide calls from the Editor (got: ${quit_log:-none}), ide-quit-editor gone, and both bystanders alive"
+            fail "bin/ide --quit Editor close" "Expected no ide calls from the Editor (got: ${quit_log:-none}), quit-editor gone, and both bystanders alive"
         fi
 
-        # Quitting from inside the Editor (`:Q`, `:qa`, `<leader>q`) starts a detached `ide --quit <its session>` that closes
+        # Quitting from inside the Editor (`:Q`, `:Quit`, `<leader>q`, `<M-q>`) starts a detached `ide --quit <its session>` that closes
         # this Editor: it must outlive it and kill exactly its own session (a 2nd pane keeps the session alive like the AI
         # and Shell panes). IDE_SESSION is set on the pane the way bin/ide sets it on every pane it creates.
         SELF_HOME="$TEMP_HOME/quit_self_home"
@@ -960,34 +714,32 @@ PYTEST
         printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\nexec %q "$@"\n' "$SELF_LOG" "$SCRIPT_DIR/bin/ide" > "$SELF_HOME/.local/bin/ide"
         chmod +x "$SELF_HOME/.local/bin/ide"
         : > "$SELF_LOG"
-        tmux new-session -d -s "ide-quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=ide-quit-self" \
+        tmux new-session -d -s "quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=quit-self" \
             "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
-        tmux split-window -d -t "ide-quit-self:" "sleep 600"
-        tmux set-option -t "ide-quit-self" @ide_socket "$SELF_SOCK"
-        self_abbrev=""
+        tmux split-window -d -t "quit-self:" "sleep 600"
+        tmux set-option -t "=quit-self:" @ide_socket "$SELF_SOCK"
         for _ in $(seq 1 100); do
-            if [ -S "$SELF_SOCK" ]; then
-                self_abbrev="$(nvim --headless --server "$SELF_SOCK" --remote-expr "execute('cabbrev qa!')" 2>/dev/null || true)"
-                grep -Fq "'Q!'" <<< "$self_abbrev" && break
+            if [ -S "$SELF_SOCK" ] && nvim --headless --server "$SELF_SOCK" --remote-expr "1" >/dev/null 2>&1; then
+                break
             fi
-            sleep 0.1
+            sleep 0.05
         done
         nvim --headless --server "$SELF_SOCK" --remote-send "<C-\\><C-n>:Q<CR>" >/dev/null 2>&1 || true
-        for _ in $(seq 1 50); do
-            session_alive "ide-quit-self" || break
-            sleep 0.1
+        for _ in $(seq 1 60); do
+            session_alive "quit-self" || break
+            sleep 0.05
         done
-        sleep 0.5
+        sleep 0.05
         self_log="$(cat "$SELF_LOG")"
-        if grep -Fq "'Q!'" <<< "$self_abbrev" && [ "$self_log" = "--quit ide-quit-self" ] && ! session_alive "ide-quit-self" && \
+        if [ "$self_log" = "--quit quit-self" ] && ! session_alive "quit-self" && \
            all_alive "ide-bystander" "plain-bystander"; then
-            pass "Quitting from inside the Editor (:Q, :qa, <leader>q) runs exactly one ide --quit naming its own session, which outlives the Editor it closes and kills only that session"
+            pass "Quitting from inside the Editor (:Q, :Quit, <leader>q, <M-q>) runs exactly one ide --quit naming its own session, which outlives the Editor it closes and kills only that session"
         else
-            fail "Editor-initiated ide --quit" "Expected exactly one '--quit ide-quit-self' call (got: ${self_log:-none}), ide-quit-self gone, and both bystanders alive; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+            fail "Editor-initiated ide --quit" "Expected exactly one '--quit quit-self' call (got: ${self_log:-none}), quit-self gone, and both bystanders alive; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
         fi
 
         # Every Editor `ide` call names the Editor's session like the tmux key bindings do, in the argument positions
-        # bin/ide parses (`--quit --force NAME`, `--cd DIR NAME`), and leaves it out without an ide-* $IDE_SESSION
+        # bin/ide parses (`--quit --force NAME`, `--cd DIR NAME`), and leaves it out without a non-empty $IDE_SESSION
         ARGS_HOME="$TEMP_HOME/editor_args_home"
         ARGS_LOG="$TEMP_HOME/editor_args.log"
         ARGS_DIR="$TEMP_HOME/editor_args_dir"
@@ -998,14 +750,14 @@ PYTEST
         cat > "$TEMP_HOME/editor_args.lua" <<LUA
 vim.env.HOME = [[$ARGS_HOME]]
 local function as(sess, fn) vim.env.IDE_SESSION = sess; pcall(fn) end
-as("ide-args", function() vim.cmd("Q") end)
-as("ide-args", function() vim.cmd("Q!") end)
-as("ide-args", function() IdeTree.dive([[$ARGS_DIR]]) end)
-as("ide-args", function() vim.fn.maparg("<leader>a", "n", false, true).callback() end)
-as("ide-args", function() vim.fn.maparg("<M-E>", "n", false, true).callback() end)
-as("ide-args", function() vim.fn.maparg("<M-H>", "n", false, true).callback() end)
+as("args-sess", function() vim.cmd("Q") end)
+as("args-sess", function() vim.cmd("Q!") end)
+as("args-sess", function() vim.cmd("IdeCd $ARGS_DIR") end)
+as("args-sess", function() vim.fn.maparg("<leader>a", "n", false, true).callback() end)
+as("args-sess", function() vim.fn.maparg("<M-E>", "n", false, true).callback() end)
+as("args-sess", function() vim.fn.maparg("<M-H>", "n", false, true).callback() end)
 as(nil, function() vim.cmd("Q") end)
-as("args", function() vim.cmd("Q") end)
+as("", function() vim.cmd("Q") end)
 vim.cmd("qa!")
 LUA
         # A TMUX value naming no server: the stub never calls tmux, and nothing here can reach a real one
@@ -1013,12 +765,12 @@ LUA
             nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" -c "source $TEMP_HOME/editor_args.lua" -c 'qa!' >/dev/null 2>&1 || true
         for _ in $(seq 1 50); do
             [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 8 ] && break
-            sleep 0.1
+            sleep 0.05
         done
         args_log="$(LC_ALL=C sort "$ARGS_LOG")"
-        args_expected="$(printf '%s\n' "--cd $ARGS_DIR ide-args" "--quit" "--quit" "--quit --force ide-args" "--quit ide-args" "--swap left ide-args" "--toggle ide-args" "--toggle-editor ide-args" | LC_ALL=C sort)"
+        args_expected="$(printf '%s\n' "--cd $ARGS_DIR args-sess" "--quit" "--quit" "--quit --force args-sess" "--quit args-sess" "--swap left args-sess" "--toggle args-sess" "--toggle-editor args-sess" | LC_ALL=C sort)"
         if [ "$args_log" = "$args_expected" ]; then
-            pass "The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME, --toggle-editor NAME, --swap DIR NAME) and omits it without an ide-* \$IDE_SESSION"
+            pass "The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME, --toggle-editor NAME, --swap DIR NAME) and omits it when \$IDE_SESSION is empty"
         else
             fail "Editor ide call arguments" "Expected: $(tr '\n' '|' <<< "$args_expected") got: $(tr '\n' '|' <<< "$args_log")"
         fi
@@ -1026,57 +778,59 @@ LUA
         pass "bin/ide --quit Editor close skipped headless runtime check (nvim not installed on runner)"
     fi
 
-    # Untargeted quits look up the caller's own pane (or a run-shell job's session id) exactly, and only act on ide-* sessions
-    tmux new-session -d -s "ide-gone" -x 120 -y 40
-    gone_pane="$(pane_of "ide-gone")"
-    gone_env="$(tmux_env_of "ide-gone")"
-    tmux kill-session -t "=ide-gone"
-    for s in ide-recent ide-auto-pane ide-auto-job; do
+    # Untargeted quits look up the caller's own pane (or a run-shell job's session id) exactly, and only act on ide sessions
+    tmux new-session -d -s "gone-sess" -x 120 -y 40
+    tmux set-option -t "=gone-sess:" @ide_session "gone-sess"
+    gone_pane="$(pane_of "gone-sess")"
+    gone_env="$(tmux_env_of "gone-sess")"
+    tmux kill-session -t "=gone-sess"
+    for s in recent-sess auto-pane auto-job; do
         tmux new-session -d -s "$s" -x 120 -y 40
+        tmux set-option -t "=$s:" @ide_session "$s"
     done
     # From a pane whose session is gone (the Editor's job above): tmux would guess the most recently used session
     env TMUX="$gone_env" TMUX_PANE="$gone_pane" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
     gone_ok=0
-    all_alive plain-bystander ide-bystander ide-recent ide-auto-pane ide-auto-job && gone_ok=1
+    all_alive plain-bystander ide-bystander recent-sess auto-pane auto-job && gone_ok=1
     # From a plain tmux session's own pane
     env TMUX="$(tmux_env_of plain-bystander)" TMUX_PANE="$(pane_of plain-bystander)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
     # When the server named in $TMUX is gone and another one now answers on its socket
-    IFS=, read -r recent_sock _ recent_id <<< "$(tmux_env_of ide-recent)"
-    env TMUX="$recent_sock,1,$recent_id" TMUX_PANE="$(pane_of ide-recent)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    IFS=, read -r recent_sock _ recent_id <<< "$(tmux_env_of recent-sess)"
+    env TMUX="$recent_sock,1,$recent_id" TMUX_PANE="$(pane_of recent-sess)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
     # From an ide pane, and from a run-shell job (no pane, just the session id in $TMUX): exactly that session
-    env TMUX="$(tmux_env_of ide-auto-pane)" TMUX_PANE="$(pane_of ide-auto-pane)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
-    env -u TMUX_PANE TMUX="$(tmux_env_of ide-auto-job)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
-    if [ "$gone_ok" = "1" ] && all_alive plain-bystander ide-bystander ide-recent && \
-       ! session_alive "ide-auto-pane" && ! session_alive "ide-auto-job"; then
+    env TMUX="$(tmux_env_of auto-pane)" TMUX_PANE="$(pane_of auto-pane)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    env -u TMUX_PANE TMUX="$(tmux_env_of auto-job)" "$SCRIPT_DIR/bin/ide" --quit --force >/dev/null 2>&1 || true
+    if [ "$gone_ok" = "1" ] && all_alive plain-bystander ide-bystander recent-sess && \
+       ! session_alive "auto-pane" && ! session_alive "auto-job"; then
         pass "Untargeted bin/ide --quit never guesses: from a pane whose session is gone, a plain tmux session, or a replaced server it quits nothing, and from an ide pane or run-shell job it quits exactly that session"
     else
-        fail "bin/ide untargeted --quit" "Expected nothing quit from a gone pane (ok=$gone_ok), plain-bystander/ide-bystander/ide-recent alive, ide-auto-pane/ide-auto-job quit; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+        fail "bin/ide untargeted --quit" "Expected nothing quit from a gone pane (ok=$gone_ok), plain-bystander/ide-bystander/recent-sess alive, auto-pane/auto-job quit; sessions now: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
     fi
 
-    # Exact session names: quitting ide-foo spares another IDE's ai-ide-foobar popup, a later --kill foo / --toggle foo
-    # never fall back to ide-foobar, and launching in ./api creates ide-api next to ide-api-gateway instead of reusing it
-    for s in ide-foobar ai-ide-foobar ide-foo ide-api-gateway; do
+    # Exact session names: quitting foo spares another IDE's ai-foobar popup, a later --kill foo / --toggle foo
+    # never fall back to foobar, and launching in ./api creates api next to api-gateway instead of reusing it
+    for s in foobar ai-foobar foo api-gateway; do
         tmux new-session -d -s "$s" -x 120 -y 40
     done
-    "$SCRIPT_DIR/bin/ide" --kill "ide-foo" >/dev/null 2>&1 || true
+    "$SCRIPT_DIR/bin/ide" --kill "foo" >/dev/null 2>&1 || true
     "$SCRIPT_DIR/bin/ide" --kill "foo" >/dev/null 2>&1 || true
     "$SCRIPT_DIR/bin/ide" --toggle "foo" >/dev/null 2>&1 || true
     mkdir -p "$TEMP_HOME/api"
     env -u IDE_AI_CLI XDG_RUNTIME_DIR="$TEMP_HOME" "$SCRIPT_DIR/bin/ide" --2pane --detach "$TEMP_HOME/api" >/dev/null 2>&1 || true
-    foobar_panes="$(tmux list-panes -s -t "ide-foobar:" 2>/dev/null | wc -l | tr -d ' ' || true)"
-    gateway_panes="$(tmux list-panes -s -t "ide-api-gateway:" 2>/dev/null | wc -l | tr -d ' ' || true)"
-    if ! session_alive "ide-foo" && all_alive ide-foobar ai-ide-foobar ide-api ide-api-gateway && \
+    foobar_panes="$(tmux list-panes -s -t "=foobar:" 2>/dev/null | wc -l | tr -d ' ' || true)"
+    gateway_panes="$(tmux list-panes -s -t "=api-gateway:" 2>/dev/null | wc -l | tr -d ' ' || true)"
+    if ! session_alive "foo" && all_alive foobar ai-foobar api api-gateway && \
        [ "$foobar_panes" = "1" ] && [ "$gateway_panes" = "1" ]; then
         pass "bin/ide targets tmux sessions by exact name (=NAME): no prefix matches when killing, toggling, or launching sessions"
     else
-        fail "bin/ide exact session names" "Expected ide-foo gone and ide-foobar (1 pane), ai-ide-foobar, ide-api, ide-api-gateway (1 pane) alive; got foobar_panes=$foobar_panes gateway_panes=$gateway_panes sessions: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+        fail "bin/ide exact session names" "Expected foo gone and foobar (1 pane), ai-foobar, api, api-gateway (1 pane) alive; got foobar_panes=$foobar_panes gateway_panes=$gateway_panes sessions: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
     fi
-    "$SCRIPT_DIR/bin/ide" --kill "ide-api" >/dev/null 2>&1 || true
+    "$SCRIPT_DIR/bin/ide" --kill "api" >/dev/null 2>&1 || true
 
-    # Mouse resizing & OSC 8 hyperlink clicking: in a real terminal client (a python3 pty speaking SGR mouse), dragging the
+    # Mouse resizing & Ctrl+LeftClick link opening: in a real terminal client (a python3 pty speaking SGR mouse), dragging the
     # AI | Editor border and the Shell's top edge resizes panes under the repo's .tmux.conf, focus switches (--toggle /
     # --show-term), parking/unparking (--toggle-editor / --toggle-term), and a zoom round trip keep the dragged sizes, and
-    # plain-clicking an OSC 8 hyperlink in the AI pane routes through MouseDown1Pane to `ide --open-link`.
+    # Ctrl+LeftClick (C-MouseDown1Pane) routes OSC 8 file hyperlinks and plain-text file:line tokens to `ide --open-link`.
     if command -v python3 >/dev/null 2>&1; then
         MOUSE_TMPDIR="$(mktemp -d)"
         IDE_WS_MOUSE="$TEMP_HOME/ws_mouse"
@@ -1092,7 +846,7 @@ LUA
             tmux -f "$SCRIPT_DIR/dotfiles/.tmux.conf" new-session -d -s mouse-holder -x 120 -y 40
             env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_MOUSE" >/dev/null 2>&1
             echo "binding=$(tmux list-keys -T root MouseDrag1Border 2>&1)"
-            python3 - "$SCRIPT_DIR/bin/ide" "ide-ws_mouse" "$MOUSE_CLICK_LOG" 2>&1 <<'PY'
+            python3 - "$SCRIPT_DIR/bin/ide" "ws_mouse" "$MOUSE_CLICK_LOG" 2>&1 <<'PY'
 import fcntl, os, select, struct, subprocess, sys, termios, threading, time
 
 ide, sess, click_log = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -1132,11 +886,11 @@ threading.Thread(target=drain, daemon=True).start()
 for _ in range(50):
     if tmux("display-message", "-p", "-t", panes[0], "#{window_width}x#{window_height}") == "120x40":
         break
-    time.sleep(0.1)
+    time.sleep(0.05)
 
 def send(seq):
     os.write(master, seq.encode())
-    time.sleep(0.2)
+    time.sleep(0.05)
 
 def drag(x0, y0, x1, y1):
     # SGR mouse reports use 1-based cells, and window row y sits on screen row y + 1 below the top status bar
@@ -1166,12 +920,11 @@ tmux("resize-pane", "-Z", "-t", panes[1])
 tmux("resize-pane", "-Z", "-t", panes[1])
 kept = sizes()
 
-# Emit an OSC 8 hyperlink on row 0 and a plain-text token on row 1 of the AI pane, then plain-click row 0 and Ctrl+LeftClick row 1
+# Emit an OSC 8 hyperlink on row 0 and a plain-text token on row 1 of the AI pane, then Ctrl+LeftClick row 0 and row 1
 outer_bytes.clear()
 tmux("respawn-pane", "-k", "-t", panes[0], "printf '\\033[2J\\033[H\\033]8;;file:///tmp/osc8_target.lua#L42\\033\\\\OSC8LINK\\033]8;;\\033\\\\\\nPLAINWORD.lua:7\\n'; sleep 30")
 time.sleep(0.3)
-outer_osc8 = "leaked" if b"\x1b]8;" in outer_bytes else "none"
-send("\x1b[<0;2;2M\x1b[<0;2;2m")
+send("\x1b[<16;2;2M\x1b[<16;2;2m")
 for _ in range(30):
     if os.path.exists(click_log) and open(click_log).read().count("\n") >= 1:
         break
@@ -1185,7 +938,7 @@ for _ in range(30):
 
 attached = False
 client.terminate()
-print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept} outer_osc8={outer_osc8}")
+print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept}")
 PY
         )" || true
         tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
@@ -1193,17 +946,21 @@ PY
         MOUSE_TMPDIR=""
         mouse_click_logged="$(cat "$MOUSE_CLICK_LOG" 2>/dev/null || true)"
         if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && \
-           grep -q '^drag=ok kept=ok outer_osc8=none$' <<< "$mouse_out" && \
+           grep -q '^drag=ok kept=ok$' <<< "$mouse_out" && \
            grep -Fq 'argc=5 2=<file:///tmp/osc8_target.lua#L42> 3=<OSC8LINK>' <<< "$mouse_click_logged" && \
            grep -Fq 'argc=5 2=<> 3=<PLAINWORD.lua:7>' <<< "$mouse_click_logged"; then
-            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom), captures OSC 8 hyperlinks in #{mouse_hyperlink} without leaking outer OSC 8 to SSH clients (*:Hls@), and preserves empty mouse_hyperlink on Ctrl+LeftClick (C-MouseDown1Pane)"
+            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom) and routes Ctrl+LeftClick (C-MouseDown1Pane) for both OSC 8 hyperlinks and plain-text file:line tokens"
         else
-            fail "tmux mouse border resize & OSC 8 / Ctrl+LeftClick" "Expected MouseDrag1Border resize-pane -M, drag=ok kept=ok outer_osc8=none, OSC 8 plain-click, and C-MouseDown1Pane argc=5 2=<> 3=<PLAINWORD.lua:7>; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
+            fail "tmux mouse border resize & Ctrl+LeftClick" "Expected MouseDrag1Border resize-pane -M, drag=ok kept=ok, and C-MouseDown1Pane for OSC8LINK + PLAINWORD.lua:7; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
         fi
     fi
 
+    export PATH="$OLD_TMUX_PATH"
+    if [ -n "$OLD_TMUX_SHELL" ]; then
+        export SHELL="$OLD_TMUX_SHELL"
+    fi
     tmux kill-server >/dev/null 2>&1 || true
-    rm -rf "$TMUX_TEST_TMPDIR"
+    rm -rf "$TMUX_TEST_TMPDIR" "$IDE_AI_STUB_DIR"
 fi
 
 # Test 7: bin/update-system CLI validation & cross-platform dry-run orchestration
