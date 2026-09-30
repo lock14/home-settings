@@ -511,11 +511,33 @@ SH
                     bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     buf_after_paren_file="${bname}:${bline}"
                 fi
+                # Verify line-wrapped URLs in a tmux pane (e.g. broken after 'home-' onto an indented next line)
+                # are stitched back together when clicking either the first line or the continuation line.
+                WRAP_BROWSER_OUT="$TEMP_HOME/wrap_browser.out"
+                WRAP_BROWSER_BIN="$TEMP_HOME/wrap_browser.sh"
+                printf '#!/usr/bin/env bash\necho "$1" >> "%s"\n' "$WRAP_BROWSER_OUT" > "$WRAP_BROWSER_BIN"
+                chmod +x "$WRAP_BROWSER_BIN"
+                tmux select-pane -t "$term_pane"
+                tmux send-keys -t "$term_pane" " printf '  Submitted PR (https://github.com/lock14/home-\\n  settings/pull/118)\\n'" C-m
+                for _ in $(seq 1 25); do
+                    tmux capture-pane -p -t "$term_pane" 2>/dev/null | grep -Fq "settings/pull/118" && break
+                    sleep 0.02
+                done
+                IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "https://github.com/lock14/home-" "$IDE_WS_3P" "ws_3pane_test"
+                IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "settings/pull/118" "$IDE_WS_3P" "ws_3pane_test"
+                for _ in $(seq 1 25); do
+                    [ "$(wc -l < "$WRAP_BROWSER_OUT" 2>/dev/null | tr -d ' ')" = "2" ] && break
+                    sleep 0.02
+                done
+                wrap_url_line1="$(sed -n '1p' "$WRAP_BROWSER_OUT" 2>/dev/null || true)"
+                wrap_url_line2="$(sed -n '2p' "$WRAP_BROWSER_OUT" 2>/dev/null || true)"
+                rm -f "$WRAP_BROWSER_OUT" "$WRAP_BROWSER_BIN"
+                tmux select-pane -t "$ed_pane"
                 active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ]; then
-                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), file URLs with parentheses, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
+                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ]; then
+                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), line-wrapped URLs, file URLs with parentheses, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
                 else
-                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane, paren=route.ts:2, and lines 2/3/1/3/2/3/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file"
+                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane, paren=route.ts:2, wrapped URLs=https://github.com/lock14/home-settings/pull/118, and lines 2/3/1/3/2/3/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file wrap1=$wrap_url_line1 wrap2=$wrap_url_line2"
                 fi
             else
                 fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
@@ -528,7 +550,8 @@ SH
             rm -f "$sock_3p"
         fi
 
-        # Verify `bin/ide --copy` populates tmux buffer (`load-buffer -w` for OSC 52) AND broadcasts to X11 (`xsel -ib`) after discovering DISPLAY from tmux,
+        # Verify `bin/ide --copy` populates tmux buffer (`load-buffer -w` for OSC 52) AND broadcasts to X11 (`xsel -ib`) after discovering DISPLAY from tmux
+        # (even when the session environment has `-DISPLAY` from headless session creation),
         # and `bin/ide --paste` prefers X11 on local desktop vs tmux buffer over SSH.
         COPY_MOCK_DIR="$(mktemp -d)"
         cat > "$COPY_MOCK_DIR/xsel" <<'SH'
@@ -544,6 +567,7 @@ fi
 exit 1
 SH
         chmod +x "$COPY_MOCK_DIR/xsel"
+        tmux set-environment -t "ws_3pane_test" -r DISPLAY 2>/dev/null || true
         tmux set-environment -g DISPLAY ":99"
         printf "solarized-clipboard-payload" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
         copy_tmux_got="$(tmux show-buffer 2>/dev/null || true)"

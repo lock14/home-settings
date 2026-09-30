@@ -130,8 +130,6 @@ def discover_display_env() -> None:
                     if val:
                         os.environ[var] = val
                         seen_vars.add(var)
-                elif line == f"-{var}":
-                    seen_vars.add(var)
     if is_ssh_session():
         return
     if not os.environ.get("DISPLAY") and is_socket_path("/tmp/.X11-unix/X0"):
@@ -1586,14 +1584,94 @@ def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str) -> bool:
     return False
 
 
+_URL_CHARS_RE = re.compile(r"^[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$")
+_URL_TAIL_RE = re.compile(r"((?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+)[)\]>\"'`,;.]*$")
+
+
+def open_browser_url(url: str, target_arg: str = "") -> bool:
+    if not url:
+        return False
+    sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
+    has_tmux = bool(os.environ.get("TMUX")) or (bool(sess) and session_exists(sess))
+    ssh_active = is_ssh_session(sess)
+    if has_tmux and shutil.which("tmux"):
+        if run_tmux("load-buffer", "-w", "-", input_bytes=url.encode("utf-8")).returncode != 0:
+            run_tmux("load-buffer", "-", input_bytes=url.encode("utf-8"))
+        if ssh_active:
+            msg = f"Copied URL to clipboard (OSC 52): {url}"
+            if sess and session_exists(sess):
+                run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", msg)
+            else:
+                run_tmux("display-message", "-d", "4000", msg)
+    ide_browser = (os.environ.get("IDE_BROWSER") or "").strip()
+    if ide_browser:
+        parts = [ide_browser] if (os.path.isfile(ide_browser) and os.access(ide_browser, os.X_OK)) else shlex.split(ide_browser)
+        if parts and (shutil.which(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
+            subprocess.Popen([*parts, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return True
+    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    for browser in (("xdg-open", "google-chrome") if has_display else ()) + ("open",):
+        if shutil.which(browser):
+            subprocess.Popen([browser, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return True
+    return bool(ssh_active and has_tmux)
+
+
+def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
+    if not word or not shutil.which("tmux"):
+        return word
+    if not (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg):
+        return word
+    sess = resolve_target_session(target_arg)
+    pane_target = ["-t", f"={sess}:"] if (sess and session_exists(sess)) else []
+    joined_out = tmux_out("capture-pane", "-p", "-J", *pane_target)
+    if joined_out:
+        for m in re.finditer(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+", joined_out):
+            full = strip_token_wrappers(m.group(0))
+            if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
+                return full
+    raw_lines = tmux_out("capture-pane", "-p", *pane_target).splitlines()
+    for idx, line in enumerate(raw_lines):
+        m_tail = _URL_TAIL_RE.search(line.strip())
+        if not m_tail:
+            continue
+        first_frag = strip_token_wrappers(m_tail.group(1))
+        frags = [first_frag]
+        cur_line = line.rstrip()
+        j = idx + 1
+        while j < len(raw_lines) and (
+            frags[-1].endswith(("-", "/", "_", "=", "?", "&", "#")) or len(cur_line) >= 60
+        ):
+            next_s = raw_lines[j].strip()
+            if not next_s:
+                break
+            first_tok = next_s.split()[0]
+            cont = strip_token_wrappers(first_tok)
+            if not cont or cont.startswith(("http://", "https://", "file://")) or not _URL_CHARS_RE.match(cont):
+                break
+            frags.append(cont)
+            cur_line = raw_lines[j].rstrip()
+            if len(next_s.split()) > 1:
+                break
+            j += 1
+        if len(frags) > 1:
+            full = "".join(frags)
+            if word in frags or full.startswith(word) or full.endswith(word):
+                return full
+    return word
+
+
 def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     cwd = cwd or os.getcwd()
     run_tmux("set-option", "-gq", "word-separators", " ()[]{}<>\"'`,;*")
 
-    # 1. Explicit file:// OSC 8 hyperlink (`#{mouse_hyperlink}`)
-    if href and href.startswith("file://"):
-        if resolve_and_open_target(href, cwd, target_arg):
-            return 0
+    # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`)
+    if href:
+        if href.startswith("file://"):
+            if resolve_and_open_target(href, cwd, target_arg):
+                return 0
+        elif href.startswith(("http://", "https://")):
+            return 0 if open_browser_url(href, target_arg) else 1
 
     # 2. Fallback to clicked word (`#{mouse_word}`)
     word = word.strip()
@@ -1607,7 +1685,7 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
 
     m_file_url = re.search(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)", word)
     if m_file_url:
-        embedded_href = m_file_url.group(1)
+        embedded_href = unsplit_wrapped_url(m_file_url.group(1), target_arg)
         while embedded_href and embedded_href[-1] in ",;." and not os.path.exists(embedded_href[7:]):
             embedded_href = embedded_href[:-1]
         if resolve_and_open_target(embedded_href, cwd, target_arg):
@@ -1630,34 +1708,16 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     if not word:
         return 0
 
+    word = unsplit_wrapped_url(word, target_arg)
+
+    if word.startswith(("http://", "https://")):
+        return 0 if open_browser_url(word, target_arg) else 1
+
     private_url = resolve_private_link(word, cwd)
     if private_url:
         if private_url.startswith("file://") and resolve_and_open_target(private_url, cwd, target_arg):
             return 0
-        sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
-        has_tmux = bool(os.environ.get("TMUX")) or (bool(sess) and session_exists(sess))
-        ssh_active = is_ssh_session(sess)
-        if has_tmux and shutil.which("tmux"):
-            if run_tmux("load-buffer", "-w", "-", input_bytes=private_url.encode("utf-8")).returncode != 0:
-                run_tmux("load-buffer", "-", input_bytes=private_url.encode("utf-8"))
-            if ssh_active:
-                msg = f"Copied URL to clipboard (OSC 52): {private_url}"
-                if sess and session_exists(sess):
-                    run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", msg)
-                else:
-                    run_tmux("display-message", "-d", "4000", msg)
-        ide_browser = (os.environ.get("IDE_BROWSER") or "").strip()
-        if ide_browser:
-            parts = [ide_browser] if (os.path.isfile(ide_browser) and os.access(ide_browser, os.X_OK)) else shlex.split(ide_browser)
-            if parts and (shutil.which(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
-                subprocess.Popen([*parts, private_url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-                return 0
-        has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-        for browser in (("xdg-open", "google-chrome") if has_display else ()) + ("open",):
-            if shutil.which(browser):
-                subprocess.Popen([browser, private_url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-                return 0
-        return 0 if (ssh_active and has_tmux) else 1
+        return 0 if open_browser_url(private_url, target_arg) else 1
 
     if resolve_and_open_target(word, cwd, target_arg):
         return 0
@@ -1927,6 +1987,7 @@ def main() -> int:
             "-e", f"IDE_AI_CLI={ide_ai_cli}",
             "-e", f"NVIM_IDE_SOCKET={nvim_socket}",
             "-e", f"IDE_INITIAL_ROOT={target_dir}",
+            "-e", "FORCE_HYPERLINK=1",
         ]
         init_info = tmux_out(
             "new-session", "-d", "-P", "-F", "#{pane_id}\t#{window_id}",

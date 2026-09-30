@@ -9,6 +9,7 @@ if [ -f "$HOME/.environment-variables" ]; then
     source "$HOME/.environment-variables"
 else
     export COLORTERM="${COLORTERM:-truecolor}"
+    export FORCE_HYPERLINK="${FORCE_HYPERLINK:-1}"
     case ":$PATH:" in
         *":$HOME/.local/bin:"*) ;;
         *) export PATH="$HOME/.local/bin:$PATH" ;;
