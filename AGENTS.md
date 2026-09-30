@@ -56,12 +56,14 @@ Any AI agent interacting with or modifying this repository **MUST** strictly adh
 | 🚫 **NEVER** | **No Blocking Subprocesses in the `IdeFollow` Tick** | The 1.5 s follow tick runs on Neovim's main loop, so it must never wait on a subprocess (`vim.system(...):wait()`, `vim.fn.system*`) or walk directory trees. Follow targets come from the AI's own edit logs (`agy` `transcript_full.jsonl` tool calls, Claude Code `tool_use` records), tailed incrementally and landed on the exact replaced block, which works in git, Mercurial, and VCS-less workspaces alike. `git status` / `git diff` run only as async `vim.system` callbacks (one scan in flight, adaptive backoff) to catch shell-driven edits. Edit-log targets outside the session's workspace (nearest `.git` / `.hg` root) or inside the AI tools' own state (`~/.gemini`, `agy`'s data directory, `~/.claude`) are never followed. |
 | 🚫 **NEVER** | **No Guessed or Prefix-Matched tmux Session Targets** | `bin/ide` must never let tmux choose a session. Automated callers always name it: tmux key bindings pass `'#{session_name}'`, and every Editor call goes through `ide_job()` in `init.lua`, which appends the pane's `$IDE_SESSION` (only `ide-*` values). For commands typed by hand, an untargeted `tmux display-message -p '#{session_name}'` answers with the most recently used session once the caller's pane is gone, so auto-detection resolves the caller's own `$TMUX_PANE` (or a run-shell job's session id, the last field of `$TMUX`) by exact id, requires the server pid from `$TMUX` to match `#{pid}`, and accepts only `ide-*` sessions, returning nothing otherwise. Session targets are exact: session-type commands (`has-session`, `kill-session`, `attach-session`, `switch-client`, `list-windows`, `show-environment` / `set-environment`) take `-t "=NAME"`, and pane- or window-type commands (`show-options` / `set-option`, `display-message`, `list-panes`) take `-t "=NAME:"`, because a bare `-t NAME` prefix-matches (`ide-foo` → `ide-foobar`) and tmux applies a leading `=` only to the target part the command expects (`list-panes -s -t =ide-foo` still lists `ide-foobar`). The Editor is closed with `--remote-send '<C-\><C-n><Cmd>qall!<CR>'`, never by typing `:qa`, which the IDE Editor abbreviates to `:Q` → another, untargeted `ide --quit`. |
 | 🚫 **NEVER** | **No Swallowed Mouse Resize Drags** | Buffer-local mouse maps (`SolarizedIdeTree` `<LeftMouse>` / `<2-LeftMouse>` / `<LeftRelease>`) must never consume presses on window separators or status lines (`getmousepos().line == 0`). They replay those presses unmapped (`nvim_feedkeys(..., "ni", false)`) and pass the matching release through, so dragging a split edge resizes it instead of toggling the row under the cursor. tmux border drags stay pinned (`bind -n MouseDrag1Border resize-pane -M`). `bin/ide` focus switches (`--toggle`, `--show-*`) never re-split, re-layout or resize visible panes, and parking/unparking (`--toggle-editor`, `--toggle-term`, `--toggle-ai`) records and restores custom pane sizes. |
+| 🚫 **NEVER** | **No Feature Accretion in Documentation** | Never document new capabilities by merely appending bullet points to the end of a section. Appending creates flat, disjointed lists with buried keybindings. Always integrate changes holistically into the macro-to-micro architectural hierarchy, updating both the conceptual narrative and the dedicated reference tables. |
 | ✅ **ALWAYS** | **Zero-Dependency Portable `.vimrc` & `.bashrc-addendum` Parity** | `dotfiles/.vimrc` and `dotfiles/.bashrc-addendum` must remain self-contained so copying just those two files to a restricted remote server provides the inline Solarized Dark TrueColor + `cterm` Vim palette (`s:ApplySolarizedDark()`) and the `Base02` (`#073642`) shelf Bash prompt (`_solarized_bash_prompt()`) with remote VCS icons, `LS_COLORS`, `LESS_TERMCAP_*`, and core Git workflow aliases. |
 | ✅ **ALWAYS** | **Modular Stage Architecture** | Keep `setup.sh` strictly as an orchestrator CLI (~240 lines). Subsystem provisioning belongs in dedicated scripts under `modules/<NN>-<name>.sh` using shared helpers in `lib/`. |
 | ✅ **ALWAYS** | **LTS Preference for Mise Tools** | For all tools defined in `.mise.toml`, specify `lts` whenever supported by the tool's ecosystem (`java = "lts"`, `node = "lts"`). For tools without an official LTS channel (Go, Python, Maven, Terraform, Rust, Neovim, Ripgrep, ShellCheck), default to `latest` stable. |
 | ✅ **ALWAYS** | **Modern Neovim via Mise** | Modern Neovim (0.11+ / 0.12+) is provisioned via `mise` (`neovim = "latest"`), avoiding obsolete distro packages (such as Ubuntu's default 0.9.5). |
 | ✅ **ALWAYS** | **XDG Base Directory Compliance** | Keep `$HOME` clean of language runtime workspaces and cache clutter. Go workspace and cache must strictly point to XDG paths: `export GOPATH="${XDG_DATA_HOME:-$HOME/.local/share}/go"` and `export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/go-build"`. |
 | ✅ **ALWAYS** | **Idempotent & Fail-Fast Scripts** | All Bash scripts must begin with `set -euo pipefail`. Re-running `setup.sh` or `Makefile` targets must be completely safe, non-destructive, and produce identical results. |
+| ✅ **ALWAYS** | **Architectural Top-Down Flow & Dual Representation** | Technical documentation must follow the 4-tier architectural flow (Mental Model -> Structural Layers -> Runtime Engines -> Toolchains) and maintain dedicated, formatted quick-lookup reference tables for shortcuts and commands. |
 
 ---
 
@@ -331,6 +333,14 @@ Colors across our developer workstation fulfill invariant domain roles across al
 4. Wire the module into `setup.sh`.
 5. Add test coverage and verify with `make test` and `make lint`.
 
+### Recipe H: Documenting Features & Workspace Keybindings
+1. Identify the appropriate architectural tier in `README.md` (Mental Model & Geometry, Structural Layer, Runtime Engine & Automation, or Toolchains & Integrations).
+2. Write concise, high-density prose explaining the *intent*, *interactions*, and *mechanics* (strictly eliminating marketing fluff, buzzwords, and conversational preambles).
+3. If introducing or modifying keybindings, CLI flags, or shell commands, add or update the corresponding row in the dedicated reference table (`IDE Workspace Keybindings & Navigation` or `Git & Shell Shortcuts`).
+4. Ensure all keys, flags, paths, and commands are enclosed in backticks (`Alt+h`, `--3pane`, `bin/ide`).
+5. Review the surrounding section to prune outdated notes and preserve cohesive narrative rhythm.
+6. Run `make lint` to verify markdown formatting.
+
 ---
 
 ## 5. Anti-Patterns & Common Traps (What NOT to Do)
@@ -344,6 +354,8 @@ Colors across our developer workstation fulfill invariant domain roles across al
 | **Hardcoding Distro Neovim Paths** | Ubuntu 22.04 apt installs Neovim 0.9.5, which crashes modern LSP plugins. | Rely on modern Neovim provisioned via `mise` (`neovim = "latest"`). |
 | **Letting Go Pollute `$HOME/go`** | Clutters user home directory. | Export XDG variables: `GOPATH="$HOME/.local/share/go"` and `GOCACHE="$HOME/.cache/go-build"`. |
 | **Installing Database Daemons by Default** | Consumes system memory, starts unwanted background services, and opens local listening ports. | Install only client CLIs by default; require `--with-postgres`, `--with-mariadb`, or `--db <engine>` for server daemons. |
+| **Append-Only Feature Documentation** | Produces fragmented, 20-bullet flat lists with buried keybindings and broken narrative flow. | Restructure the section into the 4-tier hierarchy and index all keybindings in dedicated lookup tables. |
+| **Trapping Shortcuts Solely in Paragraph Prose** | Users cannot quickly find keybindings when scanning documentation. | Always maintain dual representation: conceptual prose for architecture, tabular lookup for execution. |
 
 ---
 
@@ -377,3 +389,41 @@ Before concluding any turn or marking any task complete:
 4. **Synchronize Documentation**:
    - Update `README.md` if user-facing behavior, options, or tools changed.
    - Update `AGENTS.md` if repository principles or agent workflows changed.
+
+---
+
+## 7. Documentation Architecture & Technical Writing Style for Agents
+
+Technical documentation in this repository is engineered for high cognitive efficiency, instant discoverability, and long-term architectural stability. It communicates system mental models and mechanical precision, completely isolated from marketing prose, conversational filler, or speculative claims.
+
+Any agent drafting, modifying, or refactoring documentation (including `README.md`, `AGENTS.md`, and module headers) must adhere to the following 5 core principles:
+
+### Principle I: Macro-to-Micro Architectural Flow (The 4-Tier Hierarchy)
+Every major technical section must be organized as a cohesive, top-down narrative progression rather than an unordered list of features:
+1. **Tier 1: Mental Model & Spatial Architecture**: System topology, geometry, layout, purpose, and visual metaphors (e.g., Inverted-T 3-pane vs. 2-pane geometry, session isolation).
+2. **Tier 2: First-Principles Structural Layers**: Conceptual decoupling and behavioral tiers (e.g., the 4 keybinding layers: App-Local, Spatial Navigation, Editor/Tree, Clickable Links/Clipboard).
+3. **Tier 3: Runtime Engines & Automation**: Execution mechanics, event loops, data flow, telemetry, and edge-case mitigation (e.g., `IdeFollow` non-blocking tailing, transient buffer auto-cleanup).
+4. **Tier 4: Toolchains, Plugins & Integrations**: Concrete tool configurations, LSP servers, syntax parsers, and terminal profile integrations.
+
+### Principle II: Dual Representation Rule (Prose + Dedicated Lookup Tables)
+- Interactive keybindings, CLI flags, and shell shortcuts must **never** exist exclusively inside paragraph prose.
+- They must always be represented in **both**:
+  1. *Conceptually* within their structural layer (explaining *why* they are mapped, how they avoid domain conflicts, and how they behave across modes).
+  2. *Tabularly* in a dedicated, formatted quick-lookup reference table (`IDE Workspace Keybindings & Navigation`, `Git & Shell Shortcuts`) with explicit columns (`Keybinding / Action`, `Context`, `Description`) for fast daily lookup.
+
+### Principle III: The Non-Accretion Rule (Holistic Maintenance vs. Append-Only)
+- When introducing or modifying features, agents must **never** simply append a new bullet point to the end of an existing section.
+- Agents must review the entire section holistically:
+  - Integrate the new capability into its proper architectural tier.
+  - Update or add rows to the relevant reference tables.
+  - Prune redundant, superseded, or contradictory statements to maintain a continuous narrative rhythm.
+
+### Principle IV: High Information Density & Zero Fluff
+- **Eliminate Fluff**: Never use marketing buzzwords ("effortlessly", "blazing fast", "seamlessly"), conversational preambles ("Note that...", "In this section we will examine...", "It is worth mentioning..."), or speculative hand-waving.
+- **Concrete Semantic Payload**: Every sentence must state concrete technical nouns, exact flags, file paths, key combinations, and deterministic runtime behaviors.
+- **Zero Aspirational Documentation**: Document only behavior that is implemented, tested, and actively verified against the codebase.
+
+### Principle V: Markdown Typography & Formatting Invariants
+- **Backticks for Technical Symbols**: Keys and chords (`Alt+h`, `Space e`, `Ctrl+Click`), CLI flags (`--3pane`, `--toggle-editor`), commands (`bin/ide`, `icd`), and configuration paths (`dotfiles/.tmux.conf`, `init.lua`) must strictly be enclosed in backticks.
+- **Heading Hierarchy**: Use H2 (`##`) for major top-level systems, H3 (`###`) for architectural subsystems, and bold lead-in bullets (`- **Subsystem**: ...`) for individual components.
+- **Zero Yellow & Zero Artificial Bold**: Conforming to Section 1 invariants, never use yellow in markdown headings and never apply bold font styles across entire headings (`bold = false`).
