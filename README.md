@@ -125,6 +125,10 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
   - **Single-Window Geometry**: Built around an AI-first inverted-T layout in a single Tmux window (`ide`) with zero secondary Neovim servers or hidden `_swap` parking windows.
     - `ide` / `ide3` (`--3pane`, default): Top-Left AI Agent (50%×75%, `agy` / `claude` / `codex`, focused on launch), Top-Right Main Editor (50%×75%, single Neovim server listening on `$NVIM_IDE_SOCKET`), and Bottom Full-Width Interactive Shell (100%×25% for unconstrained Powerlevel10k prompts and wide CLI output).
     - `ide2` (`--2pane`): Side-by-side 50% AI Agent | 50% Full-Height Main Editor.
+  - **Interactive Top Status Shelf & Contextual Mode Bar**:
+    - **Left Shelf (`status-left`)**: Anchors the session badge (` #S `) at fixed width so mode transitions never shift the center switcher horizontally; clicking `status-left` opens `choose-tree -Zs`.
+    - **Center 3-State Role Switcher (`window-status-current-format`)**: Renders `@ide_tab_ai`, `@ide_tab_ed`, and `@ide_tab_term` with distinct visual states: focused (`▸` + semantic accent icon + `Base1` `#93A1A1` label), visible unfocused (`Base0` `#839496` with `(Alt+a/e/t)` focus hint), and parked (`Base01` `#586E75` with `[Alt+E/T]` restore hint), plus an Orange `󰁌 ZOOM (Alt+z)` badge when zoomed. Left-clicking any center badge invokes `ide --status-click` to focus, unpark, or unzoom; right-clicking opens a workspace context menu (`display-menu`).
+    - **Mode-Contextual Right Shelf (`status-right`)**: Surfaces inline key hints during `PREFIX` (`Ctrl+b`: `HJKL resize · |/- split · b bar · ? keys`) and `COPY` (`Alt+c copy · Alt+v paste · Esc clear`) modes, and stays minimal in normal mode—showing `󰉋 <subdir>` only when `@ide_workdir` differs from `@ide_initial_root`, followed by `󰋖 Help (Alt+?)`.
   - **Non-Destructive Pane Parking & Swapping**:
     - Park and restore panes dynamically without killing running processes (`Alt+Shift+E` / `ide --toggle-editor`, `Alt+Shift+T` / `ide --toggle-term`, `ide --toggle-ai` via hidden windows `_ide_park_<role>`).
     - Directionally swap active panes on the fly (`Alt+Shift+H/J/K/L` / `ide --swap left|down|up|right`, wrapping horizontally across the top split).
@@ -137,13 +141,14 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
 
 - **First-Principles 4-Layer Keybinding Architecture**:
   - **Layer 1: App-Local (`Ctrl`)**: Root Tmux `Ctrl+h/j/k/l` bindings are strictly omitted, preserving native `Ctrl+L` (clear), `Ctrl+J` (newline), `Ctrl+K` (kill line), and `Ctrl+H` (backspace) in Zsh, Bash, and AI CLIs (`agy`, `claude`, `codex`). `<C-j>/<C-k>` navigate Telescope pickers, while `<C-h/j/k/l>` navigate internal Neovim Normal-mode splits.
-  - **Layer 2: Spatial Navigation & Workspace (`Alt`)**:
+  - **Layer 2: Spatial Navigation, Workspace & Help (`Alt`)**:
     - `Alt+h/j/k/l` move focus seamlessly across Neovim splits and Tmux panes from any mode (`n/i/v/t`).
-    - `Alt+a`, `Alt+e`, `Alt+t` (`Alt+1/2/3`) focus or unpark the AI Agent, Editor, or Shell pane, bouncing back to the previous pane on a second press while preserving zoom state.
+    - `Alt+a`, `Alt+e`, and `Alt+t` focus or unpark the AI Agent, Editor, or Shell pane, bouncing back to the previous pane on a second press while preserving zoom state.
     - `Alt+Shift+E` and `Alt+Shift+T` toggle Editor and Shell pane visibility from anywhere.
     - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
+    - `Alt+?` (`Prefix + ?`, `Space ?`, or `ide --keys`) opens a 2-column Solarized Dark keybinding cheatsheet popup (`tmux display-popup`).
   - **Layer 3: Editor, File Explorer & Live Auto-Reload (`Space` Leader & `mini.files`)**:
-    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline.
+    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Inside `mini.files`, `h`/`l` navigate parent/child directories or open files, `j`/`k` move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q`/`<Esc>` closes.
     - `Space gs` opens Telescope `git_status` to review and jump to AI-modified files.
     - `opt.autoread` and `SolarizedAutoRead` (`FocusGained`, `BufEnter`, `CursorHold`, `CursorHoldI` -> `silent! checktime`) automatically reload buffers modified on disk by AI agents.
     - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character; `:IdeCd` (`Space cd`) synchronizes the workspace directory across Editor and Shell.
@@ -164,18 +169,20 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
 | Keybinding / Action | Context | Description |
 | :--- | :--- | :--- |
 | `Alt+h` / `j` / `k` / `l` | Universal (`n/i/v/t`) | Navigate focus across Neovim splits and Tmux panes seamlessly |
-| `Alt+a` / `Alt+3` (`Space a`) | Universal | Focus AI Agent pane (or unpark); bounce back to Editor on second press (zoom-preserving) |
-| `Alt+e` / `Alt+1` | Universal | Focus Editor pane (or unpark); bounce back to previous pane on second press |
-| `Alt+t` / `Alt+2` | Universal | Focus Shell pane (or unpark); bounce back to Editor on second press |
+| `Alt+a` (`Space a`) | Universal | Focus AI Agent pane (or unpark); bounce back to Editor on second press (zoom-preserving) |
+| `Alt+e` | Universal | Focus Editor pane (or unpark); bounce back to previous pane on second press |
+| `Alt+t` | Universal | Focus Shell pane (or unpark); bounce back to Editor on second press |
 | `Alt+Shift+E` | Universal | Toggle Editor pane visibility (park to / restore from `_ide_park_editor`) |
 | `Alt+Shift+T` | Universal | Toggle Shell pane visibility (park to / restore from `_ide_park_term`) |
 | `Alt+Shift+H` / `J` / `K` / `L` | Tmux | Directionally swap active pane left, down, up, or right (wraps horizontally across top panes) |
 | `Alt+z` | Tmux | Toggle full-window pane zoom (preserves zoom state across pane switches) |
 | `Alt+Left` / `Down` / `Up` / `Right` | Tmux | Resize active pane by 5 cells in direction (or drag borders with mouse) |
+| `Alt+?` / `Space ?` / `Prefix + ?` | Universal | Open interactive 2-column Solarized Dark keybinding cheatsheet popup (`ide --keys`) |
+| `Click Status Bar` | Tmux Mouse | Left-click session (`choose-tree`), center role/zoom badges (`ide --status-click`), or `Help` (`ide --keys`); right-click for menu |
 | `Alt+c` / `Alt+v` | Universal | Copy active selection to system/OSC 52 clipboard and clear highlight / paste from clipboard |
 | `Ctrl+Click` | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor |
 | `Alt+q` (`Alt+Shift+Q`) / `Space q` | Universal | Gracefully quit (`ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
-| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` columnar file explorer at current buffer directory (`Space e`) or cwd (`Space E`) |
+| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` explorer at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` out/in, `=` apply edits, `g?` help, `q` close |
 | `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
 | `Space cd` (`:IdeCd [dir]`) | Neovim Normal | Synchronize Editor and Tmux workspace directory (`@ide_workdir`) |
 | `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |

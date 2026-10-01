@@ -276,6 +276,13 @@ map({ "n", "i", "v", "t" }, "<M-L>", function()
         ide_job("--swap", "right")
     end
 end, { desc = "Swap Active Pane Right" })
+local function open_ide_keys_popup()
+    if vim.env.TMUX then
+        vim.fn.jobstart({ "tmux", "display-popup", "-E", "-w", "86", "-h", "25", vim.fn.expand("$HOME/.local/bin/ide") .. " --keys" }, { detach = true })
+    end
+end
+map("n", "<leader>?", open_ide_keys_popup, { desc = "Open IDE Keybinding Cheatsheet" })
+map({ "n", "i", "v", "t" }, "<M-?>", open_ide_keys_popup, { desc = "Open IDE Keybinding Cheatsheet" })
 
 -- One-Command Quit Everything (:Q, :Quit, Space+q, Alt+q, qide)
 -- While keeping `:q`, `:wq`, `:qa`, and `:wqa` as standard Neovim commands.
