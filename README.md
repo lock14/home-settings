@@ -148,7 +148,7 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
     - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
     - `Alt+?` (`Prefix + ?`, `Space ?`, or `ide --keys`) opens a 2-column Solarized Dark keybinding cheatsheet popup (`tmux display-popup`).
   - **Layer 3: Editor, File Explorer & Live Auto-Reload (`Space` Leader & `mini.files`)**:
-    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Inside `mini.files`, `h`/`l` navigate parent/child directories or open files, `j`/`k` move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q`/`<Esc>` closes.
+    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Inside `mini.files`, `h`/`l` (or `Left`/`Right`/`Enter`) navigate parent/child directories or open files, `j`/`k` (or `Up`/`Down`) move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q` closes.
     - `Space gs` opens Telescope `git_status` to review and jump to AI-modified files.
     - `opt.autoread` and `SolarizedAutoRead` (`FocusGained`, `BufEnter`, `CursorHold`, `CursorHoldI` -> `silent! checktime`) automatically reload buffers modified on disk by AI agents.
     - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character; `:IdeCd` (`Space cd`) synchronizes the workspace directory across Editor and Shell.
@@ -182,7 +182,7 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
 | `Alt+c` / `Alt+v` | Universal | Copy active selection to system/OSC 52 clipboard and clear highlight / paste from clipboard |
 | `Ctrl+Click` / `Alt+Click` | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor |
 | `Alt+q` (`Alt+Shift+Q`) / `Space q` | Universal | Gracefully quit (`ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
-| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` explorer at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` out/in, `=` apply edits, `g?` help, `q` close |
+| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` explorer at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` or `Left`/`Right`/`Enter` out/in, `j`/`k` or `Up`/`Down` move, `=` apply edits, `g?` help, `q` close |
 | `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
 | `Space cd` (`:IdeCd [dir]`) | Neovim Normal | Synchronize Editor and Tmux workspace directory (`@ide_workdir`) |
 | `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |

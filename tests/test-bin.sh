@@ -126,15 +126,70 @@ else
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" --keys)"
+IDE_KEYS_COMPOUND_OUT="$("$SCRIPT_DIR/bin/ide" --2pane --keys)"
+IDE_KEYS_PTY_OK="$(python3 - "$SCRIPT_DIR/bin/ide" <<'PY'
+import fcntl, os, pty, select, subprocess, sys, termios, time
+ide_bin = sys.argv[1]
+def set_ctty(sfd):
+    os.setsid()
+    fcntl.ioctl(sfd, termios.TIOCSCTTY, 0)
+
+def wait_noncanon(fd, deadline):
+    while time.monotonic() < deadline:
+        try:
+            if not (termios.tcgetattr(fd)[3] & termios.ICANON):
+                return True
+        except OSError:
+            return False
+        time.sleep(0.005)
+    return False
+
+for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x03", b"\x04"):
+    mfd, sfd = pty.openpty()
+    proc = subprocess.Popen(
+        [ide_bin, "--keys"],
+        stdin=sfd, stdout=sfd, stderr=sfd, close_fds=True,
+        preexec_fn=lambda sfd=sfd: set_ctty(sfd),
+    )
+    os.close(sfd)
+    out = b""
+    deadline = time.monotonic() + 2.0
+    while b"This key cheatsheet" not in out and time.monotonic() < deadline:
+        r, _, _ = select.select([mfd], [], [], 0.05)
+        if r:
+            out += os.read(mfd, 4096)
+    wait_noncanon(mfd, deadline)
+    os.write(mfd, b"\x1b[A")
+    time.sleep(0.05)
+    wait_noncanon(mfd, time.monotonic() + 2.0)
+    if proc.poll() is not None:
+        os.close(mfd)
+        print("FAIL:closed_on_arrow")
+        sys.exit(0)
+    os.write(mfd, close_seq)
+    rc = proc.wait(timeout=2.0)
+    os.close(mfd)
+    if rc != 0:
+        print(f"FAIL:seq={close_seq!r}:rc={rc}")
+        sys.exit(0)
+print("OK")
+PY
+)"
 if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
+   [ "$IDE_KEYS_OUT" = "$IDE_KEYS_COMPOUND_OUT" ] && \
+   ! "$SCRIPT_DIR/bin/ide" --keys --unknown-flag >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/ide" --ai invalid-agent --keys >/dev/null 2>&1 && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+E" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+T" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT"; then
-    pass "bin/ide --keys renders the Solarized Dark 2-column keybinding cheatsheet (including focus, swap, resize, mini.files, clipboard, and quit shortcuts)"
+   grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
+   [ "$(grep -c 'show_keys_cheatsheet()' "$SCRIPT_DIR/bin/ide")" -eq 1 ] && \
+   [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
+    pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including focus, swap, resize, mini.files h/l or Left/Right, clipboard, and quit shortcuts) and drains multi-byte escape sequences on PTY"
 else
-    fail "bin/ide --keys" "Missing expected keybinding sections in bin/ide --keys output"
+    fail "bin/ide --keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet(), or PTY key handling failed ($IDE_KEYS_PTY_OK)"
 fi
 
 if "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1; then
@@ -569,13 +624,13 @@ SH
                 chmod +x "$WRAP_BROWSER_BIN"
                 tmux select-pane -t "$term_pane"
                 tmux send-keys -t "$term_pane" " printf '  Submitted PR (https://github.com/lock14/home-\\n  settings/pull/118)\\n  \\033]8;id=test;file://$IDE_WS_3P/subdir/nested.txt#L3\\033\\\\p\\033]8;;\\033\\\\arse_file_target\\n  \\033]8;id=sep;file://$IDE_WS_3P/subdir/nested.txt#L2\\033\\\\#\\033]8;;\\033\\\\{mouse_hyperlink}\\n  \\033]8;id=wrap;file://$IDE_WS_3P/subdir/nested.txt#L3\\033\\\\w\\033]8;;\\033\\\\rapped_sym_\\n  continuation\\n  \\033[36m\\033]8;id=sgr;file://$IDE_WS_3P/subdir/nested.txt#L1\\033\\\\C\\033]8;;\\033\\\\lass\\033[39m.\\033[32mmethod\\033[0m\\n'" C-m
-                for _ in $(seq 1 25); do
+                for _ in $(seq 1 100); do
                     tmux capture-pane -p -t "$term_pane" 2>/dev/null | grep -Fq "Class.method" && break
                     sleep 0.02
                 done
                 IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "https://github.com/lock14/home-" "$IDE_WS_3P" "ws_3pane_test"
                 IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "settings/pull/118" "$IDE_WS_3P" "ws_3pane_test"
-                for _ in $(seq 1 25); do
+                for _ in $(seq 1 100); do
                     [ "$(wc -l < "$WRAP_BROWSER_OUT" 2>/dev/null | tr -d ' ')" = "2" ] && break
                     sleep 0.02
                 done

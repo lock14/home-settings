@@ -19,6 +19,62 @@
 set -euo pipefail
 export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
 
+show_keys_cheatsheet() {
+    local c_orange=$'\033[38;2;203;75;22m'
+    local c_blue=$'\033[38;2;38;139;210m'
+    local c_cyan=$'\033[38;2;42;161;152m'
+    local c_base0=$'\033[38;2;131;148;150m'
+    local c_base01=$'\033[38;2;88;110;117m'
+    local c_reset=$'\033[0m'
+    local rule="────────────────────────────────────────────────────────────────────────────────"
+
+    printf '\n  %s IDE Workspace & Editor Keybindings%s%18s[q / Esc / Space to close]%s\n' "$c_orange" "$c_base01" "" "$c_reset"
+    printf '  %s%s%s\n' "$c_base01" "$rule" "$c_reset"
+    printf '  %s%-42s%sLAYOUT, SWAP & RESIZE%s\n' "$c_blue" "FOCUS & VISIBILITY" "$c_blue" "$c_reset"
+    printf '  %s%-18s%s %-21s  %s%-18s%s %s%s\n' \
+        "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus 2D" "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap pane 2D" "$c_reset" \
+        "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Edit/Shell" "$c_cyan" "Alt+Arrow Keys" "$c_base0" "Resize pane (5 cells)" "$c_reset" \
+        "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide / show Editor" "$c_cyan" "Alt+z" "$c_base0" "Toggle 100% zoom" "$c_reset" \
+        "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide / show Shell" "$c_cyan" "Mouse drag border" "$c_base0" "Resize panes" "$c_reset" \
+        "$c_cyan" "Click top bar" "$c_base0" "Switch role / Help" "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_reset"
+    printf '\n  %s%-42s%sCLIPBOARD, LINKS & WORKSPACE%s\n' "$c_blue" "NEOVIM & MINI.FILES (Space = Leader)" "$c_blue" "$c_reset"
+    printf '  %s%-18s%s %-21s  %s%-18s%s %s%s\n' \
+        "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select & copy" "$c_reset" \
+        "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent / open item" "$c_cyan" "Alt+c / Alt+v" "$c_base0" "Copy & clear / Paste" "$c_reset" \
+        "$c_cyan" "=      (in files)" "$c_base0" "Apply file edits" "$c_cyan" "Ctrl/Alt+Click" "$c_base0" "Open link / jump def" "$c_reset" \
+        "$c_cyan" "g? / q (in files)" "$c_base0" "Help / close tree" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Shift workspace dir" "$c_reset" \
+        "$c_cyan" "Space ff / fg / gs" "$c_base0" "Find / Grep / Git" "$c_cyan" ":Q / Space q" "$c_base0" "Quit IDE workspace" "$c_reset" \
+        "$c_cyan" "H / L  (normal)" "$c_base0" "Prev / next buffer" "$c_cyan" "Alt+q / Alt+Shift+Q" "$c_base0" "Quit / Force-quit IDE" "$c_reset" \
+        "$c_cyan" "Ctrl+h / j / k / l" "$c_base0" "Move Neovim splits" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
+
+    if [ -t 0 ] && [ -t 1 ] && [ "${IDE_KEYS_NO_WAIT:-0}" != "1" ]; then
+        local saved_tty="" key="" rest=""
+        saved_tty="$(stty -g 2>/dev/null || true)"
+        trap '[ -n "${saved_tty:-}" ] && stty "$saved_tty" 2>/dev/null || true; exit 0' EXIT INT TERM
+        stty intr undef eof undef -echo 2>/dev/null || true
+        while IFS= read -r -s -n 1 key; do
+            if [ "$key" = $'\x1b' ]; then
+                rest=""
+                IFS= read -r -s -n 5 -t 0.02 rest || true
+                if [ -z "$rest" ] || [ "$rest" = "?" ]; then
+                    break
+                fi
+                continue
+            fi
+            case "$key" in
+                q|Q|\?|" "|""|$'\r'|$'\n'|$'\x03'|$'\x04')
+                    break
+                    ;;
+            esac
+        done
+    fi
+}
+
+if [ "$#" -eq 1 ] && { [ "$1" = "--keys" ] || [ "$1" = "--help-keys" ]; }; then
+    show_keys_cheatsheet
+    exit 0
+fi
+
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
 import os
 from pathlib import Path
@@ -1926,63 +1982,6 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     return 0
 
 
-def show_keys_cheatsheet() -> int:
-    c_orange = "\033[38;2;203;75;22m"
-    c_blue = "\033[38;2;38;139;210m"
-    c_cyan = "\033[38;2;42;161;152m"
-    c_base0 = "\033[38;2;131;148;150m"
-    c_base01 = "\033[38;2;88;110;117m"
-    c_reset = "\033[0m"
-
-    def row(k1: str, d1: str, k2: str, d2: str) -> str:
-        return (
-            f"  {c_cyan}{k1:<18}{c_base0} {d1:<21}  "
-            f"{c_cyan}{k2:<18}{c_base0} {d2}{c_reset}"
-        )
-
-    lines = [
-        f"  {c_orange} IDE Workspace & Editor Keybindings{c_base01}{'':>18}[q / Esc / Space to close]{c_reset}",
-        f"  {c_base01}{'─' * 80}{c_reset}",
-        f"  {c_blue}{'FOCUS & VISIBILITY':<42}{c_blue}LAYOUT, SWAP & RESIZE{c_reset}",
-        row("Alt+h / j / k / l", "Move focus 2D", "Alt+Shift+H/J/K/L", "Swap pane 2D"),
-        row("Alt+a / e / t", "Focus AI/Edit/Shell", "Alt+Arrow Keys", "Resize pane (5 cells)"),
-        row("Alt+Shift+E", "Hide / show Editor", "Alt+z", "Toggle 100% zoom"),
-        row("Alt+Shift+T", "Hide / show Shell", "Mouse drag border", "Resize panes"),
-        row("Click top bar", "Switch role / Help", "Prefix + b", "Toggle top status bar"),
-        "",
-        f"  {c_blue}{'NEOVIM & MINI.FILES (Space = Leader)':<42}{c_blue}CLIPBOARD, LINKS & WORKSPACE{c_reset}",
-        row("Space e / Space E", "Open mini.files", "Mouse drag / 2x", "Select & copy"),
-        row("h / l  (in files)", "Parent / open item", "Alt+c / Alt+v", "Copy & clear / Paste"),
-        row("=      (in files)", "Apply file edits", "Ctrl/Alt+Click", "Open link / jump def"),
-        row("g? / q (in files)", "Help / close tree", "icd [dir|--reset]", "Shift workspace dir"),
-        row("Space ff / fg / gs", "Find / Grep / Git", ":Q / Space q", "Quit IDE workspace"),
-        row("H / L  (normal)", "Prev / next buffer", "Alt+q / Alt+Shift+Q", "Quit / Force-quit IDE"),
-        row("Ctrl+h / j / k / l", "Move Neovim splits", "Alt+? / Prefix+?", "This key cheatsheet"),
-    ]
-    sys.stdout.write("\n" + "\n".join(lines) + "\n")
-    sys.stdout.flush()
-
-    if sys.stdin.isatty() and sys.stdout.isatty() and os.environ.get("IDE_KEYS_NO_WAIT", "0") != "1":
-        try:
-            import termios
-            import tty
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                tty.setraw(fd)
-                while True:
-                    ch = os.read(fd, 32)
-                    if not ch:
-                        break
-                    if ch in (b"q", b"Q", b"?", b" ", b"\r", b"\n", b"\x03", b"\x04", b"\x1b"):
-                        break
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        except OSError:
-            pass
-    return 0
-
-
 def status_click(x_str: str, target_arg: str) -> int:
     try:
         x = int(x_str)
@@ -2025,6 +2024,7 @@ def status_click(x_str: str, target_arg: str) -> int:
 
 
 def main() -> int:
+    ide_self = os.environ.pop("IDE_SELF", "")
     os.environ["FORCE_HYPERLINK"] = "1"
     if not shutil.which("tmux"):
         print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
@@ -2215,7 +2215,7 @@ def main() -> int:
         return 1
 
     if action == "keys":
-        return show_keys_cheatsheet()
+        os.execvp("bash", ["bash", ide_self, "--keys"])
     if action == "status-click":
         return status_click(status_click_x, target_arg)
 
@@ -2415,7 +2415,7 @@ if __name__ == "__main__":
     sys.exit(main())
 PY
 if [ -x /usr/bin/python3 ]; then
-    exec /usr/bin/python3 -c "$IDE_PY_SRC" "$@"
+    IDE_SELF="${BASH_SOURCE[0]}" exec /usr/bin/python3 -c "$IDE_PY_SRC" "$@"
 else
-    exec python3 -c "$IDE_PY_SRC" "$@"
+    IDE_SELF="${BASH_SOURCE[0]}" exec python3 -c "$IDE_PY_SRC" "$@"
 fi
