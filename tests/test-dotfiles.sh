@@ -52,6 +52,7 @@ done
 
 if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'default-terminal "tmux-256color"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g terminal-features ""' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'RGB:extkeys:usstyle:clipboard:hyperlinks' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -s extended-keys on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'allow-passthrough on' "$TEMP_HOME/.tmux.conf" && \
@@ -60,11 +61,17 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -T copy-mode-vi M-c send-keys -X copy-pipe-and-cancel' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi M-v' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-v' "$TEMP_HOME/.tmux.conf" && \
-   ! grep -q 'bind -n MouseDown1Pane' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1Pane select-pane -t = \\; send-keys -M' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Eq '[[:space:]]MouseDown1Pane.*run-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi M-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q 'Hls@' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-environment -g FORCE_HYPERLINK 1' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q 'update-environment.*FORCE_HYPERLINK' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane-active-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'popup-border-style "fg=#586E75,bg=#002B36"' "$TEMP_HOME/.tmux.conf" && \

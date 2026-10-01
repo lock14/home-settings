@@ -825,6 +825,8 @@ def heal_split_for_role(
     cur_dir: str,
     extra_args: list[str],
 ) -> str:
+    if "FORCE_HYPERLINK=1" not in extra_args:
+        extra_args = [*extra_args, "-e", "FORCE_HYPERLINK=1"]
     bar_role, bar_before, left_role, right_role = resolve_layout_roles(sess)
     if role == bar_role:
         flags = ["-b", "-f", "-v"] if bar_before == "1" else ["-f", "-v"]
@@ -1090,7 +1092,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
         if not editor_pane:
             editor_pane = heal_split_for_role(
                 sess, "editor", main_win, ai_pane, editor_pane, term_pane, cur_dir,
-                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
+                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"IDE_INITIAL_ROOT={init_root}", "-e", "FORCE_HYPERLINK=1"],
             )
             if editor_pane:
                 ed_just_healed = True
@@ -1104,7 +1106,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
         if not ai_pane:
             ai_pane = heal_split_for_role(
                 sess, "ai", main_win, ai_pane, editor_pane, term_pane, cur_dir,
-                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
+                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}", "-e", "FORCE_HYPERLINK=1"],
             )
             if ai_pane:
                 ai_just_healed = True
@@ -1120,7 +1122,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
         if not term_pane and need_term:
             term_pane = heal_split_for_role(
                 sess, "term", main_win, ai_pane, editor_pane, term_pane, cur_dir,
-                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}"],
+                ["-e", f"IDE_SESSION={sess}", "-e", f"IDE_AI_CLI={ai_cli}", "-e", f"NVIM_IDE_SOCKET={sock}", "-e", f"NVIM_IDE_PANE={editor_pane}", "-e", f"IDE_INITIAL_ROOT={init_root}", "-e", "FORCE_HYPERLINK=1"],
             )
             if term_pane:
                 term_just_healed = True
@@ -1494,22 +1496,55 @@ def resolve_private_link(link_word: str, link_cwd: str) -> str:
     return (res.stdout or "").strip() if res.returncode == 0 else ""
 
 
-def parse_file_target(raw: str) -> tuple[str, str]:
+def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
+    def _exists(p: str) -> bool:
+        if not p:
+            return False
+        if os.path.exists(p):
+            return True
+        if cwd and not p.startswith("/"):
+            return os.path.exists(os.path.join(cwd, p))
+        return False
+
     line = ""
-    if raw.startswith("file://"):
+    had_file_scheme = raw.startswith("file://")
+    if had_file_scheme:
         raw = raw[7:]
-        if raw.startswith("localhost"):
+        if raw.startswith("localhost/"):
             raw = raw[9:]
-    if not os.path.exists(raw) and re.search(r"%[0-9A-Fa-f]{2}", raw):
-        raw = urllib.parse.unquote(raw)
-    m_hash = re.match(r"^(.+)#L?([0-9]+)([-:][Ll]?[0-9]+)?$", raw)
+        elif not raw.startswith("/") and "/" in raw:
+            raw = raw[raw.index("/"):]
+
+    m_hash = re.match(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$", raw)
     if m_hash:
         raw, line = m_hash.group(1), m_hash.group(2)
-    elif not os.path.exists(raw):
-        m_col = re.match(r"^([^:]+):([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$", raw)
+    elif "#" in os.path.basename(raw) and not _exists(raw) and not _exists(urllib.parse.unquote(raw)):
+        base_raw, frag = raw.rsplit("#", 1)
+        base_unq = urllib.parse.unquote(base_raw)
+        if _exists(base_raw) or _exists(base_unq):
+            raw = base_raw
+        elif had_file_scheme and not _exists(urllib.parse.unquote(raw).rsplit(":", 1)[0]):
+            raw = base_raw
+        elif (
+            os.path.splitext(base_unq)[1]
+            and not os.path.splitext(frag.split(":", 1)[0])[1]
+            and re.match(r"^[A-Za-z0-9_.:-]+$", frag)
+        ):
+            raw = base_raw
+
+    if not _exists(raw) and re.search(r"%[0-9A-Fa-f]{2}", raw):
+        raw = urllib.parse.unquote(raw)
+        if not line and "#" in os.path.basename(raw) and not _exists(raw):
+            m_hash2 = re.match(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$", raw)
+            if m_hash2:
+                raw, line = m_hash2.group(1), m_hash2.group(2)
+
+    if not line and not _exists(raw):
+        m_col = re.match(r"^([^:]+):[Ll]?([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$", raw)
         if m_col:
             raw, line = m_col.group(1), m_col.group(2)
-    if not os.path.exists(raw) and re.search(r"%[0-9A-Fa-f]{2}", raw):
+
+    if not _exists(raw) and re.search(r"%[0-9A-Fa-f]{2}", raw):
         raw = urllib.parse.unquote(raw)
     return raw, line
 
@@ -1618,10 +1653,16 @@ def open_file_or_dir_target(fpath: str, line: str, target_arg: str) -> bool:
     return False
 
 
-def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str) -> bool:
-    parse_path, parse_line = parse_file_target(raw_target)
+def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str, fallback_line: str = "") -> bool:
+    parse_path, parse_line = parse_file_target(raw_target, cwd)
+    if not parse_line and fallback_line:
+        parse_line = fallback_line
     if not parse_path:
         return False
+    if not parse_path.startswith("/") and not parse_path.startswith("~/"):
+        resolved = resolve_workspace_file(parse_path, cwd, target_arg)
+        if resolved:
+            return open_file_or_dir_target(resolved, parse_line, target_arg)
     if open_file_or_dir_target(parse_path, parse_line, target_arg):
         return True
     resolved = resolve_workspace_file(parse_path, cwd, target_arg)
@@ -1715,14 +1756,98 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
     return word
 
 
+def _extract_word_target(raw_word: str, cwd: str = "") -> tuple[str, str]:
+    w = raw_word.strip()
+    m_lbl = re.search(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(", w)
+    if m_lbl:
+        w = m_lbl.group(1)
+    w = strip_token_wrappers(w)
+    m_tool = re.match(r"^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$", w)
+    if m_tool:
+        w = m_tool.group(2)
+        if w.endswith(")"):
+            w = w[:-1]
+        w = strip_token_wrappers(w)
+    return parse_file_target(w, cwd)
+
+
+_TMUX_WORD_SEPS = " ()[]{}<>\"'`,;*"
+_SGR_RE = re.compile(r"\x1b\[[0-9;:]*m")
+_SPLIT_OSC8_RE = re.compile(
+    r"\x1b\]8;[^;\x1b]*;([^\x1b\r\n]+)\x1b\\([^\x1b\r\n]+)\x1b\]8;;\x1b\\([()\[\]{}<>\"'`,;*]*[^\x1b\s()\[\]{}<>\"'`,;*]+)"
+)
+_CONT_LINE_RE = re.compile(r"^[ \t]*\r?\n[ \t]*([^\x1b\s()\[\]{}<>\"'`,;*]+)")
+
+
+def recover_split_osc8_href(word: str, target_arg: str = "") -> str:
+    clean_word = strip_token_wrappers(word.strip())
+    if not clean_word or not shutil.which("tmux"):
+        return ""
+    if not (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg):
+        return ""
+    sess = ""
+    if target_arg and target_arg.startswith("%"):
+        pane_target = ["-t", target_arg]
+    else:
+        sess = resolve_target_session(target_arg)
+        if sess and session_exists(sess):
+            pane_target = ["-t", f"={sess}:"]
+        elif os.environ.get("TMUX_PANE"):
+            pane_target = ["-t", os.environ["TMUX_PANE"]]
+        else:
+            return ""
+    pane_targets = [pane_target]
+    if not (target_arg and target_arg.startswith("%")) and sess and session_exists(sess):
+        for pid in tmux_out("list-panes", "-t", f"={sess}:", "-F", "#{pane_id}").splitlines():
+            if pid and ["-t", pid] not in pane_targets:
+                pane_targets.append(["-t", pid])
+    for pt in pane_targets:
+        esc_out = tmux_out("capture-pane", "-e", "-p", "-J", "-S", "-500", *pt)
+        if not esc_out:
+            continue
+        clean_esc = _SGR_RE.sub("", esc_out)
+        matches = list(_SPLIT_OSC8_RE.finditer(clean_esc))
+        for m in reversed(matches):
+            cand_href, pfx, sfx = m.group(1), m.group(2), m.group(3)
+            combined = pfx + sfx
+            if combined == clean_word or strip_token_wrappers(combined) == clean_word:
+                return cand_href
+        for m in reversed(matches):
+            cand_href, pfx, sfx = m.group(1), m.group(2), m.group(3)
+            combined = pfx + sfx
+            sfx_stripped = sfx.lstrip(_TMUX_WORD_SEPS)
+            if len(pfx) == 1 and len(sfx_stripped) >= 2 and (
+                sfx_stripped == clean_word or strip_token_wrappers(sfx_stripped) == clean_word
+            ):
+                return cand_href
+            if parse_file_target(strip_token_wrappers(combined))[0] == clean_word:
+                return cand_href
+            if sfx.endswith(("-", "_", ".", "/", ":")):
+                m_cont = _CONT_LINE_RE.match(clean_esc[m.end():])
+                if m_cont:
+                    cont = strip_token_wrappers(m_cont.group(1))
+                    full_comb = strip_token_wrappers(combined + cont)
+                    if full_comb == clean_word or (len(cont) >= 3 and cont == clean_word):
+                        return cand_href
+    return ""
+
+
 def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     cwd = cwd or os.getcwd()
     run_tmux("set-option", "-gq", "word-separators", " ()[]{}<>\"'`,;*")
 
+    if not href and word:
+        href = recover_split_osc8_href(word, target_arg)
+
     # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`)
     if href:
         if href.startswith("file://"):
-            if resolve_and_open_target(href, cwd, target_arg):
+            href_path, href_line = parse_file_target(href, cwd)
+            if not href_line and word:
+                word_path, word_line = _extract_word_target(word, cwd)
+                if word_line and os.path.basename(href_path) == os.path.basename(word_path):
+                    href_line = word_line
+            if resolve_and_open_target(href, cwd, target_arg, fallback_line=href_line):
                 return 0
         elif href.startswith(("http://", "https://")):
             return 0 if open_browser_url(href, target_arg) else 1
@@ -1733,16 +1858,21 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
         return 0
 
     bracket_label = ""
+    lbl_path = ""
+    lbl_line = ""
     m_lbl = re.search(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(", word)
     if m_lbl:
         bracket_label = strip_token_wrappers(m_lbl.group(1))
+        lbl_path, lbl_line = parse_file_target(bracket_label, cwd)
 
     m_file_url = re.search(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)", word)
     if m_file_url:
         embedded_href = unsplit_wrapped_url(m_file_url.group(1), target_arg)
         while embedded_href and embedded_href[-1] in ",;." and not os.path.exists(embedded_href[7:]):
             embedded_href = embedded_href[:-1]
-        if resolve_and_open_target(embedded_href, cwd, target_arg):
+        emb_path, emb_line = parse_file_target(embedded_href, cwd)
+        fb_line = lbl_line if (not emb_line and lbl_line and os.path.basename(emb_path) == os.path.basename(lbl_path)) else ""
+        if resolve_and_open_target(embedded_href, cwd, target_arg, fallback_line=fb_line):
             return 0
 
     m_md_link = re.search(
@@ -1752,13 +1882,14 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     if m_md_link:
         word = m_md_link.group(1)
 
+    word = strip_token_wrappers(word)
     m_tool = re.match(r"^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$", word)
     if m_tool:
         word = m_tool.group(2)
         if word.endswith(")"):
             word = word[:-1]
+        word = strip_token_wrappers(word)
 
-    word = strip_token_wrappers(word)
     if not word:
         return 0
 
@@ -1773,13 +1904,19 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
             return 0
         return 0 if open_browser_url(private_url, target_arg) else 1
 
-    if resolve_and_open_target(word, cwd, target_arg):
+    word_path_cand, word_line_cand = parse_file_target(word, cwd)
+    fb_word_line = (
+        lbl_line
+        if (not word_line_cand and lbl_line and os.path.basename(word_path_cand) == os.path.basename(lbl_path))
+        else ""
+    )
+    if resolve_and_open_target(word, cwd, target_arg, fallback_line=fb_word_line):
         return 0
 
     if "..." in word and "/" in word:
         trunc_base = word.rsplit("/", 1)[-1]
         if trunc_base and trunc_base != word:
-            if resolve_and_open_target(trunc_base, cwd, target_arg):
+            if resolve_and_open_target(trunc_base, cwd, target_arg, fallback_line=lbl_line):
                 return 0
 
     if bracket_label and bracket_label != word:
@@ -1816,7 +1953,7 @@ def show_keys_cheatsheet() -> int:
         f"  {c_blue}{'NEOVIM & MINI.FILES (Space = Leader)':<42}{c_blue}CLIPBOARD, LINKS & WORKSPACE{c_reset}",
         row("Space e / Space E", "Open mini.files", "Mouse drag / 2x", "Select & copy"),
         row("h / l  (in files)", "Parent / open item", "Alt+c / Alt+v", "Copy & clear / Paste"),
-        row("=      (in files)", "Apply file edits", "Ctrl+LeftClick", "Open link / jump def"),
+        row("=      (in files)", "Apply file edits", "Ctrl/Alt+Click", "Open link / jump def"),
         row("g? / q (in files)", "Help / close tree", "icd [dir|--reset]", "Shift workspace dir"),
         row("Space ff / fg / gs", "Find / Grep / Git", ":Q / Space q", "Quit IDE workspace"),
         row("H / L  (normal)", "Prev / next buffer", "Alt+q / Alt+Shift+Q", "Quit / Force-quit IDE"),
@@ -1888,6 +2025,7 @@ def status_click(x_str: str, target_arg: str) -> int:
 
 
 def main() -> int:
+    os.environ["FORCE_HYPERLINK"] = "1"
     if not shutil.which("tmux"):
         print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
         return 1
@@ -2179,6 +2317,7 @@ def main() -> int:
             ("@ide_ai_parked", "IDE_AI_PARKED", "0"),
             ("@ide_ed_parked", "IDE_ED_PARKED", "0"),
             ("@ide_term_parked", "IDE_TERM_PARKED", "0" if layout_mode == "3pane" else "1"),
+            ("@ide_force_hyperlink", "FORCE_HYPERLINK", "1"),
         ]
 
         pane_term = ""
@@ -2232,6 +2371,7 @@ def main() -> int:
                         "-e", f"NVIM_IDE_SOCKET={nvim_socket}",
                         "-e", f"NVIM_IDE_PANE={ed_pane_id}",
                         "-e", f"IDE_INITIAL_ROOT={init_root_val}",
+                        "-e", "FORCE_HYPERLINK=1",
                     )
                     if res.returncode != 0:
                         shell = os.environ.get("SHELL") or "/bin/zsh"
@@ -2239,21 +2379,22 @@ def main() -> int:
                             "respawn-pane", "-k", "-t", ai_pane_id, "-c", target_dir,
                             f"env IDE_SESSION={shlex.quote(session)} IDE_AI_CLI={shlex.quote(ide_ai_cli)} "
                             f"NVIM_IDE_SOCKET={shlex.quote(nvim_socket)} NVIM_IDE_PANE={shlex.quote(ed_pane_id)} "
-                            f"IDE_INITIAL_ROOT={shlex.quote(init_root_val)} {shlex.quote(shell)} -l",
+                            f"IDE_INITIAL_ROOT={shlex.quote(init_root_val)} FORCE_HYPERLINK=1 {shlex.quote(shell)} -l",
                         )
                     ai_run_cmd = resolve_ai_cmd(ide_ai_cli)
                     if ai_run_cmd:
                         run_tmux("send-keys", "-t", ai_pane_id, f" {ai_run_cmd}", "C-m")
 
-    env_cmds: list[str] = []
+    env_cmds: list[str] = [
+        "set-environment", "-g", "FORCE_HYPERLINK", "1",
+        ";",
+        "set-environment", "-t", f"={session}", "FORCE_HYPERLINK", "1",
+    ]
     for display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"):
         val = os.environ.get(display_var)
         if val:
-            if env_cmds:
-                env_cmds.append(";")
-            env_cmds.extend(["set-environment", "-t", f"={session}", display_var, val])
-    if env_cmds:
-        run_tmux(*env_cmds)
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", display_var, val])
+    run_tmux(*env_cmds)
 
     tmux_conf = os.path.expanduser("~/.tmux.conf")
     if os.path.isfile(tmux_conf):
