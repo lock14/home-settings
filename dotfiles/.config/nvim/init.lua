@@ -1251,6 +1251,30 @@ lazy.setup({
                     width_preview = 45,
                 },
             })
+            local mf = require("mini.files")
+            vim.api.nvim_create_autocmd("User", {
+                group = vim.api.nvim_create_augroup("SolarizedMiniFilesKeys", { clear = true }),
+                pattern = "MiniFilesBufferCreate",
+                callback = function(args)
+                    local buf_id = args.data.buf_id
+                    map("n", "<Left>", function()
+                        mf.go_out()
+                    end, { buffer = buf_id, nowait = true, desc = "Go out of directory" })
+                    map("n", "<S-Left>", function()
+                        mf.go_out()
+                        mf.trim_right()
+                    end, { buffer = buf_id, nowait = true, desc = "Go out of directory and trim right" })
+                    map("n", "<Right>", function()
+                        mf.go_in()
+                    end, { buffer = buf_id, nowait = true, desc = "Go in entry" })
+                    map("n", "<S-Right>", function()
+                        mf.go_in({ close_on_file = true })
+                    end, { buffer = buf_id, nowait = true, desc = "Go in entry and close on file" })
+                    map("n", "<CR>", function()
+                        mf.go_in({ close_on_file = true })
+                    end, { buffer = buf_id, nowait = true, desc = "Open file or enter directory" })
+                end,
+            })
         end,
     },
 })

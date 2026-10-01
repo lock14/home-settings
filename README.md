@@ -148,12 +148,12 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
     - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
     - `Alt+?` (`Prefix + ?`, `Space ?`, or `ide --keys`) opens a 2-column Solarized Dark keybinding cheatsheet popup (`tmux display-popup`).
   - **Layer 3: Editor, File Explorer & Live Auto-Reload (`Space` Leader & `mini.files`)**:
-    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Inside `mini.files`, `h`/`l` navigate parent/child directories or open files, `j`/`k` move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q`/`<Esc>` closes.
+    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Inside `mini.files`, `h`/`l` (or `Left`/`Right`/`Enter`) navigate parent/child directories or open files, `j`/`k` (or `Up`/`Down`) move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q` closes.
     - `Space gs` opens Telescope `git_status` to review and jump to AI-modified files.
     - `opt.autoread` and `SolarizedAutoRead` (`FocusGained`, `BufEnter`, `CursorHold`, `CursorHoldI` -> `silent! checktime`) automatically reload buffers modified on disk by AI agents.
     - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character; `:IdeCd` (`Space cd`) synchronizes the workspace directory across Editor and Shell.
   - **Layer 4: Clickable Links & Unified Clipboard**:
-    - Native terminal OSC 8 hyperlinks pass through Tmux (`terminal-features '*:hyperlinks'`) for browser links, while `Ctrl+Click` on compiler output (`file:line[:col]`), `file:///` URLs, markdown `[label](file:///...#L10)` links, or custom `~/.config/ide/links.sh` rules opens the target at that line in the Editor.
+    - Tmux captures inner-pane OSC 8 hyperlinks into `#{mouse_hyperlink}` and passes them through to the outer terminal (`terminal-features '*:hyperlinks'` and `FORCE_HYPERLINK=1` without `*:Hls@`, plus `recover_split_osc8_href` in `bin/ide` for 1st-character split OSC 8 links), routing `http(s)://` links to the browser and opening `file:///` links, compiler output (`file:line[:col]`), markdown `[label](file:///...#L10)` links, or custom `~/.config/ide/links.sh` rules at the target line in the Editor on `Ctrl+Click` or `Alt+Click` (`C-MouseDown1Pane` / `M-MouseDown1Pane`, while plain `MouseDown1Pane` stays pinned to `select-pane -t = \; send-keys -M`).
     - Selecting text with the mouse in Tmux or Neovim copies immediately via `copy-pipe-no-clear` / `"+ygv` while keeping the highlight visible (`Alt+c` copies and clears, `Escape` or single click clears, `Alt+v` pastes from the system/OSC 52 clipboard).
     - SSH sessions strictly avoid probing local `/tmp/.X11-unix/X0` sockets so Neovim's built-in OSC 52 provider and `tmux load-buffer -w` route clipboard yanks back to the remote SSH client.
 
@@ -180,9 +180,9 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
 | `Alt+?` / `Space ?` / `Prefix + ?` | Universal | Open interactive 2-column Solarized Dark keybinding cheatsheet popup (`ide --keys`) |
 | `Click Status Bar` | Tmux Mouse | Left-click session (`choose-tree`), center role/zoom badges (`ide --status-click`), or `Help` (`ide --keys`); right-click for menu |
 | `Alt+c` / `Alt+v` | Universal | Copy active selection to system/OSC 52 clipboard and clear highlight / paste from clipboard |
-| `Ctrl+Click` | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor |
+| `Ctrl+Click` / `Alt+Click` | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor |
 | `Alt+q` (`Alt+Shift+Q`) / `Space q` | Universal | Gracefully quit (`ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
-| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` explorer at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` out/in, `=` apply edits, `g?` help, `q` close |
+| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` explorer at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` or `Left`/`Right`/`Enter` out/in, `j`/`k` or `Up`/`Down` move, `=` apply edits, `g?` help, `q` close |
 | `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
 | `Space cd` (`:IdeCd [dir]`) | Neovim Normal | Synchronize Editor and Tmux workspace directory (`@ide_workdir`) |
 | `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |

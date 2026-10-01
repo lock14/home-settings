@@ -126,15 +126,70 @@ else
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" --keys)"
+IDE_KEYS_COMPOUND_OUT="$("$SCRIPT_DIR/bin/ide" --2pane --keys)"
+IDE_KEYS_PTY_OK="$(python3 - "$SCRIPT_DIR/bin/ide" <<'PY'
+import fcntl, os, pty, select, subprocess, sys, termios, time
+ide_bin = sys.argv[1]
+def set_ctty(sfd):
+    os.setsid()
+    fcntl.ioctl(sfd, termios.TIOCSCTTY, 0)
+
+def wait_noncanon(fd, deadline):
+    while time.monotonic() < deadline:
+        try:
+            if not (termios.tcgetattr(fd)[3] & termios.ICANON):
+                return True
+        except OSError:
+            return False
+        time.sleep(0.005)
+    return False
+
+for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x03", b"\x04"):
+    mfd, sfd = pty.openpty()
+    proc = subprocess.Popen(
+        [ide_bin, "--keys"],
+        stdin=sfd, stdout=sfd, stderr=sfd, close_fds=True,
+        preexec_fn=lambda sfd=sfd: set_ctty(sfd),
+    )
+    os.close(sfd)
+    out = b""
+    deadline = time.monotonic() + 2.0
+    while b"This key cheatsheet" not in out and time.monotonic() < deadline:
+        r, _, _ = select.select([mfd], [], [], 0.05)
+        if r:
+            out += os.read(mfd, 4096)
+    wait_noncanon(mfd, deadline)
+    os.write(mfd, b"\x1b[A")
+    time.sleep(0.05)
+    wait_noncanon(mfd, time.monotonic() + 2.0)
+    if proc.poll() is not None:
+        os.close(mfd)
+        print("FAIL:closed_on_arrow")
+        sys.exit(0)
+    os.write(mfd, close_seq)
+    rc = proc.wait(timeout=2.0)
+    os.close(mfd)
+    if rc != 0:
+        print(f"FAIL:seq={close_seq!r}:rc={rc}")
+        sys.exit(0)
+print("OK")
+PY
+)"
 if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
+   [ "$IDE_KEYS_OUT" = "$IDE_KEYS_COMPOUND_OUT" ] && \
+   ! "$SCRIPT_DIR/bin/ide" --keys --unknown-flag >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/ide" --ai invalid-agent --keys >/dev/null 2>&1 && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+E" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+T" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT"; then
-    pass "bin/ide --keys renders the Solarized Dark 2-column keybinding cheatsheet (including focus, swap, resize, mini.files, clipboard, and quit shortcuts)"
+   grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
+   [ "$(grep -c 'show_keys_cheatsheet()' "$SCRIPT_DIR/bin/ide")" -eq 1 ] && \
+   [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
+    pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including focus, swap, resize, mini.files h/l or Left/Right, clipboard, and quit shortcuts) and drains multi-byte escape sequences on PTY"
 else
-    fail "bin/ide --keys" "Missing expected keybinding sections in bin/ide --keys output"
+    fail "bin/ide --keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet(), or PTY key handling failed ($IDE_KEYS_PTY_OK)"
 fi
 
 if "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1; then
@@ -228,10 +283,10 @@ if command -v tmux >/dev/null 2>&1; then
         pane_cnt="$(tmux list-panes -t "=ws_2pane_test:" | wc -l | tr -d ' ')"
         win_cnt="$(tmux list-windows -t "=ws_2pane_test" | wc -l | tr -d ' ')"
         env_out="$(tmux show-environment -t "=ws_2pane_test" 2>/dev/null || true)"
-        if [ "$pane_cnt" = "2" ] && [ "$win_cnt" = "1" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out"; then
-            pass "bin/ide --2pane layout spawns 2 side-by-side panes (50% AI | 50% Editor) in a single window and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, and IDE_AI_CLI=agy"
+        if [ "$pane_cnt" = "2" ] && [ "$win_cnt" = "1" ] && grep -q "NVIM_IDE_SOCKET=" <<< "$env_out" && grep -q "NVIM_IDE_PANE=" <<< "$env_out" && grep -q "IDE_AI_PANE=" <<< "$env_out" && grep -q "IDE_AI_CLI=agy" <<< "$env_out" && grep -q "FORCE_HYPERLINK=1" <<< "$env_out"; then
+            pass "bin/ide --2pane layout spawns 2 side-by-side panes (50% AI | 50% Editor) in a single window and exports NVIM_IDE_SOCKET, NVIM_IDE_PANE, IDE_AI_PANE, IDE_AI_CLI=agy, and FORCE_HYPERLINK=1"
         else
-            fail "bin/ide 2-pane layout" "Expected 2 panes in 1 window and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy env vars, got panes=$pane_cnt wins=$win_cnt env=$env_out"
+            fail "bin/ide 2-pane layout" "Expected 2 panes in 1 window and NVIM_IDE_* / IDE_AI_PANE / IDE_AI_CLI=agy / FORCE_HYPERLINK=1 env vars, got panes=$pane_cnt wins=$win_cnt env=$env_out"
         fi
         "$SCRIPT_DIR/bin/ide" --kill "ws_2pane_test" >/dev/null 2>&1
     else
@@ -274,7 +329,7 @@ SH
         initial_active="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         win_width="$(tmux display-message -p -t "$main_win" "#{window_width}")"
         term_width="$(tmux display-message -p -t "$term_pane" "#{pane_width}")"
-        if [ "$pane_cnt_3" = "3" ] && [ "$win_cnt_3" = "1" ] && [ "$initial_active" = "$ai_pane" ] && [ "$term_width" = "$win_width" ] && grep -q "IDE_TERM_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3" && ! grep -q "IDE_TREE_PANE=" <<< "$env_out_3"; then
+        if [ "$pane_cnt_3" = "3" ] && [ "$win_cnt_3" = "1" ] && [ "$initial_active" = "$ai_pane" ] && [ "$term_width" = "$win_width" ] && grep -q "IDE_TERM_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_PANE=" <<< "$env_out_3" && grep -q "IDE_AI_CLI=claude" <<< "$env_out_3" && grep -q "FORCE_HYPERLINK=1" <<< "$env_out_3" && ! grep -q "IDE_TREE_PANE=" <<< "$env_out_3"; then
             pass "bin/ide default 3-pane layout spawns all 3 panes (Top-Left 50%x75% AI Agent, Top-Right 50%x75% Editor, Bottom 100%x25% Full-Width Shell) in a single window with initial focus on AI"
         else
             fail "bin/ide 3-pane layout" "Expected 3 panes in 1 window, initial_active=$ai_pane (got $initial_active), term_width=$win_width (got $term_width), IDE_TERM_PANE, IDE_AI_PANE, and IDE_AI_CLI=claude, got panes=$pane_cnt_3 wins=$win_cnt_3 env=$env_out_3"
@@ -537,33 +592,81 @@ SH
                     bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     buf_after_paren_file="${bname}:${bline}"
                 fi
+                "$SCRIPT_DIR/bin/ide" --open-link "file://myhost.local$IDE_WS_3P/subdir/nested.txt#L2:1-L3:5" "" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_host_col_hash="2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_host_col_hash="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/nested.txt:L3" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_colon_l="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_colon_l="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                "$SCRIPT_DIR/bin/ide" --open-link "file://$IDE_WS_3P/subdir/nested.txt#section:1" "\`nested.txt:2-3\`" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_href_word_line="2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_href_word_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                printf "h1\nh2\nh3\n" > "$IDE_WS_3P/subdir/foo#bar.txt"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/foo#bar.txt:3" "$IDE_WS_3P" "ws_3pane_test"
+                buf_after_hash_file="foo#bar.txt:3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    bname="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                    bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                    buf_after_hash_file="${bname}:${bline}"
+                fi
                 # Verify line-wrapped URLs in a tmux pane (e.g. broken after 'home-' onto an indented next line)
-                # are stitched back together when clicking either the first line or the continuation line.
+                # are stitched back together when clicking either the first line or the continuation line,
+                # and 1st-character split OSC 8 links (\e]8;id=...;file://...\e\\p\e]8;;\e\\arse_file_target) are recovered when clicking chars 2..N.
                 WRAP_BROWSER_OUT="$TEMP_HOME/wrap_browser.out"
                 WRAP_BROWSER_BIN="$TEMP_HOME/wrap_browser.sh"
                 printf '#!/usr/bin/env bash\necho "$1" >> "%s"\n' "$WRAP_BROWSER_OUT" > "$WRAP_BROWSER_BIN"
                 chmod +x "$WRAP_BROWSER_BIN"
                 tmux select-pane -t "$term_pane"
-                tmux send-keys -t "$term_pane" " printf '  Submitted PR (https://github.com/lock14/home-\\n  settings/pull/118)\\n'" C-m
-                for _ in $(seq 1 25); do
-                    tmux capture-pane -p -t "$term_pane" 2>/dev/null | grep -Fq "settings/pull/118" && break
+                tmux send-keys -t "$term_pane" " printf '  Submitted PR (https://github.com/lock14/home-\\n  settings/pull/118)\\n  \\033]8;id=test;file://$IDE_WS_3P/subdir/nested.txt#L3\\033\\\\p\\033]8;;\\033\\\\arse_file_target\\n  \\033]8;id=sep;file://$IDE_WS_3P/subdir/nested.txt#L2\\033\\\\#\\033]8;;\\033\\\\{mouse_hyperlink}\\n  \\033]8;id=wrap;file://$IDE_WS_3P/subdir/nested.txt#L3\\033\\\\w\\033]8;;\\033\\\\rapped_sym_\\n  continuation\\n  \\033[36m\\033]8;id=sgr;file://$IDE_WS_3P/subdir/nested.txt#L1\\033\\\\C\\033]8;;\\033\\\\lass\\033[39m.\\033[32mmethod\\033[0m\\n'" C-m
+                for _ in $(seq 1 100); do
+                    tmux capture-pane -p -t "$term_pane" 2>/dev/null | grep -Fq "Class.method" && break
                     sleep 0.02
                 done
                 IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "https://github.com/lock14/home-" "$IDE_WS_3P" "ws_3pane_test"
                 IDE_BROWSER="$WRAP_BROWSER_BIN" "$SCRIPT_DIR/bin/ide" --open-link "" "settings/pull/118" "$IDE_WS_3P" "ws_3pane_test"
-                for _ in $(seq 1 25); do
+                for _ in $(seq 1 100); do
                     [ "$(wc -l < "$WRAP_BROWSER_OUT" 2>/dev/null | tr -d ' ')" = "2" ] && break
                     sleep 0.02
                 done
                 wrap_url_line1="$(sed -n '1p' "$WRAP_BROWSER_OUT" 2>/dev/null || true)"
                 wrap_url_line2="$(sed -n '2p' "$WRAP_BROWSER_OUT" 2>/dev/null || true)"
                 rm -f "$WRAP_BROWSER_OUT" "$WRAP_BROWSER_BIN"
+                tmux select-pane -t "$term_pane"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "parse_file_target" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_split_osc8="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_split_osc8="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                tmux select-pane -t "$term_pane"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "Class.method" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_split_sgr="1"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_split_sgr="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                tmux select-pane -t "$term_pane"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "mouse_hyperlink" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_split_sep="2"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_split_sep="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
+                tmux select-pane -t "$term_pane"
+                "$SCRIPT_DIR/bin/ide" --open-link "" "continuation" "$IDE_WS_3P" "ws_3pane_test"
+                line_after_split_wrap="3"
+                if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                    line_after_split_wrap="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                fi
                 tmux select-pane -t "$ed_pane"
                 active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ]; then
-                    pass "bin/ide --open-link handles file://#L<line>, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), line-wrapped URLs, file URLs with parentheses, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
+                if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$line_after_host_col_hash" = "2" ] && [ "$line_after_colon_l" = "3" ] && [ "$line_after_href_word_line" = "2" ] && [ "$buf_after_hash_file" = "foo#bar.txt:3" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$line_after_split_osc8" = "3" ] && [ "$line_after_split_sgr" = "1" ] && [ "$line_after_split_sep" = "2" ] && [ "$line_after_split_wrap" = "3" ]; then
+                    pass "bin/ide --open-link handles file://#L<line>, file://host/path#L<line>:<col>-L<end>:<col>, filepath:L<line>, file:// href + word:line-end, filenames with '#', compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), line-wrapped URLs, 1st-character split OSC 8 links (recover_split_osc8_href including mid-token SGR, word-separator prefixes, and wrapped continuations), file URLs with parentheses, Read(...) tool headers, collapsed empty-href args, and workspace basenames (unparking Editor if hidden)"
                 else
-                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane, paren=route.ts:2, wrapped URLs=https://github.com/lock14/home-settings/pull/118, and lines 2/3/1/3/2/3/1, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file wrap1=$wrap_url_line1 wrap2=$wrap_url_line2"
+                    fail "bin/ide --open-link focus/line" "Expected active=$ed_pane, paren=route.ts:2, hash=foo#bar.txt:3, wrapped URLs=https://github.com/lock14/home-settings/pull/118, split_osc8=3/1/2/3, and lines 2/3/1/3/2/3/1/2/3/2, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file host_col=$line_after_host_col_hash colon_l=$line_after_colon_l href_word=$line_after_href_word_line hash=$buf_after_hash_file wrap1=$wrap_url_line1 wrap2=$wrap_url_line2 split_osc8=$line_after_split_osc8/$line_after_split_sgr/$line_after_split_sep/$line_after_split_wrap"
                 fi
             else
                 fail "bin/ide --open-link filepath:line:col:" "Command failed on filepath:line:col:"
@@ -864,10 +967,10 @@ LUA
     fi
     "$SCRIPT_DIR/bin/ide" --kill "api" >/dev/null 2>&1 || true
 
-    # Mouse resizing & Ctrl+LeftClick link opening: in a real terminal client (a python3 pty speaking SGR mouse), dragging the
+    # Mouse resizing & Ctrl/Alt+LeftClick link opening: in a real terminal client (a python3 pty speaking SGR mouse), dragging the
     # AI | Editor border and the Shell's top edge resizes panes under the repo's .tmux.conf, focus switches (--toggle /
     # --show-term), parking/unparking (--toggle-editor / --toggle-term), and a zoom round trip keep the dragged sizes, and
-    # Ctrl+LeftClick (C-MouseDown1Pane) routes OSC 8 file hyperlinks and plain-text file:line tokens to `ide --open-link`.
+    # Ctrl+LeftClick (C-MouseDown1Pane) and Alt+LeftClick (M-MouseDown1Pane) route OSC 8 file hyperlinks and plain-text file:line tokens to `ide --open-link`.
     if command -v python3 >/dev/null 2>&1; then
         MOUSE_TMPDIR="$(mktemp -d)"
         IDE_WS_MOUSE="$TEMP_HOME/ws_mouse"
@@ -883,6 +986,7 @@ LUA
             tmux -f "$SCRIPT_DIR/dotfiles/.tmux.conf" new-session -d -s mouse-holder -x 120 -y 40
             env -u IDE_AI_CLI "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_MOUSE" >/dev/null 2>&1
             echo "binding=$(tmux list-keys -T root MouseDrag1Border 2>&1)"
+            echo "md1=$(tmux list-keys -T root MouseDown1Pane 2>&1)"
             python3 - "$SCRIPT_DIR/bin/ide" "ws_mouse" "$MOUSE_CLICK_LOG" 2>&1 <<'PY'
 import fcntl, os, select, struct, subprocess, sys, termios, threading, time
 
@@ -957,7 +1061,7 @@ tmux("resize-pane", "-Z", "-t", panes[1])
 tmux("resize-pane", "-Z", "-t", panes[1])
 kept = sizes()
 
-# Emit an OSC 8 hyperlink on row 0 and a plain-text token on row 1 of the AI pane, then Ctrl+LeftClick row 0 and row 1
+# Emit an OSC 8 hyperlink on row 0 and a plain-text token on row 1 of the AI pane, then Ctrl+LeftClick row 0 and row 1, plus Alt+LeftClick row 0
 outer_bytes.clear()
 tmux("respawn-pane", "-k", "-t", panes[0], "printf '\\033[2J\\033[H\\033]8;;file:///tmp/osc8_target.lua#L42\\033\\\\OSC8LINK\\033]8;;\\033\\\\\\nPLAINWORD.lua:7\\n'; sleep 30")
 time.sleep(0.3)
@@ -972,10 +1076,17 @@ for _ in range(30):
     if os.path.exists(click_log) and open(click_log).read().count("\n") >= 2:
         break
     time.sleep(0.05)
+time.sleep(0.4)
+send("\x1b[<8;2;2M\x1b[<8;2;2m")
+for _ in range(30):
+    if os.path.exists(click_log) and open(click_log).read().count("\n") >= 3:
+        break
+    time.sleep(0.05)
 
 attached = False
 client.terminate()
-print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept}")
+outer_osc8 = "passed" if b"\x1b]8;" in outer_bytes else "missing"
+print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept} outer_osc8={outer_osc8}")
 PY
         )" || true
         tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
@@ -983,12 +1094,13 @@ PY
         MOUSE_TMPDIR=""
         mouse_click_logged="$(cat "$MOUSE_CLICK_LOG" 2>/dev/null || true)"
         if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && \
-           grep -q '^drag=ok kept=ok$' <<< "$mouse_out" && \
-           grep -Fq 'argc=5 2=<file:///tmp/osc8_target.lua#L42> 3=<OSC8LINK>' <<< "$mouse_click_logged" && \
+           grep -q '^md1=.*MouseDown1Pane select-pane -t = \\; send-keys -M' <<< "$mouse_out" && \
+           grep -q '^drag=ok kept=ok outer_osc8=passed$' <<< "$mouse_out" && \
+           [ "$(grep -Fc 'argc=5 2=<file:///tmp/osc8_target.lua#L42> 3=<OSC8LINK>' <<< "$mouse_click_logged")" -ge 2 ] && \
            grep -Fq 'argc=5 2=<> 3=<PLAINWORD.lua:7>' <<< "$mouse_click_logged"; then
-            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom) and routes Ctrl+LeftClick (C-MouseDown1Pane) for both OSC 8 hyperlinks and plain-text file:line tokens"
+            pass "tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom), pins native MouseDown1Pane, passes OSC 8 through to the outer terminal, and routes Ctrl+LeftClick (C-MouseDown1Pane) and Alt+LeftClick (M-MouseDown1Pane) for OSC 8 hyperlinks and plain-text file:line tokens"
         else
-            fail "tmux mouse border resize & Ctrl+LeftClick" "Expected MouseDrag1Border resize-pane -M, drag=ok kept=ok, and C-MouseDown1Pane for OSC8LINK + PLAINWORD.lua:7; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
+            fail "tmux mouse border resize & Ctrl/Alt+LeftClick" "Expected MouseDrag1Border resize-pane -M, MouseDown1Pane select-pane -t = \\; send-keys -M, drag=ok kept=ok outer_osc8=passed, and C-MouseDown1Pane + M-MouseDown1Pane for OSC8LINK + PLAINWORD.lua:7; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
         fi
     fi
 
