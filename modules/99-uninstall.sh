@@ -22,7 +22,6 @@ uninstall_dotfiles() {
     echo "  Removing managed dotfile symlinks..."
     local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
     local dotfiles=(
-        "$HOME/.dir-colors/dircolors"
         "$xdg_config/bat/themes/Solarized-Dark-TrueColor.tmTheme"
         "$xdg_config/mise/config.toml"
     )
@@ -62,8 +61,6 @@ uninstall_dotfiles() {
     unlink_path "$HOME/.zsh-aliases"
 
     # Unlink any managed .config entries dynamically
-    local nvim_target="$xdg_config/nvim"
-    unlink_path "$nvim_target"
     if [ -d "$REPO_DIR/dotfiles/.config" ]; then
         for item in "$REPO_DIR/dotfiles/.config"/*; do
             [ -e "$item" ] || continue
@@ -77,9 +74,11 @@ uninstall_dotfiles() {
     fi
 
     # Clean up empty bat directories if they exist
-    rmdir "$xdg_config/bat/syntaxes" 2>/dev/null || true
-    rmdir "$xdg_config/bat/themes" 2>/dev/null || true
-    rmdir "$xdg_config/bat" 2>/dev/null || true
+    if [ "$DRY_RUN" = false ]; then
+        rmdir "$xdg_config/bat/syntaxes" 2>/dev/null || true
+        rmdir "$xdg_config/bat/themes" 2>/dev/null || true
+        rmdir "$xdg_config/bat" 2>/dev/null || true
+    fi
 
     # Rebuild bat cache to purge uninstalled syntaxes and themes
     if [ "$DRY_RUN" = false ]; then

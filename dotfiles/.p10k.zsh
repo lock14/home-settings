@@ -800,8 +800,8 @@
   }
 
   # Nearest-root project dominance & subtree scoping for right-prompt toolchain segments.
-  # Prevents repo-root package.json files (e.g. ~/Google/package.json) or $HOME files from
-  # bleeding into nested non-Node subdirectories (e.g. ~/Google/terraform/ghes-cluster-gcp).
+  # Prevents repo-root package.json files (e.g. ~/workspace/package.json) or $HOME files from
+  # bleeding into nested non-Node subdirectories (e.g. ~/workspace/terraform/prod-cluster).
   function _p9k_solarized_project_active() {
     emulate -L zsh -o extended_glob
     local tool=''

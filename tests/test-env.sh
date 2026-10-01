@@ -287,6 +287,38 @@ STANDALONE_HOME=$(mktemp -d)
             kill "$bash_nvim_pid" 2>/dev/null || true
             rm -f "$bash_test_sock"
         fi
+
+        if command -v tmux >/dev/null 2>&1; then
+            tmux kill-session -t '=bg_sess' >/dev/null 2>&1 || true
+            tmux kill-session -t '=fg_sess' >/dev/null 2>&1 || true
+            multisess_dir="$(mktemp -d)"
+            bg_nvim_sock="$multisess_dir/bg-nvim.sock"
+            (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bg_nvim_sock" >/dev/null 2>&1) &
+            bg_nvim_pid=$!
+            for _ in $(seq 1 30); do
+                [ -S "$bg_nvim_sock" ] && break
+                sleep 0.05
+            done
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
+            bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_socket "$bg_nvim_sock"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_initial_root "$SCRIPT_DIR/modules"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux new-session -d -s fg_sess -c "/tmp" "sleep 30"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_socket "$multisess_dir/wrong-fg.sock"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_initial_root "/tmp"
+            tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
+            (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
+            bg_remote_state="$(nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
+            kill "$bg_nvim_pid" 2>/dev/null || true
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
+            rm -rf "$multisess_dir"
+            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ]; then
+                echo "PASS:Standalone .bashrc-addendum v() and icd() target caller TMUX_PANE session instead of active fg_sess in multi-session tmux"
+            else
+                echo "FAIL:Standalone v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3' and '$SCRIPT_DIR/modules', got state='$bg_remote_state' pwd='$icd_reset_pwd'"
+            fi
+        fi
     fi
 
     # Test Solarized Dark PS1 shelf prompt states (local vs SSH, clean vs dirty git, detached HEAD, non-git dir, TERM=linux fallback, exit status 0 vs non-zero)

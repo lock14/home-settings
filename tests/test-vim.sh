@@ -136,7 +136,9 @@ if [ -f "$NVIM_CONFIG" ]; then
     if grep -q 'opt\.autoread = true' "$NVIM_CONFIG" && \
        grep -q 'SolarizedAutoRead' "$NVIM_CONFIG" && \
        grep -q 'silent! checktime' "$NVIM_CONFIG" && \
-       grep -q 'toggle_file_explorer' "$NVIM_CONFIG" && \
+       grep -q 'toggle_file_explorer(false)' "$NVIM_CONFIG" && \
+       grep -q 'toggle_file_explorer(true)' "$NVIM_CONFIG" && \
+       ! grep -q 'vim\.keymap\.set.*<leader>[eE]' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("IdeCd"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("Q"' "$NVIM_CONFIG" && \
        grep -q 'nvim_create_user_command("Quit"' "$NVIM_CONFIG" && \
@@ -145,9 +147,9 @@ if [ -f "$NVIM_CONFIG" ]; then
        ! grep -q 'IdeFollow' "$NVIM_CONFIG" && \
        ! grep -q 'IdeClose' "$NVIM_CONFIG" && \
        ! grep -q 'IdeWriteClose' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures native autoread + SolarizedAutoRead checktime, mini.files explorer (<leader>e / <leader>E), <leader>gs git_status, IdeCd, and Q/Quit without custom SolarizedIdeTree, IdeFollow, or :q/:qa hijack"
+        pass "Neovim init.lua configures native autoread + SolarizedAutoRead checktime, mini.files explorer (<leader>e buffer dir / <leader>E workspace cwd), <leader>gs git_status, IdeCd, and Q/Quit without custom SolarizedIdeTree, IdeFollow, or :q/:qa hijack"
     else
-        fail "Neovim native autoread & explorer" "Expected opt.autoread, SolarizedAutoRead, toggle_file_explorer, IdeCd, Q/Quit, <leader>gs, and no SolarizedIdeTree/IdeFollow/IdeClose in init.lua"
+        fail "Neovim native autoread & explorer" "Expected opt.autoread, SolarizedAutoRead, toggle_file_explorer(false/true), IdeCd, Q/Quit, <leader>gs, and no SolarizedIdeTree/IdeFollow/IdeClose in init.lua"
     fi
 
     if grep -q 'if not in_ssh then' "$NVIM_CONFIG" && \
@@ -2330,15 +2332,15 @@ end
     # /tmp/.X11-unix/X0 socket, leaves vim.g.clipboard unset so Neovim's built-in OSC 52 / unnamedplus provider runs,
     # and enables autoread + SolarizedAutoRead checktime and IdeCd.
     if command -v nvim >/dev/null 2>&1; then
-        SSH_NVIM_OUT="$(env -u DISPLAY -u WAYLAND_DISPLAY -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI \
+        SSH_NVIM_OUT="$( (cd "$SCRIPT_DIR" && env -u DISPLAY -u WAYLAND_DISPLAY -u NVIM_IDE_SOCKET -u NVIM_IDE_PANE -u IDE_SESSION -u IDE_INITIAL_ROOT -u IDE_AI_CLI \
             SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" \
             nvim --headless -i NONE -u "$NVIM_CONFIG" \
-            -c 'lua local ac = vim.api.nvim_get_autocmds({ group = "SolarizedAutoRead" }); io.write("DISP=" .. (vim.env.DISPLAY or "") .. "|GCLIP=" .. tostring(vim.g.clipboard) .. "|CB=" .. vim.o.clipboard .. "|AR=" .. tostring(vim.o.autoread) .. "|AC=" .. tostring(#ac >= 1))' \
-            -c 'qa!' 2>/dev/null || true)"
-        if [ "$SSH_NVIM_OUT" = "DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true" ]; then
-            pass "Neovim init.lua does not spoof DISPLAY=:0 over SSH, preserves built-in unnamedplus/OSC 52 clipboard provider, and registers SolarizedAutoRead checktime autocmds"
+            -c 'lua local ac = vim.api.nvim_get_autocmds({ group = "SolarizedAutoRead" }); local mf_ok = "true"; local ok, mf = pcall(require, "mini.files"); if ok and mf then local fk = function(k) vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), "mx", false) end; local cwd = vim.fn.getcwd(); fk("<leader>e"); local b0 = (mf.get_explorer_state() or {}).branch or {}; mf.close(); vim.cmd("edit " .. cwd .. "/modules/10-dotfiles.sh"); fk("<leader>e"); local b1 = (mf.get_explorer_state() or {}).branch or {}; fk("<leader>e"); local st_closed = mf.get_explorer_state(); vim.cmd("edit " .. cwd .. "/modules/unsaved-new.sh"); fk("<leader>e"); local b2 = (mf.get_explorer_state() or {}).branch or {}; mf.set_branch({cwd, cwd .. "/modules"}); mf.close(); fk("<leader>E"); local b3 = (mf.get_explorer_state() or {}).branch or {}; mf.close(); mf_ok = tostring(b0[1] == cwd and b1[1] == cwd .. "/modules" and st_closed == nil and b2[1] == cwd .. "/modules" and #b3 == 1 and b3[1] == cwd) end; io.write("DISP=" .. (vim.env.DISPLAY or "") .. "|GCLIP=" .. tostring(vim.g.clipboard) .. "|CB=" .. vim.o.clipboard .. "|AR=" .. tostring(vim.o.autoread) .. "|AC=" .. tostring(#ac >= 1) .. "|MF=" .. mf_ok)' \
+            -c 'qa!') 2>/dev/null || true)"
+        if [ "$SSH_NVIM_OUT" = "DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|MF=true" ]; then
+            pass "Neovim init.lua does not spoof DISPLAY=:0 over SSH, preserves built-in unnamedplus/OSC 52 clipboard provider, registers SolarizedAutoRead checktime autocmds, and opens mini.files at buffer dir (<leader>e) vs workspace root (<leader>E)"
         else
-            fail "Neovim SSH DISPLAY guard & native autoread/clipboard" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true', got '$SSH_NVIM_OUT'"
+            fail "Neovim SSH DISPLAY guard, autoread/clipboard & mini.files" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|MF=true', got '$SSH_NVIM_OUT'"
         fi
     fi
 else

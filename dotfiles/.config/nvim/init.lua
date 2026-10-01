@@ -153,14 +153,16 @@ local function smart_tmux_nav(dir, tmux_dir)
         end
         vim.cmd("wincmd " .. dir)
         if vim.api.nvim_get_current_win() == cur_win and vim.env.TMUX then
-            local target_cmd = "select-pane -" .. tmux_dir
-            vim.fn.system({
-                "tmux",
-                "if-shell",
-                "-F",
-                "#{==:#{window_zoomed_flag},0}",
-                target_cmd,
-            })
+            local pane = vim.env.TMUX_PANE
+            local target_cmd = (pane and pane ~= "")
+                and ("select-pane -t " .. pane .. " -" .. tmux_dir)
+                or ("select-pane -" .. tmux_dir)
+            local cmd = { "tmux", "if-shell" }
+            if pane and pane ~= "" then
+                vim.list_extend(cmd, { "-t", pane })
+            end
+            vim.list_extend(cmd, { "-F", "#{==:#{window_zoomed_flag},0}", target_cmd })
+            vim.fn.jobstart(cmd, { detach = true })
         end
     end
 end
@@ -206,24 +208,36 @@ local function ide_job(...)
     vim.fn.jobstart(cmd, { detach = true })
 end
 
--- Project File Explorer Toggle: toggles mini.files (`Space+e` / `Space+E`, falling back to Lexplore)
-local function toggle_file_explorer()
+-- Project File Explorer Toggle: toggles mini.files (`Space+e` at current buffer / `Space+E` at cwd, falling back to Lexplore)
+local function toggle_file_explorer(use_cwd)
     local ok, mf = pcall(require, "mini.files")
     if ok and mf then
         if not mf.close() then
+            local uv = vim.uv or vim.loop
             local buf_name = vim.api.nvim_buf_get_name(0)
-            if buf_name ~= "" and (vim.uv or vim.loop).fs_stat(buf_name) then
-                mf.open(buf_name, false)
-            else
-                mf.open((vim.uv or vim.loop).cwd(), true)
+            if not use_cwd and buf_name ~= "" then
+                if uv.fs_stat(buf_name) then
+                    mf.open(buf_name, false)
+                    return
+                end
+                local buf_dir = vim.fn.fnamemodify(buf_name, ":h")
+                if buf_dir ~= "" and uv.fs_stat(buf_dir) then
+                    mf.open(buf_dir, false)
+                    return
+                end
             end
+            mf.open(uv.cwd(), false)
         end
     else
         vim.cmd("Lexplore")
     end
 end
-map("n", "<leader>e", toggle_file_explorer, { desc = "Toggle Mini.files Navigator" })
-map("n", "<leader>E", toggle_file_explorer, { desc = "Toggle Mini.files Navigator" })
+map("n", "<leader>e", function()
+    toggle_file_explorer(false)
+end, { desc = "Toggle Mini.files Navigator (Buffer Dir)" })
+map("n", "<leader>E", function()
+    toggle_file_explorer(true)
+end, { desc = "Toggle Mini.files Navigator (Workspace Root)" })
 
 -- Workspace Role Jump, Visibility Toggle & Directional Swap Keybindings (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
@@ -1237,8 +1251,6 @@ lazy.setup({
                     width_preview = 45,
                 },
             })
-            vim.keymap.set({ "n" }, "<leader>e", toggle_file_explorer, { desc = "Toggle Mini.files Navigator" })
-            vim.keymap.set({ "n" }, "<leader>E", toggle_file_explorer, { desc = "Toggle Mini.files Navigator" })
         end,
     },
 })

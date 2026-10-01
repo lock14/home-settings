@@ -355,6 +355,12 @@ SH
         "$SCRIPT_DIR/bin/ide" --status-click "45" "ws_3pane_test"
         active_after_unpark_ed="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
         ed_parked_flag0="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_ed_parked 2>/dev/null || true)"
+        # Verify --status-click caps status-left width at 48 for session names > 42 chars
+        long_sess="ws_3pane_test_very_long_session_name_exceeding_48_chars"
+        tmux rename-session -t "=ws_3pane_test" "$long_sess"
+        "$SCRIPT_DIR/bin/ide" --status-click "52" "$long_sess"
+        active_after_long_click="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+        tmux rename-session -t "=$long_sess" "ws_3pane_test"
         "$SCRIPT_DIR/bin/ide" --toggle-term "ws_3pane_test"
         term_parked_flag0="$(tmux show-options -qv -t "=ws_3pane_test:" @ide_term_parked 2>/dev/null || true)"
         panes_after_unpark_all="$(tmux list-panes -t "$main_win" | wc -l | tr -d ' ')"
@@ -367,11 +373,12 @@ SH
            [ "$panes_after_park_term" = "2" ] && [ "$park_term_win" = "_ide_park_term" ] && [ "$term_parked_flag1" = "1" ] && \
            [ "$panes_after_park_ed" = "1" ] && [ "$park_ed_win" = "_ide_park_editor" ] && [ "$ed_parked_flag1" = "1" ] && \
            [ "$panes_after_last_guard" = "1" ] && [ "$active_after_unpark_ed" = "$ed_pane" ] && [ "$ed_parked_flag0" = "0" ] && \
+           [ "$active_after_long_click" = "$ai_pane" ] && \
            [ "$panes_after_unpark_all" = "3" ] && [ "$term_parked_flag0" = "0" ] && [ "$term_w_restored" = "$win_width" ] && [ "$term_h_restored" = "$term_h_0" ] && \
            [ "$ed_pid_0" = "$ed_pid_1" ] && [ "$term_pid_0" = "$term_pid_1" ] && [ "$ai_pid_0" = "$ai_pid_1" ]; then
             pass "bin/ide --toggle-term, --toggle-editor, --toggle-ai, and --status-click non-destructively park/unpark panes via _ide_park_<role>, track @ide_*_parked, lock main_win rename, guard the last visible pane, and restore geometry and PIDs"
         else
-            fail "bin/ide pane parking/unparking" "Unexpected state: main_rename=$main_allow_rename park_term=$panes_after_park_term($park_term_win,flag=$term_parked_flag1->$term_parked_flag0) park_ed=$panes_after_park_ed($park_ed_win,flag=$ed_parked_flag1->$ed_parked_flag0) guard=$panes_after_last_guard unpark_ed=$active_after_unpark_ed all=$panes_after_unpark_all w=$term_w_restored/$win_width h=$term_h_restored/$term_h_0 pids=$ed_pid_0/$ed_pid_1,$term_pid_0/$term_pid_1,$ai_pid_0/$ai_pid_1"
+            fail "bin/ide pane parking/unparking" "Unexpected state: main_rename=$main_allow_rename park_term=$panes_after_park_term($park_term_win,flag=$term_parked_flag1->$term_parked_flag0) park_ed=$panes_after_park_ed($park_ed_win,flag=$ed_parked_flag1->$ed_parked_flag0) guard=$panes_after_last_guard unpark_ed=$active_after_unpark_ed long_click=$active_after_long_click all=$panes_after_unpark_all w=$term_w_restored/$win_width h=$term_h_restored/$term_h_0 pids=$ed_pid_0/$ed_pid_1,$term_pid_0/$term_pid_1,$ai_pid_0/$ai_pid_1"
         fi
 
         # Test directional pane swapping (--swap right|left|down|up) including horizontal wrap,
@@ -586,7 +593,11 @@ fi
 exit 1
 SH
         chmod +x "$COPY_MOCK_DIR/xsel"
-        tmux set-environment -t "ws_3pane_test" -r DISPLAY 2>/dev/null || true
+        tmux set-environment -t "=ws_3pane_test" -r DISPLAY 2>/dev/null || true
+        for ssh_v in SSH_CONNECTION SSH_TTY SSH_CLIENT; do
+            tmux set-environment -g -r "$ssh_v" 2>/dev/null || true
+            tmux set-environment -t "=ws_3pane_test" -r "$ssh_v" 2>/dev/null || true
+        done
         tmux set-environment -g DISPLAY ":99"
         printf "solarized-clipboard-payload" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
         copy_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
@@ -594,17 +605,24 @@ SH
         # Local desktop (--paste without SSH_CONNECTION): prefers X11 (`from-xsel-selection`) and loads it into tmux buffer
         env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
         paste_local_got="$(tmux show-buffer 2>/dev/null || true)"
-        # SSH session (--paste with SSH_CONNECTION): prefers tmux buffer (`from-tmux-ssh-buf`) over stale background X11
+        # SSH session (--paste with SSH_CONNECTION in process env): prefers tmux buffer (`from-tmux-ssh-buf`) over stale background X11
         tmux set-buffer "from-tmux-ssh-buf"
         env -u DISPLAY SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
         paste_ssh_got="$(tmux show-buffer 2>/dev/null || true)"
+        # SSH session (--paste with SSH_CONNECTION only in tmux session env, as run-shell #{pane_id} does): prefers tmux buffer
+        tmux set-buffer "from-tmux-ssh-sess-env"
+        tmux set-environment -t "=ws_3pane_test" SSH_CONNECTION "10.0.0.1 1234 10.0.0.2 22"
+        env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
+        paste_ssh_sess_got="$(tmux show-buffer 2>/dev/null || true)"
+        tmux set-environment -t "=ws_3pane_test" -r SSH_CONNECTION 2>/dev/null || true
         tmux set-environment -gu DISPLAY
         rm -rf "$COPY_MOCK_DIR"
         if [ "$copy_tmux_got" = "solarized-clipboard-payload" ] && [ "$copy_xsel_got" = "solarized-clipboard-payload" ] && \
-           [ "$paste_local_got" = "from-xsel-selection" ] && [ "$paste_ssh_got" = "from-tmux-ssh-buf" ]; then
-            pass "bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11, and --paste prioritizes X11 on local desktop and tmux buffer over SSH"
+           [ "$paste_local_got" = "from-xsel-selection" ] && [ "$paste_ssh_got" = "from-tmux-ssh-buf" ] && \
+           [ "$paste_ssh_sess_got" = "from-tmux-ssh-sess-env" ]; then
+            pass "bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11, and --paste prioritizes X11 on local desktop and tmux buffer over SSH (both process and tmux session env)"
         else
-            fail "bin/ide --copy / --paste" "Expected copy='solarized-clipboard-payload', paste_local='from-xsel-selection', paste_ssh='from-tmux-ssh-buf', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got'"
+            fail "bin/ide --copy / --paste" "Expected copy='solarized-clipboard-payload', paste_local='from-xsel-selection', paste_ssh='from-tmux-ssh-buf', paste_ssh_sess='from-tmux-ssh-sess-env', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess='$paste_ssh_sess_got'"
         fi
 
         # Verify untagged pane recovery when @ide_term_pane and pane's @ide_role are cleared (tests tmux_out preserving trailing \t)
@@ -1103,6 +1121,50 @@ if grep -Fq "apt-get upgrade" <<< "$INTERACTIVE_OUT" && ! grep -Fq "apt-get upgr
     pass "bin/update-system -i (--interactive) suppresses automatic -y flag for interactive confirmation"
 else
     fail "bin/update-system -i" "Found automatic -y flag in interactive mode"
+fi
+
+# Test 8: bin/gnome-terminal-solarized dry-run and legacy profile UUID / font upgrade
+echo -e "\n[8/8] Testing bin/gnome-terminal-solarized profile provisioning..."
+GT_MOCK_DIR="$(mktemp -d)"
+cat > "$GT_MOCK_DIR/dconf" <<'SH'
+#!/usr/bin/env bash
+echo "dconf $*" >> "${GT_MOCK_LOG:-/dev/null}"
+if [ "${1:-}" = "read" ] && [ "${2:-}" = "/org/gnome/terminal/legacy/profiles:/list" ]; then
+    echo "['11f5ebd6-faab-4bd3-8336-868a6b52ac0d', 'other-profile-uuid']"
+elif [ "${1:-}" = "list" ] && [ "${2:-}" = "/org/gnome/terminal/legacy/profiles:/" ]; then
+    printf ":other-profile-uuid/\n:321fa646-e6ab-45a1-88d8-00aa66d158d8/\n"
+elif [ "${1:-}" = "read" ] && [[ "${2:-}" == *"/font" ]]; then
+    echo "'MesloLGS NF 12'"
+fi
+exit 0
+SH
+cat > "$GT_MOCK_DIR/gsettings" <<'SH'
+#!/usr/bin/env bash
+echo "gsettings $*" >> "${GT_MOCK_LOG:-/dev/null}"
+if [ "${1:-}" = "list-schemas" ]; then
+    echo "org.gnome.Terminal.ProfilesList"
+fi
+exit 0
+SH
+chmod +x "$GT_MOCK_DIR/dconf" "$GT_MOCK_DIR/gsettings"
+GT_DRY_OUT="$(PATH="$GT_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/gnome-terminal-solarized" --dry-run)"
+if grep -Fq "Solarized Dark" <<< "$GT_DRY_OUT" && \
+   grep -Fq "321fa646-e6ab-45a1-88d8-00aa66d158d8" <<< "$GT_DRY_OUT" && \
+   grep -Fq "11f5ebd6-faab-4bd3-8336-868a6b52ac0d" <<< "$GT_DRY_OUT"; then
+    pass "bin/gnome-terminal-solarized --dry-run outputs Solarized Dark profile UUID (321fa646-...) and legacy UUID cleanup (11f5ebd6-...)"
+else
+    fail "bin/gnome-terminal-solarized --dry-run" "Missing expected dry-run output: $GT_DRY_OUT"
+fi
+
+GT_MOCK_LOG="$GT_MOCK_DIR/gt.log" PATH="$GT_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/gnome-terminal-solarized" >/dev/null 2>&1
+gt_logged="$(cat "$GT_MOCK_DIR/gt.log" 2>/dev/null || true)"
+rm -rf "$GT_MOCK_DIR"
+if grep -Fq "dconf reset -f /org/gnome/terminal/legacy/profiles:/:11f5ebd6-faab-4bd3-8336-868a6b52ac0d/" <<< "$gt_logged" && \
+   grep -Fq "dconf write /org/gnome/terminal/legacy/profiles:/list ['other-profile-uuid', '321fa646-e6ab-45a1-88d8-00aa66d158d8']" <<< "$gt_logged" && \
+   grep -Fq "dconf write /org/gnome/terminal/legacy/profiles:/:other-profile-uuid/font 'MesloLGS Nerd Font Mono 12'" <<< "$gt_logged"; then
+    pass "bin/gnome-terminal-solarized purges legacy profile UUID (11f5ebd6-...) and upgrades legacy 'MesloLGS NF 12' font to 'MesloLGS Nerd Font Mono 12'"
+else
+    fail "bin/gnome-terminal-solarized mock provisioning" "Unexpected dconf/gsettings calls: $gt_logged"
 fi
 
 test_summary
