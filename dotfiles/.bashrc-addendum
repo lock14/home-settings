@@ -131,73 +131,78 @@ v() {
     local sock="${NVIM_IDE_SOCKET:-}"
     local pane="${NVIM_IDE_PANE:-}"
     local tmux_sock=""
-    if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
-        tmux_sock="$(tmux show-options -qv @ide_socket 2>/dev/null || true)"
+    local -a abs_args=()
+    local -a plus_cmds=()
+    local local_only=0
+    local expect_cmd=0
+    local end_of_opts=0
+    local arg dir base p_cmd esc_cmd
+    for arg in "$@"; do
+        if [ "$expect_cmd" = "1" ]; then
+            plus_cmds+=("$arg")
+            expect_cmd=0
+            continue
+        fi
+        if [ "$end_of_opts" = "0" ]; then
+            if [ "$arg" = "--" ]; then
+                end_of_opts=1
+                continue
+            elif [[ "$arg" == +* ]]; then
+                p_cmd="${arg#+}"
+                [ -z "$p_cmd" ] && p_cmd="$"
+                plus_cmds+=("$p_cmd")
+                continue
+            elif [ "$arg" = "-c" ] || [ "$arg" = "--cmd" ]; then
+                expect_cmd=1
+                continue
+            elif [[ "$arg" =~ ^(-v|--version|-h|--help|-d|-u|--clean|--headless|-es|-Es|--startuptime)$ ]]; then
+                local_only=1
+                break
+            elif [[ "$arg" == -* ]]; then
+                continue
+            fi
+        fi
+        if [[ "$arg" == /* ]]; then
+            abs_args+=("$arg")
+        else
+            dir="$(dirname -- "$arg")"
+            base="$(basename -- "$arg")"
+            if [ -d "$dir" ]; then
+                abs_args+=("$(cd -- "$dir" && pwd -P)/$base")
+            else
+                abs_args+=("$PWD/${arg#./}")
+            fi
+        fi
+    done
+
+    local tmux_target="${TMUX_PANE:-}"
+    if [ -z "$tmux_target" ] && [[ "${TMUX:-}" == *,*,* ]]; then
+        tmux_target="\$${TMUX##*,}"
+    fi
+    if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ] && [ -n "$tmux_target" ] && command -v tmux >/dev/null 2>&1; then
+        tmux_sock="$(tmux show-options -qv -t "$tmux_target" @ide_socket 2>/dev/null || true)"
         if [ -z "$tmux_sock" ]; then
             local env_sock
-            env_sock="$(tmux show-environment NVIM_IDE_SOCKET 2>/dev/null || true)"
+            env_sock="$(tmux show-environment -t "$tmux_target" NVIM_IDE_SOCKET 2>/dev/null || true)"
             if [[ "$env_sock" == NVIM_IDE_SOCKET=* ]]; then
                 tmux_sock="${env_sock#NVIM_IDE_SOCKET=}"
             fi
         fi
         [ -z "$sock" ] && sock="$tmux_sock"
-    fi
-    if [ -z "$pane" ] && [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
-        pane="$(tmux show-options -qv @ide_editor_pane 2>/dev/null || true)"
         if [ -z "$pane" ]; then
-            local env_pane
-            env_pane="$(tmux show-environment NVIM_IDE_PANE 2>/dev/null || true)"
-            if [[ "$env_pane" == NVIM_IDE_PANE=* ]]; then
-                pane="${env_pane#NVIM_IDE_PANE=}"
+            pane="$(tmux show-options -qv -t "$tmux_target" @ide_editor_pane 2>/dev/null || true)"
+            if [ -z "$pane" ]; then
+                local env_pane
+                env_pane="$(tmux show-environment -t "$tmux_target" NVIM_IDE_PANE 2>/dev/null || true)"
+                if [[ "$env_pane" == NVIM_IDE_PANE=* ]]; then
+                    pane="${env_pane#NVIM_IDE_PANE=}"
+                fi
             fi
         fi
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
         if nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
-            local -a abs_args=()
-            local -a plus_cmds=()
-            local local_only=0
-            local expect_cmd=0
-            local end_of_opts=0
-            local arg dir base p_cmd esc_cmd
-            for arg in "$@"; do
-                if [ "$expect_cmd" = "1" ]; then
-                    plus_cmds+=("$arg")
-                    expect_cmd=0
-                    continue
-                fi
-                if [ "$end_of_opts" = "0" ]; then
-                    if [ "$arg" = "--" ]; then
-                        end_of_opts=1
-                        continue
-                    elif [[ "$arg" == +* ]]; then
-                        p_cmd="${arg#+}"
-                        [ -z "$p_cmd" ] && p_cmd="$"
-                        plus_cmds+=("$p_cmd")
-                        continue
-                    elif [ "$arg" = "-c" ] || [ "$arg" = "--cmd" ]; then
-                        expect_cmd=1
-                        continue
-                    elif [[ "$arg" =~ ^(-v|--version|-h|--help|-d|-u|--clean|--headless|-es|-Es|--startuptime)$ ]]; then
-                        local_only=1
-                        break
-                    elif [[ "$arg" == -* ]]; then
-                        continue
-                    fi
-                fi
-                if [[ "$arg" == /* ]]; then
-                    abs_args+=("$arg")
-                else
-                    dir="$(dirname -- "$arg")"
-                    base="$(basename -- "$arg")"
-                    if [ -d "$dir" ]; then
-                        abs_args+=("$(cd -- "$dir" && pwd -P)/$base")
-                    else
-                        abs_args+=("$PWD/${arg#./}")
-                    fi
-                fi
-            done
             if [ "$local_only" = "0" ]; then
                 if [ "${#abs_args[@]}" -gt 0 ]; then
                     nvim --server "$sock" --remote "${abs_args[@]}"
@@ -209,7 +214,6 @@ v() {
                 done
                 if [ -n "${TMUX:-}" ] && { [ -z "$tmux_sock" ] || [ "$sock" = "$tmux_sock" ]; }; then
                     local cur_pane="${TMUX_PANE:-}"
-                    [ -z "$cur_pane" ] && cur_pane="$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)"
                     if [ -z "$pane" ] || [ "$cur_pane" != "$pane" ]; then
                         if [ -x "$HOME/.local/bin/ide" ]; then
                             "$HOME/.local/bin/ide" --focus-editor >/dev/null 2>&1 || true
@@ -247,9 +251,15 @@ icd() {
     fi
 
     if [ "${1:-}" = "--reset" ] || [ "${1:-}" = "~" ]; then
-        local init_root=""
-        if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
-            init_root="$(tmux show-options -qv @ide_initial_root 2>/dev/null || true)"
+        local init_root="${IDE_INITIAL_ROOT:-}"
+        if [ -z "$init_root" ] && [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+            local tmux_target="${TMUX_PANE:-}"
+            if [ -z "$tmux_target" ] && [[ "${TMUX:-}" == *,*,* ]]; then
+                tmux_target="\$${TMUX##*,}"
+            fi
+            if [ -n "$tmux_target" ]; then
+                init_root="$(tmux show-options -qv -t "$tmux_target" @ide_initial_root 2>/dev/null || true)"
+            fi
         fi
         if [ -n "$init_root" ] && [ -d "$init_root" ]; then
             builtin cd -- "$init_root" || return 1

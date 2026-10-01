@@ -40,7 +40,7 @@ done
 
 # 2. Discover and link directory-based dotfiles (.dir-colors)
 if [ -d "$DOTFILES_DIR/.dir-colors" ]; then
-    mkdir -p "$HOME/.dir-colors"
+    [ "$DRY_RUN" = true ] || mkdir -p "$HOME/.dir-colors"
     for f in "$DOTFILES_DIR/.dir-colors"/*; do
         [ -e "$f" ] || continue
         link_file "$f" "$HOME/.dir-colors/$(basename "$f")"
@@ -49,7 +49,7 @@ fi
 
 # 3. Discover and link .config subtrees (e.g. nvim)
 if [ -d "$DOTFILES_DIR/.config" ]; then
-    mkdir -p "$XDG_CONFIG"
+    [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG"
     for item in "$DOTFILES_DIR/.config"/*; do
         [ -e "$item" ] || continue
         target_name="$(basename "$item")"
@@ -67,7 +67,7 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
         if [ -L "$existing" ] && [ ! -e "$existing" ]; then
             target_link="$(readlink "$existing" 2>/dev/null || true)"
             if [[ "$target_link" == *"$DOTFILES_DIR/.config"* ]]; then
-                rm -f "$existing"
+                unlink_path "$existing"
             fi
         fi
     done
@@ -76,7 +76,7 @@ fi
 # 4. Ghostty macOS Application Support compatibility symlink
 if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     GHOSTTY_MAC_DIR="$HOME/Library/Application Support/com.mitchellh.ghostty"
-    mkdir -p "$GHOSTTY_MAC_DIR"
+    [ "$DRY_RUN" = true ] || mkdir -p "$GHOSTTY_MAC_DIR"
     link_file "$XDG_CONFIG/ghostty/config" "$GHOSTTY_MAC_DIR/config"
     if [ -d "$DOTFILES_DIR/.config/ghostty/themes" ]; then
         link_dir "$DOTFILES_DIR/.config/ghostty/themes" "$GHOSTTY_MAC_DIR/themes"
@@ -91,7 +91,7 @@ if [ -f "$BAT_THEME_SRC" ]; then
 fi
 
 if [ -d "$REPO_DIR/syntaxes" ]; then
-    mkdir -p "$XDG_CONFIG/bat/syntaxes"
+    [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/bat/syntaxes"
     for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
         [ -e "$syn" ] || continue
         link_file "$syn" "$XDG_CONFIG/bat/syntaxes/$(basename "$syn")"
@@ -133,6 +133,6 @@ if [ -f "$REPO_DIR/.mise.toml" ]; then
 fi
 
 # Live servers are intentionally never touched here: this module also runs under a temporary
-# $HOME in tests, and re-sourcing init.lua into running IDE editors orphans IdeFollow's timer.
+# $HOME in tests, and hot-reloading running tmux or Neovim servers would mutate live sessions.
 # `ide` re-sources ~/.tmux.conf on every launch/attach (or press `prefix r`); restart an IDE
 # Editor pane to pick up init.lua changes.

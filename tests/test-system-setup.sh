@@ -88,6 +88,14 @@ else
     pass "setup.sh rejects missing DB argument"
 fi
 
+# Isolate HOME and XDG directories so setup.sh invocations never touch the caller's real $HOME
+TEMP_SETUP_HOME="$(mktemp -d)"
+trap 'rm -rf "$TEMP_SETUP_HOME"' EXIT
+export HOME="$TEMP_SETUP_HOME"
+export XDG_CONFIG_HOME="$TEMP_SETUP_HOME/.config"
+export XDG_CACHE_HOME="$TEMP_SETUP_HOME/.cache"
+export XDG_DATA_HOME="$TEMP_SETUP_HOME/.local/share"
+
 # Test 3: Dry-run Execution across Platforms
 echo -e "\n[3/5] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
@@ -259,14 +267,20 @@ else
     fail "setup.sh uninstall-dotfiles dry-run" "Command failed: $output"
 fi
 
+if [ -z "$(ls -A "$TEMP_SETUP_HOME" 2>/dev/null)" ]; then
+    pass "setup.sh --dry-run leaves HOME completely untouched (zero directories created)"
+else
+    fail "setup.sh --dry-run filesystem mutation" "Expected empty $TEMP_SETUP_HOME, found: $(ls -A "$TEMP_SETUP_HOME")"
+fi
+
 TEMP_UNINSTALL_HOME=$(mktemp -d)
-mkdir -p "$TEMP_UNINSTALL_HOME/.config/mise"
+mkdir -p "$TEMP_UNINSTALL_HOME/.config/mise" "$TEMP_UNINSTALL_HOME/.config/bat/themes" "$TEMP_UNINSTALL_HOME/.config/bat/syntaxes"
 ln -s "$SCRIPT_DIR/.mise.toml" "$TEMP_UNINSTALL_HOME/.config/mise/config.toml"
 dry_out=$(HOME="$TEMP_UNINSTALL_HOME" XDG_CONFIG_HOME="$TEMP_UNINSTALL_HOME/.config" "$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1)
-if [[ "$dry_out" == *"mise/config.toml"* ]]; then
-    pass "setup.sh --uninstall-dotfiles cleans ~/.config/mise/config.toml symlink"
+if [[ "$dry_out" == *"mise/config.toml"* ]] && [ -d "$TEMP_UNINSTALL_HOME/.config/bat/themes" ] && [ -d "$TEMP_UNINSTALL_HOME/.config/bat/syntaxes" ]; then
+    pass "setup.sh --uninstall-dotfiles --dry-run cleans ~/.config/mise/config.toml symlink without deleting bat dirs"
 else
-    fail "setup.sh uninstall-dotfiles mise cleanup" "Expected mise/config.toml in dry-run output: $dry_out"
+    fail "setup.sh uninstall-dotfiles mise cleanup" "Expected mise/config.toml in dry-run output and preserved bat dirs: $dry_out"
 fi
 rm -rf "$TEMP_UNINSTALL_HOME"
 

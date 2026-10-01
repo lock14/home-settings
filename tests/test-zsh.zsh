@@ -146,6 +146,44 @@ test_functions() {
                 fi
             fi
         fi
+
+        if command -v tmux >/dev/null 2>&1; then
+            tmux kill-session -t '=bg_sess' >/dev/null 2>&1 || true
+            tmux kill-session -t '=fg_sess' >/dev/null 2>&1 || true
+            local multisess_dir
+            multisess_dir="$(mktemp -d)"
+            local bg_nvim_sock="$multisess_dir/bg-nvim.sock"
+            (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bg_nvim_sock" >/dev/null 2>&1) &
+            local bg_nvim_pid=$!
+            local tries=0
+            while [ ! -S "$bg_nvim_sock" ] && [ "$tries" -lt 30 ]; do
+                sleep 0.05
+                tries=$((tries + 1))
+            done
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
+            local bg_pane
+            bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_socket "$bg_nvim_sock"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_initial_root "$SCRIPT_DIR/modules"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux new-session -d -s fg_sess -c "/tmp" "sleep 30"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_socket "$multisess_dir/wrong-fg.sock"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_initial_root "/tmp"
+            local tmux_env
+            tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
+            (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
+            local bg_remote_state
+            bg_remote_state="$(nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            local icd_reset_pwd
+            icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
+            kill "$bg_nvim_pid" 2>/dev/null || true
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
+            rm -rf "$multisess_dir"
+            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ]; then
+                echo "PASS:v() and icd() target caller TMUX_PANE session instead of active fg_sess in multi-session tmux"
+            else
+                echo "FAIL:v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3' and '$SCRIPT_DIR/modules', got state='$bg_remote_state' pwd='$icd_reset_pwd'"
+            fi
+        fi
     fi
 
     # Test fs execution with aliases active
@@ -783,31 +821,31 @@ EOF
         fi
     )
 
-    # 5. Verify _p9k_solarized_project_active right-prompt toolchain scoping (suppresses parent package.json in nested terraform/ghes-cluster-gcp)
-    local proj_root="$TEMP_HOME/Google"
-    mkdir -p "$proj_root/terraform/ghes-cluster-gcp" \
+    # 5. Verify _p9k_solarized_project_active right-prompt toolchain scoping (suppresses parent package.json in nested terraform/prod-cluster)
+    local proj_root="$TEMP_HOME/workspace"
+    mkdir -p "$proj_root/terraform/prod-cluster" \
              "$proj_root/src/utils/fixtures" \
              "$proj_root/src/utils/native" \
              "$proj_root/support-site/assets" \
              "$proj_root/packages/my-pkg/native"
-    echo '{"name":"google-workspace","version":"1.0.0"}' > "$proj_root/package.json"
-    echo 'resource "google_compute_instance" "vm" {}' > "$proj_root/terraform/ghes-cluster-gcp/main.tf"
+    echo '{"name":"monorepo-workspace","version":"1.0.0"}' > "$proj_root/package.json"
+    echo 'resource "null_resource" "cluster" {}' > "$proj_root/terraform/prod-cluster/main.tf"
     echo 'export const x = 1;' > "$proj_root/src/utils/helper.ts"
     echo '[package]\nname = "utils-native"' > "$proj_root/src/utils/native/Cargo.toml"
     echo 'console.log("site");' > "$proj_root/support-site/assets/site.js"
     echo '[package]\nname = "native"' > "$proj_root/packages/my-pkg/native/Cargo.toml"
     (
-        cd "$proj_root/terraform/ghes-cluster-gcp"
+        cd "$proj_root/terraform/prod-cluster"
         if ! _p9k_solarized_project_active node && ! _p9k_solarized_project_active package && _p9k_solarized_project_active terraform; then
-            echo "PASS:_p9k_solarized_project_active suppresses node_version and package in nested terraform/ghes-cluster-gcp while activating terraform_version"
+            echo "PASS:_p9k_solarized_project_active suppresses node_version and package in nested terraform/prod-cluster while activating terraform_version"
         else
-            echo "FAIL:_p9k_solarized_project_active in terraform/ghes-cluster-gcp:Expected node=inactive package=inactive terraform=active"
+            echo "FAIL:_p9k_solarized_project_active in terraform/prod-cluster:Expected node=inactive package=inactive terraform=active"
         fi
 
         cd "$proj_root/terraform"
         echo 'module example.com/workspace' > "$proj_root/go.mod"
         if ! _p9k_solarized_project_active node && ! _p9k_solarized_project_active package && ! _p9k_solarized_project_active go; then
-            echo "PASS:_p9k_solarized_project_active suppresses parent package.json and go.mod bleed in intermediate directory (terraform/) with competing child project (ghes-cluster-gcp/*.tf)"
+            echo "PASS:_p9k_solarized_project_active suppresses parent package.json and go.mod bleed in intermediate directory (terraform/) with competing child project (prod-cluster/*.tf)"
         else
             echo "FAIL:_p9k_solarized_project_active in terraform/:Expected node, package, and go to be inactive"
         fi

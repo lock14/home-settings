@@ -159,8 +159,9 @@ function! s:TmuxNavigate(dir, tmux_dir) abort
     let l:cur_win = winnr()
     execute 'wincmd ' . a:dir
     if winnr() == l:cur_win && !empty($TMUX)
-        let l:target_cmd = 'select-pane -' . a:tmux_dir
-        call system('tmux if-shell -F "#{==:#{window_zoomed_flag},0}" "' . l:target_cmd . '"')
+        let l:pane_opt = !empty($TMUX_PANE) ? '-t ' . $TMUX_PANE . ' ' : ''
+        let l:target_cmd = 'select-pane ' . l:pane_opt . '-' . a:tmux_dir
+        call system('tmux if-shell ' . l:pane_opt . '-F "#{==:#{window_zoomed_flag},0}" "' . l:target_cmd . '"')
     endif
 endfunction
 
