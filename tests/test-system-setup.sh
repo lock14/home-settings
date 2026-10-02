@@ -316,6 +316,27 @@ else
     fail "modules/60-shell.sh fzf-zsh-plugin cleanup" "Expected fzf-zsh-plugin removed from .zshrc"
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+    chsh_check=$(HOME="$TEMP_SHELL_HOME" MOD_SH="$SCRIPT_DIR/modules/60-shell.sh" python3 -c '
+import os, pty, subprocess
+def run_mod(skip_zsh):
+    m, s = pty.openpty()
+    env = dict(os.environ, DRY_RUN="true", SKIP_ZSH=skip_zsh, SKIP_BASH="true", SKIP_COMPLETIONS="true", USER="nonexistent_test_user_xyz", SHELL="/bin/sh")
+    p = subprocess.run(["bash", os.environ["MOD_SH"]], stdin=s, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    os.close(m)
+    os.close(s)
+    return p.stdout
+out_skip = run_mod("true")
+out_noskip = run_mod("false")
+print("SKIP=" + ("chsh" if "chsh -s" in out_skip else "none") + "|NOSKIP=" + ("chsh" if "chsh -s" in out_noskip else "none"))
+')
+    if [ "$chsh_check" = "SKIP=none|NOSKIP=chsh" ]; then
+        pass "modules/60-shell.sh skips chsh login shell switch when --skip-zsh (SKIP_ZSH=true) is set"
+    else
+        fail "modules/60-shell.sh --skip-zsh chsh guard" "Expected SKIP=none|NOSKIP=chsh, got $chsh_check"
+    fi
+fi
+
 HOME="$TEMP_SHELL_HOME" "$SCRIPT_DIR/setup.sh" --uninstall-dotfiles >/dev/null 2>&1 || true
 if [ ! -d "$TEMP_SHELL_HOME/.oh-my-zsh/custom/plugins/fzf-zsh-plugin" ] && [ ! -d "$TEMP_SHELL_HOME/.vim/bundle" ]; then
     pass "setup.sh --uninstall-dotfiles purges legacy fzf-zsh-plugin and .vim/bundle directories"

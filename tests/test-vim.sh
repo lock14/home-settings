@@ -81,7 +81,7 @@ echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
 check_option "get(g:, 'netrw_banner', -1) == 0 && get(g:, 'netrw_liststyle', -1) == 3 && get(g:, 'netrw_browse_split', -1) == 4 && get(g:, 'netrw_winsize', -1) == 20" "Vim Netrw configured as tree sidebar (netrw_liststyle=3, browse_split=4, winsize=20)"
-check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'v') =~# 'TmuxNavigate' && maparg('<M-h>', 'i') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore and both <C-h/j/k/l> and <M-h/j/k/l> mapped to s:TmuxNavigate"
+check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') ==? '<C-w>h' && maparg('<M-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'v') =~# 'TmuxNavigate' && maparg('<M-h>', 'i') =~# 'TmuxNavigate'" "Vim <leader>e mapped to :Lexplore, <C-h/j/k/l> kept internal to Vim splits (<C-w>h/j/k/l), and <M-h/j/k/l> mapped to s:TmuxNavigate"
 
 # Test 5: Verify fallback Vim zero-external-dependency architecture
 echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."

@@ -292,7 +292,13 @@ map({ "n", "i", "v", "t" }, "<M-L>", function()
 end, { desc = "Swap Active Pane Right" })
 local function open_ide_keys_popup()
     if vim.env.TMUX then
-        vim.fn.jobstart({ "tmux", "display-popup", "-E", "-w", "86", "-h", "25", vim.fn.expand("$HOME/.local/bin/ide") .. " --keys" }, { detach = true })
+        local cmd = { "tmux", "display-popup" }
+        if (vim.env.TMUX_PANE or "") ~= "" then
+            table.insert(cmd, "-t")
+            table.insert(cmd, vim.env.TMUX_PANE)
+        end
+        vim.list_extend(cmd, { "-E", "-w", "86", "-h", "25", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
+        vim.fn.jobstart(cmd, { detach = true })
     end
 end
 map("n", "<leader>?", open_ide_keys_popup, { desc = "Open IDE Keybinding Cheatsheet" })

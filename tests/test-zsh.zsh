@@ -4,24 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-# Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
-export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
-export MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
-export MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
-
-pass() {
-    echo "  \033[32m✔ PASS:\033[0m $1"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-}
-
-fail() {
-    echo "  \033[31m✘ FAIL:\033[0m $1"
-    echo "    $2"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-}
+. "$SCRIPT_DIR/tests/test-helper.sh"
 
 echo "========================================"
 echo "Running Zsh Configuration Tests"
@@ -82,13 +65,7 @@ test_aliases() {
     fi
 }
 
-while IFS= read -r line; do
-    if [[ "$line" =~ ^PASS:(.*) ]]; then
-        pass "Alias defined: ${match[1]}"
-    elif [[ "$line" =~ ^FAIL:(.*):(.*) ]]; then
-        fail "Alias missing: ${match[1]}" "${match[2]}"
-    fi
-done < <(test_aliases)
+parse_subshell_results "Alias defined: " "Alias missing: " < <(test_aliases)
 
 # Test 3: Source zsh-functions and verify functions
 echo "\n[3/5] Testing dotfiles/.zsh-functions..."
@@ -98,9 +75,9 @@ test_functions() {
 
     for expected_func in v icd fs gsync; do
         if typeset -f "$expected_func" >/dev/null 2>&1; then
-            echo "PASS:$expected_func"
+            echo "PASS:Function defined: $expected_func"
         else
-            echo "FAIL:$expected_func:function not found"
+            echo "FAIL:Function missing: $expected_func:function not found"
         fi
     done
 
@@ -110,12 +87,7 @@ test_functions() {
         rm -f "$test_sock"
         (cd "$SCRIPT_DIR" && nvim --headless --listen "$test_sock" >/dev/null 2>&1) &
         local nvim_pid=$!
-        local tries=0
-        while [ ! -S "$test_sock" ] && [ "$tries" -lt 30 ]; do
-            sleep 0.05
-            tries=$((tries + 1))
-        done
-        if [ -S "$test_sock" ]; then
+        if wait_for_nvim_socket "$test_sock" 30; then
             local zsh_ver_out
             zsh_ver_out="$(TMUX="" NVIM_IDE_SOCKET="$test_sock" v --version 2>/dev/null | head -n 1 || true)"
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
@@ -148,18 +120,12 @@ test_functions() {
         fi
 
         if command -v tmux >/dev/null 2>&1; then
-            tmux kill-session -t '=bg_sess' >/dev/null 2>&1 || true
-            tmux kill-session -t '=fg_sess' >/dev/null 2>&1 || true
             local multisess_dir
             multisess_dir="$(mktemp -d)"
             local bg_nvim_sock="$multisess_dir/bg-nvim.sock"
             (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bg_nvim_sock" >/dev/null 2>&1) &
             local bg_nvim_pid=$!
-            local tries=0
-            while [ ! -S "$bg_nvim_sock" ] && [ "$tries" -lt 30 ]; do
-                sleep 0.05
-                tries=$((tries + 1))
-            done
+            wait_for_nvim_socket "$bg_nvim_sock" 30 || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
             local bg_pane
             bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
@@ -175,13 +141,17 @@ test_functions() {
             bg_remote_state="$(nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
             local icd_reset_pwd
             icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
+            local sid_reset_pwd
+            sid_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%,0},\$0" TMUX_PANE="" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
+            local bad_pid_target
+            bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
-            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ]; then
-                echo "PASS:v() and icd() target caller TMUX_PANE session instead of active fg_sess in multi-session tmux"
+            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
+                echo "PASS:v() and icd() target caller TMUX_PANE or \$0 session ID and verify server PID in multi-session tmux"
             else
-                echo "FAIL:v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3' and '$SCRIPT_DIR/modules', got state='$bg_remote_state' pwd='$icd_reset_pwd'"
+                echo "FAIL:v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3', '$SCRIPT_DIR/modules', and 'rejected', got state='$bg_remote_state' pwd='$icd_reset_pwd' sid_pwd='$sid_reset_pwd' bad_pid='$bad_pid_target'"
             fi
         fi
     fi
@@ -196,13 +166,7 @@ test_functions() {
     fi
 }
 
-while IFS= read -r line; do
-    if [[ "$line" =~ ^PASS:(.*) ]]; then
-        pass "Function defined: ${match[1]}"
-    elif [[ "$line" =~ ^FAIL:(.*):(.*) ]]; then
-        fail "Function missing: ${match[1]}" "${match[2]}"
-    fi
-done < <(test_functions)
+parse_subshell_results < <(test_functions)
 
 # Test 4: Functional test of gsync & git aliases in a mock git repository
 echo "\n[4/5] Testing git functions and aliases behavior..."
@@ -317,13 +281,7 @@ test_git_integration() {
     fi
 }
 
-while IFS= read -r line; do
-    if [[ "$line" =~ ^PASS:(.*) ]]; then
-        pass "${match[1]}"
-    elif [[ "$line" =~ ^FAIL:(.*):(.*) ]]; then
-        fail "${match[1]}" "${match[2]}"
-    fi
-done < <(test_git_integration)
+parse_subshell_results < <(test_git_integration)
 
 # Test 5: Test zshrc-addendum sourcing
 echo "\n[5/5] Testing dotfiles/.zshrc-addendum..."
@@ -897,18 +855,6 @@ EOF
     fi
 }
 
-while IFS= read -r line; do
-    if [[ "$line" =~ ^PASS:(.*) ]]; then
-        pass "${match[1]}"
-    elif [[ "$line" =~ ^FAIL:(.*):(.*) ]]; then
-        fail "${match[1]}" "${match[2]}"
-    fi
-done < <(test_addendum)
+parse_subshell_results < <(test_addendum)
 
-echo "\n========================================"
-echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
-echo "========================================"
-
-if [ "$TESTS_FAILED" -gt 0 ]; then
-    exit 1
-fi
+test_summary

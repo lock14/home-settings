@@ -29,9 +29,6 @@ OLD_HOME="$HOME"
 OLD_PATH="$PATH"
 OLD_XDG_DATA_HOME="${XDG_DATA_HOME:-}"
 OLD_XDG_CACHE_HOME="${XDG_CACHE_HOME:-}"
-export MISE_DATA_DIR="${MISE_DATA_DIR:-$OLD_HOME/.local/share/mise}"
-export MISE_CACHE_DIR="${MISE_CACHE_DIR:-$OLD_HOME/.cache/mise}"
-export MISE_STATE_DIR="${MISE_STATE_DIR:-$OLD_HOME/.local/state/mise}"
 TEMP_HOME=$(mktemp -d)
 
 cleanup_env_test() {
@@ -268,11 +265,7 @@ STANDALONE_HOME=$(mktemp -d)
         rm -f "$bash_test_sock"
         (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bash_test_sock" >/dev/null 2>&1) &
         bash_nvim_pid=$!
-        for _ in $(seq 1 30); do
-            [ -S "$bash_test_sock" ] && break
-            sleep 0.05
-        done
-        if [ -S "$bash_test_sock" ]; then
+        if wait_for_nvim_socket "$bash_test_sock" 30; then
             ver_out="$(TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v --version 2>/dev/null | head -n 1 || true)"
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
             bash_remote_state="$(nvim --headless --server "$bash_test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
@@ -289,16 +282,11 @@ STANDALONE_HOME=$(mktemp -d)
         fi
 
         if command -v tmux >/dev/null 2>&1; then
-            tmux kill-session -t '=bg_sess' >/dev/null 2>&1 || true
-            tmux kill-session -t '=fg_sess' >/dev/null 2>&1 || true
             multisess_dir="$(mktemp -d)"
             bg_nvim_sock="$multisess_dir/bg-nvim.sock"
             (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bg_nvim_sock" >/dev/null 2>&1) &
             bg_nvim_pid=$!
-            for _ in $(seq 1 30); do
-                [ -S "$bg_nvim_sock" ] && break
-                sleep 0.05
-            done
+            wait_for_nvim_socket "$bg_nvim_sock" 30 || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
             bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_socket "$bg_nvim_sock"
@@ -310,13 +298,15 @@ STANDALONE_HOME=$(mktemp -d)
             (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
             bg_remote_state="$(nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
             icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
+            sid_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%,0},\$0" TMUX_PANE="" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
+            bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
-            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ]; then
-                echo "PASS:Standalone .bashrc-addendum v() and icd() target caller TMUX_PANE session instead of active fg_sess in multi-session tmux"
+            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
+                echo "PASS:Standalone .bashrc-addendum v() and icd() target caller TMUX_PANE or \$0 session ID and verify server PID in multi-session tmux"
             else
-                echo "FAIL:Standalone v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3' and '$SCRIPT_DIR/modules', got state='$bg_remote_state' pwd='$icd_reset_pwd'"
+                echo "FAIL:Standalone v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3', '$SCRIPT_DIR/modules', and 'rejected', got state='$bg_remote_state' pwd='$icd_reset_pwd' sid_pwd='$sid_reset_pwd' bad_pid='$bad_pid_target'"
             fi
         fi
     fi
@@ -621,14 +611,7 @@ EOF
     fi
 ) > "$STANDALONE_HOME/results.txt"
 
-while IFS= read -r line; do
-    if [[ "$line" == PASS:* ]]; then
-        pass "${line#PASS:}"
-    elif [[ "$line" == FAIL:* ]]; then
-        rest="${line#FAIL:}"
-        fail "${rest%%:*}" "${rest#*:}"
-    fi
-done < "$STANDALONE_HOME/results.txt"
+parse_subshell_results < "$STANDALONE_HOME/results.txt"
 rm -rf "$STANDALONE_HOME"
 
 cleanup_env_test

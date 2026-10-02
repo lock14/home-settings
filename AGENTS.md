@@ -373,7 +373,7 @@ Before concluding any turn or marking any task complete:
    ```bash
    make test
    ```
-   Ensures all 340+ validation tests across all 8 test modules pass with 0 failures:
+   Ensures all 500+ validation tests across all 8 test modules pass with 0 failures:
    - `test-system-setup.sh`: Cross-platform CLI, dry-run, OS dispatching, Mise definitions, bootstrapper.
    - `test-dotfiles.sh`: Declarative dotfiles auto-discovery, physical directory backup, drop-ins, uninstallation.
    - `test-bin.sh`: User binaries symlinking, compatibility shims (fd, bat), uninstallation.

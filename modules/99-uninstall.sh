@@ -82,13 +82,7 @@ uninstall_dotfiles() {
 
     # Rebuild bat cache to purge uninstalled syntaxes and themes
     if [ "$DRY_RUN" = false ]; then
-        if command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
-            mise exec -- bat cache --build >/dev/null 2>&1 || true
-        elif command -v bat >/dev/null 2>&1; then
-            bat cache --build >/dev/null 2>&1 || true
-        elif command -v batcat >/dev/null 2>&1; then
-            batcat cache --build >/dev/null 2>&1 || true
-        fi
+        rebuild_bat_cache
     fi
 
     # Clean up legacy fzf-zsh-plugin directory and .vim bundles if present

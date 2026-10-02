@@ -1,7 +1,8 @@
 .DEFAULT_GOAL := help
-.PHONY: setup bootstrap install system uninstall test lint check all help
+.PHONY: setup bootstrap install system uninstall test test-system-setup test-dotfiles test-bin test-env test-zsh test-completions test-vim test-fonts lint check all help
 
-# Force 24-bit TrueColor across test executions
+# Force 24-bit TrueColor and isolate tests from any caller tmux session
+unexport TMUX TMUX_PANE
 export COLORTERM ?= truecolor
 ifeq ($(COLORTERM),)
 export COLORTERM := truecolor
@@ -47,6 +48,30 @@ test:
 	done; \
 	if [ "$$failed" -ne 0 ]; then exit 1; fi; \
 	echo "All tests passed successfully."
+
+test-system-setup:
+	@bash tests/test-system-setup.sh
+
+test-dotfiles:
+	@bash tests/test-dotfiles.sh
+
+test-bin:
+	@bash tests/test-bin.sh
+
+test-env:
+	@bash tests/test-env.sh
+
+test-zsh:
+	@zsh tests/test-zsh.zsh
+
+test-completions:
+	@bash tests/test-completions.sh
+
+test-vim:
+	@bash tests/test-vim.sh
+
+test-fonts:
+	@bash tests/test-fonts.sh
 
 ## lint: Run syntax validation and shellcheck.
 lint:
