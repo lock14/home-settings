@@ -853,6 +853,157 @@ EOF
     else
         echo "FAIL:p10k battery stages & terraform show_on_command:Got battery='${POWERLEVEL9K_BATTERY_STAGES:-}' tf_proj='${POWERLEVEL9K_TERRAFORM_VERSION_PROJECT_ONLY:-}' tf_cmd='${POWERLEVEL9K_TERRAFORM_VERSION_SHOW_ON_COMMAND:-}' tf_unwrap='$tf_unwrap_ok'"
     fi
+
+    # 7. Verify VCS prompt PR/MR OSC 8 links (_p9k_vcs_build_pr_url across 5 forge families, Tier 0 .git/config, Tier 1 CLIs, Tier 2 virtual refs, Tier 3 Bitbucket Cloud API, merged/unpushed guards, and preexec invalidation)
+    local u_gh_ssh u_gh_https u_gl_sub u_bb_cloud u_bb_auth u_bbs_ssh u_bbs_scm u_bbs_user u_cb u_gitea u_invalid="STALE" u_zero="STALE"
+    _p9k_vcs_build_pr_url -v u_gh_ssh "git@github.com:octocat/Hello-World.git" "42"
+    _p9k_vcs_build_pr_url -v u_gh_https "https://token@github.com/octocat/Hello-World.git" "99"
+    _p9k_vcs_build_pr_url -v u_gl_sub "git@gitlab.com:group/sub/project.git" "17"
+    _p9k_vcs_build_pr_url -v u_bb_cloud "git@bitbucket.org:team/repo.git" "8"
+    _p9k_vcs_build_pr_url -v u_bb_auth "https://x-token-auth:secret@bitbucket.org/team/repo.git" "8"
+    _p9k_vcs_build_pr_url -v u_bbs_ssh "ssh://git@bitbucket.corp.example.com:7999/proj/my-repo.git" "123" "bitbucket-server"
+    _p9k_vcs_build_pr_url -v u_bbs_scm "https://bitbucket.corp.example.com/scm/proj/my-repo.git" "123"
+    _p9k_vcs_build_pr_url -v u_bbs_user "ssh://git@bitbucket.corp.example.com:7999/~jdoe/my-repo.git" "5"
+    _p9k_vcs_build_pr_url -v u_cb "git@codeberg.org:owner/repo.git" "55"
+    _p9k_vcs_build_pr_url -v u_gitea "https://git.ByExample.org/org/service.git" "7" "gitea"
+    _p9k_vcs_build_pr_url -v u_invalid "not-a-valid-remote" "42" || true
+    _p9k_vcs_build_pr_url -v u_zero "https://github.com/octocat/Hello-World.git" "0" || true
+    if [ "$u_gh_ssh" = "https://github.com/octocat/Hello-World/pull/42" ] && \
+       [ "$u_gh_https" = "https://github.com/octocat/Hello-World/pull/99" ] && \
+       [ "$u_gl_sub" = "https://gitlab.com/group/sub/project/-/merge_requests/17" ] && \
+       [ "$u_bb_cloud" = "https://bitbucket.org/team/repo/pull-requests/8" ] && \
+       [ "$u_bb_auth" = "https://bitbucket.org/team/repo/pull-requests/8" ] && \
+       [ "$u_bbs_ssh" = "https://bitbucket.corp.example.com/projects/PROJ/repos/my-repo/pull-requests/123" ] && \
+       [ "$u_bbs_scm" = "https://bitbucket.corp.example.com/projects/PROJ/repos/my-repo/pull-requests/123" ] && \
+       [ "$u_bbs_user" = "https://bitbucket.corp.example.com/users/jdoe/repos/my-repo/pull-requests/5" ] && \
+       [ "$u_cb" = "https://codeberg.org/owner/repo/pulls/55" ] && \
+       [ "$u_gitea" = "https://git.ByExample.org/org/service/pulls/7" ] && \
+       [ -z "$u_invalid" ] && [ -z "$u_zero" ]; then
+        echo "PASS:_p9k_vcs_build_pr_url normalizes GitHub, GitLab (with subgroups), Bitbucket Cloud, Bitbucket Server/DC (/projects/PROJ and /users/~user), and Gitea/Forgejo/Codeberg PR/MR URLs and rejects invalid/zero inputs"
+    else
+        echo "FAIL:_p9k_vcs_build_pr_url:Got gh_ssh='$u_gh_ssh' gh_https='$u_gh_https' gl='$u_gl_sub' bb='$u_bb_cloud' bb_auth='$u_bb_auth' bbs_ssh='$u_bbs_ssh' bbs_scm='$u_bbs_scm' bbs_user='$u_bbs_user' cb='$u_cb' gitea='$u_gitea' invalid='$u_invalid' zero='$u_zero'"
+    fi
+
+    local pr_remote_dir="$TEMP_HOME/vcs-pr-remote.git"
+    local pr_local_dir="$TEMP_HOME/vcs-pr-local"
+    local pr_cache_dir="$TEMP_HOME/pr-cache"
+    git init --bare -b main "$pr_remote_dir" >/dev/null 2>&1
+    git clone "$pr_remote_dir" "$pr_local_dir" >/dev/null 2>&1
+    (
+        export GIT_PR_CACHE_DIR="$pr_cache_dir"
+        export GIT_PR_CACHE_TTL=3600
+        cd "$pr_local_dir"
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git config commit.gpgsign false
+        echo "base" > file.txt && git add file.txt && git commit -m "base" >/dev/null 2>&1
+        git push -u origin main >/dev/null 2>&1
+        git checkout -b feat/pr-link >/dev/null 2>&1
+        echo "feature" >> file.txt && git commit -am "feature" >/dev/null 2>&1
+        git push -u origin feat/pr-link >/dev/null 2>&1
+        local feat_sha
+        feat_sha=$(git rev-parse HEAD)
+
+        # Tier 0: explicit branch.<name>.pr + remote URL and branch.<name>.prurl override + branch.<name>.merge virtual ref
+        git config branch.feat/pr-link.pr 108
+        git config branch.feat/pr-link.prurl "https://github.com/octocat/Hello-World/pull/108?x=%201"
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier0_prurl_seg="$P10K_SEG_TEXT"
+        git config --unset branch.feat/pr-link.pr
+        git config --unset branch.feat/pr-link.prurl
+
+        git config branch.feat/pr-link.merge "refs/pull/77/head"
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier0_merge_seg="$P10K_SEG_TEXT"
+        git config branch.feat/pr-link.merge "refs/heads/feat/pr-link"
+
+        # Tier 2: virtual ref refs/pull/42/head on bare remote (invoked from a nested subdirectory)
+        git --git-dir="$pr_remote_dir" update-ref refs/pull/42/head "$feat_sha"
+        mkdir -p "$pr_local_dir/nested/sub"
+        (cd "$pr_local_dir/nested/sub" && _p9k_vcs_refresh_pr_cache)
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier2_open_seg="$P10K_SEG_TEXT"
+
+        # Dirty state keeps @ in Base01 (#586E75) and shifts PR number to Yellow (#B58900) before dirty counts
+        echo "dirty" >> file.txt
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier2_dirty_seg="$P10K_SEG_TEXT"
+        git checkout -- file.txt
+
+        # Preexec cache invalidation on git push and git -C <dir> push
+        _p9k_solarized_vcs_preexec "git -C $pr_local_dir push origin feat/pr-link"
+        local cache_files_after_push=( "$pr_cache_dir"/*.state(N) )
+
+        # Closed-PR / mismatched remote SHA guard: remote branch advances past closed refs/pull/42/head -> NONE
+        echo "post-close" >> file.txt && git commit -am "post-close" >/dev/null 2>&1
+        git push origin feat/pr-link >/dev/null 2>&1
+        _p9k_vcs_refresh_pr_cache
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier2_unpushed_seg="$P10K_SEG_TEXT"
+        git reset --hard "$feat_sha" >/dev/null 2>&1
+        git push -f origin feat/pr-link >/dev/null 2>&1
+
+        # Merged-PR guard: remote main advances to feat_sha -> NONE
+        git --git-dir="$pr_remote_dir" update-ref refs/heads/main "$feat_sha"
+        rm -f "$pr_cache_dir"/*.state(N)
+        _p9k_vcs_refresh_pr_cache
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier2_merged_seg="$P10K_SEG_TEXT"
+
+        # Tier 1 (glab with nested author.web_url + milestone.iid) and Tier 3 (Bitbucket Cloud curl with ssh port 22 + nested id)
+        local mock_cli_dir="$TEMP_HOME/mock-forge-clis"
+        mkdir -p "$mock_cli_dir"
+        cat > "$mock_cli_dir/glab" <<'EOF'
+#!/usr/bin/env bash
+printf '[{"id":999,"iid":51,"milestone":{"id":10,"iid":3},"author":{"id":7,"web_url":"https://gitlab.com/jdoe"},"web_url":"https://gitlab.com/group/proj/-/merge_requests/51","assignees":[{"web_url":"https://gitlab.com/a"}]}]\n'
+EOF
+        cat > "$mock_cli_dir/curl" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+    if [[ "$arg" == "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests"* ]]; then
+        printf '{"values":[{"type":"pullrequest","id":64,"links":{"html":{"href":"https://bitbucket.org/team/repo/pull-requests/64"}},"author":{"id":999}}]}\n'
+        exit 0
+    fi
+done
+exit 1
+EOF
+        chmod +x "$mock_cli_dir/glab" "$mock_cli_dir/curl"
+
+        rm -f "$pr_cache_dir"/*.state(N)
+        git remote set-url origin "git@gitlab.com:group/proj.git"
+        PATH="$mock_cli_dir:$PATH" _p9k_vcs_refresh_pr_cache
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier1_glab_seg="$P10K_SEG_TEXT"
+
+        rm -f "$pr_cache_dir"/*.state(N)
+        git remote set-url origin "ssh://git@bitbucket.org:22/team/repo.git"
+        PATH="$mock_cli_dir:$PATH" _p9k_vcs_refresh_pr_cache
+        P10K_SEG_TEXT=""
+        prompt_vcs
+        local tier3_bb_seg="$P10K_SEG_TEXT"
+        rm -rf "$mock_cli_dir"
+
+        if [[ "$tier0_prurl_seg" == *$'\e]8;;https://github.com/octocat/Hello-World/pull/108?x=%%201\a%}%F{#586E75}@%F{#859900}108%{\e]8;;\a%}'* ]] && \
+           [[ "$tier0_merge_seg" == *$'/pull/77\a%}%F{#586E75}@%F{#859900}77%{\e]8;;\a%}'* ]] && \
+           [[ "$tier2_open_seg" == *$'/pull/42\a%}%F{#586E75}@%F{#859900}42%{\e]8;;\a%}'* ]] && \
+           [[ "$tier2_dirty_seg" == *$'/pull/42\a%}%F{#586E75}@%F{#B58900}42%{\e]8;;\a%} %F{#B58900}!1'* ]] && \
+           (( ${#cache_files_after_push} == 0 )) && \
+           [[ "$tier2_unpushed_seg" != *"@42"* ]] && \
+           [[ "$tier2_merged_seg" != *"@42"* ]] && \
+           [[ "$tier1_glab_seg" == *$'\e]8;;https://gitlab.com/group/proj/-/merge_requests/51\a%}%F{#586E75}@%F{#859900}51%{\e]8;;\a%}'* ]] && \
+           [[ "$tier3_bb_seg" == *$'\e]8;;https://bitbucket.org/team/repo/pull-requests/64\a%}%F{#586E75}@%F{#859900}64%{\e]8;;\a%}'* ]]; then
+            echo "PASS:prompt_vcs resolves Tier 0 (.git/config pr/prurl/merge), Tier 1 (glab JSON with nested objects), Tier 2 (git ls-remote refs/pull/*/head from subdirs), and Tier 3 (Bitbucket Cloud REST API) OSC 8 @<N> links, guards against closed/merged PRs, and invalidates cache on git [-C dir] push"
+        else
+            echo "FAIL:prompt_vcs PR/MR links:Got tier0_prurl='${(V)tier0_prurl_seg}' tier0_merge='${(V)tier0_merge_seg}' tier2_open='${(V)tier2_open_seg}' tier2_dirty='${(V)tier2_dirty_seg}' cache_after_push='${#cache_files_after_push}' unpushed='${(V)tier2_unpushed_seg}' merged='${(V)tier2_merged_seg}' tier1_glab='${(V)tier1_glab_seg}' tier3_bb='${(V)tier3_bb_seg}'"
+        fi
+    )
 }
 
 parse_subshell_results < <(test_addendum)

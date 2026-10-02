@@ -586,6 +586,146 @@ EOF
         echo "FAIL:Standalone PS1 remote host icons:Unexpected remote icons (gh=$ps1_gh_clean | gh_dirty=$ps1_gh_dirty | gl=$ps1_gl_clean | bb=$ps1_bb_clean | generic=$ps1_generic_comment | tracked=$ps1_tracked_upstream | insteadof=$ps1_insteadof_gh | override=$ps1_insteadof_override | includeif=$ps1_includeif_bb6 | multi=$ps1_multi_url_gh | wt=$ps1_wt_gh | linux=$ps1_gh_linux)"
     fi
 
+    # Test VCS prompt PR/MR OSC 8 hyperlink resolution across all 5 forge families, Tier 0 config, Tier 1/2/3 discovery, worktree commondir sharing, TERM=linux fallback, and promptvars safety
+    b_inv="STALE"
+    b_zero="STALE"
+    _solarized_vcs_build_pr_url -v b_gh "git@github.com:octocat/Hello-World.git" "42"
+    _solarized_vcs_build_pr_url -v b_gl "git@gitlab.com:group/sub/project.git" "17"
+    _solarized_vcs_build_pr_url -v b_bb "https://x-token-auth:secret@bitbucket.org/team/repo.git" "8"
+    _solarized_vcs_build_pr_url -v b_bbs "https://bitbucket.corp.example.com/scm/proj/my-repo.git" "123"
+    _solarized_vcs_build_pr_url -v b_bbs_u "ssh://git@bitbucket.corp.example.com:7999/~jdoe/my-repo.git" "5"
+    _solarized_vcs_build_pr_url -v b_cb "git@codeberg.org:owner/repo.git" "55"
+    _solarized_vcs_build_pr_url -v b_gt "https://git.ByExample.org/org/service.git" "7" "gitea"
+    _solarized_vcs_build_pr_url -v b_inv "not-a-valid-remote" "42" || true
+    _solarized_vcs_build_pr_url -v b_zero "https://github.com/octocat/Hello-World.git" "0" || true
+    if [ "$b_gh" = "https://github.com/octocat/Hello-World/pull/42" ] && \
+       [ "$b_gl" = "https://gitlab.com/group/sub/project/-/merge_requests/17" ] && \
+       [ "$b_bb" = "https://bitbucket.org/team/repo/pull-requests/8" ] && \
+       [ "$b_bbs" = "https://bitbucket.corp.example.com/projects/PROJ/repos/my-repo/pull-requests/123" ] && \
+       [ "$b_bbs_u" = "https://bitbucket.corp.example.com/users/jdoe/repos/my-repo/pull-requests/5" ] && \
+       [ "$b_cb" = "https://codeberg.org/owner/repo/pulls/55" ] && \
+       [ "$b_gt" = "https://git.ByExample.org/org/service/pulls/7" ] && \
+       [ -z "$b_inv" ] && [ -z "$b_zero" ]; then
+        echo "PASS:Standalone _solarized_vcs_build_pr_url normalizes GitHub, GitLab (with subgroups), Bitbucket Cloud, Bitbucket Server/DC, and Gitea/Forgejo/Codeberg PR/MR URLs and rejects invalid/zero inputs"
+    else
+        echo "FAIL:Standalone _solarized_vcs_build_pr_url:Got gh='$b_gh' gl='$b_gl' bb='$b_bb' bbs='$b_bbs' bbs_u='$b_bbs_u' cb='$b_cb' gt='$b_gt' inv='$b_inv' zero='$b_zero'"
+    fi
+
+    PR_BARE_REMOTE="$STANDALONE_HOME/pr-bare-remote.git"
+    PR_CLONE_REPO="$STANDALONE_HOME/pr-clone-repo"
+    PR_CACHE_DIR="$STANDALONE_HOME/pr-cache"
+    git init --bare -b main "$PR_BARE_REMOTE" >/dev/null 2>&1
+    git clone "$PR_BARE_REMOTE" "$PR_CLONE_REPO" >/dev/null 2>&1
+    (
+        export GIT_PR_CACHE_DIR="$PR_CACHE_DIR"
+        export GIT_PR_CACHE_TTL=3600
+        cd "$PR_CLONE_REPO"
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git config commit.gpgsign false
+        echo "base" > README.md && git add README.md && git commit -m "base" >/dev/null 2>&1
+        git push -u origin main >/dev/null 2>&1
+        git checkout -q -b feat/pr-link
+        echo "feature" >> README.md && git commit -am "feature" >/dev/null 2>&1
+        git push -u origin feat/pr-link >/dev/null 2>&1
+        feat_sha=$(git rev-parse HEAD)
+
+        git config branch.feat/pr-link.pr 108
+        git config branch.feat/pr-link.prurl 'https://github.com/octocat/Hello-World/pull/108?q=$(echo_INJECTED)'
+        true
+        _solarized_bash_prompt
+        ps1_tier0_expanded="${PS1@P}"
+        git config --unset branch.feat/pr-link.pr
+        git config --unset branch.feat/pr-link.prurl
+
+        git --git-dir="$PR_BARE_REMOTE" update-ref refs/pull/42/head "$feat_sha"
+        mkdir -p "$PR_CLONE_REPO/sub/dir"
+        (cd "$PR_CLONE_REPO/sub/dir" && _solarized_vcs_refresh_pr_cache)
+        true
+        _solarized_bash_prompt
+        ps1_pr_clean="$PS1"
+
+        # Linked worktree shares normalized commondir cache with main worktree
+        PR_WT_REPO="$STANDALONE_HOME/pr-wt-repo"
+        git worktree add -b feat/wt-pr "$PR_WT_REPO" >/dev/null 2>&1
+        (
+            cd "$PR_WT_REPO"
+            echo "wt" >> README.md && git commit -am "wt" >/dev/null 2>&1
+            git push -u origin feat/wt-pr >/dev/null 2>&1
+            wt_sha=$(git rev-parse HEAD)
+            git --git-dir="$PR_BARE_REMOTE" update-ref refs/pull/88/head "$wt_sha"
+            _solarized_vcs_refresh_pr_cache
+        )
+        wt_state_count=$(find "$PR_CACHE_DIR" -maxdepth 1 -name '*.state' | wc -l | tr -d ' ')
+        git worktree remove --force "$PR_WT_REPO" >/dev/null 2>&1 || rm -rf "$PR_WT_REPO"
+
+        echo "dirty" >> README.md
+        true
+        _solarized_bash_prompt
+        ps1_pr_dirty="$PS1"
+        git checkout -- README.md
+
+        TERM=linux _solarized_bash_prompt
+        ps1_pr_linux="$PS1"
+
+        git --git-dir="$PR_BARE_REMOTE" update-ref refs/heads/main "$feat_sha"
+        rm -f "$PR_CACHE_DIR"/*.state
+        _solarized_vcs_refresh_pr_cache
+        true
+        _solarized_bash_prompt
+        ps1_pr_merged="$PS1"
+
+        # Tier 1 (glab JSON with author.web_url before MR web_url) and Tier 3 (Bitbucket Cloud curl with ssh port 22)
+        MOCK_CLI_DIR="$STANDALONE_HOME/mock-forge-clis"
+        mkdir -p "$MOCK_CLI_DIR"
+        cat > "$MOCK_CLI_DIR/glab" <<'EOF'
+#!/usr/bin/env bash
+printf '[{"id":999,"iid":51,"author":{"id":7,"web_url":"https://gitlab.com/jdoe"},"web_url":"https://gitlab.com/group/proj/-/merge_requests/51"}]\n'
+EOF
+        cat > "$MOCK_CLI_DIR/curl" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+    if [[ "$arg" == "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests"* ]]; then
+        printf '{"values":[{"type":"pullrequest","id":64,"links":{"html":{"href":"https://bitbucket.org/team/repo/pull-requests/64"}},"author":{"id":999}}]}\n'
+        exit 0
+    fi
+done
+exit 1
+EOF
+        chmod +x "$MOCK_CLI_DIR/glab" "$MOCK_CLI_DIR/curl"
+
+        rm -f "$PR_CACHE_DIR"/*.state
+        git remote set-url origin "git@gitlab.com:group/proj.git"
+        PATH="$MOCK_CLI_DIR:$PATH" _solarized_vcs_refresh_pr_cache
+        true
+        _solarized_bash_prompt
+        ps1_tier1_glab="$PS1"
+
+        rm -f "$PR_CACHE_DIR"/*.state
+        git remote set-url origin "ssh://git@bitbucket.org:22/team/repo.git"
+        PATH="$MOCK_CLI_DIR:$PATH" _solarized_vcs_refresh_pr_cache
+        true
+        _solarized_bash_prompt
+        ps1_tier3_bb="$PS1"
+        rm -rf "$MOCK_CLI_DIR"
+
+        if [[ "$ps1_tier0_expanded" == *'https://github.com/octocat/Hello-World/pull/108?q=$(echo_INJECTED)'* ]] && \
+           [[ "$ps1_tier0_expanded" != *"INJECTED"* || "$ps1_tier0_expanded" == *'$(echo_INJECTED)'* ]] && \
+           [[ "$ps1_pr_clean" == *"feat/pr-link\\[\\e]8;;https://localhost"* && "$ps1_pr_clean" == *"/pull/42\\a\\]\\[\\e[38;2;88;110;117m\\]@\\[\\e[38;2;133;153;0m\\]42\\[\\e]8;;\\a\\]"* ]] && \
+           [ "$wt_state_count" = "1" ] && \
+           [[ "$ps1_pr_dirty" == *"/pull/42\\a\\]\\[\\e[38;2;88;110;117m\\]@\\[\\e[38;2;181;137;0m\\]42\\[\\e]8;;\\a\\]*"* ]] && \
+           [[ "$ps1_pr_linux" == *"feat/pr-link\\[\\e[90m\\]@\\[\\e[32m\\]42"* ]] && \
+           [[ "$ps1_pr_linux" != *"\\e]8;;"* ]] && \
+           [[ "$ps1_pr_merged" != *"@42"* ]] && \
+           [[ "$ps1_tier1_glab" == *"https://gitlab.com/group/proj/-/merge_requests/51\\a\\]\\[\\e[38;2;88;110;117m\\]@\\[\\e[38;2;133;153;0m\\]51"* ]] && \
+           [[ "$ps1_tier3_bb" == *"https://bitbucket.org/team/repo/pull-requests/64\\a\\]\\[\\e[38;2;88;110;117m\\]@\\[\\e[38;2;133;153;0m\\]64"* ]]; then
+            echo "PASS:Standalone _solarized_bash_prompt renders clickable OSC 8 @<N> PR/MR links (Base01 @ + Green/Yellow N before dirty *), resolves Tier 1/2/3 & worktree commondir, guards against merged PRs and promptvars injection, and omits OSC 8 on TERM=linux"
+        else
+            echo "FAIL:Standalone _solarized_bash_prompt PR/MR links:Got tier0='$ps1_tier0_expanded' clean='$ps1_pr_clean' wt_states='$wt_state_count' dirty='$ps1_pr_dirty' linux='$ps1_pr_linux' merged='$ps1_pr_merged' glab='$ps1_tier1_glab' bb='$ps1_tier3_bb'"
+        fi
+    )
+    cd "$MOCK_REPO"
+
     # Test interactive Bash PROMPT_COMMAND coexistence with zoxide/mise and exit status propagation
     interactive_out=$(HOME="$STANDALONE_HOME" bash --norc -i -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; false; eval \"\$PROMPT_COMMAND\"; p_err=\"\$PS1\"; true; eval \"\$PROMPT_COMMAND\"; p_ok=\"\$PS1\"; printf 'PC=%s\nERR=%s\nOK=%s\n' \"\${PROMPT_COMMAND[*]}\" \"\$p_err\" \"\$p_ok\"" 2>/dev/null)
     if grep -Fq "_solarized_bash_prompt" <<< "$interactive_out" && \
