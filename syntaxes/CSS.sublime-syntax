@@ -82,7 +82,7 @@ contexts:
           scope: keyword.operator.logical.css
         - match: '([a-zA-Z_-][a-zA-Z0-9_-]*)\s*(:)'
           captures:
-            1: support.type.property-name.css
+            1: support.constant.property-value.css
             2: punctuation.separator.key-value.css
         - match: '[,()]'
           scope: punctuation.separator.css
@@ -137,7 +137,7 @@ contexts:
     # ID selector (#id-name)
     - match: '(#)([a-zA-Z0-9_-]+)'
       captures:
-        1: punctuation.definition.entity.css
+        1: entity.other.attribute-name.id.css
         2: entity.other.attribute-name.id.css
 
     # Pseudo-element (::before, ::after)

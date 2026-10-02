@@ -1,0 +1,194 @@
+%YAML 1.2
+---
+# Solarized Dark Protocol Buffers (proto2 / proto3 / editions) Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Schema Grammar Directives (syntax, edition) in Solarized Orange (keyword.control.directive.proto)
+# - Module Import Keyword (import) in Solarized Violet (keyword.control.import.proto)
+# - Package Keyword (package) in Solarized Green (keyword.other.package.proto)
+# - Formal Package Declaration Identifiers (package telemetry.v1;) in Solarized Violet (entity.name.namespace.proto)
+# - Structural & Declarative Keywords (message, enum, oneof, service, rpc, returns, option, extend,
+#   extensions, reserved, to, max, map, repeated, optional, required, stream, public, weak) in Solarized Green
+# - Built-in Scalar Types (double, float, int32, int64, uint32, uint64, sint32, sint64, fixed32, fixed64,
+#   sfixed32, sfixed64, bool, string, bytes) in Solarized Green (support.type.primitive.proto)
+# - RPC Method Declarations (rpc IngestBatch) in Solarized Blue (entity.name.function.rpc.proto)
+# - User-Defined Types, Qualifiers, Field Names, Option Names in calm Base0 Grey (entity.name.type.proto, variable.other.member.proto)
+# - Enum Variant Identifiers, Field Tag Numbers, Numeric Literals, Booleans in Solarized Magenta
+# - Quoted Strings & Escape Sequences in Solarized Cyan (string.quoted.*.proto, constant.character.escape.proto)
+# - Operators, Brackets & Delimiters in calm Base0 Grey
+# - Comments in Solarized Base01 Dim (comment.line.double-slash.proto, comment.block.proto)
+
+name: Protocol Buffer
+scope: source.proto
+version: 2
+
+file_extensions:
+  - proto
+  - protobuf
+  - protodevel
+
+contexts:
+  prototype:
+    - include: comments
+
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.proto
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.proto
+      push:
+        - meta_scope: comment.block.proto
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.proto
+          pop: true
+
+  main:
+    - include: directives
+    - include: package-decl
+    - include: import-decl
+    - include: rpc-decl
+    - include: enum-decl
+    - include: option-block-assignment
+    - include: declarations-and-keywords
+    - include: strings
+    - include: constants-and-numbers
+    - include: identifiers-and-types
+    - include: punctuation-and-operators
+
+  directives:
+    - match: '\b(syntax|edition)\b'
+      scope: keyword.control.directive.proto
+
+  package-decl:
+    - match: '\b(package)\b'
+      captures:
+        1: keyword.other.package.proto
+      push:
+        - match: ';'
+          scope: punctuation.terminator.statement.proto
+          pop: true
+        - match: '\.'
+          scope: punctuation.accessor.dot.proto
+        - match: '[A-Za-z_][A-Za-z0-9_]*'
+          scope: entity.name.namespace.proto
+
+  import-decl:
+    - match: '\b(import)\b'
+      scope: keyword.control.import.proto
+
+  rpc-decl:
+    - match: '\b(rpc)\b\s+([A-Za-z_][A-Za-z0-9_]*)'
+      captures:
+        1: keyword.declaration.rpc.proto
+        2: entity.name.function.rpc.proto
+    - match: '\b(returns)\b'
+      scope: keyword.other.returns.proto
+
+  enum-decl:
+    - match: '\b(enum)\b\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\{)'
+      captures:
+        1: keyword.declaration.enum.proto
+        2: entity.name.type.enum.proto
+        3: punctuation.section.block.begin.proto
+      push:
+        - match: '\}'
+          scope: punctuation.section.block.end.proto
+          pop: true
+        - include: option-block-assignment
+        - include: option-block
+        - match: '^\s*([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*=)'
+          captures:
+            1: variable.other.enummember.proto
+        - match: '(?<=\.)\b([A-Za-z_][A-Za-z0-9_]*)\b'
+          scope: variable.other.member.proto
+        - match: '\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*[=:])'
+          scope: variable.other.member.proto
+        - match: '\b(option|reserved|to|max)\b'
+          scope: keyword.other.proto
+        - include: strings
+        - include: constants-and-numbers
+        - include: identifiers-and-types
+        - include: punctuation-and-operators
+
+  option-block-assignment:
+    - match: '(=)(\s*)(\{)'
+      captures:
+        1: keyword.operator.assignment.proto
+        3: punctuation.section.block.begin.proto
+      push: option-block-body
+
+  option-block:
+    - match: '\{'
+      scope: punctuation.section.block.begin.proto
+      push: option-block-body
+
+  option-block-body:
+    - match: '\}'
+      scope: punctuation.section.block.end.proto
+      pop: true
+    - include: option-block
+    - match: '\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*[:\{<])'
+      captures:
+        1: variable.other.member.proto
+    - include: strings
+    - include: constants-and-numbers
+    - include: identifiers-and-types
+    - include: punctuation-and-operators
+
+  declarations-and-keywords:
+    # Guard member/option/field identifiers preceded by `.` or followed by `=`/`:` so fields/options named `message`, `service`, `max`, etc. stay in Base0 Grey
+    - match: '(?<=\.)\b([A-Za-z_][A-Za-z0-9_]*)\b'
+      scope: variable.other.member.proto
+    - match: '\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*[=:])'
+      scope: variable.other.member.proto
+    - match: '\b(message|enum|oneof|service|extend)\b'
+      scope: keyword.declaration.proto
+    - match: '\b(option|extensions|reserved|to|max|map|group)\b'
+      scope: keyword.other.proto
+    - match: '\b(repeated|optional|required|stream|public|weak)\b'
+      scope: storage.modifier.proto
+    - match: '\b(double|float|int32|int64|uint32|uint64|sint32|sint64|fixed32|fixed64|sfixed32|sfixed64|bool|string|bytes)\b'
+      scope: support.type.primitive.proto
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.proto
+      push:
+        - meta_scope: string.quoted.double.proto
+        - match: '"'
+          scope: punctuation.definition.string.end.proto
+          pop: true
+        - match: '\\(?:[abfnrtv\\''"?]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{1,3})'
+          scope: constant.character.escape.proto
+    - match: "'"
+      scope: punctuation.definition.string.begin.proto
+      push:
+        - meta_scope: string.quoted.single.proto
+        - match: "'"
+          scope: punctuation.definition.string.end.proto
+          pop: true
+        - match: '\\(?:[abfnrtv\\''"?]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{1,3})'
+          scope: constant.character.escape.proto
+
+  constants-and-numbers:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.proto
+    - match: '[-+]?\b(inf|nan)\b'
+      scope: constant.numeric.float.proto
+    - match: '[-+]?(?:0[xX][0-9a-fA-F]+|[0-9]+\.[0-9]*(?:[eE][-+]?[0-9]+)?|\.[0-9]+(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+|[0-9]+)\b'
+      scope: constant.numeric.proto
+    # Enum constant identifiers assigned to options (e.g., SPEED, IDEMPOTENT, NO_SIDE_EFFECTS)
+    - match: '(?<=[=:])\s*\b([A-Z][A-Z0-9_]*)\b'
+      captures:
+        1: constant.other.enum.proto
+
+  identifiers-and-types:
+    - match: '\b[A-Za-z_][A-Za-z0-9_]*\b'
+      scope: variable.other.proto
+
+  punctuation-and-operators:
+    - match: '='
+      scope: keyword.operator.assignment.proto
+    - match: '[;,:./]'
+      scope: punctuation.separator.proto
+    - match: '[\{\}\[\]\(\)<>]'
+      scope: punctuation.section.brackets.proto

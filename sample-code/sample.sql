@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS customer_accounts (
     organization_name VARCHAR(128) NOT NULL,
     plan_tier VARCHAR(32) NOT NULL DEFAULT 'standard' CHECK (plan_tier IN ('starter', 'standard', 'enterprise')),
     monthly_budget NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    metadata JSONB NOT NULL DEFAULT '{}',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -23,6 +24,10 @@ CREATE TABLE IF NOT EXISTS ledger_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_ledger_account_settled
     ON ledger_transactions(account_id, settled_at DESC);
+
+INSERT INTO customer_accounts (organization_name, plan_tier, monthly_budget)
+VALUES ('Solarized Cloud', 'enterprise', 2500.00)
+RETURNING account_id, created_at;
 
 -- Analytical aggregation with CTE, Window Functions, and CASE logic
 WITH monthly_billing_summary AS (
@@ -57,3 +62,4 @@ GROUP BY s.account_id, s.organization_name, s.plan_tier, s.total_invoices, s.agg
 HAVING s.total_invoices > 0
 ORDER BY revenue_rank ASC, s.aggregate_spend DESC
 LIMIT 25;
+

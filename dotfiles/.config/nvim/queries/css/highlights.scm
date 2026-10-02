@@ -15,11 +15,11 @@
 
 "@import" @keyword.import
 
-;; Keyframes step selectors
+;; Keyframes step selectors -> Solarized Blue (#268BD2)
 [
   (to)
   (from)
-] @keyword
+] @tag
 
 ;; Comments
 (comment) @comment
@@ -43,7 +43,7 @@
 ((nesting_selector) @operator (#set! priority 130))
 
 ;; Combinators and operators
-[
+([
   "~"
   ">"
   "+"
@@ -55,7 +55,7 @@
   "~="
   "$="
   "*="
-] @operator
+] @operator (#set! priority 130))
 
 (binary_expression ["+" "-" "*" "/"] @operator)
 
@@ -110,7 +110,7 @@
 ((unit) @type.builtin.css (#set! priority 130))
 
 ;; Delimiters & punctuation -> Calm Base0 Grey
-[
+([
   ","
   "."
   ":"
@@ -122,4 +122,5 @@
   "]"
   "("
   ")"
-] @punctuation.delimiter
+] @punctuation.delimiter (#set! priority 130))
+

@@ -21,6 +21,12 @@
 (inline_link
   (link_destination) @markup.link.url)
 
+; Autolinks: <https://...> and <user@example.com> -> Solarized Cyan
+[
+  (uri_autolink)
+  (email_autolink)
+] @markup.link.url
+
 ; GitHub Alert Callouts ([!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION])
 ((shortcut_link
   "[" @markup.alert.note

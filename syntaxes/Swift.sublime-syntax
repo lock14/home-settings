@@ -1,0 +1,301 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Swift Syntax
+# Supports Modern Swift 6:
+# - Actors, structured concurrency (async, await), typed throws, protocols, generics
+# - Compiler directives (#if, #elseif, #else, #endif) in Solarized Orange
+# - Module imports (import Foundation) in Solarized Violet
+# - Attributes (@available, @MainActor, @Sendable) in Solarized Violet
+# - Scalar primitive types (Bool, Int, UInt64, UInt32, Double, Float, String, Void, Never, Any) in Solarized Green
+# - Domain & protocol types (Sendable, Equatable, Codable, Error, ConnectionStatus) in calm Base0 Grey
+# - Structural enum variant 'case' in Solarized Green vs. switch branching 'case' in Solarized Yellow
+# - String interpolation \(...) neutralized to Base0 Grey inside Cyan strings
+name: Swift
+scope: source.swift
+version: 2
+
+file_extensions:
+  - swift
+
+first_line_match: |-
+  (?xi:
+    ^ \#! .*? \bswift\b
+  )
+
+variables:
+  ident: '[[:alpha:]_][[:alnum:]_]*'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_]*\b'
+  const_ident: '\b[[:upper:]][[:upper:][:digit:]_]+\b'
+  primitive_type: '\b(?:Bool|Int|Int8|Int16|Int32|Int64|UInt|UInt8|UInt16|UInt32|UInt64|Float|Float16|Float32|Float64|Double|Character|String|StaticString|Substring|Void|Never|Any|AnyObject)\b'
+  modifier: '\b(?:public|private|fileprivate|internal|package|open|final|static|override|mutating|nonmutating|convenience|required|lazy|weak|unowned|optional|indirect|nonisolated|isolated|inout|borrowing|consuming|sending)\b'
+  declaration_keyword: '\b(?:struct|class|actor|protocol|extension|typealias|associatedtype|macro|init|deinit|subscript|let|var|where|some|any)\b'
+  control_flow: '\b(?:if|else|guard|switch|case|default|fallthrough|for|while|repeat|break|continue|return|defer|do|catch|throw|throws|rethrows|async|await)\b'
+  hex_digit: '[0-9a-fA-F_]'
+
+contexts:
+  main:
+    - include: shebang
+    - include: comments
+    - include: compiler-directives
+    - include: import-statement
+    - include: attributes
+    - include: enum-declaration
+    - include: for-loop
+    - include: function-declaration
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  shebang:
+    - match: '^#!.*$'
+      scope: comment.line.number-sign.shebang.swift
+
+  comments:
+    # Triple-slash documentation comments
+    - match: '///.*$'
+      scope: comment.line.triple-slash.documentation.swift
+    # Block documentation comments
+    - match: '/\*\*(?!/)'
+      scope: punctuation.definition.comment.begin.swift
+      push:
+        - meta_scope: comment.block.documentation.swift
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.swift
+          pop: true
+        - include: comments
+    # Nested block comments
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.swift
+      push:
+        - meta_scope: comment.block.swift
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.swift
+          pop: true
+        - include: comments
+    # Standard line comments
+    - match: '//.*$'
+      scope: comment.line.double-slash.swift
+
+  compiler-directives:
+    - match: '^\s*(#(?:if|elseif))\b'
+      captures:
+        1: keyword.control.directive.swift
+      push:
+        - match: '$'
+          pop: true
+        - include: comments
+        - match: '\b(canImport|os|arch|endian|swift|compiler|targetEnvironment|hasAttribute|hasFeature)\b'
+          scope: keyword.control.directive.swift
+        - include: expressions
+    - match: '^\s*(#(?:else|endif|warning|error))\b'
+      captures:
+        1: keyword.control.directive.swift
+    - match: '(?<![[:alnum:]_])(#(?:available|unavailable))\b'
+      captures:
+        1: keyword.control.directive.swift
+
+  import-statement:
+    - match: '\b(import)\b\s+(?:(struct|class|enum|protocol|typealias|func|var|let)\b\s+)?'
+      captures:
+        1: keyword.control.import.swift
+        2: storage.type.swift
+      push:
+        - match: '(?:;|$)'
+          scope: punctuation.terminator.swift
+          pop: true
+        - include: comments
+        - match: '\.'
+          scope: punctuation.accessor.dot.swift
+        - match: '\b({{ident}})\b'
+          captures:
+            1: entity.name.namespace.swift
+
+  attributes:
+    - match: '(?<![[:alnum:]_])@{{ident}}'
+      scope: storage.type.annotation.swift
+
+  enum-declaration:
+    # Distinguish structural 'case' inside enum declarations (Solarized Green)
+    # from branching 'case' inside switch statements (Solarized Yellow).
+    - match: '\b(enum)\b\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.enum.swift
+        2: entity.name.type.enum.swift
+      push:
+        - match: '\{'
+          scope: punctuation.section.braces.begin.swift
+          set: enum-body
+        - match: '(?=[;])'
+          pop: true
+        - include: comments
+        - include: types
+        - include: operators-and-delimiters
+
+  enum-body:
+    - match: '\}'
+      scope: punctuation.section.braces.end.swift
+      pop: true
+    - include: comments
+    - include: compiler-directives
+    - include: attributes
+    - match: '\b(case)\b'
+      scope: storage.type.enum.case.swift
+    - include: for-loop
+    - include: function-declaration
+    # Nested braces inside enum methods/computed properties use standard statements (where switch 'case' is Yellow)
+    - match: '\{'
+      scope: punctuation.section.braces.begin.swift
+      push:
+        - match: '\}'
+          scope: punctuation.section.braces.end.swift
+          pop: true
+        - include: main
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  for-loop:
+    # Highlight 'for' and loop 'in' inside for-header in Solarized Yellow
+    - match: '(?<!\.)\b(for)\b'
+      captures:
+        1: keyword.control.loop.swift
+      push:
+        - match: '(?=\{)'
+          pop: true
+        - include: comments
+        - match: '\b(in)\b'
+          scope: keyword.control.loop.swift
+        - include: declarations
+        - include: statements
+        - include: expressions
+
+  function-declaration:
+    - match: '\b(func)\b\s+({{ident}})'
+      captures:
+        1: storage.type.function.swift
+        2: entity.name.function.swift
+
+  declarations:
+    - match: '(?<!\.)\b(?:get|set|willSet|didSet)\b(?=\s*(?:\(|\{|$))'
+      scope: storage.type.function.swift
+    - match: '(?<!\.){{modifier}}'
+      scope: storage.modifier.swift
+    - match: '(?<!\.){{declaration_keyword}}'
+      scope: storage.type.swift
+
+  statements:
+    - match: '(?<!\.){{control_flow}}'
+      scope: keyword.control.swift
+    - match: '(?<!\.)\btry[?!]?(?!\w)'
+      scope: keyword.control.swift
+    - match: '(?<!\.)\b(?:is|in|as[?!]?)(?!\w)'
+      scope: keyword.operator.word.swift
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: constants
+    - include: function-calls
+    - include: types
+    - include: identifiers
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal integer or floating-point literal (e.g. 0xCAFE_BABE, 0x1.0p0)
+    - match: '\b0[xX]{{hex_digit}}+(?:\.{{hex_digit}}+)?(?:[pP][+-]?[0-9_]+)?\b'
+      scope: constant.numeric.hexadecimal.swift
+    # Octal integer literal (e.g. 0o755)
+    - match: '\b0[oO][0-7_]+\b'
+      scope: constant.numeric.octal.swift
+    # Binary integer literal (e.g. 0b1010_1100)
+    - match: '\b0[bB][01_]+\b'
+      scope: constant.numeric.binary.swift
+    # Decimal floating-point literal (require digit after dot so ranges 0..<10 preserve '..<')
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+\b'
+      scope: constant.numeric.float.swift
+    # Decimal integer literal (e.g. 5_000_000_000, 14, 0)
+    - match: '\b[0-9][0-9_]*\b'
+      scope: constant.numeric.integer.decimal.swift
+
+  strings:
+    # Multi-line string literal: """ ... """
+    - match: '"""'
+      scope: punctuation.definition.string.begin.swift
+      push:
+        - meta_scope: string.quoted.triple.swift
+        - match: '"""'
+          scope: punctuation.definition.string.end.swift
+          pop: true
+        - include: string-escapes-and-interpolation
+    # Standard double-quoted string literal: " ... "
+    - match: '"'
+      scope: punctuation.definition.string.begin.swift
+      push:
+        - meta_scope: string.quoted.double.swift
+        - match: '"'
+          scope: punctuation.definition.string.end.swift
+          pop: true
+        - include: string-escapes-and-interpolation
+
+  string-escapes-and-interpolation:
+    # String interpolation: \(...)
+    - match: '\\\('
+      scope: punctuation.section.interpolation.begin.swift
+      push:
+        - meta_content_scope: meta.interpolation.swift
+        - match: '\)'
+          scope: punctuation.section.interpolation.end.swift
+          pop: true
+        - include: interpolation-parens
+        - include: statements
+        - include: expressions
+    # Character escapes
+    - match: '\\(?:[0\\tnr"'']|u\{[0-9a-fA-F]{1,8}\})'
+      scope: constant.character.escape.swift
+
+  interpolation-parens:
+    - match: '\('
+      scope: punctuation.section.parens.begin.swift
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.swift
+          pop: true
+        - include: interpolation-parens
+        - include: statements
+        - include: expressions
+
+  constants:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.swift
+    - match: '\bnil\b'
+      scope: constant.language.nil.swift
+    - match: '\b(self|super|Self)\b'
+      scope: variable.language.swift
+    - match: '\$[0-9]+\b'
+      scope: variable.language.closure-parameter.swift
+    - match: '{{const_ident}}'
+      scope: variable.other.constant.swift
+
+  types:
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.swift
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.swift
+
+  function-calls:
+    - match: '(\.)\s*({{ident}})\s*(?=\()'
+      captures:
+        1: punctuation.accessor.dot.swift
+        2: variable.function.swift
+    - match: '\b({{ident}})\s*(?=\()'
+      scope: variable.function.swift
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.swift
+
+  operators-and-delimiters:
+    - match: '===|!==|==|!=|<=|>=|&&|\|\||\?\?|\.\.<|\.\.\.|->|[+\-*/%&|^~<>=!?]'
+      scope: keyword.operator.swift
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.swift

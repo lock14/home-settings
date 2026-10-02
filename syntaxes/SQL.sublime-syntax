@@ -85,7 +85,7 @@ contexts:
       captures:
         1: keyword.control.ddl.sql
         2: entity.name.type.table.sql
-    - match: '(?xi:\b(from|into|update)\s+({{ident}}))'
+    - match: '(?xi:\b(from|into|update)\s+(?!set\b)({{ident}}))'
       captures:
         1: keyword.control.sql
         2: entity.name.type.table.sql
@@ -93,7 +93,7 @@ contexts:
       captures:
         1: keyword.control.sql
         2: entity.name.type.table.sql
-    - match: '(?xi:\b(on)\s+({{ident}})\s*(?=\())'
+    - match: '(?xi:\b(on)\s+(?!conflict\b)({{ident}})\s*(?=\())'
       captures:
         1: keyword.control.sql
         2: entity.name.type.table.sql
@@ -111,7 +111,7 @@ contexts:
       scope: keyword.control.sql
     - match: '(?xi:\b(with|as|join|left|right|inner|full|cross|natural|outer|on)\b)'
       scope: keyword.control.sql
-    - match: '(?xi:\b(insert\s+into|values|update|set|delete(?:\s+from)?|returning)\b)'
+    - match: '(?xi:\b(insert\s+into|values|update|set|delete(?:\s+from)?|returning|conflict|do|nothing)\b)'
       scope: keyword.control.sql
     - match: '(?xi:\b(create|drop|alter|table|index|view|schema|database|sequence|trigger|procedure|function)\b)'
       scope: keyword.control.sql

@@ -10,6 +10,12 @@ readonly SCRIPT_NAME
 readonly WORK_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/sample-runner"
 readonly MAX_RETRIES=5
 declare -a ACTIVE_SERVICES=("nginx" "redis" "postgresql" "app-worker")
+declare -A SERVICE_TIERS=(
+    [nginx]="edge"
+    [redis]="cache"
+    [postgresql]="storage"
+    [app-worker]="compute"
+)
 
 cleanup() {
     local -r exit_code=$?
@@ -51,11 +57,12 @@ check_services() {
     local failed=0
 
     for svc in "${ACTIVE_SERVICES[@]}"; do
+        local tier="${SERVICE_TIERS[$svc]:-unknown}"
         total=$(( total + 1 ))
         if [[ "$svc" == "redis" || "$svc" == "nginx" ]]; then
-            log_status "INFO" "Service '${svc}' is healthy."
+            log_status "INFO" "Service '${svc}' (${tier}) is healthy."
         else
-            log_status "WARN" "Service '${svc}' is standby."
+            log_status "WARN" "Service '${svc}' (${tier}) is standby."
         fi
     done
 
@@ -70,3 +77,4 @@ main() {
 }
 
 main "$@"
+

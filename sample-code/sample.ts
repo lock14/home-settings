@@ -28,6 +28,8 @@ export interface UserProfile {
   attributes?: Record<string, string | number>;
 }
 
+export type ProfileAttributeKey = keyof UserProfile;
+
 export class ServiceGateway<T extends { id: string }> {
   protected readonly baseUrl: string;
   private connectionState: ConnectionState = "disconnected";
@@ -42,14 +44,22 @@ export class ServiceGateway<T extends { id: string }> {
 
   public async request(endpoint: string): Promise<ApiResponse<T>> {
     this.connectionState = "connecting";
-    const requestUrl = `${this.baseUrl}/${endpoint}?service=${encodeURIComponent(this.serviceName)}`;
+    const normalizedEndpoint = endpoint ?? "healthz";
+    const requestUrl = `${this.baseUrl}/${normalizedEndpoint}?service=${encodeURIComponent(this.serviceName)}`;
 
     try {
       // Simulated asynchronous network latency
       await new Promise((resolve) => setTimeout(resolve, 50));
       this.connectionState = "connected";
 
-      const mockData = { id: "usr-42", username: "alex", role: UserRole.Developer } as unknown as T;
+      const fallbackUser = {
+        id: "usr-42",
+        username: "alex",
+        role: UserRole.Developer,
+        quotaBytes: 1048576,
+        isActive: true,
+      } satisfies UserProfile;
+      const mockData = fallbackUser as unknown as T;
 
       return {
         success: true,
@@ -68,3 +78,4 @@ export class ServiceGateway<T extends { id: string }> {
     return this.connectionState;
   }
 }
+

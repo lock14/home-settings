@@ -1,12 +1,13 @@
 #!/bin/bash
 # Shared symlink creation and cleanup helper for home-settings.
 
-link_file() {
-    local src="$1"
-    local dst="$2"
+_link_path() {
+    local flags="$1"
+    local src="$2"
+    local dst="$3"
 
     if [ "${DRY_RUN:-false}" = true ]; then
-        echo "  [DryRun] ln -sf $src $dst"
+        echo "  [DryRun] ln $flags $src $dst"
     else
         mkdir -p "$(dirname "$dst")"
         if [ -d "$dst" ] && [ ! -L "$dst" ]; then
@@ -15,26 +16,16 @@ link_file() {
             echo "  Backing up pre-existing directory to $bak"
             mv "$dst" "$bak"
         fi
-        ln -sf "$src" "$dst"
+        ln "$flags" "$src" "$dst"
     fi
 }
 
-link_dir() {
-    local src="$1"
-    local dst="$2"
+link_file() {
+    _link_path -sf "$1" "$2"
+}
 
-    if [ "${DRY_RUN:-false}" = true ]; then
-        echo "  [DryRun] ln -sfn $src $dst"
-    else
-        mkdir -p "$(dirname "$dst")"
-        if [ -d "$dst" ] && [ ! -L "$dst" ]; then
-            local bak
-            bak="${dst}.bak.$(date +%s)"
-            echo "  Backing up pre-existing directory to $bak"
-            mv "$dst" "$bak"
-        fi
-        ln -sfn "$src" "$dst"
-    fi
+link_dir() {
+    _link_path -sfn "$1" "$2"
 }
 
 unlink_path() {

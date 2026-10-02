@@ -1,0 +1,156 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor OCaml Syntax
+# Supports Modern OCaml 5.x:
+# - open / include in Solarized Violet, formal module / module type names in Solarized Violet
+# - module / struct / sig / end / functor / type / let / rec / and / in / val / mutable / external / fun / of in Solarized Green
+# - Type variables ('a) and scalar primitive types (int, float, bool, string, char, unit) in Solarized Green
+# - Container & custom types (option, list, result, sample, severity) and constructors (Some, Ok, Error, Info, Warn) in calm Base0 Grey
+# - Function declarations (let fn ..., val fn : ...) in Solarized Blue; qualified calls (List.fold_left) in calm Base0 Grey
+# - Control flow (match, with, when, if, then, else, for, to, downto, while, do, done, try, function) in Solarized Yellow
+# - Polymorphic variants (`Active, `Draining), None, true, false, (), and numbers in Solarized Magenta
+name: OCaml
+scope: source.ocaml
+version: 2
+
+file_extensions:
+  - ml
+  - mli
+
+variables:
+  ident: "[a-z_][a-zA-Z0-9_']*"
+  module_ident: "[A-Z][a-zA-Z0-9_']*"
+  primitive_type: '\b(?:int|int32|int64|nativeint|float|bool|string|bytes|char|unit)\b'
+
+contexts:
+  main:
+    - include: comments
+    - include: module-declarations
+    - include: function-declarations
+    - include: strings
+    - include: constants-and-variants
+    - include: numbers
+    - include: keywords
+    - include: types-and-constructors
+    - include: identifiers
+    - include: operators-and-punctuation
+
+  comments:
+    - match: '\(\*'
+      scope: punctuation.definition.comment.begin.ocaml
+      push:
+        - meta_scope: comment.block.ocaml
+        - match: '\*\)'
+          scope: punctuation.definition.comment.end.ocaml
+          pop: true
+        - include: comments
+
+  module-declarations:
+    # open / include Module
+    - match: '\b(open|include)\b\s+({{module_ident}})'
+      captures:
+        1: keyword.control.import.ocaml
+        2: entity.name.module.ocaml
+    # module type NAME = sig
+    - match: '\b(module)\s+(type)\s+({{module_ident}})'
+      captures:
+        1: keyword.declaration.module.ocaml
+        2: keyword.declaration.type.ocaml
+        3: entity.name.module.ocaml
+    # module Name : SIG = struct
+    - match: '\b(module)\s+({{module_ident}})(?:\s*(:)\s*({{module_ident}}))?'
+      captures:
+        1: keyword.declaration.module.ocaml
+        2: entity.name.module.ocaml
+        3: punctuation.separator.colon.ocaml
+        4: entity.name.module.ocaml
+
+  function-declarations:
+    # val fn_name : ...
+    - match: '\b(val)\s+({{ident}})\s*(:)'
+      captures:
+        1: keyword.declaration.val.ocaml
+        2: entity.name.function.ocaml
+        3: punctuation.separator.colon.ocaml
+    # let [rec] fn_name arg1 ... (only when followed by parameter identifier or typed parameter, not `=`)
+    - match: '\b(let)(?:\s+(rec))?\s+({{ident}})(?=\s+(?:{{ident}}|\())'
+      captures:
+        1: keyword.declaration.let.ocaml
+        2: keyword.declaration.rec.ocaml
+        3: entity.name.function.ocaml
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.ocaml
+      push:
+        - meta_scope: string.quoted.double.ocaml
+        - match: '"'
+          scope: punctuation.definition.string.end.ocaml
+          pop: true
+        - match: '\\(?:[\\"''ntbr ]|x[0-9a-fA-F]{2}|o[0-3][0-7]{2}|[0-9]{3}|u\{[0-9a-fA-F]+\})'
+          scope: constant.character.escape.ocaml
+        - match: '%[-+0# ]*[0-9*]*(\.[0-9*]*)?[lLn]?[diouxXDOUeEfFgGaAcCsSpb%!@]'
+          scope: constant.other.placeholder.ocaml
+    - match: '''(?:[^''\\]|\\(?:[\\"''ntbr ]|x[0-9a-fA-F]{2}|[0-9]{3}))'''
+      scope: string.quoted.single.ocaml
+
+  constants-and-variants:
+    # Polymorphic variants (`Active, `Draining, `Offline)
+    - match: '`[A-Z][a-zA-Z0-9_'']*\b'
+      scope: constant.other.variant.ocaml
+    # Unit literal ()
+    - match: '\(\)'
+      scope: constant.language.unit.ocaml
+    # Booleans and None sentinel
+    - match: '\b(true|false|None)\b'
+      scope: constant.language.ocaml
+
+  numbers:
+    - match: '\b0[xX][0-9a-fA-F_]+(?:\.[0-9a-fA-F_]*)?(?:[pP][+-]?[0-9_]+)?[lLn]?\b'
+      scope: constant.numeric.hex.ocaml
+    - match: '\b0[oO][0-7_]+[lLn]?\b'
+      scope: constant.numeric.octal.ocaml
+    - match: '\b0[bB][01_]+[lLn]?\b'
+      scope: constant.numeric.binary.ocaml
+    - match: '\b[0-9][0-9_]*\.[0-9_]*(?:[eE][+-]?[0-9_]+)?\b'
+      scope: constant.numeric.float.ocaml
+    - match: '\b[0-9][0-9_]*[lLn]?\b'
+      scope: constant.numeric.integer.ocaml
+
+  keywords:
+    # Control flow keywords (Solarized Yellow)
+    - match: '\b(match|with|when|if|then|else|for|to|downto|while|do|done|try|function|raise)\b'
+      scope: keyword.control.conditional.ocaml
+    # Import directives (Solarized Violet)
+    - match: '\b(open|include)\b'
+      scope: keyword.control.import.ocaml
+    # Structural & declaration keywords (Solarized Green)
+    - match: '\b(module|struct|sig|end|functor|type|let|rec|and|in|val|mutable|external|fun|of|as|exception|nonrec|private|virtual| inherit|initializer|method|object|class|constraint|lazy|assert|begin|new| lor|lxor|land|lsl|lsr|asr|mod)\b'
+      scope: keyword.declaration.ocaml
+
+  types-and-constructors:
+    # Type variables ('a, 'b) in Solarized Green
+    - match: '''[a-z_][a-zA-Z0-9_]*\b'
+      scope: storage.modifier.lifetime.ocaml
+    # Scalar primitive types (Solarized Green)
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.ocaml
+    # Qualified module access in code (List.fold_left, Printf.sprintf) in calm Base0 Grey
+    - match: '\b({{module_ident}})(\.)({{ident}})'
+      captures:
+        1: support.type.module.ocaml
+        2: punctuation.accessor.dot.ocaml
+        3: variable.function.ocaml
+    # Constructors and custom types (Some, Ok, Error, Info, Warn, Critical, Fatal) in calm Base0 Grey
+    - match: '\b{{module_ident}}\b'
+      scope: support.type.constructor.ocaml
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.ocaml
+
+  operators-and-punctuation:
+    - match: '::|->|<-|\|>|\+\.|\-\.|\*\.|/\.|==|!=|<=|>=|<>|&&|\|\||[+\-*/=<>|^@~!?&$:.]+'
+      scope: keyword.operator.ocaml
+    - match: '[,;()\[\]{}]'
+      scope: punctuation.separator.ocaml

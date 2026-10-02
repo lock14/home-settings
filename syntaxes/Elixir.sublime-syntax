@@ -1,0 +1,157 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Elixir Syntax
+# Supports Modern Elixir 1.17+:
+# - defmodule / defprotocol / use / import / alias / require module names in Solarized Violet
+# - Module attributes (@moduledoc, @doc, @spec, @type, @impl, @default_timeout) unified in Solarized Violet
+# - def / defp / defmacro / defguard / defstruct / fn / do / end in Solarized Green
+# - Function declarations in Solarized Blue; piped/qualified calls and |> in calm Base0 Grey
+# - In-code module qualifiers and struct names (Enum.map, String.trim, %MetricSample{}) in calm Base0 Grey
+# - :atoms, keyword keys (key:), nil / true / false, and __MODULE__ in Solarized Magenta
+# - Control flow (case, cond, with, if, unless, else, receive, try, rescue, catch, after, when, for) in Solarized Yellow
+# - String interpolation (#{...}) neutralized to calm Base0 Grey inside Solarized Cyan strings
+name: Elixir
+scope: source.elixir
+version: 2
+
+file_extensions:
+  - ex
+  - exs
+
+first_line_match: '^#!.*\belixir\b'
+
+variables:
+  ident: '[a-z_][a-zA-Z0-9_]*[?!]?'
+  module_path: '[A-Z][a-zA-Z0-9_]*(?:\.[A-Z][a-zA-Z0-9_]*)*'
+
+contexts:
+  main:
+    - include: comments
+    - include: module-declarations
+    - include: import-directives
+    - include: module-attributes
+    - include: function-declarations
+    - include: strings
+    - include: constants-and-atoms
+    - include: numbers
+    - include: keywords
+    - include: types-and-modules
+    - include: function-calls
+    - include: identifiers
+    - include: operators-and-punctuation
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.elixir
+
+  module-declarations:
+    - match: '\b(defmodule|defprotocol)\b\s+({{module_path}})'
+      captures:
+        1: keyword.declaration.module.elixir
+        2: entity.name.module.elixir
+
+  import-directives:
+    - match: '\b(use|import|alias|require)\b\s+({{module_path}})'
+      captures:
+        1: keyword.control.import.elixir
+        2: entity.name.module.elixir
+    - match: '\b(use|import|alias|require)\b(?![:?!)])'
+      scope: keyword.control.import.elixir
+
+  module-attributes:
+    - match: '@[a-z_][a-zA-Z0-9_]*\b'
+      scope: entity.name.attribute.elixir
+
+  function-declarations:
+    - match: '\b(def|defp|defmacro|defmacrop|defguard|defguardp|defdelegate)\b\s+({{ident}})'
+      captures:
+        1: keyword.declaration.function.elixir
+        2: entity.name.function.elixir
+
+  strings:
+    # Triple-quoted heredoc strings
+    - match: '"""'
+      scope: punctuation.definition.string.begin.elixir
+      push:
+        - meta_scope: string.quoted.triple.elixir
+        - match: '"""'
+          scope: punctuation.definition.string.end.elixir
+          pop: true
+        - match: '\\(?:x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\}|.)'
+          scope: constant.character.escape.elixir
+        - include: string-interpolation
+    # Double-quoted strings
+    - match: '"'
+      scope: punctuation.definition.string.begin.elixir
+      push:
+        - meta_scope: string.quoted.double.elixir
+        - match: '"'
+          scope: punctuation.definition.string.end.elixir
+          pop: true
+        - match: '\\(?:x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\}|.)'
+          scope: constant.character.escape.elixir
+        - include: string-interpolation
+
+  string-interpolation:
+    - match: '\#\{'
+      scope: punctuation.section.interpolation.begin.elixir
+      push:
+        - meta_content_scope: meta.interpolation.elixir
+        - match: '\}'
+          scope: punctuation.section.interpolation.end.elixir
+          pop: true
+        - include: main
+
+  constants-and-atoms:
+    # Keyword list keys (key:)
+    - match: '\b([a-zA-Z_][a-zA-Z0-9_?!]*:)(?!:)'
+      scope: constant.other.symbol.elixir
+    # Atoms (:ok, :error, :us_east)
+    - match: '(?<!:)(:[a-zA-Z_][a-zA-Z0-9_?!@]*)'
+      scope: constant.other.symbol.elixir
+    # Built-in booleans, nil, and special forms
+    - match: '\b(true|false|nil)\b(?![:?!])'
+      scope: constant.language.elixir
+    - match: '\b(__MODULE__|__DIR__|__ENV__|__CALLER__|__STACKTRACE__)\b'
+      scope: constant.language.special.elixir
+
+  numbers:
+    # Anonymous function capture placeholders (&1, &2) are operators in calm Base0
+    - match: '&[0-9]+\b'
+      scope: keyword.operator.capture.elixir
+    - match: '\b0[xX][0-9a-fA-F_]+\b'
+      scope: constant.numeric.hex.elixir
+    - match: '\b0[bB][01_]+\b'
+      scope: constant.numeric.binary.elixir
+    - match: '\b0[oO][0-7_]+\b'
+      scope: constant.numeric.octal.elixir
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?\b'
+      scope: constant.numeric.float.elixir
+    - match: '\b[0-9][0-9_]*\b'
+      scope: constant.numeric.integer.elixir
+
+  keywords:
+    # Control flow & exception keywords (Solarized Yellow)
+    - match: '\b(case|cond|with|if|unless|else|receive|try|rescue|catch|after|when|for|raise|throw|reraise)\b(?![:?!])'
+      scope: keyword.control.conditional.elixir
+    # Structural & word operator keywords (Solarized Green)
+    - match: '\b(defmodule|defprotocol|defimpl|defstruct|defexception|defoverridable|def|defp|defmacro|defmacrop|defguard|defguardp|defdelegate|fn|do|end|and|or|not|in)\b(?![:?!])'
+      scope: keyword.declaration.elixir
+
+  types-and-modules:
+    - match: '\b[A-Z][a-zA-Z0-9_]*\b'
+      scope: support.type.elixir
+
+  function-calls:
+    - match: '\b({{ident}})\s*(?=\()'
+      scope: variable.function.elixir
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.elixir
+
+  operators-and-punctuation:
+    - match: '\|>|<<<|>>>|<<~|~>>|<~|~>|<~>|<\|>|<-|\\\\|::|->|\+\+|--|<>|\.\.\.|\.\.|===|!==|==|!=|<=|>=|&&|\|\||=~|[+\-*/%&|^~<>=!@]'
+      scope: keyword.operator.elixir
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.elixir

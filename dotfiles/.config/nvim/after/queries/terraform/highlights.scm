@@ -37,3 +37,15 @@
 
 ;; Map ternary operator ? to @operator in calm Base0 Grey
 ("?" @operator)
+
+;; Map function calls (contains, range, cidrsubnet, merge) to @function.call (calm Base0 Grey #839496)
+(function_call
+  (identifier) @function.call
+  (#set! "priority" 105))
+
+;; Top-level Terraform 1.5+ / 1.8+ declarative refactoring & assertion blocks -> @keyword (Solarized Green #859900)
+((block
+   (identifier) @keyword)
+ (#any-of? @keyword "check" "import" "moved" "removed"))
+
+

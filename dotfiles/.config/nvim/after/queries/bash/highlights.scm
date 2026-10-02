@@ -21,3 +21,35 @@
 ((simple_expansion
   (variable_name) @constant.builtin)
   (#lua-match? @constant.builtin "^[0-9]+$"))
+
+; Heredoc delimiters (EOF) in Solarized Green (@keyword #859900) matching bat
+[
+  (heredoc_start)
+  (heredoc_end)
+] @keyword
+(#set! "priority" 105)
+
+; Parameter expansion default/fallback payload inside "${VAR:-default}" in calm Base0 Grey (@variable #839496)
+((expansion) @variable
+  (#set! "priority" 101))
+
+; Preserve ALL_CAPS constant highlighting inside parameter expansions (Solarized Magenta @constant #d33682)
+((variable_name) @constant
+  (#lua-match? @constant "^[A-Z][A-Z_0-9]*$")
+  (#set! "priority" 105))
+
+; Unquoted associative array subscript keys ([nginx]="edge") in calm Base0 Grey (@variable #839496) matching bat,
+; while preserving [@] and [*] special array subscripts in Solarized Cyan (@character.special #2aa198)
+(subscript
+  index: (word) @variable
+  (#not-any-of? @variable "@" "*")
+  (#set! "priority" 105))
+(subscript
+  index: (word) @character.special
+  (#any-of? @character.special "@" "*")
+  (#set! "priority" 110))
+(array
+  (concatenation
+    (word) @variable
+    (#set! "priority" 105)))
+

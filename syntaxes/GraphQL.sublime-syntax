@@ -1,0 +1,196 @@
+%YAML 1.2
+---
+# Solarized Dark GraphQL Schema & Query Language Syntax Package for bat / Sublime Text
+# Complies with Universal Semantic Color Contract:
+# - Structural & Declarative Keywords (schema, scalar, type, interface, union, enum, input, extend,
+#   implements, directive, repeatable, on, query, mutation, subscription, fragment) in Solarized Green (#859900)
+# - Built-in Scalar Types (Int, Float, String, Boolean, ID) in Solarized Green (support.type.builtin.graphql)
+# - User-Defined Types (Scalars, Objects, Interfaces, Unions, Enums, Inputs) in calm Base0 Grey (entity.name.type.graphql)
+# - Field Definitions, Input Fields, Selection Fields, Aliases & Object Literal Keys in Solarized Green (support.type.property-name.graphql)
+# - Operation & Fragment Declarations (query Get..., fragment Node...) in Solarized Blue (entity.name.function.graphql)
+# - Directives (@deprecated, @rateLimit, @specifiedBy, @auth) in Solarized Violet (storage.type.annotation.graphql)
+# - Enum Values, Directive Locations, Numbers, Booleans & null in Solarized Magenta (#D33682)
+# - Quoted Strings & Block Strings ("""...""") in Solarized Cyan (string.quoted.*.graphql)
+# - Arguments, Variables ($var), Fragment Spreads, Operators & Delimiters in calm Base0 Grey (#839496)
+# - Comments (# ...) in Solarized Base01 Dim (comment.line.number-sign.graphql)
+# - Zero Yellow (#B58900) in declarative schema & query documents.
+
+name: GraphQL
+scope: source.graphql
+version: 2
+
+file_extensions:
+  - graphql
+  - graphqls
+  - gql
+
+contexts:
+  prototype:
+    - include: comments
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.graphql
+
+  main:
+    - include: strings
+    - include: enum-decl
+    - include: operation-and-fragment-decl
+    - include: directives
+    - include: arguments-block
+    - include: spreads
+    - include: fields-and-declarations
+    - include: constants-and-numbers
+    - include: variables-and-types
+    - include: punctuation-and-operators
+
+  strings:
+    - match: '"""'
+      scope: punctuation.definition.string.begin.graphql
+      push:
+        - meta_scope: string.quoted.triple.graphql
+        - match: '"""'
+          scope: punctuation.definition.string.end.graphql
+          pop: true
+        - match: '\\"""'
+          scope: constant.character.escape.graphql
+    - match: '"'
+      scope: punctuation.definition.string.begin.graphql
+      push:
+        - meta_scope: string.quoted.double.graphql
+        - match: '"'
+          scope: punctuation.definition.string.end.graphql
+          pop: true
+        - match: '\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.graphql
+
+  enum-decl:
+    - match: '\b(enum)\b\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\{)'
+      captures:
+        1: keyword.declaration.enum.graphql
+        2: entity.name.type.enum.graphql
+        3: punctuation.section.block.begin.graphql
+      push:
+        - match: '\}'
+          scope: punctuation.section.block.end.graphql
+          pop: true
+        - include: strings
+        - include: directives
+        - include: arguments-block
+        - match: '\b(?!true\b|false\b|null\b)([A-Za-z_][A-Za-z0-9_]*)\b'
+          scope: constant.other.enum.graphql
+        - include: punctuation-and-operators
+
+  operation-and-fragment-decl:
+    # Inside schema { query: Query ... }, query/mutation/subscription followed by `:` are keywords
+    - match: '\b(query|mutation|subscription)\b(?=\s*:)'
+      scope: keyword.declaration.operation.graphql
+    - match: '\b(query|mutation|subscription)\b(?:\s+([A-Za-z_][A-Za-z0-9_]*))?'
+      captures:
+        1: keyword.declaration.operation.graphql
+        2: entity.name.function.graphql
+    - match: '\b(fragment)\b\s+(?!on\b)([A-Za-z_][A-Za-z0-9_]*)'
+      captures:
+        1: keyword.declaration.fragment.graphql
+        2: entity.name.function.graphql
+
+  directives:
+    - match: '(@[A-Za-z_][A-Za-z0-9_]*)'
+      scope: storage.type.annotation.graphql
+
+  arguments-block:
+    - match: '\('
+      scope: punctuation.section.parens.begin.graphql
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.graphql
+          pop: true
+        - include: strings
+        - include: directives
+        - include: object-literal-block
+        - match: '(\$[A-Za-z_][A-Za-z0-9_]*)'
+          scope: variable.parameter.graphql
+        - match: '\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*:)'
+          scope: variable.parameter.graphql
+        - match: '\b(Int|Float|String|Boolean|ID)\b'
+          scope: support.type.builtin.graphql
+        - include: constants-and-numbers
+        - include: variables-and-types
+        - include: punctuation-and-operators
+
+  object-literal-block:
+    - match: '\{'
+      scope: punctuation.section.braces.begin.graphql
+      push:
+        - match: '\}'
+          scope: punctuation.section.braces.end.graphql
+          pop: true
+        - include: strings
+        - include: object-literal-block
+        - match: '\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*:)'
+          scope: support.type.property-name.graphql
+        - include: constants-and-numbers
+        - include: variables-and-types
+        - include: punctuation-and-operators
+
+  spreads:
+    - match: '(\.\.\.)\s*(on)\b\s+([A-Za-z_][A-Za-z0-9_]*)'
+      captures:
+        1: punctuation.definition.spread.graphql
+        2: keyword.other.on.graphql
+        3: entity.name.type.graphql
+    - match: '(\.\.\.)\s*([A-Za-z_][A-Za-z0-9_]*)'
+      captures:
+        1: punctuation.definition.spread.graphql
+        2: variable.other.fragment.graphql
+    - match: '\.\.\.'
+      scope: punctuation.definition.spread.graphql
+
+  fields-and-declarations:
+    - match: '\b(schema|scalar|type|interface|union|enum|input|extend|implements|directive|repeatable|on)\b'
+      scope: keyword.declaration.graphql
+    - match: '\b(Int|Float|String|Boolean|ID)\b'
+      scope: support.type.builtin.graphql
+    # Aliased selection field: `primaryHost: hostname` (where target is lowercase field identifier, not a PascalCase type)
+    - match: '\b([a-z_][A-Za-z0-9_]*)\s*(:)\s*([a-z_][A-Za-z0-9_]*)\b'
+      captures:
+        1: support.type.property-name.graphql
+        2: punctuation.separator.colon.graphql
+        3: support.type.property-name.graphql
+    # Field definition or field call with arguments/colon: `id: ID!`, `events(limit: Int = 50):`
+    - match: '\b([a-z_][A-Za-z0-9_]*)\b(?=\s*[:\(])'
+      captures:
+        1: support.type.property-name.graphql
+    # Bare selection field in query/fragment selection set
+    - match: '\b(?!query\b|mutation\b|subscription\b|fragment\b|schema\b|scalar\b|type\b|interface\b|union\b|enum\b|input\b|extend\b|directive\b|implements\b|repeatable\b|on\b|true\b|false\b|null\b)([a-z_][A-Za-z0-9_]*)\b'
+      captures:
+        1: support.type.property-name.graphql
+
+  constants-and-numbers:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.graphql
+    - match: '\b(null)\b'
+      scope: constant.language.null.graphql
+    - match: '[-+]?(?:[0-9]+\.[0-9]+(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+|[0-9]+)\b'
+      scope: constant.numeric.graphql
+    # ALL_CAPS enum constants and directive locations (e.g. HEALTH_STATE_ACTIVE, FIELD_DEFINITION, OBJECT)
+    - match: '\b[A-Z][A-Z0-9_]+\b'
+      scope: constant.other.enum.graphql
+
+  variables-and-types:
+    - match: '\$[A-Za-z_][A-Za-z0-9_]*'
+      scope: variable.other.graphql
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.graphql
+    - match: '\b[a-z_][A-Za-z0-9_]*\b'
+      scope: variable.other.graphql
+
+  punctuation-and-operators:
+    - match: '='
+      scope: keyword.operator.assignment.graphql
+    - match: '!'
+      scope: keyword.operator.nullability.graphql
+    - match: '[|&:,]'
+      scope: punctuation.separator.graphql
+    - match: '[\{\}\[\]\(\)]'
+      scope: punctuation.section.brackets.graphql

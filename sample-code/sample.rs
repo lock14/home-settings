@@ -60,6 +60,16 @@ impl<T: Clone + Display> ServerNode<T> {
             NodeStatus::Terminated => "Node has stopped",
         }
     }
+
+    pub fn active_port(&self, fallback: Option<u16>) -> Option<u16> {
+        let Some(default_port) = fallback else {
+            return None;
+        };
+        match self.status {
+            NodeStatus::Running(port) => Some(port),
+            _ => Some(default_port),
+        }
+    }
 }
 
 impl<T: Clone + Display> Display for ServerNode<T> {
@@ -73,6 +83,8 @@ fn main() {
     primary_node.tags.insert("environment".to_string(), "production");
 
     let timeout = Duration::from_millis(500);
+    let port = primary_node.active_port(Some(8080)).unwrap_or(80);
     println!("Max connections: {}, Buffer: {:#X}", MAX_CONNECTIONS, BUFFER_CAPACITY);
-    println!("Status: {} (timeout: {:?})", primary_node.inspect_state(), timeout);
+    println!("Status: {} (port: {}, timeout: {:?})", primary_node.inspect_state(), port, timeout);
 }
+

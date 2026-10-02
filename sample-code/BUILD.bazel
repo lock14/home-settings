@@ -1,0 +1,112 @@
+"""Open-source Bazel BUILD target definitions for the telemetry collector package.
+
+Demonstrates package() default visibility, load() from @rules_cc and @rules_proto,
+exports_files(), config_setting(), filegroup() with glob(), proto_library(),
+cc_library() with select(), cc_binary(), and parameterized cc_test() generation.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load(":sample.bzl", "DEFAULT_COPTS", "telemetry_cc_library", "telemetry_schema_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+exports_files(
+    [
+        "sample.proto",
+        "sample.graphql",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "macos_aarch64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+filegroup(
+    name = "schema_fixtures",
+    srcs = glob(
+        include = [
+            "*.proto",
+            "*.graphql",
+            "*.json",
+        ],
+        exclude = [
+            "*_experimental.*",
+        ],
+        allow_empty = False,
+    ),
+)
+
+proto_library(
+    name = "telemetry_proto",
+    srcs = ["sample.proto"],
+    strip_import_prefix = "/sample-code",
+)
+
+telemetry_schema_library(
+    name = "telemetry_codegen_hdrs",
+    srcs = [
+        "sample.graphql",
+        "sample.proto",
+    ],
+    wire_format = "v2",
+)
+
+telemetry_cc_library(
+    name = "telemetry_collector",
+    srcs = ["sample.cpp"],
+    hdrs = [":telemetry_codegen_hdrs"],
+    copts = DEFAULT_COPTS + select({
+        ":linux_x86_64": ["-DTELEMETRY_SIMD_AVX2=1"],
+        ":macos_aarch64": ["-DTELEMETRY_SIMD_NEON=1"],
+        "//conditions:default": [],
+    }),
+    enable_tests = True,
+    linkopts = select({
+        "@platforms//os:linux": ["-lpthread", "-ldl"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_binary(
+    name = "telemetry_collector_daemon",
+    srcs = ["sample.cpp"],
+    copts = DEFAULT_COPTS,
+    deps = [
+        ":telemetry_collector",
+    ],
+)
+
+[
+    cc_test(
+        name = "telemetry_shard_%s_test" % shard,
+        size = "small",
+        srcs = ["sample.cpp"],
+        args = [
+            "--shard-id=%s" % shard,
+            "--max-workers=8",
+        ],
+        copts = DEFAULT_COPTS,
+        data = [":schema_fixtures"],
+        deps = [":telemetry_collector"],
+    )
+    for shard in [
+        "alpha",
+        "beta",
+    ]
+]

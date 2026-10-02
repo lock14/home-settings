@@ -1,0 +1,178 @@
+# =============================================================================
+# Distributed telemetry and edge gateway GraphQL schema & query showcase
+# demonstrating SDL declarations (schema, scalar, directive, enum, interface,
+# type, extend, union, input) and executable operations (query, mutation,
+# subscription, fragments, inline spreads, variables, directives, block strings).
+# =============================================================================
+
+"""
+Root schema binding query, mutation, and live subscription entry points.
+"""
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+"""
+RFC 3339 UTC timestamp scalar serialized as an ISO-8601 string.
+"""
+scalar DateTime @specifiedBy(url: "https://scalars.graphql.org/andimarek/date-time")
+
+scalar JSONPayload
+
+directive @rateLimit(
+  maxCalls: Int = 100
+  windowSec: Int!
+) repeatable on FIELD_DEFINITION | OBJECT
+
+directive @auth(
+  requires: Role = ROLE_VIEWER
+) on FIELD_DEFINITION | OBJECT | ENUM_VALUE
+
+enum Role {
+  ROLE_VIEWER
+  ROLE_OPERATOR
+  ROLE_ADMIN
+}
+
+enum HealthState {
+  HEALTH_STATE_UNSPECIFIED
+  HEALTH_STATE_ACTIVE
+  HEALTH_STATE_DRAINING @deprecated(reason: "Use HEALTH_STATE_MAINTENANCE")
+  HEALTH_STATE_MAINTENANCE
+}
+
+interface NodeIdentity {
+  id: ID!
+  hostname: String!
+  region: String!
+}
+
+type MetricPoint {
+  name: String!
+  observedAt: DateTime!
+  gaugeValue: Float!
+  counterDelta: Int
+}
+
+type HistogramSummary {
+  sampleCount: Int!
+  sumValue: Float!
+  quantileBounds: [Float!]!
+}
+
+type SpanEventBatch {
+  traceId: ID!
+  rootOperation: String!
+  droppedSpans: Int!
+}
+
+union TelemetryEvent = MetricPoint | HistogramSummary | SpanEventBatch
+
+type TelemetryNode implements NodeIdentity @rateLimit(maxCalls: 500, windowSec: 60) {
+  id: ID!
+  hostname: String!
+  region: String!
+  state: HealthState!
+  workerThreads: Int!
+  compressionRatio: Float
+  isCompressed: Boolean!
+  events(limit: Int = 50, offset: Int = 0): [TelemetryEvent!]!
+}
+
+input SnapshotFilterInput {
+  regionFilter: String!
+  includeDraining: Boolean = false
+  minSamples: Int = 10
+  stateFilter: HealthState = HEALTH_STATE_ACTIVE
+  tags: JSONPayload
+}
+
+input IngestBatchInput {
+  batchId: ID!
+  sourceNodeId: ID!
+  recordedAt: DateTime!
+  samplingFloor: Float = 0.05
+}
+
+type IngestBatchPayload {
+  ackId: ID!
+  acceptedPoints: Int!
+  rejectedPoints: Int!
+  statusNode: TelemetryNode
+}
+
+type Query {
+  telemetryNodes(
+    filter: SnapshotFilterInput!
+    limit: Int = 25
+    cursor: String = null
+    threshold: Float = -0.25
+    metadata: JSONPayload
+  ): [TelemetryNode!]! @auth(requires: ROLE_VIEWER)
+}
+
+extend type Query {
+  nodeById(id: ID!): TelemetryNode
+}
+
+type Mutation {
+  ingestTelemetryBatch(input: IngestBatchInput!): IngestBatchPayload! @auth(requires: ROLE_OPERATOR)
+}
+
+type Subscription {
+  watchNodeHealth(region: String!): TelemetryNode!
+}
+
+fragment NodeSummaryFields on TelemetryNode {
+  id
+  primaryHost: hostname
+  region
+  state
+  isCompressed
+}
+
+query GetTelemetrySnapshot(
+  $filter: SnapshotFilterInput!
+  $limit: Int = 25
+  $includeEvents: Boolean = true
+) {
+  telemetryNodes(
+    filter: $filter
+    limit: $limit
+    cursor: null
+    threshold: -0.25
+    metadata: { serviceOwner: "platform-observability", tier: 1, strictMode: true }
+  ) {
+    ...NodeSummaryFields
+    events(limit: 10, offset: 0) @include(if: $includeEvents) {
+      ... on MetricPoint {
+        name
+        gaugeValue
+      }
+      ... on HistogramSummary {
+        sampleCount
+        sumValue
+      }
+      ... on SpanEventBatch {
+        traceId
+        rootOperation
+      }
+    }
+  }
+}
+
+mutation IngestTelemetryBatch($input: IngestBatchInput!) {
+  ingestTelemetryBatch(input: $input) {
+    ackId
+    acceptedPoints
+    rejectedPoints
+  }
+}
+
+subscription WatchNodeHealth($region: String!) {
+  watchNodeHealth(region: $region) {
+    ...NodeSummaryFields
+  }
+}

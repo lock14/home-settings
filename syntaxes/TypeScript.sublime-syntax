@@ -155,11 +155,25 @@ contexts:
     - match: '({{ident}})\s*(?=[?:=;]|\s)'
       captures:
         1: variable.other.property.ts
+    # Class property initializer assignment (= ...) transitions to expression context
+    - match: '='
+      scope: keyword.operator.ts
+      push: field-initializer
     - include: type-parameters
     - include: parameter-list
     - include: type-annotation
     - include: statements
     - include: expressions
+
+  field-initializer:
+    - match: ';'
+      scope: punctuation.delimiter.ts
+      pop: true
+    - match: '(?=\})'
+      pop: true
+    - include: comments
+    - include: expressions
+
 
   computed-member:
     - match: '\]'
@@ -378,6 +392,10 @@ contexts:
     - match: '=>'
       scope: storage.type.function.arrow.ts
     # Type cast / assertions
+    - match: '\b(as)\b\s+\b(const)\b'
+      captures:
+        1: keyword.operator.expression.as.ts
+        2: storage.modifier.ts
     - match: '\b(as)\b\s+({{primitive_types}})'
       captures:
         1: keyword.operator.expression.as.ts
@@ -388,7 +406,7 @@ contexts:
         2: entity.name.type.ts
     - match: '\b(as)\b'
       scope: keyword.operator.expression.as.ts
-    - match: '\b(instanceof|typeof|in)\b'
+    - match: '\b(instanceof|typeof|in|satisfies|keyof)\b'
       scope: keyword.operator.word.ts
     # New operator -> Green
     - match: '\b(new)\b'

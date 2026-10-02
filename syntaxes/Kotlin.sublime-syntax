@@ -1,0 +1,328 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Kotlin Syntax
+# Supports Modern Kotlin 2.x:
+# - Value classes (@JvmInline value class), sealed interfaces, data classes & data objects
+# - Coroutines (suspend), extensions (fun Receiver.method), smart casts (is, !is, as, as?)
+# - Package declarations in Solarized Violet (entity.name.namespace.kotlin)
+# - Calm Base0 package routing paths in import statements with Magenta wildcard (*)
+# - Unified annotations (@file:JvmName, @JvmInline) in Solarized Violet
+# - Scalar primitive types (Int, UInt, Long, Double, Float, Boolean, String, Unit, Any, Nothing) in Solarized Green
+# - Collection & domain types (List, Map, Set, Array, NodeId, TelemetryEvent) in calm Base0 Grey
+# - String interpolation ($ident and ${expr}) neutralized to Base0 Grey inside Cyan strings
+name: Kotlin
+scope: source.kotlin
+version: 2
+
+file_extensions:
+  - kt
+  - kts
+
+first_line_match: |-
+  (?xi:
+    ^ \#! .*? \bkotlin\b
+  )
+
+variables:
+  ident: '[[:alpha:]_][[:alnum:]_]*'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_]*\b'
+  const_ident: '\b[[:upper:]][[:upper:][:digit:]_]+\b'
+  primitive_type: '\b(?:Boolean|Byte|Short|Int|Long|UByte|UShort|UInt|ULong|Float|Double|Char|String|Unit|Nothing|Any|ByteArray|ShortArray|IntArray|LongArray|UByteArray|UShortArray|UIntArray|ULongArray|FloatArray|DoubleArray|BooleanArray|CharArray)\b'
+  modifier: '\b(?:public|private|protected|internal|open|final|abstract|sealed|inline|noinline|crossinline|reified|tailrec|operator|infix|external|lateinit|const|override|actual|expect|inner|out|vararg)\b'
+  declaration_keyword: '\b(?:val|var|typealias|class|interface|object|enum|constructor|by|where)\b'
+  control_flow: '\b(?:if|else|when|while|do|return|break|continue|try|catch|finally|throw|suspend)\b'
+  hex_digit: '[0-9a-fA-F_]'
+
+contexts:
+  main:
+    - include: shebang
+    - include: comments
+    - include: package-statement
+    - include: import-statement
+    - include: labeled-jumps-and-receivers
+    - include: annotations
+    - include: for-loop
+    - include: function-declaration
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  shebang:
+    - match: '^#!.*$'
+      scope: comment.line.number-sign.shebang.kotlin
+
+  comments:
+    # Markdown doc comments
+    - match: '///.*$'
+      scope: comment.line.triple-slash.documentation.kotlin
+    # KDoc block comments
+    - match: '/\*\*(?!/)'
+      scope: punctuation.definition.comment.begin.kotlin
+      push:
+        - meta_scope: comment.block.documentation.kotlin
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.kotlin
+          pop: true
+        - include: comments
+    # Nested block comments
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.kotlin
+      push:
+        - meta_scope: comment.block.kotlin
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.kotlin
+          pop: true
+        - include: comments
+    # Line comments
+    - match: '//.*$'
+      scope: comment.line.double-slash.kotlin
+
+  package-statement:
+    - match: '\b(package)\b\s*'
+      captures:
+        1: keyword.other.package.kotlin
+      push:
+        - match: '(?:;|$)'
+          scope: punctuation.terminator.kotlin
+          pop: true
+        - include: comments
+        - match: '\b({{ident}})\b'
+          captures:
+            1: entity.name.namespace.kotlin
+        - match: '\.'
+          scope: punctuation.accessor.dot.kotlin
+
+  import-statement:
+    - match: '\b(import)\b\s*'
+      captures:
+        1: keyword.control.import.kotlin
+      push:
+        - match: '(?:;|$)'
+          scope: punctuation.terminator.kotlin
+          pop: true
+        - include: comments
+        - match: '\b(as)\b\s+({{ident}})\b'
+          captures:
+            1: keyword.operator.word.kotlin
+            2: support.type.user-defined.kotlin
+        - match: '\*'
+          scope: constant.language.wildcard.kotlin
+        - match: '\.'
+          scope: punctuation.accessor.dot.kotlin
+        - match: '\b({{ident}})\b'
+          captures:
+            1: variable.other.namespace.kotlin
+
+  labeled-jumps-and-receivers:
+    - match: '\b((?:return|break|continue)@)({{ident}})\b'
+      captures:
+        1: keyword.control.kotlin
+        2: entity.name.label.kotlin
+    - match: '\b((?:this|super)@)({{ident}})\b'
+      captures:
+        1: variable.language.kotlin
+        2: support.type.user-defined.kotlin
+    - match: '\b({{ident}}@)'
+      captures:
+        1: entity.name.label.kotlin
+
+  annotations:
+    # Unified file/use-site and declaration annotations: @file:JvmName, @JvmInline
+    - match: '(?<![[:alnum:]_])@(?:(?:file|field|property|get|set|receiver|param|setparam|delegate):)?{{ident}}(?:\.{{ident}})*'
+      scope: storage.type.annotation.kotlin
+
+  for-loop:
+    # Highlight 'for' and loop 'in' inside for-header in Solarized Yellow
+    - match: '\b(for)\b\s*(\()'
+      captures:
+        1: keyword.control.loop.kotlin
+        2: punctuation.section.parens.begin.kotlin
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.kotlin
+          pop: true
+        - include: comments
+        - match: '\b(in)\b'
+          scope: keyword.control.loop.kotlin
+        - include: declarations
+        - include: expressions
+
+  function-declaration:
+    - match: '\b(fun)\b'
+      captures:
+        1: storage.type.function.kotlin
+      push:
+        - match: '(?=[({=;])'
+          pop: true
+        - include: comments
+        - include: function-type-parameters
+        # Function identifier immediately before parameter list '('
+        - match: '\b({{ident}})\s*(?=\()'
+          captures:
+            1: entity.name.function.kotlin
+          pop: true
+        - include: types
+        - match: '\.'
+          scope: punctuation.accessor.dot.kotlin
+        - include: operators-and-delimiters
+
+  function-type-parameters:
+    - match: '<'
+      scope: punctuation.definition.typeparameters.begin.kotlin
+      push:
+        - match: '>'
+          scope: punctuation.definition.typeparameters.end.kotlin
+          pop: true
+        - include: comments
+        - include: function-type-parameters
+        - match: '\b(?:in|out|reified)\b'
+          scope: storage.modifier.kotlin
+        - include: types
+        - include: operators-and-delimiters
+
+  declarations:
+    # Contextual declaration modifiers guarded by following keyword or block
+    - match: '(?<!\.)\b(?:value|annotation)\b(?=\s+class\b)'
+      scope: storage.modifier.kotlin
+    - match: '(?<!\.)\bdata\b(?=\s+(?:class|object)\b)'
+      scope: storage.modifier.kotlin
+    - match: '(?<!\.)\bcompanion\b(?=\s+object\b)'
+      scope: storage.type.kotlin
+    - match: '(?<!\.)\binit\b(?=\s*\{)'
+      scope: storage.type.function.kotlin
+    - match: '(?<!\.)\b(?:get|set)\b(?=\s*(?:\(|=|\{|$))'
+      scope: storage.type.function.kotlin
+    - match: '{{modifier}}'
+      scope: storage.modifier.kotlin
+    - match: '{{declaration_keyword}}'
+      scope: storage.type.kotlin
+
+  statements:
+    - include: labeled-jumps-and-receivers
+    - match: '{{control_flow}}'
+      scope: keyword.control.kotlin
+    # Word operators: is, !is, in, !in, as?, as (Solarized Green)
+    - match: '(?:!is|!in|\b(?:is|in)\b|\bas\??(?!\w))'
+      scope: keyword.operator.word.kotlin
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: constants
+    - include: function-calls
+    - include: types
+    - include: identifiers
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal integer literal (e.g. 0xCAFE_BABEu, 0x7FL)
+    - match: '\b0[xX]{{hex_digit}}+[uU]?[lL]?\b'
+      scope: constant.numeric.hexadecimal.kotlin
+    # Binary integer literal (e.g. 0b1010_1100u)
+    - match: '\b0[bB][01_]+[uU]?[lL]?\b'
+      scope: constant.numeric.binary.kotlin
+    # Floating-point literal (require digit after dot so 0.0..100.0 preserves '..')
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?[fF]?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+[fF]?\b|\b[0-9][0-9_]*[fF]\b'
+      scope: constant.numeric.float.kotlin
+    # Decimal / unsigned / long integer literal (e.g. 1024, 2u, 5_000L)
+    - match: '\b[0-9][0-9_]*[uU]?[lL]?\b'
+      scope: constant.numeric.integer.decimal.kotlin
+
+  strings:
+    # Raw multi-line string: """ ... """
+    - match: '"""'
+      scope: punctuation.definition.string.begin.kotlin
+      push:
+        - meta_scope: string.quoted.triple.kotlin
+        - match: '"""'
+          scope: punctuation.definition.string.end.kotlin
+          pop: true
+        - include: string-interpolation
+    # Standard double-quoted string: " ... "
+    - match: '"'
+      scope: punctuation.definition.string.begin.kotlin
+      push:
+        - meta_scope: string.quoted.double.kotlin
+        - match: '"'
+          scope: punctuation.definition.string.end.kotlin
+          pop: true
+        - match: '\\(?:[btnfr"''\\$]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.kotlin
+        - include: string-interpolation
+    # Single-quoted character literal: ' ... '
+    - match: "'"
+      scope: punctuation.definition.string.begin.kotlin
+      push:
+        - meta_scope: string.quoted.single.kotlin
+        - match: "'"
+          scope: punctuation.definition.string.end.kotlin
+          pop: true
+        - match: '\\(?:[btnfr"''\\$]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.kotlin
+
+  string-interpolation:
+    # Braced expression interpolation: ${expr}
+    - match: '\$\{'
+      scope: punctuation.section.interpolation.begin.kotlin
+      push:
+        - meta_content_scope: meta.interpolation.kotlin
+        - match: '\}'
+          scope: punctuation.section.interpolation.end.kotlin
+          pop: true
+        - include: interpolation-braces
+        - include: statements
+        - include: expressions
+    # Simple identifier interpolation: $ident
+    - match: '(\$)({{ident}})'
+      captures:
+        1: punctuation.definition.variable.kotlin
+        2: variable.other.readwrite.kotlin
+
+  interpolation-braces:
+    - match: '\{'
+      scope: punctuation.section.braces.begin.kotlin
+      push:
+        - match: '\}'
+          scope: punctuation.section.braces.end.kotlin
+          pop: true
+        - include: interpolation-braces
+        - include: statements
+        - include: expressions
+
+  constants:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.kotlin
+    - match: '\bnull\b'
+      scope: constant.language.null.kotlin
+    - match: '\b(this|super|it|field)\b'
+      scope: variable.language.kotlin
+    - match: '{{const_ident}}'
+      scope: variable.other.constant.kotlin
+
+  types:
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.kotlin
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.kotlin
+
+  function-calls:
+    - match: '(\??\.)\s*({{ident}})\s*(?=\()'
+      captures:
+        1: punctuation.accessor.dot.kotlin
+        2: variable.function.kotlin
+    - match: '(::)\s*({{ident}})'
+      captures:
+        1: punctuation.accessor.double-colon.kotlin
+        2: variable.function.kotlin
+    - match: '\b({{ident}})\s*(?=\()'
+      scope: variable.function.kotlin
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.kotlin
+
+  operators-and-delimiters:
+    - match: '===|!==|==|!=|<=|>=|&&|\|\||\?\?|\?:|\?\.|!!|\.\.<|\.\.|->|\+\+|--|[+\-*/%&|^~<>=!?]'
+      scope: keyword.operator.kotlin
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.kotlin

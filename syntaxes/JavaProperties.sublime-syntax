@@ -58,6 +58,18 @@ contexts:
       set: value
 
   value:
+    # Standalone booleans spanning the entire value: true or false
+    - match: '(true|false)(?=[ \t]*$)'
+      captures:
+        1: constant.language.boolean.properties
+    # Standalone float numbers spanning the entire value: 0.15, 1.5
+    - match: '([-+]?[0-9]+\.[0-9]+)(?=[ \t]*$)'
+      captures:
+        1: constant.numeric.float.properties
+    # Standalone integer numbers spanning the entire value: 8080, 4096
+    - match: '([-+]?[0-9]+)(?=[ \t]*$)'
+      captures:
+        1: constant.numeric.integer.properties
     - include: value-tokens
 
   value-tokens:
@@ -77,21 +89,6 @@ contexts:
         1: punctuation.section.embedded.properties
         2: variable.other.interpolation.properties
         3: punctuation.section.embedded.properties
-
-    # Standalone booleans: true or false
-    - match: '(?<=[=:\s])(true|false)(?=[,\s\\]|$)'
-      captures:
-        1: constant.language.boolean.properties
-
-    # Standalone float numbers: 0.15, 1.5
-    - match: '(?<=[=:\s])([0-9]+\.[0-9]+)(?=[,\s\\]|$)'
-      captures:
-        1: constant.numeric.float.properties
-
-    # Standalone integer numbers: 8080, 4096
-    - match: '(?<=[=:\s])([0-9]+)(?=[,\s\\]|$)'
-      captures:
-        1: constant.numeric.integer.properties
 
     # Escaped characters: \uXXXX, \:, \=, \\
     - match: '\\u[0-9a-fA-F]{4}'

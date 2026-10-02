@@ -42,9 +42,10 @@ show_keys_cheatsheet() {
         "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select & copy" "$c_reset" \
         "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent / open item" "$c_cyan" "Alt+c / Alt+v" "$c_base0" "Copy & clear / Paste" "$c_reset" \
         "$c_cyan" "=      (in files)" "$c_base0" "Apply file edits" "$c_cyan" "Ctrl/Alt+Click" "$c_base0" "Open link / jump def" "$c_reset" \
-        "$c_cyan" "g? / q (in files)" "$c_base0" "Help / close tree" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Shift workspace dir" "$c_reset" \
-        "$c_cyan" "Space ff / fg / gs" "$c_base0" "Find / Grep / Git" "$c_cyan" ":Q / Space q" "$c_base0" "Quit IDE workspace" "$c_reset" \
-        "$c_cyan" "H / L  (normal)" "$c_base0" "Prev / next buffer" "$c_cyan" "Alt+q / Alt+Shift+Q" "$c_base0" "Quit / Force-quit IDE" "$c_reset" \
+        "$c_cyan" "g? / q (in files)" "$c_base0" "Help / close tree" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back / forward" "$c_reset" \
+        "$c_cyan" "Space ff / fg / gs" "$c_base0" "Find / Grep / Git" "$c_cyan" "v [+line] <file>" "$c_base0" "Open file in Editor" "$c_reset" \
+        "$c_cyan" "Space m" "$c_base0" "Toggle MD render" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Shift workspace dir" "$c_reset" \
+        "$c_cyan" "H / L  (normal)" "$c_base0" "Prev / next buffer" "$c_cyan" ":Q / Alt+q / Alt+Q" "$c_base0" "Quit / Force-quit IDE" "$c_reset" \
         "$c_cyan" "Ctrl+h / j / k / l" "$c_base0" "Move Neovim splits" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
 
     if [ -t 0 ] && [ -t 1 ] && [ "${IDE_KEYS_NO_WAIT:-0}" != "1" ]; then
@@ -786,11 +787,21 @@ def nvim_remote_send(sock: str, keys: str) -> bool:
 
 def nvim_remote_file(sock: str, filepath: str, line: str = "") -> None:
     escaped = filepath.replace("'", "''")
-    line_cmd = f" | silent! {line} | silent! normal! zz" if line else ""
+    line_num = int(line) if line.isdigit() and int(line) > 0 else 0
+    line_step = (
+        f", 'keepjumps silent! call cursor({line_num}, 1) | silent! normal! zz'"
+        if line_num > 0
+        else ""
+    )
     nvim_remote_expr(
         sock,
-        'execute(["if &filetype ==# \'netrw\' && winnr(\'\\$\') > 1 | wincmd p | endif", '
-        f"'silent! edit ' . fnameescape('{escaped}') . '{line_cmd}'])",
+        'execute(['
+        '"if exists(\\"*luaeval\\") | silent! call luaeval(\'package.loaded[\\"mini.files\\"] and require(\\"mini.files\\").close()\') | endif", '
+        '"if &filetype ==# \'netrw\' && winnr(\'\\$\') > 1 | wincmd p | endif", '
+        '"stopinsert", '
+        '"silent! normal! m\'", '
+        f"'if fnamemodify(bufname(\"%\"), \":p\") !=# fnamemodify(' . string('{escaped}') . ', \":p\") | keepjumps silent! edit ' . fnameescape('{escaped}') . ' | endif'"
+        f"{line_step}])",
     )
 
 
@@ -1541,6 +1552,19 @@ def resolve_private_link(link_word: str, link_cwd: str) -> str:
     return _call_ide_hook("ide_resolve_link", link_word, link_cwd)
 
 
+_RE_FILE_URI = re.compile(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)")
+_RE_SCHEME = re.compile(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+")
+_RE_LINE_COL = re.compile(r"^([^:]+):[Ll]?([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$")
+_RE_HASH_LINE = re.compile(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$")
+_RE_MD_LABEL = re.compile(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(")
+_RE_MD_LINK = re.compile(
+    r"\[(?:`[^`\r\n]+`|[^\[\]\r\n]*(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(([^()\s]+(?:\([^()\s]*\)[^()\s]*)*)\)"
+)
+_RE_TOOL_CALL = re.compile(r"^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$")
+_RE_PCT_ENC = re.compile(r"%[0-9A-Fa-f]{2}")
+_RE_FRAG_ID = re.compile(r"^[A-Za-z0-9_.:-]+$")
+
+
 def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
     def _exists(p: str) -> bool:
         if not p:
@@ -1560,7 +1584,7 @@ def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
         elif not raw.startswith("/") and "/" in raw:
             raw = raw[raw.index("/"):]
 
-    m_hash = re.match(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$", raw)
+    m_hash = _RE_HASH_LINE.match(raw)
     if m_hash:
         raw, line = m_hash.group(1), m_hash.group(2)
     elif "#" in os.path.basename(raw) and not _exists(raw) and not _exists(urllib.parse.unquote(raw)):
@@ -1573,23 +1597,23 @@ def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
         elif (
             os.path.splitext(base_unq)[1]
             and not os.path.splitext(frag.split(":", 1)[0])[1]
-            and re.match(r"^[A-Za-z0-9_.:-]+$", frag)
+            and _RE_FRAG_ID.match(frag)
         ):
             raw = base_raw
 
-    if not _exists(raw) and re.search(r"%[0-9A-Fa-f]{2}", raw):
+    if not _exists(raw) and _RE_PCT_ENC.search(raw):
         raw = urllib.parse.unquote(raw)
         if not line and "#" in os.path.basename(raw) and not _exists(raw):
-            m_hash2 = re.match(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$", raw)
+            m_hash2 = _RE_HASH_LINE.match(raw)
             if m_hash2:
                 raw, line = m_hash2.group(1), m_hash2.group(2)
 
     if not line and not _exists(raw):
-        m_col = re.match(r"^([^:]+):[Ll]?([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$", raw)
+        m_col = _RE_LINE_COL.match(raw)
         if m_col:
             raw, line = m_col.group(1), m_col.group(2)
 
-    if not _exists(raw) and re.search(r"%[0-9A-Fa-f]{2}", raw):
+    if not _exists(raw) and _RE_PCT_ENC.search(raw):
         raw = urllib.parse.unquote(raw)
     return raw, line
 
@@ -1688,6 +1712,9 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
     return ""
 
 
+_resolve_workspace_file = resolve_workspace_file
+
+
 def open_file_or_dir_target(fpath: str, line: str, target_arg: str) -> bool:
     if os.path.isfile(fpath):
         open_in_editor(fpath, True, target_arg, line)
@@ -1705,12 +1732,12 @@ def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str, fallback
     if not parse_path:
         return False
     if not parse_path.startswith("/") and not parse_path.startswith("~/"):
-        resolved = resolve_workspace_file(parse_path, cwd, target_arg)
+        resolved = _resolve_workspace_file(parse_path, cwd, target_arg)
         if resolved:
             return open_file_or_dir_target(resolved, parse_line, target_arg)
     if open_file_or_dir_target(parse_path, parse_line, target_arg):
         return True
-    resolved = resolve_workspace_file(parse_path, cwd, target_arg)
+    resolved = _resolve_workspace_file(parse_path, cwd, target_arg)
     if resolved:
         return open_file_or_dir_target(resolved, parse_line, target_arg)
     return False
@@ -1780,7 +1807,7 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
     for pt in pane_targets:
         joined_out = tmux_out("capture-pane", "-p", "-J", *pt)
         if joined_out:
-            for m in re.finditer(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+", joined_out):
+            for m in _RE_SCHEME.finditer(joined_out):
                 full = strip_token_wrappers(m.group(0))
                 if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
                     return full
@@ -1815,19 +1842,26 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
     return word
 
 
+_stitch_wrapped_tmux_word = unsplit_wrapped_url
+
+
+def _unwrap_tool_or_token(word: str) -> str:
+    word = strip_token_wrappers(word)
+    m_tool = _RE_TOOL_CALL.match(word)
+    if m_tool:
+        word = m_tool.group(2)
+        if word.endswith(")"):
+            word = word[:-1]
+        word = strip_token_wrappers(word)
+    return word
+
+
 def _extract_word_target(raw_word: str, cwd: str = "") -> tuple[str, str]:
     w = raw_word.strip()
-    m_lbl = re.search(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(", w)
+    m_lbl = _RE_MD_LABEL.search(w)
     if m_lbl:
         w = m_lbl.group(1)
-    w = strip_token_wrappers(w)
-    m_tool = re.match(r"^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$", w)
-    if m_tool:
-        w = m_tool.group(2)
-        if w.endswith(")"):
-            w = w[:-1]
-        w = strip_token_wrappers(w)
-    return parse_file_target(w, cwd)
+    return parse_file_target(_unwrap_tool_or_token(w), cwd)
 
 
 _TMUX_WORD_SEPS = " ()[]{}<>\"'`,;*"
@@ -1874,27 +1908,51 @@ def recover_split_osc8_href(word: str, target_arg: str = "") -> str:
     return ""
 
 
+def _open_osc8_href(href: str, word: str, cwd: str, target_arg: str) -> int | None:
+    if href.startswith("file://"):
+        href_path, href_line = parse_file_target(href, cwd)
+        if not href_line and word:
+            word_path, word_line = _extract_word_target(word, cwd)
+            if word_line and os.path.basename(href_path) == os.path.basename(word_path):
+                href_line = word_line
+        if resolve_and_open_target(href, cwd, target_arg, fallback_line=href_line):
+            return 0
+    elif href.startswith(("http://", "https://")):
+        return 0 if open_browser_url(href, target_arg) else 1
+    return None
+
+
+def _open_embedded_file_uri(word: str, lbl_path: str, lbl_line: str, cwd: str, target_arg: str) -> bool:
+    m_file_url = _RE_FILE_URI.search(word)
+    if not m_file_url:
+        return False
+    embedded_href = _stitch_wrapped_tmux_word(m_file_url.group(1), target_arg)
+    while embedded_href and embedded_href[-1] in ",;." and not os.path.exists(embedded_href[7:]):
+        embedded_href = embedded_href[:-1]
+    emb_path, emb_line = parse_file_target(embedded_href, cwd)
+    fb_line = lbl_line if (not emb_line and lbl_line and os.path.basename(emb_path) == os.path.basename(lbl_path)) else ""
+    return resolve_and_open_target(embedded_href, cwd, target_arg, fallback_line=fb_line)
+
+
+def _normalize_clicked_word(word: str) -> str:
+    m_md_link = _RE_MD_LINK.search(word)
+    if m_md_link:
+        word = m_md_link.group(1)
+    return _unwrap_tool_or_token(word)
+
+
 def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     cwd = cwd or os.getcwd()
-    run_tmux("set-option", "-gq", "word-separators", " ()[]{}<>\"'`,;*")
+    run_tmux("set-option", "-gq", "word-separators", _TMUX_WORD_SEPS)
 
     if not href and word:
         href = recover_split_osc8_href(word, target_arg)
 
-    # 1. Explicit OSC 8 hyperlink (`#{mouse_hyperlink}`)
     if href:
-        if href.startswith("file://"):
-            href_path, href_line = parse_file_target(href, cwd)
-            if not href_line and word:
-                word_path, word_line = _extract_word_target(word, cwd)
-                if word_line and os.path.basename(href_path) == os.path.basename(word_path):
-                    href_line = word_line
-            if resolve_and_open_target(href, cwd, target_arg, fallback_line=href_line):
-                return 0
-        elif href.startswith(("http://", "https://")):
-            return 0 if open_browser_url(href, target_arg) else 1
+        osc8_rc = _open_osc8_href(href, word, cwd, target_arg)
+        if osc8_rc is not None:
+            return osc8_rc
 
-    # 2. Fallback to clicked word (`#{mouse_word}`)
     word = word.strip()
     if not word:
         return 0
@@ -1902,41 +1960,19 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     bracket_label = ""
     lbl_path = ""
     lbl_line = ""
-    m_lbl = re.search(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(", word)
+    m_lbl = _RE_MD_LABEL.search(word)
     if m_lbl:
         bracket_label = strip_token_wrappers(m_lbl.group(1))
         lbl_path, lbl_line = parse_file_target(bracket_label, cwd)
 
-    m_file_url = re.search(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)", word)
-    if m_file_url:
-        embedded_href = unsplit_wrapped_url(m_file_url.group(1), target_arg)
-        while embedded_href and embedded_href[-1] in ",;." and not os.path.exists(embedded_href[7:]):
-            embedded_href = embedded_href[:-1]
-        emb_path, emb_line = parse_file_target(embedded_href, cwd)
-        fb_line = lbl_line if (not emb_line and lbl_line and os.path.basename(emb_path) == os.path.basename(lbl_path)) else ""
-        if resolve_and_open_target(embedded_href, cwd, target_arg, fallback_line=fb_line):
-            return 0
+    if _open_embedded_file_uri(word, lbl_path, lbl_line, cwd, target_arg):
+        return 0
 
-    m_md_link = re.search(
-        r"\[(?:`[^`\r\n]+`|[^\[\]\r\n]*(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(([^()\s]+(?:\([^()\s]*\)[^()\s]*)*)\)",
-        word,
-    )
-    if m_md_link:
-        word = m_md_link.group(1)
-
-    word = strip_token_wrappers(word)
-    m_tool = re.match(r"^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$", word)
-    if m_tool:
-        word = m_tool.group(2)
-        if word.endswith(")"):
-            word = word[:-1]
-        word = strip_token_wrappers(word)
-
+    word = _normalize_clicked_word(word)
     if not word:
         return 0
 
-    word = unsplit_wrapped_url(word, target_arg)
-
+    word = _stitch_wrapped_tmux_word(word, target_arg)
     if word.startswith(("http://", "https://")):
         return 0 if open_browser_url(word, target_arg) else 1
 
@@ -1957,13 +1993,11 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
 
     if "..." in word and "/" in word:
         trunc_base = word.rsplit("/", 1)[-1]
-        if trunc_base and trunc_base != word:
-            if resolve_and_open_target(trunc_base, cwd, target_arg, fallback_line=lbl_line):
-                return 0
-
-    if bracket_label and bracket_label != word:
-        if resolve_and_open_target(bracket_label, cwd, target_arg):
+        if trunc_base and trunc_base != word and resolve_and_open_target(trunc_base, cwd, target_arg, fallback_line=lbl_line):
             return 0
+
+    if bracket_label and bracket_label != word and resolve_and_open_target(bracket_label, cwd, target_arg):
+        return 0
 
     return 0
 

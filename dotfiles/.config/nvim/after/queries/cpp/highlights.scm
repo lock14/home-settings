@@ -59,8 +59,36 @@
  (#eq? @_scope "std")
  (#any-of? @constant "nullopt" "npos"))
 
-;; Standard and vendor attributes: [[nodiscard]], [[maybe_unused]], etc.
+;; Standard and vendor attributes: [[nodiscard]], [[maybe_unused]], etc. -> unified Violet (@attribute)
+(attribute_declaration
+  "[[" @attribute
+  "]]" @attribute
+  (#set! "priority" 105))
 (attribute
-  name: (identifier) @attribute)
+  name: (identifier) @attribute
+  (#set! "priority" 105))
 
+;; Switch default branch -> Yellow (@keyword.conditional)
+(case_statement
+  "default" @keyword.conditional
+  (#set! "priority" 105))
+
+;; noexcept specifier is a declaration modifier (Green @keyword.modifier), not runtime control flow
+("noexcept" @keyword.modifier
+  (#set! "priority" 105))
+
+;; Preprocessor #include directive -> Solarized Orange (@keyword.directive #CB4B16) matching bat and cInclude
+(preproc_include
+  "#include" @keyword.directive
+  (#set! "priority" 105))
+
+;; C++ static_assert declaration keyword -> Solarized Green (@keyword #859900) matching bat
+(static_assert_declaration
+  "static_assert" @keyword
+  (#set! "priority" 105))
+
+;; Destructor name (~ClusterNode) -> unified Solarized Blue (@function #268BD2) matching bat
+(destructor_name
+  "~" @function
+  (#set! "priority" 105))
 

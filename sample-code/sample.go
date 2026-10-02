@@ -84,9 +84,18 @@ func (c *ClusterNode) HealthCheck() bool {
 	return c.active
 }
 
+// ResolveDefault returns val if non-zero, or fallback otherwise using Go generics.
+func ResolveDefault[T comparable](val, fallback T) T {
+	var zero T
+	if val == zero {
+		return fallback
+	}
+	return val
+}
+
 func main() {
 	cfg := ServiceConfig{
-		ServiceName: "Solarized-Service",
+		ServiceName: ResolveDefault("Solarized-Service", "Default-Service"),
 		Port:        8080,
 		RateLimit:   99.95,
 		Timeout:     3 * time.Second,
@@ -96,6 +105,11 @@ func main() {
 	node, err := NewClusterNode(cfg)
 	if err != nil {
 		panic(err)
+	}
+	node.peers["edge-gateway-01"] = 1
+
+	for peer, _ := range node.peers {
+		_ = peer
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
@@ -110,3 +124,4 @@ func main() {
 	fmt.Print(message)
 	fmt.Printf("Health ready: %t (mask: 0x%X)\n", node.HealthCheck(), MaskAll)
 }
+

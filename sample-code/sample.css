@@ -293,8 +293,16 @@
   }
 }
 
-@media (width >= 1200px) {
+@supports (display: grid) {
+  #main-viewport {
+    display: grid;
+    min-height: 100dvh;
+  }
+}
+
+@media (min-width: 1200px) {
   .dashboard-grid {
     grid-template-columns: 320px 1fr;
   }
 }
+

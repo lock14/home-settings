@@ -1,0 +1,164 @@
+%YAML 1.2
+---
+name: Rego
+file_extensions:
+  - rego
+scope: source.rego
+
+contexts:
+  main:
+    - include: comments
+    - include: package_decl
+    - include: import_decl
+    - include: default_decl
+    - include: rule_decl
+    - include: expressions
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.rego
+
+  package_decl:
+    - match: ^\s*\b(package)\b
+      captures:
+        1: keyword.other.package.rego
+      push: module_ref_line
+
+  import_decl:
+    - match: ^\s*\b(import)\b
+      captures:
+        1: keyword.control.import.rego
+      push: module_ref_line
+
+  module_ref_line:
+    - match: $
+      pop: true
+    - include: comments
+    - match: \b(as)\b
+      scope: keyword.other.rego
+    - match: \b[A-Za-z_][A-Za-z0-9_]*\b
+      scope: entity.name.namespace.rego
+    - match: \.
+      scope: punctuation.accessor.dot.rego
+    - include: strings
+    - include: punctuation
+
+  default_decl:
+    - match: ^\s*\b(default)\s+([a-z_][A-Za-z0-9_]*)\b
+      captures:
+        1: keyword.other.default.rego
+        2: entity.name.function.rego
+
+  rule_decl:
+    # Top-level ALL_CAPS constant rule (Solarized Magenta #D33682)
+    - match: ^\s*\b([A-Z][A-Z0-9_]*)\b(?=\s*(?::=|=))
+      captures:
+        1: constant.other.caps.rego
+
+    # Top-level rule / function declaration (Solarized Blue #268BD2)
+    - match: ^\s*\b(?!if\b|else\b|every\b|some\b|in\b|not\b|contains\b|default\b|with\b|as\b|package\b|import\b|true\b|false\b|null\b)([a-z_][A-Za-z0-9_]*)\b(?=\s*(?:\(|\[|\.|:=|=|\bcontains\b|\bif\b|\{))
+      captures:
+        1: entity.name.function.rego
+
+  block_body:
+    - match: \}
+      scope: punctuation.section.braces.end.rego
+      pop: true
+    - include: comments
+    - include: expressions
+
+  bracket_body:
+    - match: \]
+      scope: punctuation.section.brackets.end.rego
+      pop: true
+    - include: comments
+    - include: expressions
+
+  paren_body:
+    - match: \)
+      scope: punctuation.section.parens.end.rego
+      pop: true
+    - include: comments
+    - include: expressions
+
+  expressions:
+    - include: strings
+    - include: keywords
+    - include: constants
+    - include: numbers
+    - match: \{
+      scope: punctuation.section.braces.begin.rego
+      push: block_body
+    - match: \[
+      scope: punctuation.section.brackets.begin.rego
+      push: bracket_body
+    - match: \(
+      scope: punctuation.section.parens.begin.rego
+      push: paren_body
+    - include: identifiers
+    - include: operators
+    - include: punctuation
+
+  keywords:
+    # Conditional & quantifier control flow (Solarized Yellow #B58900)
+    - match: \b(?:if|else|every)\b
+      scope: keyword.control.flow.rego
+
+    # Structural & query keywords (Solarized Green #859900)
+    - match: \b(?:default|some|contains|with|as)\b
+      scope: keyword.other.rego
+
+    # Logical & membership keyword operators (Solarized Green #859900)
+    - match: \b(?:in|not)\b
+      scope: keyword.operator.word.rego
+
+  constants:
+    # Booleans and null (Solarized Magenta #D33682)
+    - match: \b(?:true|false)\b
+      scope: constant.language.boolean.rego
+    - match: \bnull\b
+      scope: constant.language.null.rego
+
+    # ALL_CAPS constants (Solarized Magenta #D33682)
+    - match: \b[A-Z][A-Z0-9_]*\b
+      scope: constant.other.caps.rego
+
+  numbers:
+    # Numeric literals with unified negative sign (Solarized Magenta #D33682)
+    - match: (?<![A-Za-z0-9_])-?\b\d+\.\d+(?:[eE][+-]?\d+)?\b
+      scope: constant.numeric.float.rego
+    - match: (?<![A-Za-z0-9_])-?\b\d+(?:[eE][+-]?\d+)?\b
+      scope: constant.numeric.integer.rego
+
+  strings:
+    # Double-quoted strings (Solarized Cyan #2AA198)
+    - match: '"'
+      scope: string.quoted.double.rego
+      push:
+        - meta_scope: string.quoted.double.rego
+        - match: '"'
+          scope: string.quoted.double.rego
+          pop: true
+        - match: \\.
+          scope: constant.character.escape.rego
+
+    # Raw backtick strings (Solarized Cyan #2AA198)
+    - match: '`'
+      scope: string.quoted.raw.rego
+      push:
+        - meta_scope: string.quoted.raw.rego
+        - match: '`'
+          scope: string.quoted.raw.rego
+          pop: true
+
+  identifiers:
+    - match: \b[A-Za-z_][A-Za-z0-9_]*\b
+      scope: variable.other.rego
+
+  operators:
+    - match: ':=|==|!=|<=|>=|[-+*/%=<>|&]'
+      scope: keyword.operator.rego
+
+  punctuation:
+    - match: '[.,:;]'
+      scope: punctuation.other.rego

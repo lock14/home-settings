@@ -12,7 +12,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-# Constant definitions
+# Constant definitions & PEP 695 type alias (Python 3.12+)
+type MetricTagMap = dict[str, str | int | bool]
+
 DEFAULT_PORT: int = 8080
 MAX_RETRIES: int = 5
 CACHE_HEX_MASK: int = 0xFF00_AA55
@@ -46,6 +48,15 @@ class EndpointMetrics:
         """Returns True if the response code indicates HTTP 2xx success."""
         return 200 <= self.status_code < 300
 
+    def classify_status(self) -> str:
+        match self.status_code:
+            case 200 | 201 | 204:
+                return "ok"
+            case 400 | 401 | 403 | 404:
+                return "client_error"
+            case _:
+                return "server_error"
+
     def summary(self) -> str:
         return f"Endpoint: {self.path} -> {self.status_code} ({self.duration_ms:.1f}ms)"
 
@@ -65,8 +76,8 @@ class MetricsCollector:
     @timed_execution
     async def flush(self) -> int:
         await asyncio.sleep(0.02)
-        count = len(self._buffer)
-        self._buffer.clear()
+        if (count := len(self._buffer)) > 0:
+            self._buffer.clear()
         return count
 
 
@@ -81,3 +92,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+

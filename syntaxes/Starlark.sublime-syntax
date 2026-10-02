@@ -1,0 +1,213 @@
+%YAML 1.2
+---
+name: Starlark
+file_extensions:
+  - bzl
+  - bazel
+  - star
+  - starlark
+  - BUILD
+  - WORKSPACE
+scope: source.starlark
+
+contexts:
+  main:
+    - include: comments
+    - match: '"""'
+      scope: comment.block.documentation.starlark
+      set:
+        - meta_scope: comment.block.documentation.starlark
+        - match: '"""'
+          set: statements
+        - match: \\.
+          scope: comment.block.documentation.starlark
+    - match: "'''"
+      scope: comment.block.documentation.starlark
+      set:
+        - meta_scope: comment.block.documentation.starlark
+        - match: "'''"
+          set: statements
+        - match: \\.
+          scope: comment.block.documentation.starlark
+    - match: (?=\S)
+      set: statements
+
+  statements:
+    - include: comments
+    - include: docstrings_after_def
+    - include: strings
+    - include: imports
+    - include: function_definitions
+    - include: keywords
+    - include: constants
+    - include: numbers
+    - include: identifiers
+    - include: operators
+    - include: punctuation
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.starlark
+
+  docstrings_after_def:
+    - match: \b(def)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\()
+      captures:
+        1: storage.type.function.starlark
+        2: entity.name.function.starlark
+        3: punctuation.section.parameters.begin.starlark
+      push: def_params
+
+  def_params:
+    - include: comments
+    - include: strings
+    - include: keywords
+    - include: constants
+    - include: numbers
+    - include: identifiers
+    - include: operators
+    - match: \(
+      scope: punctuation.section.parens.begin.starlark
+      push: nested_parens
+    - match: \[
+      scope: punctuation.section.brackets.begin.starlark
+      push: nested_brackets
+    - match: \{
+      scope: punctuation.section.braces.begin.starlark
+      push: nested_braces
+    - match: (\))\s*(:)
+      captures:
+        1: punctuation.section.parameters.end.starlark
+        2: punctuation.separator.colon.starlark
+      set: def_docstring
+
+  def_docstring:
+    - include: comments
+    - match: '"""'
+      scope: comment.block.documentation.starlark
+      set:
+        - meta_scope: comment.block.documentation.starlark
+        - match: '"""'
+          pop: true
+        - match: \\.
+          scope: comment.block.documentation.starlark
+    - match: "'''"
+      scope: comment.block.documentation.starlark
+      set:
+        - meta_scope: comment.block.documentation.starlark
+        - match: "'''"
+          pop: true
+        - match: \\.
+          scope: comment.block.documentation.starlark
+    - match: (?=\S)
+      pop: true
+
+  nested_parens:
+    - match: \)
+      scope: punctuation.section.parens.end.starlark
+      pop: true
+    - include: statements
+
+  nested_brackets:
+    - match: \]
+      scope: punctuation.section.brackets.end.starlark
+      pop: true
+    - include: statements
+
+  nested_braces:
+    - match: \}
+      scope: punctuation.section.braces.end.starlark
+      pop: true
+    - include: statements
+
+  function_definitions:
+    - match: \b(def)\s+([A-Za-z_][A-Za-z0-9_]*)\b
+      captures:
+        1: storage.type.function.starlark
+        2: entity.name.function.starlark
+
+  imports:
+    - match: \b(load)(?=\s*\()
+      captures:
+        1: keyword.control.import.starlark
+
+  keywords:
+    # Execution control flow (Solarized Yellow #B58900)
+    - match: \b(?:if|elif|else|for|while|break|continue|return)\b
+      scope: keyword.control.flow.starlark
+
+    # Logical & membership keyword operators and structural keywords (Solarized Green #859900)
+    - match: \b(?:and|or|not|in|del|pass|lambda)\b
+      scope: keyword.operator.logical.starlark
+
+  constants:
+    # Booleans and None (Solarized Magenta #D33682)
+    - match: \b(?:True|False|None)\b
+      scope: constant.language.starlark
+
+    # ALL_CAPS constants (Solarized Magenta #D33682)
+    - match: \b[A-Z][A-Z0-9_]*\b
+      scope: constant.other.caps.starlark
+
+  numbers:
+    - match: \b0[xX][0-9a-fA-F]+\b
+      scope: constant.numeric.hex.starlark
+    - match: \b0[oO][0-7]+\b
+      scope: constant.numeric.octal.starlark
+    - match: \b\d+\.\d*(?:[eE][+-]?\d+)?\b
+      scope: constant.numeric.float.starlark
+    - match: \b\d+(?:[eE][+-]?\d+)?\b
+      scope: constant.numeric.integer.starlark
+
+  strings:
+    # Triple-quoted strings (non-docstring)
+    - match: '[rRbB]?"""'
+      scope: string.quoted.double.block.starlark
+      push:
+        - meta_scope: string.quoted.double.block.starlark
+        - match: '"""'
+          pop: true
+        - match: \\.
+          scope: constant.character.escape.starlark
+
+    - match: "[rRbB]?'''"
+      scope: string.quoted.single.block.starlark
+      push:
+        - meta_scope: string.quoted.single.block.starlark
+        - match: "'''"
+          pop: true
+        - match: \\.
+          scope: constant.character.escape.starlark
+
+    # Double-quoted strings
+    - match: '[rRbB]?"'
+      scope: string.quoted.double.starlark
+      push:
+        - meta_scope: string.quoted.double.starlark
+        - match: '"'
+          scope: string.quoted.double.starlark
+          pop: true
+        - match: \\.
+          scope: constant.character.escape.starlark
+
+    # Single-quoted strings
+    - match: "[rRbB]?'"
+      scope: string.quoted.single.starlark
+      push:
+        - meta_scope: string.quoted.single.starlark
+        - match: "'"
+          scope: string.quoted.single.starlark
+          pop: true
+        - match: \\.
+          scope: constant.character.escape.starlark
+
+  identifiers:
+    - match: \b[A-Za-z_][A-Za-z0-9_]*\b
+      scope: variable.other.starlark
+
+  operators:
+    - match: '==|!=|<=|>=|//|\*\*|\+=|-=|\*=|/=|%=|[-+*/%=<>|&^~]'
+      scope: keyword.operator.starlark
+
+  punctuation:
+    - match: '[\(\)\[\]\{\},.:;]'
+      scope: punctuation.other.starlark

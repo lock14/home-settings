@@ -19,12 +19,24 @@
 (StyleSheetPI
   "xml-stylesheet" @keyword.directive)
 
-;; In XML declaration, attribute values are strings (Solarized Cyan)
+;; In XML declaration and attributes, attribute values and their surrounding quotes are strings (Solarized Cyan)
 (XMLDecl
   (VersionNum) @string)
 
 (XMLDecl
   (EncName) @string)
+
+(XMLDecl
+  "\"" @string
+  (#set! priority 105))
+
+(AttValue
+  "\"" @string
+  (#set! priority 105))
+
+(PseudoAttValue
+  "\"" @string
+  (#set! priority 105))
 
 ;; CDATA section: Violet delimiters, calm Base0 payload
 ;; - Upstream site query captures (CData) @markup.raw (which renders Cyan).

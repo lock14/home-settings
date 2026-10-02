@@ -42,21 +42,23 @@ else
     export _ZO_ECHO="${_ZO_ECHO:-1}"
     export _ZO_RESOLVE_SYMLINKS="${_ZO_RESOLVE_SYMLINKS:-1}"
     export _ZO_FZF_OPTS="${_ZO_FZF_OPTS:---height=50% --layout=reverse --border=rounded --inline-info --preview='eza -la --icons=auto --color=always --group-directories-first {2..} 2>/dev/null || ls -la {2..}' --preview-window='right:50%:wrap'}"
+
+    # Solarized Dark Manpage / Pager Colors (less / man)
+    export LESS="${LESS:--R}"
+    export GROFF_NO_SGR="${GROFF_NO_SGR:-1}"
+    export LESS_TERMCAP_mb=$'\e[38;2;220;50;47m'                  # blink -> Solarized Red (#DC322F)
+    export LESS_TERMCAP_md=$'\e[1;38;2;38;139;210m'               # bold headings -> Solarized Blue (#268BD2)
+    export LESS_TERMCAP_me=$'\e[0m'                               # reset bold/blink
+    export LESS_TERMCAP_so=$'\e[38;2;147;161;161;48;2;7;54;66m'   # standout/search -> Base1 (#93A1A1) on Base02 (#073642)
+    export LESS_TERMCAP_se=$'\e[0m'                               # reset standout
+    export LESS_TERMCAP_us=$'\e[4;38;2;42;161;152m'               # underline/flags -> Solarized Cyan (#2AA198)
+    export LESS_TERMCAP_ue=$'\e[0m'                               # reset underline
 fi
 
-# Bash History & Solarized Dark Manpage / Pager Colors (less / man)
+# Bash History
 export HISTSIZE="${HISTSIZE:-50000}"
 export HISTFILESIZE="${HISTFILESIZE:-100000}"
 export HISTCONTROL="${HISTCONTROL:-ignoreboth:erasedups}"
-export LESS="${LESS:--R}"
-export GROFF_NO_SGR="${GROFF_NO_SGR:-1}"
-export LESS_TERMCAP_mb=$'\e[38;2;220;50;47m'                  # blink -> Solarized Red (#DC322F)
-export LESS_TERMCAP_md=$'\e[1;38;2;38;139;210m'               # bold headings -> Solarized Blue (#268BD2)
-export LESS_TERMCAP_me=$'\e[0m'                               # reset bold/blink
-export LESS_TERMCAP_so=$'\e[38;2;147;161;161;48;2;7;54;66m'   # standout/search -> Base1 (#93A1A1) on Base02 (#073642)
-export LESS_TERMCAP_se=$'\e[0m'                               # reset standout
-export LESS_TERMCAP_us=$'\e[4;38;2;42;161;152m'               # underline/flags -> Solarized Cyan (#2AA198)
-export LESS_TERMCAP_ue=$'\e[0m'                               # reset underline
 
 # 2. Directory & Filesystem Colors (dircolors database with inline Solarized Dark fallback)
 if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ]; then
@@ -65,7 +67,7 @@ else
     # Calibrated Solarized Dark LS_COLORS:
     # Directories Blue (34), Symlinks Cyan (36), Executables unbolded Green (32),
     # Archives Orange (91), Media Violet (95), Crypto/Keys Magenta (35), Text/Code Base0 (00), Temp/Logs Base01 (90)
-    export LS_COLORS="rs=0:di=34:ln=36:mh=00:pi=33:so=35:do=35:bd=35:cd=35:or=31:mi=31:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;40:st=37;44:ex=32:*.tar=91:*.tgz=91:*.arc=91:*.arj=91:*.taz=91:*.lha=91:*.lz4=91:*.lzh=91:*.lzma=91:*.tlz=91:*.txz=91:*.tzo=91:*.t7z=91:*.zip=91:*.z=91:*.dz=91:*.gz=91:*.lrz=91:*.lz=91:*.lzo=91:*.xz=91:*.zst=91:*.tzst=91:*.bz2=91:*.bz=91:*.tbz=91:*.tbz2=91:*.tz=91:*.deb=91:*.rpm=91:*.jar=91:*.war=91:*.ear=91:*.sar=91:*.rar=91:*.7z=91:*.cab=91:*.dmg=91:*.iso=91:*.apk=91:*.gem=91:*.msi=91:*.xpi=91:*.jpg=95:*.jpeg=95:*.gif=95:*.bmp=95:*.pbm=95:*.pgm=95:*.ppm=95:*.tga=95:*.xbm=95:*.xpm=95:*.tif=95:*.tiff=95:*.png=95:*.svg=95:*.svgz=95:*.webp=95:*.mov=95:*.mpg=95:*.mpeg=95:*.mkv=95:*.webm=95:*.mp4=95:*.m4v=95:*.avi=95:*.flv=95:*.wmv=95:*.aac=95:*.flac=95:*.m4a=95:*.mid=95:*.midi=95:*.mka=95:*.mp3=95:*.ogg=95:*.wav=95:*.key=35:*.pem=35:*.crt=35:*.cer=35:*.gpg=35:*.pgp=35:*.asc=35:*.3des=35:*.aes=35:*.enc=35:*.txt=00:*.md=00:*.mkd=00:*.markdown=00:*.json=00:*.yaml=00:*.yml=00:*.toml=00:*.xml=00:*.html=00:*.css=00:*.sh=00:*.bash=00:*.zsh=00:*.py=00:*.go=00:*.rs=00:*.c=00:*.cc=00:*.cpp=00:*.h=00:*.hpp=00:*.java=00:*.js=00:*.ts=00:*.sql=00:*.tf=00:*.bak=90:*.old=90:*.orig=90:*.swp=90:*.swo=90:*.log=90:"
+    export LS_COLORS="rs=0:di=34:ln=36:mh=00:pi=33:so=35:do=35:bd=35:cd=35:or=31:mi=31:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;40:st=37;44:ex=32:*.tar=91:*.tgz=91:*.arc=91:*.arj=91:*.taz=91:*.lha=91:*.lz4=91:*.lzh=91:*.lzma=91:*.tlz=91:*.txz=91:*.tzo=91:*.t7z=91:*.zip=91:*.z=91:*.dz=91:*.gz=91:*.lrz=91:*.lz=91:*.lzo=91:*.xz=91:*.zst=91:*.tzst=91:*.bz2=91:*.bz=91:*.tbz=91:*.tbz2=91:*.tz=91:*.deb=91:*.rpm=91:*.jar=91:*.war=91:*.ear=91:*.sar=91:*.rar=91:*.7z=91:*.cab=91:*.dmg=91:*.iso=91:*.apk=91:*.gem=91:*.msi=91:*.xpi=91:*.jpg=95:*.jpeg=95:*.gif=95:*.bmp=95:*.pbm=95:*.pgm=95:*.ppm=95:*.tga=95:*.xbm=95:*.xpm=95:*.tif=95:*.tiff=95:*.png=95:*.svg=95:*.svgz=95:*.webp=95:*.mov=95:*.mpg=95:*.mpeg=95:*.mkv=95:*.webm=95:*.mp4=95:*.m4v=95:*.avi=95:*.flv=95:*.wmv=95:*.aac=95:*.flac=95:*.m4a=95:*.mid=95:*.midi=95:*.mka=95:*.mp3=95:*.ogg=95:*.wav=95:*.key=35:*.pem=35:*.crt=35:*.cer=35:*.gpg=35:*.pgp=35:*.asc=35:*.3des=35:*.aes=35:*.enc=35:*.txt=00:*.md=00:*.mkd=00:*.markdown=00:*.json=00:*.yaml=00:*.yml=00:*.toml=00:*.xml=00:*.html=00:*.css=00:*.properties=00:*.proto=00:*.textproto=00:*.pbtxt=00:*.textpb=00:*.prototxt=00:*.sh=00:*.bash=00:*.zsh=00:*.py=00:*.go=00:*.rs=00:*.c=00:*.cc=00:*.cpp=00:*.h=00:*.hpp=00:*.java=00:*.js=00:*.ts=00:*.sql=00:*.tf=00:*.kt=00:*.kts=00:*.swift=00:*.zig=00:*.cs=00:*.scala=00:*.sc=00:*.rb=00:*.graphql=00:*.graphqls=00:*.gql=00:*.bzl=00:*.bazel=00:*.rego=00:*.lua=00:*.mk=00:*.ex=00:*.exs=00:*.hs=00:*.ml=00:*.mli=00:*.clj=00:*.cljs=00:*.cljc=00:*.edn=00:*.diff=00:*.patch=00:*.bak=90:*.old=90:*.orig=90:*.swp=90:*.swo=90:*.log=90:"
     export LSCOLORS="${LSCOLORS:-exgxfxdxcxfxfxegedabagacad}"
 fi
 

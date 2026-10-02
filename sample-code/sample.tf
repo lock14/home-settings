@@ -83,3 +83,16 @@ output "subnet_cidr_blocks" {
   value       = local.subnet_mapping
   description = "Generated subnet CIDR allocations"
 }
+
+moved {
+  from = aws_s3_bucket.legacy_telemetry
+  to   = aws_s3_bucket.telemetry_lake
+}
+
+check "telemetry_lake_resiliency" {
+  assert {
+    condition     = contains(["staging", "production"], var.environment)
+    error_message = "Telemetry lake tier must remain compliant."
+  }
+}
+

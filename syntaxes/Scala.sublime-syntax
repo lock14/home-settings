@@ -1,0 +1,283 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Scala 3 Syntax
+# Supports Modern Scala 3 LTS:
+# - package declarations in Solarized Green (package) + Solarized Violet (entity.name.namespace)
+# - import keyword in Solarized Violet, calm Base0 Grey import paths, and Magenta wildcard (* / _)
+# - Unified @annotations (@main, @tailrec) in Solarized Violet
+# - Method declarations (def <name>) in Solarized Blue
+# - Structural keywords (class, trait, object, enum, case class/object, enum case, given, using,
+#   extension, extends, derives, val, var, def, sealed, final, override, private, new)
+#   and scalar primitive types (Boolean, Byte, Short, Int, Long, Float, Double, Char, String,
+#   Unit, Nothing, Any, AnyVal, AnyRef, Null) in Solarized Green
+# - Control flow (if, then, else, match, pattern-matching case ... =>, for, yield, do, while,
+#   return, try, catch, finally, throw) in Solarized Yellow
+# - Strings and interpolator prefixes (s"...", f"...", raw"...") in Solarized Cyan with Base0 Grey expressions
+# - Numbers, booleans, null, None, Nil, this, super, wildcards (_/*), and SCREAMING_SNAKE_CASE constants in Solarized Magenta
+# - User types, collection types (List, Map, Option), variables, and calls in calm Base0 Grey
+name: Scala
+scope: source.scala
+version: 2
+
+file_extensions:
+  - scala
+  - sc
+
+first_line_match: |-
+  (?xi:
+    ^ \#! .*? \bscala\b
+  )
+
+variables:
+  ident: '[[:alpha:]_][[:alnum:]_]*'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_]*\b'
+  const_ident: '\b[[:upper:]][[:upper:][:digit:]_]+\b'
+  primitive_type: '\b(?:Boolean|Byte|Short|Int|Long|Float|Double|Char|String|Unit|Nothing|Any|AnyVal|AnyRef|Null)\b'
+  modifier: '\b(?:abstract|final|implicit|inline|lazy|open|opaque|override|private|protected|sealed|transparent|infix|erased|into)\b'
+  declaration_keyword: '\b(?:class|trait|object|enum|type|val|var|def|given|using|extension|extends|derives|with|new|export)\b'
+  control_flow: '\b(?:if|then|else|match|for|yield|do|while|return|try|catch|finally|throw)\b'
+  hex_digit: '[0-9a-fA-F_]'
+
+contexts:
+  main:
+    - include: shebang
+    - include: comments
+    - include: package-statement
+    - include: import-statement
+    - include: annotations
+    - include: function-declaration
+    - include: case-clauses
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  shebang:
+    - match: '^#!.*$'
+      scope: comment.line.number-sign.shebang.scala
+
+  comments:
+    # Scaladoc block comments
+    - match: '/\*\*(?!/)'
+      scope: punctuation.definition.comment.begin.scala
+      push:
+        - meta_scope: comment.block.documentation.scala
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.scala
+          pop: true
+        - include: comments
+    # Block comments
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.scala
+      push:
+        - meta_scope: comment.block.scala
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.scala
+          pop: true
+        - include: comments
+    # Single-line comments
+    - match: '//.*$'
+      scope: comment.line.double-slash.scala
+
+  package-statement:
+    - match: '\b(package)\b\s+(?!object\b)'
+      captures:
+        1: keyword.other.package.scala
+      push:
+        - match: '(?:;|$)'
+          scope: punctuation.terminator.scala
+          pop: true
+        - include: comments
+        - match: '\b({{ident}})\b'
+          captures:
+            1: entity.name.namespace.scala
+        - match: '\.'
+          scope: punctuation.accessor.dot.scala
+
+  import-statement:
+    - match: '\b(import)\b\s*'
+      captures:
+        1: keyword.control.import.scala
+      push:
+        - match: '(?:;|$)'
+          scope: punctuation.terminator.scala
+          pop: true
+        - include: comments
+        - match: '\b(given|as)\b'
+          scope: storage.modifier.scala
+        - match: '\*|\b_\b'
+          scope: constant.language.wildcard.scala
+        - match: '\.'
+          scope: punctuation.accessor.dot.scala
+        - match: '{{pascal_ident}}'
+          scope: support.type.user-defined.scala
+        - match: '\b({{ident}})\b'
+          captures:
+            1: variable.other.namespace.scala
+
+  annotations:
+    # Unified Scala annotation (@main, @tailrec, @deprecated) in Solarized Violet
+    - match: '(?<![[:alnum:]_])@{{ident}}(?:\.{{ident}})*'
+      scope: entity.name.attribute.scala
+
+  function-declaration:
+    - match: '\b(def)\s+({{ident}})\b'
+      captures:
+        1: storage.type.function.scala
+        2: entity.name.function.scala
+
+  case-clauses:
+    # Structural case class / case object -> Solarized Green
+    - match: '\b(case)\b(?=\s+(?:class|object)\b)'
+      scope: storage.type.scala
+    # Pattern-matching case ... => -> Solarized Yellow
+    - match: '\b(case)\b(?=[^\n]*=>)'
+      scope: keyword.control.conditional.scala
+    # Scala 3 enum variant case -> Solarized Green
+    - match: '\b(case)\b'
+      scope: storage.type.scala
+
+  declarations:
+    - match: '{{modifier}}'
+      scope: storage.modifier.scala
+    - match: '{{declaration_keyword}}'
+      scope: storage.type.scala
+
+  statements:
+    - match: '{{control_flow}}'
+      scope: keyword.control.scala
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: constants
+    - include: types
+    - include: function-calls
+    - include: identifiers
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal integer
+    - match: '\b0[xX]{{hex_digit}}+[lL]?\b'
+      scope: constant.numeric.hexadecimal.scala
+    # Binary integer
+    - match: '\b0[bB][01_]+[lL]?\b'
+      scope: constant.numeric.binary.scala
+    # Floating-point literal
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?[fFdD]?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+[fFdD]?\b|\b[0-9][0-9_]*[fFdD]\b'
+      scope: constant.numeric.float.scala
+    # Decimal integer
+    - match: '\b[0-9][0-9_]*[lL]?\b'
+      scope: constant.numeric.integer.decimal.scala
+
+  strings:
+    # Interpolated triple-quoted string: s"""..."""
+    - match: '\b(s|f|raw)(""")'
+      captures:
+        1: punctuation.definition.string.begin.scala
+        2: punctuation.definition.string.begin.scala
+      push:
+        - meta_scope: string.quoted.triple.interpolated.scala
+        - match: '"""'
+          scope: punctuation.definition.string.end.scala
+          pop: true
+        - include: string-interpolation
+    # Interpolated double-quoted string: s"...", f"...", raw"..."
+    - match: '\b(s|f|raw)(")'
+      captures:
+        1: punctuation.definition.string.begin.scala
+        2: punctuation.definition.string.begin.scala
+      push:
+        - meta_scope: string.quoted.double.interpolated.scala
+        - match: '"'
+          scope: punctuation.definition.string.end.scala
+          pop: true
+        - match: '\$\$'
+          scope: constant.character.escape.scala
+        - match: '\\(?:[btnfr"''\\]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.scala
+        - include: string-interpolation
+    # Triple-quoted raw string: """..."""
+    - match: '"""'
+      scope: punctuation.definition.string.begin.scala
+      push:
+        - meta_scope: string.quoted.triple.scala
+        - match: '"""'
+          scope: punctuation.definition.string.end.scala
+          pop: true
+    # Standard double-quoted string: "..."
+    - match: '"'
+      scope: punctuation.definition.string.begin.scala
+      push:
+        - meta_scope: string.quoted.double.scala
+        - match: '"'
+          scope: punctuation.definition.string.end.scala
+          pop: true
+        - match: '\\(?:[btnfr"''\\]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.scala
+    # Single-quoted character literal
+    - match: "'"
+      scope: punctuation.definition.string.begin.scala
+      push:
+        - meta_scope: string.quoted.single.scala
+        - match: "'"
+          scope: punctuation.definition.string.end.scala
+          pop: true
+        - match: '\\(?:[btnfr"''\\]|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.scala
+
+  string-interpolation:
+    # Braced expression interpolation: ${expr}
+    - match: '\$\{'
+      scope: punctuation.section.interpolation.begin.scala
+      push:
+        - meta_content_scope: meta.interpolation.scala
+        - match: '\}'
+          scope: punctuation.section.interpolation.end.scala
+          pop: true
+        - include: expressions
+    # Constant identifier interpolation: $PROTOCOL_VERSION
+    - match: '(\$)({{const_ident}})'
+      captures:
+        1: punctuation.definition.variable.scala
+        2: variable.other.constant.scala
+    # Variable identifier interpolation: $name
+    - match: '(\$)({{ident}})'
+      captures:
+        1: punctuation.definition.variable.scala
+        2: variable.other.readwrite.scala
+
+  constants:
+    - match: '\b(?:true|false)\b'
+      scope: constant.language.boolean.scala
+    - match: '\b(?:null|None|Nil)\b'
+      scope: constant.language.scala
+    - match: '\b(?:this|super)\b'
+      scope: variable.language.scala
+    - match: '\b_\b'
+      scope: constant.language.wildcard.scala
+    - match: '{{const_ident}}'
+      scope: variable.other.constant.scala
+
+  types:
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.scala
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.scala
+
+  function-calls:
+    - match: '(\.)\s*({{ident}})\s*(?=\[|\()'
+      captures:
+        1: punctuation.accessor.dot.scala
+        2: variable.function.scala
+    - match: '\b({{ident}})\s*(?=\()'
+      scope: variable.function.scala
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.scala
+
+  operators-and-delimiters:
+    - match: '=>|<-|::|\+=|-=|\*=|/=|==|!=|<=|>=|&&|\|\||[+\-*/%&|^~<>=!?]'
+      scope: keyword.operator.scala
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.scala

@@ -17,7 +17,7 @@ cursor-text = #002B36
 selection-background = #073642
 selection-foreground = #93A1A1
 
-# 16-Color TrueColor Palette (matching windows-settings.json 1:1)
+# 16-Color TrueColor Palette
 palette = 0=#073642
 palette = 1=#DC322F
 palette = 2=#859900

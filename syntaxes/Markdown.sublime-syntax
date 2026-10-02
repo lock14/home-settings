@@ -127,6 +127,32 @@ contexts:
           pop: true
         - include: scope:source.java
 
+    # Kotlin
+    - match: '^(\s*)(`{3,}|~{3,})\s*(kotlin|kt|kts)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.kotlin
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.kotlin
+
+    # Swift
+    - match: '^(\s*)(`{3,}|~{3,})\s*(swift)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.swift
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.swift
+
     # Diff
     - match: '^(\s*)(`{3,}|~{3,})\s*(diff|patch)\b.*$'
       captures:
@@ -165,6 +191,45 @@ contexts:
             0: punctuation.definition.raw.code-fence.end.markdown
           pop: true
         - include: scope:source.terraform
+
+    # Lua
+    - match: '^(\s*)(`{3,}|~{3,})\s*(lua|luajit)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.lua
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.lua
+
+    # Dockerfile / Containerfile
+    - match: '^(\s*)(`{3,}|~{3,})\s*(dockerfile|docker|containerfile)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.dockerfile
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.dockerfile
+
+    # Makefile / GNU Make
+    - match: '^(\s*)(`{3,}|~{3,})\s*(makefile|make|mk|gnumake)\b.*$'
+      captures:
+        2: punctuation.definition.raw.code-fence.begin.markdown
+        3: punctuation.definition.raw.code-fence.language.markdown
+      push:
+        - meta_content_scope: source.makefile
+        - match: '^\1\2\s*$'
+          captures:
+            0: punctuation.definition.raw.code-fence.end.markdown
+          pop: true
+        - include: scope:source.makefile
 
     # Generic Fenced Code Block
     - match: '^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_.-]*)\s*$'
@@ -400,7 +465,7 @@ contexts:
   # =========================================================================
   paragraph-text:
     - include: inline-elements
-    - match: '[^\s`*!_\[\]~()]+'
+    - match: '[^\s`*!_\[\]~()<>]+'
       scope: text.html.markdown
     - match: '[()]+'
       scope: text.html.markdown
@@ -440,6 +505,10 @@ contexts:
         4: punctuation.definition.metadata.begin.markdown
         5: markup.underline.link.markdown
         6: punctuation.definition.metadata.end.markdown
+
+    # Autolinks: <https://...> or <user@example.com>
+    - match: '<(?:[a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>]+|[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)>'
+      scope: markup.underline.link.markdown
 
     # Bold: **bold** or __bold__
     - match: '(\*\*|__)(.+?)(\1)'

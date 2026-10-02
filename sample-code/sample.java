@@ -34,7 +34,7 @@ class FastOrderProcessor extends BaseOrderProcessor {
 record OrderRecord(Long id, String customerId, double amount, Instant timestamp) {}
 
 interface BaseService {
-    Optional<sample.OrderSnapshot> findById(Long id);
+    Optional<OrderService.OrderSnapshot> findById(Long id);
 }
 
 interface OrderRepository {
@@ -65,7 +65,7 @@ class InMemoryOrderRepository implements OrderRepository {
 /// Record Patterns with guards, Unnamed variables (_), Sequenced Collections, and Virtual Threads.
 @Service
 @Transactional
-public class sample implements BaseService {
+class OrderService implements BaseService {
 
     private static final int DEFAULT_BUFFER_SIZE = 1024;
     private static final double TAX_RATE_MULTIPLIER = 1.0825;
@@ -124,7 +124,7 @@ public class sample implements BaseService {
     }
 
     public static void main(String[] args) {
-        sample service = new sample();
+        OrderService service = new OrderService();
         FastOrderProcessor processor = new FastOrderProcessor(50);
         service.processLegacyOrder((long) processor.timeoutMs);
 

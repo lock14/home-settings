@@ -88,4 +88,13 @@
   (identifier) @keyword.conditional
   (#eq? @keyword.conditional "default"))
 
+; Annotation type element declaration name: String value() default ""; -> @function.method (Blue #268BD2)
+(annotation_type_element_declaration
+  name: (identifier) @function.method)
+
+; Java 22+ unnamed variables and patterns (_) -> calm Base0 Grey (@variable #839496)
+((underscore_pattern) @variable
+  (#set! "priority" 105))
+
+
 

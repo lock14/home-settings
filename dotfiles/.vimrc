@@ -1,4 +1,5 @@
 " Indentation & Formatting
+set nocompatible
 filetype plugin indent on
 set tabstop=4
 set shiftwidth=4
@@ -110,6 +111,14 @@ function! s:ApplySolarizedDark() abort
         highlight Added cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
         highlight Changed cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=#B58900 guibg=NONE
         highlight Removed cterm=NONE ctermfg=1 ctermbg=NONE gui=NONE guifg=#DC322F guibg=NONE
+
+        " Protocol Buffers (.proto) & Textproto (.textproto / .pbtxt) Fallbacks
+        highlight protoRepeat cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
+        highlight protoTodo cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=NONE
+        highlight pbtxtMessage cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=#268BD2 guibg=NONE
+        highlight pbtxtField cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=#859900 guibg=NONE
+        highlight pbtxtEnum cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=#D33682 guibg=NONE
+        highlight pbtxtTodo cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=NONE
     endif
 
     " Diff Highlight Formatting
@@ -118,6 +127,20 @@ function! s:ApplySolarizedDark() abort
     highlight DiffText term=reverse cterm=bold ctermbg=gray ctermfg=black gui=bold guifg=#268BD2 guibg=#0B4764
     highlight DiffDelete term=reverse cterm=bold ctermbg=red ctermfg=black gui=NONE guifg=#DC322F guibg=#422D33
 endfunction
+
+augroup SolarizedFiletypes
+    autocmd!
+    autocmd BufNewFile,BufRead *.proto setfiletype proto
+    autocmd BufNewFile,BufRead *.textproto,*.pbtxt,*.textpb,*.prototxt,*.pb.txt,*.proto.text setfiletype pbtxt
+    autocmd BufNewFile,BufRead *.bzl,BUILD.bazel,BUILD,WORKSPACE,WORKSPACE.bazel,*.bazel setfiletype bzl
+    autocmd BufNewFile,BufRead *.rego setfiletype rego
+    autocmd BufNewFile,BufRead *.graphql,*.graphqls,*.gql setfiletype graphql
+    autocmd BufNewFile,BufRead *.zig setfiletype zig
+    autocmd BufNewFile,BufRead *.kt,*.kts setfiletype kotlin
+    autocmd BufNewFile,BufRead *.scala,*.sc setfiletype scala
+    autocmd BufNewFile,BufRead *.ex,*.exs setfiletype elixir
+    autocmd BufNewFile,BufRead *.clj,*.cljs,*.cljc,*.edn setfiletype clojure
+augroup END
 
 augroup SolarizedDarkFallback
     autocmd!
@@ -154,6 +177,12 @@ if has('clipboard')
     xnoremap <silent> <MiddleMouse> "*p
     cnoremap <MiddleMouse> <C-r>*
 endif
+nnoremap <silent> <X1Mouse> <C-o>
+nnoremap <silent> <X2Mouse> <C-i>
+vnoremap <silent> <X1Mouse> <C-o>
+vnoremap <silent> <X2Mouse> <C-i>
+inoremap <silent> <X1Mouse> <C-\><C-o><C-o>
+inoremap <silent> <X2Mouse> <C-\><C-o><C-i>
 
 function! s:TmuxNavigate(dir, tmux_dir) abort
     let l:cur_win = winnr()

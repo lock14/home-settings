@@ -23,6 +23,9 @@ The developer workstation environment provides an automated, idempotent configur
 > [!WARNING]
 > Never install database daemons directly on the workstation; use containerized instances instead.
 
+> [!CAUTION]
+> Modifying system-wide PAM or sudoers files without validation can lock out administrative sessions.
+
 Key architectural tenets include:
 - **Declarative Configuration**: All user preferences, toolchains, and dotfiles are defined declaratively and mirrored into place without hardcoded personal usernames.
 - **Fail-Fast & Idempotent**: Scripts execute with `set -euo pipefail`. Running `./setup.sh` multiple times produces completely deterministic, repeatable results.
@@ -136,3 +139,4 @@ func ValidateWorkstation(configPath string) error {
 *   [Ethan Schoonover's Solarized Homepage](https://ethanschoonover.com/solarized/) — Official color specifications and mathematical CIELAB coordinates.
 *   [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) — Standards for modern Unix filesystem cleanliness.
 *   [Powerlevel10k Theme Documentation](https://github.com/romkatv/powerlevel10k) — Fast, customizable Zsh prompt engine.
+*   Canonical Repository & Maintainer Contact: <https://github.com/example/home-settings> and <maintainers@example.com>

@@ -41,6 +41,7 @@
   "continue"
   "goto"
   "fallthrough"
+  "range"
 ] @keyword.conditional
 
 ; Built-in function invocations remain in calm Base0 Grey (@function.call #839496)
