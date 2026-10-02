@@ -498,6 +498,420 @@
   (( $+functions[gitstatus_stop_p9k_] )) && gitstatus_stop_p9k_ POWERLEVEL9K
   unset _p9k_preinit
   unfunction _p9k_preinit instant_prompt_vcs 2>/dev/null
+  zmodload -F zsh/datetime b:EPOCHSECONDS 2>/dev/null
+  typeset -g POWERLEVEL9K_VCS_HYPERLINK=true
+
+  # Pure-Zsh cross-platform PR/MR web URL builder across all 5 major Git forge families:
+  # GitHub, GitLab, Bitbucket Cloud, Bitbucket Server / Data Center, and Gitea / Forgejo / Codeberg.
+  # Usage: _p9k_vcs_build_pr_url [-v out_var] <remote_url> <pr_num> [forge_hint]
+  function _p9k_vcs_build_pr_url() {
+    emulate -L zsh -o extended_glob
+    local out_var=''
+    if [[ ${1:-} == '-v' ]]; then
+      out_var=$2
+      shift 2
+    fi
+    typeset -g REPLY=''
+    [[ -n $out_var ]] && typeset -g "$out_var="
+    local raw_url=${1:-} pr_num=${2:-} forge_hint=${(L)3:-}
+    if [[ -z $raw_url || $pr_num != <-> ]] || (( pr_num <= 0 )); then
+      return 1
+    fi
+
+    local scheme='https' rest=$raw_url
+    local -i has_scheme=0 is_http=0
+    if [[ $rest == http://* ]]; then
+      scheme='http'
+      rest=${rest#http://}
+      has_scheme=1
+      is_http=1
+    elif [[ $rest == https://* ]]; then
+      scheme='https'
+      rest=${rest#https://}
+      has_scheme=1
+      is_http=1
+    elif [[ $rest == (ssh|git|git+ssh)://* ]]; then
+      rest=${rest#*://}
+      has_scheme=1
+    elif [[ $rest == file://* ]]; then
+      rest="localhost/${rest#file://}"
+      has_scheme=1
+    elif [[ $rest == /* ]]; then
+      rest="localhost${rest}"
+      has_scheme=1
+    fi
+
+    local host='' repo_path=''
+    if (( has_scheme )); then
+      [[ $rest == */* ]] || return 1
+      host=${rest%%/*}
+      repo_path=${rest#*/}
+      host=${host#*@}
+      if (( ! is_http )) && [[ $host == *:* && $host != *\] ]]; then
+        host=${host%:*}
+      fi
+    elif [[ $rest == *:* && ( $rest != */* || ${rest%%:*} != */* ) ]]; then
+      host=${rest%%:*}
+      repo_path=${rest#*:}
+      host=${host#*@}
+    elif [[ $rest == */* ]]; then
+      host=${rest%%/*}
+      repo_path=${rest#*/}
+      host=${host#*@}
+    else
+      return 1
+    fi
+
+    while [[ $repo_path == /* ]]; do
+      repo_path=${repo_path#/}
+    done
+    while [[ $repo_path == */ ]]; do
+      repo_path=${repo_path%/}
+    done
+    repo_path=${repo_path%.git}
+    while [[ $repo_path == */ ]]; do
+      repo_path=${repo_path%/}
+    done
+    [[ -n $host && -n $repo_path ]] || return 1
+
+    local host_l=${(L)host}
+    local forge=$forge_hint
+    if [[ -z $forge ]]; then
+      if [[ $host_l == *github* ]]; then
+        forge='github'
+      elif [[ $host_l == *gitlab* ]]; then
+        forge='gitlab'
+      elif [[ $host_l == 'bitbucket.org' ]]; then
+        forge='bitbucket-cloud'
+      elif [[ $host_l == (*bitbucket*|*stash*) ]]; then
+        forge='bitbucket-server'
+      elif [[ $host_l == (*codeberg*|*gitea*|*forgejo*) ]]; then
+        forge='gitea'
+      else
+        forge='github'
+      fi
+    fi
+
+    local built_url=''
+    case $forge in
+      github)
+        built_url="${scheme}://${host}/${repo_path}/pull/${pr_num}"
+        ;;
+      gitlab)
+        built_url="${scheme}://${host}/${repo_path}/-/merge_requests/${pr_num}"
+        ;;
+      bitbucket-cloud|bitbucket_cloud)
+        built_url="https://bitbucket.org/${repo_path}/pull-requests/${pr_num}"
+        ;;
+      bitbucket-server|bitbucket_server|bitbucket-dc|stash)
+        local bb_path=${repo_path#scm/}
+        [[ $bb_path == */scm/* ]] && bb_path=${bb_path#*/scm/}
+        local proj='' repo=''
+        if [[ $bb_path == */* ]]; then
+          repo=${bb_path##*/}
+          local bb_rem=${bb_path%/*}
+          proj=${bb_rem##*/}
+        else
+          proj=$bb_path
+          repo=$bb_path
+        fi
+        if [[ $proj == \~* ]]; then
+          built_url="${scheme}://${host}/users/${proj#\~}/repos/${repo}/pull-requests/${pr_num}"
+        else
+          built_url="${scheme}://${host}/projects/${(U)proj}/repos/${repo}/pull-requests/${pr_num}"
+        fi
+        ;;
+      gitea|forgejo|codeberg)
+        built_url="${scheme}://${host}/${repo_path}/pulls/${pr_num}"
+        ;;
+      *)
+        built_url="${scheme}://${host}/${repo_path}/pull/${pr_num}"
+        ;;
+    esac
+
+    typeset -g REPLY=$built_url
+    if [[ -n $out_var ]]; then
+      typeset -g "$out_var=$built_url"
+    else
+      printf '%s\n' "$built_url"
+    fi
+    return 0
+  }
+
+  # Asynchronous / callable PR/MR state discovery worker (Tier 1 Forge CLIs, Tier 2 git ls-remote
+  # virtual PR refs with merged-PR guard, Tier 3 Bitbucket Cloud API, atomic cache state update).
+  function _p9k_vcs_refresh_pr_cache() {
+    emulate -L zsh -o extended_glob
+    local workdir=${1:-${GIT_WORK_TREE:-$PWD}}
+    local gitdir=${2:-${GIT_DIR:-}}
+    local branch=${3:-}
+    local remote_name=${4:-}
+    local remote_url=${5:-}
+    local forge_hint=${(L)6:-}
+    local cache_file=${7:-}
+    local upstream_forge_url=${8:-}
+
+    [[ -d $HOME && -d $workdir ]] || return 0
+
+    if [[ -z $gitdir ]]; then
+      while [[ $workdir != / && ! -e "$workdir/.git" && ! -L "$workdir/.git" ]]; do
+        workdir=${workdir:h}
+      done
+      if [[ -d "$workdir/.git" ]]; then
+        gitdir="$workdir/.git"
+      elif [[ -r "$workdir/.git" ]]; then
+        local gd_line=''
+        read -r gd_line < "$workdir/.git" 2>/dev/null
+        gd_line=${gd_line%$'\r'}
+        if [[ $gd_line == 'gitdir: '* ]]; then
+          gd_line=${gd_line#'gitdir: '}
+          [[ $gd_line == /* ]] && gitdir=$gd_line || gitdir="$workdir/$gd_line"
+        fi
+      fi
+    fi
+    [[ -n $gitdir ]] || return 1
+
+    if [[ -z $branch ]]; then
+      branch=$(git --git-dir="$gitdir" symbolic-ref --short HEAD 2>/dev/null) || return 1
+    fi
+    [[ -n $branch && $branch != '(detached)' ]] || return 1
+
+    if [[ -z $remote_name ]]; then
+      remote_name=$(git --git-dir="$gitdir" config "branch.${branch}.remote" 2>/dev/null)
+      [[ -z $remote_name || $remote_name == '.' ]] && remote_name='origin'
+    fi
+    if [[ -z $remote_url ]]; then
+      remote_url=$(git --git-dir="$gitdir" config "remote.${remote_name}.url" 2>/dev/null || git --git-dir="$gitdir" config remote.origin.url 2>/dev/null)
+    fi
+    [[ -n $remote_url ]] || return 1
+
+    if [[ -z $forge_hint ]]; then
+      forge_hint=$(git --git-dir="$gitdir" config "remote.${remote_name}.forge" 2>/dev/null || git --git-dir="$gitdir" config remote.origin.forge 2>/dev/null)
+      forge_hint=${(L)forge_hint}
+    fi
+    if [[ -z $upstream_forge_url && $remote_name != 'upstream' ]]; then
+      upstream_forge_url=$(git --git-dir="$gitdir" config remote.upstream.url 2>/dev/null)
+    fi
+
+    if [[ -z $cache_file ]]; then
+      local commondir=$gitdir
+      if [[ -r "$gitdir/commondir" ]]; then
+        local common_line=''
+        read -r common_line < "$gitdir/commondir" 2>/dev/null
+        common_line=${common_line%$'\r'}
+        if [[ -n $common_line && $common_line != '.' && $common_line != './' ]]; then
+          [[ $common_line == /* ]] && commondir=$common_line || commondir="$gitdir/$common_line"
+        fi
+      fi
+      local cache_dir=${GIT_PR_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/git-pr-prompt}
+      local repo_key=${${commondir:A}//[^A-Za-z0-9._-]/_}
+      cache_file="$cache_dir/${repo_key}.state"
+    fi
+
+    local cache_dir=${cache_file:h}
+    command mkdir -p "$cache_dir" 2>/dev/null || return 1
+    zmodload -F zsh/datetime b:EPOCHSECONDS 2>/dev/null
+    local -i now=${EPOCHSECONDS:-$(date +%s 2>/dev/null || echo 0)}
+    printf '%s\n' "$now" > "${cache_file}.lock" 2>/dev/null || true
+
+    local forge=$forge_hint
+    local remote_l=${(L)remote_url}
+    if [[ -z $forge ]]; then
+      if [[ $remote_l == *github* ]]; then
+        forge='github'
+      elif [[ $remote_l == *gitlab* ]]; then
+        forge='gitlab'
+      elif [[ $remote_l == *bitbucket.org* ]]; then
+        forge='bitbucket-cloud'
+      elif [[ $remote_l == (*bitbucket*|*stash*) ]]; then
+        forge='bitbucket-server'
+      elif [[ $remote_l == (*codeberg*|*gitea*|*forgejo*) ]]; then
+        forge='gitea'
+      fi
+    fi
+
+    local found_num='' found_url=''
+    local -i is_local_remote=0
+    [[ $remote_url == (/*|./*|../*|file://*) ]] && is_local_remote=1
+
+    # Tier 1: Forge CLIs (gh, glab, tea) when remote is not a local filesystem path
+    if (( ! is_local_remote )); then
+      if [[ $forge == 'github' ]] && command -v gh >/dev/null 2>&1; then
+        local gh_out=''
+        gh_out=$(cd "$workdir" 2>/dev/null && GH_PROMPT_DISABLED=1 gh pr view --json number,url,state -q 'select(.state == "OPEN") | "\(.number)|\(.url)"' 2>/dev/null)
+        gh_out=${${gh_out%%$'\n'*}%$'\r'}
+        if [[ $gh_out == (#b)(<->)\|(*) ]] && (( match[1] > 0 )); then
+          found_num=$match[1]
+          found_url=$match[2]
+        fi
+      elif [[ $forge == 'gitlab' ]] && command -v glab >/dev/null 2>&1; then
+        local glab_out=''
+        glab_out=$(cd "$workdir" 2>/dev/null && glab mr list --source-branch "$branch" -F json 2>/dev/null)
+        if [[ $glab_out =~ '"web_url"[[:space:]]*:[[:space:]]*"(https?://[^"\\]*/-/merge_requests/([1-9][0-9]*))"' ]]; then
+          found_url=${match[1]}
+          found_num=${match[2]}
+        elif [[ $glab_out =~ '"iid"[[:space:]]*:[[:space:]]*([1-9][0-9]*)' ]]; then
+          found_num=${match[1]}
+          _p9k_vcs_build_pr_url -v found_url "$remote_url" "$found_num" "gitlab"
+        fi
+      elif [[ $forge == (gitea|forgejo|codeberg) ]] && command -v tea >/dev/null 2>&1; then
+        local tea_out='' t_idx='' t_head='' t_url='' t_rest=''
+        tea_out=$(cd "$workdir" 2>/dev/null && tea pr list --state open --fields index,head,url -o simple 2>/dev/null)
+        while IFS=$' \t' read -r t_idx t_head t_url t_rest || [[ -n $t_idx ]]; do
+          t_idx=${t_idx#\#}
+          if [[ $t_idx == <-> ]] && (( t_idx > 0 )) && [[ $t_head == "$branch" || $t_head == *":$branch" ]]; then
+            found_num=$t_idx
+            if [[ $t_url == https://* || $t_url == http://* ]]; then
+              found_url=$t_url
+            else
+              _p9k_vcs_build_pr_url -v found_url "$remote_url" "$found_num" "gitea"
+            fi
+            break
+          fi
+        done <<< "$tea_out"
+      fi
+    fi
+
+    # Tier 2: Pure `git ls-remote` virtual PR refs (GitHub, GitLab, Bitbucket Server/DC, Gitea/Forgejo/Codeberg)
+    if [[ -z $found_num && ( $forge != 'bitbucket-cloud' || $is_local_remote -eq 1 ) ]]; then
+      local ls_out=''
+      ls_out=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=5}" \
+        git --git-dir="$gitdir" ls-remote "$remote_url" \
+        "HEAD" "refs/heads/main" "refs/heads/master" "refs/heads/trunk" "refs/heads/develop" \
+        "refs/heads/$branch" "refs/pull/*/head" "refs/merge-requests/*/head" "refs/pull-requests/*/from" 2>/dev/null)
+      if [[ -n $ls_out ]]; then
+        local branch_remote_sha='' r_sha='' r_ref=''
+        local -A default_shas=() pr_ref_shas=() pr_ref_kinds=()
+        for line in "${(@f)ls_out}"; do
+          r_sha=${line%%[[:space:]]*}
+          r_ref=${line##*[[:space:]]}
+          [[ -z $r_sha || -z $r_ref ]] && continue
+          if [[ $r_ref == "refs/heads/$branch" ]]; then
+            branch_remote_sha=$r_sha
+          elif [[ $r_ref == ('HEAD'|'refs/heads/main'|'refs/heads/master'|'refs/heads/trunk'|'refs/heads/develop') ]]; then
+            default_shas[$r_sha]=1
+          elif [[ $r_ref == (#b)refs/pull/(<->)/head ]]; then
+            pr_ref_shas[$match[1]]=$r_sha
+            pr_ref_kinds[$match[1]]=''
+          elif [[ $r_ref == (#b)refs/merge-requests/(<->)/head ]]; then
+            pr_ref_shas[$match[1]]=$r_sha
+            pr_ref_kinds[$match[1]]='gitlab'
+          elif [[ $r_ref == (#b)refs/pull-requests/(<->)/from ]]; then
+            pr_ref_shas[$match[1]]=$r_sha
+            pr_ref_kinds[$match[1]]='bitbucket-server'
+          fi
+        done
+
+        if [[ -n $branch_remote_sha && -z ${default_shas[$branch_remote_sha]:-} ]]; then
+          local -i best_num=0 cand_num=0
+          local best_kind='' k=''
+          for k in "${(@k)pr_ref_shas}"; do
+            if [[ ${pr_ref_shas[$k]} == "$branch_remote_sha" ]]; then
+              cand_num=$k
+              if (( cand_num > best_num )); then
+                best_num=$cand_num
+                best_kind=${pr_ref_kinds[$k]}
+              fi
+            fi
+          done
+          if (( best_num > 0 )); then
+            found_num=$best_num
+            _p9k_vcs_build_pr_url -v found_url "$remote_url" "$found_num" "${forge_hint:-$best_kind}"
+          elif [[ -n $upstream_forge_url && $upstream_forge_url != "$remote_url" ]]; then
+            local up_ls_out=''
+            up_ls_out=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=5}" \
+              git --git-dir="$gitdir" ls-remote "$upstream_forge_url" \
+              "HEAD" "refs/heads/main" "refs/heads/master" "refs/heads/trunk" "refs/heads/develop" \
+              "refs/pull/*/head" "refs/merge-requests/*/head" "refs/pull-requests/*/from" 2>/dev/null)
+            if [[ -n $up_ls_out ]]; then
+              local -A up_default_shas=()
+              local -i up_best_num=0
+              local up_best_kind=''
+              for line in "${(@f)up_ls_out}"; do
+                r_sha=${line%%[[:space:]]*}
+                r_ref=${line##*[[:space:]]}
+                if [[ $r_ref == ('HEAD'|'refs/heads/main'|'refs/heads/master'|'refs/heads/trunk'|'refs/heads/develop') ]]; then
+                  up_default_shas[$r_sha]=1
+                fi
+              done
+              if [[ -z ${up_default_shas[$branch_remote_sha]:-} ]]; then
+                for line in "${(@f)up_ls_out}"; do
+                  r_sha=${line%%[[:space:]]*}
+                  r_ref=${line##*[[:space:]]}
+                  [[ $r_sha == "$branch_remote_sha" ]] || continue
+                  if [[ $r_ref == (#b)refs/pull/(<->)/head ]] && (( match[1] > up_best_num )); then
+                    up_best_num=$match[1]
+                    up_best_kind=''
+                  elif [[ $r_ref == (#b)refs/merge-requests/(<->)/head ]] && (( match[1] > up_best_num )); then
+                    up_best_num=$match[1]
+                    up_best_kind='gitlab'
+                  elif [[ $r_ref == (#b)refs/pull-requests/(<->)/from ]] && (( match[1] > up_best_num )); then
+                    up_best_num=$match[1]
+                    up_best_kind='bitbucket-server'
+                  fi
+                done
+                if (( up_best_num > 0 )); then
+                  found_num=$up_best_num
+                  _p9k_vcs_build_pr_url -v found_url "$upstream_forge_url" "$found_num" "$up_best_kind"
+                fi
+              fi
+            fi
+          fi
+        fi
+      fi
+    fi
+
+    # Tier 3: Bitbucket Cloud (bitbucket.org) REST API fallback
+    if [[ -z $found_num && ( $forge == 'bitbucket-cloud' || $remote_l == *bitbucket.org* ) ]] && (( ! is_local_remote )) && command -v curl >/dev/null 2>&1; then
+      local bb_probe='' bb_rest=''
+      _p9k_vcs_build_pr_url -v bb_probe "$remote_url" 1 "bitbucket-cloud"
+      bb_rest=${${bb_probe#https://bitbucket.org/}%/pull-requests/1}
+      if [[ $bb_rest == */* ]]; then
+        local -a curl_args=(-fsSL --max-time 5)
+        if [[ -n ${BITBUCKET_TOKEN:-} ]]; then
+          curl_args+=(-H "Authorization: Bearer $BITBUCKET_TOKEN")
+        elif [[ -r "$HOME/.netrc" ]]; then
+          curl_args+=(-n)
+        fi
+        local bb_json=''
+        bb_json=$(curl "${curl_args[@]}" "https://api.bitbucket.org/2.0/repositories/${bb_rest}/pullrequests?q=source.branch.name=%22${branch}%22+AND+state=%22OPEN%22&pagelen=1" 2>/dev/null)
+        if [[ $bb_json =~ '"id"[[:space:]]*:[[:space:]]*([1-9][0-9]*)' ]]; then
+          found_num=${match[1]}
+          if [[ $bb_json =~ '"href"[[:space:]]*:[[:space:]]*"(https?://[^"\\]*/pull-requests/[1-9][0-9]*)"' ]]; then
+            found_url=${match[1]}
+          else
+            _p9k_vcs_build_pr_url -v found_url "$remote_url" "$found_num" "bitbucket-cloud"
+          fi
+        fi
+      fi
+    fi
+
+    [[ -d $HOME && -d $cache_dir ]] || return 0
+    local tmp_file="${cache_file}.tmp.$$"
+    {
+      if [[ -r $cache_file ]]; then
+        local existing_line=''
+        while IFS= read -r existing_line || [[ -n $existing_line ]]; do
+          [[ -z $existing_line || $existing_line == "${branch}|"* ]] && continue
+          printf '%s\n' "$existing_line"
+        done < "$cache_file"
+      fi
+      printf '%s|%s|%s|%s\n' "$branch" "${found_num:-NONE}" "$found_url" "$now"
+    } > "$tmp_file" 2>/dev/null && command mv -f "$tmp_file" "$cache_file" 2>/dev/null || command rm -f "$tmp_file" 2>/dev/null
+    command rm -f "${cache_file}.lock" 2>/dev/null || true
+    return 0
+  }
+
+  # Invalidate PR state cache immediately on git push / gpush / gpushf / gh pr / glab mr / tea pr / bkt pr
+  function _p9k_solarized_vcs_preexec() {
+    emulate -L zsh -o extended_glob
+    local cmd="${1:-} ${2:-}"
+    if [[ $cmd =~ '(^|[[:space:];|&])(git([[:space:]]+(-[Cc][[:space:]]+[^[:space:]]+|-[^[:space:]]+))*[[:space:]]+push|gpush|gpushf|gh[[:space:]]+pr|glab[[:space:]]+mr|tea[[:space:]]+pr|bkt[[:space:]]+pr)([[:space:];|&]|$)' ]]; then
+      local cache_dir=${GIT_PR_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/git-pr-prompt}
+      [[ -d $cache_dir ]] && command rm -f "$cache_dir"/*.state(#qN) "$cache_dir"/*.lock(#qN) 2>/dev/null
+    fi
+    return 0
+  }
 
   # Native Powerlevel10k VCS segment powered by `git status --porcelain=v2 --branch`.
   # Supports all modern Git repository extensions (reftable, SHA-256, worktrees) in a single fork.
@@ -577,8 +991,8 @@
       fi
     fi
 
-    local -A remote_urls=() instead_of=() seen_cfgs=()
-    local first_remote_name='' branch_remote=''
+    local -A remote_urls=() remote_forges=() instead_of=() seen_cfgs=()
+    local first_remote_name='' branch_remote='' branch_pr='' branch_pr_url='' merge_forge_hint=''
     function _p9k_vcs_parse_cfg() {
       local cfg_file=$1 is_repo_cfg=${2:-0} depth=${3:-0}
       (( depth > 4 )) || [[ ! -r $cfg_file ]] && return 0
@@ -662,8 +1076,27 @@
             seen_url_in_section=1
             (( is_repo_cfg )) && : ${first_remote_name:=$section_name}
           fi
-        elif [[ $section_type == 'branch' && $section_name == "$branch" && $key == 'remote' ]]; then
-          branch_remote=$val
+        elif [[ $section_type == 'remote' && $key == 'forge' ]]; then
+          remote_forges[$section_name]=${(L)val}
+        elif [[ $section_type == 'branch' && $section_name == "$branch" ]]; then
+          if [[ $key == 'remote' ]]; then
+            branch_remote=$val
+          elif [[ $key == 'pr' && $val == <-> ]] && (( val > 0 )); then
+            branch_pr=$val
+          elif [[ $key == 'prurl' ]]; then
+            branch_pr_url=$val
+          elif [[ $key == 'merge' ]]; then
+            if [[ $val == (#b)refs/pull/(<->)/head ]] && (( match[1] > 0 )); then
+              [[ -z $branch_pr ]] && branch_pr=$match[1]
+              merge_forge_hint='github'
+            elif [[ $val == (#b)refs/merge-requests/(<->)/head ]] && (( match[1] > 0 )); then
+              [[ -z $branch_pr ]] && branch_pr=$match[1]
+              merge_forge_hint='gitlab'
+            elif [[ $val == (#b)refs/pull-requests/(<->)/(from|head) ]] && (( match[1] > 0 )); then
+              [[ -z $branch_pr ]] && branch_pr=$match[1]
+              merge_forge_hint='bitbucket-server'
+            fi
+          fi
         elif [[ $section_type == 'url' && $key == 'insteadof' ]]; then
           instead_of[$val]=$section_name
         elif [[ $section_type == 'include' && $key == 'path' ]]; then
@@ -681,13 +1114,13 @@
       _p9k_vcs_parse_cfg "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" 0
       _p9k_vcs_parse_cfg "$HOME/.gitconfig" 0
     fi
+    local commondir=$gitdir
     if [[ -n $gitdir ]]; then
       if [[ -r "$gitdir/commondir" ]]; then
         local common_line=''
         read -r common_line < "$gitdir/commondir"
         common_line=${common_line%$'\r'}
-        if [[ -n $common_line ]]; then
-          local commondir
+        if [[ -n $common_line && $common_line != '.' && $common_line != './' ]]; then
           if [[ $common_line == /* ]]; then
             commondir=$common_line
           else
@@ -725,6 +1158,70 @@
       [[ -n $best_pfx ]] && remote_url="${instead_of[$best_pfx]}${remote_url#$best_pfx}"
     fi
     typeset -g VCS_STATUS_REMOTE_URL=$remote_url
+
+    local first_remote_forge=${first_remote_name:+${remote_forges[$first_remote_name]:-}}
+    local forge_hint=${remote_forges[$remote_name]:-${remote_forges[origin]:-${first_remote_forge:-$merge_forge_hint}}}
+
+    # Resolve PR/MR number and URL (Tier 0 .git/config -> Tier 0.5 zero-fork state cache -> async worker)
+    local pr_num='' pr_url=''
+    if [[ -n $branch && $branch != '(detached)' ]]; then
+      if [[ -n $branch_pr && $branch_pr == <-> ]] && (( branch_pr > 0 )); then
+        pr_num=$branch_pr
+        if [[ -n $branch_pr_url ]]; then
+          pr_url=$branch_pr_url
+        elif [[ -n $remote_url ]]; then
+          _p9k_vcs_build_pr_url -v pr_url "$remote_url" "$pr_num" "$forge_hint"
+        fi
+      elif [[ $branch != (main|master|trunk|develop) && -n $commondir ]]; then
+        local cache_dir=${GIT_PR_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/git-pr-prompt}
+        local repo_key=${${commondir:A}//[^A-Za-z0-9._-]/_}
+        local cache_file="$cache_dir/${repo_key}.state"
+        local -i cache_fresh=0 now=${EPOCHSECONDS:-0}
+        if [[ -r $cache_file ]]; then
+          local c_branch='' c_num='' c_url='' c_ts=''
+          while IFS='|' read -r c_branch c_num c_url c_ts || [[ -n $c_branch ]]; do
+            if [[ $c_branch == "$branch" ]]; then
+              if [[ $c_num == <-> ]] && (( c_num > 0 )); then
+                pr_num=$c_num
+                if [[ -n $c_url ]]; then
+                  pr_url=$c_url
+                elif [[ -n $remote_url ]]; then
+                  _p9k_vcs_build_pr_url -v pr_url "$remote_url" "$c_num" "$forge_hint"
+                fi
+              fi
+              if [[ $c_ts == <-> ]] && (( now - c_ts < ${GIT_PR_CACHE_TTL:-120} )); then
+                cache_fresh=1
+              fi
+              break
+            fi
+          done < "$cache_file"
+        fi
+        if (( ! cache_fresh )) && [[ -n $remote_url && ${SOLARIZED_VCS_PR_ASYNC:-1} != 0 ]]; then
+          local -i lock_active=0
+          if [[ -r "${cache_file}.lock" ]]; then
+            local lock_ts=''
+            read -r lock_ts < "${cache_file}.lock" 2>/dev/null
+            if [[ $lock_ts == <-> ]] && (( now - lock_ts < 30 )); then
+              lock_active=1
+            fi
+          fi
+          if (( ! lock_active )); then
+            local upstream_forge_url=${remote_urls[upstream]:-}
+            if [[ -n $upstream_forge_url ]] && (( $#instead_of > 0 )); then
+              local u_pfx u_best_pfx=''
+              for u_pfx in "${(@k)instead_of}"; do
+                if [[ $upstream_forge_url == "$u_pfx"* ]] && (( $#u_pfx > $#u_best_pfx )); then
+                  u_best_pfx=$u_pfx
+                fi
+              done
+              [[ -n $u_best_pfx ]] && upstream_forge_url="${instead_of[$u_best_pfx]}${upstream_forge_url#$u_best_pfx}"
+            fi
+            ( ( _p9k_vcs_refresh_pr_cache "$workdir" "$gitdir" "$branch" "$remote_name" "$remote_url" "$forge_hint" "$cache_file" "$upstream_forge_url" ) </dev/null >/dev/null 2>&1 & )
+          fi
+        fi
+      fi
+    fi
+    typeset -g VCS_STATUS_PR_NUM=$pr_num VCS_STATUS_PR_URL=$pr_url
 
     local vcs_icon
     case $remote_url in
@@ -774,6 +1271,15 @@
       local remote_branch=${upstream#*/}
       if [[ -n $upstream && $remote_branch != "$branch" ]]; then
         res+="${meta}:${state_color}${(V)remote_branch//\%/%%}"
+      fi
+      if [[ -n $pr_num ]]; then
+        local pr_esc="${pr_num//\%/%%}"
+        local pr_badge="${meta}@${state_color}${pr_esc}"
+        if [[ "${POWERLEVEL9K_VCS_HYPERLINK:-true}" == true ]] && (( ${_p9k_term_has_href:-1} )) && [[ $pr_url == https://* || $pr_url == http://* ]]; then
+          local url_esc="${pr_url//\%/%%}"
+          pr_badge=$'%{\e]8;;'${url_esc}$'\a%}'"${pr_badge}"$'%{\e]8;;\a%}'
+        fi
+        res+="${pr_badge}"
       fi
     else
       res+="${state_color}${branch_icon}${meta}@${state_color}${oid[1,8]}"
@@ -927,6 +1433,10 @@
     function prompt_vcs() {
       _p9k_solarized_prompt_vcs "$@"
     }
+    typeset -ga preexec_functions
+    if (( ! ${preexec_functions[(I)_p9k_solarized_vcs_preexec]} )); then
+      preexec_functions+=(_p9k_solarized_vcs_preexec)
+    fi
 
     if (( $+functions[_p9k_orig_prompt_terraform_version] )); then
       functions -c _p9k_orig_prompt_terraform_version prompt_terraform_version 2>/dev/null
