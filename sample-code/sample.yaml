@@ -117,7 +117,7 @@ spec:
         - name: tls-certs
           secret:
             secretName: collector-tls
-            defaultMode: 0o440
+            defaultMode: 288
 
       tolerations:
         - key: dedicated

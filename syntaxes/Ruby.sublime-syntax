@@ -1,0 +1,207 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Ruby Syntax
+# Supports Modern Ruby 3.3+:
+# - require / require_relative / load and module declaration names in Solarized Violet
+# - Method declarations (def <name>, def self.<name>) in Solarized Blue
+# - Structural keywords (module, class, def, end, do, begin, include, extend, prepend,
+#   attr_reader, attr_writer, attr_accessor, private, protected, public) in Solarized Green
+# - Control flow (if, elsif, else, unless, case, when, in, while, until, for, return,
+#   break, next, redo, retry, yield, rescue, ensure, raise) in Solarized Yellow
+# - Strings and regex literals in Solarized Cyan with Base0 Grey #{...} interpolated expressions
+# - :symbols, numbers, booleans, nil, self, super, and SCREAMING_SNAKE_CASE constants in Solarized Magenta
+# - Classes/types, @instance_vars, @@class_vars, hash symbol keys (key:), variables, and calls in calm Base0 Grey
+name: Ruby
+scope: source.ruby
+version: 2
+
+file_extensions:
+  - rb
+  - rake
+  - gemspec
+  - ru
+  - Podfile
+  - Gemfile
+  - Rakefile
+  - Vagrantfile
+
+first_line_match: |-
+  (?xi:
+    ^ \#! .*? \bruby\b
+  )
+
+variables:
+  ident: '[[:alpha:]_][[:alnum:]_]*'
+  method_ident: '[[:alpha:]_][[:alnum:]_]*[!?=]?'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_]*\b'
+  const_ident: '\b[[:upper:]][[:upper:][:digit:]_]+\b'
+  modifier: '\b(?:include|extend|prepend|attr_reader|attr_writer|attr_accessor|private|protected|public|module_function)\b'
+  declaration_keyword: '\b(?:module|class|def|end|do|begin|undef|alias|defined\?)\b'
+  control_flow: '\b(?:if|elsif|else|unless|case|when|in|then|while|until|for|return|break|next|redo|retry|yield|rescue|ensure|raise|fail|catch|throw)\b'
+  word_operator: '\b(?:and|or|not)\b'
+  hex_digit: '[0-9a-fA-F_]'
+
+contexts:
+  main:
+    - include: shebang
+    - include: comments
+    - include: imports
+    - include: module-declaration
+    - include: class-declaration
+    - include: method-declaration
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  shebang:
+    - match: '^#!.*$'
+      scope: comment.line.number-sign.shebang.ruby
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.ruby
+
+  imports:
+    - match: '\b(?:require|require_relative|load)\b'
+      scope: keyword.control.import.ruby
+
+  module-declaration:
+    - match: '\b(module)\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.module.ruby
+        2: entity.name.module.ruby
+
+  class-declaration:
+    - match: '\b(class)\s+({{pascal_ident}})'
+      captures:
+        1: storage.type.class.ruby
+        2: entity.name.type.class.ruby
+
+  method-declaration:
+    - match: '\b(def)\s+(?:(self)(\.))?({{method_ident}})'
+      captures:
+        1: storage.type.function.ruby
+        2: variable.language.ruby
+        3: punctuation.accessor.dot.ruby
+        4: entity.name.function.ruby
+
+  declarations:
+    - match: '{{modifier}}'
+      scope: storage.modifier.ruby
+    - match: '{{declaration_keyword}}'
+      scope: keyword.other.ruby
+
+  statements:
+    - match: '{{control_flow}}'
+      scope: keyword.control.ruby
+    - match: '{{word_operator}}'
+      scope: keyword.operator.word.ruby
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: symbols-and-hash-keys
+    - include: constants
+    - include: instance-and-class-variables
+    - include: types
+    - include: function-calls
+    - include: identifiers
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal integer
+    - match: '\b0[xX]{{hex_digit}}+[rhei]?\b'
+      scope: constant.numeric.hexadecimal.ruby
+    # Octal integer
+    - match: '\b0[oO]?[0-7_]+\b'
+      scope: constant.numeric.octal.ruby
+    # Binary integer
+    - match: '\b0[bB][01_]+\b'
+      scope: constant.numeric.binary.ruby
+    # Floating-point literal (require digit after dot so 100.0.. preserves '..')
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?[rhei]?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+[rhei]?\b'
+      scope: constant.numeric.float.ruby
+    # Decimal integer
+    - match: '\b[0-9][0-9_]*[rhei]?\b'
+      scope: constant.numeric.integer.decimal.ruby
+
+  strings:
+    # Double-quoted string with #{...} interpolation
+    - match: '"'
+      scope: punctuation.definition.string.begin.ruby
+      push:
+        - meta_scope: string.quoted.double.ruby
+        - match: '"'
+          scope: punctuation.definition.string.end.ruby
+          pop: true
+        - match: '\\(?:[abefnrstv\\"''#]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F ]+\})'
+          scope: constant.character.escape.ruby
+        - match: '#\{'
+          scope: punctuation.section.interpolation.begin.ruby
+          push:
+            - meta_content_scope: meta.interpolation.ruby
+            - match: '\}'
+              scope: punctuation.section.interpolation.end.ruby
+              pop: true
+            - include: statements
+            - include: expressions
+    # Single-quoted string
+    - match: "'"
+      scope: punctuation.definition.string.begin.ruby
+      push:
+        - meta_scope: string.quoted.single.ruby
+        - match: "'"
+          scope: punctuation.definition.string.end.ruby
+          pop: true
+        - match: "\\\\[\\\\']"
+          scope: constant.character.escape.ruby
+
+  symbols-and-hash-keys:
+    # Hash key / keyword argument symbol (type:, capacity:, scale_factor:) in calm Base0 Grey
+    - match: '\b({{ident}})(:)(?![:])'
+      captures:
+        1: variable.other.member.ruby
+        2: punctuation.separator.key-value.ruby
+    # Ruby :symbol literal (:metric, :heartbeat, :ok, :each) in Solarized Magenta
+    - match: '(?<![[:alnum:]_:]):{{method_ident}}'
+      scope: constant.other.symbol.ruby
+
+  constants:
+    - match: '\b(?:true|false)\b'
+      scope: constant.language.boolean.ruby
+    - match: '\bnil\b'
+      scope: constant.language.nil.ruby
+    - match: '\b(?:self|super)\b'
+      scope: variable.language.ruby
+    - match: '{{const_ident}}'
+      scope: variable.other.constant.ruby
+
+  instance-and-class-variables:
+    - match: '@@?{{ident}}'
+      scope: variable.other.readwrite.instance.ruby
+
+  types:
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.ruby
+
+  function-calls:
+    - match: '(&\.)\s*({{method_ident}})'
+      captures:
+        1: punctuation.accessor.safe-navigation.ruby
+        2: variable.function.ruby
+    - match: '(\.)\s*({{method_ident}})'
+      captures:
+        1: punctuation.accessor.dot.ruby
+        2: variable.function.ruby
+    - match: '\b({{method_ident}})\s*(?=\()'
+      scope: variable.function.ruby
+
+  identifiers:
+    - match: '\b{{method_ident}}'
+      scope: variable.other.readwrite.ruby
+
+  operators-and-delimiters:
+    - match: '<=>|===|==|!=|<=|>=|=~|!~|\*\*|<<|>>|&&|\|\||=>|\.\.\.|\.\.|\+=|-=|\*=|/=|%=|\|\|=|&&=|[+\-*/%&|^~<>=!?]'
+      scope: keyword.operator.ruby
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.ruby

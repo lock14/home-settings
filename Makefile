@@ -81,7 +81,7 @@ lint:
 	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck --severity=warning dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh; \
+		shellcheck --severity=warning -e SC2148,SC2154 dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi

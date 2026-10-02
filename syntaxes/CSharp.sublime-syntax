@@ -1,0 +1,256 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor C# Syntax
+# Supports Modern C# 12 / 13 (.NET 8 / 9 LTS):
+# - using directives, file-scoped namespace paths, and unified [Attribute] blocks in Solarized Violet
+# - Method declarations in Solarized Blue
+# - Structural keywords (class, record, struct, interface, enum, public, sealed, const,
+#   get, set, init, where) and primitive types (int, uint, ushort, double, string, bool, void) in Solarized Green
+# - Control flow & async/await (if, else, switch, case, when, for, foreach, in, while,
+#   do, return, break, continue, try, catch, finally, throw, async, await, yield) in Solarized Yellow
+# - Strings and interpolation format specifiers (:F2) in Solarized Cyan with Base0 Grey expressions
+# - Numbers, booleans, null, default, this, base, discard (_), and SCREAMING_SNAKE_CASE constants in Solarized Magenta
+# - User types, records, interfaces, properties, LINQ calls, and variables in calm Base0 Grey
+name: C#
+scope: source.cs
+version: 2
+
+file_extensions:
+  - cs
+  - csx
+
+variables:
+  ident: '[[:alpha:]_][[:alnum:]_]*'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_]*\b'
+  const_ident: '\b[[:upper:]][[:upper:][:digit:]_]+\b'
+  primitive_type: '\b(?:bool|byte|sbyte|char|decimal|double|float|int|uint|nint|nuint|long|ulong|short|ushort|object|string|void|dynamic)\b'
+  modifier: '\b(?:public|private|protected|internal|file|static|readonly|const|volatile|virtual|override|abstract|sealed|partial|extern|unsafe|fixed|ref|out|params|scoped|required)\b'
+  declaration_keyword: '\b(?:namespace|class|record|struct|interface|enum|delegate|event|operator|implicit|explicit|where|get|set|init|add|remove|var)\b'
+  control_flow: '\b(?:if|else|switch|case|when|for|foreach|while|do|return|break|continue|goto|try|catch|finally|throw|async|await|yield|lock)\b'
+  word_operator: '\b(?:new|is|as|and|or|not|nameof|typeof|sizeof|checked|unchecked|stackalloc|with)\b'
+  hex_digit: '[0-9a-fA-F_]'
+
+contexts:
+  main:
+    - include: preprocessor
+    - include: comments
+    - include: using-directive
+    - include: namespace-declaration
+    - include: attributes
+    - include: foreach-loop
+    - include: method-declaration
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  preprocessor:
+    - match: '^\s*#\s*(?:if|elif|else|endif|define|undef|region|endregion|pragma|nullable|error|warning|line)\b.*$'
+      scope: keyword.control.directive.cs
+
+  comments:
+    # XML documentation comments
+    - match: '///.*$'
+      scope: comment.line.documentation.cs
+    # Block comments
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.cs
+      push:
+        - meta_scope: comment.block.cs
+        - match: '\*/'
+          scope: punctuation.definition.comment.end.cs
+          pop: true
+    # Single-line comments
+    - match: '//.*$'
+      scope: comment.line.double-slash.cs
+
+  using-directive:
+    - match: '\b(using)\b'
+      captures:
+        1: keyword.control.import.cs
+
+  namespace-declaration:
+    - match: '\b(namespace)\b\s*'
+      captures:
+        1: storage.type.namespace.cs
+      push:
+        - match: '[;{]|$'
+          scope: punctuation.terminator.cs
+          pop: true
+        - include: comments
+        - match: '\b({{ident}})\b'
+          captures:
+            1: entity.name.namespace.cs
+        - match: '\.'
+          scope: punctuation.accessor.dot.cs
+
+  attributes:
+    # Unified C# attributes at line start or parameter level: [Serializable], [Obsolete("msg"), Serializable]
+    - match: '(?:^\s*|(?<=[\(,])\s*)(\[)\s*({{ident}}(?:\.{{ident}})*)(?=[^\]]*\]\s*(?:$|[A-Za-z_@\[]|//|/\*))'
+      captures:
+        1: punctuation.section.attribute.begin.cs
+        2: entity.name.attribute.cs
+      push:
+        - match: '\]'
+          scope: punctuation.section.attribute.end.cs
+          pop: true
+        - match: '\('
+          scope: punctuation.section.parens.begin.cs
+          push:
+            - match: '\)'
+              scope: punctuation.section.parens.end.cs
+              pop: true
+            - include: comments
+            - include: expressions
+        - match: '(,)\s*({{ident}}(?:\.{{ident}})*)'
+          captures:
+            1: punctuation.separator.comma.cs
+            2: entity.name.attribute.cs
+        - include: comments
+        - include: expressions
+
+  foreach-loop:
+    - match: '\b(foreach)\b\s*(\()'
+      captures:
+        1: keyword.control.loop.cs
+        2: punctuation.section.parens.begin.cs
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.cs
+          pop: true
+        - include: comments
+        - match: '\b(in)\b'
+          scope: keyword.control.loop.cs
+        - include: declarations
+        - include: expressions
+
+  method-declaration:
+    # Primitive return type (with optional array/nullable suffix) + MethodName(
+    - match: '({{primitive_type}})(?:\[\])?\??\s+({{ident}})\b(?=\s*(?:<[^>;{}]*>)?\s*\()'
+      captures:
+        1: storage.type.primitive.cs
+        2: entity.name.function.cs
+    # Generic return type closing bracket (e.g. Task<int>, Task<List<int>>) + MethodName(
+    - match: '(?<=[A-Za-z0-9_?\]>])>+(?:\[\])?\??\s+({{ident}})\b(?=\s*(?:<[^>;{}]*>)?\s*\()'
+      captures:
+        1: entity.name.function.cs
+    # User-defined return type (with optional array/nullable suffix) + MethodName(
+    - match: '\b(?!(?:{{control_flow}}|{{modifier}}|{{declaration_keyword}}|{{primitive_type}}|{{word_operator}}|from|select|where|orderby|group|join|let|into|by|on|equals|in)\b)({{ident}})(?:\[\])?\??\s+({{ident}})\b(?=\s*(?:<[^>;{}]*>)?\s*\()'
+      captures:
+        1: support.type.user-defined.cs
+        2: entity.name.function.cs
+
+  declarations:
+    - match: '{{modifier}}'
+      scope: storage.modifier.cs
+    - match: '{{declaration_keyword}}'
+      scope: storage.type.cs
+
+  statements:
+    - match: '{{control_flow}}'
+      scope: keyword.control.cs
+    - match: '{{word_operator}}'
+      scope: keyword.operator.word.cs
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: constants
+    - include: types
+    - include: function-calls
+    - include: identifiers
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal integer
+    - match: '\b0[xX]{{hex_digit}}+[uUlL]*\b'
+      scope: constant.numeric.hexadecimal.cs
+    # Binary integer
+    - match: '\b0[bB][01_]+[uUlL]*\b'
+      scope: constant.numeric.binary.cs
+    # Floating-point / decimal literal
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?[fFdDmM]?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+[fFdDmM]?\b|\b[0-9][0-9_]*[fFdDmM]\b'
+      scope: constant.numeric.float.cs
+    # Decimal integer
+    - match: '\b[0-9][0-9_]*[uUlL]*\b'
+      scope: constant.numeric.integer.decimal.cs
+
+  strings:
+    # Interpolated double-quoted string: $"..."
+    - match: '(?:\$@|@\$|\$)"'
+      scope: punctuation.definition.string.begin.cs
+      push:
+        - meta_scope: string.quoted.double.interpolated.cs
+        - match: '"'
+          scope: punctuation.definition.string.end.cs
+          pop: true
+        - match: '\{\{|\}\}'
+          scope: constant.character.escape.cs
+        - match: '\\(?:[btnfr"''\\0abv]|x[0-9a-fA-F]{1,4}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})'
+          scope: constant.character.escape.cs
+        - match: '\{'
+          scope: punctuation.section.interpolation.begin.cs
+          push:
+            - meta_content_scope: meta.interpolation.cs
+            - match: '(:[A-Za-z0-9_.,+-]+)(?=\})'
+              captures:
+                1: constant.other.placeholder.cs
+            - match: '\}'
+              scope: punctuation.section.interpolation.end.cs
+              pop: true
+            - include: expressions
+    # Standard double-quoted string: "..."
+    - match: '@?"'
+      scope: punctuation.definition.string.begin.cs
+      push:
+        - meta_scope: string.quoted.double.cs
+        - match: '"'
+          scope: punctuation.definition.string.end.cs
+          pop: true
+        - match: '\\(?:[btnfr"''\\0abv]|x[0-9a-fA-F]{1,4}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})'
+          scope: constant.character.escape.cs
+    # Single-quoted character literal
+    - match: "'"
+      scope: punctuation.definition.string.begin.cs
+      push:
+        - meta_scope: string.quoted.single.cs
+        - match: "'"
+          scope: punctuation.definition.string.end.cs
+          pop: true
+        - match: '\\(?:[btnfr"''\\0abv]|x[0-9a-fA-F]{1,4}|u[0-9a-fA-F]{4})'
+          scope: constant.character.escape.cs
+
+  constants:
+    - match: '\b(?:true|false)\b'
+      scope: constant.language.boolean.cs
+    - match: '\b(?:null|default)\b'
+      scope: constant.language.cs
+    - match: '\b(?:this|base)\b'
+      scope: variable.language.cs
+    - match: '\b_\b'
+      scope: constant.language.discard.cs
+    - match: '{{const_ident}}'
+      scope: variable.other.constant.cs
+
+  types:
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.cs
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.cs
+
+  function-calls:
+    - match: '(\??\.)\s*({{ident}})\s*(?=<[^>;{}]*>\s*\(|\()'
+      captures:
+        1: punctuation.accessor.dot.cs
+        2: variable.function.cs
+    - match: '\b({{ident}})\s*(?=\()'
+      scope: variable.function.cs
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.cs
+
+  operators-and-delimiters:
+    - match: '=>|\?\?=|\?\?|\?\.|==|!=|<=|>=|&&|\|\||<<|>>|\+\+|--|\+=|-=|\*=|/=|%=|&=|\|=|\^=|[+\-*/%&|^~<>=!?]'
+      scope: keyword.operator.cs
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.cs

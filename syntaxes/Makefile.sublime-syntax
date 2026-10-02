@@ -1,0 +1,264 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor GNU Make Syntax
+# Enforces the Universal Semantic Color Contract:
+# - Comments in Base01 Dim (comment.line.number-sign.makefile)
+# - Conditionals (ifeq, ifneq, ifdef, ifndef, else, endif) in Solarized Yellow (keyword.control.conditional.makefile)
+# - Embedded shell control flow (if, then, else, elif, fi, for, in, do, done) in Solarized Yellow
+# - Special built-in targets (.PHONY, .DELETE_ON_ERROR, .ONESHELL, .SILENT, etc.) in Solarized Green (support.type.target.phony.makefile)
+# - Structural directives (export, unexport, override, define, endef) in Solarized Green (keyword.other.makefile)
+# - Include directives (include, -include, sinclude) in Solarized Violet (keyword.control.import.makefile) with path in Cyan
+# - Rule & pattern targets (all:, build:, %.o:) in Solarized Blue (entity.name.function.target.makefile)
+# - Prerequisite target references in calm Base0 Grey (variable.other.prerequisite.makefile)
+# - Recipe prefix modifiers (@, -, +) in Solarized Orange (punctuation.definition.recipe.makefile)
+# - Automatic variables ($@, $<, $^, $*, $?, $+, $|) in Solarized Magenta (variable.language.automatic.makefile)
+# - Built-in special variables (.DEFAULT_GOAL, .SHELLFLAGS, SHELL, MAKEFLAGS) & ALL_CAPS variables in Solarized Magenta
+# - Built-in Make functions (wildcard, patsubst, shell, dir, call, info, etc.) in calm Base0 Grey (support.function.builtin.makefile)
+# - Numbers & version literals in Solarized Magenta (constant.numeric.makefile)
+# - Quoted strings in Solarized Cyan (string.quoted.double.makefile, string.quoted.single.makefile)
+name: Makefile
+scope: source.makefile
+version: 2
+
+file_extensions:
+  - mk
+  - mak
+  - make
+  - Makefile
+  - makefile
+  - GNUmakefile
+  - gnumakefile
+
+first_line_match: |-
+  (?xi:
+    ^ \#! .*? \bmake\b
+  )
+
+variables:
+  special_target: '\.(?:PHONY|DELETE_ON_ERROR|ONESHELL|SILENT|DEFAULT|SUFFIXES|PRECIOUS|INTERMEDIATE|SECONDARY|SECONDEXPANSION|EXPORT_ALL_VARIABLES|IGNORE|POSIX|NOTPARALLEL|LOW_RESOLUTION_TIME)'
+  builtin_var: '(?:\.DEFAULT_GOAL|\.EXTRA_PREREQS|\.FEATURES|\.INCLUDE_DIRS|\.RECIPEPREFIX|\.SHELLFLAGS|\.VARIABLES|MAKEARGS|MAKEFILE_LIST|MAKEFLAGS|MAKE_RESTARTS|MAKE_TERMERR|MAKE_TERMOUT|SHELL)'
+  all_caps: '[A-Z][A-Z0-9_]+'
+  ident: '[a-zA-Z_][a-zA-Z0-9_]*'
+  builtin_fn: '(?:subst|patsubst|strip|findstring|filter-out|filter|sort|wordlist|words|word|firstword|lastword|dir|notdir|suffix|basename|addsuffix|addprefix|join|wildcard|realpath|abspath|error|warning|info|origin|flavor|foreach|if|or|and|call|eval|file|value|let|shell)'
+
+contexts:
+  main:
+    - include: comments
+    - include: recipe-lines
+    - include: conditionals
+    - include: directives
+    - include: variable-assignments
+    - include: rules
+    - include: expressions
+
+  comments:
+    - match: '^\s*#.*$'
+      scope: comment.line.number-sign.makefile
+
+  recipe-lines:
+    # Tab-indented recipe lines with optional @, -, + prefix modifier
+    - match: '^\t([@+-])?'
+      captures:
+        1: punctuation.definition.recipe.makefile
+      push:
+        - match: '(?<!\\)$'
+          pop: true
+        - match: '\\$'
+          scope: punctuation.separator.continuation.makefile
+        - include: automatic-variables
+        - include: variable-expansions
+        - include: strings
+        - include: shell-control-flow
+        - include: redirections
+        - include: numbers
+        - include: flags
+        - match: '[^\s"''$\\]+'
+          scope: variable.other.recipe.makefile
+
+  conditionals:
+    - match: '^\s*(ifdef|ifndef)\s+({{all_caps}})\b'
+      captures:
+        1: keyword.control.conditional.makefile
+        2: variable.other.constant.makefile
+    - match: '^\s*(ifdef|ifndef)\s+({{ident}})\b'
+      captures:
+        1: keyword.control.conditional.makefile
+        2: variable.other.makefile
+    - match: '^\s*(ifeq|ifneq|else|endif)\b'
+      captures:
+        1: keyword.control.conditional.makefile
+
+  directives:
+    - match: '^\s*(-?include|sinclude)\s+([^\s#]+)'
+      captures:
+        1: keyword.control.import.makefile
+        2: string.unquoted.include.makefile
+    - match: '^\s*(export|unexport)\b'
+      captures:
+        1: keyword.other.export.makefile
+      push:
+        - match: '$'
+          pop: true
+        - match: '\b{{all_caps}}\b'
+          scope: variable.other.constant.makefile
+        - match: '\b{{ident}}\b'
+          scope: variable.other.makefile
+    - match: '^\s*(define)\s+({{all_caps}})\b'
+      captures:
+        1: keyword.other.define.makefile
+        2: variable.other.constant.makefile
+    - match: '^\s*(define)\s+({{ident}})\b'
+      captures:
+        1: keyword.other.define.makefile
+        2: variable.other.makefile
+    - match: '^\s*(endef|override)\b'
+      captures:
+        1: keyword.other.makefile
+
+  variable-assignments:
+    # Built-in special variables (.SHELLFLAGS := ..., .DEFAULT_GOAL := ..., SHELL := ...)
+    - match: '^\s*({{builtin_var}})\s*(:=|\?=|\+=|!=|=)'
+      captures:
+        1: variable.language.builtin.makefile
+        2: keyword.operator.assignment.makefile
+      push: assignment-rhs
+    # ALL_CAPS variable assignment
+    - match: '^\s*({{all_caps}})\s*(:=|\?=|\+=|!=|=)'
+      captures:
+        1: variable.other.constant.makefile
+        2: keyword.operator.assignment.makefile
+      push: assignment-rhs
+    # Standard variable assignment
+    - match: '^\s*({{ident}})\s*(:=|\?=|\+=|!=|=)'
+      captures:
+        1: variable.other.makefile
+        2: keyword.operator.assignment.makefile
+      push: assignment-rhs
+
+  assignment-rhs:
+    - match: '(?<!\\)$'
+      pop: true
+    - match: '\\$'
+      scope: punctuation.separator.continuation.makefile
+    - include: automatic-variables
+    - include: variable-expansions
+    - include: strings
+    - include: numbers
+    - include: flags
+    - match: '[^\s"''$\\]+'
+      scope: variable.other.value.makefile
+
+  rules:
+    # Special targets (.PHONY:, .DELETE_ON_ERROR:, .ONESHELL:, etc.)
+    - match: '^({{special_target}})\s*(:)'
+      captures:
+        1: support.type.target.phony.makefile
+        2: keyword.operator.rule.makefile
+      push: prerequisites-rhs
+    # Pattern rule with leading variable expansion: $(BUILD_DIR)/%.o:
+    - match: '^(\$\()({{all_caps}})(\))([a-zA-Z0-9_./%-]+)\s*(:)(?![=])'
+      captures:
+        1: punctuation.definition.variable.begin.makefile
+        2: variable.other.constant.makefile
+        3: punctuation.definition.variable.end.makefile
+        4: entity.name.function.target.makefile
+        5: keyword.operator.rule.makefile
+      push: prerequisites-rhs
+    # Standard & pattern targets (all:, build:, %.o:)
+    - match: '^([a-zA-Z0-9_./%-]+)\s*(:)(?![=])'
+      captures:
+        1: entity.name.function.target.makefile
+        2: keyword.operator.rule.makefile
+      push: prerequisites-rhs
+
+  prerequisites-rhs:
+    - match: '$'
+      pop: true
+    - include: automatic-variables
+    - include: variable-expansions
+    - match: '[a-zA-Z0-9_./%-]+'
+      scope: variable.other.prerequisite.makefile
+
+  automatic-variables:
+    - match: '\$[@<^?*+|]'
+      scope: variable.language.automatic.makefile
+
+  variable-expansions:
+    # $(func ...) built-in function call
+    - match: '(\$\()({{builtin_fn}})\b'
+      captures:
+        1: punctuation.definition.variable.begin.makefile
+        2: support.function.builtin.makefile
+      push:
+        - match: '\)'
+          scope: punctuation.definition.variable.end.makefile
+          pop: true
+        - include: automatic-variables
+        - include: variable-expansions
+        - include: strings
+        - include: flags
+        - match: ','
+          scope: punctuation.separator.makefile
+        - match: '[^\s"''$(),]+'
+          scope: variable.other.makefile
+    # $(ALL_CAPS) or ${ALL_CAPS}
+    - match: '(\$[({])({{all_caps}})([)}])'
+      captures:
+        1: punctuation.definition.variable.begin.makefile
+        2: variable.other.constant.makefile
+        3: punctuation.definition.variable.end.makefile
+    # $(ident) or ${ident}
+    - match: '(\$[({])({{ident}})([)}])'
+      captures:
+        1: punctuation.definition.variable.begin.makefile
+        2: variable.other.makefile
+        3: punctuation.definition.variable.end.makefile
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.makefile
+      push:
+        - meta_scope: string.quoted.double.makefile
+        - match: '"'
+          scope: punctuation.definition.string.end.makefile
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.makefile
+        - include: automatic-variables
+        - include: variable-expansions
+    - match: "'"
+      scope: punctuation.definition.string.begin.makefile
+      push:
+        - meta_scope: string.quoted.single.makefile
+        - match: "'"
+          scope: punctuation.definition.string.end.makefile
+          pop: true
+
+  shell-control-flow:
+    - match: '(?<=\s|\t|^|;|@|-|\+)\b(if|then|else|elif|fi|for|in|do|done|case|esac|while|until)\b(?=\s|;|$)'
+      scope: keyword.control.shell.makefile
+
+  redirections:
+    - match: '(\d+)?(>&|<&)(\d+)'
+      captures:
+        1: constant.numeric.file-descriptor.makefile
+        2: keyword.operator.redirect.makefile
+        3: constant.numeric.file-descriptor.makefile
+
+  flags:
+    - match: '(?<=\s)(?:--[a-zA-Z0-9_-]+(?:=[^\s"''\\]+)?|-[a-zA-Z0-9]+)(?=\s|$|=)'
+      scope: variable.parameter.flag.makefile
+
+  numbers:
+    - match: '(?<=\s|,|=)(\d+(?:\.\d+)*)(?=\s|\)|;|\\|$)'
+      scope: constant.numeric.makefile
+
+  expressions:
+    - include: automatic-variables
+    - include: variable-expansions
+    - include: strings
+    - include: numbers
+    - match: '[(),:]'
+      scope: punctuation.separator.makefile
+    - match: '[^\s"''$(),:#]+'
+      scope: variable.other.makefile

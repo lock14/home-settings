@@ -72,25 +72,43 @@ home-settings/
 │   ├── Solarized-Dark.terminal           # macOS Terminal.app Solarized Dark profile
 │   └── gnome-terminal-solarized.dconf    # GNOME Terminal Solarized Dark dconf profile
 │
-├── syntaxes/                        # Enhanced Sublime syntax packages for bat (18 languages)
+├── syntaxes/                        # Enhanced Sublime syntax packages for bat (36 languages)
 │   ├── Bash.sublime-syntax          # Bash / POSIX shell syntax
-│   ├── C.sublime-syntax             # Modern C syntax with granular declaration scopes
-│   ├── C++.sublime-syntax           # Modern C++ syntax with concept/template support
+│   ├── C.sublime-syntax             # Modern C23 syntax with granular declaration scopes
+│   ├── C++.sublime-syntax           # Modern C++20/23 syntax with concept/template support
+│   ├── CSharp.sublime-syntax        # Modern C# 12/13 syntax (records, primary constructors, LINQ)
 │   ├── CSS.sublime-syntax           # Modern CSS3 / Container Queries syntax
+│   ├── Clojure.sublime-syntax       # Clojure syntax (namespaces, macros, protocols, keywords)
 │   ├── Diff.sublime-syntax          # Standalone Git & Unified Diff syntax for bat
+│   ├── Dockerfile.sublime-syntax    # Multi-stage Dockerfile / Containerfile syntax
+│   ├── Elixir.sublime-syntax        # Elixir syntax (GenServer, @spec/@doc, pipe operators, atoms)
 │   ├── Go.sublime-syntax            # Go syntax with calm Base0 qualifiers & struct tags
+│   ├── GraphQL.sublime-syntax       # Declarative GraphQL schema & query syntax
 │   ├── HTML.sublime-syntax          # HTML5 syntax with attribute-guarded script injections
+│   ├── Haskell.sublime-syntax       # GHC2021 Haskell syntax (pragmas, typeclasses, GADTs, do)
 │   ├── JSON.sublime-syntax          # JSON / JSONC declarative hierarchy syntax
-│   ├── Java.sublime-syntax          # Modern Java (records, pattern matching, annotations)
+│   ├── Java.sublime-syntax          # Modern Java 25 LTS (records, pattern matching, annotations)
 │   ├── JavaProperties.sublime-syntax# Java .properties configuration syntax
+│   ├── Kotlin.sublime-syntax        # Modern Kotlin 2.x (value classes, coroutines, annotations)
+│   ├── Lua.sublime-syntax           # Modern Lua 5.4 / LuaJIT syntax (<const>, metamethods)
+│   ├── Makefile.sublime-syntax      # GNU Make syntax (directives, targets, automatic variables)
 │   ├── Markdown.sublime-syntax      # Semantic Architecture Markdown syntax
-│   ├── Python.sublime-syntax        # Modern Python 3 syntax with type annotations
+│   ├── OCaml.sublime-syntax         # OCaml 5 syntax (modules, functors, polymorphic variants)
+│   ├── Protobuf.sublime-syntax      # Protocol Buffers (.proto) schema syntax
+│   ├── ProtobufText.sublime-syntax  # Protocol Buffers Text Format (.textproto / .pbtxt) syntax
+│   ├── Python.sublime-syntax        # Modern Python 3.12+ syntax (type statements, match/case)
+│   ├── Rego.sublime-syntax          # Open Policy Agent (OPA Rego v1) policy syntax
+│   ├── Ruby.sublime-syntax          # Modern Ruby 3.3+ syntax (Data.define, pattern matching)
 │   ├── Rust.sublime-syntax          # Rust syntax with unified attributes & lifetimes
 │   ├── SQL.sublime-syntax           # ANSI / PostgreSQL / MySQL declarative syntax
+│   ├── Scala.sublime-syntax         # Scala 3 LTS syntax (enums, given/using, extensions)
+│   ├── Starlark.sublime-syntax      # Open-source Bazel / Starlark (.bzl, BUILD.bazel) syntax
+│   ├── Swift.sublime-syntax         # Modern Swift 6 (actors, structured concurrency, directives)
 │   ├── TOML.sublime-syntax          # TOML syntax with Blue table headers & Green keys
 │   ├── Terraform.sublime-syntax     # Terraform / HCL2 infrastructure syntax
 │   ├── TypeScript.sublime-syntax    # TypeScript / JavaScript ES2024+ syntax
-│   └── XML.sublime-syntax           # XML syntax with namespaces, directives & CDATA
+│   ├── XML.sublime-syntax           # XML syntax with namespaces, directives & CDATA
+│   └── Zig.sublime-syntax           # Modern Zig syntax (comptime, error sets, @builtins)
 │
 └── tests/                           # Automated test suites (500+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
@@ -148,18 +166,20 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
     - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
     - `Alt+?` (`Prefix + ?`, `Space ?`, or `ide --keys`) opens a 2-column Solarized Dark keybinding cheatsheet popup (`tmux display-popup`).
   - **Layer 3: Editor, File Explorer & Live Auto-Reload (`Space` Leader & `mini.files`)**:
-    - `Space e` opens the `mini.files` columnar file explorer anchored at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Inside `mini.files`, `h`/`l` (or `Left`/`Right`/`Enter`) navigate parent/child directories or open files, `j`/`k` (or `Up`/`Down`) move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q` closes.
+    - `Space e` opens the `mini.files` columnar file explorer at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Configured with a 2-column left-anchored layout (`max_number = 2`, `width_focus = 35`) that pins the active directory at `col = 0` as parent directories slide left into `branch` history and stretches the right preview pane to the terminal edge (`MiniFilesWindowUpdate`). Inside `mini.files`, `h`/`l` (or `Left`/`Right`/`Enter`) navigate parent/child directories or open files, `j`/`k` (or `Up`/`Down`) move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q` closes.
+    - `Space m` (`:RenderMarkdown toggle`) toggles in-buffer Markdown rendering (`MeanderingProgrammer/render-markdown.nvim`), paired with automatic Markdown word-boundary soft-wrapping (`wrap`, `linebreak`, `breakindent`).
     - `Space gs` opens Telescope `git_status` to review and jump to AI-modified files.
     - `opt.autoread` and `SolarizedAutoRead` (`FocusGained`, `BufEnter`, `CursorHold`, `CursorHoldI` -> `silent! checktime`) automatically reload buffers modified on disk by AI agents.
     - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character; `:IdeCd` (`Space cd`) synchronizes the workspace directory across Editor and Shell.
-  - **Layer 4: Clickable Links & Unified Clipboard**:
+  - **Layer 4: Clickable Links, Jumplist History & Unified Clipboard**:
     - Tmux captures inner-pane OSC 8 hyperlinks into `#{mouse_hyperlink}` and passes them through to the outer terminal (`terminal-features '*:hyperlinks'` and `FORCE_HYPERLINK=1` without `*:Hls@`, plus `recover_split_osc8_href` in `bin/ide` for 1st-character split OSC 8 links), routing `http(s)://` links to the browser and opening `file:///` links, compiler output (`file:line[:col]`), markdown `[label](file:///...#L10)` links, or custom `~/.config/ide/links.sh` rules at the target line in the Editor on `Ctrl+Click` or `Alt+Click` (`C-MouseDown1Pane` / `M-MouseDown1Pane`, while plain `MouseDown1Pane` stays pinned to `select-pane -t = \; send-keys -M`).
+    - Before opening any link in the Editor, `nvim_remote_file` closes `mini.files` if open, records a single context jump mark (`normal! m'`), and loads the target file and line via `keepjumps` so pressing `Mouse4` (`<X1Mouse>` / `MouseDown8Pane`) or `Ctrl+O` returns to the exact previous file and line in one step, and `Mouse5` (`<X2Mouse>` / `MouseDown9Pane`) or `Ctrl+I` jumps forward.
     - Selecting text with the mouse in Tmux or Neovim copies immediately via `copy-pipe-no-clear` / `"+ygv` while keeping the highlight visible (`Alt+c` copies and clears, `Escape` or single click clears, `Alt+v` pastes from the system/OSC 52 clipboard).
     - SSH sessions strictly avoid probing local `/tmp/.X11-unix/X0` sockets so Neovim's built-in OSC 52 provider and `tmux load-buffer -w` route clipboard yanks back to the remote SSH client.
 
 - **Polyglot LSP, Treesitter & Neovim Toolchains**:
   - **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
-  - **Treesitter**: AST-based syntax highlighting with 1:1 parity matching `bat`.
+  - **Treesitter & In-Buffer Markdown Rendering (`render-markdown.nvim`)**: AST-based syntax highlighting with 1:1 parity matching `bat`, plus live in-buffer Markdown rendering (`<leader>m` / `:RenderMarkdown toggle`) for headings (H1 Orange `#CB4B16`, H2 Blue `#268BD2`, H3 Violet `#6C71C4`, H4 Base1 `#93A1A1`, H5/H6 Base0 `#839496` on Base02 `#073642` bands), rounded pipe tables, callouts, checkboxes, bullets, and Base02 code blocks across all lines (including the active cursor row in Normal/Visual/Command modes via `anti_conceal = { enabled = false }` and `concealcursor = "nvc"`) with word-boundary soft-wrapping (`SolarizedMarkdownReadability`).
   - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`, `<leader>gs`) with `<C-j>` / `<C-k>` selection movement.
   - **Solarized Dark**: Seamless `#002B36` terminal background matching.
   - **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim` and `+line` support over RPC).
@@ -181,8 +201,10 @@ The repository provides a unified terminal-based IDE orchestrated across **Tmux*
 | `Click Status Bar` | Tmux Mouse | Left-click session (`choose-tree`), center role/zoom badges (`ide --status-click`), or `Help` (`ide --keys`); right-click for menu |
 | `Alt+c` / `Alt+v` | Universal | Copy active selection to system/OSC 52 clipboard and clear highlight / paste from clipboard |
 | `Ctrl+Click` / `Alt+Click` | Shell / AI | Open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor |
+| `Mouse4` / `Mouse5` (`Ctrl+O` / `Ctrl+I`) | Universal / Editor | Jump back / forward in Editor jumplist (returns to previous file and line in one step after `Ctrl+Click` / `Alt+Click`) |
 | `Alt+q` (`Alt+Shift+Q`) / `Space q` | Universal | Gracefully quit (`ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
-| `Space e` / `Space E` | Neovim Normal | Toggle `mini.files` explorer at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` or `Left`/`Right`/`Enter` out/in, `j`/`k` or `Up`/`Down` move, `=` apply edits, `g?` help, `q` close |
+| `Space e` / `Space E` | Neovim Normal | Toggle left-anchored `mini.files` explorer (`col = 0`, full-width right preview) at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` or `Left`/`Right`/`Enter` out/in, `j`/`k` or `Up`/`Down` move, `=` apply edits, `g?` help, `q` close |
+| `Space m` (`:RenderMarkdown toggle`) | Neovim Normal | Toggle in-buffer Markdown rendering (`render-markdown.nvim`) |
 | `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
 | `Space cd` (`:IdeCd [dir]`) | Neovim Normal | Synchronize Editor and Tmux workspace directory (`@ide_workdir`) |
 | `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |
@@ -212,7 +234,7 @@ Developer runtimes are managed declaratively in user-space via [**`mise`**](http
 
 | Tool | Command / Shortcut | Role & Solarized Dark Integration |
 | :--- | :--- | :--- |
-| `bat` | `bat <file>`, `b <file>` | TrueColor syntax-highlighting pager with 18 custom syntaxes matching Neovim Treesitter (`cat` remains pure coreutils) |
+| `bat` | `bat <file>`, `b <file>` | TrueColor syntax-highlighting pager with 36 custom syntaxes matching Neovim Treesitter (`cat` remains pure coreutils) |
 | `delta` | `git diff`, `git log -p`, `git show` | TrueColor diff pager with word-level diff intra-line highlights, line numbers, and subtle Solarized tints |
 | `dust` | `ds` | Graphical proportional disk space visualizer (Rust `du -sh` alternative) |
 | `tealdeer` | `tldr <cmd>` | Fast offline cheatsheet viewer with Solarized Dark TrueColor styling |

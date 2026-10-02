@@ -50,9 +50,7 @@ else
         mkdir -p "$fontconfig_dir"
         fc_alias_src="$REPO_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
         fc_alias_dest="$fontconfig_dir/10-meslo-nerd-font.conf"
-        if [ -f "$fc_alias_src" ] && [ ! -e "$fc_alias_dest" ]; then
-            cp -f "$fc_alias_src" "$fc_alias_dest"
-        elif [ -f "$fc_alias_src" ] && ! [ "$fc_alias_src" -ef "$fc_alias_dest" ]; then
+        if [ -f "$fc_alias_src" ] && [ ! "$fc_alias_src" -ef "$fc_alias_dest" ]; then
             cp -f "$fc_alias_src" "$fc_alias_dest"
         fi
     fi

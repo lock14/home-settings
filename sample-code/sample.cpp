@@ -1,7 +1,7 @@
 /**
- * Authentic Solarized Dark syntax preview for modern C++ (C++20).
- * Demonstrates templates, namespaces, classes, smart pointers, lambdas,
- * and preprocessor directives.
+ * Authentic Solarized Dark syntax preview for modern C++ (C++20 / C++23).
+ * Demonstrates concepts, templates, namespaces, classes, smart pointers,
+ * attributes, lambdas, and preprocessor directives.
  */
 
 #pragma once
@@ -16,6 +16,8 @@
 
 #define MAX_WORKERS 64
 #define LIKELY(x) __builtin_expect(!!(x), 1)
+
+static_assert(MAX_WORKERS > 0, "MAX_WORKERS must be strictly positive");
 
 namespace core::telemetry {
 
@@ -47,6 +49,20 @@ public:
 
     [[nodiscard]] constexpr uint64_t id() const noexcept { return node_id_; }
     [[nodiscard]] std::string_view hostname() const noexcept { return hostname_; }
+    [[nodiscard]] constexpr bool is_active() const noexcept { return state_ == NodeState::Active; }
+
+    [[nodiscard]] constexpr std::string_view describe_state() const noexcept {
+        switch (state_) {
+            case NodeState::Initializing:
+                return "INITIALIZING";
+            case NodeState::Active:
+                return "ACTIVE";
+            case NodeState::Suspended:
+                return "SUSPENDED";
+            default:
+                return "FAILED";
+        }
+    }
 
     void record_metric(T metric) {
         payload_history_.emplace_back(std::move(metric));
@@ -77,10 +93,11 @@ int main(int argc, char* argv[]) {
     primary_node->record_metric("memory_used: 1024MB");
     primary_node->synchronize();
 
-    if (auto metric = primary_node->latest_metric(); metric.has_value()) {
+    if (auto metric = primary_node->latest_metric(); LIKELY(metric.has_value())) {
         std::cout << "[Node " << primary_node->id() << " @ " << primary_node->hostname()
-                  << "] Latest: " << *metric << "\n";
+                  << " (" << primary_node->describe_state() << ")] Latest: " << *metric << "\n";
     }
 
     return 0;
 }
+

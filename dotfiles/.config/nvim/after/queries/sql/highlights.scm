@@ -17,3 +17,14 @@
 (cte
   (identifier) @type)
 
+;; Map END in CASE ... END expressions to @keyword.conditional (Solarized Yellow #B58900) matching CASE/WHEN/THEN/ELSE
+((keyword_end) @keyword.conditional
+  (#set! "priority" 105))
+
+;; Map INTERVAL literal payload ('30 days') to @string (Solarized Cyan #2AA198) while keeping INTERVAL keyword as @type.builtin
+(interval) @string
+(interval
+  (keyword_interval) @type.builtin
+  (#set! "priority" 105))
+
+

@@ -1,0 +1,171 @@
+// =============================================================================
+// Distributed telemetry and gateway routing schema demonstrating Protocol
+// Buffers (proto3) syntax: packages, imports, file/message/field options,
+// enums, nested messages, maps, oneofs, reserved ranges, extensions, and gRPC.
+// =============================================================================
+
+syntax = "proto3";
+
+package telemetry.v1;
+
+import "common/v1/duration.proto";
+import public "common/v1/timestamp.proto";
+import weak "common/v1/legacy_trace.proto";
+
+option go_package = "example.com/solarized-gateway/gen/telemetry/v1;telemetryv1";
+option java_package = "com.example.gateway.telemetry.v1";
+option java_multiple_files = true;
+option optimize_for = SPEED;
+option (telemetry.v1.schema_metadata) = {
+  service_owner: "platform-observability"
+  schema_version: 3
+  strict_validation: true
+  sampling_floor: 0.05
+};
+
+// Operational lifecycle state of an edge gateway node.
+enum NodeState {
+  option allow_alias = true;
+
+  NODE_STATE_UNSPECIFIED = 0;
+  NODE_STATE_STARTING = 1;
+  NODE_STATE_ACTIVE = 2;
+  NODE_STATE_READY = 2 [(telemetry.v1.enum_state_meta) = { label: "ready-alias" service: "gateway" }];
+  NODE_STATE_DRAINING = 3;
+  NODE_STATE_OFFLINE = -1 [deprecated = true];
+}
+
+// Wire compression codec negotiated between gateway and collector.
+enum CompressionCodec {
+  COMPRESSION_CODEC_UNSPECIFIED = 0;
+  COMPRESSION_CODEC_NONE = 1;
+  COMPRESSION_CODEC_ZSTD = 2;
+  COMPRESSION_CODEC_LZ4 = 3;
+}
+
+// Custom extension declarations for schema governance annotations.
+extend common.v1.FileOptions {
+  optional SchemaMetadata schema_metadata = 50001;
+}
+
+extend common.v1.FieldOptions {
+  optional FieldValidationRule validation = 50002;
+}
+
+extend common.v1.EnumValueOptions {
+  optional EnumStateMetadata enum_state_meta = 50003;
+}
+
+message EnumStateMetadata {
+  string label = 1;
+  string service = 2;
+}
+
+message SchemaMetadata {
+  string service_owner = 1;
+  int32 schema_version = 2;
+  bool strict_validation = 3;
+  double sampling_floor = 4;
+}
+
+message FieldValidationRule {
+  bool required_non_empty = 1;
+  int64 min = 2;
+  int64 max = 3;
+  string pattern = 4;
+}
+
+/*
+ * TODO: Migrate legacy histogram buckets to exponential native histograms
+ * NOTE: Field tags 10 through 15 are permanently retired from v2 wire format.
+ */
+message TelemetryBatch {
+  reserved 2, 10 to 15, 99 to max;
+  reserved "legacy_host", "raw_counters";
+
+  string batch_id = 1 [(telemetry.v1.validation).required_non_empty = true];
+  uint64 sequence_num = 3 [json_name = "seqNum"];
+  common.v1.Timestamp recorded_at = 4;
+  NodeState node_state = 5;
+  CompressionCodec codec = 6;
+  bool is_compressed = 7;
+  double compression_ratio = 8;
+
+  message SourceNode {
+    string hostname = 1;
+    string region = 2;
+    uint32 worker_threads = 3;
+    fixed64 instance_fingerprint = 4;
+    sint32 clock_drift_ms = 5;
+  }
+
+  SourceNode source_node = 9;
+  map<string, string> resource_labels = 16;
+  map<uint32, EndpointQuota> route_quotas = 17;
+  repeated MetricPoint metrics = 18;
+
+  oneof payload {
+    HistogramSummary histogram = 19;
+    SpanEventBatch trace_events = 20;
+    bytes raw_frame = 21 [deprecated = true];
+  }
+}
+
+message EndpointQuota {
+  string route_prefix = 1;
+  uint64 max_requests_per_sec = 2;
+  double burst_multiplier = 3;
+  common.v1.Duration window = 4;
+}
+
+message MetricPoint {
+  string name = 1;
+  common.v1.Timestamp observed_at = 2;
+  map<string, string> dimensions = 3;
+
+  oneof value {
+    int64 counter_value = 4;
+    double gauge_value = 5;
+    string text_annotation = 6;
+  }
+}
+
+message HistogramSummary {
+  uint64 sample_count = 1;
+  double sum_value = 2;
+  repeated double quantile_bounds = 3 [packed = true];
+  repeated uint64 bucket_counts = 4 [packed = true];
+}
+
+message SpanEventBatch {
+  bytes trace_id = 1;
+  string root_operation = 2;
+  uint32 dropped_spans = 3;
+  string diagnostic_note = 4 [(telemetry.v1.validation).pattern = "^[a-z0-9_:\\-]+\\n?$"];
+}
+
+message IngestResponse {
+  string ack_id = 1;
+  uint32 accepted_points = 2;
+  uint32 rejected_points = 3;
+  common.v1.Duration processing_latency = 4;
+}
+
+message SnapshotRequest {
+  string region_filter = 1;
+  uint32 limit = 2 [(telemetry.v1.validation).max = 5000];
+  bool include_draining = 3;
+}
+
+// gRPC service interface for edge telemetry ingestion and live inspection.
+service TelemetryIngestionService {
+  rpc IngestBatch (TelemetryBatch) returns (IngestResponse);
+
+  rpc StreamMetrics (stream TelemetryBatch) returns (stream IngestResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+
+  rpc QuerySnapshot (SnapshotRequest) returns (TelemetryBatch) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}

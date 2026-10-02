@@ -1,0 +1,228 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Lua 5.4 / LuaJIT Syntax
+# Enforces the Universal Semantic Color Contract:
+# - Shebang in Solarized Orange (keyword.control.directive.shebang.lua)
+# - Comments & Doc Comments in Base01 Dim (comment.line.double-dash.lua, comment.block.lua)
+# - Declaration keywords (local, function, and function-closing end) in Solarized Green
+# - Word operators (and, or, not) in Solarized Green (keyword.operator.logical.lua)
+# - Control flow (if, then, elseif, else, for, in, while, do, repeat, until, return, break, goto, and block-closing end) in Solarized Yellow
+# - Lua 5.4 variable attributes (<const>, <close>) unified in Solarized Violet (storage.modifier.attribute.lua)
+# - Function & method declarations in Solarized Blue (entity.name.function.lua)
+# - Function & method invocations, standard library tables (string, math, table, io, coroutine), and module tables (M) in calm Base0 Grey
+# - Metamethods (__index, __tostring, __call, __close, etc.) in Solarized Magenta (support.function.metamethod.lua)
+# - Sentinels, booleans, receivers, and globals (nil, true, false, self, _G, _VERSION) in Solarized Magenta
+# - Multi-character ALL_CAPS constants in Solarized Magenta (variable.other.constant.lua)
+# - Numbers (hex, float, integer) in Solarized Magenta (constant.numeric.lua)
+# - Strings, multiline [[...]] strings, escape sequences, and format specifiers in Solarized Cyan
+# - Goto / ::label:: identifiers in Base01 Dim (entity.name.label.lua)
+name: Lua
+scope: source.lua
+version: 2
+
+file_extensions:
+  - lua
+  - rockspec
+
+first_line_match: |-
+  (?xi:
+    ^ \#! .*? \b(lua|luajit)\b
+  )
+
+variables:
+  ident: '[a-zA-Z_][a-zA-Z0-9_]*'
+  metamethod: '__(?:add|band|bnot|bor|bxor|call|close|concat|div|eq|gc|idiv|index|le|len|lt|metatable|mod|mode|mul|name|newindex|pairs|pow|shl|shr|sub|tostring|unm)'
+  all_caps: '[A-Z][A-Z0-9_]+'
+
+contexts:
+  main:
+    - include: shebang
+    - include: statements
+
+  shebang:
+    - match: '^#!.*$'
+      scope: keyword.control.directive.shebang.lua
+
+  statements:
+    - include: comments
+    - include: multiline-strings
+    - include: strings
+    - include: attributes
+    - include: labels
+    - include: function-declarations
+    - include: control-blocks
+    - include: keywords-and-constants
+    - include: numbers
+    - include: operators-and-punctuation
+    - include: identifiers
+
+  comments:
+    # Block comments --[[ ... ]] or --[=[ ... ]=]
+    - match: '--\[(=*)\['
+      scope: punctuation.definition.comment.begin.lua
+      push:
+        - meta_scope: comment.block.lua
+        - match: '\]\1\]'
+          scope: punctuation.definition.comment.end.lua
+          pop: true
+    # Documentation line comments ---
+    - match: '---.*$'
+      scope: comment.line.double-dash.documentation.lua
+    # Standard line comments --
+    - match: '--.*$'
+      scope: comment.line.double-dash.lua
+
+  multiline-strings:
+    - match: '\[(=*)\['
+      scope: punctuation.definition.string.begin.lua
+      push:
+        - meta_scope: string.quoted.other.multiline.lua
+        - match: '\]\1\]'
+          scope: punctuation.definition.string.end.lua
+          pop: true
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.lua
+      push:
+        - meta_scope: string.quoted.double.lua
+        - match: '"'
+          scope: punctuation.definition.string.end.lua
+          pop: true
+        - include: string-escapes
+    - match: "'"
+      scope: punctuation.definition.string.begin.lua
+      push:
+        - meta_scope: string.quoted.single.lua
+        - match: "'"
+          scope: punctuation.definition.string.end.lua
+          pop: true
+        - include: string-escapes
+
+  string-escapes:
+    - match: '\\(?:[abfnrtv\\"'']|z\s*|\r?\n|\d{1,3}|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\})'
+      scope: constant.character.escape.lua
+    - match: '%(?:[-+#0 ]*\d*(?:\.\d+)?[cdiouxXeEfgGqsaAp%]|\[[^\]]*\]|[a-zA-Z0-9%.+-])'
+      scope: constant.other.placeholder.lua
+
+  attributes:
+    - match: '<(?:const|close)>'
+      scope: storage.modifier.attribute.lua
+
+  labels:
+    - match: '(::)\s*({{ident}})\s*(::)'
+      captures:
+        1: punctuation.definition.label.lua
+        2: entity.name.label.lua
+        3: punctuation.definition.label.lua
+    - match: '\b(goto)\s+({{ident}})\b'
+      captures:
+        1: keyword.control.goto.lua
+        2: entity.name.label.lua
+
+  function-declarations:
+    # local function foo(...)
+    - match: '\b(local)\s+(function)\s+({{ident}})\b'
+      captures:
+        1: storage.modifier.local.lua
+        2: keyword.declaration.function.lua
+        3: entity.name.function.lua
+      push: function-block
+    # function T:__tostring(...) or function a.b.__index(...)
+    - match: '\b(function)\s+({{ident}}(?:\.{{ident}})*)([.:])({{metamethod}})\b'
+      captures:
+        1: keyword.declaration.function.lua
+        2: variable.other.lua
+        3: punctuation.accessor.lua
+        4: support.function.metamethod.lua
+      push: function-block
+    # function T:method(...) or function a.b.func(...)
+    - match: '\b(function)\s+({{ident}}(?:\.{{ident}})*)([.:])({{ident}})\b'
+      captures:
+        1: keyword.declaration.function.lua
+        2: variable.other.lua
+        3: punctuation.accessor.lua
+        4: entity.name.function.lua
+      push: function-block
+    # function foo(...)
+    - match: '\b(function)\s+({{ident}})\b'
+      captures:
+        1: keyword.declaration.function.lua
+        2: entity.name.function.lua
+      push: function-block
+    # __close = function(...)
+    - match: '\b({{metamethod}})\s*(=)\s*\b(function)\b'
+      captures:
+        1: support.function.metamethod.lua
+        2: keyword.operator.assignment.lua
+        3: keyword.declaration.function.lua
+      push: function-block
+    # field = function(...)
+    - match: '\b({{ident}})\s*(=)\s*\b(function)\b'
+      captures:
+        1: entity.name.function.lua
+        2: keyword.operator.assignment.lua
+        3: keyword.declaration.function.lua
+      push: function-block
+    # Anonymous function(...)
+    - match: '\b(function)\b'
+      captures:
+        1: keyword.declaration.function.lua
+      push: function-block
+
+  function-block:
+    - match: '\b(end)\b'
+      scope: keyword.declaration.function.lua
+      pop: true
+    - include: statements
+
+  control-blocks:
+    - match: '\b(if|do)\b'
+      scope: keyword.control.lua
+      push: control-block
+
+  control-block:
+    - match: '\b(end)\b'
+      scope: keyword.control.lua
+      pop: true
+    - include: statements
+
+  keywords-and-constants:
+    - match: '\b(then|elseif|else|for|in|while|repeat|until|return|break|goto|end)\b'
+      scope: keyword.control.lua
+    - match: '\b(local)\b'
+      scope: storage.modifier.local.lua
+    - match: '\b(and|or|not)\b'
+      scope: keyword.operator.logical.lua
+    - match: '\b({{metamethod}})\b'
+      scope: support.function.metamethod.lua
+    - match: '\b(nil)\b'
+      scope: constant.language.null.lua
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.lua
+    - match: '\b(self)\b'
+      scope: variable.language.self.lua
+    - match: '\b(_G|_VERSION)\b'
+      scope: constant.language.builtin.lua
+    - match: '\b({{all_caps}})\b'
+      scope: variable.other.constant.lua
+
+  numbers:
+    - match: '\b0[xX][0-9a-fA-F]+(?:\.[0-9a-fA-F]*)?(?:[pP][-+]?\d+)?\b'
+      scope: constant.numeric.hex.lua
+    - match: '\b\d+(?:\.\d+)?(?:[eE][-+]?\d+)?\b'
+      scope: constant.numeric.lua
+
+  operators-and-punctuation:
+    - match: '\.{3}'
+      scope: variable.parameter.vararg.lua
+    - match: '\.{2}|==|~=|<=|>=|<<|>>|//|[-+*/%^#=<>&|~]'
+      scope: keyword.operator.lua
+    - match: '[(){}\[\]]'
+      scope: punctuation.section.brackets.lua
+    - match: '[;,:.\s]'
+      scope: punctuation.separator.lua
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.lua

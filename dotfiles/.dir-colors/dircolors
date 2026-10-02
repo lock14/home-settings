@@ -167,6 +167,9 @@ EXEC 32
 .go 00
 .py 00
 .java 00
+.kt 00
+.kts 00
+.swift 00
 .js 00
 .ts 00
 .sh 00
@@ -181,6 +184,36 @@ EXEC 32
 .css 00
 .sql 00
 .tf 00
+.properties 00
+.proto 00
+.textproto 00
+.pbtxt 00
+.textpb 00
+.prototxt 00
+.zig 00
+.cs 00
+.scala 00
+.sc 00
+.rb 00
+.graphql 00
+.graphqls 00
+.gql 00
+.bzl 00
+.bazel 00
+.rego 00
+.lua 00
+.mk 00
+.ex 00
+.exs 00
+.hs 00
+.ml 00
+.mli 00
+.clj 00
+.cljs 00
+.cljc 00
+.edn 00
+.diff 00
+.patch 00
 
 # Security, Crypto & Keys (Solarized Magenta #D33682 / ANSI 35)
 .gpg 35

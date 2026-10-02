@@ -38,4 +38,15 @@
     "UnicodeWarning" "BytesWarning" "ResourceWarning")
   (#set! priority 125))
 
+; In `async def`, `async` is a declaration modifier (Solarized Green @keyword.function #859900) matching bat
+(function_definition
+  "async" @keyword.function
+  (#set! "priority" 105))
+
+; Structural pattern matching wildcard `_` in `case _:` remains calm Base0 Grey (@variable #839496)
+((case_pattern
+  "_" @variable)
+  (#set! "priority" 105))
+
+
 

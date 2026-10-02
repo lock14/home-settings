@@ -1,0 +1,188 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Zig Syntax
+# Supports Modern Zig (0.13 / 0.14):
+# - @import / @cImport builtins and imported module bindings in Solarized Violet
+# - Function declarations (fn <name>) in Solarized Blue
+# - Structural keywords (const, var, pub, comptime, struct, enum, union, error, test)
+#   and built-in primitive types (u8..u128, i8..i128, usize, f64, bool, void, type) in Solarized Green
+# - Control flow & cleanup execution pathways (if, else, switch, while, for, return,
+#   break, continue, try, catch, defer, errdefer) in Solarized Yellow
+# - Strings and character literals in Solarized Cyan
+# - Numbers, booleans, null, undefined, self, enum shorthand (.info, .critical),
+#   and SCREAMING_SNAKE_CASE constants in Solarized Magenta
+# - User types, struct field initializers (.id = 1), @builtins, and identifiers in calm Base0 Grey
+name: Zig
+scope: source.zig
+version: 2
+
+file_extensions:
+  - zig
+  - zon
+
+variables:
+  ident: '[[:alpha:]_][[:alnum:]_]*'
+  pascal_ident: '\b[[:upper:]][[:alnum:]_]*\b'
+  const_ident: '\b[[:upper:]][[:upper:][:digit:]_]+\b'
+  primitive_type: '\b(?:i8|u8|i16|u16|i32|u32|i64|u64|i128|u128|isize|usize|c_char|c_short|c_ushort|c_int|c_uint|c_long|c_ulong|c_longlong|c_ulonglong|c_longdouble|f16|f32|f64|f80|f128|bool|anyopaque|void|noreturn|type|anyerror|comptime_int|comptime_float|anyframe|anytype|[iu][0-9]+)\b'
+  modifier: '\b(?:pub|export|extern|inline|noinline|comptime|threadlocal|allowzero|align|callconv|linksection|packed|volatile)\b'
+  declaration_keyword: '\b(?:const|var|fn|struct|enum|union|opaque|error|test|usingnamespace|asm)\b'
+  control_flow: '\b(?:if|else|switch|while|for|return|break|continue|try|catch|defer|errdefer|nosuspend|suspend|resume|async|await)\b'
+  word_operator: '\b(?:and|or|orelse)\b'
+  hex_digit: '[0-9a-fA-F_]'
+
+contexts:
+  main:
+    - include: comments
+    - include: imports
+    - include: function-declaration
+    - include: declarations
+    - include: statements
+    - include: expressions
+
+  comments:
+    # Module-level doc comments (//!)
+    - match: '//!.*$'
+      scope: comment.line.documentation.module.zig
+    # Doc comments (///)
+    - match: '///.*$'
+      scope: comment.line.documentation.zig
+    # Standard line comments (//)
+    - match: '//.*$'
+      scope: comment.line.double-slash.zig
+
+  imports:
+    # const std = @import("std");
+    - match: '\b(const)\s+({{ident}})\s*(=)\s*(@(?:import|cImport))\b'
+      captures:
+        1: storage.type.const.zig
+        2: entity.name.namespace.zig
+        3: keyword.operator.assignment.zig
+        4: keyword.control.import.zig
+    # Standalone @import / @cImport
+    - match: '(?<![[:alnum:]_])@(?:import|cImport)\b'
+      scope: keyword.control.import.zig
+
+  function-declaration:
+    - match: '\b(fn)\s+({{ident}})\b'
+      captures:
+        1: storage.type.function.zig
+        2: entity.name.function.zig
+
+  declarations:
+    - match: '{{modifier}}'
+      scope: storage.modifier.zig
+    - match: '{{declaration_keyword}}'
+      scope: storage.type.zig
+
+  statements:
+    - match: '{{control_flow}}'
+      scope: keyword.control.zig
+    - match: '{{word_operator}}'
+      scope: keyword.operator.word.zig
+
+  expressions:
+    - include: numbers
+    - include: strings
+    - include: builtins
+    - include: field-initializers-and-enum-literals
+    - include: constants
+    - include: types
+    - include: function-calls
+    - include: identifiers
+    - include: operators-and-delimiters
+
+  numbers:
+    # Hexadecimal float or integer
+    - match: '\b0[xX]{{hex_digit}}+(?:\.{{hex_digit}}+)?(?:[pP][+-]?[0-9_]+)?\b'
+      scope: constant.numeric.hexadecimal.zig
+    # Octal integer
+    - match: '\b0[oO][0-7_]+\b'
+      scope: constant.numeric.octal.zig
+    # Binary integer
+    - match: '\b0[bB][01_]+\b'
+      scope: constant.numeric.binary.zig
+    # Decimal float
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+\b'
+      scope: constant.numeric.float.zig
+    # Decimal integer
+    - match: '\b[0-9][0-9_]*\b'
+      scope: constant.numeric.integer.decimal.zig
+
+  strings:
+    # Multi-line raw string literal (\\...)
+    - match: '\\\\.*$'
+      scope: string.quoted.other.zig
+    # Double-quoted string literal
+    - match: '"'
+      scope: punctuation.definition.string.begin.zig
+      push:
+        - meta_scope: string.quoted.double.zig
+        - match: '"'
+          scope: punctuation.definition.string.end.zig
+          pop: true
+        - match: '\\(?:[nrt\\''"]|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\})'
+          scope: constant.character.escape.zig
+    # Single-quoted character literal
+    - match: "'"
+      scope: punctuation.definition.string.begin.zig
+      push:
+        - meta_scope: string.quoted.single.zig
+        - match: "'"
+          scope: punctuation.definition.string.end.zig
+          pop: true
+        - match: '\\(?:[nrt\\''"]|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\})'
+          scope: constant.character.escape.zig
+
+  builtins:
+    # Built-in compiler functions (@This, @as, @intCast, @memset, etc.) in calm Base0 Grey
+    - match: '(?<![[:alnum:]_])@{{ident}}\b'
+      scope: support.function.builtin.zig
+
+  field-initializers-and-enum-literals:
+    # Struct field initializer (.id = 1, .metric = 0.42) in calm Base0 Grey
+    - match: '(?<![[:alnum:]_)\].])(\.)({{ident}})(?=\s*=[^=>])'
+      captures:
+        1: punctuation.accessor.dot.zig
+        2: variable.other.member.zig
+    # Anonymous enum literal (.info, .warn, .critical, .metric =>) in Solarized Magenta
+    - match: '(?<![[:alnum:]_)\].])(\.)({{ident}})\b'
+      captures:
+        1: punctuation.accessor.dot.zig
+        2: constant.other.enum.zig
+
+  constants:
+    - match: '\b(?:true|false)\b'
+      scope: constant.language.boolean.zig
+    - match: '\b(?:null|undefined)\b'
+      scope: constant.language.zig
+    - match: '\bself\b'
+      scope: variable.language.zig
+    - match: '\b_\b'
+      scope: constant.language.underscore.zig
+    - match: '{{const_ident}}'
+      scope: variable.other.constant.zig
+
+  types:
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.zig
+    - match: '{{pascal_ident}}'
+      scope: support.type.user-defined.zig
+
+  function-calls:
+    - match: '(\.)\s*({{ident}})\s*(?=\()'
+      captures:
+        1: punctuation.accessor.dot.zig
+        2: variable.function.zig
+    - match: '\b({{ident}})\s*(?=\()'
+      scope: variable.function.zig
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.zig
+
+  operators-and-delimiters:
+    - match: '=>|\.\.\.|\.\.|==|!=|<=|>=|<<\|?|>>|\+\+|\*\*|\+%|-%|\*%|\+\||-\||\*\|&=|\|=|\^=|\+=|-=|\*=|/=|%=|[+\-*/%&|^~<>=!?]'
+      scope: keyword.operator.zig
+    - match: '[.,;:()\[\]{}]'
+      scope: punctuation.separator.zig

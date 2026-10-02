@@ -130,6 +130,18 @@ wait_for_nvim_socket() {
     return 1
 }
 
+# Run headless Neovim safely with stdin closed (</dev/null), a separate
+# trailing -c "qall!" (so Ex/Lua errors in earlier -c commands never leave
+# Neovim hanging in its event loop), and a bounded timeout.
+run_nvim_headless() {
+    local timeout_sec="${NVIM_HEADLESS_TIMEOUT:-30}"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$timeout_sec" nvim --headless "$@" -c "qall!" </dev/null
+    else
+        nvim --headless "$@" -c "qall!" </dev/null
+    fi
+}
+
 parse_subshell_results() {
     local pass_prefix="${1:-}"
     local fail_prefix="${2:-}"

@@ -58,12 +58,6 @@ if [ "${1:-}" != "" ]; then
   LENGTH="$1"
 fi
 
-if [ "$LENGTH" = "" ]; then
-  echo "error: a length must be provided" >&2
-  usage >&2
-  exit 1
-fi
-
 INTEGER='^[0-9]+$'
 if ! [[ $LENGTH =~ $INTEGER ]] || [ "$LENGTH" -le 0 ]; then
    echo "error: $LENGTH is not a valid positive length" >&2

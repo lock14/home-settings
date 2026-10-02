@@ -301,7 +301,7 @@ contexts:
     - match: '(<<-?)\s*(''([a-zA-Z0-9_]+)''|"([a-zA-Z0-9_]+)")'
       captures:
         1: keyword.operator.redirect.shell
-        2: string.quoted.single.shell
+        2: keyword.declaration.heredoc.shell
         3: keyword.control.heredoc-token.shell
         4: keyword.control.heredoc-token.shell
       push:
@@ -411,6 +411,10 @@ contexts:
         # Nested expansions or strings inside defaults
         - include: strings
         - include: parameter-expansion
+        - match: '[\[\]]'
+          scope: punctuation.definition.bracket.shell
+        - match: '[.\-]+'
+          scope: variable.other.shell
 
     # Simple ALL_CAPS variable: $NAME
     - match: '(\$)({{all_caps}})'

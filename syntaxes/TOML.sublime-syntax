@@ -50,7 +50,7 @@ contexts:
             1: punctuation.definition.table.array.end.toml
           pop: true
         - match: '\.'
-          scope: punctuation.separator.table.toml
+          scope: punctuation.separator.dot.toml
         - match: '"'
           scope: punctuation.definition.key.begin.toml entity.name.section.table.toml
           push:
@@ -82,7 +82,7 @@ contexts:
             1: punctuation.definition.table.end.toml
           pop: true
         - match: '\.'
-          scope: punctuation.separator.table.toml
+          scope: punctuation.separator.dot.toml
         - match: '"'
           scope: punctuation.definition.key.begin.toml entity.name.section.table.toml
           push:

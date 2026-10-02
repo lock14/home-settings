@@ -1,0 +1,144 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Haskell Syntax
+# Supports Modern GHC 9.8 / Haskell2021:
+# - {-# LANGUAGE ... #-} pragmas in Solarized Orange
+# - module ... where and import qualified ... as ... module names in Solarized Violet
+# - data / newtype / type / class / instance / deriving / where / let / in / forall in Solarized Green
+# - Scalar primitive types (Int, Integer, Double, Float, Bool, Char, String) in Solarized Green
+# - Custom types, typeclasses, and data constructors (NodeId, Severity, MetricSample, Maybe, Either, IO, Just) in calm Base0 Grey
+# - Function type signatures (fn :: ...) and function definitions (fn ... =) in Solarized Blue
+# - Control flow (if, then, else, case, of, do, mdo) in Solarized Yellow
+# - Booleans (True, False, otherwise), Nothing, and numeric literals in Solarized Magenta
+name: Haskell
+scope: source.haskell
+version: 2
+
+file_extensions:
+  - hs
+  - lhs
+
+variables:
+  ident: "[a-z_][a-zA-Z0-9_']*"
+  type_ident: "[A-Z][a-zA-Z0-9_']*"
+  module_path: "[A-Z][a-zA-Z0-9_']*(?:\\.[A-Z][a-zA-Z0-9_']*)*"
+  primitive_type: '\b(?:Int|Int8|Int16|Int32|Int64|Integer|Word|Word8|Word16|Word32|Word64|Float|Double|Bool|Char|String)\b'
+
+contexts:
+  main:
+    - include: pragmas
+    - include: comments
+    - include: module-header
+    - include: import-statement
+    - include: function-signatures-and-definitions
+    - include: strings
+    - include: constants-and-numbers
+    - include: keywords
+    - include: types-and-constructors
+    - include: identifiers
+    - include: operators-and-punctuation
+
+  pragmas:
+    - match: '\{-#.*?#-\}'
+      scope: meta.preprocessor.pragma.haskell
+
+  comments:
+    - match: '--.*$'
+      scope: comment.line.double-dash.haskell
+    - match: '\{-(?!#)'
+      scope: punctuation.definition.comment.begin.haskell
+      push:
+        - meta_scope: comment.block.haskell
+        - match: '-\}'
+          scope: punctuation.definition.comment.end.haskell
+          pop: true
+        - include: comments
+
+  module-header:
+    - match: '^\s*(module)\b\s+({{module_path}})'
+      captures:
+        1: keyword.control.import.haskell
+        2: entity.name.namespace.haskell
+
+  import-statement:
+    - match: '^\s*(import)\b(?:\s+(qualified)\b)?\s+({{module_path}})(?:\s+(as)\b\s+({{module_path}}))?'
+      captures:
+        1: keyword.control.import.haskell
+        2: keyword.control.import.haskell
+        3: entity.name.namespace.haskell
+        4: keyword.other.haskell
+        5: entity.name.namespace.haskell
+
+  function-signatures-and-definitions:
+    # Type signature at top-level or indented in class/where block (e.g. clampScore :: ... or measureScore :: ...)
+    - match: '^(\s*)(?!\b(?:module|import|data|newtype|type|class|instance|deriving|where|let|in|if|then|else|case|of|do|mdo|forall|foreign|infix|infixl|infixr|default)\b)({{ident}})\s*(::)(?![:!#$%&*+./<=>?@\\^|~-])'
+      captures:
+        2: entity.name.function.haskell
+        3: keyword.operator.double-colon.haskell
+    # Top-level function definition clause (e.g. clampScore lower upper val or ingestStream primaryNode batch = do)
+    - match: '^(?!\b(?:module|import|data|newtype|type|class|instance|deriving|where|let|in|if|then|else|case|of|do|mdo|forall|foreign|infix|infixl|infixr|default)\b)({{ident}})\b(?=\s+(?:[a-zA-Z0-9_''()\[\]{}"-]|=\s|\|))'
+      captures:
+        1: entity.name.function.haskell
+    # Indented class instance method definition (2 spaces indent, e.g. measureScore sample = ...)
+    - match: '^([ ]{2})(?!\b(?:module|import|data|newtype|type|class|instance|deriving|where|let|in|if|then|else|case|of|do|mdo|forall|foreign|infix|infixl|infixr|default)\b)({{ident}})\b(?=\s+[a-z_][a-zA-Z0-9_'']*\s*=)'
+      captures:
+        2: entity.name.function.haskell
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.haskell
+      push:
+        - meta_scope: string.quoted.double.haskell
+        - match: '"'
+          scope: punctuation.definition.string.end.haskell
+          pop: true
+        - match: '\\(?:[abfnrtv\\"'']|x[0-9a-fA-F]+|o[0-7]+|[0-9]+)'
+          scope: constant.character.escape.haskell
+    - match: '''(?:[^''\\]|\\(?:[abfnrtv\\"'']|x[0-9a-fA-F]+|o[0-7]+|[0-9]+))'''
+      scope: string.quoted.single.haskell
+
+  constants-and-numbers:
+    - match: '\b(True|False|Nothing|otherwise)\b'
+      scope: constant.language.haskell
+    - match: '\b0[xX][0-9a-fA-F_]+\b'
+      scope: constant.numeric.hex.haskell
+    - match: '\b0[oO][0-7_]+\b'
+      scope: constant.numeric.octal.haskell
+    - match: '\b0[bB][01_]+\b'
+      scope: constant.numeric.binary.haskell
+    - match: '\b[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][+-]?[0-9_]+)?\b'
+      scope: constant.numeric.float.haskell
+    - match: '\b[0-9][0-9_]*\b'
+      scope: constant.numeric.integer.haskell
+
+  keywords:
+    # Control flow keywords (Solarized Yellow)
+    - match: '\b(if|then|else|case|of|do|mdo|proc|rec)\b'
+      scope: keyword.control.conditional.haskell
+    # Structural & declaration keywords (Solarized Green)
+    - match: '\b(data|newtype|type|class|instance|deriving|where|let|in|forall|foreign|infix|infixl|infixr|family|role|pattern|default|as|hiding)\b'
+      scope: keyword.declaration.haskell
+
+  types-and-constructors:
+    # Scalar primitive types (Solarized Green)
+    - match: '{{primitive_type}}'
+      scope: storage.type.primitive.haskell
+    # Qualified module prefix in expressions/types (e.g. Map.lookup, Map.Map, Map.empty) in calm Base0
+    - match: '\b({{type_ident}})(\.)({{ident}}|{{type_ident}})'
+      captures:
+        1: support.type.module-prefix.haskell
+        2: punctuation.accessor.dot.haskell
+        3: variable.other.member.haskell
+    # Custom types, typeclasses, and data constructors (calm Base0 Grey)
+    - match: '\b{{type_ident}}\b'
+      scope: support.type.haskell
+
+  identifiers:
+    - match: '\b{{ident}}\b'
+      scope: variable.other.readwrite.haskell
+
+  operators-and-punctuation:
+    - match: '::|->|<-|=>|\.\.|&&|\|\||==|/=|<=|>=|\+\+|[+\-*/=<>|.$:!%&^~@\\]+'
+      scope: keyword.operator.haskell
+    - match: '[,;()\[\]{}]'
+      scope: punctuation.separator.haskell

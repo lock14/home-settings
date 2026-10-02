@@ -68,6 +68,65 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
     end,
 })
 
+-- Markdown Prose Readability (Word-Boundary Soft-Wrapping without Mutating Code Buffers)
+vim.api.nvim_create_autocmd("FileType", {
+    group = vim.api.nvim_create_augroup("SolarizedMarkdownReadability", { clear = true }),
+    pattern = { "markdown" },
+    callback = function()
+        vim.opt_local.wrap = true
+        vim.opt_local.linebreak = true
+        vim.opt_local.breakindent = true
+    end,
+})
+
+-- Protocol Buffers, Textproto, GraphQL, Starlark/Bazel, OPA Rego, Dockerfile & Make Filetype & Tree-sitter Registration
+if vim.filetype and vim.filetype.add then
+    vim.filetype.add({
+        extension = {
+            proto = "proto",
+            textproto = "pbtxt",
+            pbtxt = "pbtxt",
+            textpb = "pbtxt",
+            prototxt = "pbtxt",
+            graphql = "graphql",
+            graphqls = "graphql",
+            gql = "graphql",
+            bzl = "bzl",
+            bazel = "bzl",
+            star = "bzl",
+            rego = "rego",
+            Dockerfile = "dockerfile",
+            dockerfile = "dockerfile",
+            Containerfile = "dockerfile",
+            containerfile = "dockerfile",
+            mk = "make",
+            mak = "make",
+        },
+        filename = {
+            ["Dockerfile"] = "dockerfile",
+            ["dockerfile"] = "dockerfile",
+            ["Containerfile"] = "dockerfile",
+            ["containerfile"] = "dockerfile",
+            ["Makefile"] = "make",
+            ["makefile"] = "make",
+            ["GNUmakefile"] = "make",
+        },
+        pattern = {
+            [".*%.pb%.txt"] = "pbtxt",
+            [".*%.proto%.text"] = "pbtxt",
+            ["[Dd]ockerfile%..*"] = "dockerfile",
+            ["[Cc]ontainerfile%..*"] = "dockerfile",
+        },
+    })
+end
+if vim.treesitter and vim.treesitter.language and vim.treesitter.language.register then
+    pcall(vim.treesitter.language.register, "properties", { "jproperties", "properties" })
+    pcall(vim.treesitter.language.register, "textproto", { "pbtxt", "textproto", "textpb", "prototxt" })
+    pcall(vim.treesitter.language.register, "graphql", { "graphql", "graphqls", "gql" })
+    pcall(vim.treesitter.language.register, "starlark", { "bzl", "starlark", "bazel" })
+    pcall(vim.treesitter.language.register, "rego", { "rego" })
+end
+
 -- System Clipboard Integration (GNOME Terminal / X11 / Wayland / macOS + Native Neovim OSC 52)
 if vim.fn.has("linux") == 1 then
     local in_ssh = (vim.env.SSH_CONNECTION ~= nil and vim.env.SSH_CONNECTION ~= "")
@@ -177,9 +236,13 @@ map({ "n", "i", "v", "t" }, "<M-j>", smart_tmux_nav("j", "D"), { desc = "Move to
 map({ "n", "i", "v", "t" }, "<M-k>", smart_tmux_nav("k", "U"), { desc = "Move to upper split or tmux pane" })
 map({ "n", "i", "v", "t" }, "<M-l>", smart_tmux_nav("l", "R"), { desc = "Move to right split or tmux pane" })
 
--- Fast Buffer Cycling in Normal Mode
+-- Fast Buffer Cycling & Side Mouse Button (Mouse4/Mouse5) Jumplist Navigation
 map("n", "H", "<cmd>bprevious<CR>", { silent = true, desc = "Previous buffer" })
 map("n", "L", "<cmd>bnext<CR>", { silent = true, desc = "Next buffer" })
+map({ "n", "v" }, "<X1Mouse>", "<C-o>", { silent = true, desc = "Jump back in jumplist (Mouse4)" })
+map({ "n", "v" }, "<X2Mouse>", "<C-i>", { silent = true, desc = "Jump forward in jumplist (Mouse5)" })
+map("i", "<X1Mouse>", "<C-\\><C-o><C-o>", { silent = true, desc = "Jump back in jumplist (Mouse4)" })
+map("i", "<X2Mouse>", "<C-\\><C-o><C-i>", { silent = true, desc = "Jump forward in jumplist (Mouse5)" })
 
 -- Stay in indent mode when shifting
 map("v", "<", "<gv", { desc = "Indent left" })
@@ -436,7 +499,7 @@ lazy.setup({
                 parameters = { italic = false },
             },
             on_highlights = function(colors, _)
-                return {
+                local hl = {
                     -- =========================================================================
                     -- Non-Language-Specific UI & Framing Architecture (Converged Solarized Dark)
                     -- =========================================================================
@@ -463,14 +526,11 @@ lazy.setup({
                     FloatBorder = { fg = colors.base01, bg = colors.base04 },
                     FloatTitle = { fg = colors.base1, bg = colors.base02, bold = true },
                     NormalFloat = { fg = colors.base0, bg = colors.base04 },
-                    Directory = { fg = colors.blue },
 
                     -- Mini.files Columnar Navigator (Solarized Dark Framing)
                     MiniFilesBorder = { fg = colors.base01, bg = colors.base04 },
                     MiniFilesBorderModified = { fg = colors.yellow, bg = colors.base04 },
                     MiniFilesCursorLine = { bg = colors.base02 },
-                    MiniFilesDirectory = { fg = colors.blue },
-                    MiniFilesFile = { fg = colors.base0 },
                     MiniFilesNormal = { fg = colors.base0, bg = colors.base04 },
                     MiniFilesTitle = { fg = colors.base01, bg = colors.base02 },
                     MiniFilesTitleFocused = { fg = colors.base1, bg = colors.base02, bold = true },
@@ -496,381 +556,219 @@ lazy.setup({
                     PmenuSbar = { bg = colors.base04 },
                     PmenuThumb = { bg = colors.base1 },
 
-                    -- Diagnostic Severity Hierarchy (Unified 4-Tier Ladder)
-                    DiagnosticError = { fg = colors.red },
+                    -- Diagnostic Signs & Underlines (sp-only underline/undercurl without mutating syntax fg)
                     DiagnosticSignError = { fg = colors.red, bg = colors.base03 },
-                    DiagnosticFloatingError = { fg = colors.red },
-                    DiagnosticVirtualTextError = { fg = colors.red },
-                    DiagnosticWarn = { fg = colors.yellow },
                     DiagnosticSignWarn = { fg = colors.yellow, bg = colors.base03 },
-                    DiagnosticFloatingWarn = { fg = colors.yellow },
-                    DiagnosticVirtualTextWarn = { fg = colors.yellow },
-                    DiagnosticInfo = { fg = colors.blue },
                     DiagnosticSignInfo = { fg = colors.blue, bg = colors.base03 },
-                    DiagnosticFloatingInfo = { fg = colors.blue },
-                    DiagnosticVirtualTextInfo = { fg = colors.blue },
-                    DiagnosticHint = { fg = colors.cyan },
                     DiagnosticSignHint = { fg = colors.cyan, bg = colors.base03 },
-                    DiagnosticFloatingHint = { fg = colors.cyan },
-                    DiagnosticVirtualTextHint = { fg = colors.cyan },
-                    -- Canonical Syntax Highlights
-                    Comment = { fg = colors.base01, italic = false },
-                    Keyword = { fg = colors.green },
-                    Statement = { fg = colors.green },
-                    Conditional = { fg = colors.yellow },
-                    Repeat = { fg = colors.yellow },
-                    Type = { fg = colors.base0 },
-                    Structure = { fg = colors.base0 },
-                    StorageClass = { fg = colors.green },
-                    Function = { fg = colors.blue },
-                    Identifier = { fg = colors.base0 },
-                    Parameter = { fg = colors.base0, italic = false },
-                    String = { fg = colors.cyan },
-                    Character = { fg = colors.cyan },
-                    Constant = { fg = colors.magenta },
-                    Number = { fg = colors.magenta },
-                    Boolean = { fg = colors.magenta },
-                    Float = { fg = colors.magenta },
-                    Operator = { fg = colors.base0 },
-                    PreProc = { fg = colors.orange },
-                    Include = { fg = colors.violet },
-                    Define = { fg = colors.orange },
-                    Macro = { fg = colors.blue },
-                    Special = { fg = colors.violet },
-                    Delimiter = { fg = colors.base0 },
-                    -- Tree-sitter & LSP Semantic Token Overrides (Exact 1:1 Parity with Bat)
-                    ["@keyword"] = { fg = colors.green },
-                    ["@keyword.function"] = { fg = colors.green },
-                    ["@keyword.modifier"] = { fg = colors.green },
-                    ["@keyword.operator"] = { fg = colors.green },
-                    ["@keyword.conditional"] = { fg = colors.yellow },
-                    ["@keyword.repeat"] = { fg = colors.yellow },
-                    ["@keyword.return"] = { fg = colors.yellow },
-                    ["@keyword.coroutine"] = { fg = colors.yellow },
-                    ["@keyword.exception"] = { fg = colors.yellow },
-                    ["@keyword.conditional.ternary"] = { fg = colors.base0 },
-                    ["@keyword.directive"] = { fg = colors.orange },
-                    ["@keyword.directive.define"] = { fg = colors.orange },
-                    ["@keyword.import"] = { fg = colors.violet },
-                    ["@keyword.type"] = { fg = colors.green },
-                    ["@type"] = { fg = colors.base0 },
-                    ["@type.builtin"] = { fg = colors.green },
-                    ["@type.definition"] = { fg = colors.base0 },
-                    ["@type.qualifier"] = { fg = colors.base0 },
-                    ["@constructor"] = { fg = colors.base0 },
-                    ["@function"] = { fg = colors.blue },
-                    ["@function.call"] = { fg = colors.base0 },
-                    ["@function.method"] = { fg = colors.blue },
-                    ["@function.method.call"] = { fg = colors.base0 },
-                    ["@function.builtin"] = { fg = colors.base0 },
-                    ["@function.macro"] = { fg = colors.blue },
-                    ["@variable"] = { fg = colors.base0 },
-                    ["@variable.parameter"] = { fg = colors.base0, italic = false },
-                    ["@variable.parameter.builtin"] = { fg = colors.base0, italic = false },
-                    ["@variable.builtin"] = { fg = colors.magenta },
-                    ["@variable.member"] = { fg = colors.base0 },
-                    ["@property"] = { fg = colors.base0 },
-                    ["@module"] = { fg = colors.violet },
-                    ["@module.builtin"] = { fg = colors.violet },
-                    ["@string"] = { fg = colors.cyan },
-                    ["@string.documentation"] = { fg = colors.base01, italic = false },
-                    ["@string.special"] = { fg = colors.cyan },
-                    ["@string.special.path"] = { fg = colors.cyan },
-                    ["@string.special.url"] = { fg = colors.cyan },
-                    ["@string.special.symbol"] = { fg = colors.cyan },
-                    ["@string.escape"] = { fg = colors.cyan },
-                    ["@character"] = { fg = colors.cyan },
-                    ["@character.printf"] = { fg = colors.cyan },
-                    ["@character.special"] = { fg = colors.cyan },
-                    ["@comment"] = { fg = colors.base01, italic = false },
-                    ["@comment.documentation"] = { fg = colors.base01, italic = false },
-                    ["@spell"] = {},
-                    ["@label"] = { fg = colors.base01 },
-                    ["@constant"] = { fg = colors.magenta },
-                    ["@constant.builtin"] = { fg = colors.magenta },
-                    ["@constant.macro"] = { fg = colors.orange },
-                    ["@number"] = { fg = colors.magenta },
-                    ["@number.float"] = { fg = colors.magenta },
-                    ["@boolean"] = { fg = colors.magenta },
-                    ["@operator"] = { fg = colors.base0 },
-                    ["@punctuation.bracket"] = { fg = colors.base0 },
-                    ["@punctuation.delimiter"] = { fg = colors.base0 },
-                    ["@punctuation.special"] = { fg = colors.base0 },
-                    -- Tags & Markup Elements (HTML / XML / JSX / TSX)
-                    Tag = { fg = colors.blue },
-                    TagAttribute = { fg = colors.green },
-                    TagDelimiter = { fg = colors.base0 },
-                    ["@tag"] = { fg = colors.blue },
-                    ["@tag.attribute"] = { fg = colors.green },
-                    ["@tag.delimiter"] = { fg = colors.base0 },
-                    ["@tag.attribute.css"] = { fg = colors.base0 },
-                    ["@markup.raw.xml"] = { fg = colors.base0 },
-                    -- Diagnostic Underlines (sp-only underline/undercurl without mutating syntax fg)
                     DiagnosticUnderlineError = { fg = "NONE", sp = colors.red, undercurl = true, underline = true },
                     DiagnosticUnderlineWarn = { fg = "NONE", sp = colors.yellow, undercurl = true, underline = true },
                     DiagnosticUnderlineInfo = { fg = "NONE", sp = colors.blue, undercurl = true, underline = true },
                     DiagnosticUnderlineHint = { fg = "NONE", sp = colors.cyan, undercurl = true, underline = true },
-                    -- Markdown & Markup Overrides (Exact 1:1 Parity with Bat - First Principles Sequence)
-                    ["@markup.heading"] = { fg = colors.orange, bold = false },
-                    ["@markup.heading.1"] = { fg = colors.orange, bold = false },
-                    ["@markup.heading.2"] = { fg = colors.blue, bold = false },
-                    ["@markup.heading.3"] = { fg = colors.violet, bold = false },
-                    ["@markup.heading.4"] = { fg = colors.base1, bold = false },
-                    ["@markup.heading.5"] = { fg = colors.base0, bold = false },
-                    ["@markup.heading.6"] = { fg = colors.base0, bold = false },
-                    ["@markup.heading.delimiter"] = { fg = colors.base01, bold = false },
+
+                    -- Markup & Diff Special Composite Highlights
+                    ["@spell"] = {},
                     ["@markup.strong"] = { fg = colors.base1, bold = true },
                     ["@markup.italic"] = { fg = colors.base0, italic = true },
-                    ["@markup.raw"] = { fg = colors.cyan },
-                    ["@markup.raw.delimiter"] = { fg = colors.base01 },
-                    ["@markup.raw.block"] = { fg = colors.base0 },
-                    ["@markup.link"] = { fg = colors.base01 },
-                    ["@markup.link.label"] = { fg = colors.blue },
-                    ["@markup.link.url"] = { fg = colors.cyan, underline = true },
-                    ["@markup.quote"] = { fg = colors.base0, italic = false },
-                    ["@markup.quote.marker"] = { fg = colors.base01 },
-                    ["@markup.list"] = { fg = colors.green, bold = false },
-                    ["@markup.list.checked"] = { fg = colors.green, bold = false },
-                    ["@markup.list.unchecked"] = { fg = colors.base01, bold = false },
-                    ["@markup.table"] = { fg = colors.base01 },
-                    ["@markup.table.delimiter"] = { fg = colors.base01 },
-                    ["@markup.alert.note"] = { fg = colors.blue },
-                    ["@markup.alert.tip"] = { fg = colors.green },
-                    ["@markup.alert.important"] = { fg = colors.violet },
-                    ["@markup.alert.warning"] = { fg = colors.orange },
-                    ["@markup.alert.caution"] = { fg = colors.red },
-                    ["@attribute"] = { fg = colors.violet },
-                    ["@lsp.type.keyword"] = { fg = colors.green },
-                    ["@lsp.type.namespace"] = { fg = colors.violet },
-                    ["@lsp.type.type"] = { fg = colors.base0 },
-                    ["@lsp.type.class"] = { fg = colors.base0 },
-                    ["@lsp.type.struct"] = { fg = colors.base0 },
-                    ["@lsp.type.interface"] = { fg = colors.base0 },
-                    ["@lsp.type.enum"] = { fg = colors.base0 },
-                    ["@lsp.type.typeParameter"] = { fg = colors.base0 },
-                    ["@lsp.type.enumMember"] = { fg = colors.magenta },
-                    ["@lsp.type.function"] = { fg = colors.blue },
-                    ["@lsp.type.method"] = { fg = colors.blue },
-                    ["@lsp.type.variable"] = { fg = colors.base0 },
-                    ["@lsp.type.parameter"] = { fg = colors.base0, italic = false },
-                    ["@lsp.type.property"] = { fg = colors.base0 },
-                    ["@lsp.type.string"] = { fg = colors.cyan },
-                    ["@lsp.type.comment"] = { fg = colors.base01, italic = false },
-                    ["@lsp.typemod.variable.readonly"] = { fg = colors.base0 },
-                    -- Classic Vim Regex Fallbacks (Exact 1:1 Parity with Bat when Tree-sitter is offline)
-                    markdownH1 = { fg = colors.orange, bold = false },
-                    markdownH2 = { fg = colors.blue, bold = false },
-                    markdownH3 = { fg = colors.violet, bold = false },
-                    markdownH4 = { fg = colors.base1, bold = false },
-                    markdownH5 = { fg = colors.base0, bold = false },
-                    markdownH6 = { fg = colors.base0, bold = false },
-                    markdownHeadingDelimiter = { fg = colors.base01, bold = false },
+                    ["@markup.link"] = { fg = colors.base01, underline = false },
+                    ["@markup.link.label"] = { fg = colors.blue, underline = false },
+                    ["@markup.link.url"] = { fg = colors.cyan, underline = false },
+                    ["@string.special.url.html"] = { fg = colors.cyan, underline = false },
+                    RenderMarkdownCode = { fg = "NONE", bg = colors.base02 },
+                    RenderMarkdownCodeBorder = { fg = colors.base01, bg = colors.base02 },
+                    RenderMarkdownCodeInfo = { fg = colors.base01, bg = colors.base02, italic = false },
+                    RenderMarkdownCodeFallback = { fg = colors.base0, bg = colors.base02 },
+                    RenderMarkdownCodeInline = { fg = colors.cyan, bg = colors.base02 },
+                    RenderMarkdownSign = { fg = colors.base01, bg = "NONE" },
+                    RenderMarkdownIndent = { fg = colors.base02 },
+                    RenderMarkdownInlineHighlight = { fg = colors.base1, bg = colors.base02 },
+                    RenderMarkdownLink = { fg = colors.blue, bold = false, underline = false },
+                    RenderMarkdownWikiLink = { fg = colors.blue, bold = false, underline = false },
                     markdownBold = { fg = colors.base1, bold = true },
                     markdownItalic = { italic = true },
-                    markdownCode = { fg = colors.cyan },
-                    markdownCodeBlock = { fg = colors.base0 },
-                    markdownCodeDelimiter = { fg = colors.base01 },
-                    markdownBlockquote = { fg = colors.base0, italic = false },
-                    markdownListMarker = { fg = colors.green, bold = false },
-                    markdownOrderedListMarker = { fg = colors.green, bold = false },
-                    markdownRule = { fg = colors.base01, bold = false },
-                    markdownLinkText = { fg = colors.blue },
-                    markdownUrl = { fg = colors.cyan, underline = true },
-                    markdownId = { fg = colors.blue },
-                    markdownIdDeclaration = { fg = colors.cyan },
-                    goPredefinedIdentifiers = { fg = colors.magenta },
-                    goConstants = { fg = colors.magenta },
-                    goExtraType = { fg = colors.base0 },
-                    goType = { fg = colors.base0 },
-                    goSignedInts = { fg = colors.green },
-                    goUnsignedInts = { fg = colors.green },
-                    goFloats = { fg = colors.green },
-                    goComplexes = { fg = colors.green },
-                    goDecimalInt = { fg = colors.magenta },
-                    goHexadecimalInt = { fg = colors.magenta },
-                    goOctalInt = { fg = colors.magenta },
-                    goFloat = { fg = colors.magenta },
-                    goStatement = { fg = colors.yellow },
-                    goConditional = { fg = colors.yellow },
-                    goRepeat = { fg = colors.yellow },
-                    goDeclaration = { fg = colors.green },
-                    goDeclType = { fg = colors.green },
-                    goDirective = { fg = colors.violet },
-                    pythonDocstring = { fg = colors.base01, italic = false },
-                    pythonBuiltinType = { fg = colors.green },
-                    pythonDecorator = { fg = colors.violet },
-                    pythonDecoratorName = { fg = colors.violet },
-                    pythonConditional = { fg = colors.yellow },
-                    pythonRepeat = { fg = colors.yellow },
-                    pythonException = { fg = colors.yellow },
-                    pythonStatement = { fg = colors.yellow },
-                    rustCommentLineDoc = { fg = colors.base01, italic = false },
-                    rustAttribute = { fg = colors.violet },
-                    rustDerive = { fg = colors.violet },
-                    rustDeriveTrait = { fg = colors.base0 },
-                    rustConditional = { fg = colors.yellow },
-                    rustRepeat = { fg = colors.yellow },
-                    rustKeyword = { fg = colors.green },
-                    rustModPath = { fg = colors.violet },
-                    rustMacro = { fg = colors.blue },
-                    rustType = { fg = colors.base0 },
-                    cDefine = { fg = colors.orange },
-                    cInclude = { fg = colors.orange },
-                    cPreProc = { fg = colors.orange },
-                    cPreCondit = { fg = colors.orange },
-                    cType = { fg = colors.base0 },
-                    cStructure = { fg = colors.green },
-                    cStorageClass = { fg = colors.green },
-                    cConditional = { fg = colors.yellow },
-                    cRepeat = { fg = colors.yellow },
-                    cStatement = { fg = colors.yellow },
-                    cConstant = { fg = colors.magenta },
-                    cppAccess = { fg = colors.green },
-                    cppType = { fg = colors.base0 },
-                    cppStructure = { fg = colors.green },
-                    cppStorageClass = { fg = colors.green },
-                    cppModifier = { fg = colors.green },
-                    diffAdded = { fg = colors.green },
-                    diffRemoved = { fg = colors.red },
-                    diffChanged = { fg = colors.yellow },
-                    diffLine = { fg = colors.blue },
-                    diffFile = { fg = colors.cyan },
-                    diffNewFile = { fg = colors.cyan },
-                    diffIndexLine = { fg = colors.base01 },
+                    markdownLinkText = { fg = colors.blue, underline = false },
+                    markdownUrl = { fg = colors.cyan, underline = false },
                     DiffAdd = { fg = colors.green, bg = colors.mix_green },
                     DiffDelete = { fg = colors.red, bg = colors.mix_red },
                     DiffChange = { fg = colors.yellow, bg = colors.mix_yellow },
                     DiffText = { fg = colors.blue, bg = colors.mix_blue, bold = true },
-                    ["@diff.plus"] = { fg = colors.green },
-                    ["@diff.minus"] = { fg = colors.red },
-                    ["@diff.delta"] = { fg = colors.yellow },
-                    ["@diff.line"] = { fg = colors.blue },
-                    -- Legacy Vim Regex Fallbacks (Shell and SQL)
-                    shOption = { fg = colors.base0 },
-                    shCommandSub = { fg = colors.base0 },
-                    shConditional = { fg = colors.yellow },
-                    shRepeat = { fg = colors.yellow },
-                    shStatement = { fg = colors.yellow },
-                    shFunctionKey = { fg = colors.green },
-                    shFunction = { fg = colors.blue },
-                    sqlKeyword = { fg = colors.green },
-                    sqlSpecial = { fg = colors.magenta },
-                    -- Legacy XML Syntax Fallbacks
-                    xmlTagName = { fg = colors.blue },
-                    xmlTag = { fg = colors.base0 },
-                    xmlEndTag = { fg = colors.base0 },
-                    xmlAttrib = { fg = colors.green },
-                    xmlEqual = { fg = colors.base0 },
-                    xmlString = { fg = colors.cyan },
-                    xmlProcessing = { fg = colors.orange },
-                    xmlProcessingDelim = { fg = colors.base0 },
-                    xmlDocTypeDecl = { fg = colors.orange },
-                    xmlDocTypeKeyword = { fg = colors.orange },
-                    xmlEntity = { fg = colors.magenta },
-                    xmlEntityPunct = { fg = colors.magenta },
-                    xmlCdataStart = { fg = colors.violet },
-                    xmlCdataEnd = { fg = colors.violet },
-                    xmlCdata = { fg = colors.base0 },
-                    xmlCdataCdata = { fg = colors.violet },
-                    xmlComment = { fg = colors.base01, italic = false },
-                    xmlCommentPart = { fg = colors.base01, italic = false },
-                    xmlNamespace = { fg = colors.blue },
-                    -- Legacy HTML Syntax Fallbacks
-                    htmlTagName = { fg = colors.blue },
-                    htmlSpecialTagName = { fg = colors.blue },
-                    htmlTag = { fg = colors.base0 },
-                    htmlEndTag = { fg = colors.base0 },
-                    htmlArg = { fg = colors.green },
-                    htmlString = { fg = colors.cyan },
-                    htmlComment = { fg = colors.base01, italic = false },
-                    htmlCommentPart = { fg = colors.base01, italic = false },
-                    htmlSpecialChar = { fg = colors.magenta },
-                    htmlDoctype = { fg = colors.orange },
-                    htmlHead = { fg = colors.base0 },
-                    htmlTitle = { fg = colors.base0 },
-                    htmlH1 = { fg = colors.base0, bold = false },
-                    htmlH2 = { fg = colors.base0, bold = false },
-                    htmlH3 = { fg = colors.base0, bold = false },
-                    htmlH4 = { fg = colors.base0, bold = false },
-                    htmlH5 = { fg = colors.base0, bold = false },
-                    htmlH6 = { fg = colors.base0, bold = false },
-                    htmlBold = { fg = colors.base0, bold = false },
-                    htmlItalic = { fg = colors.base0, italic = false },
-                    htmlUnderline = { fg = colors.base0, underline = false },
-                    htmlLink = { fg = colors.base0, underline = false },
-                    -- Legacy CSS Syntax Fallbacks
-                    cssProp = { fg = colors.green },
-                    cssTagName = { fg = colors.blue },
-                    cssClassName = { fg = colors.blue },
-                    cssClassNameDot = { fg = colors.base0 },
-                    cssIdentifier = { fg = colors.blue },
-                    cssColor = { fg = colors.magenta },
-                    cssValueNumber = { fg = colors.magenta },
-                    cssValueLength = { fg = colors.magenta },
-                    cssUnitizers = { fg = colors.base0 },
-                    cssStringQ = { fg = colors.cyan },
-                    cssStringQQ = { fg = colors.cyan },
-                    cssPseudoClass = { fg = colors.violet },
-                    cssPseudoClassId = { fg = colors.violet },
-                    cssCustomProperty = { fg = colors.base0 },
-                    cssVar = { fg = colors.base0 },
-                    cssAtRule = { fg = colors.orange },
-                    -- Legacy Java Properties Syntax Fallbacks
-                    jpropertiesIdentifier = { fg = colors.green },
-                    jpropertiesAssignment = { fg = colors.base0 },
-                    jpropertiesString = { fg = colors.cyan },
-                    jpropertiesSpecialChar = { fg = colors.cyan },
-                    jpropertiesComment = { fg = colors.base01, italic = false },
-
-                    -- Language-Specific Tree-sitter Semantic Specializations & Contextual Invariance
-                    -- Java (Principle 7 Operational Role Invariance & Module Directives)
-                    ["@keyword.directive.java"] = { fg = colors.base0 },
-
-                    -- Go (Principle 12 Blank Identifier Sentinel)
-                    ["@variable.builtin.go"] = { fg = colors.magenta },
-
-                    -- SQL (Principle 29 Scaffolding Constraints)
-                    ["@attribute.sql"] = { fg = colors.green },
-
-                    -- Terraform / HCL (Principle 35 Calm Typename Declarations)
-                    ["@type.builtin.terraform"] = { fg = colors.base0 },
-                    ["@type.builtin.hcl"] = { fg = colors.base0 },
-
-                    -- HTML (Semantic Headings & Content Desensitization to calm Base0 Grey)
-                    ["@markup.heading.html"] = { fg = colors.base0 },
-                    ["@markup.heading.1.html"] = { fg = colors.base0 },
-                    ["@markup.heading.2.html"] = { fg = colors.base0 },
-                    ["@markup.heading.3.html"] = { fg = colors.base0 },
-                    ["@markup.heading.4.html"] = { fg = colors.base0 },
-                    ["@markup.heading.5.html"] = { fg = colors.base0 },
-                    ["@markup.heading.6.html"] = { fg = colors.base0 },
-                    ["@markup.link.label.html"] = { fg = colors.base0, underline = false },
-                    ["@markup.link.html"] = { fg = colors.base0, underline = false },
-                    ["@markup.strong.html"] = { fg = colors.base0, bold = false },
-                    ["@markup.italic.html"] = { fg = colors.base0, italic = false },
-                    ["@markup.underline.html"] = { fg = colors.base0, underline = false },
-                    ["@string.special.url.html"] = { fg = colors.cyan, underline = false },
-
-                    -- Declarative Configuration Continuum (Mapping Keys in Solarized Green)
-                    ["@property.json"] = { fg = colors.green },
-                    ["@property.yaml"] = { fg = colors.green },
-                    ["@property.toml"] = { fg = colors.green },
-                    ["@property.css"] = { fg = colors.green },
-                    ["@property.properties"] = { fg = colors.green },
-
-                    -- CSS (Universal Semantic Architecture: Selectors Blue, Properties Green, Custom Props Base0, Hex Magenta)
-                    ["@type.css"] = { fg = colors.blue },
-                    ["@tag.css"] = { fg = colors.blue },
-                    ["@variable.css"] = { fg = colors.base0 },
-                    ["@function.call.css"] = { fg = colors.base0 },
-                    ["@type.builtin.css"] = { fg = colors.base0 },
-                    ["@string.special.css"] = { fg = colors.magenta },
-                    ["@constant.css"] = { fg = colors.base0 },
-                    ["@keyword.modifier.css"] = { fg = colors.red },
-
-                    -- Java Properties (Variable Interpolation in Base0 Grey)
-                    ["@variable.properties"] = { fg = colors.base0 },
+                    protoTodo = { fg = colors.base01, bg = "NONE", bold = false },
+                    pbtxtTodo = { fg = colors.base01, bg = "NONE", bold = false },
                 }
+
+                local function set_hl(groups, spec)
+                    for _, g in ipairs(groups) do
+                        hl[g] = spec
+                    end
+                end
+
+                -- Calm Base0 Grey (#839496): Identifiers, Invocations, Custom Types, Operators, Punctuation & Neutralized Canvas
+                set_hl({
+                    "MiniFilesFile", "Type", "Structure", "Identifier", "Operator", "Delimiter", "TagDelimiter",
+                    "@keyword.conditional.ternary", "@type", "@type.definition", "@type.qualifier", "@constructor",
+                    "@function.call", "@function.method.call", "@function.builtin", "@variable", "@variable.member",
+                    "@property", "@operator", "@punctuation.bracket", "@punctuation.delimiter", "@punctuation.special",
+                    "@tag.delimiter", "@tag.attribute.css", "@markup.raw.xml", "@markup.raw.block",
+                    "@lsp.type.type", "@lsp.type.class", "@lsp.type.struct", "@lsp.type.interface", "@lsp.type.enum",
+                    "@lsp.type.typeParameter", "@lsp.type.variable", "@lsp.type.property", "@lsp.typemod.variable.readonly",
+                    "markdownCodeBlock", "goExtraType", "goType", "rustDeriveTrait", "rustType", "cType", "cppType",
+                    "shOption", "shCommandSub", "xmlTag", "xmlEndTag", "xmlEqual", "xmlProcessingDelim", "xmlCdata",
+                    "htmlTag", "htmlEndTag", "htmlHead", "htmlTitle", "cssClassNameDot", "cssUnitizers",
+                    "cssCustomProperty", "cssVar", "jpropertiesAssignment",
+                    "@keyword.directive.java", "@type.builtin.terraform", "@type.builtin.hcl",
+                    "@function.call.terraform", "@function.terraform", "@function.hcl",
+                    "@markup.heading.html", "@markup.heading.1.html", "@markup.heading.2.html",
+                    "@markup.heading.3.html", "@markup.heading.4.html", "@markup.heading.5.html", "@markup.heading.6.html",
+                    "@type.builtin.starlark", "@variable.css", "@function.call.css", "@type.builtin.css",
+                    "@constant.css", "@variable.properties",
+                }, { fg = colors.base0 })
+
+                set_hl({
+                    "Parameter", "@variable.parameter", "@variable.parameter.builtin", "@markup.quote",
+                    "@lsp.type.parameter", "markdownBlockquote", "htmlItalic", "@markup.italic.html",
+                }, { fg = colors.base0, italic = false })
+
+                set_hl({
+                    "@markup.heading.5", "@markup.heading.6", "RenderMarkdownH5", "RenderMarkdownH6",
+                    "markdownH5", "markdownH6", "htmlH1", "htmlH2", "htmlH3", "htmlH4", "htmlH5", "htmlH6",
+                    "htmlBold", "@markup.strong.html",
+                }, { fg = colors.base0, bold = false })
+
+                set_hl({
+                    "htmlUnderline", "htmlLink", "@markup.link.label.html", "@markup.link.html", "@markup.underline.html",
+                }, { fg = colors.base0, underline = false })
+
+                -- Calm Base01 Dim (#586E75): Comments, Documentation, Delimiters, Markers & Borders
+                set_hl({
+                    "@label", "@markup.raw.delimiter", "@markup.quote.marker", "@markup.table", "@markup.table.delimiter",
+                    "RenderMarkdownQuote", "RenderMarkdownQuote1", "RenderMarkdownQuote2", "RenderMarkdownQuote3",
+                    "RenderMarkdownQuote4", "RenderMarkdownQuote5", "RenderMarkdownQuote6", "RenderMarkdownDash",
+                    "markdownCodeDelimiter", "diffIndexLine",
+                }, { fg = colors.base01 })
+
+                set_hl({
+                    "Comment", "@string.documentation", "@comment", "@comment.documentation",
+                    "RenderMarkdownHtmlComment", "@lsp.type.comment", "pythonDocstring", "rustCommentLineDoc",
+                    "xmlComment", "xmlCommentPart", "htmlComment", "htmlCommentPart", "jpropertiesComment",
+                    "protoComment", "pbtxtComment",
+                }, { fg = colors.base01, italic = false })
+
+                set_hl({
+                    "@markup.heading.delimiter", "@markup.list.unchecked", "RenderMarkdownTableHead",
+                    "RenderMarkdownTableRow", "RenderMarkdownTableFill", "RenderMarkdownLinkTitle",
+                    "RenderMarkdownUnchecked", "markdownHeadingDelimiter", "markdownRule",
+                }, { fg = colors.base01, bold = false })
+
+                -- Base1 (#93A1A1) & Base02 (#073642) Markdown Headings / Backgrounds
+                set_hl({ "@markup.heading.4", "RenderMarkdownH4", "markdownH4" }, { fg = colors.base1, bold = false })
+                set_hl({
+                    "RenderMarkdownH1Bg", "RenderMarkdownH2Bg", "RenderMarkdownH3Bg",
+                    "RenderMarkdownH4Bg", "RenderMarkdownH5Bg", "RenderMarkdownH6Bg",
+                }, { fg = "NONE", bg = colors.base02, bold = false })
+
+                -- Solarized Green (#859900): Structural Scaffolding, Primitives, Mapping Keys & Diff Additions
+                set_hl({
+                    "Keyword", "Statement", "StorageClass", "TagAttribute",
+                    "@keyword", "@keyword.function", "@keyword.modifier", "@keyword.operator", "@keyword.type",
+                    "@type.builtin", "@tag.attribute", "@markup.alert.tip", "RenderMarkdownBullet", "@lsp.type.keyword",
+                    "goSignedInts", "goUnsignedInts", "goFloats", "goComplexes", "goDeclaration", "goDeclType",
+                    "pythonBuiltinType", "rustKeyword", "cStructure", "cStorageClass", "cppAccess", "cppStructure",
+                    "cppStorageClass", "cppModifier", "diffAdded", "@diff.plus", "shFunctionKey", "sqlKeyword",
+                    "xmlAttrib", "htmlArg", "cssProp", "jpropertiesIdentifier",
+                    "protoStructure", "protoRepeat", "protoDefault", "protoExtend", "protoRPC", "protoType",
+                    "protoTypedef", "pbtxtField", "@attribute.sql",
+                    "@property.json", "@property.yaml", "@property.toml", "@property.css",
+                    "@property.properties", "@property.textproto", "@property.pbtxt", "@property.graphql",
+                }, { fg = colors.green })
+
+                set_hl({
+                    "@markup.list", "@markup.list.checked", "RenderMarkdownChecked", "RenderMarkdownSuccess",
+                    "markdownListMarker", "markdownOrderedListMarker",
+                }, { fg = colors.green, bold = false })
+
+                -- Solarized Yellow (#B58900): Exclusive Imperative Control Flow & Diagnostics
+                set_hl({
+                    "DiagnosticWarn", "DiagnosticFloatingWarn", "DiagnosticVirtualTextWarn", "Conditional", "Repeat",
+                    "@keyword.conditional", "@keyword.repeat", "@keyword.return", "@keyword.coroutine", "@keyword.exception",
+                    "goStatement", "goConditional", "goRepeat", "pythonConditional", "pythonRepeat",
+                    "pythonException", "pythonStatement", "rustConditional", "rustRepeat",
+                    "cConditional", "cRepeat", "cStatement", "diffChanged", "@diff.delta",
+                    "shConditional", "shRepeat", "shStatement",
+                }, { fg = colors.yellow })
+
+                -- Solarized Blue (#268BD2): Routine Declarations, Tags, Selectors, H2 & Info
+                set_hl({
+                    "Directory", "MiniFilesDirectory", "DiagnosticInfo", "DiagnosticFloatingInfo", "DiagnosticVirtualTextInfo",
+                    "Function", "Macro", "Tag", "@function", "@function.method", "@function.macro", "@tag",
+                    "@markup.alert.note", "@lsp.type.function", "@lsp.type.method", "markdownId", "rustMacro",
+                    "diffLine", "@diff.line", "shFunction", "xmlTagName", "xmlNamespace", "htmlTagName",
+                    "htmlSpecialTagName", "cssTagName", "cssClassName", "cssIdentifier", "pbtxtMessage",
+                    "@type.css", "@tag.css",
+                }, { fg = colors.blue })
+
+                set_hl({
+                    "@markup.heading.2", "RenderMarkdownH2", "RenderMarkdownInfo", "markdownH2",
+                }, { fg = colors.blue, bold = false })
+
+                -- Solarized Violet (#6C71C4): Module Imports, Namespaces, Attributes, H3 & Hints
+                set_hl({
+                    "Include", "Special", "@keyword.import", "@module", "@module.builtin", "@markup.alert.important",
+                    "@attribute", "@lsp.type.namespace", "goDirective", "pythonDecorator", "pythonDecoratorName",
+                    "rustAttribute", "rustDerive", "rustModPath", "xmlCdataStart", "xmlCdataEnd", "xmlCdataCdata",
+                    "cssPseudoClass", "cssPseudoClassId", "protoSyntax",
+                }, { fg = colors.violet })
+
+                set_hl({
+                    "@markup.heading.3", "RenderMarkdownH3", "RenderMarkdownMath", "RenderMarkdownHint", "markdownH3",
+                }, { fg = colors.violet, bold = false })
+
+                -- Solarized Orange (#CB4B16): Preprocessor Directives, Macros, H1 & Warnings
+                set_hl({
+                    "PreProc", "Define", "@keyword.directive", "@keyword.directive.define", "@constant.macro",
+                    "@markup.alert.warning", "cDefine", "cInclude", "cPreProc", "cPreCondit",
+                    "xmlProcessing", "xmlDocTypeDecl", "xmlDocTypeKeyword", "htmlDoctype", "cssAtRule",
+                }, { fg = colors.orange })
+
+                set_hl({
+                    "@markup.heading", "@markup.heading.1", "RenderMarkdownH1", "RenderMarkdownTodo",
+                    "RenderMarkdownWarn", "markdownH1",
+                }, { fg = colors.orange, bold = false })
+
+                -- Solarized Magenta (#D33682): Constants, Numbers, Booleans, Regexes, Receivers & Symbols
+                set_hl({
+                    "Constant", "Number", "Boolean", "Float",
+                    "@variable.builtin", "@string.regexp", "@constant", "@constant.builtin", "@number",
+                    "@number.float", "@boolean", "@lsp.type.enumMember",
+                    "goPredefinedIdentifiers", "goConstants", "goDecimalInt", "goHexadecimalInt", "goOctalInt",
+                    "goFloat", "cConstant", "sqlSpecial", "xmlEntity", "xmlEntityPunct", "htmlSpecialChar",
+                    "cssColor", "cssValueNumber", "cssValueLength", "protoBool", "protoInt", "protoFloat",
+                    "pbtxtEnum", "pbtxtBool", "pbtxtInt", "pbtxtHex", "pbtxtFloat", "@variable.builtin.go",
+                    "@punctuation.delimiter.regex", "@punctuation.bracket.regex", "@operator.regex",
+                    "@string.escape.regex", "@character.special.regex", "@constant.regex", "@property.regex",
+                    "@string.special.css", "@string.special.symbol.elixir", "@string.special.symbol.clojure",
+                    "@string.special.symbol.ruby",
+                }, { fg = colors.magenta })
+
+                -- Solarized Cyan (#2AA198): Strings, Characters, Format Specifiers, Escape Sequences & Hints
+                set_hl({
+                    "DiagnosticHint", "DiagnosticFloatingHint", "DiagnosticVirtualTextHint", "String", "Character",
+                    "@string", "@string.special", "@string.special.path", "@string.special.url",
+                    "@string.special.symbol", "@string.escape", "@character", "@character.printf",
+                    "@character.special", "@markup.raw", "@lsp.type.string",
+                    "markdownCode", "markdownIdDeclaration", "diffFile", "diffNewFile", "xmlString", "htmlString",
+                    "cssStringQ", "cssStringQQ", "jpropertiesString", "jpropertiesSpecialChar",
+                    "protoString", "pbtxtString",
+                }, { fg = colors.cyan })
+
+                -- Solarized Red (#DC322F): Errors, Diff Deletions & Overrides
+                set_hl({
+                    "DiagnosticError", "DiagnosticFloatingError", "DiagnosticVirtualTextError",
+                    "@markup.alert.caution", "diffRemoved", "@diff.minus", "@keyword.modifier.css",
+                }, { fg = colors.red })
+
+                set_hl({ "RenderMarkdownError" }, { fg = colors.red, bold = false })
+
+                return hl
             end,
         },
         config = function(_, opts)
@@ -888,11 +786,14 @@ lazy.setup({
         priority = 900,
         config = function()
             local parsers = {
-                "c", "cpp", "go", "java", "python", "rust", "typescript",
-                "javascript", "bash", "markdown", "markdown_inline",
+                "c", "cpp", "go", "java", "kotlin", "swift", "python", "rust",
+                "typescript", "javascript", "bash", "markdown", "markdown_inline",
                 "json", "yaml", "toml", "terraform", "sql", "lua",
                 "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
-                "properties", "regex"
+                "properties", "proto", "textproto", "regex",
+                "elixir", "haskell", "ocaml", "clojure",
+                "zig", "c_sharp", "scala", "ruby",
+                "graphql", "starlark", "rego", "dockerfile", "make"
             }
 
             -- Pin tree-sitter-css to revision with Container Query support (PR #96)
@@ -972,9 +873,6 @@ lazy.setup({
 
             -- Ensure user config directory unconditionally takes precedence over site queries in runtimepath
             vim.opt.rtp:prepend(vim.fn.stdpath("config"))
-
-            -- Register Tree-sitter language aliases
-            pcall(vim.treesitter.language.register, "properties", { "jproperties", "properties" })
 
             -- Ensure compatibility with Neovim 0.12 directive handling (captures passed as TSNode[])
             if vim.treesitter.query.add_directive then
@@ -1252,12 +1150,41 @@ lazy.setup({
             require("mini.icons").setup()
             require("mini.files").setup({
                 windows = {
+                    max_number = 2,
                     preview = true,
                     width_focus = 35,
-                    width_preview = 45,
+                    width_nofocus = 15,
+                    width_preview = 25,
                 },
             })
             local mf = require("mini.files")
+            vim.api.nvim_create_autocmd("User", {
+                group = vim.api.nvim_create_augroup("SolarizedMiniFilesWindow", { clear = true }),
+                pattern = "MiniFilesWindowUpdate",
+                callback = function(args)
+                    local st = mf.get_explorer_state()
+                    if not st or not st.windows or #st.windows == 0 then
+                        return
+                    end
+                    local last_win = st.windows[#st.windows]
+                    if args.data.win_id == last_win.win_id and last_win.path ~= st.branch[st.depth_focus] then
+                        local cfg = vim.api.nvim_win_get_config(args.data.win_id)
+                        local col = type(cfg.col) == "table" and (cfg.col[false] or cfg.col[1] or 0) or (cfg.col or 0)
+                        local bw = (cfg.border == nil or cfg.border == "none") and 0 or 2
+                        local w = vim.o.columns - col - bw
+                        if w > cfg.width then
+                            cfg.width = w
+                            if last_win.path then
+                                local clean_path = last_win.path:gsub("%z", "")
+                                local name = (" " .. vim.fn.fnamemodify(clean_path, ":t") .. " "):gsub("\n", "<NL>")
+                                local nchars = vim.fn.strchars(name)
+                                cfg.title = nchars <= w and name or ("…" .. vim.fn.strcharpart(name, nchars - w + 1, w - 1))
+                            end
+                            vim.api.nvim_win_set_config(args.data.win_id, cfg)
+                        end
+                    end
+                end,
+            })
             vim.api.nvim_create_autocmd("User", {
                 group = vim.api.nvim_create_augroup("SolarizedMiniFilesKeys", { clear = true }),
                 pattern = "MiniFilesBufferCreate",
@@ -1282,5 +1209,86 @@ lazy.setup({
                 end,
             })
         end,
+    },
+
+    -- In-Buffer Markdown Rendering (Solarized Dark Semantic Architecture)
+    {
+        "MeanderingProgrammer/render-markdown.nvim",
+        dependencies = { "nvim-treesitter/nvim-treesitter", "echasnovski/mini.nvim" },
+        ft = { "markdown" },
+        cmd = { "RenderMarkdown" },
+        keys = {
+            { "<leader>m", "<cmd>RenderMarkdown toggle<CR>", desc = "Toggle Markdown rendering" },
+        },
+        opts = {
+            file_types = { "markdown" },
+            render_modes = { "n", "v", "c", "t" },
+            anti_conceal = {
+                enabled = false,
+            },
+            win_options = {
+                concealcursor = {
+                    default = vim.o.concealcursor,
+                    rendered = "nvc",
+                },
+            },
+            heading = {
+                enabled = true,
+                sign = false,
+                position = "inline",
+                width = "block",
+                right_pad = 1,
+                icons = { "󰲡 ", "󰲣 ", "󰲥 ", "󰲧 ", "󰲩 ", "󰲫 " },
+            },
+            code = {
+                enabled = true,
+                sign = false,
+                style = "full",
+                position = "left",
+                width = "full",
+                border = "thin",
+                above = "▄",
+                below = "▀",
+                left_pad = 1,
+                right_pad = 1,
+                highlight_language = "RenderMarkdownCodeInfo",
+            },
+            dash = {
+                enabled = true,
+                icon = "─",
+                width = "full",
+            },
+            bullet = {
+                enabled = true,
+                icons = { "•", "◦", "▪", "▫" },
+            },
+            checkbox = {
+                enabled = true,
+                unchecked = { icon = "󰄱 ", highlight = "RenderMarkdownUnchecked" },
+                checked = { icon = "󰱒 ", highlight = "RenderMarkdownChecked" },
+            },
+            quote = {
+                enabled = true,
+                icon = "▋",
+                repeat_linebreak = true,
+            },
+            pipe_table = {
+                enabled = true,
+                preset = "round",
+                style = "full",
+                cell = "padded",
+                alignment_indicator = "━",
+            },
+            link = {
+                enabled = true,
+                footnote = { enabled = true, superscript = true },
+                image = "󰥶 ",
+                email = "󰀓 ",
+                hyperlink = "󰌹 ",
+            },
+            html = { enabled = false },
+            latex = { enabled = false },
+            yaml = { enabled = false },
+        },
     },
 })

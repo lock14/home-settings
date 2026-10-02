@@ -1,0 +1,121 @@
+# =============================================================================
+# proto-file: sample-code/sample.proto
+# proto-message: telemetry.v1.TelemetryBatch
+#
+# Edge gateway telemetry payload demonstrating Protocol Buffers Text Format
+# (.textproto / .pbtxt): scalar fields, nested messages (brace and angle-bracket
+# forms), repeated lists, enum constants, hex/octal/negative numbers, special
+# float literals, multi-part strings, extension fields, and Any type URLs.
+# =============================================================================
+
+batch_id: "batch-2025-09-14-0001"
+sequence_num: 1042
+node_state: NODE_STATE_ACTIVE
+codec: COMPRESSION_CODEC_ZSTD
+is_compressed: true
+compression_ratio: 0.375
+
+# --- Timestamp & Source Identity ---------------------------------------------
+
+recorded_at {
+  seconds: 1757838600
+  nanos: 450000000
+}
+
+source_node {
+  hostname: "solarized-gateway-01.us-east-1.internal.io"
+  region: "us-east-1"
+  worker_threads: 0x10
+  instance_fingerprint: 1844674407370955161
+  clock_drift_ms: -12
+}
+
+# --- Resource Labels & Route Quotas ------------------------------------------
+
+resource_labels {
+  key: "service.name"
+  value: "solarized-gateway"
+}
+
+resource_labels {
+  key: "deployment.environment"
+  value: "production"
+}
+
+route_quotas <
+  key: 100
+  value <
+    route_prefix: "/api/v1/telemetry"
+    max_requests_per_sec: 5000
+    burst_multiplier: 1.5
+    window {
+      seconds: 60
+      nanos: 0
+    }
+  >
+>
+
+# --- Metric Points & Scalar Lists --------------------------------------------
+
+metrics: [{
+    name: "gateway.http.request_duration_ms"
+    observed_at {
+      seconds: 1757838600
+      nanos: 125000000
+    }
+    dimensions {
+      key: "http.method"
+      value: "POST"
+    }
+    gauge_value: 14.825
+  },
+  {
+    name: "gateway.http.active_streams"
+    observed_at {
+      seconds: 1757838600
+      nanos: 250000000
+    }
+    counter_value: 4096
+  },
+  {
+    name: "gateway.upstream.saturation_delta"
+    observed_at {
+      seconds: 1757838600
+      nanos: 375000000
+    }
+    gauge_value: -0.0625
+  }
+]
+
+# --- Oneof Payload & Special Float Boundaries --------------------------------
+
+histogram {
+  sample_count: 12840
+  sum_value: 190352.75
+  quantile_bounds: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, inf]
+  bucket_counts: [120, 480, 1920, 4100, 3200, 1850, 810, 290, 55, 15, 0]
+  lower_bound_sentinel: -inf
+  uncalibrated_drift: nan
+}
+
+# --- Multi-part String Escapes & Extension / Any Annotations -----------------
+
+diagnostic_banner: "solarized-gateway telemetry frame\n"
+                   "codec=\"zstd\"\tstatus=OK"
+
+# TODO: Rotate regional collector endpoint certificate before Q4 window
+[telemetry.v1.routing_extension] {
+  collector_endpoint: "https://collector.internal.io:4317"
+  fallback_region: "us-west-2"
+  retry_backoff_ms: [100, 250, 500, 1000]
+  fail_open: false
+}
+
+[type.example.com/telemetry.v1.SystemHealthPayload] {
+  kernel_release: "6.11.0-solarized"
+  open_file_descriptors: 0755
+  memory_pressure_score: 0.042
+  healthy: true
+}
+
+extensions: [{ [type.example.com/telemetry.v1.SystemHealthPayload] { healthy: true } }]

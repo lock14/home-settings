@@ -1,0 +1,147 @@
+%YAML 1.2
+---
+# Authentic Solarized Dark TrueColor Clojure Syntax
+# Supports Modern Clojure 1.12:
+# - (ns core.telemetry.collector (:require ...) (:import ...)) in Solarized Violet
+# - defn / defn- / def / defonce / defmacro / defprotocol / defrecord / let / fn / loop / do in Solarized Green
+# - Declared function, macro, and protocol method names in Solarized Blue
+# - Metadata (^:private, ^String, ^double, ^long) unified in Solarized Violet
+# - :keywords / :namespaced/keywords, nil, true, false, numbers, and #"..." regexes in Solarized Magenta
+# - Control flow (if, when, when-let, if-let, cond, case, recur, try, catch, finally, throw) in Solarized Yellow
+# - Parentheses/brackets/braces, custom types (Measurable, MetricSample), threading macros (->, ->>), and calls in calm Base0 Grey
+name: Clojure
+scope: source.clojure
+version: 2
+
+file_extensions:
+  - clj
+  - cljs
+  - cljc
+  - edn
+
+variables:
+  sym_char: '[a-zA-Z0-9*+!_?$%&=<>:#.\-]'
+  sym_ident: '[a-zA-Z*+!_?$%&=<>.-][a-zA-Z0-9*+!_?$%&=<>:#.\-]*'
+
+contexts:
+  main:
+    - include: comments
+    - include: ns-declaration
+    - include: protocol-declaration
+    - include: record-declaration
+    - include: function-and-macro-declarations
+    - include: def-declarations
+    - include: metadata
+    - include: regex-and-strings
+    - include: constants-and-keywords
+    - include: numbers
+    - include: control-flow-and-structural-forms
+    - include: symbols-and-punctuation
+
+  comments:
+    - match: ';.*$'
+      scope: comment.line.semicolon.clojure
+
+  ns-declaration:
+    - match: '(\()\s*(ns)\b\s+([a-zA-Z0-9._\-]+)'
+      captures:
+        1: punctuation.section.parens.begin.clojure
+        2: keyword.control.import.clojure
+        3: entity.name.namespace.clojure
+    - match: '(\()\s*(:require|:import|:use|:refer-clojure)\b'
+      captures:
+        1: punctuation.section.parens.begin.clojure
+        2: keyword.control.import.clojure
+
+  protocol-declaration:
+    - match: '(\()\s*(defprotocol)\b\s+({{sym_ident}})'
+      captures:
+        1: punctuation.section.parens.begin.clojure
+        2: keyword.declaration.protocol.clojure
+        3: support.type.protocol.clojure
+      push:
+        - match: '\)'
+          scope: punctuation.section.parens.end.clojure
+          pop: true
+        - include: comments
+        - include: regex-and-strings
+        # Protocol method signature: (sample-score [this] ...)
+        - match: '(\()\s*({{sym_ident}})'
+          captures:
+            1: punctuation.section.parens.begin.clojure
+            2: entity.name.function.clojure
+          push:
+            - match: '\)'
+              scope: punctuation.section.parens.end.clojure
+              pop: true
+            - include: main
+
+  record-declaration:
+    - match: '(\()\s*(defrecord|deftype)\b\s+({{sym_ident}})'
+      captures:
+        1: punctuation.section.parens.begin.clojure
+        2: keyword.declaration.record.clojure
+        3: support.type.record.clojure
+
+  function-and-macro-declarations:
+    - match: '(\()\s*(defn-|defn|defmacro|defmulti|defmethod)(?=\s)(?:\s+(\^:?{{sym_char}}+))?\s+({{sym_ident}})'
+      captures:
+        1: punctuation.section.parens.begin.clojure
+        2: keyword.declaration.function.clojure
+        3: entity.name.attribute.metadata.clojure
+        4: entity.name.function.clojure
+
+  def-declarations:
+    - match: '(\()\s*(defonce|def)(?=\s)(?:\s+(\^:?{{sym_char}}+))?\s+({{sym_ident}})'
+      captures:
+        1: punctuation.section.parens.begin.clojure
+        2: keyword.declaration.clojure
+        3: entity.name.attribute.metadata.clojure
+        4: variable.other.readwrite.clojure
+
+  metadata:
+    - match: '\^:?[a-zA-Z0-9._/*+!\-?]+'
+      scope: entity.name.attribute.metadata.clojure
+
+  regex-and-strings:
+    # Regex literal #"..." in Solarized Magenta
+    - match: '#"(?:[^"\\]|\\.)*"'
+      scope: string.regexp.clojure
+    # Standard string literal "..." in Solarized Cyan
+    - match: '"'
+      scope: punctuation.definition.string.begin.clojure
+      push:
+        - meta_scope: string.quoted.double.clojure
+        - match: '"'
+          scope: punctuation.definition.string.end.clojure
+          pop: true
+        - match: '\\(?:[btnfr"\\]|u[0-9a-fA-F]{4}|[0-3]?[0-7]{1,2})'
+          scope: constant.character.escape.clojure
+
+  constants-and-keywords:
+    # Booleans and nil in Solarized Magenta
+    - match: '(?<![a-zA-Z0-9*+!_?$%&=<>:#.\-])(true|false|nil)(?![a-zA-Z0-9*+!_?$%&=<>:#.\-])'
+      scope: constant.language.clojure
+    # Clojure keywords (:keyword, :namespaced/keyword, ::auto-resolved) in Solarized Magenta
+    - match: '(?<![a-zA-Z0-9*+!_?$%&=<>.\-])::?[a-zA-Z0-9*+!_?$%&=<>.\-]+(?:/[a-zA-Z0-9*+!_?$%&=<>.\-]+)?'
+      scope: constant.other.keyword.clojure
+
+  numbers:
+    - match: '(?<![a-zA-Z0-9*+!_?$%&=<>:#.\-])[+-]?(?:0[xX][0-9a-fA-F]+N?|[0-9]+/[0-9]+|[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?M?|[0-9]+[NM]?)(?![a-zA-Z0-9*+!_?$%&=<>:#.\-])'
+      scope: constant.numeric.clojure
+
+  control-flow-and-structural-forms:
+    # Control flow forms in Solarized Yellow
+    - match: '(?<=[\(\s\[])(if-not|if-let|if-some|if|when-not|when-let|when-some|when-first|when|condp|cond->|cond->>|cond|case|recur|try|catch|finally|throw|for|doseq|dotimes|while)(?=[\s\)\]])'
+      scope: keyword.control.conditional.clojure
+    # Structural binding, definition & logical operator forms in Solarized Green
+    - match: '(?<=[\(\s\[])(defn-|defn|defmacro|defonce|defprotocol|defrecord|deftype|defmulti|defmethod|def|fn|letfn|let|loop|do|binding|with-open|extend-type|extend-protocol|reify|and|or|not)(?=[\s\)\]])'
+      scope: keyword.declaration.clojure
+
+  symbols-and-punctuation:
+    - match: '~@|[`''~@#]'
+      scope: keyword.operator.macro.clojure
+    - match: '[\(\)\[\]\{\}]'
+      scope: punctuation.section.brackets.clojure
+    - match: '{{sym_ident}}(?:/{{sym_ident}})?'
+      scope: variable.other.symbol.clojure

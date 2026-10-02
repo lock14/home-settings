@@ -525,8 +525,8 @@ contexts:
     # Built-in receiver self in Solarized Magenta
     - match: '\b(self)\b'
       scope: variable.language.rust
-    # Boolean constants in Solarized Magenta
-    - match: '\b(true|false)\b'
+    # Boolean and unit sentinel constants in Solarized Magenta
+    - match: '\b(true|false|None)\b'
       scope: constant.language.boolean.rust
     # Scoped enum variant access: Type::Variant (e.g. NodeStatus::Running, NodeStatus::Starting)
     - match: '({{pascal_ident}})(::)({{pascal_ident}})'

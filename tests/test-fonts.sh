@@ -14,16 +14,8 @@ echo "========================================"
 export HOME_SETTINGS_FONT_CACHE="${HOME_SETTINGS_FONT_CACHE:-/tmp/home-settings-fonts-cache}"
 mkdir -p "$HOME_SETTINGS_FONT_CACHE"
 
-# Test 1: Bash syntax check
-echo -e "\n[1/3] Checking setup.sh syntax..."
-if bash -n "$SCRIPT_DIR/setup.sh"; then
-    pass "Syntax valid: setup.sh"
-else
-    fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
-fi
-
-# Test 2: Font download & installation in temp directory (Linux)
-echo -e "\n[2/3] Testing font installation on Linux target..."
+# Test 1: Font download & installation in temp directory (Linux)
+echo -e "\n[1/2] Testing font installation on Linux target..."
 TEMP_HOME=$(mktemp -d)
 trap 'rm -rf "$TEMP_HOME"' EXIT
 
@@ -165,8 +157,8 @@ else
     fail "setup.sh --uninstall-fonts" "Uninstall command failed: $output"
 fi
 
-# Test 3: Font installation on macOS target
-echo -e "\n[3/3] Testing font installation on macOS target..."
+# Test 2: Font installation on macOS target
+echo -e "\n[2/2] Testing font installation on macOS target..."
 MAC_TEMP_HOME=$(mktemp -d)
 trap 'rm -rf "$TEMP_HOME" "$MAC_TEMP_HOME"' EXIT
 

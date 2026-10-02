@@ -543,20 +543,8 @@ contexts:
       scope: invalid.illegal.go
 
   pop-brackets-inner:
-    - match: ''
-      pop: 1
-      branch_point: point-brackets-inner
-      branch:
-        - pop-brackets-inner-type-parameter-list
-        - pop-brackets-inner-any
-
-  pop-brackets-inner-type-parameter-list:
     - match: (?={{ident}}{{noise}}(?:,|{{type_begin}}))
       set: pop-type-parameter-list-inner
-    - match: (?=\S)
-      fail: point-brackets-inner
-
-  pop-brackets-inner-any:
     - include: pop-on-bracket-end
     - include: match-any
 

@@ -545,7 +545,7 @@ contexts:
     - include: preprocessor-line-continuation
     - include: preprocessor-comments
     - match: \bdefined\b
-      scope: keyword.control.directive.c
+      scope: keyword.operator.word.c
     - match: \b__has_include(?:_next)?\b
       scope: keyword.control.directive.c
     - match: '"'
@@ -1471,6 +1471,8 @@ contexts:
     - match: '\}'
       scope: punctuation.section.block.end.c
     - include: expressions
+    - match: '{{identifier}}'
+      scope: variable.other.readwrite.c
 
   preprocessor-practical-workarounds:
     - include: preprocessor-convention-ignore-uppercase-ident-lines
@@ -1518,6 +1520,8 @@ contexts:
         - include: preprocessor-line-continuation
         - include: preprocessor-line-ending
         - include: preprocessor-comments
+        - match: \bonce\b
+          scope: variable.parameter.pragma.c
         - match: \bdefined\b
           scope: keyword.control.c
     - match: ^\s*(#\s*undef)\b

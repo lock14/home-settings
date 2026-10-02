@@ -12,13 +12,7 @@ echo "Running Completions Setup Tests"
 echo "========================================"
 
 # Test 1: Syntax validation
-echo -e "\n[1/3] Checking script and completion syntax..."
-if bash -n "$SCRIPT_DIR/setup.sh"; then
-    pass "Syntax valid: setup.sh"
-else
-    fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
-fi
-
+echo -e "\n[1/3] Checking completion syntax..."
 if zsh -n "$SCRIPT_DIR/dotfiles/.zsh-completions"; then
     pass "Syntax valid: dotfiles/.zsh-completions"
 else
