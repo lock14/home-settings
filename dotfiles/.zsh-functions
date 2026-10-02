@@ -6,6 +6,24 @@
 # Routes file opens into the active Tmux + Neovim IDE pane when $NVIM_IDE_SOCKET is live,
 # while keeping $EDITOR=nvim intact so `git commit` / `gcommit` blocks properly.
 unalias v 2>/dev/null || true
+_ide_tmux_target() {
+    [[ "${TMUX:-}" == *,*,* ]] && command -v tmux >/dev/null 2>&1 || return 1
+    local tmux_rest="${TMUX%,*}"
+    local tmux_pid="${tmux_rest##*,}"
+    local tmux_sid="${TMUX##*,}"
+    tmux_sid="${tmux_sid#\$}"
+    local tmux_target="${TMUX_PANE:-}"
+    if [ -z "$tmux_target" ] && [[ "$tmux_sid" =~ ^[0-9]+$ ]]; then
+        tmux_target="\$$tmux_sid"
+    fi
+    [ -n "$tmux_target" ] || return 1
+    local srv_info fmt='#{pid}:#{session_id}'
+    [[ "$tmux_target" == %* ]] && fmt='#{pid}:#{pane_id}'
+    srv_info="$(tmux display-message -p -t "$tmux_target" "$fmt" 2>/dev/null || true)"
+    [ "$srv_info" = "$tmux_pid:$tmux_target" ] || return 1
+    printf '%s' "$tmux_target"
+}
+
 v() {
     local sock="${NVIM_IDE_SOCKET:-}"
     local pane="${NVIM_IDE_PANE:-}"
@@ -48,11 +66,11 @@ v() {
         fi
     done
 
-    local tmux_target="${TMUX_PANE:-}"
-    if [ -z "$tmux_target" ] && [[ "${TMUX:-}" == *,*,* ]]; then
-        tmux_target="\$${TMUX##*,}"
+    local tmux_target=""
+    if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ]; then
+        tmux_target="$(_ide_tmux_target || true)"
     fi
-    if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ] && [ -n "$tmux_target" ] && command -v tmux >/dev/null 2>&1; then
+    if [ -n "$tmux_target" ]; then
         tmux_sock="$(tmux show-options -qv -t "$tmux_target" @ide_socket 2>/dev/null || true)"
         if [ -z "$tmux_sock" ]; then
             local env_sock
@@ -107,8 +125,10 @@ v() {
 
     if command -v nvim >/dev/null 2>&1; then
         command nvim "$@"
-    else
+    elif command -v vim >/dev/null 2>&1; then
         command vim "$@"
+    else
+        command vi "$@"
     fi
 }
 
@@ -123,11 +143,9 @@ icd() {
 
     if [ "${1:-}" = "--reset" ] || [ "${1:-}" = "~" ]; then
         local init_root="${IDE_INITIAL_ROOT:-}"
-        if [ -z "$init_root" ] && [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
-            local tmux_target="${TMUX_PANE:-}"
-            if [ -z "$tmux_target" ] && [[ "${TMUX:-}" == *,*,* ]]; then
-                tmux_target="\$${TMUX##*,}"
-            fi
+        if [ -z "$init_root" ] && [ -n "${TMUX:-}" ]; then
+            local tmux_target
+            tmux_target="$(_ide_tmux_target || true)"
             if [ -n "$tmux_target" ]; then
                 init_root="$(tmux show-options -qv -t "$tmux_target" @ide_initial_root 2>/dev/null || true)"
             fi

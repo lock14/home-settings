@@ -165,10 +165,10 @@ function! s:TmuxNavigate(dir, tmux_dir) abort
     endif
 endfunction
 
-nnoremap <silent> <C-h> :call <SID>TmuxNavigate('h', 'L')<CR>
-nnoremap <silent> <C-j> :call <SID>TmuxNavigate('j', 'D')<CR>
-nnoremap <silent> <C-k> :call <SID>TmuxNavigate('k', 'U')<CR>
-nnoremap <silent> <C-l> :call <SID>TmuxNavigate('l', 'R')<CR>
+nnoremap <silent> <C-h> <C-w>h
+nnoremap <silent> <C-j> <C-w>j
+nnoremap <silent> <C-k> <C-w>k
+nnoremap <silent> <C-l> <C-w>l
 if !has('nvim')
     silent! execute "set <M-h>=\<Esc>h"
     silent! execute "set <M-j>=\<Esc>j"

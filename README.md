@@ -92,7 +92,7 @@ home-settings/
 │   ├── TypeScript.sublime-syntax    # TypeScript / JavaScript ES2024+ syntax
 │   └── XML.sublime-syntax           # XML syntax with namespaces, directives & CDATA
 │
-└── tests/                           # Automated test suites (350+ tests across 8 modules)
+└── tests/                           # Automated test suites (500+ tests across 8 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap & dry-run tests
     ├── test-dotfiles.sh             # Declarative dotfiles auto-discovery, backup, & drop-ins
@@ -282,7 +282,7 @@ make system
 # Clean uninstallation of managed dotfiles, binaries, and fonts
 make uninstall
 
-# Run complete test suite (350+ tests across 8 modules)
+# Run complete test suite (500+ tests across 8 modules)
 make test
 
 # Run ShellCheck and shell syntax checks
@@ -420,7 +420,7 @@ The redesigned repository is built for frictionless extension:
 All scripts enforce `set -euo pipefail` for fail-fast safety.
 
 ```bash
-# Run full automated test suite (350+ tests across 8 test modules)
+# Run full automated test suite (500+ tests across 8 test modules)
 make test
 
 # Run syntax & lint validation

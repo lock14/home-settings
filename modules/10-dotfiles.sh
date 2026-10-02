@@ -116,13 +116,7 @@ if [ -f "$BAT_THEME_SRC" ] || [ -d "$REPO_DIR/syntaxes" ]; then
             done
         fi
         if [ "$need_bat_build" = true ]; then
-            if command -v bat >/dev/null 2>&1; then
-                bat cache --build >/dev/null 2>&1 || true
-            elif command -v batcat >/dev/null 2>&1; then
-                batcat cache --build >/dev/null 2>&1 || true
-            elif command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
-                mise exec -- bat cache --build >/dev/null 2>&1 || true
-            fi
+            rebuild_bat_cache
         fi
     fi
 fi

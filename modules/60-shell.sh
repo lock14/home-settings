@@ -100,13 +100,15 @@ if [ "$SKIP_COMPLETIONS" = false ]; then
 fi
 
 # Default Login Shell
-CURRENT_SHELL="$(getent passwd "${USER:-$(whoami)}" 2>/dev/null | cut -d: -f7 || echo "${SHELL:-}")"
-ZSH_BIN="$(command -v zsh 2>/dev/null || true)"
-if [ -n "$ZSH_BIN" ] && [ "$CURRENT_SHELL" != "$ZSH_BIN" ] && [ -t 0 ] && command -v chsh &>/dev/null; then
-    echo "  Changing default login shell to Zsh ($ZSH_BIN)..."
-    if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] chsh -s $ZSH_BIN"
-    else
-        chsh -s "$ZSH_BIN" || true
+if [ "$SKIP_ZSH" = false ]; then
+    CURRENT_SHELL="$(getent passwd "${USER:-$(whoami)}" 2>/dev/null | cut -d: -f7 || echo "${SHELL:-}")"
+    ZSH_BIN="$(command -v zsh 2>/dev/null || true)"
+    if [ -n "$ZSH_BIN" ] && [ "$CURRENT_SHELL" != "$ZSH_BIN" ] && [ -t 0 ] && command -v chsh &>/dev/null; then
+        echo "  Changing default login shell to Zsh ($ZSH_BIN)..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "  [DryRun] chsh -s $ZSH_BIN"
+        else
+            chsh -s "$ZSH_BIN" || true
+        fi
     fi
 fi

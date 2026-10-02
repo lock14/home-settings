@@ -134,12 +134,13 @@ def run_tmux(*args: str, input_bytes: bytes | None = None) -> subprocess.Complet
         return subprocess.run(
             ["tmux", *args],
             input=input_bytes,
-             stdout=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             check=False,
         )
     return subprocess.run(
         ["tmux", *args],
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
@@ -326,12 +327,12 @@ def sanitize_name_token(raw: str) -> str:
     return cleaned or "workspace"
 
 
-def resolve_custom_session_name(target_dir: str) -> str:
+def _call_ide_hook(fn_name: str, *args: str) -> str:
     xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     rules = os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
     try:
         with open(rules, "r", encoding="utf-8") as f:
-            if "ide_session_name" not in f.read():
+            if fn_name not in f.read():
                 return ""
     except OSError:
         return ""
@@ -339,17 +340,22 @@ def resolve_custom_session_name(target_dir: str) -> str:
         [
             "bash",
             "-c",
-            '. "$1" && declare -F ide_session_name >/dev/null && ide_session_name "$2"',
+            f'. "$1" && declare -F {fn_name} >/dev/null && {fn_name} "${{@:2}}"',
             "ide",
             rules,
-            target_dir,
+            *args,
         ],
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
         check=False,
     )
     return (res.stdout or "").strip() if res.returncode == 0 else ""
+
+
+def resolve_custom_session_name(target_dir: str) -> str:
+    return _call_ide_hook("ide_session_name", target_dir)
 
 
 def sanitize_session_name(raw: str) -> str:
@@ -378,9 +384,11 @@ def current_ide_session() -> str:
     if len(parts) < 3:
         return ""
     server_pid = parts[-2]
-    last_part = parts[-1]
+    last_part = parts[-1].lstrip("$")
     tmux_pane = os.environ.get("TMUX_PANE", "")
-    target = tmux_pane if tmux_pane else f"${last_part}"
+    target = tmux_pane if tmux_pane else (f"${last_part}" if last_part else "")
+    if not target:
+        return ""
     found = tmux_out(
         "display-message", "-p", "-t", target,
         "#{pid}\t#{session_name}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}",
@@ -1530,26 +1538,7 @@ def paste_from_system_clipboard(target_pane: str) -> None:
 
 
 def resolve_private_link(link_word: str, link_cwd: str) -> str:
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    rules = os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
-    if not os.path.isfile(rules) or not os.access(rules, os.R_OK):
-        return ""
-    res = subprocess.run(
-        [
-            "bash",
-            "-c",
-            '. "$1" && declare -F ide_resolve_link >/dev/null && ide_resolve_link "$2" "$3"',
-            "ide",
-            rules,
-            link_word,
-            link_cwd,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
-    return (res.stdout or "").strip() if res.returncode == 0 else ""
+    return _call_ide_hook("ide_resolve_link", link_word, link_cwd)
 
 
 def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
@@ -1760,11 +1749,12 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
     return bool(ssh_active and has_tmux)
 
 
-def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
-    if not word or not shutil.which("tmux"):
-        return word
+def _resolve_capture_pane_targets(target_arg: str = "") -> list[list[str]]:
+    if not shutil.which("tmux"):
+        return []
     if not (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg):
-        return word
+        return []
+    sess = ""
     if target_arg and target_arg.startswith("%"):
         pane_target = ["-t", target_arg]
     else:
@@ -1774,41 +1764,54 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
         elif os.environ.get("TMUX_PANE"):
             pane_target = ["-t", os.environ["TMUX_PANE"]]
         else:
-            return word
-    joined_out = tmux_out("capture-pane", "-p", "-J", *pane_target)
-    if joined_out:
-        for m in re.finditer(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+", joined_out):
-            full = strip_token_wrappers(m.group(0))
-            if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
-                return full
-    raw_lines = tmux_out("capture-pane", "-p", *pane_target).splitlines()
-    for idx, line in enumerate(raw_lines):
-        m_tail = _URL_TAIL_RE.search(line.strip())
-        if not m_tail:
-            continue
-        first_frag = strip_token_wrappers(m_tail.group(1))
-        frags = [first_frag]
-        cur_line = line.rstrip()
-        j = idx + 1
-        while j < len(raw_lines) and (
-            frags[-1].endswith(("-", "/", "_", "=", "?", "&", "#")) or len(cur_line) >= 60
-        ):
-            next_s = raw_lines[j].strip()
-            if not next_s:
-                break
-            first_tok = next_s.split()[0]
-            cont = strip_token_wrappers(first_tok)
-            if not cont or cont.startswith(("http://", "https://", "file://")) or not _URL_CHARS_RE.match(cont):
-                break
-            frags.append(cont)
-            cur_line = raw_lines[j].rstrip()
-            if len(next_s.split()) > 1:
-                break
-            j += 1
-        if len(frags) > 1:
-            full = "".join(frags)
-            if word in frags or full.startswith(word) or full.endswith(word):
-                return full
+            return []
+    pane_targets = [pane_target]
+    if not (target_arg and target_arg.startswith("%")) and sess and session_exists(sess):
+        for pid in tmux_out("list-panes", "-t", f"={sess}:", "-F", "#{pane_id}").splitlines():
+            if pid and ["-t", pid] not in pane_targets:
+                pane_targets.append(["-t", pid])
+    return pane_targets
+
+
+def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
+    if not word:
+        return word
+    pane_targets = _resolve_capture_pane_targets(target_arg)
+    for pt in pane_targets:
+        joined_out = tmux_out("capture-pane", "-p", "-J", *pt)
+        if joined_out:
+            for m in re.finditer(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+", joined_out):
+                full = strip_token_wrappers(m.group(0))
+                if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
+                    return full
+        raw_lines = tmux_out("capture-pane", "-p", *pt).splitlines()
+        for idx, line in enumerate(raw_lines):
+            m_tail = _URL_TAIL_RE.search(line.strip())
+            if not m_tail:
+                continue
+            first_frag = strip_token_wrappers(m_tail.group(1))
+            frags = [first_frag]
+            cur_line = line.rstrip()
+            j = idx + 1
+            while j < len(raw_lines) and (
+                frags[-1].endswith(("-", "/", "_", "=", "?", "&", "#")) or len(cur_line) >= 60
+            ):
+                next_s = raw_lines[j].strip()
+                if not next_s:
+                    break
+                first_tok = next_s.split()[0]
+                cont = strip_token_wrappers(first_tok)
+                if not cont or cont.startswith(("http://", "https://", "file://")) or not _URL_CHARS_RE.match(cont):
+                    break
+                frags.append(cont)
+                cur_line = raw_lines[j].rstrip()
+                if len(next_s.split()) > 1:
+                    break
+                j += 1
+            if len(frags) > 1:
+                full = "".join(frags)
+                if word in frags or full.startswith(word) or full.endswith(word):
+                    return full
     return word
 
 
@@ -1837,26 +1840,9 @@ _CONT_LINE_RE = re.compile(r"^[ \t]*\r?\n[ \t]*([^\x1b\s()\[\]{}<>\"'`,;*]+)")
 
 def recover_split_osc8_href(word: str, target_arg: str = "") -> str:
     clean_word = strip_token_wrappers(word.strip())
-    if not clean_word or not shutil.which("tmux"):
+    if not clean_word:
         return ""
-    if not (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg):
-        return ""
-    sess = ""
-    if target_arg and target_arg.startswith("%"):
-        pane_target = ["-t", target_arg]
-    else:
-        sess = resolve_target_session(target_arg)
-        if sess and session_exists(sess):
-            pane_target = ["-t", f"={sess}:"]
-        elif os.environ.get("TMUX_PANE"):
-            pane_target = ["-t", os.environ["TMUX_PANE"]]
-        else:
-            return ""
-    pane_targets = [pane_target]
-    if not (target_arg and target_arg.startswith("%")) and sess and session_exists(sess):
-        for pid in tmux_out("list-panes", "-t", f"={sess}:", "-F", "#{pane_id}").splitlines():
-            if pid and ["-t", pid] not in pane_targets:
-                pane_targets.append(["-t", pid])
+    pane_targets = _resolve_capture_pane_targets(target_arg)
     for pt in pane_targets:
         esc_out = tmux_out("capture-pane", "-e", "-p", "-J", "-S", "-500", *pt)
         if not esc_out:
@@ -2151,7 +2137,14 @@ def main() -> int:
         elif arg == "--open-link":
             action = "open-link"
             rem = argv[i + 1:]
-            if len(rem) >= 3 and os.path.isdir(rem[2]):
+            if (
+                len(rem) >= 3
+                and os.path.isdir(rem[2])
+                and (
+                    len(rem) >= 4
+                    or not (os.path.isabs(rem[1]) and os.path.isdir(rem[1]) and not os.path.isabs(rem[2]))
+                )
+            ):
                 link_href, link_word, link_cwd = rem[0], rem[1], rem[2]
                 if len(rem) >= 4:
                     target_arg = rem[3]

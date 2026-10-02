@@ -8,6 +8,9 @@ COLOR_PASS="\033[32m"
 COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
+# Isolate all test suites from any live caller tmux session by default
+unset TMUX TMUX_PANE
+
 # Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
 export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
 export MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
@@ -41,14 +44,14 @@ export SOL_BASE03 SOL_BASE02 SOL_BASE01 SOL_BASE00 SOL_BASE0 SOL_BASE1 SOL_BASE2
 export SOL_YELLOW SOL_ORANGE SOL_RED SOL_MAGENTA SOL_VIOLET SOL_BLUE SOL_CYAN SOL_GREEN SOL_RESET
 
 pass() {
-    echo -e "  ${COLOR_PASS}✔ PASS:${COLOR_RESET} $1"
+    printf '  %b✔ PASS:%b %s\n' "$COLOR_PASS" "$COLOR_RESET" "$1"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 }
 
 fail() {
-    echo -e "  ${COLOR_FAIL}✘ FAIL:${COLOR_RESET} $1"
+    printf '  %b✘ FAIL:%b %s\n' "$COLOR_FAIL" "$COLOR_RESET" "$1"
     if [ $# -ge 2 ] && [ -n "$2" ]; then
-        echo "    $2"
+        printf '    %s\n' "$2"
     fi
     TESTS_FAILED=$((TESTS_FAILED + 1))
 }
@@ -110,10 +113,41 @@ assert_symlink() {
     fi
 }
 
+wait_for_nvim_socket() {
+    local sock="$1"
+    local max_tries="${2:-30}"
+    local check_rpc="${3:-0}"
+    local tries=0
+    while [ "$tries" -lt "$max_tries" ]; do
+        if [ -S "$sock" ]; then
+            if [ "$check_rpc" != "1" ] || nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
+                return 0
+            fi
+        fi
+        sleep 0.05
+        tries=$((tries + 1))
+    done
+    return 1
+}
+
+parse_subshell_results() {
+    local pass_prefix="${1:-}"
+    local fail_prefix="${2:-}"
+    local line rest
+    while IFS= read -r line; do
+        if [[ "$line" == PASS:* ]]; then
+            pass "${pass_prefix}${line#PASS:}"
+        elif [[ "$line" == FAIL:* ]]; then
+            rest="${line#FAIL:}"
+            fail "${fail_prefix}${rest%%:*}" "${rest#*:}"
+        fi
+    done
+}
+
 test_summary() {
-    echo -e "\n========================================"
-    echo "Summary: $TESTS_PASSED passed, $TESTS_FAILED failed"
-    echo "========================================"
+    printf '\n========================================\n'
+    printf 'Summary: %s passed, %s failed\n' "$TESTS_PASSED" "$TESTS_FAILED"
+    printf '========================================\n'
 
     if [ "$TESTS_FAILED" -gt 0 ]; then
         exit 1

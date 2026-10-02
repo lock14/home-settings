@@ -44,7 +44,7 @@ else
 
         # Rebuild bat cache with modern Mise bat and remove obsolete distro shims
         if "$MISE_BIN" which bat >/dev/null 2>&1; then
-            "$MISE_BIN" exec -- bat cache --build >/dev/null 2>&1 || true
+            rebuild_bat_cache "$MISE_BIN"
             if [ -L "$HOME/.local/bin/bat" ] && [ "$(readlink "$HOME/.local/bin/bat")" = "$(command -v batcat 2>/dev/null)" ]; then
                 rm -f "$HOME/.local/bin/bat"
             fi
