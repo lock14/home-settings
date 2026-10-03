@@ -1652,6 +1652,99 @@ EOF
         else
             fail "Neovim SSH DISPLAY guard, autoread/clipboard, left-anchored mini.files & render-markdown" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|MF=true|MFL=true|MDW=true|RMHL=true|RMT=true|XM=true', got '$SSH_NVIM_OUT'"
         fi
+
+        MD_LINK_SCRIPT="$(mktemp)"
+        cat << 'EOF' > "$MD_LINK_SCRIPT"
+local c_mouse = vim.fn.maparg("<C-LeftMouse>", "n", false, true)
+local m_mouse = vim.fn.maparg("<M-LeftMouse>", "n", false, true)
+local gx_map = vim.fn.maparg("gx", "n", false, true)
+local maps_ok = (c_mouse.desc ~= nil and c_mouse.desc:find("Follow Markdown") ~= nil
+    and m_mouse.desc ~= nil and m_mouse.desc:find("Follow Markdown") ~= nil
+    and gx_map.desc ~= nil and gx_map.desc:find("Follow Markdown") ~= nil)
+
+local buf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(buf)
+vim.bo[buf].filetype = "markdown"
+local cr_map = vim.fn.maparg("<CR>", "n", false, true)
+local cr_ok = (cr_map.desc ~= nil and cr_map.desc:find("Follow Markdown") ~= nil and cr_map.buffer == 1)
+
+local lines = {
+    "# Test Document",
+    "",
+    "## Table of Contents",
+    "- [Quick Start](#quick-start)",
+    "- [Linux & macOS](#linux--macos)",
+    "- [Automated Setup (`doom setup`)](#automated-setup-doom-setup)",
+    "- [Notes](#notes)",
+    "- [Notes 2](#notes-1)",
+    "- [Sample Go File](sample-code/sample.go#L10)",
+    "",
+    "```bash",
+    "# Fenced code comment: Quick Start",
+    "doom setup",
+    "```",
+    "",
+    "## Quick Start",
+    "Quick start content.",
+    "",
+    "### Linux & macOS",
+    "Linux and macOS content.",
+    "",
+    "## Automated Setup (`doom setup`)",
+    "Automated setup content.",
+    "",
+    "## Notes",
+    "First notes content.",
+    "",
+    "## Notes",
+    "Second notes content."
+}
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+vim.opt_local.conceallevel = 2
+
+vim.api.nvim_win_set_cursor(0, { 4, 5 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local pos_qs = vim.api.nvim_win_get_cursor(0)
+local qs_ok = (pos_qs[1] == 16)
+
+vim.cmd("normal! \15")
+local pos_ret = vim.api.nvim_win_get_cursor(0)
+local ret_ok = (pos_ret[1] == 4)
+
+vim.api.nvim_win_set_cursor(0, { 5, 5 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gx", true, false, true), "mx", false)
+local pos_linux = vim.api.nvim_win_get_cursor(0)
+local linux_ok = (pos_linux[1] == 19)
+
+vim.api.nvim_win_set_cursor(0, { 6, 5 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local pos_auto = vim.api.nvim_win_get_cursor(0)
+local auto_ok = (pos_auto[1] == 22)
+
+vim.api.nvim_win_set_cursor(0, { 8, 5 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local pos_notes2 = vim.api.nvim_win_get_cursor(0)
+local notes2_ok = (pos_notes2[1] == 28)
+
+vim.api.nvim_win_set_cursor(0, { 9, 5 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local rel_file = vim.fn.expand("%")
+local pos_rel = vim.api.nvim_win_get_cursor(0)
+local rel_ok = (rel_file:find("sample.go") ~= nil and pos_rel[1] == 10)
+
+vim.cmd("normal! \15")
+local pos_back = vim.api.nvim_win_get_cursor(0)
+local back_ok = (pos_back[1] == 9)
+
+io.write("MAPS=" .. tostring(maps_ok) .. "|CR=" .. tostring(cr_ok) .. "|QS=" .. tostring(qs_ok) .. "|RET=" .. tostring(ret_ok) .. "|LNX=" .. tostring(linux_ok) .. "|AUTO=" .. tostring(auto_ok) .. "|N2=" .. tostring(notes2_ok) .. "|REL=" .. tostring(rel_ok) .. "|BACK=" .. tostring(back_ok))
+EOF
+        MD_LINK_OUT="$( (cd "$SCRIPT_DIR" && run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $MD_LINK_SCRIPT") 2>/dev/null || true)"
+        rm -f "$MD_LINK_SCRIPT"
+        if [ "$MD_LINK_OUT" = "MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true" ]; then
+            pass "Neovim init.lua provides conceal-aware Markdown TOC anchor, duplicate-heading, fenced-code-block-ignoring, relative file line, and 1-step jumplist navigation (<C-LeftMouse>, <M-LeftMouse>, gx, <CR>)"
+        else
+            fail "Neovim Markdown link & TOC navigation" "Expected 'MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true', got '$MD_LINK_OUT'"
+        fi
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"
