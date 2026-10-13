@@ -338,12 +338,12 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     MD_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/markdown/highlights.scm"
-    MD_INLINE_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/markdown_inline/highlights.scm"
+    MD_INLINE_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/markdown_inline/highlights.scm"
     if [ -f "$MD_QUERY" ] && grep -q 'atx_h1_marker' "$MD_QUERY" && grep -q 'pipe_table_header' "$MD_QUERY" && \
-       [ -f "$MD_INLINE_QUERY" ] && grep -q '!NOTE' "$MD_INLINE_QUERY"; then
-        pass "Neovim defines Tree-sitter query extensions for Markdown & Inline Markdown (Base01 heading/quote delimiters, Base01 table borders, GitHub alerts)"
+       [ -f "$MD_INLINE_QUERY" ] && grep -q '!NOTE' "$MD_INLINE_QUERY" && ! grep -q '#set!.*url' "$MD_INLINE_QUERY"; then
+        pass "Neovim defines Tree-sitter queries for Markdown & Inline Markdown (Base01 heading/quote delimiters, Base01 table borders, GitHub alerts, zero rogue OSC 8 url metadata)"
     else
-        fail "Neovim Markdown query extension" "Missing or invalid after/queries/markdown/highlights.scm or after/queries/markdown_inline/highlights.scm"
+        fail "Neovim Markdown query extension" "Missing or invalid after/queries/markdown/highlights.scm or queries/markdown_inline/highlights.scm"
     fi
 
     JS_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/javascript/highlights.scm"
@@ -1666,7 +1666,9 @@ local buf = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_set_current_buf(buf)
 vim.bo[buf].filetype = "markdown"
 local cr_map = vim.fn.maparg("<CR>", "n", false, true)
-local cr_ok = (cr_map.desc ~= nil and cr_map.desc:find("Follow Markdown") ~= nil and cr_map.buffer == 1)
+local gd_map = vim.fn.maparg("gd", "n", false, true)
+local cr_ok = (cr_map.desc ~= nil and cr_map.desc:find("Follow Markdown") ~= nil and cr_map.buffer == 1
+    and gd_map.desc ~= nil and gd_map.desc:find("Follow Markdown") ~= nil and gd_map.buffer == 1)
 
 local lines = {
     "# Test Document",
@@ -1702,7 +1704,7 @@ local lines = {
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 vim.opt_local.conceallevel = 2
 
-vim.api.nvim_win_set_cursor(0, { 4, 5 })
+vim.api.nvim_win_set_cursor(0, { 4, 0 })
 vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
 local pos_qs = vim.api.nvim_win_get_cursor(0)
 local qs_ok = (pos_qs[1] == 16)
@@ -1717,7 +1719,7 @@ local pos_linux = vim.api.nvim_win_get_cursor(0)
 local linux_ok = (pos_linux[1] == 19)
 
 vim.api.nvim_win_set_cursor(0, { 6, 5 })
-vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gd", true, false, true), "mx", false)
 local pos_auto = vim.api.nvim_win_get_cursor(0)
 local auto_ok = (pos_auto[1] == 22)
 

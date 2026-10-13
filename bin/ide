@@ -1923,14 +1923,53 @@ def recover_split_osc8_href(word: str, target_arg: str = "") -> str:
     return ""
 
 
+def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True) -> bool:
+    slug = urllib.parse.unquote(anchor.lstrip("#").strip()).lower()
+    if not slug:
+        return False
+    sess = resolve_target_session(target_arg)
+    if not sess or not session_exists(sess):
+        return False
+    if focus:
+        toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
+    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    if not sock or not is_socket_path(sock) or not resolve_nvim_bin():
+        return False
+    esc_slug = slug.replace("\\", "\\\\").replace("'", "\\'")
+    lua_expr = (
+        f"(function() local s = '{esc_slug}'; "
+        "local ok, p = pcall(vim.treesitter.get_parser, 0, 'markdown'); "
+        "if not ok or not p then return 0 end; "
+        "local t = (p:parse(true) or {})[1]; "
+        "if not t then return 0 end; "
+        "local q = vim.treesitter.query.parse('markdown', '(atx_heading (inline) @h)'); "
+        "local seen = {}; "
+        "for _, n in q:iter_captures(t:root(), 0) do "
+        "local h = vim.treesitter.get_node_text(n, 0):gsub('^%s+', ''):gsub('%s+$', ''):gsub('%[(.-)%]%b()', '%1'):gsub('<[^>]+>', ''):lower():gsub('[^%w%s%-_]', ''):gsub(' ', '-'); "
+        "local c = seen[h] or 0; seen[h] = c + 1; "
+        "if (c == 0 and h == s) or (string.format('%s-%d', h, c) == s) then "
+        "local l = (n:range()) + 1; "
+        "vim.cmd(\"normal! m'\"); "
+        "vim.cmd(string.format('keepjumps call cursor(%d, 1) | normal! ^zz', l)); "
+        "return l end end; return 0 end)()"
+    )
+    out = nvim_remote_expr(sock, f'luaeval("{lua_expr.replace(chr(34), chr(92) + chr(34))}")')
+    return bool(out and out != "0")
+
+
 def _open_osc8_href(href: str, word: str, cwd: str, target_arg: str) -> int | None:
-    if href.startswith("file://"):
+    if href.startswith("#"):
+        return 0 if _jump_nvim_markdown_anchor(href, target_arg) else None
+    if href.startswith("file://") or not _RE_SCHEME.match(href):
         href_path, href_line = parse_file_target(href, cwd)
         if not href_line and word:
             word_path, word_line = _extract_word_target(word, cwd)
             if word_line and os.path.basename(href_path) == os.path.basename(word_path):
                 href_line = word_line
+        frag = href.rsplit("#", 1)[1] if (not href_line and "#" in href) else ""
         if resolve_and_open_target(href, cwd, target_arg, fallback_line=href_line):
+            if frag:
+                _jump_nvim_markdown_anchor(frag, target_arg, focus=False)
             return 0
     elif href.startswith(("http://", "https://")):
         return 0 if open_browser_url(href, target_arg) else 1

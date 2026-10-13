@@ -79,11 +79,17 @@ vim.api.nvim_create_autocmd("FileType", {
         vim.opt_local.wrap = true
         vim.opt_local.linebreak = true
         vim.opt_local.breakindent = true
+        local buf = (ev and ev.buf) or true
         vim.keymap.set("n", "<CR>", function()
             if not (follow_editor_link and follow_editor_link(false, false)) then
                 vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
             end
-        end, { buffer = (ev and ev.buf) or true, silent = true, desc = "Follow Markdown link under cursor" })
+        end, { buffer = buf, silent = true, desc = "Follow Markdown link under cursor" })
+        vim.keymap.set("n", "gd", function()
+            if not (follow_editor_link and follow_editor_link(false, true)) then
+                vim.lsp.buf.definition()
+            end
+        end, { buffer = buf, silent = true, desc = "Follow Markdown link or LSP definition" })
     end,
 })
 
@@ -297,7 +303,7 @@ local function ide_job(...)
 end
 
 -- -------------------------------------------------------------
--- Conceal-Aware Markdown & Editor Link Navigation
+-- Standard Tree-sitter & LSP Link / Definition Navigation
 -- -------------------------------------------------------------
 local function url_decode(str)
     return (str:gsub("%%(%x%x)", function(hex)
@@ -308,187 +314,70 @@ end
 local function markdown_heading_slug(raw)
     if not raw or raw == "" then return "" end
     local h = raw:gsub("^%s*#+%s+", ""):gsub("%s+#+%s*$", ""):gsub("^%s+", ""):gsub("%s+$", "")
-    h = h:gsub("%[(.-)%]%b()", "%1")
-    h = h:gsub("%[(.-)%]%b[]", "%1")
-    h = h:gsub("<[^>]+>", "")
-    h = h:lower()
-    h = h:gsub("[^%w%s%-_]", "")
-    h = h:gsub(" ", "-")
-    return h
+    h = h:gsub("%[(.-)%]%b()", "%1"):gsub("%[(.-)%]%b[]", "%1"):gsub("<[^>]+>", "")
+    return h:lower():gsub("[^%w%s%-_]", ""):gsub(" ", "-")
 end
 
 local function find_markdown_anchor_line(bufnr, raw_slug)
     local target_slug = url_decode(raw_slug or ""):gsub("^#+", ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
     if target_slug == "" then return nil end
 
-    local bufnr_val = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
-    local lines = vim.api.nvim_buf_get_lines(bufnr_val, 0, -1, false)
-    local in_fence = false
-    local fence_char = nil
-    local fence_len = 0
-    local seen_headings = {}
-
-    for lnum, line in ipairs(lines) do
-        local fence = line:match("^%s*(`+)") or line:match("^%s*(~+)")
-        if fence and #fence >= 3 then
-            if not in_fence then
-                in_fence = true
-                fence_char = fence:sub(1, 1)
-                fence_len = #fence
-            elseif fence:sub(1, 1) == fence_char and #fence >= fence_len then
-                in_fence = false
-                fence_char = nil
-                fence_len = 0
-            end
-        elseif not in_fence then
-            local html_id = line:match('<a%s+[^>]*id=["\']([^"\']+)["\']') or line:match('<a%s+[^>]*name=["\']([^"\']+)["\']')
-            if html_id and html_id:lower() == target_slug then
-                return lnum
-            end
-
-            local hashes, heading_text = line:match("^%s*(#+)%s+(.+)$")
-            if hashes and heading_text then
-                local base_slug = markdown_heading_slug(line)
-                local count = seen_headings[base_slug] or 0
-                seen_headings[base_slug] = count + 1
-                local full_slug = count == 0 and base_slug or string.format("%s-%d", base_slug, count)
-                if full_slug == target_slug or (count == 0 and base_slug == target_slug) then
-                    return lnum
+    local b = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+    local ok, parser = pcall(vim.treesitter.get_parser, b, "markdown")
+    if ok and parser then
+        local tree = (parser:parse(true) or {})[1]
+        if tree then
+            local q = vim.treesitter.query.parse("markdown", "(atx_heading (inline) @h)")
+            local seen = {}
+            for _, node in q:iter_captures(tree:root(), b) do
+                local base = markdown_heading_slug(vim.treesitter.get_node_text(node, b))
+                local count = seen[base] or 0
+                seen[base] = count + 1
+                local full = count == 0 and base or string.format("%s-%d", base, count)
+                if full == target_slug or (count == 0 and base == target_slug) then
+                    return (node:range()) + 1
                 end
             end
+        end
+    end
+    for lnum, line in ipairs(vim.api.nvim_buf_get_lines(b, 0, -1, false)) do
+        local html_id = line:match('<a%s+[^>]*id=["\']([^"\']+)["\']') or line:match('<a%s+[^>]*name=["\']([^"\']+)["\']')
+        if html_id and html_id:lower() == target_slug then
+            return lnum
         end
     end
     return nil
-end
-
-local function find_inline_markdown_links(line)
-    local links = {}
-    local len = #line
-    local i = 1
-    while i <= len do
-        local b_start = line:find("%[", i)
-        if not b_start then break end
-
-        local depth = 1
-        local j = b_start + 1
-        local in_code = false
-        while j <= len and depth > 0 do
-            local c = line:sub(j, j)
-            if c == "`" then
-                in_code = not in_code
-            elseif not in_code then
-                if c == "[" then
-                    depth = depth + 1
-                elseif c == "]" then
-                    depth = depth - 1
-                end
-            end
-            if depth == 0 then break end
-            j = j + 1
-        end
-
-        if depth == 0 and j < len and line:sub(j + 1, j + 1) == "(" then
-            local p_start = j + 1
-            local p_depth = 1
-            local k = p_start + 1
-            while k <= len and p_depth > 0 do
-                local c = line:sub(k, k)
-                if c == "(" then
-                    p_depth = p_depth + 1
-                elseif c == ")" then
-                    p_depth = p_depth - 1
-                end
-                if p_depth == 0 then break end
-                k = k + 1
-            end
-
-            if p_depth == 0 then
-                local label = line:sub(b_start + 1, j - 1)
-                local raw_dest = line:sub(p_start + 1, k - 1)
-                local dest = raw_dest:gsub("^%s+", ""):gsub("%s+$", "")
-                if dest:sub(1, 1) == "<" and dest:find(">", 2) then
-                    dest = dest:match("^<([^>]+)>") or dest
-                else
-                    dest = dest:match("^(%S+)") or dest
-                end
-                table.insert(links, {
-                    start_col = b_start,
-                    end_col = k,
-                    label = label,
-                    target = dest,
-                })
-                i = k + 1
-            else
-                i = j + 1
-            end
-        else
-            i = b_start + 1
-        end
-    end
-    return links
 end
 
 local function extract_link_at_cursor()
-    local line = vim.api.nvim_get_current_line()
+    pcall(vim.treesitter.start, 0)
+    pcall(function() vim.treesitter.get_parser(0):parse(true) end)
     local pos = vim.api.nvim_win_get_cursor(0)
-    local col1 = pos[2] + 1
-    local bufnr = 0
-
-    local links = find_inline_markdown_links(line)
-    for _, l in ipairs(links) do
-        if col1 >= l.start_col and col1 <= l.end_col then
-            return l.target
-        end
+    local row, col = pos[1] - 1, pos[2]
+    local line = vim.api.nvim_get_current_line()
+    local bcol = line:find("%[")
+    if bcol and col < bcol - 1 and line:sub(1, bcol):match("^%s*[-*+%d.)]*%s*%[$") then
+        col = bcol - 1
     end
-    if #links == 1 and col1 < links[1].start_col then
-        local prefix = line:sub(1, links[1].start_col - 1)
-        if prefix:match("^%s*[-*+]?%s*$") or prefix:match("^%s*%d+[.)]%s*$") then
-            return links[1].target
-        end
-    end
-
-    local ref_s = 1
-    while ref_s <= #line do
-        local s_idx, e_idx, label, ref = line:find("%[([^%]]+)%]%[([^%]]*)%]", ref_s)
-        if not s_idx then break end
-        if col1 >= s_idx and col1 <= e_idx then
-            local key = (ref ~= "" and ref) or label
-            local b_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-            for _, bline in ipairs(b_lines) do
-                local m = bline:match("^%s*%[" .. vim.pesc(key) .. "%]:%s*(%S+)")
-                if m then return m end
+    local ok, node = pcall(vim.treesitter.get_node, { pos = { row, col }, ignore_injections = false })
+    while ok and node do
+        local t = node:type()
+        if t == "uri_autolink" then
+            return (vim.treesitter.get_node_text(node, 0):gsub("^<", ""):gsub(">$", "")), true
+        elseif t == "inline_link" then
+            for child in node:iter_children() do
+                if child:type() == "link_destination" then
+                    return (vim.treesitter.get_node_text(child, 0):gsub("^<", ""):gsub(">$", "")), true
+                end
             end
         end
-        ref_s = e_idx + 1
+        node = node:parent()
     end
-
-    local auto_s = 1
-    while auto_s <= #line do
-        local s_idx, e_idx, target = line:find("<(https?://[^>]+)>", auto_s)
-        if not s_idx then
-            s_idx, e_idx, target = line:find("<(file://[^>]+)>", auto_s)
-        end
-        if not s_idx then break end
-        if col1 >= s_idx and col1 <= e_idx then
-            return target
-        end
-        auto_s = e_idx + 1
+    local cfile = vim.fn.expand("<cfile>")
+    if cfile ~= "" then
+        return cfile:gsub("^<", ""):gsub("[>.,;)]+$", ""), false
     end
-
-    local bare_s = 1
-    while bare_s <= #line do
-        local s_idx, e_idx, target = line:find("(https?://[%w%-_.~!*'();:@&=+$,/?#%%]+)", bare_s)
-        if not s_idx then
-            s_idx, e_idx, target = line:find("(file://[%w%-_.~!*'();:@&=+$,/?#%%]+)", bare_s)
-        end
-        if not s_idx then break end
-        if col1 >= s_idx and col1 <= e_idx then
-            return target
-        end
-        bare_s = e_idx + 1
-    end
-
-    return nil
+    return nil, false
 end
 
 follow_editor_link = function(at_mouse, fallback_tag)
@@ -510,14 +399,13 @@ follow_editor_link = function(at_mouse, fallback_tag)
         end
     end
 
-    local target = extract_link_at_cursor()
+    local target, is_md = extract_link_at_cursor()
     if target and target ~= "" then
-        if target:sub(1, 1) == "#" then
+        if target:sub(1, 1) == "#" and (is_md or vim.bo.filetype == "markdown") then
             local lnum = find_markdown_anchor_line(0, target:sub(2))
             if lnum then
                 vim.cmd("normal! m'")
-                vim.cmd(string.format("keepjumps call cursor(%d, 1)", lnum))
-                vim.cmd("normal! ^zz")
+                vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", lnum))
                 return true
             end
             return false
@@ -532,50 +420,51 @@ follow_editor_link = function(at_mouse, fallback_tag)
             return true
         end
 
-        local raw_path = target
-        if raw_path:match("^file://") then
-            raw_path = raw_path:gsub("^file://[^/]*", "")
-        end
-        raw_path = url_decode(raw_path)
+        if is_md or vim.bo.filetype == "markdown" or target:match("^file://") or target:find("[/\\.]") then
+            local raw_path = target:gsub("^file://[^/]*", "")
+            raw_path = url_decode(raw_path)
 
-        local file_path, fragment = raw_path:match("^([^#]+)#?(.*)$")
-        file_path = file_path or raw_path
-        fragment = fragment or ""
+            local file_path, fragment = raw_path:match("^([^#]+)#?(.*)$")
+            file_path = file_path or raw_path
+            fragment = fragment or ""
 
-        local line_num = fragment:match("^[Ll]?(%d+)") or file_path:match(":(%d+)")
-        if file_path:match(":%d+") then
-            file_path = file_path:gsub(":%d+.*$", "")
-        end
-
-        local uv = vim.uv or vim.loop
-        local base_dir = vim.fn.expand("%:p:h")
-        if base_dir == "" then base_dir = uv.cwd() end
-        local is_abs = file_path:match("^/") or file_path:match("^%a:[/\\]")
-        local resolved_path = is_abs and vim.fs.normalize(file_path) or vim.fs.normalize(vim.fs.joinpath(base_dir, file_path))
-
-        if uv.fs_stat(resolved_path) then
-            pcall(function() require("mini.files").close() end)
-            vim.cmd("normal! m'")
-            vim.cmd("keepjumps edit " .. vim.fn.fnameescape(resolved_path))
-            if line_num and tonumber(line_num) then
-                vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", tonumber(line_num)))
-            elseif fragment and fragment ~= "" then
-                local lnum = find_markdown_anchor_line(0, fragment)
-                if lnum then
-                    vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", lnum))
-                end
+            local line_num = fragment:match("^[Ll]?(%d+)") or file_path:match(":(%d+)")
+            if file_path:match(":%d+") then
+                file_path = file_path:gsub(":%d+.*$", "")
             end
-            return true
+
+            local uv = vim.uv or vim.loop
+            local base_dir = vim.fn.expand("%:p:h")
+            if base_dir == "" then base_dir = uv.cwd() end
+            local is_abs = file_path:match("^/") or file_path:match("^%a:[/\\]")
+            local resolved_path = is_abs and vim.fs.normalize(file_path) or vim.fs.normalize(vim.fs.joinpath(base_dir, file_path))
+            local st = uv.fs_stat(resolved_path)
+
+            if st and st.type == "file" then
+                pcall(function() require("mini.files").close() end)
+                vim.cmd("normal! m'")
+                vim.cmd("keepjumps edit " .. vim.fn.fnameescape(resolved_path))
+                if line_num and tonumber(line_num) then
+                    vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", tonumber(line_num)))
+                elseif fragment and fragment ~= "" then
+                    local lnum = find_markdown_anchor_line(0, fragment)
+                    if lnum then
+                        vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", lnum))
+                    end
+                end
+                return true
+            end
         end
     end
 
-    if at_mouse then
+    if at_mouse or fallback_tag then
         local has_lsp = vim.lsp and vim.lsp.get_clients and #vim.lsp.get_clients({ bufnr = 0, method = "textDocument/definition" }) > 0
         if has_lsp then
             vim.lsp.buf.definition()
             return true
         elseif fallback_tag then
             pcall(vim.cmd, "normal! \29")
+            return true
         end
     end
     return false
