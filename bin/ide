@@ -1960,6 +1960,10 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
 def _open_osc8_href(href: str, word: str, cwd: str, target_arg: str) -> int | None:
     if href.startswith("#"):
         return 0 if _jump_nvim_markdown_anchor(href, target_arg) else None
+    if href.startswith(("http://", "https://")):
+        private_url = resolve_private_link(href, cwd)
+        if private_url:
+            href = private_url
     if href.startswith("file://") or not _RE_SCHEME.match(href):
         href_path, href_line = parse_file_target(href, cwd)
         if not href_line and word:
@@ -2027,14 +2031,14 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
         return 0
 
     word = _stitch_wrapped_tmux_word(word, target_arg)
-    if word.startswith(("http://", "https://")):
-        return 0 if open_browser_url(word, target_arg) else 1
-
     private_url = resolve_private_link(word, cwd)
     if private_url:
         if private_url.startswith("file://") and resolve_and_open_target(private_url, cwd, target_arg):
             return 0
         return 0 if open_browser_url(private_url, target_arg) else 1
+
+    if word.startswith(("http://", "https://")):
+        return 0 if open_browser_url(word, target_arg) else 1
 
     word_path_cand, word_line_cand = parse_file_target(word, cwd)
     fb_word_line = (
