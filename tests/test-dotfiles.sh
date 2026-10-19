@@ -58,6 +58,9 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'allow-passthrough on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'copy-command' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'MouseDragEnd1Pane.*copy-pipe-no-clear' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi MouseDown1Pane select-pane \\; send-keys -X clear-selection' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q 'copy-mode-vi MouseDown1Pane.*cancel' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi MouseUp1Pane.*scroll_position.*cancel' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi M-c send-keys -X copy-pipe-and-cancel' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi M-v' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-v' "$TEMP_HOME/.tmux.conf" && \
