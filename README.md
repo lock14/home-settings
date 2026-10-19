@@ -131,127 +131,125 @@ The workstation environment and provisioning pipeline are tested across:
 - **RHEL-based Linux**: Fedora 38+ / 40+, RHEL 9+, CentOS Stream, Rocky Linux, AlmaLinux
 - **macOS**: Modern macOS releases (Sonoma, Sequoia; Apple Silicon & Intel)
 
-Host machines require `bash` (4+), `git`, `curl`, and `sudo` (for system packages). Polyglot toolchains and CLI utilities are managed declaratively in user-space via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`).
+Host machines require `bash` (4+), `git`, `curl`, and `sudo` (for system packages). Polyglot toolchains and CLI utilities are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`).
 
 ---
 
 ## Integrated Development Environment & AI Workspace
 
-The repository provides a unified terminal-based IDE orchestrated across **Tmux** (`dotfiles/.tmux.conf`), **Neovim** (`dotfiles/.config/nvim/init.lua`), and AI CLIs (`agy`, `claude`, `codex`) via `bin/ide`.
+The repository provides a terminal-based IDE (`bin/ide`) combining **Tmux**, **Neovim**, and AI CLIs (`agy`, `claude`, `codex`).
 
 - **Spatial Window Architecture (`bin/ide`, `dotfiles/.tmux.conf`)**:
-  - **Single-Window Geometry**: Built around an AI-first inverted-T layout in a single Tmux window (`ide`) with zero secondary Neovim servers or hidden `_swap` parking windows.
-    - `ide` / `ide3` (`--3pane`, default): Top-Left AI Agent (50%×75%, `agy` / `claude` / `codex`, focused on launch), Top-Right Main Editor (50%×75%, single Neovim server listening on `$NVIM_IDE_SOCKET`), and Bottom Full-Width Interactive Shell (100%×25% for unconstrained Powerlevel10k prompts and wide CLI output).
-    - `ide2` (`--2pane`): Side-by-side 50% AI Agent | 50% Full-Height Main Editor.
-  - **Interactive Top Status Shelf & Contextual Mode Bar**:
-    - **Left Shelf (`status-left`)**: Anchors the session badge (` #S `) at fixed width so mode transitions never shift the center switcher horizontally; clicking `status-left` opens `choose-tree -Zs`.
-    - **Center 3-State Role Switcher (`window-status-current-format`)**: Renders `@ide_tab_ai`, `@ide_tab_ed`, and `@ide_tab_term` with distinct visual states: focused (`▸` + semantic accent icon + `Base1` `#93A1A1` label), visible unfocused (`Base0` `#839496` with `(Alt+a/e/t)` focus hint), and parked (`Base01` `#586E75` with `[Alt+E/T]` restore hint), plus an Orange `󰁌 ZOOM (Alt+z)` badge when zoomed. Left-clicking any center badge invokes `ide --status-click` to focus, unpark, or unzoom; right-clicking opens a workspace context menu (`display-menu`).
-    - **Mode-Contextual Right Shelf (`status-right`)**: Surfaces inline key hints during `PREFIX` (`Ctrl+b`: `HJKL resize · |/- split · b bar · ? keys`) and `COPY` (`󰆏 COPY [scroll/history]` via `#{scroll_position}/#{history_size}` with `Alt+c copy · Alt+v paste · Esc clear`) modes. In normal mode, pure-C zero-fork indicators conditionally display a Red `󰓦 SYNC` warning (`#{pane_synchronized}`), a Violet `󰣀 <host>` remote badge (`#h` when `SSH_CONNECTION` or `SSH_TTY` is present), and `󰉋 <subdir>` only when `@ide_workdir` differs from `@ide_initial_root`, followed by `󰋖 Help (Alt+?)`.
-  - **Non-Destructive Pane Parking & Swapping**:
-    - Park and restore panes dynamically without killing running processes (`Alt+Shift+E` / `ide --toggle-editor`, `Alt+Shift+T` / `ide --toggle-term`, `ide --toggle-ai` via hidden windows `_ide_park_<role>`).
-    - Directionally swap active panes on the fly (`Alt+Shift+H/J/K/L` / `ide --swap left|down|up|right`, wrapping horizontally across the top split).
-  - **Mouse & Keyboard Resizing**:
-    - Drag any split border with the mouse or use `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`).
-    - Custom pane dimensions persist across focus switches, parking/unparking, and full-screen zoom (`Alt+z`).
-  - **Safe Session Isolation & Quitting**:
-    - Every IDE command targets its exact session (`=NAME`) to prevent prefix collisions or cascading shutdowns.
-    - Standard Neovim `:q`, `:wq`, `:qa`, and `:wqa` work natively on buffers, splits, and the Editor process, while `:Q`, `:Quit`, `Space q`, `Alt+q`, `ide quit`, or `qide` terminate the entire IDE workspace session, prompting if unsaved buffers exist (`:Q!` / `Alt+Shift+Q` / `ide quit --force`).
+  - **Single-Window Geometry**: Runs inside a single Tmux window (`ide`) using an AI-first inverted-T layout:
+    - **3-Pane Layout (`ide` or `ide3`, default)**: Top-left AI Agent (50%×75%, focused on launch), top-right Main Editor (50%×75%, single Neovim server), and a full-width bottom Interactive Shell (100%×25%). Also selectable via `ide --3pane`.
+    - **2-Pane Layout (`ide2`)**: Side-by-side 50% AI Agent and 50% full-height Main Editor (`ide --2pane`).
+  - **Interactive Top Status Bar**:
+    - **Left (Session Badge)**: Displays the session name at a fixed width; click to switch sessions.
+    - **Center (Role Switcher)**: Shows the **AI**, **Editor**, and **Shell** panes with visual states for focused, unfocused, parked, and zoomed (`Alt+z`). Left-click any badge to focus, restore, or unzoom; right-click for the workspace menu.
+    - **Right (Contextual Hints & Status)**: Shows inline key hints during Tmux prefix (`Ctrl+b`) and copy modes. In normal mode, it displays conditional indicators for synchronized panes (`SYNC`), remote SSH hosts, active subdirectories, and the `Help` cheatsheet button (`Alt+?`).
+  - **Pane Parking, Swapping & Resizing**:
+    - Hide and restore the Editor (`Alt+Shift+E`) or Shell (`Alt+Shift+T`) without stopping running processes.
+    - Swap panes directionally with `Alt+Shift+H/J/K/L`, and resize by dragging borders with the mouse or pressing `Alt+Left/Down/Up/Right`. Custom pane sizes persist across focus changes, parking, and zoom (`Alt+z`).
+  - **Session Isolation & Quitting**:
+    - IDE commands target only the active workspace session so other Tmux sessions are unaffected.
+    - Standard Neovim quit commands (`:q`, `:wq`, `:qa`, `:wqa`) close only editor buffers and splits.
+    - Workspace quit commands (`:Q`, `:Quit`, `Space q`, `Alt+q`, or `qide`) close the entire IDE session after checking for unsaved changes, while `:Q!`, `Alt+Shift+Q`, and `idek` force-quit immediately.
 
-- **First-Principles 4-Layer Keybinding Architecture**:
-  - **Layer 1: App-Local (`Ctrl`)**: Root Tmux `Ctrl+h/j/k/l` bindings are strictly omitted, preserving native `Ctrl+L` (clear), `Ctrl+J` (newline), `Ctrl+K` (kill line), and `Ctrl+H` (backspace) in Zsh, Bash, and AI CLIs (`agy`, `claude`, `codex`). `<C-j>/<C-k>` navigate Telescope pickers, while `<C-h/j/k/l>` navigate internal Neovim Normal-mode splits.
-  - **Layer 2: Spatial Navigation, Workspace & Help (`Alt`)**:
-    - `Alt+h/j/k/l` move focus seamlessly across Neovim splits and Tmux panes from any mode (`n/i/v/t`).
-    - `Alt+a`, `Alt+e`, and `Alt+t` focus or unpark the AI Agent, Editor, or Shell pane, bouncing back to the previous pane on a second press while preserving zoom state.
-    - `Alt+Shift+E` and `Alt+Shift+T` toggle Editor and Shell pane visibility from anywhere.
-    - `Alt+Shift+H/J/K/L` directionally swap panes; `Alt+z` toggles full-window zoom; `Alt+q` (`Alt+Shift+Q`) quits the workspace.
-    - `Alt+?` (`Prefix + ?`, `Space ?`, or `ide --keys`) opens a 2-column Solarized Dark keybinding cheatsheet popup (`tmux display-popup`).
-  - **Layer 3: Editor, File Explorer & Live Auto-Reload (`Space` Leader & `mini.files`)**:
-    - `Space e` opens the `mini.files` columnar file explorer at the current buffer's directory (`Space E` opens at the current working directory), falling back to `:Lexplore` when offline. Configured with a 2-column left-anchored layout (`max_number = 2`, `width_focus = 35`) that pins the active directory at `col = 0` as parent directories slide left into `branch` history and stretches the right preview pane to the terminal edge (`MiniFilesWindowUpdate`). Inside `mini.files`, `h`/`l` (or `Left`/`Right`/`Enter`) navigate parent/child directories or open files, `j`/`k` (or `Up`/`Down`) move across entries, `=` synchronizes buffer edits (create, rename, move, delete) to disk, `g?` shows explorer help, and `q` closes.
-    - `Space m` (`:RenderMarkdown toggle`) toggles in-buffer Markdown rendering (`MeanderingProgrammer/render-markdown.nvim`), paired with automatic Markdown word-boundary soft-wrapping (`wrap`, `linebreak`, `breakindent`).
-    - `Space gs` opens Telescope `git_status` to review and jump to AI-modified files.
-    - `opt.autoread` and `SolarizedAutoRead` (`FocusGained`, `BufEnter`, `CursorHold`, `CursorHoldI` -> `silent! checktime`) automatically reload buffers modified on disk by AI agents.
-    - `H`/`L` cycle listed buffers; `<Home>` jumps to the first non-blank character; `:IdeCd` (`Space cd`) synchronizes the workspace directory across Editor and Shell.
-  - **Layer 4: Clickable Links, Jumplist History & Unified Clipboard**:
-    - Tmux captures inner-pane OSC 8 hyperlinks into `#{mouse_hyperlink}` and passes them through to the outer terminal (`terminal-features '*:hyperlinks'` and `FORCE_HYPERLINK=1` without `*:Hls@`, plus `recover_split_osc8_href` in `bin/ide` for 1st-character and `<branch>@<N>` suffix split OSC 8 links), routing `http(s)://` links (including VCS prompt PR/MR badges) to the browser and opening `file:///` links, compiler output (`file:line[:col]`), markdown `[label](file:///...#L10)` links, or custom `~/.config/ide/links.sh` rules at the target line in the Editor on `Ctrl+Click` or `Alt+Click` (`C-MouseDown1Pane` / `M-MouseDown1Pane`, while plain `MouseDown1Pane` stays pinned to `select-pane -t = \; send-keys -M`).
-    - Inside Neovim buffers, `Ctrl+Click` (`<C-LeftMouse>`), `Alt+Click` (`<M-LeftMouse>`), `gx`, and buffer-local `gd` / `<CR>` (in Markdown files) provide standard Tree-sitter and LSP link/definition navigation across both local dev and remote SSH sessions. `queries/markdown_inline/highlights.scm` supersedes upstream `url` metadata so Neovim never emits rogue OSC 8 `#anchor` escape sequences that would cause `tmux` or outer terminals to swallow clicks. Link resolution inspects the `markdown_inline` Tree-sitter AST (`vim.treesitter.get_node` for `inline_link` and `uri_autolink`, with `<cfile>` fallback) even when destinations are concealed by `render-markdown.nvim` (`conceallevel=2`, `concealcursor="nvc"`), queries `(atx_heading (inline) @h)` in the `markdown` Tree-sitter tree to jump to table of contents `#heading-title` anchors (automatically ignoring fenced code blocks and resolving duplicate `-1`/`-2` suffixes), opens relative file links (with optional `#L42` line numbers or `#heading` fragments) in the Editor, dispatches `http(s)://` URLs via `bin/ide --open-link` (opening the local browser or copying to the SSH client clipboard via OSC 52) or `vim.ui.open()`, and falls back to LSP definitions (`vim.lsp.buf.definition()`) or tags (`<C-]>`) on code symbols.
-    - Before opening any link in the Editor or navigating in-buffer anchors, a single context jump mark (`normal! m'`) is recorded, and buffer/line transitions execute via `keepjumps` so pressing `Mouse4` (`<X1Mouse>` / `MouseDown8Pane`) or `Ctrl+O` returns to the exact previous file and line in one step without jumplist pollution, and `Mouse5` (`<X2Mouse>` / `MouseDown9Pane`) or `Ctrl+I` jumps forward.
-    - Selecting text with the mouse in Tmux or Neovim copies immediately via `copy-pipe-no-clear` / `"+ygv` while keeping the highlight visible (`Alt+c` copies and clears, `Escape` or single click clears, `Alt+v` pastes from the system/OSC 52 clipboard).
-    - SSH sessions strictly avoid probing local `/tmp/.X11-unix/X0` sockets so Neovim's built-in OSC 52 provider and `tmux load-buffer -w` route clipboard yanks back to the remote SSH client.
+- **4-Layer Keybinding Architecture**:
+  - **Layer 1 — App-Local (`Ctrl`)**: Tmux never binds root `Ctrl+h/j/k/l`, keeping standard terminal shortcuts (clear screen, newline, kill line, backspace) intact in shells and AI CLIs. Inside Neovim, `Ctrl+h/j/k/l` navigate editor splits and `Ctrl+j/k` move through Telescope results.
+  - **Layer 2 — Workspace Navigation (`Alt`)**:
+    - `Alt+h/j/k/l` move focus across Neovim splits and Tmux panes from any mode.
+    - `Alt+a` (or `Space a`), `Alt+e`, and `Alt+t` jump directly to the AI Agent, Editor, or Shell pane; pressing the same key again bounces back to the previous pane.
+    - `Alt+?`, `Space ?`, or `Prefix + ?` opens the interactive keybinding cheatsheet popup (`ide --keys`).
+  - **Layer 3 — Editor, File Explorer & Live Reload (`Space` Leader)**:
+    - `Space e` opens the left-anchored `mini.files` column explorer at the current buffer's directory (`Space E` opens at the working directory) with a full-width preview pane on the right. Inside the explorer, navigate with `h/j/k/l` or arrow keys, press `=` to apply file changes to disk, `g?` for help, and `q` to close.
+    - `Space m` toggles in-buffer Markdown rendering (`render-markdown.nvim`) with word-boundary soft wrapping.
+    - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents.
+    - `H` and `L` cycle open buffers, `Home` jumps to the first non-blank character on the line, and `Space cd` (`:IdeCd` in Neovim, or `icd` in the shell) synchronizes the working directory across panes.
+  - **Layer 4 — Clickable Links, Jumplist & Clipboard**:
+    - **Terminal Links (`Ctrl+Click` / `Alt+Click`)**: Clicking URLs or prompt PR/MR badges in the Shell or AI panes opens them in the browser. Clicking file paths, compiler errors (`file:line:col`), Markdown file links, or custom `~/.config/ide/links.sh` matches opens the target file and line in the Editor.
+    - **In-Buffer Navigation**: Inside Neovim, `Ctrl+Click`, `Alt+Click`, and `gx` follow concealed Markdown links, table-of-contents `#heading` anchors, relative file paths, and web URLs, falling back to LSP go-to-definition on code symbols. In Markdown buffers, `gd` and `Enter` also follow links under the cursor.
+    - **Single-Step Jump Back**: Link jumps record a single context mark before switching files or lines, so mouse back and forward buttons (`Mouse4` and `Mouse5`) or `Ctrl+O` and `Ctrl+I` step cleanly backward and forward in the jumplist.
+    - **Unified Clipboard**: Mouse selection copies immediately in both local and remote SSH sessions (via OSC 52) while keeping the selection highlighted. Press `Alt+c` to copy and clear, `Escape` to clear, or `Alt+v` to paste.
 
-- **Polyglot LSP, Treesitter & Neovim Toolchains**:
-  - **Native LSP (`mason.nvim` + `nvim-lspconfig` / `vim.lsp.config`)**: Polyglot code intelligence auto-managing C/C++ (`clangd`), Rust (`rust_analyzer`), Go (`gopls`), Python (`pyright`), Lua (`lua_ls`), Bash (`bashls`), Terraform (`terraformls`), YAML (`yamlls`), JSON (`jsonls`), and Java via on-demand `nvim-jdtls` (`dotfiles/.config/nvim/ftplugin/java.lua`).
-  - **Treesitter & In-Buffer Markdown Rendering (`render-markdown.nvim`)**: AST-based syntax highlighting with 1:1 parity matching `bat`, plus live in-buffer Markdown rendering (`<leader>m` / `:RenderMarkdown toggle`) for headings (H1 Orange `#CB4B16`, H2 Blue `#268BD2`, H3 Violet `#6C71C4`, H4 Base1 `#93A1A1`, H5/H6 Base0 `#839496` on Base02 `#073642` bands), rounded pipe tables, callouts, checkboxes, bullets, and Base02 code blocks across all lines (including the active cursor row in Normal/Visual/Command modes via `anti_conceal = { enabled = false }` and `concealcursor = "nvc"`) with word-boundary soft-wrapping (`SolarizedMarkdownReadability`).
-  - **Telescope**: Fuzzy file finding (`<leader>ff`, `<leader>fg`, `<leader>fb`, `<leader>gs`) with `<C-j>` / `<C-k>` selection movement.
-  - **Solarized Dark**: Seamless `#002B36` terminal background matching.
-  - **Editor Aliases**: `vi`, `vim`, `v` mapped to `nvim` (with automatic fallback to legacy `vim` and `+line` support over RPC).
+- **LSP, Treesitter & Neovim Toolchains**:
+  - **Native LSP**: Automatic language server provisioning (`mason.nvim` and `nvim-lspconfig`) for C/C++, Rust, Go, Python, Java (`nvim-jdtls`), Lua, Bash, Terraform, YAML, and JSON.
+  - **Treesitter & Markdown Rendering**: Solarized Dark syntax highlighting aligned with `bat`, plus live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks.
+  - **Telescope**: Fuzzy finders for files (`Space ff`), live grep (`Space fg`), open buffers (`Space fb`), and Git status (`Space gs`).
+  - **Editor Aliases**: `vi`, `vim`, and `v` launch `nvim` (with fallback to `vim`); inside an IDE session, `v [+line] <file>` opens the file directly in the main Editor pane.
 
 ### IDE Workspace Keybindings & Navigation
 
 | Keybinding / Action | Context | Description |
 | :--- | :--- | :--- |
-| `Alt+h` / `j` / `k` / `l` | Universal (`n/i/v/t`) | Navigate focus across Neovim splits and Tmux panes seamlessly |
-| `Alt+a` (`Space a`) | Universal | Focus AI Agent pane (or unpark); bounce back to Editor on second press (zoom-preserving) |
-| `Alt+e` | Universal | Focus Editor pane (or unpark); bounce back to previous pane on second press |
-| `Alt+t` | Universal | Focus Shell pane (or unpark); bounce back to Editor on second press |
-| `Alt+Shift+E` | Universal | Toggle Editor pane visibility (park to / restore from `_ide_park_editor`) |
-| `Alt+Shift+T` | Universal | Toggle Shell pane visibility (park to / restore from `_ide_park_term`) |
-| `Alt+Shift+H` / `J` / `K` / `L` | Tmux | Directionally swap active pane left, down, up, or right (wraps horizontally across top panes) |
-| `Alt+z` | Tmux | Toggle full-window pane zoom (preserves zoom state across pane switches) |
-| `Alt+Left` / `Down` / `Up` / `Right` | Tmux | Resize active pane by 5 cells in direction (or drag borders with mouse) |
-| `Alt+?` / `Space ?` / `Prefix + ?` | Universal | Open interactive 2-column Solarized Dark keybinding cheatsheet popup (`ide --keys`) |
-| `Click Status Bar` | Tmux Mouse | Left-click session (`choose-tree`), center role/zoom badges (`ide --status-click`), or `Help` (`ide --keys`); right-click for menu |
-| `Alt+c` / `Alt+v` | Universal | Copy active selection to system/OSC 52 clipboard and clear highlight / paste from clipboard |
-| `Ctrl+Click` / `Alt+Click` | Shell / AI / Editor | In Shell/AI: open file path, compiler warning (`file:line:col`), `file:///` link, or `~/.config/ide/links.sh` rule in Editor; open `http(s)://` URLs and `<branch>@<N>` VCS PR/MR badges in browser. In Neovim: follow conceal-aware Markdown links, TOC `#anchors`, relative files, URLs, or jump to LSP definition |
-| `gx` | Neovim Normal | Follow link under cursor (TOC `#anchor`, relative file, URL); falls back to LSP definition / tag |
-| `gd` / `<CR>` | Neovim Markdown | Follow Markdown link under cursor (TOC `#anchor`, relative file, URL); falls back to LSP definition (`gd`) or native `<CR>` |
-| `Mouse4` / `Mouse5` (`Ctrl+O` / `Ctrl+I`) | Universal / Editor | Jump back / forward in Editor jumplist (returns to previous file and line in one step after `Ctrl+Click` / `Alt+Click` or in-buffer link jump) |
-| `Alt+q` (`Alt+Shift+Q`) / `Space q` | Universal | Gracefully quit (`ide quit`) or force-quit (`ide --quit --force`) current IDE workspace |
-| `Space e` / `Space E` | Neovim Normal | Toggle left-anchored `mini.files` explorer (`col = 0`, full-width right preview) at buffer dir (`Space e`) or cwd (`Space E`); `h`/`l` or `Left`/`Right`/`Enter` out/in, `j`/`k` or `Up`/`Down` move, `=` apply edits, `g?` help, `q` close |
-| `Space m` (`:RenderMarkdown toggle`) | Neovim Normal | Toggle in-buffer Markdown rendering (`render-markdown.nvim`) |
-| `Space gs` | Neovim Normal | Open Telescope `git_status` to review AI-modified files |
-| `Space cd` (`:IdeCd [dir]`) | Neovim Normal | Synchronize Editor and Tmux workspace directory (`@ide_workdir`) |
-| `H` / `L` | Neovim Normal | Cycle previous / next listed buffer |
-| `<Home>` | Neovim Normal | Jump to first non-blank character on line |
-| `:q` / `:wq` / `:qa` / `:wqa` | Neovim Command | Native Neovim window/buffer/editor close (unmodified) |
-| `:Q` / `:Q!` (`:Quit`) | Neovim Command | Quit entire IDE workspace session safely (or force-quit with `!`) |
-| `icd [dir|--reset]` | Shell | Synchronize working directory across Editor and Shell without killing AI Agent |
-| `v [+line] <file>` | Shell | Open file in the IDE Editor pane (with optional line jump) via RPC |
+| `Alt+h/j/k/l` | Universal | Move focus across Neovim splits and Tmux panes |
+| `Ctrl+h/j/k/l` | Neovim Normal | Move focus across internal Neovim splits (`Ctrl+j/k` move through Telescope results) |
+| `Alt+a` / `Space a` | Universal | Focus or unpark AI Agent pane; press again to bounce back |
+| `Alt+e` | Universal | Focus or unpark Editor pane; press again to bounce back |
+| `Alt+t` | Universal | Focus or unpark Shell pane; press again to bounce back |
+| `Alt+Shift+E` | Universal | Hide or restore the Editor pane |
+| `Alt+Shift+T` | Universal | Hide or restore the Shell pane |
+| `Alt+Shift+H/J/K/L` | Tmux | Swap active pane left, down, up, or right |
+| `Alt+z` | Tmux | Toggle full-window pane zoom |
+| `Alt+Left/Down/Up/Right` | Tmux | Resize active pane by 5 cells (or drag borders with the mouse) |
+| `Alt+?` / `Space ?` / `Prefix + ?` | Universal | Open interactive keybinding cheatsheet popup (`ide --keys`) |
+| `Click Status Bar` | Tmux Mouse | Left-click session badge, pane badges, or `Help`; right-click for workspace menu |
+| `Alt+c` / `Alt+v` | Universal | Copy selection to clipboard and clear highlight (`Escape` clears) / paste from clipboard |
+| `Ctrl+Click` / `Alt+Click` | Shell / AI / Editor | Open terminal paths, compiler locations, or URLs; follow Markdown links, `#anchors`, or LSP definitions in Neovim |
+| `gx` | Neovim Normal | Open link under cursor (`#anchor`, file path, or URL), falling back to LSP definition |
+| `gd` / `Enter` | Neovim Markdown | Follow Markdown link under cursor, falling back to LSP definition (`gd`) or newline (`Enter`) |
+| `Mouse4` / `Mouse5` | Universal / Editor | Jump backward (`Ctrl+O`) or forward (`Ctrl+I`) in the Editor jumplist |
+| `Alt+q` / `Space q` | Universal | Quit the IDE workspace after checking for unsaved changes (`Alt+Shift+Q` forces quit) |
+| `Space e` / `Space E` | Neovim Normal | Open `mini.files` explorer at buffer directory or working directory (`h/j/k/l` navigate, `=` apply edits, `g?` help, `q` close) |
+| `Space ff` / `Space fg` / `Space fb` | Neovim Normal | Find files (`Space ff`), live grep (`Space fg`), or switch buffers (`Space fb`) via Telescope |
+| `Space gs` | Neovim Normal | Open Telescope `git_status` picker to review modified files |
+| `Space m` | Neovim Normal | Toggle in-buffer Markdown rendering (`:RenderMarkdown toggle`) |
+| `Space cd` / `:IdeCd [dir]` | Neovim Normal | Synchronize Editor and Shell working directory |
+| `H` / `L` | Neovim Normal | Cycle previous / next buffer |
+| `Home` | Neovim Normal | Jump to first non-blank character on the line |
+| `:q` / `:wq` / `:qa` / `:wqa` | Neovim Command | Close Neovim window, buffer, or editor normally |
+| `:Q` / `:Q!` | Neovim Command | Quit entire IDE workspace session (`:Quit`; `!` forces quit) |
+| `icd [dir\|--reset]` | Shell | Synchronize working directory across Editor and Shell panes |
+| `v [+line] <file>` | Shell | Open file in the IDE Editor pane at optional line number |
 
 ---
 
 ## Interactive Shell & Powerlevel10k Prompt
 
-Interactive shell environments are provisioned with sub-10ms startup times, instant completion, and calibrated Solarized Dark styling:
+Interactive shells are configured for sub-10ms startup times, fast tab completion, and Solarized Dark styling:
 
-- **Zsh Engine & Completion**: Instant interactive startup (<10ms), completion system (`fpath`), and drop-in configuration support (`~/.environment-variables.d/`, `~/.aliases.d/`, `~/.zsh-functions.d/`).
-- **Powerlevel10k & Portable Bash VCS Prompts (`.p10k.zsh`, `.bashrc-addendum`)**: Single-line Base02 (`#073642`) shelf prompt with zero-fork `.git/config` remote host icon resolution (``, ``, ``, ``), single-fork porcelain v2 Git status (100% `gitstatusd`-free, supporting SHA-256 and Git `reftable`), and non-blocking clickable OSC 8 `<branch>@<N>` PR/MR hyperlinks (`@` in Base01 `#586E75`, `<N>` in clean Green `#859900` or modified Yellow `#B58900`) across **GitHub** (`/pull/<N>`), **GitLab** (`/-/merge_requests/<N>`), **Bitbucket Cloud** (`/pull-requests/<N>`), **Bitbucket Server / Data Center** (`/projects/<PROJ>/repos/<repo>/pull-requests/<N>` and `/users/<user>/repos/<repo>/pull-requests/<N>`), and **Gitea / Forgejo / Codeberg** (`/pulls/<N>`, or `remote.<name>.forge` override). Resolved via zero-fork `.git/config` (`branch.<name>.pr`, `branch.<name>.prurl`, `branch.<name>.merge`) and an asynchronous `${XDG_CACHE_HOME:-~/.cache}/git-pr-prompt/*.state` worker (`gh`/`glab`/`tea` CLIs and zero-CLI `git ls-remote` virtual refs `refs/pull/*/head`, `refs/merge-requests/*/head`, `refs/pull-requests/*/from` with closed/merged PR guards and `git push` preexec invalidation).
-- **Syntax Highlighting**: Authentic 24-bit TrueColor Solarized Dark command highlighting (`zsh-syntax-highlighting`): commands in Green (`#859900`), strings in Cyan (`#2AA198`), numbers in Magenta (`#D33682`), directories/paths in Blue (`#268BD2`), errors in Red (`#DC322F`), with parameters, options, and operators in calm Base0 (`#839496`).
-- **Autosuggestions & Search**: Asynchronous history autosuggestions in subtle Base01 (`#586E75`), Base02 selection highlighting (`#073642`), and interactive fuzzy history search via `fzf` (`Ctrl+R`).
-- **Frecency Directory Jumping**: Smart directory jumping via `zoxide` (`z <dir>` with destination echoing, `zi` with interactive `eza` previews).
+- **Zsh Engine & Completion**: Fast interactive startup with `fpath` tab completions and support for untracked local `*.d/` drop-in directories.
+- **Powerlevel10k & Bash Git Prompts (`.p10k.zsh`, `.bashrc-addendum`)**:
+  - **Single-Line Shelf Prompt**: Solarized Dark Base02 shelf displaying the OS icon, working directory, Git host icon, branch status, and execution telemetry in both Zsh and Bash.
+  - **Daemon-Free Git Status**: Queries `git status --porcelain=v2` directly without `gitstatusd`, supporting standard, SHA-256, and `reftable` repositories.
+  - **Clickable PR/MR Badges**: Renders `<branch>@<N>` as a clickable link to the active pull or merge request on **GitHub**, **GitLab**, **Bitbucket**, and **Gitea / Forgejo / Codeberg**. PR numbers are resolved and cached in the background via forge CLIs or `git ls-remote` so the prompt never blocks.
+- **Syntax Highlighting**: 24-bit Solarized Dark command highlighting (`zsh-syntax-highlighting`) that colors valid commands in Green, strings in Cyan, numbers in Magenta, paths in Blue, and errors in Red while keeping flags and operators in neutral Base0 grey.
+- **Autosuggestions & History Search**: Asynchronous inline history suggestions (`zsh-autosuggestions`) paired with interactive `Ctrl+R` fuzzy history search via `fzf`.
+- **Smart Directory Jumping**: Frecency-based directory jumping via `zoxide` (`z <dir>`) with interactive tree previews (`zi`).
 
 ---
 
 ## Developer Toolchains & Modern CLI Suite
 
-Developer runtimes are managed declaratively in user-space via [**`mise`**](https://mise.jdx.dev/) (`.mise.toml`), providing LTS Java (17/21/25+), LTS Node.js, and the latest stable Go, Python, Rust, Terraform, and Maven toolchains alongside a curated suite of 24-bit TrueColor CLI utilities:
+Developer runtimes are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), providing LTS Java (17/21/25+), LTS Node.js, and the latest stable Go, Python, Rust, Terraform, and Maven toolchains alongside a curated suite of 24-bit TrueColor CLI utilities:
 
 | Tool | Command / Shortcut | Role & Solarized Dark Integration |
 | :--- | :--- | :--- |
 | `bat` | `bat <file>`, `b <file>` | TrueColor syntax-highlighting pager with 36 custom syntaxes matching Neovim Treesitter (`cat` remains pure coreutils) |
-| `delta` | `git diff`, `git log -p`, `git show` | TrueColor diff pager with word-level diff intra-line highlights, line numbers, and subtle Solarized tints |
+| `delta` | `git diff`, `git show` | TrueColor diff pager with word-level intra-line highlights, line numbers, and subtle Solarized tints |
 | `dust` | `ds` | Graphical proportional disk space visualizer (Rust `du -sh` alternative) |
 | `tealdeer` | `tldr <cmd>` | Fast offline cheatsheet viewer with Solarized Dark TrueColor styling |
 | `zoxide` | `z <dir>`, `zi` | Frecency directory jumper with destination path echo and interactive `eza` previews |
 | `fzf` | `Ctrl+R`, `Ctrl+T` | Fuzzy finder powering command history, file navigation, and Telescope pickers |
-| `ripgrep` | `rg <pattern>` | Ultra-fast recursive regex search powering `fzf` file discovery and Neovim Telescope live grep |
-| `fd` | `fd <query>`, `fs` | Lightning-fast file and directory tree search |
-| `eza` | `e`, `el`, `et`, `elt` | Modern `ls` with Nerd Font icons, Git status, and directory tree views |
-| `sd` | `sd 'find' 'replace' <file>` | Modern, intuitive regex find-and-replace CLI (escaping-free `sed` alternative) |
-| `jq` | `jq <filter>` | CLI JSON processor with calibrated TrueColor `JQ_COLORS` matching Solarized Dark |
+| `ripgrep` | `rg <pattern>` | Recursive regex search powering `fzf` file discovery and Neovim Telescope live grep |
+| `fd` | `fd <query>`, `fs` | Fast file and directory tree search |
+| `eza` | `e`, `el`, `et` | Modern `ls` replacement with Nerd Font icons, Git status, and directory tree views |
+| `sd` | `sd 'find' 'replace' <file>` | Intuitive regex find-and-replace CLI (escaping-free `sed` alternative) |
+| `jq` | `jq <filter>` | CLI JSON processor with calibrated Solarized Dark syntax colors |
 | `yq` | `yq <filter>` | Portable processor for YAML, JSON, XML, CSV, and Java Properties files |
-| `btop` | `btop` | System resource monitor with custom TrueColor Solarized Dark gradients and Vim keys (`h/j/k/l`) |
+| `btop` | `btop` | System resource monitor with custom TrueColor Solarized Dark gradients and Vim keys |
 | `gh` | `gh <cmd>` | Official GitHub CLI for pull requests, issues, and workflow inspection |
-| `mise` | `mise <cmd>` | Polyglot runtime manager managing LTS Java, LTS Node, latest Go, Python, Rust, Terraform, etc. |
+| `mise` | `mise <cmd>` | Polyglot runtime manager for LTS Java, LTS Node, Go, Python, Rust, and Terraform |
 | `shellcheck` | `shellcheck <script>` | Static analysis linter for POSIX and Bash shell scripts |
 
 ---
@@ -259,26 +257,16 @@ Developer runtimes are managed declaratively in user-space via [**`mise`**](http
 ## Terminal Emulators & System Monitoring
 
 - **Ghostty (`dotfiles/.config/ghostty/config`)**:
-  - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`theme = "Solarized Dark"`) with 1:1 RGB palette matching Windows Terminal.
-  - **Typography**: `MesloLGS Nerd Font Mono` (`font-family = "MesloLGS Nerd Font Mono"`, `font-size = 12`) with native Nerd Fonts v3 icons for `eza`.
-  - **Window & Layout**: Flush edges (zero padding, unconstrained grid) and block cursor.
-  - **Productivity**: Auto-split panes (`Ctrl+Shift+D`), navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
-  - **Cross-Platform**: Automatically symlinked to `${XDG_CONFIG_HOME:-~/.config}/ghostty/config` and macOS `~/Library/Application Support/com.mitchellh.ghostty/config`.
-- **GNOME Terminal (`colors/gnome-terminal-solarized.dconf` & `bin/gnome-terminal-solarized`)**:
-  - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile provisioned into dconf as default.
-  - **Palette**: Corrects Color 8 to `base01` (`#586E75`), fixing the common invisible dim text / autosuggestions bug.
-  - **Typography & UI**: `MesloLGS Nerd Font Mono 12` font, Solarized `base02` (`#073642`) text selection highlight, block cursor, and silent bell.
-  - **CLI Management**: Provisioned automatically during setup (`modules/70-terminal.sh`) or manually via `gnome-terminal-solarized`.
-- **macOS Terminal.app (`colors/Solarized-Dark.terminal` & `bin/macos-terminal-solarized`)**:
-  - **Theme**: Authentic 24-bit TrueColor Solarized Dark profile configured in `com.apple.Terminal.plist` as default.
-  - **Palette**: Corrects Color 8 to `base01` (`#586E75`), with `base02` selection highlight and `base03` background.
-  - **Typography**: `MesloLGS Nerd Font Mono` 12 font (`MesloLGSNFM-Regular 12pt`), antialiasing enabled.
-  - **CLI Management**: Provisioned automatically on macOS during setup (`modules/70-terminal.sh`) or manually via `macos-terminal-solarized`.
+  - 24-bit Solarized Dark theme with `MesloLGS Nerd Font Mono` (12pt), block cursor, and flush window edges.
+  - Built-in split management (`Ctrl+Shift+D`), pane navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
+  - Automatically linked to `~/.config/ghostty/config` and macOS `Application Support`.
+- **GNOME Terminal (`bin/gnome-terminal-solarized`)**:
+  - Provisions the Solarized Dark TrueColor profile into `dconf` with `MesloLGS Nerd Font Mono 12`, block cursor, and silent bell.
+  - Calibrates ANSI Color 8 to Solarized Base01 (`#586E75`) so dim text and shell autosuggestions remain clearly visible.
+- **macOS Terminal.app (`bin/macos-terminal-solarized`)**:
+  - Provisions `colors/Solarized-Dark.terminal` as the default profile with `MesloLGS Nerd Font Mono` (12pt) and calibrated dim-text and selection contrast.
 - **Btop++ System Monitor (`dotfiles/.config/btop/btop.conf`)**:
-  - **Theme**: Authentic 24-bit TrueColor Solarized Dark (`themes/solarized_dark.theme`) with custom gradients for CPU, Memory, Disks, Network, and Processes.
-  - **Layout & Typography**: High-resolution Braille glyphs (`graph_symbol = "braille"`), rounded corners (`rounded_corners = true`), and Solarized Base01 (`#586E75`) split frames matching Ghostty, Tmux, and Neovim.
-  - **Navigation**: Full Vim navigation keys enabled (`vim_keys = true` for `h, j, k, l, g, G`).
-  - **Cross-Platform**: Automatically symlinked into `${XDG_CONFIG_HOME:-~/.config}/btop/`.
+  - Custom Solarized Dark theme (`themes/solarized_dark.theme`) with Braille graphs, rounded borders, and Vim navigation keys (`h/j/k/l` and `g/G`).
 
 ---
 
@@ -373,70 +361,76 @@ make lint
 
 ## Extensibility & Customization
 
-The redesigned repository is built for frictionless extension:
+The repository is structured for local customization without modifying tracked files:
 
-1. **Add a Dotfile**: Drop any file or directory into `dotfiles/`. It is automatically discovered and mirrored to `$HOME` (e.g. `dotfiles/.gitconfig` -> `~/.gitconfig`). Pre-existing physical directories are backed up safely (`.bak.<timestamp>`) to prevent nested symlinks.
-2. **Add a CLI Utility**: Drop any script into `bin/` and make it executable. It is automatically symlinked into `~/.local/bin/`.
-3. **Drop-in Shell Extensions (`.d/`)**: Keep machine-specific or sensitive configurations in local drop-in directories without committing them to the repository:
-   - `~/.environment-variables.d/*.sh`: Custom exports and paths (sourced by `.environment-variables`).
-   - `~/.aliases.d/*.sh`: Custom aliases (sourced by `.aliases`).
-   - `~/.zsh-functions.d/*.zsh`: Custom Zsh functions (sourced by `.zsh-functions`).
-   - `~/.config/ide/links.sh` (or `$IDE_LINK_RULES`): Private Ctrl+click link rules and workspace session naming for `ide`. Define `ide_resolve_link WORD CWD` to print a URL for a clicked word (e.g. an internal ticket ID or short link) and return 0; return non-zero to fall through to the default file handling. Optionally define `ide_session_name DIR` to print a custom tmux session name for a workspace directory (e.g. extracting a parent workspace identifier when `basename "$DIR"` is shared across multiple checkouts).
-   - `~/.config/zsh/p10k.local.zsh`: Machine-local Powerlevel10k overrides (sourced by `.p10k.zsh` before reload), e.g. extra anchors appended to `POWERLEVEL9K_SHORTEN_FOLDER_MARKER`, or `POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN}|/slow/network/fs/*"` to skip Git status on slow filesystems.
-4. **Add a Provisioning Stage**: Drop a new numbered script into `modules/` (e.g. `modules/70-docker.sh`).
+1. **Add a Dotfile**: Drop any file or directory into `dotfiles/`. It is automatically discovered and symlinked into `$HOME` (backing up any existing physical directory to `.bak.<timestamp>`).
+2. **Add a CLI Utility**: Drop any executable script into `bin/` to symlink it automatically into `~/.local/bin/`.
+3. **Local Drop-in Extensions**: Keep machine-specific or private settings in untracked local hooks:
+   - `~/.environment-variables.d/*.sh`: Custom exports and `PATH` entries.
+   - `~/.aliases.d/*.sh`: Custom shell aliases.
+   - `~/.zsh-functions.d/*.zsh`: Custom Zsh functions.
+   - `~/.config/ide/links.sh` (overridable via `$IDE_LINK_RULES`): Custom workspace hooks for `ide`:
+     - Define `ide_resolve_link WORD CWD` to print a target URL for a clicked token and return `0`.
+     - Define `ide_session_name DIR` to print a custom Tmux session name for a workspace directory.
+   - `~/.config/zsh/p10k.local.zsh`: Local Powerlevel10k overrides sourced before prompt reload (such as custom folder markers or `POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN` for slow network mounts).
+4. **Add a Provisioning Stage**: Drop a numbered script into `modules/` (e.g., `modules/80-custom.sh`).
 
+---
 
 ## Git & Shell Shortcuts
 
 | Shortcut | Description |
 | :--- | :--- |
-| `Ctrl+R` | Interactive fuzzy search command history via `fzf` |
-| `z <dir>` | Smart jump to directory with destination path echo via `zoxide` |
-| `zi` | Interactive fuzzy directory jump with live `eza` preview via `zoxide` + `fzf` |
-| `sd <find> <replace> <file>` | Fast, intuitive regex find-and-replace via `sd` |
-| `b <file>` / `bat` | Syntax-highlighted file viewing via `bat` with TrueColor Solarized Dark (`cat` remains pure coreutils) |
-| `vi` / `vim` / `v` | Modern Lua Neovim (with automatic fallback to `vim`; inside an `ide` session, `v [+line] <file>` opens in the main editor pane) |
-| `ide` / `ide3` / `ide2` | Launch or attach to a 3-pane (`ide`, `ide3`) or 2-pane (`ide2`) Tmux + Neovim + AI Agent IDE workspace |
-| `qide` / `idek` | Gracefully quit (`ide quit`) or force-kill (`ide --kill`) the current IDE workspace session (only that exact `ide`-managed session: other tmux sessions are never touched) |
-| `icd [dir\|--reset]` | Non-destructively synchronize the active directory across IDE `Editor` and `Shell` panes without respawning the AI Agent |
-| `ds` | Graphical proportional disk space analysis via `dust` |
-| `tldr <cmd>` | Fast, practical syntax-highlighted command cheat sheet via `tealdeer` |
-| `update` | Run cross-platform system and toolchain maintenance (`update-system`) |
-| `ls` | Standard directory listing with color (`ls --color=auto`) |
-| `ll` | Standard long directory listing with hidden files (`ls -alF`) |
-| `la` | List almost all files (`ls -A`) |
-| `l` | Compact column listing (`ls -CF`) |
-| `e` | Modern grid listing with Nerd Font icons (`eza --icons=auto --group-directories-first`) |
-| `el` | Detailed eza listing with headers, Git status, group, and ISO timestamps (`eza -la --icons=auto --git --header --group --time-style=long-iso`) |
-| `elm` | Detailed eza listing sorted by modification time with newest files at bottom (`eza -la ... --sort=modified`) |
-| `et` | Safe 2-level directory tree view with icons (`eza --tree --level=2 --icons=auto`) |
-| `elt` | Detailed eza tree view with Git status, group, and ISO timestamps (`eza -la --tree --level=2 ...`) |
-| `elx` | Extended forensic listing with hard links, inodes, blocks, and extended attributes (`-H -i -S --extended`) |
-| `fs` | Fast recursive directory tree search (`fd` + `tree --fromfile`) |
-| `gcommit` | `git add -A && git commit` |
-| `gamend` | `git add -A && git commit --amend --no-edit` |
-| `gpush` / `gpushf` | `git push origin HEAD` / `--force-with-lease` |
-| `gpull` | `git pull --rebase --autostash` |
-| `gup` | `git pull --rebase --autostash --prune` |
-| `gprune` | Safely delete merged local branches |
-| `gpurge` | Nuclear force-delete (`-D`) local branches except `main`/`master` |
-| `gsync` | Rebase current branch onto latest `main`/`master` |
-| `guser-branch` | Prefix branch with `$USER/` (refusing `main`/`master`) |
-| `tf` | `terraform` |
+| `Ctrl+R` | Fuzzy search command history via `fzf` |
+| `z <dir>` | Jump to frecency-ranked directory via `zoxide` |
+| `zi` | Interactive directory jump with live `eza` preview |
+| `sd <find> <replace> <file>` | Regex find-and-replace via `sd` |
+| `b <file>` / `bat` | Syntax-highlighted file viewer (`cat` remains standard coreutils) |
+| `vi` / `vim` / `v` | Launch Neovim (inside `ide`, `v [+line] <file>` opens in the main Editor pane) |
+| `ide` / `ide3` | Launch or attach to a 3-pane IDE workspace (`ide --3pane`) |
+| `ide2` | Launch or attach to a 2-pane IDE workspace (`ide --2pane`) |
+| `qide` | Gracefully quit the active IDE workspace session (`ide --quit`) |
+| `idek` | Force-kill the active IDE workspace session (`ide --kill`) |
+| `icd [dir\|--reset]` | Synchronize the working directory across IDE Editor and Shell panes |
+| `ds` | Graphical disk space analyzer via `dust` |
+| `tldr <cmd>` | Practical command cheatsheet viewer via `tealdeer` |
+| `update` | Update system packages, Flatpaks, Snaps, and Mise toolchains (`update-system`) |
+| `ls` | Standard directory listing with Solarized color (`ls --color=auto`) |
+| `ll` | Long directory listing including hidden files (`ls -alF`) |
+| `la` | Directory listing including hidden files except `.` and `..` (`ls -A`) |
+| `l` | Compact column directory listing (`ls -CF`) |
+| `e` | Grid directory listing with Nerd Font icons (`eza`) |
+| `el` | Detailed `eza` listing with Git status, headers, and ISO timestamps |
+| `elm` | Detailed `eza` listing sorted by modification time (newest last) |
+| `et` | 2-level directory tree view with icons (`eza --tree`) |
+| `elt` | Detailed 2-level directory tree view with Git status and timestamps |
+| `elx` | Extended forensic listing with inodes, hard links, blocks, and extended attributes |
+| `fs` | Recursive directory tree search (`fd` + `tree --fromfile`) |
+| `gcommit` | Stage all changes and commit (`git add -A && git commit`) |
+| `gamend` | Stage all changes and amend the previous commit without editing the message |
+| `gpush` | Push current branch to `origin` (`git push origin HEAD`) |
+| `gpushf` | Force-push current branch safely (`git push --force-with-lease origin HEAD`) |
+| `gpull` | Pull with rebase and autostash (`git pull --rebase --autostash`) |
+| `gup` | Pull with rebase, autostash, and remote branch pruning (`--prune`) |
+| `gprune` | Delete local branches already merged into the default branch |
+| `gpurge` | Force-delete (`-D`) all local branches except `main` or `master` |
+| `gsync` | Fetch and rebase current branch onto latest `main` or `master` |
+| `guser-branch` | Rename current branch with `$USER/` prefix (refuses `main` or `master`) |
+| `tf` | Shorthand alias for `terraform` |
 
 ---
 
 ## Standalone Utilities (`bin/`)
 
 | Script | Description |
-|---|---|
-| `gen-passwd` | Generate random passwords with configurable character sets (`-u`, `-l`, `-n`, `-s`) and lengths |
+| :--- | :--- |
+| `gen-passwd` | Generate random passwords with configurable length and character sets (uppercase, lowercase, digits, symbols) |
 | `gnome-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in GNOME Terminal (`dconf`) |
 | `ide` | Launch and manage multi-pane Tmux + Neovim + AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
 | `macos-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in macOS `Terminal.app` |
-| `sum` | Sum numbers from stdin/args with CSV parsing, column filtering (`-k`), human byte units (`-H`), averages (`-a`), and stats (`-s`) |
+| `sum` | Sum numbers from stdin or arguments with support for CSV columns, human byte units, averages, and min/max stats |
 | `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
-| `update-system` | Cross-platform system package & toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, Mise) |
+| `update-system` | Cross-platform system package and toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, Mise) |
 
 ---
 
