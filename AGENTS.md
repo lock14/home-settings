@@ -425,9 +425,10 @@ Every major technical section must be organized as a cohesive, top-down narrativ
   - Update or add rows to the relevant reference tables.
   - Prune redundant, superseded, or contradictory statements to maintain a continuous narrative rhythm.
 
-### Principle IV: High Information Density & Zero Fluff
+### Principle IV: High Information Density, Readability & Zero Fluff
 - **Eliminate Fluff**: Never use marketing buzzwords ("effortlessly", "blazing fast", "seamlessly"), conversational preambles ("Note that...", "In this section we will examine...", "It is worth mentioning..."), or speculative hand-waving.
-- **Concrete Semantic Payload**: Every sentence must state concrete technical nouns, exact flags, file paths, key combinations, and deterministic runtime behaviors.
+- **Concrete Semantic Payload**: State concrete technical nouns, exact flags, file paths, key combinations, and deterministic runtime behaviors.
+- **User-Facing Readability (`README.md`) vs. Internal Spec (`AGENTS.md`)**: In `README.md`, communicate *what* features do and *how* to use them in clear, scannable prose. Never chain long sequences of inline code spans, internal variable/option names (`@ide_*`, `#{...}`), Tree-sitter S-expressions, URL route templates, or repetitive RGB hex codes in a single paragraph—keep low-level implementation mechanics in `AGENTS.md`.
 - **Zero Aspirational Documentation**: Document only behavior that is implemented, tested, and actively verified against the codebase.
 
 ### Principle V: Markdown Typography & Formatting Invariants
