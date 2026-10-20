@@ -315,11 +315,16 @@ local function markdown_heading_slug(raw)
     if not raw or raw == "" then return "" end
     local h = raw:gsub("^%s*#+%s+", ""):gsub("%s+#+%s*$", ""):gsub("^%s+", ""):gsub("%s+$", "")
     h = h:gsub("%[(.-)%]%b()", "%1"):gsub("%[(.-)%]%b[]", "%1"):gsub("<[^>]+>", "")
-    return h:lower():gsub("[^%w%s%-_]", ""):gsub(" ", "-")
+    h = h:gsub("–", ""):gsub("—", ""):gsub("‘", ""):gsub("’", ""):gsub("“", ""):gsub("”", "")
+    h = vim.fn.tolower(h):gsub("%p", function(c)
+        return (c == "-" or c == "_") and c or ""
+    end)
+    return (h:gsub(" ", "-"))
 end
 
 local function find_markdown_anchor_line(bufnr, raw_slug)
-    local target_slug = url_decode(raw_slug or ""):gsub("^#+", ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    local cleaned_slug = url_decode(raw_slug or ""):gsub("^#+", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local target_slug = vim.fn.tolower(cleaned_slug)
     if target_slug == "" then return nil end
 
     local b = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr

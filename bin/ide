@@ -197,12 +197,12 @@ def is_ssh_session(target_arg: str = "") -> bool:
     return False
 
 
-def discover_display_env(target_arg: str = "", ignore_tmux_ssh: bool = False) -> None:
+def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) -> None:
     if any(os.environ.get(v) for v in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT")):
         return
-    if not ignore_tmux_ssh and is_ssh_session(target_arg):
+    if not ignore_tmux_env and is_ssh_session(target_arg):
         return
-    if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")) and shutil.which("tmux"):
+    if not ignore_tmux_env and (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")) and shutil.which("tmux"):
         env_lines: list[str] = []
         if target_arg and target_arg.startswith("%"):
             env_lines.extend(tmux_out("show-environment", "-t", target_arg).splitlines())
@@ -2008,7 +2008,8 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
         "local q = vim.treesitter.query.parse('markdown', '(atx_heading (inline) @h)'); "
         "local seen = {}; "
         "for _, n in q:iter_captures(t:root(), 0) do "
-        "local h = vim.treesitter.get_node_text(n, 0):gsub('^%s+', ''):gsub('%s+$', ''):gsub('%[(.-)%]%b()', '%1'):gsub('<[^>]+>', ''):lower():gsub('[^%w%s%-_]', ''):gsub(' ', '-'); "
+        "local h = vim.treesitter.get_node_text(n, 0):gsub('^%s+', ''):gsub('%s+$', ''):gsub('%[(.-)%]%b()', '%1'):gsub('%[(.-)%]%b[]', '%1'):gsub('<[^>]+>', ''):gsub('–', ''):gsub('—', ''):gsub('‘', ''):gsub('’', ''):gsub('“', ''):gsub('”', ''); "
+        "h = vim.fn.tolower(h):gsub('%p', function(c) return (c == '-' or c == '_') and c or '' end):gsub(' ', '-'); "
         "local c = seen[h] or 0; seen[h] = c + 1; "
         "if (c == 0 and h == s) or (string.format('%s-%d', h, c) == s) then "
         "local l = (n:range()) + 1; "
@@ -2389,7 +2390,7 @@ def main() -> int:
     if action in ("copy", "paste", "open-link"):
         discover_display_env(target_arg)
     elif action == "launch":
-        discover_display_env(target_arg, ignore_tmux_ssh=not bool(os.environ.get("TMUX")))
+        discover_display_env(target_arg, ignore_tmux_env=not bool(os.environ.get("TMUX")))
 
     if action == "copy":
         copy_to_system_clipboard(target_arg)
@@ -2565,20 +2566,26 @@ def main() -> int:
         ssh_val = os.environ.get(ssh_var)
         if caller_is_ssh and ssh_val:
             env_cmds.extend([";", "set-environment", "-t", f"={session}", ssh_var, ssh_val])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", ssh_var, ssh_val])
         elif not caller_is_ssh:
             env_cmds.extend([";", "set-environment", "-t", f"={session}", "-r", ssh_var])
             if not os.environ.get("TMUX"):
                 env_cmds.extend([";", "set-environment", "-g", "-r", ssh_var])
     for display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"):
         val = os.environ.get(display_var)
-        if val:
+        if val and not caller_is_ssh:
             env_cmds.extend([";", "set-environment", "-t", f"={session}", display_var, val])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", display_var, val])
         elif caller_is_ssh and display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
             env_cmds.extend([";", "set-environment", "-t", f"={session}", "-r", display_var])
             if not os.environ.get("TMUX"):
                 env_cmds.extend([";", "set-environment", "-g", "-r", display_var])
         elif not caller_is_ssh and display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
             env_cmds.extend([";", "set-environment", "-t", f"={session}", "-u", display_var])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", "-u", display_var])
     run_tmux(*env_cmds)
 
     tmux_conf = os.path.expanduser("~/.tmux.conf")

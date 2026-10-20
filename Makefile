@@ -73,7 +73,7 @@ test-vim:
 test-fonts:
 	@bash tests/test-fonts.sh
 
-## lint: Run syntax validation and shellcheck.
+## lint: Run syntax validation, shellcheck, and documentation hygiene checks.
 lint:
 	@echo "Checking zsh syntax..."
 	@zsh -n dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh tests/test-zsh.zsh
@@ -85,6 +85,8 @@ lint:
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi
+	@echo "Checking documentation hygiene and links..."
+	@bash -c '. tests/test-helper.sh && lint_documentation .'
 	@echo "All lint checks passed."
 
 ## check: Run both lint and test suites.

@@ -810,14 +810,24 @@ SH
             paste_ssh_got="$(tmux show-buffer 2>/dev/null || true)"
             # Simulate re-attaching to the existing local session over SSH (`ide --detach "$IDE_WS_3P"`)
             env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY SSH_CONNECTION="10.0.0.1 4321 10.0.0.2 22" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
+            rm -f "$COPY_MOCK_DIR/xsel_out"
+            printf "ssh-reattach-copy" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
+            copy_ssh_sess_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
+            copy_ssh_sess_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
             tmux set-buffer "from-tmux-ssh-sess-env"
             env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
             paste_ssh_sess_got="$(tmux show-buffer 2>/dev/null || true)"
             env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT -u IDE_BROWSER COPY_BROWSER_OUT="$COPY_MOCK_DIR/browser_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --open-link "https://example.com/ssh-osc52" "" "$IDE_WS_3P" "ws_3pane_test"
             ssh_url_buf_got="$(tmux show-buffer 2>/dev/null || true)"
             ssh_browser_got="$(cat "$COPY_MOCK_DIR/browser_out" 2>/dev/null || true)"
-            # Simulate re-attaching back on local desktop (`DISPLAY=:99`, no `SSH_*`)
-            env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT DISPLAY=":99" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
+            # Simulate re-attaching back on local desktop (`DISPLAY=:99`, no `SSH_*`, clearing stale `WAYLAND_DISPLAY=wayland-stale`)
+            tmux set-environment -t "=ws_3pane_test" WAYLAND_DISPLAY "wayland-stale"
+            tmux set-environment -g WAYLAND_DISPLAY "wayland-stale"
+            env -u WAYLAND_DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT DISPLAY=":99" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
+            wayland_after_reattach="$(tmux show-environment -t "=ws_3pane_test" WAYLAND_DISPLAY 2>/dev/null || true)$(tmux show-environment -g WAYLAND_DISPLAY 2>/dev/null || true)"
+            rm -f "$COPY_MOCK_DIR/xsel_out"
+            printf "local-reattach-copy" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
+            copy_reattach_local_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
             tmux set-buffer "stale-ssh-buf"
             env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
             paste_reattach_local_got="$(tmux show-buffer 2>/dev/null || true)"
@@ -827,12 +837,15 @@ SH
             if [ "$copy_tmux_got" = "solarized-clipboard-payload" ] && [ "$copy_xsel_got" = "solarized-clipboard-payload" ] && \
                [ "$copy_ssh_tmux_got" = "ssh-copy-payload" ] && [ -z "$copy_ssh_xsel_got" ] && \
                [ "$paste_local_got" = "from-xsel-clipboard" ] && [ "$paste_ssh_got" = "from-tmux-ssh-buf" ] && \
+               [ "$copy_ssh_sess_tmux_got" = "ssh-reattach-copy" ] && [ -z "$copy_ssh_sess_xsel_got" ] && \
                [ "$paste_ssh_sess_got" = "from-tmux-ssh-sess-env" ] && \
                [ "$ssh_url_buf_got" = "https://example.com/ssh-osc52" ] && [ -z "$ssh_browser_got" ] && \
+               [[ "$wayland_after_reattach" != *"wayland-stale"* ]] && \
+               [ "$copy_reattach_local_xsel_got" = "local-reattach-copy" ] && \
                [ "$paste_reattach_local_got" = "from-xsel-clipboard" ]; then
-                echo "PASS:bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11 (skipping X11 over SSH), --paste prioritizes CLIPBOARD over PRIMARY on local desktop and tmux buffer over SSH, --open-link copies URLs via OSC 52 without launching local browsers over SSH, and local <-> SSH re-attachment synchronizes session env"
+                echo "PASS:bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11 (skipping X11 over SSH), --paste prioritizes CLIPBOARD over PRIMARY on local desktop and tmux buffer over SSH, --open-link copies URLs via OSC 52 without launching local browsers over SSH, and local <-> SSH re-attachment synchronizes session & global env"
             else
-                echo "FAIL:bin/ide --copy / --paste:Expected copy='solarized-clipboard-payload', ssh_copy='ssh-copy-payload' (xsel=''), paste_local='from-xsel-clipboard', paste_ssh='from-tmux-ssh-buf', paste_ssh_sess='from-tmux-ssh-sess-env', ssh_url='https://example.com/ssh-osc52' (browser=''), reattach_local='from-xsel-clipboard', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' ssh_tmux='$copy_ssh_tmux_got' ssh_xsel='$copy_ssh_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess='$paste_ssh_sess_got' ssh_url='$ssh_url_buf_got' browser='$ssh_browser_got' reattach_local='$paste_reattach_local_got'"
+                echo "FAIL:bin/ide --copy / --paste:Expected copy='solarized-clipboard-payload', ssh_copy='ssh-copy-payload' (xsel=''), paste_local='from-xsel-clipboard', paste_ssh='from-tmux-ssh-buf', copy_ssh_sess='ssh-reattach-copy' (xsel=''), paste_ssh_sess='from-tmux-ssh-sess-env', ssh_url='https://example.com/ssh-osc52' (browser=''), wayland!='WAYLAND_DISPLAY=wayland-stale', copy_reattach_local='local-reattach-copy', reattach_local='from-xsel-clipboard', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' ssh_tmux='$copy_ssh_tmux_got' ssh_xsel='$copy_ssh_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess_copy='$copy_ssh_sess_tmux_got/$copy_ssh_sess_xsel_got' ssh_sess='$paste_ssh_sess_got' ssh_url='$ssh_url_buf_got' browser='$ssh_browser_got' wayland='$wayland_after_reattach' copy_reattach='$copy_reattach_local_xsel_got' reattach_local='$paste_reattach_local_got'"
             fi
 
             # Verify untagged pane recovery and self-healing Editor
