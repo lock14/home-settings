@@ -1018,7 +1018,7 @@ if [ -n "$BAT_BIN" ]; then
        grep -Fq "${SOL_YELLOW}if" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}return" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}nil" <<< "$MD_SAMPLE_OUT" && \
-       grep -Fq "${SOL_CYAN}<https://github.com/example/home-settings>" <<< "$MD_SAMPLE_OUT" && \
+       grep -Fq "${SOL_CYAN}<https://github.com/lock14/home-settings>" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}<maintainers@example.com>" <<< "$MD_SAMPLE_OUT" && \
        ! grep -Fq "${SOL_YELLOW}Workstation Architecture" <<< "$MD_SAMPLE_OUT" && \
        ! grep -Fq "${SOL_YELLOW}1. Executive Summary" <<< "$MD_SAMPLE_OUT"; then

@@ -1011,7 +1011,7 @@ assert_suite("Neovim highlights modern Markdown documents (sample.md) with Seman
     { "is_md_alert_important", probe_cap(md_buf, "> [!IMPORTANT]", "!IMPORTANT", "markup.alert.important"), "true" },
     { "is_md_alert_warning", probe_cap(md_buf, "> [!WARNING]", "!WARNING", "markup.alert.warning"), "true" },
     { "is_md_alert_caution", probe_cap(md_buf, "> [!CAUTION]", "!CAUTION", "markup.alert.caution"), "true" },
-    { "is_md_uri_autolink", probe_cap_fg(md_buf, "<https://github.com/example/home-settings>", "<https://", "markup.link.url"), "true/2aa198" },
+    { "is_md_uri_autolink", probe_cap_fg(md_buf, "<https://github.com/lock14/home-settings>", "<https://", "markup.link.url"), "true/2aa198" },
     { "is_md_email_autolink", probe_cap(md_buf, "<maintainers@example.com>", "<maintainers@", "markup.link.url"), "true" },
     { "is_md_task_checked", probe_cap(md_buf, "- [x]", "[x]", "markup.list.checked"), "true" },
     { "task_chk_fg", hl_fg("@markup.list.checked"), "859900" },

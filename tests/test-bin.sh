@@ -1445,4 +1445,39 @@ else
     fail "bin/macos-terminal-solarized mock Darwin provisioning" "Unexpected plist state: $mac_plist_ok"
 fi
 
+if gt_help="$("$SCRIPT_DIR/bin/gnome-terminal-solarized" --help 2>&1)" && \
+   grep -Fq "Usage: gnome-terminal-solarized [OPTIONS]" <<< "$gt_help" && \
+   grep -Fq -- "--dry-run" <<< "$gt_help" && \
+   ! "$SCRIPT_DIR/bin/gnome-terminal-solarized" --invalid-flag >/dev/null 2>&1; then
+    pass "bin/gnome-terminal-solarized supports -h/--help and rejects unknown options"
+else
+    fail "bin/gnome-terminal-solarized CLI flags" "Expected --help usage output and non-zero exit on --invalid-flag"
+fi
+
+if mt_help="$("$SCRIPT_DIR/bin/macos-terminal-solarized" --help 2>&1)" && \
+   grep -Fq "Usage: macos-terminal-solarized [OPTIONS]" <<< "$mt_help" && \
+   grep -Fq -- "--dry-run" <<< "$mt_help" && \
+   ! "$SCRIPT_DIR/bin/macos-terminal-solarized" --invalid-flag >/dev/null 2>&1; then
+    pass "bin/macos-terminal-solarized supports -h/--help and rejects unknown options"
+else
+    fail "bin/macos-terminal-solarized CLI flags" "Expected --help usage output and non-zero exit on --invalid-flag"
+fi
+
+if gp_help="$("$SCRIPT_DIR/bin/gen-passwd" --help 2>&1)" && \
+   gp_short_help="$("$SCRIPT_DIR/bin/gen-passwd" -u --help 2>&1)" && \
+   grep -Fq "Usage: gen-passwd [-u] [-l] [-n] [-s] [-t] [-h] [length]" <<< "$gp_help" && \
+   grep -Fq "Usage: gen-passwd [-u] [-l] [-n] [-s] [-t] [-h] [length]" <<< "$gp_short_help" && \
+   rus_help="$("$SCRIPT_DIR/bin/repeat-until-success" --help 2>&1)" && \
+   rus_short_help="$("$SCRIPT_DIR/bin/repeat-until-success" -n 2 --help 2>&1)" && \
+   grep -Fq "Usage: repeat-until-success [-n <attempts>] [-d <seconds>] [-t] [-h] <command> [args...]" <<< "$rus_help" && \
+   grep -Fq "Usage: repeat-until-success [-n <attempts>] [-d <seconds>] [-t] [-h] <command> [args...]" <<< "$rus_short_help" && \
+   sum_help="$("$SCRIPT_DIR/bin/sum" --help 2>&1)" && \
+   sum_short_help="$("$SCRIPT_DIR/bin/sum" -a --help 2>&1)" && \
+   grep -Fq "usage: sum [options]" <<< "$sum_help" && \
+   grep -Fq "usage: sum [options]" <<< "$sum_short_help"; then
+    pass "bin/gen-passwd, bin/repeat-until-success, and bin/sum support --help (both first and after short flags)"
+else
+    fail "bin utilities --help" "Expected --help usage output from gen-passwd, repeat-until-success, and sum"
+fi
+
 test_summary

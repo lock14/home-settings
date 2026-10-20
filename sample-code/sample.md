@@ -15,7 +15,7 @@ The developer workstation environment provides an automated, idempotent configur
 > All user dotfiles and toolchains are managed declaratively without hardcoded personal username paths.
 
 > [!TIP]
-> Execute `./setup.sh --verbose` for real-time stage progression and diagnostic output.
+> Execute `./setup.sh --dry-run` for real-time stage progression and diagnostic output.
 
 > [!IMPORTANT]
 > Modern Neovim (0.11+) is provisioned via `mise`, avoiding obsolete distribution packages.
@@ -40,7 +40,7 @@ Key architectural tenets include:
 
 Workspaces, local binaries, cache trees, and configuration files strictly honor XDG Base Directory environment variables. User home directories remain clean of language runtime workspaces and temporary files.
 
-| Environment Variable | Target Path | Purpose / Managed Contents | Persistence |
+| Environment Variable | Target Path | Purpose and Managed Contents | Persistence |
 | :--- | :--- | :--- | :--- |
 | `${XDG_CONFIG_HOME}` | `$HOME/.config/` | Application configs (`nvim/`, `ghostty/`, `bat/`, `mise/`) | Permanent |
 | `${XDG_DATA_HOME}` | `$HOME/.local/share/` | Standalone runtimes, Go workspace (`$GOPATH`), fonts | Permanent |
@@ -53,7 +53,7 @@ Workspaces, local binaries, cache trees, and configuration files strictly honor 
 When an interactive shell session starts, initialization occurs through a structured sequential pipeline:
 
 1. **Environment Initialization**: Sources `~/.environment-variables` to export `EDITOR=nvim`, `COLORTERM=truecolor`, `BAT_THEME="Solarized-Dark-TrueColor"`, and `BAT_OPTS="--italic-text=always"`.
-2. **Path Resolution**: Prepends `${XDG_DATA_HOME}/bin` and `${HOME}/.local/bin` to ensure user binaries take precedence over distro defaults.
+2. **Path Resolution**: Prepends `${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims` and `${HOME}/.local/bin` to ensure user binaries take precedence over distro defaults.
 3. **Shell Addendum Loading**: Executes `~/.zshrc-addendum` (or `~/.bashrc-addendum`) to register completions, Oh-My-Zsh plugins, and custom aliases.
 4. **Visual Palette Registration**: Configures Zsh Line Editor (`ZLE`) highlighters and dircolors.
 
@@ -76,7 +76,7 @@ Any unrecognized command token, malformed redirection, or missing delimiter trig
 - [x] TrueColor 24-bit terminal capability confirmed (`COLORTERM=truecolor`)
 - [x] Solarized Dark TrueColor theme compiled into `~/.cache/bat/themes.bin`
 - [x] Neovim 0.11+ Treesitter highlights aligned 1:1 with `bat`
-- [x] MesloLGS NF font rendering correctly with Powerlevel10k glyphs
+- [x] MesloLGS Nerd Font Mono font rendering correctly with Powerlevel10k glyphs
 - [ ] User custom aliases drop-in verified (`~/.aliases.d/*.sh`)
 
 ---
@@ -89,11 +89,11 @@ To clone and bootstrap a new workstation, run the modular orchestrator CLI:
 
 ```bash
 # Clone the configuration repository
-git clone https://github.com/example/home-settings.git "$HOME/home-settings"
+git clone https://github.com/lock14/home-settings.git "$HOME/home-settings"
 cd "$HOME/home-settings"
 
 # Run non-destructive bootstrap (install packages, link dotfiles, compile themes)
-./setup.sh --verbose
+./setup.sh --dry-run
 
 # Source the newly established shell environment
 source "$HOME/.zshrc"
@@ -105,7 +105,7 @@ The environment provisions ergonomic shortcuts for common daily workflows:
 
 - `b <file>`: Fast syntax-highlighted pager via `bat` with line numbers and Git modification markers.
 - `v <file>` or `vi <file>`: Modern Neovim editor with LSP integration.
-- `el` / `elt`: Directory listing and tree view via `eza` with Solarized file metadata colors.
+- `el` or `elt`: Directory listing and tree view via `eza` with Solarized file metadata colors.
 - `gsync`: Synchronize feature branches with `main` cleanly using rebase and stash preservation.
 - `gprune`: Safely delete merged local tracking branches.
 
@@ -139,4 +139,4 @@ func ValidateWorkstation(configPath string) error {
 *   [Ethan Schoonover's Solarized Homepage](https://ethanschoonover.com/solarized/) — Official color specifications and mathematical CIELAB coordinates.
 *   [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) — Standards for modern Unix filesystem cleanliness.
 *   [Powerlevel10k Theme Documentation](https://github.com/romkatv/powerlevel10k) — Fast, customizable Zsh prompt engine.
-*   Canonical Repository & Maintainer Contact: <https://github.com/example/home-settings> and <maintainers@example.com>
+*   Canonical Repository & Maintainer Contact: <https://github.com/lock14/home-settings> and <maintainers@example.com>

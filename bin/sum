@@ -13,9 +13,9 @@ Options:
   -H           Parse human-readable byte unit suffixes (K/KiB, M/MiB, G/GiB, T/TiB, P/PiB, E/EiB)
   -a           Output average (mean) instead of sum
   -s           Output summary statistics (count, min, max, mean, sum)
-  -f <fmt>     printf format specifier for output numbers (e.g. '%.2f', '%d')
+  -f <fmt>     printf format specifier for output numbers (such as '%.2f' or '%d')
   -t           Enable trace output (xtrace)
-  -h           Show this help message
+  -h, --help   Show this help message
 
 Examples:
   sum 1 2 3 4 5
@@ -27,6 +27,16 @@ Examples:
   sum data1.txt data2.txt
 HELP
 }
+
+for arg in "$@"; do
+  case "$arg" in
+    --) break ;;
+    --help)
+      usage
+      exit 0
+      ;;
+  esac
+done
 
 DELIM=""
 COL=0
@@ -43,7 +53,7 @@ while getopts ":d:k:Hf:asth" opt; do
     k )
       COL="$OPTARG"
       if ! [[ "$COL" =~ ^[0-9]+$ ]] || [ "$COL" -le 0 ]; then
-        echo "error: column (-k) must be a positive integer" >&2
+        echo "Error: column (-k) must be a positive integer" >&2
         exit 1
       fi
       ;;

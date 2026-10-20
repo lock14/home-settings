@@ -9,7 +9,7 @@ Any AI agent interacting with or modifying this repository must strictly adhere 
 | Rule | Invariant | Description |
 | :--- | :--- | :--- |
 | Never | No hardcoded personal paths | Never commit paths containing personal usernames like `/home/<username>/`, `/Users/<username>/`, or Windows user profiles. Always use `$HOME`, `${XDG_DATA_HOME:-$HOME/.local/share}`, `${XDG_CONFIG_HOME:-$HOME/.config}`, or `${XDG_CACHE_HOME:-$HOME/.cache}`. |
-| Never | No employer-internal names in tracked files | This repository is public. Never commit company-internal hostnames, short links, monorepo paths, or internal tool or product names (in code, tests, docs, or commit messages), and never write tests that grep for them. Machine-specific rules belong in untracked hooks: Ctrl+click link rules (`ide_resolve_link WORD CWD`) and workspace session-naming rules (`ide_session_name DIR`) in `${XDG_CONFIG_HOME:-$HOME/.config}/ide/links.sh` (overridable via `$IDE_LINK_RULES`) and prompt overrides in `${XDG_CONFIG_HOME:-$HOME/.config}/zsh/p10k.local.zsh` (sourced by `.p10k.zsh` before `p10k reload`). |
+| Never | No employer-internal names in tracked files | This repository is public. Never commit company-internal hostnames, short links, monorepo paths, or internal tool or product names (in code, tests, docs, or commit messages), and never write tests that grep for them. Machine-specific rules belong in untracked hooks: `Ctrl+Click` link rules (`ide_resolve_link WORD CWD`) and workspace session-naming rules (`ide_session_name DIR`) in `${XDG_CONFIG_HOME:-$HOME/.config}/ide/links.sh` (overridable via `$IDE_LINK_RULES`) and prompt overrides in `${XDG_CONFIG_HOME:-$HOME/.config}/zsh/p10k.local.zsh` (sourced by `.p10k.zsh` before `p10k reload`). |
 | Never | No blind error suppression | Never redirect `stderr` to `/dev/null` or use blanket quiet flags (`MISE_QUIET=1` and similar settings) in startup files (`.zshrc-addendum`, `.bashrc-addendum`) or orchestrators. Always resolve the root cause (such as trusting configs or installing missing toolchains). |
 | Never | No default heavy daemons or GUI apps | Heavyweight database server daemons (PostgreSQL, MariaDB) and GUI applications (Chrome, VS Code) must never be installed by default. Only lightweight client CLI tools (`psql`, `mariadb-client`) are installed unless opted into via `--with-postgres`, `--with-mariadb`, `--db <engine>`, or `--with-gui`. |
 | Never | No hardcoded dotfile arrays in setup | Never maintain hardcoded lists of dotfile paths in `setup.sh`. All dotfiles must be auto-discovered declaratively by `modules/10-dotfiles.sh` and mirrored to `$HOME`. |
@@ -95,7 +95,7 @@ Any AI agent interacting with or modifying this repository must strictly adhere 
 | macOS Terminal profile | `colors/Solarized-Dark.terminal` | `~/Library/Preferences/com.apple.Terminal.plist` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | Fontconfig alias | `dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf` | `${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d/` | `tests/test-fonts.sh`, `tests/test-dotfiles.sh` |
 | Dircolors database | `dotfiles/.dir-colors/dircolors` | `$HOME/.dir-colors/dircolors` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
-| Standalone binaries and IDE | `bin/*` (`ide`, `sum`, `gen-passwd`) | `${XDG_DATA_HOME:-$HOME/.local}/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
+| Standalone binaries and IDE | `bin/*` (`gen-passwd`, `gnome-terminal-solarized`, `ide`, `macos-terminal-solarized`, `repeat-until-success`, `sum`, `update-system`) | `$HOME/.local/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | Polyglot toolchains | `.mise.toml` | `${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml` | `tests/test-system-setup.sh` |
 | Meslo Nerd Fonts | Downloaded dynamically | `${XDG_DATA_HOME:-$HOME/.local/share}/fonts/` or macOS Fonts | `tests/test-fonts.sh` |
 | Shared test harness | `tests/test-helper.sh` | Internal test assertion library | All `tests/*.sh` and `tests/*.zsh` |
@@ -122,6 +122,7 @@ All UI components across terminal, prompt, file viewers, and editor must strictl
 | Errors and diagnostics | `red` | `#DC322F` | Syntax errors, diagnostic warnings, diff deletions |
 
 ### Universal semantic color contract
+
 Colors across our developer workstation fulfill invariant domain roles across all languages and filetypes:
 
 | Palette color | Hex code | Universal semantic role | Manifestations across languages and tools |
@@ -132,7 +133,7 @@ Colors across our developer workstation fulfill invariant domain roles across al
 | Solarized Blue | `#268BD2` | Routine declarations and structural headers | `func New...`, `fn find...`, `def __init__`, Protobuf gRPC method declarations (`rpc IngestBatch`), XML element tags (`<deployment>`, `<mon:monitoring>`, `<script>`), TOML table section headers (`[package]`, `[[rate_limits]]`), Textproto message block field headers (`recorded_at {`, `route_quotas <`, `metrics: [{`), CSS tag selectors (`body`, `a`, `*`), CSS class selectors (`.dashboard-grid`, `.metric-card`), `diffLine`, `@@ ... @@` hunk headers, Markdown H2, GitHub alert `[!NOTE]` |
 | Solarized Violet | `#6C71C4` | Aspects, annotations, attributes, modules, and imports | `@Service`, `@dataclass`, `#[derive]`, `[[nodiscard]]`, CSS pseudo-classes (`:root`, `:hover`), CSS pseudo-elements (`::before`, `::after`), XML CDATA boundaries (`<![CDATA[`, `]]>`), `import`, `from`, `use`, `package main`, Protobuf `package telemetry.v1` namespace identifiers, Textproto bracketed extension and `Any` type URL identifiers (`[telemetry.v1.routing_extension]`, `[type.example.com/telemetry.v1.SystemHealthPayload]`), `@module`, Markdown H3, GitHub alert `[!IMPORTANT]` |
 | Solarized Magenta | `#D33682` | Constants, literals, hashes, sentinels, receivers | `1024`, `nil`, `null`, `None`, `true`, `false`, TOML temporal date-times (`2025-09-14T08:30:00Z`), Java Properties numbers (`8080`, `4096`), floats (`0.15`, `1.5`), and booleans (`true`, `false`), Protobuf enum constants (`NODE_STATE_ACTIVE`, `SPEED`) and tag numbers (`1`, `-1`), Textproto numbers (`-12`, `0x10`, `0755`), special floats (`inf`, `-inf`, `nan`), booleans, and enum values, CSS hex colors (`#002b36`), XML entity references (`&amp;`, `&lt;`), `LevelDebug`, `MAX_CONNECTIONS`, `4b825dc`, `this`, `self` |
-| Solarized Cyan | `#2AA198` | Strings, filesystem paths, struct tags, format placeholders | `"Hello %s\n"`, `a/src/...`, markdown link URLs, XML attribute strings (`"3.2"`, `"urn:..."`), Java Properties strings (`solarized-gateway`, `/api`, URLs), backtick struct tags, format specifiers (`%s`, `:.4f`, `%d`) |
+| Solarized Cyan | `#2AA198` | Strings, filesystem paths, struct tags, format placeholders | `"Hello %s\n"`, `a/src/...`, Markdown link URLs, XML attribute strings (`"3.2"`, `"urn:..."`), Java Properties strings (`solarized-gateway`, `/api`, URLs), backtick struct tags, format specifiers (`%s`, `:.4f`, `%d`) |
 | Solarized Orange | `#CB4B16` | Directives, preprocessor macros, shebang | `#define`, `#include`, `#!/bin/bash`, Protobuf `syntax` and `edition` directives, CSS at-rules (`@layer`, `@font-face`, `@keyframes`, `@media`, `@container`, `@supports`), XML processing instructions (`<?xml ... ?>`, `<?xml-stylesheet ... ?>`), `DOCTYPE`, Markdown `#` H1, GitHub alert `[!WARNING]` |
 | Base01 Dim | `#586E75` | Comments, subtle metadata, structural delimiters | `// upright comments`, Java Properties and Textproto comments (`#`, `!`), bat borders, tree connectors, autosuggestions, Markdown `#` heading markers, quote `>` markers, table `\|` borders, task unchecked `[ ]` |
 
@@ -150,7 +151,7 @@ Colors across our developer workstation fulfill invariant domain roles across al
       - **Solarized Cyan**: Uses `#2AA198` for string literals, filesystem paths, unbroken escape sequences and format specifiers (`%s`, `\n`), raw backtick struct tags, and Markdown link targets.
       - **Solarized Magenta**: Uses `#D33682` for numeric literals, booleans (`true`, `false`), named `ALL_CAPS` and `iota` constants (`EXIT_FAILURE`, `MAX_BUFFER_SIZE`, `LevelDebug`), runtime environment global singletons (`console`, `process`, `globalThis`, `window`, `document`), regex literal bodies (`/^\/health[z]?$/`), and sentinel values (`nil`, `null`, `None`, `std::nullopt`, `_`, `this`, `self`).
       - **Solarized Orange**: Uses `#CB4B16` for compiler directives, preprocessor macros (`#define`, `#include`), interpreter shebangs (`#!/bin/bash`), and Markdown H1 titles.
-  - **Two-tier configuration topology (the table vs. key principle)**: In serialization and configuration languages like TOML, document section headers (`[table]`, `[[array]]`) represent macro-level structural boundaries and receive Solarized Blue (`#268BD2`) matching Markdown H2 and diff hunk headers. Internal mapping keys and dotted property paths (`port =`, `pool.min_size =`) represent attribute declarations and receive Solarized Green (`#859900`) matching JSON and YAML property keys. Enclosing brackets (`[`, `]`, `[[`, `]]`), dots (`.`), and equals signs (`=`) strictly remain in calm Base0 Grey (`#839496`), preventing visual flattening.
+  - **Two-tier configuration topology (the table versus key principle)**: In serialization and configuration languages like TOML, document section headers (`[table]`, `[[array]]`) represent macro-level structural boundaries and receive Solarized Blue (`#268BD2`) matching Markdown H2 and diff hunk headers. Internal mapping keys and dotted property paths (`port =`, `pool.min_size =`) represent attribute declarations and receive Solarized Green (`#859900`) matching JSON and YAML property keys. Enclosing brackets (`[`, `]`, `[[`, `]]`), dots (`.`), and equals signs (`=`) strictly remain in calm Base0 Grey (`#839496`), preventing visual flattening.
   - **Temporal scalar invariance (unquoted date-times as literals)**: First-class unquoted date and time literals (such as TOML RFC 3339 timestamps `2025-09-14T08:30:00Z`, `17:45:00`) represent immutable temporal scalar values. They strictly belong to Solarized Magenta (`#D33682`) alongside numbers and booleans, completely decoupled from quoted string data in Solarized Cyan (`#2AA198`).
   - **The declarative configuration continuum (unified property and attribute architecture)**: Key-value declarations across structured markup and configuration languages form a unified continuum. XML and HTML tag attribute names (`xmlns`, `version`, `id`, `replicas`, `lang`, `class`, `charset`, `data-status`) represent attribute key declarations and receive Solarized Green (`#859900`), unifying with JSON and YAML property keys, TOML mapping keys, Java Properties keys, and CSS property names. Tag delimiters (`<`, `>`, `</`, `/>`) and punctuation operators strictly remain in calm Base0 Grey (`#839496`), tag element names belong to Solarized Blue (`#268BD2`), and attribute string values remain in Solarized Cyan (`#2AA198`).
   - **Stylesheet hierarchy principle (CSS declarative structure)**: In stylesheets like CSS, at-rules (`@layer`, `@font-face`, `@keyframes`, `@container`, `@media`, `@supports`) represent directives and belong to Solarized Orange (`#CB4B16`). In Container Queries Level 3, the `@container` keyword is Orange, optional container names (`content`) sit in calm Base0 Grey (`#839496`), and query dimensions and numbers (`640`) sit in Solarized Magenta (`#D33682`) with units (`px`) in Base0 Grey. Selectors (tags `body`, `*`, classes `.card-grid`, and IDs `#dashboard-grid`) represent document targets and receive Solarized Blue (`#268BD2`). In modern nesting and attribute selectors, the parent reference `&` sits in calm Base0 Grey (`#839496`) as an operator, attribute names (`data-status`) sit in Base0 Grey (`#839496`) via `["@tag.attribute.css"]` (preserving selector canvas tranquility, isolated from markup attribute Green), and attribute strings (`"healthy"`) strictly receive Solarized Cyan (`#2AA198`). Pseudo-classes and pseudo-elements (`:root`, `:hover`, `::before`) represent aspect qualifiers and receive Solarized Violet (`#6C71C4`). CSS property names (`font-family`, `display`, `color`) represent structural attribute declarations and receive Solarized Green (`#859900`), completely eliminating accidental Yellow properties. Custom properties (`--color-base03`), variable references (`var(...)`), CSS functions (`oklch()`, `clamp()`, `calc()`), and sizing keywords (`auto`, `auto-fill`, `minmax`) rest on calm Base0 Grey (`#839496`) with zero token fracturing. Hex color codes (`#002b36`) are captured atomically including the `#` prefix in Solarized Magenta (`#D33682`). In Tree-sitter query architecture, all leaf overrides inside compound selector blocks specify priority `>= 130` to guarantee that upstream catch-all selector rules never swallow leaf tokens.
@@ -162,14 +163,14 @@ Colors across our developer workstation fulfill invariant domain roles across al
 
 - **Pillar II: Operational role invariance (runtime semantics over static syntax)**:
   - **Core premise**: Highlighting must reflect the runtime operational role of a token rather than its static lexical spelling or compiler internal representation:
-    - **Definition vs. invocation decoupling**: Function declarations (`func Process()`) are structural landmarks in Blue (`#268BD2`); function and method invocations (`node.Process()`) are runtime operations resting on the calm Base0 Grey (`#839496`) canvas.
+    - **Definition versus invocation decoupling**: Function declarations (`func Process()`) are structural landmarks in Blue (`#268BD2`); function and method invocations (`node.Process()`) are runtime operations resting on the calm Base0 Grey (`#839496`) canvas.
     - **Factory invariance (no semantic flipping)**: In languages where constructors are ordinary functions (such as Go `NewClusterNode` or factory patterns), constructors remain invocations in calm Base0 Grey (`#839496`), preserving visual continuity across all call sites rather than falsely masquerading in Yellow as language-level primitive constructors.
     - **Built-in routine invariance**: Standard library and compiler built-in routines (`panic(...)`, `make(...)`, `len(...)`, `printf(...)`) function identically to user routines at the call site and sit calmly on Base0 Grey.
     - **Dual-identity contextual disambiguation**: In Java, C++, and Python, receiver keywords fulfill dual functions based on syntax context: when acting as an instance reference or receiver (`this.timeoutMs`, `self.val`, `super.init()`), they represent immutable instance constants in Solarized Magenta (`#D33682`); when acting as explicit constructor delegations (`this(...)`, `super(...)`), they act as callable routine invocations in calm Base0 Grey (`#839496`).
     - **Computed member key invariance (syntactic plane decoupling)**: In languages supporting computed member declarations or access (such as ECMAScript `*[Symbol.iterator]()` or `[inspectSymbol]()`), computed brackets `[` and `]` delimit an autonomous expression evaluation plane rather than an identifier. Inner tokens are evaluated according to runtime expression semantics (variables, properties, types, arithmetic) and remain on their native tiers (Base0 Grey `#839496` for identifiers), strictly decoupling computed keys from routine declarations in Blue (`#268BD2`).
-    - **Runtime global singletons vs. member invocations**: Global singletons provided by the execution host (`console`, `process`, `globalThis`, `window`, `document`) fulfill the semantic role of ambient environmental receivers in Solarized Magenta (`#D33682`), while their routine invocations (`.log()`, `.exit()`) strictly remain in calm Base0 Grey (`#839496`) under Built-in Routine Invariance.
-    - **Sentinels vs. types in tri-state logic**: In SQL and systems programming, sentinel literals (`NULL`, `None`, `nil`, `_`, `std::nullopt`) represent missing states or wildcards and are classified strictly as constants in Solarized Magenta (`#D33682`), decoupling them from structural types and keywords.
-    - **Positional contextuality of meta-arguments**: Declarative identifiers fulfilling dual roles (such as Terraform `provider "aws" {` vs `provider = aws.west`) are disambiguated positionally: block headers join Green declarations, while assignment targets fall through to Base0 attributes.
+    - **Runtime global singletons versus member invocations**: Global singletons provided by the execution host (`console`, `process`, `globalThis`, `window`, `document`) fulfill the semantic role of ambient environmental receivers in Solarized Magenta (`#D33682`), while their routine invocations (`.log()`, `.exit()`) strictly remain in calm Base0 Grey (`#839496`) under Built-in Routine Invariance.
+    - **Sentinels versus types in tri-state logic**: In SQL and systems programming, sentinel literals (`NULL`, `None`, `nil`, `_`, `std::nullopt`) represent missing states or wildcards and are classified strictly as constants in Solarized Magenta (`#D33682`), decoupling them from structural types and keywords.
+    - **Positional contextuality of meta-arguments**: Declarative identifiers fulfilling dual roles (such as Terraform `provider "aws" {` versus `provider = aws.west`) are disambiguated positionally: block headers join Green declarations, while assignment targets fall through to Base0 attributes.
 
 - **Pillar III: Gestalt semantic continuity and atomic compound enclosure**:
   - **Core premise**: The human visual cortex parses code in Gestalt units (laws of continuity, proximity, and closure). Syntax engines that mechanically fracture unified semantic constructs into contrasting checkerboards induce disruptive saccadic interrupts:
@@ -188,14 +189,14 @@ Colors across our developer workstation fulfill invariant domain roles across al
 - **Pillar V: Pushdown automata state machine engineering**:
   - **Core premise**: Regex-based pushdown automata (`bat`, Syntect, and Sublime Text) operate without compiler symbol tables or AST graphs. Achieving 1:1 parity with AST engines requires robust state machine engineering:
     - **Non-greedy transition eagerness**: Pushdown state transitions must match structural framing prefixes (such as Markdown list sigils `^\s*([-*+]|\d+\.)(?=\s)` or quote sigils `^\s*(>)`) and never greedily consume downstream content (`(.*)$`). Consuming downstream characters on transition starves child contexts, skipping inline formatting, code spans, and links.
-    - **Opening delimiter consumption vs. lookahead trap**: Context push rules must consume their opening delimiters (`match: '({{ident}})\s*(\()'` with capture 2 scoped to punctuation) rather than using lookaheads (`(?=\()`). Non-consuming lookaheads leave delimiters in the buffer to be consumed by inner rules, breaking pop condition symmetry and permanently trapping the parser in corrupted child states.
+    - **Opening delimiter consumption versus lookahead trap**: Context push rules must consume their opening delimiters (`match: '({{ident}})\s*(\()'` with capture 2 scoped to punctuation) rather than using lookaheads (`(?=\()`). Non-consuming lookaheads leave delimiters in the buffer to be consumed by inner rules, breaking pop condition symmetry and permanently trapping the parser in corrupted child states.
     - **Positional and boundary anchoring**: In indentation-sensitive or statement-delimiter-free syntaxes (Python, YAML, Markdown), rules must enforce line-initial anchors (`^\s*`) and negative lookaheads (`(?!\s*[=:])`) to prevent statement block headers (`try:`, `finally:`) from poisoning expression contexts.
     - **Composite operator deconstruction**: Glued operator-operand constructs (`>&2`, `2>&1`, `*ptr`) must be deconstructed at lexing time so operators remain Base0 Grey while numeric file descriptors retain Solarized Magenta (`#D33682`).
     - **Statement arm isolation**: Context-dependent statement blocks (such as shell `case ... in ... esac` arms) require dedicated pushdown contexts (`case-body`) to prevent line-initial pattern labels from being misparsed as command invocations in Blue.
-    - **Contextual polysemy disambiguation**: Multi-purpose punctuation symbols (`*`, `@`, `#`) must be disambiguated by structural containment: SQL `*` in projection (`SELECT *`) vs binary arithmetic (`a * b` in Base0); shell `@` in parameter expansions (`$@` in Magenta) vs array subscripts (`${arr[@]}` in Cyan).
+    - **Contextual polysemy disambiguation**: Multi-purpose punctuation symbols (`*`, `@`, `#`) must be disambiguated by structural containment: SQL `*` in projection (`SELECT *`) versus binary arithmetic (`a * b` in Base0); shell `@` in parameter expansions (`$@` in Magenta) versus array subscripts (`${arr[@]}` in Cyan).
     - **Punctuation-safe word tokenization**: Plain-text fallback rules must segregate non-space runs into word runs (`` [^\s`*!_\[\]~()]+ ``), punctuation clusters, and fallback characters, preventing punctuation enclosures (`(**Debian or Ubuntu**,`) from swallowing adjacent markup delimiters.
     - **Multi-state grammar sequencing for tabular topology**: Pushdown automata must model tabular layouts as a multi-stage topological state machine (`table` to `table-after-header` to `table-body`) to distinguish Base1 headers from Base0 data cells.
-    - **The lookaround guard protocol for contextual keywords**: Contextual keywords that double as identifier positions (such as ECMAScript `of`, `in`, `catch`, `finally`, `default`, Kotlin `value`, `data`, and `annotation` before `class` or `object` vs variable `value` and loop `in` vs containment `in`, and Swift `case` in enum variant declarations vs `switch` pattern arms) must be guarded by surrounding syntactic slots: negative lookbehinds `(?<!\.)` prevent chained method calls (`Array.of()`, `promise.catch()`) from triggering control flow Yellow, while lookaheads (`(?!\s*:)`, `(?=\s+(?:class|object)\b)`) disambiguate declaration sites from ordinary identifiers and expression operators.
+    - **The lookaround guard protocol for contextual keywords**: Contextual keywords that double as identifier positions (such as ECMAScript `of`, `in`, `catch`, `finally`, `default`, Kotlin `value`, `data`, and `annotation` before `class` or `object` versus variable `value` and loop `in` versus containment `in`, and Swift `case` in enum variant declarations versus `switch` pattern arms) must be guarded by surrounding syntactic slots: negative lookbehinds `(?<!\.)` prevent chained method calls (`Array.of()`, `promise.catch()`) from triggering control flow Yellow, while lookaheads (`(?!\s*:)`, `(?=\s+(?:class|object)\b)`) disambiguate declaration sites from ordinary identifiers and expression operators.
     - **Computed member pushdown states**: State machines must push an autonomous expression context upon matching opening computed member brackets `\[` and pop on `\]`, delegating inner evaluation to the expression pipeline rather than greedily capturing bracketed spans as routine declarations.
     - **Lookahead key partitioning for dotted paths**: In serialization and configuration grammars (such as TOML), dotted key sequences (`pool.min_size`, `limits.per_minute`) must partition path segments using lookahead assertions `(?:\b[A-Za-z0-9_-]+\b)(?=\s*\.)` to cleanly distinguish dot accessors from value expressions without premature context popping or delimiter leakage.
 
@@ -210,8 +211,8 @@ Colors across our developer workstation fulfill invariant domain roles across al
     - **Standard library class desensitization and global precedence**: Standard library runtime classes (`Date`, `Object`, `Math`, `Promise`, `Error`) must be prioritized to `@type` (Base0 Grey `#839496`) over upstream generic `@type.builtin` captures to prevent canvas fracture. Host runtime globals (`process`, `globalThis`) must be extended into `@variable.builtin` without excessive priority weighting that would override local function definitions (`function process()`).
     - **Base query supersedure for metadata elimination (the OSC 8 hyperlink trap)**: Tree-sitter query metadata (such as `(#set! @capture url ...)` in upstream HTML queries) attaches directly to extmarks during `query:iter_matches`. When present, Neovim's TUI emits OSC 8 terminal escape sequences (`\e]8;;<URL>\e\`), rendering tokens as clickable terminal hyperlinks in modern emulators like Ghostty. Because query metadata is collected cumulatively across all matching query files on `runtimepath`, setting a higher-priority highlight in `after/queries/` does NOT suppress metadata from upstream base queries. Eliminating rogue metadata requires superseding the base query directly in `~/.config/nvim/queries/<lang>/highlights.scm` without `;; extends`.
     - **Diagnostic underline isolation and hyperlink extmark suppression**: Diagnostics and document link providers in Neovim operate on an independent layer above syntax highlighting. If `DiagnosticUnderline*` groups specify a foreground color (`fg`), Neovim colorizes the text characters themselves, overwriting the underlying syntax highlighting (such as turning Cyan URLs into Yellow warning text). Overriding `DiagnosticUnderline*` with `fg = "NONE"` ensures diagnostic severity is rendered exclusively as an undercurl or underline using `sp`, preserving syntax color fidelity. Furthermore, nullifying `client.server_capabilities.documentLinkProvider = nil` eliminates rogue clickable extmarks on URLs in code.
-    - **Recursive AST query depth unrolling**: When Tree-sitter grammars (such as `tree-sitter-toml`) model dotted paths as nested binary trees (`(dotted_key (dotted_key (bare_key)) (bare_key))`), highlight queries must explicitly unroll pattern depths up to the grammar's depth limit. This ensures parent container semantics (`table` header Blue vs `pair` key Green) cascade down to all path segments without leaking into adjacent value expressions.
-    - **Single-source-of-truth query architecture (base supersedure vs. runtime extension)**: Neovim supports two query locations: `queries/<lang>/` (evaluated first, for base supersedure) and `after/queries/<lang>/` (evaluated last, with `;; extends` for additive rules). When a grammar requires eliminating upstream directives (such as rogue `url` metadata in HTML or unconditional injections in XML, Dockerfile, and Elixir) or preventing broad structural selector swallowing (as in CSS, HTML tags, Properties, Protobuf, Textproto, GraphQL, and Rego), the base query must be superseded directly in `queries/<lang>/` (`highlights.scm` or `injections.scm`) without `;; extends`. Conversely, when extending upstream distro queries additively (as in Go, Rust, Python, Bash, Kotlin, Swift), rules belong in `after/queries/<lang>/highlights.scm` with `;; extends`. Never maintain duplicate highlight queries across both directories for the same language: dual sets produce conflicting priority stacks and double AST traversal overhead.
+    - **Recursive AST query depth unrolling**: When Tree-sitter grammars (such as `tree-sitter-toml`) model dotted paths as nested binary trees (`(dotted_key (dotted_key (bare_key)) (bare_key))`), highlight queries must explicitly unroll pattern depths up to the grammar's depth limit. This ensures parent container semantics (`table` header Blue versus `pair` key Green) cascade down to all path segments without leaking into adjacent value expressions.
+    - **Single-source-of-truth query architecture (base supersedure versus runtime extension)**: Neovim supports two query locations: `queries/<lang>/` (evaluated first, for base supersedure) and `after/queries/<lang>/` (evaluated last, with `;; extends` for additive rules). When a grammar requires eliminating upstream directives (such as rogue `url` metadata in HTML or unconditional injections in XML, Dockerfile, and Elixir) or preventing broad structural selector swallowing (as in CSS, HTML tags, Properties, Protobuf, Textproto, GraphQL, and Rego), the base query must be superseded directly in `queries/<lang>/` (`highlights.scm` or `injections.scm`) without `;; extends`. Conversely, when extending upstream distro queries additively (as in Go, Rust, Python, Bash, Kotlin, Swift), rules belong in `after/queries/<lang>/highlights.scm` with `;; extends`. Never maintain duplicate highlight queries across both directories for the same language: dual sets produce conflicting priority stacks and double AST traversal overhead.
     - **Document-order rule precedence and catch-all fallback sequencing**: In Tree-sitter query evaluation, rules at equal priority are evaluated sequentially in document order. When defining a fallback rule alongside specialized predicate captures (such as in Java Properties or JSON), generic catch-all patterns (`(value) @string`) must always precede specialized predicate rules (`((value) @number (#lua-match? ...))`). Placing catch-alls after specialized rules in document order causes the broader pattern to match downstream and overwrite specific syntax captures.
 
 - **Pillar VII: Standalone subsystem independence and LTS currency**:
@@ -278,7 +279,10 @@ Colors across our developer workstation fulfill invariant domain roles across al
 
 ## 4. Step-by-step task recipes for agents
 
+Follow these standard workflows when extending toolchains, CLI options, dotfiles, or documentation:
+
 ### Recipe A: Adding or updating a developer toolchain
+
 1. Edit `.mise.toml` to declare the tool:
    - Use `"lts"` if the tool ecosystem supports LTS releases (such as `java = "lts"` and `node = "lts"`).
    - Use `"latest"` for all other stable tools (such as `go = "latest"`, `python = "latest"`, and `neovim = "latest"`).
@@ -287,6 +291,7 @@ Colors across our developer workstation fulfill invariant domain roles across al
 4. Run `make test` and `make lint` to verify.
 
 ### Recipe B: Adding a setup CLI switch or option
+
 1. Update `setup.sh` argument parser (`while [ $# -gt 0 ]; do ... done`).
 2. Implement `--dry-run` and live behavior within the relevant `modules/<NN>-*.sh` script.
 3. Add a test case in `tests/test-system-setup.sh` asserting both `--help` and `--dry-run` behavior.
@@ -295,24 +300,28 @@ Colors across our developer workstation fulfill invariant domain roles across al
 6. Run `make test` and `make lint`.
 
 ### Recipe C: Adding a custom Git workflow or developer shortcut
+
 1. Add the alias to `dotfiles/.aliases` (or function to `dotfiles/.zsh-functions` if multi-line).
-2. Ensure no standard Oh-My-Zsh git aliases are duplicated.
+2. Ensure no standard Oh-My-Zsh Git aliases are duplicated.
 3. Add the alias or function name to the assertion list in `tests/test-zsh.zsh`.
 4. Run `make test` and `make lint`.
 
 ### Recipe D: Modifying environment variables or `PATH`
+
 1. Edit `dotfiles/.environment-variables`.
 2. Ensure XDG paths (`XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`) are respected.
 3. Update assertions in `tests/test-env.sh`.
 4. Run `make test` and `make lint`.
 
 ### Recipe E: Adding a new managed dotfile
+
 1. Drop the file or directory directly into `dotfiles/` (such as `dotfiles/.gitconfig` and `dotfiles/.tmux.conf`).
 2. Dotfiles are automatically discovered and mirrored to `$HOME` by `modules/10-dotfiles.sh` and cleaned up by `modules/99-uninstall.sh`.
 3. Add assertion to `tests/test-dotfiles.sh`.
 4. Run `make test` and `make lint`.
 
 ### Recipe F: Adding a standalone CLI utility
+
 1. Drop the executable script into `bin/` (such as `bin/my-util`).
 2. Make it executable (`chmod +x bin/my-util`) and start with `#!/bin/bash` and `set -euo pipefail`.
 3. It is automatically symlinked to `~/.local/bin/my-util` by `modules/20-bin.sh` and cleaned up by `modules/99-uninstall.sh`.
@@ -320,6 +329,7 @@ Colors across our developer workstation fulfill invariant domain roles across al
 5. Run `make test` and `make lint`.
 
 ### Recipe G: Adding a new provisioning module
+
 1. Create `modules/<NN>-<feature>.sh` (numbered between 00 and 99 by execution order).
 2. Include standard shebang, `set -euo pipefail`, and source `lib/log.sh`, `lib/os.sh`, `lib/symlink.sh`.
 3. Respect standard environment flags: `DRY_RUN`, `OS`, `ARCH`.
@@ -327,28 +337,29 @@ Colors across our developer workstation fulfill invariant domain roles across al
 5. Add test coverage and verify with `make test` and `make lint`.
 
 ### Recipe H: Documenting features and workspace keybindings
+
 1. Identify the appropriate architectural tier in `README.md` (Mental model and geometry, Structural layers, Runtime engine and automation, or Toolchains and integrations).
 2. Write concise, high-density prose explaining the intent, interactions, and mechanics (strictly eliminating marketing fluff, buzzwords, and conversational preambles).
 3. If introducing or modifying keybindings, CLI flags, or shell commands, add or update the corresponding row in the dedicated reference table ([IDE workspace keybindings and navigation](README.md#ide-workspace-keybindings-and-navigation) or [Git and shell shortcuts](README.md#git-and-shell-shortcuts)).
 4. Ensure all keys, flags, paths, and commands are enclosed in backticks (`Alt+h`, `--3pane`, `bin/ide`).
 5. Review the surrounding section to prune outdated notes and preserve cohesive narrative rhythm.
-6. Run `make lint` to verify markdown formatting.
+6. Run `make lint` to verify Markdown formatting.
 
 ## 5. Anti-patterns and common traps
 
 | Anti-pattern | Why it breaks | Correct implementation |
 | :--- | :--- | :--- |
 | Masking startup warnings (`2>/dev/null`) | Hides real syntax and configuration errors from the user. | Fix the root cause (trust configs via `mise trust`, install missing runtimes via `mise install`). |
-| Hardcoding dotfile lists in scripts | Requires editing bash arrays whenever dotfiles change. | Drop dotfiles in `dotfiles/`; let `modules/10-dotfiles.sh` auto-discover and mirror. |
+| Hardcoding dotfile lists in scripts | Requires editing Bash arrays whenever dotfiles change. | Drop dotfiles in `dotfiles/`; let `modules/10-dotfiles.sh` auto-discover and mirror. |
 | Inlining module logic into `setup.sh` | Re-creates a bloated, unmaintainable monolithic script. | Keep `setup.sh` strictly as an orchestrator CLI; place logic into `modules/<NN>-<name>.sh`. |
 | Blind `ln -sfn` over existing directory | Creates a nested symlink (`~/.config/nvim/nvim`) instead of replacing the directory. | Use `lib/symlink.sh` (`link_dir` and `link_file`) which backs up physical directories to `.bak.<timestamp>`. |
-| Hardcoding distro Neovim paths | Ubuntu 22.04 apt installs Neovim 0.9.5, which crashes modern LSP plugins. | Rely on modern Neovim provisioned via `mise` (`neovim = "latest"`). |
+| Hardcoding distro Neovim paths | Ubuntu 22.04 `apt` installs Neovim 0.9.5, which crashes modern LSP plugins. | Rely on modern Neovim provisioned via `mise` (`neovim = "latest"`). |
 | Letting Go pollute `$HOME/go` | Clutters user home directory. | Export XDG variables: `GOPATH="$HOME/.local/share/go"` and `GOCACHE="$HOME/.cache/go-build"`. |
 | Installing database daemons by default | Consumes system memory, starts unwanted background services, and opens local listening ports. | Install only client CLIs by default; require `--with-postgres`, `--with-mariadb`, or `--db <engine>` for server daemons. |
 | Append-only feature documentation | Produces fragmented, 20-bullet flat lists with buried keybindings and broken narrative flow. | Restructure the section into the 4-tier hierarchy and index all keybindings in dedicated lookup tables. |
 | Trapping shortcuts solely in paragraph prose | Users cannot quickly find keybindings when scanning documentation. | Always maintain dual representation: conceptual prose for architecture, tabular lookup for execution. |
-| Polling `#(...)` scripts or cross-process state sync in Tmux status bar | Spawns persistent subprocess forks on every timer tick, causes terminal micro-stutters and battery drain, leaves orphaned or stale status if processes exit unexpectedly, and duplicates prompt info. | Rely strictly on native zero-fork pure-C tmux format variables (`#{scroll_position}`, `#{pane_synchronized}`, `#{SSH_CONNECTION}`, `#{SSH_TTY}`, `#h`) and event-driven workspace options (`@ide_workdir`). |
-| Screen-column link scraping under Markdown concealment | When `conceallevel > 0` or `render-markdown.nvim` conceals markdown syntax, screen columns diverge from buffer byte columns, causing cursor-based link extractors to miss links or open the wrong target. | Traverse the Tree-sitter AST (`vim.treesitter.get_node({ ignore_injections = false })` for `inline_link` and `uri_autolink`, with `<cfile>` fallback), query `(atx_heading (inline) @h)` in the `markdown` tree for `#anchor` targets, and position mouse clicks via `<LeftMouse>` before extracting. |
+| Polling `#(...)` scripts or cross-process state sync in `tmux` status bar | Spawns persistent subprocess forks on every timer tick, causes terminal micro-stutters and battery drain, leaves orphaned or stale status if processes exit unexpectedly, and duplicates prompt info. | Rely strictly on native zero-fork pure-C `tmux` format variables (`#{scroll_position}`, `#{pane_synchronized}`, `#{SSH_CONNECTION}`, `#{SSH_TTY}`, `#h`) and event-driven workspace options (`@ide_workdir`). |
+| Screen-column link scraping under Markdown concealment | When `conceallevel > 0` or `render-markdown.nvim` conceals Markdown syntax, screen columns diverge from buffer byte columns, causing cursor-based link extractors to miss links or open the wrong target. | Traverse the Tree-sitter AST (`vim.treesitter.get_node({ ignore_injections = false })` for `inline_link` and `uri_autolink`, with `<cfile>` fallback), query `(atx_heading (inline) @h)` in the `markdown` tree for `#anchor` targets, and position mouse clicks via `<LeftMouse>` before extracting. |
 
 ## 6. Verification checklist and definition of done
 
@@ -369,7 +380,7 @@ Before concluding any turn or marking any task complete:
    - `test-dotfiles.sh`: Declarative dotfiles auto-discovery, physical directory backup, drop-ins, uninstallation.
    - `test-bin.sh`: User binaries symlinking, compatibility shims (`fd`, `bat`), uninstallation.
    - `test-env.sh`: Environment variables, `PATH`, `COLORTERM`, `BAT_THEME`, `EZA_COLORS`, `dircolors`, XDG `GOPATH` and `GOCACHE`.
-   - `test-zsh.zsh`: Git aliases, functions, live git repo integration, `.zshrc-addendum`.
+   - `test-zsh.zsh`: Git aliases, functions, live Git repository integration, `.zshrc-addendum`.
    - `test-completions.sh`: Completions symlinks, generators, idempotency.
    - `test-vim.sh`: `.vimrc` options and mappings, Neovim Lua syntax and plugin validation.
    - `test-fonts.sh`: Linux and macOS font downloads, font idempotency.
@@ -395,7 +406,7 @@ Separate documentation by reader intent rather than mixing tutorials, reference 
 - **Task guides (How-to)**: Goal-oriented recipes written in the imperative mood for readers who already know the basics.
 - **Lookup tables (Reference)**: Austere, factual tables and schemas that mirror the codebase without narrative prose.
 - **Architecture (Explanation)**: System topology, design rationale, and trade-offs ("why"), organized from macro mental model down to runtime mechanics and concrete toolchains:
-  - **Tier 1 (mental model and spatial architecture)**: System topology, geometry, layout, purpose, and visual metaphors (such as Inverted-T 3-pane vs. 2-pane geometry and session isolation).
+  - **Tier 1 (mental model and spatial architecture)**: System topology, geometry, layout, purpose, and visual metaphors (such as Inverted-T 3-pane versus 2-pane geometry and session isolation).
   - **Tier 2 (first-principles structural layers)**: Conceptual decoupling and behavioral tiers (such as the 4 keybinding layers: App-Local, Spatial Navigation, Editor and Explorer, Clickable Links and Clipboard).
   - **Tier 3 (runtime engines and automation)**: Execution mechanics, event loops, data flow, telemetry, and edge-case mitigation (such as native `autoread` and `checktime` synchronization and non-destructive pane parking).
   - **Tier 4 (toolchains, plugins, and integrations)**: Concrete tool configurations, LSP servers, syntax parsers, and terminal profile integrations.
@@ -419,7 +430,7 @@ Separate documentation by reader intent rather than mixing tutorials, reference 
 
 - **No marketing or conversational filler**: Omit buzzwords ("effortlessly", "blazing fast", "seamlessly") and preambles ("Note that...", "In this section we will...", "It is worth mentioning...").
 - **Concrete semantic payload**: Every sentence must state exact technical nouns, flags, file paths, key combinations, and deterministic runtime behaviors.
-- **User-facing readability vs. internal specification**: In `README.md`, communicate what features do and how to use them in clear, scannable prose. Never chain long sequences of inline code spans, internal variable or option names (`@ide_*`, `#{...}`), Tree-sitter S-expressions, URL route templates, or repetitive RGB hex codes in a single paragraph—keep low-level implementation mechanics in `AGENTS.md`.
+- **User-facing readability versus internal specification**: In `README.md`, communicate what features do and how to use them in clear, scannable prose. Never chain long sequences of inline code spans, internal variable or option names (`@ide_*`, `#{...}`), Tree-sitter S-expressions, URL route templates, or repetitive RGB hex codes in a single paragraph—keep low-level implementation mechanics in `AGENTS.md`.
 - **Zero aspirational documentation**: Document only behavior that is implemented, tested, and verified against the current codebase.
 
 ### Principle V: Typography and formatting restraint (Google Style Guide, Butterick)

@@ -27,6 +27,8 @@ Host machines require `bash` (4+), `git`, `curl`, and `sudo` (for system package
 
 ## Quick start and installation
 
+Provision a new machine via the single-command remote bootstrapper, run lifecycle targets through `make`, or invoke `./setup.sh` directly with custom component flags.
+
 ### Turnkey bootstrap (new machines)
 
 Stream and run directly in Bash without pre-cloning:
@@ -37,15 +39,20 @@ curl -fsSL https://raw.githubusercontent.com/lock14/home-settings/main/setup.sh 
 
 ### Standard workflows (Makefile)
 
+After cloning the repository, use the `Makefile` targets to install user-space configurations, provision system packages, or run verification suites:
+
 ```bash
 git clone https://github.com/lock14/home-settings.git
 cd home-settings
 
-# User-space installation (dotfiles, bin, fonts, tools, shell) without sudo
+# User-space installation (dotfiles, bin, fonts, tools, shell) without sudo (default: make or make all)
 make install
 
-# Full machine provisioning with native OS packages (requires sudo)
+# Full machine provisioning with native OS packages (requires sudo; alias: make setup)
 make system
+
+# Full turnkey bootstrap for a brand-new machine
+make bootstrap
 
 # Clean uninstallation of managed dotfiles, binaries, and fonts
 make uninstall
@@ -55,9 +62,17 @@ make test
 
 # Run ShellCheck, shell syntax, and documentation checks
 make lint
+
+# Run both lint and test suites
+make check
+
+# Display available Makefile targets
+make help
 ```
 
 ### CLI orchestrator (`./setup.sh`)
+
+Run `./setup.sh` directly to pass granular component flags or preview changes in dry-run mode:
 
 ```bash
 # Full machine provisioning
@@ -71,6 +86,8 @@ make lint
 ```
 
 ## Command-line options (`./setup.sh`)
+
+`./setup.sh` accepts modular flags to select operating system targets, opt into database daemons or desktop GUI applications, skip individual provisioning stages, or uninstall managed artifacts:
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
@@ -113,6 +130,8 @@ make lint
 
 ## Architecture overview
 
+The repository is organized into a thin CLI orchestrator (`setup.sh`), stage-based provisioning modules (`modules/`), declaratively mirrored user configurations (`dotfiles/` and `bin/`), standalone syntax and color definitions (`syntaxes/` and `colors/`), and an automated verification suite (`tests/`):
+
 ```text
 home-settings/
 ├── setup.sh                         # Modular orchestrator CLI
@@ -123,21 +142,21 @@ home-settings/
 ├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
 │   ├── gnome-terminal-solarized     # GNOME Terminal Solarized Dark profile provisioner
-│   ├── ide                          # Tmux + Neovim + AI Agent (agy, claude, codex) IDE workspace launcher
+│   ├── ide                          # Tmux, Neovim, and AI Agent (agy, claude, codex) IDE workspace launcher
 │   ├── macos-terminal-solarized     # macOS Terminal.app Solarized Dark profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   ├── sum                          # High-performance AWK number summation and stats
 │   └── update-system                # Cross-platform system package, Snap, Flatpak, and toolchain updater
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
-│   ├── .aliases                     # Full Git suite, CLI, and Terraform shortcuts (+ auto-loads ~/.aliases.d/*.sh)
+│   ├── .aliases                     # Full Git suite, CLI, and Terraform shortcuts (also auto-loads ~/.aliases.d/*.sh)
 │   ├── .bashrc-addendum             # Bash integration hook and zoxide
-│   ├── .environment-variables       # Environment, COLORTERM, PATH (+ auto-loads ~/.environment-variables.d/*.sh)
+│   ├── .environment-variables       # Environment, COLORTERM, and PATH (also auto-loads ~/.environment-variables.d/*.sh)
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
 │   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer and IDE pane bindings
 │   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
 │   ├── .zsh-completions             # Fpath completion registration
-│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener (v, icd) (+ auto-loads ~/.zsh-functions.d/*.zsh)
+│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), and IDE opener (v, icd) (also auto-loads ~/.zsh-functions.d/*.zsh)
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
 │   └── .config/
@@ -238,9 +257,9 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - **Left session badge**: Displays the session name at a fixed width; click to switch sessions.
     - **Center role switcher**: Shows the `AI`, `Editor`, and `Shell` panes with visual states for focused, unfocused, parked, and zoomed (`Alt+z`). Left-click any badge to focus, restore, or unzoom; right-click for the workspace menu.
     - **Right contextual hints and status**: Shows inline key hints during Tmux prefix (`Ctrl+b`) and copy modes. In normal mode, it displays conditional indicators for synchronized panes (`SYNC`), remote SSH hosts, active subdirectories, and the `Help` cheatsheet button (`Alt+?`).
-  - **Pane parking, swapping, and resizing**:
-    - Hide and restore the Editor (`Alt+Shift+E`) or Shell (`Alt+Shift+T`) without stopping running processes.
-    - Swap panes directionally with `Alt+Shift+H/J/K/L`, and resize by dragging borders with the mouse or pressing `Alt+Left/Down/Up/Right`. Custom pane sizes persist across focus changes, parking, and zoom (`Alt+z`).
+  - **Pane parking, swapping, splitting, and resizing**:
+    - Hide and restore the Editor (`Alt+Shift+E`), Shell (`Alt+Shift+T`), or AI Agent (`Alt+Shift+A`) without stopping running processes, or press `Prefix + b` to break the active pane into a standalone Tmux window and join it back into `ide`.
+    - Swap panes directionally with `Alt+Shift+H/J/K/L`, split panes horizontally or vertically in the current working directory with `Prefix + |` or `Prefix + -`, resize by dragging borders with the mouse or pressing `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`), and reload `~/.tmux.conf` with `Prefix + r`. Custom pane sizes persist across focus changes, parking, and zoom (`Alt+z`).
   - **Session isolation and quitting**:
     - IDE commands target only the active workspace session so other Tmux sessions are unaffected.
     - Standard Neovim quit commands (`:q`, `:wq`, `:qa`, `:wqa`) close only editor buffers and splits.
@@ -254,9 +273,10 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - `Alt+?`, `Space ?`, or `Prefix + ?` opens the interactive keybinding cheatsheet popup (`ide --keys`).
   - **Layer 3 (editor, file explorer, and live reload)**: Uses the `Space` leader key inside Neovim:
     - `Space e` opens the left-anchored `mini.files` column explorer at the current buffer's directory (`Space E` opens at the working directory) with a full-width preview pane on the right. Inside the explorer, navigate with `h/j/k/l` or arrow keys, press `Enter` or double-click to open a file or enter a directory, press `=` to apply file changes to disk, `g?` for help, and `q` to close.
+    - `Space w` saves the active buffer (`:w`), and `Space h` clears search highlighting (`:nohlsearch`).
     - `Space m` toggles in-buffer Markdown rendering (`render-markdown.nvim`) with word-boundary soft wrapping.
     - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents.
-    - `H` and `L` cycle open buffers, `Home` jumps to the first non-blank character on the line, and `Space cd` (`:IdeCd` in Neovim, or `icd` in the shell) synchronizes the working directory across panes.
+    - `H` and `L` cycle open buffers, `Home` toggles between the first non-blank character on the line and column 1 across normal, visual, and insert modes, and `Space cd` (`:IdeCd` in Neovim, or `icd` in the shell) synchronizes the working directory across panes.
   - **Layer 4 (clickable links, jumplist, and clipboard)**:
     - **Terminal links**: `Ctrl+Click` or `Alt+Click` on URLs or prompt pull and merge request badges in the Shell or AI panes opens them in the browser on a local desktop (or via `$IDE_BROWSER`) or copies them to the local clipboard via OSC 52 over SSH. Clicking file paths, compiler errors (`file:line:col`), Markdown file links, or custom `~/.config/ide/links.sh` matches (overridable via `$IDE_LINK_RULES`) opens the target file and line in the Editor.
     - **In-buffer navigation**: Inside Neovim, `Ctrl+Click`, `Alt+Click`, and `gx` follow concealed Markdown links, table-of-contents `#heading` anchors, relative file paths, and web URLs, falling back to LSP go-to-definition on code symbols. In Markdown buffers, `gd` and `Enter` also follow links under the cursor.
@@ -264,12 +284,14 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - **Unified clipboard**: Mouse selection copies immediately in both local and remote SSH sessions (via OSC 52) while keeping the selection highlighted. Press `Alt+c` to copy and clear, `Escape` to clear, or `Alt+v` to paste.
 
 - **LSP, Tree-sitter, and Neovim toolchains**:
-  - **Native LSP**: Automatic language server provisioning (`mason.nvim` and `nvim-lspconfig`) for C, C++, Rust, Go, Python, Java (`nvim-jdtls`), Lua, Bash, Terraform, YAML, and JSON.
+  - **Native LSP**: Automatic language server provisioning (`mason.nvim` and `nvim-lspconfig`) for C, C++, Rust, Go, Python, Java (`nvim-jdtls`), Lua, Bash, Terraform, YAML, and JSON. Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) additionally bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
   - **Tree-sitter and Markdown rendering**: Solarized Dark syntax highlighting aligned with `bat`, plus live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks.
   - **Telescope**: Fuzzy finders for files (`Space ff`), live grep (`Space fg`), open buffers (`Space fb`), and Git status (`Space gs`).
   - **Editor aliases**: `vi`, `vim`, and `v` launch `nvim` (with fallback to `vim`); inside an IDE session, `v [+line] <file>` opens the file directly in the main Editor pane.
 
 ### IDE workspace keybindings and navigation
+
+The following table indexes all keyboard shortcuts, mouse actions, editor commands, and environment variables across the IDE workspace:
 
 | Keybinding or action | Context | Description |
 | :--- | :--- | :--- |
@@ -278,26 +300,34 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
 | `Alt+a` or `Space a` | Universal | Focus or unpark AI Agent pane; press again to bounce back |
 | `Alt+e` | Universal | Focus or unpark Editor pane; press again to bounce back |
 | `Alt+t` | Universal | Focus or unpark Shell pane; press again to bounce back |
-| `Alt+Shift+E` | Universal | Hide or restore the Editor pane |
-| `Alt+Shift+T` | Universal | Hide or restore the Shell pane |
-| `Alt+Shift+H/J/K/L` | Tmux | Swap active pane left, down, up, or right |
+| `Alt+Shift+E` | Universal | Hide or restore the Editor pane (`ide --toggle-editor`) |
+| `Alt+Shift+T` | Universal | Hide or restore the Shell pane (`ide --toggle-term`) |
+| `Alt+Shift+A` | Universal | Hide or restore the AI Agent pane (`ide --toggle-ai`) |
+| `Alt+Shift+H/J/K/L` | Tmux | Swap active pane left, down, up, or right (`ide --swap`) |
 | `Alt+z` | Tmux | Toggle full-window pane zoom |
-| `Alt+Left/Down/Up/Right` | Tmux | Resize active pane by 5 cells (or drag borders with the mouse) |
+| `Alt+Left/Down/Up/Right` or `Prefix + H/J/K/L` | Tmux | Resize active pane by 5 cells (or drag borders with the mouse) |
+| `Prefix + \|` or `Prefix + -` | Tmux | Split active pane horizontally (`\|`) or vertically (`-`) in current directory |
+| `Prefix + b` | Tmux | Break active pane into a standalone window or join it back into `ide` |
+| `Prefix + r` | Tmux | Reload `~/.tmux.conf` configuration |
 | `Alt+?`, `Space ?`, or `Prefix + ?` | Universal | Open interactive keybinding cheatsheet popup (`ide --keys`) |
 | `Click status bar` | Tmux mouse | Left-click session badge, pane badges, or `Help`; right-click for workspace menu |
 | `Alt+c` or `Alt+v` | Universal | Copy selection to clipboard and clear highlight (`Escape` clears) or paste from clipboard |
 | `Ctrl+Click` or `Alt+Click` | Shell, AI, and Editor | Open terminal paths, compiler locations, or URLs; follow Markdown links, `#anchors`, or LSP definitions in Neovim |
 | `gx` | Neovim normal | Open link under cursor (`#anchor`, file path, or URL), falling back to LSP definition |
+| `gd`, `gr`, or `K` | Neovim LSP | Go to definition (`gd`), find references (`gr`), or show hover documentation (`K`) |
 | `gd` or `Enter` | Neovim Markdown | Follow Markdown link under cursor, falling back to LSP definition (`gd`) or newline (`Enter`) |
+| `Space rn`, `Space ca`, or `Space d` | Neovim LSP | Rename symbol (`Space rn`), run code action (`Space ca`), or show line diagnostics float (`Space d`) |
+| `Space jo`, `Space jv`, `Space jc`, or `Space jm` | Neovim Java (JDTLS) | Organize imports (`Space jo`), extract variable (`Space jv`), extract constant (`Space jc`), or extract method (`Space jm`) |
 | `Mouse4` or `Mouse5` | Universal and Editor | Jump backward (`Ctrl+O`) or forward (`Ctrl+I`) in the Editor jumplist |
 | `Alt+q` or `Space q` | Universal | Quit the IDE workspace after checking for unsaved changes (`Alt+Shift+Q` forces quit) |
+| `Space w` or `Space h` | Neovim and Vim normal | Save current buffer (`Space w`) or clear search highlight (`Space h`) |
 | `Space e` or `Space E` | Neovim normal | Open `mini.files` explorer at buffer directory or working directory (`h/j/k/l` navigate, `Enter` or double-click open, `=` apply edits, `g?` help, `q` close) |
 | `Space ff`, `Space fg`, or `Space fb` | Neovim normal | Find files (`Space ff`), live grep (`Space fg`), or switch buffers (`Space fb`) via Telescope |
 | `Space gs` | Neovim normal | Open Telescope `git_status` picker to review modified files |
 | `Space m` | Neovim normal | Toggle in-buffer Markdown rendering (`:RenderMarkdown toggle`) |
 | `Space cd` or `:IdeCd [dir]` | Neovim normal | Synchronize Editor and Shell working directory |
 | `H` or `L` | Neovim normal | Cycle previous or next buffer |
-| `Home` | Neovim normal | Jump to first non-blank character on the line |
+| `Home` | Neovim and Vim (`n/v/i`) | Smart-home: jump to first non-blank character on the line, or toggle to column 1 if already there |
 | `:q`, `:wq`, `:qa`, or `:wqa` | Neovim command | Close Neovim window, buffer, or editor normally |
 | `:Q` or `:Q!` | Neovim command | Quit entire IDE workspace session (`:Quit`; `!` forces quit) |
 | `ide --ai <cli>` or `ide --agent <cli>` | Shell | Select AI CLI agent (`agy`, `claude`, or `codex`, overriding `$IDE_AI_CLI`) |
@@ -320,10 +350,19 @@ Interactive shells are configured for sub-10ms startup times, fast tab completio
 
 ## Developer toolchains and modern CLI suite
 
-Developer runtimes are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), providing LTS Java (17, 21, and 25+), LTS Node.js, and the latest stable Go, Python, Rust, Terraform, and Maven toolchains alongside a curated suite of 24-bit TrueColor CLI utilities:
+Developer runtimes, language compilers, and modern CLI utilities are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), provisioning LTS Java (17, 21, and 25+), Maven, LTS Node.js, Go, Python, Rust, Terraform, Neovim, and the Tree-sitter CLI alongside a curated suite of 24-bit TrueColor terminal tools:
 
 | Tool | Command or shortcut | Role and Solarized Dark integration |
 | :--- | :--- | :--- |
+| `java` | `java`, `javac` | LTS Java runtime and compiler (`java = "lts"`, targeting Java 21 and 25 LTS) |
+| `maven` | `mvn <goal>` | Apache Maven build automation and dependency manager for Java projects |
+| `node` | `node`, `npm`, `npx` | LTS Node.js JavaScript and TypeScript runtime (`node = "lts"`) |
+| `go` | `go <cmd>` | Latest stable Go toolchain with XDG-compliant `GOPATH` and `GOCACHE` |
+| `python` | `python3`, `pip` | Latest stable Python runtime and package tooling |
+| `rust` | `cargo`, `rustc`, `rustup` | Latest stable Rust compiler and Cargo build toolchain |
+| `terraform` | `terraform`, `tf` | Infrastructure-as-code CLI with Zsh and Bash tab completion |
+| `neovim` | `nvim`, `vi`, `vim`, `v` | Modern Lua editor (`neovim = "latest"`) with Native LSP, Tree-sitter, and Solarized Dark theme |
+| `tree-sitter` | `tree-sitter <cmd>` | Tree-sitter parser generator CLI required to compile custom pinned grammar revisions |
 | `bat` | `bat <file>`, `b <file>` | TrueColor syntax-highlighting pager with 36 custom syntaxes matching Neovim Tree-sitter (`cat` remains pure coreutils) |
 | `delta` | `git diff`, `git show` | TrueColor diff pager with word-level intra-line highlights, line numbers, and subtle Solarized tints |
 | `dust` | `ds` | Graphical proportional disk space visualizer (Rust `du -sh` alternative) |
@@ -339,14 +378,16 @@ Developer runtimes are managed declaratively in user-space via [mise](https://mi
 | `yq` | `yq <filter>` | Portable processor for YAML, JSON, XML, CSV, and Java Properties files |
 | `btop` | `btop` | System resource monitor with custom TrueColor Solarized Dark gradients and Vim keys |
 | `gh` | `gh <cmd>` | Official GitHub CLI for pull requests, issues, and workflow inspection |
-| `mise` | `mise <cmd>` | Polyglot runtime manager for LTS Java, LTS Node, Go, Python, Rust, and Terraform |
+| `mise` | `mise <cmd>` | Polyglot runtime manager for all language toolchains and CLI utilities declared in `.mise.toml` |
 | `shellcheck` | `shellcheck <script>` | Static analysis linter for POSIX and Bash shell scripts |
 
 ## Terminal emulators and system monitoring
 
+Terminal emulator profiles and system monitors are pre-configured with Ethan Schoonover's Solarized Dark palette, calibrated dim-text contrast (`#586E75`), and `MesloLGS Nerd Font Mono` typography:
+
 - **Ghostty**: Configured in `dotfiles/.config/ghostty/config`:
   - 24-bit Solarized Dark theme with `MesloLGS Nerd Font Mono` (12pt), block cursor, flush window edges, and `macos-option-as-alt = true` so `Option` shortcuts map to `Alt`.
-  - Built-in split management (`Ctrl+Shift+D`), pane navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
+  - Built-in split and tab management: `Ctrl+Shift+D` opens a new split (`new_split:auto`), `Ctrl+Shift+W` closes the current surface, `Ctrl+Shift+Enter` toggles split zoom, `Ctrl+Shift+H/J/K/L` move focus across splits, `Ctrl+Shift+T` opens a new tab, and `Alt+Left/Right/Up/Down` forward standard ESC-prefixed sequences (`\x1b[1;3D`, `\x1b[1;3C`, `\x1b[1;3A`, `\x1b[1;3B`) to Tmux and the shell.
   - Automatically linked to `~/.config/ghostty/config` and macOS `Application Support`.
 - **GNOME Terminal**: Configured via `bin/gnome-terminal-solarized`:
   - Provisions the Solarized Dark TrueColor profile into `dconf` with `MesloLGS Nerd Font Mono 12`, block cursor, and silent bell.
@@ -355,6 +396,16 @@ Developer runtimes are managed declaratively in user-space via [mise](https://mi
   - Provisions `colors/Solarized-Dark.terminal` as the default profile with `MesloLGS Nerd Font Mono` (12pt), `useOptionAsMetaKey` enabled, and calibrated dim-text and selection contrast.
 - **Btop++ system monitor**: Configured in `dotfiles/.config/btop/btop.conf`:
   - Custom Solarized Dark theme (`themes/solarized_dark.theme`) with Braille graphs, rounded borders, and Vim navigation keys (`h/j/k/l` and `g/G`).
+
+| Keybinding | Application | Description |
+| :--- | :--- | :--- |
+| `Ctrl+Shift+D` | Ghostty | Open a new split automatically (`new_split:auto`) |
+| `Ctrl+Shift+W` | Ghostty | Close the active terminal surface (`close_surface`) |
+| `Ctrl+Shift+Enter` | Ghostty | Toggle zoom on the active split (`toggle_split_zoom`) |
+| `Ctrl+Shift+H/J/K/L` | Ghostty | Move focus across left, bottom, top, or right Ghostty splits |
+| `Ctrl+Shift+T` | Ghostty | Open a new terminal tab (`new_tab`) |
+| `Alt+Left/Right/Up/Down` | Ghostty | Forward ESC-prefixed arrow sequences to Tmux and shells (with `macos-option-as-alt = true`) |
+| `h/j/k/l`, `g/G` | Btop++ | Navigate process lists and jump to top or bottom using Vim keys |
 
 ## Extensibility and customization
 
@@ -373,6 +424,8 @@ The repository is structured for local customization without modifying tracked f
 - **Add a provisioning stage**: Drop a numbered script into `modules/` (such as `modules/80-custom.sh`).
 
 ## Git and shell shortcuts
+
+Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` provide shortcuts for history search, directory jumping, `eza` directory listings, IDE session control, and Git branch maintenance:
 
 | Shortcut | Description |
 | :--- | :--- |
@@ -415,23 +468,35 @@ The repository is structured for local customization without modifying tracked f
 
 ## Standalone utilities (`bin/`)
 
-| Script | Description |
-| :--- | :--- |
-| `gen-passwd` | Generate random passwords with configurable length and character sets (uppercase, lowercase, digits, and symbols) |
-| `gnome-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in GNOME Terminal (`dconf`) |
-| `ide` | Launch and manage multi-pane Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
-| `macos-terminal-solarized` | Provision or verify the Solarized Dark TrueColor profile in macOS `Terminal.app` |
-| `sum` | Sum numbers from stdin or arguments with support for CSV columns, human byte units, averages, and minimum and maximum statistics |
-| `repeat-until-success` | Retry a command up to N times with a configurable sleep interval |
-| `update-system` | Cross-platform system package and toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, and Mise) |
+Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by `modules/20-bin.sh`. Every utility runs under `set -euo pipefail` and accepts `-h` or `--help` to display command-line usage:
+
+| Script | Key options and arguments | Description |
+| :--- | :--- | :--- |
+| `gen-passwd` | `-u`, `-l`, `-n`, `-s`, `-t`, `-h, --help`, `[length]` | Generate random passwords with configurable length (default `16`) and character sets (uppercase, lowercase, digits, and symbols) |
+| `gnome-terminal-solarized` | `--dry-run`, `-h, --help` | Provision or preview the Solarized Dark TrueColor profile in GNOME Terminal (`dconf`) |
+| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--cd [dir\|--reset]`, `--open <file> [line]`, `--keys`, `--quit`, `--kill`, `-h, --help`, `[dir]` | Launch and manage multi-pane Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
+| `macos-terminal-solarized` | `--dry-run`, `-h, --help` | Provision or preview the Solarized Dark TrueColor profile in macOS `Terminal.app` |
+| `repeat-until-success` | `-n <attempts>`, `-s, -d <seconds>`, `-t`, `-h, --help`, `<command> [args...]` | Retry a command up to `N` attempts (default `10`) with a configurable delay in seconds (default `30`) |
+| `sum` | `-d <delim>`, `-k <col>`, `-H`, `-a`, `-s`, `-f <fmt>`, `-t`, `-h, --help`, `[numbers... \| files...]` | Sum numbers from stdin, files, or arguments with support for CSV columns, human byte units, averages, and summary statistics |
+| `update-system` | `--all`, `--system-only`, `-n, --dry-run`, `-i, --interactive`, `--skip-snaps`, `--skip-snap`, `--skip-flatpak`, `--with-dev, --dev, --tools`, `--no-cleanup`, `--macos-system`, `--os <distro>`, `-y, --yes`, `-h, --help` | Cross-platform system package and toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, and Mise) |
 
 ## Development and testing
 
-All scripts enforce `set -euo pipefail` for fail-fast safety.
+All scripts enforce `set -euo pipefail` for fail-fast safety. Run the full verification pipeline or target individual test suites through `make`:
 
 ```bash
 # Run full automated test suite (500+ tests across 8 test modules)
 make test
+
+# Run individual test suites
+make test-system-setup
+make test-dotfiles
+make test-bin
+make test-env
+make test-zsh
+make test-completions
+make test-vim
+make test-fonts
 
 # Run syntax, ShellCheck, and documentation lint validation
 make lint

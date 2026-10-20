@@ -60,12 +60,12 @@ Primary Workflows:
   -i, --interactive    Prompt for confirmation during package updates (disables auto -y)
 
 Component Toggles:
-  --skip-snaps         Skip Snap package refresh
-  --skip-snap          Alias for --skip-snaps
-  --skip-flatpak       Skip Flatpak updates
-  --with-dev, --tools  Include developer toolchains (mise, rustup, Oh-My-Zsh)
-  --no-cleanup         Skip package autoremove and cache cleaning phases
-  --macos-system       Run macOS Apple Software Update (macOS only)
+  --skip-snaps              Skip Snap package refresh
+  --skip-snap               Alias for --skip-snaps
+  --skip-flatpak            Skip Flatpak updates
+  --with-dev, --dev, --tools  Include developer toolchains (mise, rustup, Oh-My-Zsh)
+  --no-cleanup              Skip package autoremove and cache cleaning phases
+  --macos-system            Run macOS Apple Software Update (macOS only)
 
 Advanced Options:
   --os <distro>        Override OS detection: ubuntu, fedora, macos, arch
@@ -130,7 +130,7 @@ while [ $# -gt 0 ]; do
             ;;
         --os)
             if [ $# -lt 2 ]; then
-                log_error "Option --os requires an argument (e.g. ubuntu, fedora, macos, arch)"
+                log_error "Option --os requires an argument (such as ubuntu, fedora, macos, or arch)"
                 exit 1
             fi
             TARGET_OS="$2"

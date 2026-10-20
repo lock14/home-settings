@@ -388,7 +388,7 @@ def session_exists(sess: str) -> bool:
 def missing_session_msg(sess: str) -> str:
     if sess:
         return f"No active IDE session named '{sess}'."
-    return "Not inside an ide session (pass a session name, e.g. 'ide --quit <dir>')."
+    return "Not inside an ide session (pass a session name, such as 'ide --quit <dir>')."
 
 
 def current_ide_session() -> str:
