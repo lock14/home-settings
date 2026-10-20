@@ -764,6 +764,7 @@ SH
             COPY_MOCK_DIR="$(mktemp -d)"
             cat > "$COPY_MOCK_DIR/xsel" <<'SH'
 #!/usr/bin/env bash
+[ "${DISPLAY:-}" = ":99" ] || exit 1
 if [ "${1:-}" = "-ib" ]; then
     cat > "$COPY_XSEL_OUT"
     exit 0

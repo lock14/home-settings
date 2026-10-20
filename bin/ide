@@ -222,9 +222,6 @@ def discover_display_env(target_arg: str = "", ignore_tmux_ssh: bool = False) ->
             for var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
                 if var in seen_vars or os.environ.get(var):
                     continue
-                if line == f"-{var}":
-                    seen_vars.add(var)
-                    continue
                 prefix = f"{var}="
                 if line.startswith(prefix):
                     val = line[len(prefix):]
@@ -2580,6 +2577,8 @@ def main() -> int:
             env_cmds.extend([";", "set-environment", "-t", f"={session}", "-r", display_var])
             if not os.environ.get("TMUX"):
                 env_cmds.extend([";", "set-environment", "-g", "-r", display_var])
+        elif not caller_is_ssh and display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", "-u", display_var])
     run_tmux(*env_cmds)
 
     tmux_conf = os.path.expanduser("~/.tmux.conf")
