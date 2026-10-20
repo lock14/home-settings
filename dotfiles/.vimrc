@@ -169,13 +169,36 @@ let g:netrw_altv = 1
 let g:netrw_winsize = 20
 nnoremap <silent> <leader>e :Lexplore<CR>
 
+set mouse=a
+if has('mouse_sgr')
+    set ttymouse=sgr
+endif
+
+if !has('nvim')
+    silent! execute "set <M-h>=\<Esc>h"
+    silent! execute "set <M-j>=\<Esc>j"
+    silent! execute "set <M-k>=\<Esc>k"
+    silent! execute "set <M-l>=\<Esc>l"
+    silent! execute "set <M-c>=\<Esc>c"
+    silent! execute "set <M-v>=\<Esc>v"
+endif
+
 if has('clipboard')
     xnoremap <silent> <LeftRelease> <LeftRelease>"+ygv"*ygv
     xnoremap <silent> <C-c> "+y
+    xnoremap <silent> <M-c> "+y
+    nnoremap <silent> <M-v> "+p
+    inoremap <silent> <M-v> <C-r><C-o>+
+    xnoremap <silent> <M-v> "+p
     nnoremap <silent> <MiddleMouse> <LeftMouse>"*p
     inoremap <silent> <MiddleMouse> <LeftMouse><C-r><C-o>*
     xnoremap <silent> <MiddleMouse> "*p
     cnoremap <MiddleMouse> <C-r>*
+else
+    xnoremap <silent> <M-c> y
+    nnoremap <silent> <M-v> p
+    inoremap <silent> <M-v> <C-r><C-o>"
+    xnoremap <silent> <M-v> p
 endif
 nnoremap <silent> <X1Mouse> <C-o>
 nnoremap <silent> <X2Mouse> <C-i>
@@ -198,12 +221,6 @@ nnoremap <silent> <C-h> <C-w>h
 nnoremap <silent> <C-j> <C-w>j
 nnoremap <silent> <C-k> <C-w>k
 nnoremap <silent> <C-l> <C-w>l
-if !has('nvim')
-    silent! execute "set <M-h>=\<Esc>h"
-    silent! execute "set <M-j>=\<Esc>j"
-    silent! execute "set <M-k>=\<Esc>k"
-    silent! execute "set <M-l>=\<Esc>l"
-endif
 nnoremap <silent> <M-h> :call <SID>TmuxNavigate('h', 'L')<CR>
 nnoremap <silent> <M-j> :call <SID>TmuxNavigate('j', 'D')<CR>
 nnoremap <silent> <M-k> :call <SID>TmuxNavigate('k', 'U')<CR>

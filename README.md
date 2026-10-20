@@ -162,12 +162,12 @@ The repository provides a terminal-based IDE (`bin/ide`) combining **Tmux**, **N
     - `Alt+a` (or `Space a`), `Alt+e`, and `Alt+t` jump directly to the AI Agent, Editor, or Shell pane; pressing the same key again bounces back to the previous pane.
     - `Alt+?`, `Space ?`, or `Prefix + ?` opens the interactive keybinding cheatsheet popup (`ide --keys`).
   - **Layer 3 — Editor, File Explorer & Live Reload (`Space` Leader)**:
-    - `Space e` opens the left-anchored `mini.files` column explorer at the current buffer's directory (`Space E` opens at the working directory) with a full-width preview pane on the right. Inside the explorer, navigate with `h/j/k/l` or arrow keys, press `=` to apply file changes to disk, `g?` for help, and `q` to close.
+    - `Space e` opens the left-anchored `mini.files` column explorer at the current buffer's directory (`Space E` opens at the working directory) with a full-width preview pane on the right. Inside the explorer, navigate with `h/j/k/l` or arrow keys, press `Enter` or double-click to open a file or enter a directory, press `=` to apply file changes to disk, `g?` for help, and `q` to close.
     - `Space m` toggles in-buffer Markdown rendering (`render-markdown.nvim`) with word-boundary soft wrapping.
     - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents.
     - `H` and `L` cycle open buffers, `Home` jumps to the first non-blank character on the line, and `Space cd` (`:IdeCd` in Neovim, or `icd` in the shell) synchronizes the working directory across panes.
   - **Layer 4 — Clickable Links, Jumplist & Clipboard**:
-    - **Terminal Links (`Ctrl+Click` / `Alt+Click`)**: Clicking URLs or prompt PR/MR badges in the Shell or AI panes opens them in the browser. Clicking file paths, compiler errors (`file:line:col`), Markdown file links, or custom `~/.config/ide/links.sh` matches opens the target file and line in the Editor.
+    - **Terminal Links (`Ctrl+Click` / `Alt+Click`)**: Clicking URLs or prompt PR/MR badges in the Shell or AI panes opens them in the browser on a local desktop or copies them to the local clipboard via OSC 52 over SSH. Clicking file paths, compiler errors (`file:line:col`), Markdown file links, or custom `~/.config/ide/links.sh` matches opens the target file and line in the Editor.
     - **In-Buffer Navigation**: Inside Neovim, `Ctrl+Click`, `Alt+Click`, and `gx` follow concealed Markdown links, table-of-contents `#heading` anchors, relative file paths, and web URLs, falling back to LSP go-to-definition on code symbols. In Markdown buffers, `gd` and `Enter` also follow links under the cursor.
     - **Single-Step Jump Back**: Link jumps record a single context mark before switching files or lines, so mouse back and forward buttons (`Mouse4` and `Mouse5`) or `Ctrl+O` and `Ctrl+I` step cleanly backward and forward in the jumplist.
     - **Unified Clipboard**: Mouse selection copies immediately in both local and remote SSH sessions (via OSC 52) while keeping the selection highlighted. Press `Alt+c` to copy and clear, `Escape` to clear, or `Alt+v` to paste.
@@ -200,7 +200,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining **Tmux**, **N
 | `gd` / `Enter` | Neovim Markdown | Follow Markdown link under cursor, falling back to LSP definition (`gd`) or newline (`Enter`) |
 | `Mouse4` / `Mouse5` | Universal / Editor | Jump backward (`Ctrl+O`) or forward (`Ctrl+I`) in the Editor jumplist |
 | `Alt+q` / `Space q` | Universal | Quit the IDE workspace after checking for unsaved changes (`Alt+Shift+Q` forces quit) |
-| `Space e` / `Space E` | Neovim Normal | Open `mini.files` explorer at buffer directory or working directory (`h/j/k/l` navigate, `=` apply edits, `g?` help, `q` close) |
+| `Space e` / `Space E` | Neovim Normal | Open `mini.files` explorer at buffer directory or working directory (`h/j/k/l` navigate, `Enter` or double-click open, `=` apply edits, `g?` help, `q` close) |
 | `Space ff` / `Space fg` / `Space fb` | Neovim Normal | Find files (`Space ff`), live grep (`Space fg`), or switch buffers (`Space fb`) via Telescope |
 | `Space gs` | Neovim Normal | Open Telescope `git_status` picker to review modified files |
 | `Space m` | Neovim Normal | Toggle in-buffer Markdown rendering (`:RenderMarkdown toggle`) |
@@ -257,14 +257,14 @@ Developer runtimes are managed declaratively in user-space via [mise](https://mi
 ## Terminal Emulators & System Monitoring
 
 - **Ghostty (`dotfiles/.config/ghostty/config`)**:
-  - 24-bit Solarized Dark theme with `MesloLGS Nerd Font Mono` (12pt), block cursor, and flush window edges.
+  - 24-bit Solarized Dark theme with `MesloLGS Nerd Font Mono` (12pt), block cursor, flush window edges, and `macos-option-as-alt = true` so `Option` shortcuts map to `Alt`.
   - Built-in split management (`Ctrl+Shift+D`), pane navigation (`Ctrl+Shift+H/J/K/L`), and zoom toggle (`Ctrl+Shift+Enter`).
   - Automatically linked to `~/.config/ghostty/config` and macOS `Application Support`.
 - **GNOME Terminal (`bin/gnome-terminal-solarized`)**:
   - Provisions the Solarized Dark TrueColor profile into `dconf` with `MesloLGS Nerd Font Mono 12`, block cursor, and silent bell.
   - Calibrates ANSI Color 8 to Solarized Base01 (`#586E75`) so dim text and shell autosuggestions remain clearly visible.
 - **macOS Terminal.app (`bin/macos-terminal-solarized`)**:
-  - Provisions `colors/Solarized-Dark.terminal` as the default profile with `MesloLGS Nerd Font Mono` (12pt) and calibrated dim-text and selection contrast.
+  - Provisions `colors/Solarized-Dark.terminal` as the default profile with `MesloLGS Nerd Font Mono` (12pt), `useOptionAsMetaKey` enabled, and calibrated dim-text and selection contrast.
 - **Btop++ System Monitor (`dotfiles/.config/btop/btop.conf`)**:
   - Custom Solarized Dark theme (`themes/solarized_dark.theme`) with Braille graphs, rounded borders, and Vim navigation keys (`h/j/k/l` and `g/G`).
 

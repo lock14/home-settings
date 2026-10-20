@@ -365,19 +365,92 @@ local function extract_link_at_cursor()
         if t == "uri_autolink" then
             return (vim.treesitter.get_node_text(node, 0):gsub("^<", ""):gsub(">$", "")), true
         elseif t == "inline_link" then
+            local dest, label = nil, nil
             for child in node:iter_children() do
-                if child:type() == "link_destination" then
-                    return (vim.treesitter.get_node_text(child, 0):gsub("^<", ""):gsub(">$", "")), true
+                local ct = child:type()
+                if ct == "link_destination" then
+                    dest = vim.treesitter.get_node_text(child, 0):gsub("^<", ""):gsub(">$", "")
+                elseif ct == "link_text" then
+                    label = vim.treesitter.get_node_text(child, 0):gsub("^%[", ""):gsub("%]$", ""):gsub("^`", ""):gsub("`$", "")
                 end
+            end
+            if dest then
+                if label and not dest:find("[#:]") then
+                    local lbl_line = label:match(":[Ll]?(%d+)") or label:match("#[Ll]?(%d+)")
+                    if lbl_line then
+                        dest = dest .. "#L" .. lbl_line
+                    end
+                end
+                return dest, true
             end
         end
         node = node:parent()
+    end
+    if #line > 0 then
+        local idx = math.min(math.max(1, col + 1), #line)
+        local sep_pat = "[%s%(%)%[%]%{%}<>\"'`,;*]"
+        if line:sub(idx, idx):match(sep_pat) then
+            if idx < #line and not line:sub(idx + 1, idx + 1):match(sep_pat) then
+                idx = idx + 1
+            elseif idx > 1 and not line:sub(idx - 1, idx - 1):match(sep_pat) then
+                idx = idx - 1
+            end
+        end
+        if not line:sub(idx, idx):match(sep_pat) then
+            local s, e = idx, idx
+            while s > 1 and not line:sub(s - 1, s - 1):match(sep_pat) do
+                s = s - 1
+            end
+            while e < #line and not line:sub(e + 1, e + 1):match(sep_pat) do
+                e = e + 1
+            end
+            local tok = line:sub(s, e)
+            if not tok:match("/%.%.%.?$") then
+                tok = tok:gsub("[.,;:]+$", "")
+            end
+            if tok ~= "" then
+                return tok, false
+            end
+        end
     end
     local cfile = vim.fn.expand("<cfile>")
     if cfile ~= "" then
         return cfile:gsub("^<", ""):gsub("[>.,;)]+$", ""), false
     end
     return nil, false
+end
+
+local function resolve_custom_link_rule(word, cwd)
+    if not word or word == "" then
+        return nil
+    end
+    local uv = vim.uv or vim.loop
+    local xdg_cfg = vim.env.XDG_CONFIG_HOME
+    if not xdg_cfg or xdg_cfg == "" then
+        xdg_cfg = vim.fn.expand("$HOME/.config")
+    end
+    local rules = vim.env.IDE_LINK_RULES
+    if not rules or rules == "" then
+        rules = xdg_cfg .. "/ide/links.sh"
+    end
+    local st = uv.fs_stat(rules)
+    if not st or st.type ~= "file" then
+        return nil
+    end
+    local out = vim.fn.system({
+        "bash",
+        "-c",
+        '. "$1" && declare -F ide_resolve_link >/dev/null && ide_resolve_link "$2" "$3"',
+        "ide",
+        rules,
+        word,
+        cwd or uv.cwd() or "",
+    })
+    if vim.v.shell_error ~= 0 or not out then
+        return nil
+    end
+    out = out:gsub("[\r\n]+$", "")
+    return out ~= "" and out or nil
 end
 
 follow_editor_link = function(at_mouse, fallback_tag)
@@ -399,6 +472,44 @@ follow_editor_link = function(at_mouse, fallback_tag)
         end
     end
 
+    local uv = vim.uv or vim.loop
+    local base_dir = vim.fn.expand("%:p:h")
+    if base_dir == "" then base_dir = uv.cwd() end
+
+    local function open_local_file_target(raw_target, dir)
+        local raw_path = raw_target:gsub("^file://[^/]*", "")
+        raw_path = url_decode(raw_path)
+
+        local file_path, fragment = raw_path:match("^([^#]+)#?(.*)$")
+        file_path = file_path or raw_path
+        fragment = fragment or ""
+
+        local line_num = fragment:match("^[Ll]?(%d+)") or file_path:match(":[Ll]?(%d+)")
+        if file_path:match(":[Ll]?%d+") then
+            file_path = file_path:gsub(":[Ll]?%d+.*$", "")
+        end
+
+        local is_abs = file_path:match("^/") or file_path:match("^%a:[/\\]")
+        local resolved_path = is_abs and vim.fs.normalize(file_path) or vim.fs.normalize(vim.fs.joinpath(dir, file_path))
+        local st = uv.fs_stat(resolved_path)
+
+        if st and st.type == "file" then
+            pcall(function() require("mini.files").close() end)
+            vim.cmd("normal! m'")
+            vim.cmd("keepjumps edit " .. vim.fn.fnameescape(resolved_path))
+            if line_num and tonumber(line_num) then
+                vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", tonumber(line_num)))
+            elseif fragment and fragment ~= "" then
+                local lnum = find_markdown_anchor_line(0, fragment)
+                if lnum then
+                    vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", lnum))
+                end
+            end
+            return true
+        end
+        return false
+    end
+
     local target, is_md = extract_link_at_cursor()
     if target and target ~= "" then
         if target:sub(1, 1) == "#" and (is_md or vim.bo.filetype == "markdown") then
@@ -412,47 +523,37 @@ follow_editor_link = function(at_mouse, fallback_tag)
         end
 
         if target:match("^https?://") then
+            local custom_target = resolve_custom_link_rule(target, base_dir)
+            if custom_target and custom_target:match("^file://") and open_local_file_target(custom_target, base_dir) then
+                return true
+            end
+            local open_url = (custom_target and custom_target:match("^https?://")) and custom_target or target
             if vim.env.TMUX and vim.env.TMUX ~= "" and vim.fn.executable(vim.fn.expand("$HOME/.local/bin/ide")) == 1 then
-                ide_job("--open-link", target, target, vim.fn.expand("%:p:h"))
+                ide_job("--open-link", open_url, open_url, base_dir)
             elseif vim.ui and vim.ui.open then
-                vim.ui.open(target)
+                vim.ui.open(open_url)
             end
             return true
         end
 
         if is_md or vim.bo.filetype == "markdown" or target:match("^file://") or target:find("[/\\.]") then
-            local raw_path = target:gsub("^file://[^/]*", "")
-            raw_path = url_decode(raw_path)
-
-            local file_path, fragment = raw_path:match("^([^#]+)#?(.*)$")
-            file_path = file_path or raw_path
-            fragment = fragment or ""
-
-            local line_num = fragment:match("^[Ll]?(%d+)") or file_path:match(":(%d+)")
-            if file_path:match(":%d+") then
-                file_path = file_path:gsub(":%d+.*$", "")
+            if not target:match("^//") and open_local_file_target(target, base_dir) then
+                return true
             end
-
-            local uv = vim.uv or vim.loop
-            local base_dir = vim.fn.expand("%:p:h")
-            if base_dir == "" then base_dir = uv.cwd() end
-            local is_abs = file_path:match("^/") or file_path:match("^%a:[/\\]")
-            local resolved_path = is_abs and vim.fs.normalize(file_path) or vim.fs.normalize(vim.fs.joinpath(base_dir, file_path))
-            local st = uv.fs_stat(resolved_path)
-
-            if st and st.type == "file" then
-                pcall(function() require("mini.files").close() end)
-                vim.cmd("normal! m'")
-                vim.cmd("keepjumps edit " .. vim.fn.fnameescape(resolved_path))
-                if line_num and tonumber(line_num) then
-                    vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", tonumber(line_num)))
-                elseif fragment and fragment ~= "" then
-                    local lnum = find_markdown_anchor_line(0, fragment)
-                    if lnum then
-                        vim.cmd(string.format("keepjumps call cursor(%d, 1) | normal! ^zz", lnum))
+            if target:find("/") or target:match("^@?%d%d%d%d%d%d+$") then
+                local custom_target = resolve_custom_link_rule(target, base_dir)
+                if custom_target then
+                    if open_local_file_target(custom_target, base_dir) then
+                        return true
+                    elseif custom_target:match("^https?://") then
+                        if vim.env.TMUX and vim.env.TMUX ~= "" and vim.fn.executable(vim.fn.expand("$HOME/.local/bin/ide")) == 1 then
+                            ide_job("--open-link", custom_target, custom_target, base_dir)
+                        elseif vim.ui and vim.ui.open then
+                            vim.ui.open(custom_target)
+                        end
+                        return true
                     end
                 end
-                return true
             end
         end
     end
@@ -1405,6 +1506,18 @@ lazy.setup({
                     map("n", "<CR>", function()
                         mf.go_in({ close_on_file = true })
                     end, { buffer = buf_id, nowait = true, desc = "Open file or enter directory" })
+                    map("n", "<2-LeftMouse>", function()
+                        local m = vim.fn.getmousepos()
+                        if m.winid > 0 and vim.api.nvim_win_is_valid(m.winid) then
+                            vim.api.nvim_set_current_win(m.winid)
+                            if m.line > 0 then
+                                local win_buf = vim.api.nvim_win_get_buf(m.winid)
+                                local line_cnt = vim.api.nvim_buf_line_count(win_buf)
+                                pcall(vim.api.nvim_win_set_cursor, m.winid, { math.min(m.line, line_cnt), math.max(0, m.column - 1) })
+                            end
+                        end
+                        mf.go_in({ close_on_file = true })
+                    end, { buffer = buf_id, nowait = true, silent = true, desc = "Open file or enter directory on double-click" })
                 end,
             })
         end,

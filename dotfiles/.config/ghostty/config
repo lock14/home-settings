@@ -60,6 +60,8 @@ cursor-style-blink = false
 # 5. Terminal Behavior & Clipboard
 # ------------------------------------------------------------------------------
 copy-on-select = clipboard
+clipboard-read = allow
+clipboard-write = allow
 confirm-close-surface = false
 shell-integration = detect
 mouse-hide-while-typing = true

@@ -65,6 +65,9 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -T copy-mode-vi M-v' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-v' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1Pane select-pane -t = \\; send-keys -M' "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq "bind -n DoubleClick1Pane select-pane -t = \; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; send-keys -X copy-pipe-no-clear'" "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq "bind -n TripleClick1Pane select-pane -t = \; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-line ; send-keys -X copy-pipe-no-clear'" "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Fq "copy-mode -H \;" "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '[[:space:]]MouseDown1Pane.*run-shell' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi M-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
@@ -72,6 +75,7 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown8Pane.*send-keys C-o' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown9Pane.*send-keys C-i' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Fq "'select-pane -t = \; if-shell" "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Smulx=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'Setulc=' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q 'Hls@' "$TEMP_HOME/.tmux.conf" && \
@@ -166,7 +170,7 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" set-environment -t "=cfg_test" SSH_CONNECTION "10.0.0.1 12345 10.0.0.2 22"
         eval_sright_ssh="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" set-environment -u -t "=cfg_test" SSH_CONNECTION
-        tmux -L "$TMUX_TEST_SOCK" copy-mode -t "$cfg_pane"
+        tmux -L "$TMUX_TEST_SOCK" if-shell -t "$cfg_pane" -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; send-keys -X copy-pipe-no-clear'
         eval_sright_copy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" send-keys -t "$cfg_pane" -X cancel
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
@@ -184,7 +188,7 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "󰓦 SYNC" <<< "$eval_sright_sync" && \
            grep -Fq "󰣀" <<< "$eval_sright_ssh" && \
            grep -Fq "󰆏 COPY [" <<< "$eval_sright_copy"; then
-            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor}, fixed status-left, 3-state window-status-current-format, and conditional status-right"
+            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor}, fixed status-left, 3-state window-status-current-format, DoubleClick1Pane if-shell copy-mode chain, and conditional status-right"
         else
             fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor sleft='$eval_sleft' wcur='$eval_wcur' sright_root='$eval_sright_root' sright_sub='$eval_sright_sub' sright_sync='$eval_sright_sync' sright_ssh='$eval_sright_ssh' sright_copy='$eval_sright_copy'"
         fi
@@ -228,10 +232,12 @@ fi
 if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
    grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -q 'clipboard-read = allow' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -q 'clipboard-write = allow' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'macos-option-as-alt = true' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, and macos-option-as-alt = true"
+    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, clipboard-read/write = allow, and macos-option-as-alt = true"
 else
-    fail "Ghostty config verification" "Ghostty config missing expected theme, font, or macos-option-as-alt"
+    fail "Ghostty config verification" "Ghostty config missing expected theme, font, clipboard-read/write, or macos-option-as-alt"
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then
