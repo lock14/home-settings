@@ -667,15 +667,33 @@ ide_resolve_link() {
         printf 'file://%s/%s#L%s\n' "$IDE_WS_3P" "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}"
         return 0
     fi
+    if [[ "\$1" == "//pkg/subdir/nested.txt:3" ]]; then
+        printf 'file://%s/subdir/nested.txt#L3\n' "$IDE_WS_3P"
+        return 0
+    fi
+    if [[ "\$1" == "//pkg/subdir/..." ]]; then
+        printf 'file://%s/subdir/nested.txt#L1\n' "$IDE_WS_3P"
+        return 0
+    fi
     return 1
 }
 SH
                     IDE_LINK_RULES="$OSC8_RULES_FILE" "$SCRIPT_DIR/bin/ide" --open-link "https://code.example.test/view/subdir/nested.txt?l=2" "nested.txt" "$IDE_WS_3P" "ws_3pane_test"
-                    rm -f "$OSC8_RULES_FILE"
                     line_after_osc8_rule="2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                         line_after_osc8_rule="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
+                    IDE_LINK_RULES="$OSC8_RULES_FILE" "$SCRIPT_DIR/bin/ide" --open-link "" "\`//pkg/subdir/nested.txt:3\`" "$IDE_WS_3P" "ws_3pane_test"
+                    line_after_root_ref="3"
+                    if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                        line_after_root_ref="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                    fi
+                    IDE_LINK_RULES="$OSC8_RULES_FILE" "$SCRIPT_DIR/bin/ide" --open-link "" "(//pkg/subdir/...)." "$IDE_WS_3P" "ws_3pane_test"
+                    line_after_root_wildcard="1"
+                    if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                        line_after_root_wildcard="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                    fi
+                    rm -f "$OSC8_RULES_FILE"
                     # Verify line-wrapped URLs in an unfocused tmux pane (e.g. broken after 'home-' onto an indented next line in $term_pane while $ed_pane is active)
                     # are stitched back together when clicking either the first line or the continuation line,
                     # and 1st-character split OSC 8 links (\e]8;id=...;file://...\e\\p\e]8;;\e\\arse_file_target) are recovered when clicking chars 2..N.
@@ -726,10 +744,10 @@ SH
                     fi
                     tmux select-pane -t "$ed_pane"
                     active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                    if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$buf_after_jump_back" = "nested.txt:1" ] && [ "$buf_after_jump_fwd" = "route.ts:2" ] && [ "$line_after_host_col_hash" = "2" ] && [ "$line_after_colon_l" = "3" ] && [ "$line_after_href_word_line" = "2" ] && [ "$buf_after_hash_file" = "foo#bar.txt:3" ] && [ "$line_after_md_file_anchor" = "3" ] && [ "$line_after_md_anchor" = "1" ] && [ "$line_after_osc8_rule" = "2" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$sfx_osc8_pr_url" = "https://gitlab.com/org/project/-/merge_requests/42" ] && [ "$line_after_split_osc8" = "3" ] && [ "$line_after_split_sgr" = "1" ] && [ "$line_after_split_sep" = "2" ] && [ "$line_after_split_wrap" = "3" ]; then
-                        echo "PASS:bin/ide --open-link handles file://#L<line>, file://host/path#L<line>:<col>-L<end>:<col>, filepath:L<line>, file:// href + word:line-end, filenames with '#', Markdown #anchor and file.md#anchor heading jumps, ide_resolve_link http(s)://->file:// rewrites, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), single-step jumplist Back/Forward (<C-o>/<C-i>, Mouse4/Mouse5), line-wrapped URLs across unfocused panes, 1st-character and suffix split OSC 8 links (recover_split_osc8_href including mid-token SGR, word-separator prefixes, <branch>@<N> PR links, and wrapped continuations), file URLs with parentheses, Read(...) tool headers, collapsed empty-href args (with matching CWD subdir), and workspace basenames (unparking Editor if hidden)"
+                    if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$buf_after_jump_back" = "nested.txt:1" ] && [ "$buf_after_jump_fwd" = "route.ts:2" ] && [ "$line_after_host_col_hash" = "2" ] && [ "$line_after_colon_l" = "3" ] && [ "$line_after_href_word_line" = "2" ] && [ "$buf_after_hash_file" = "foo#bar.txt:3" ] && [ "$line_after_md_file_anchor" = "3" ] && [ "$line_after_md_anchor" = "1" ] && [ "$line_after_osc8_rule" = "2" ] && [ "$line_after_root_ref" = "3" ] && [ "$line_after_root_wildcard" = "1" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$sfx_osc8_pr_url" = "https://gitlab.com/org/project/-/merge_requests/42" ] && [ "$line_after_split_osc8" = "3" ] && [ "$line_after_split_sgr" = "1" ] && [ "$line_after_split_sep" = "2" ] && [ "$line_after_split_wrap" = "3" ]; then
+                        echo "PASS:bin/ide --open-link handles file://#L<line>, file://host/path#L<line>:<col>-L<end>:<col>, filepath:L<line>, file:// href + word:line-end, filenames with '#', Markdown #anchor and file.md#anchor heading jumps, ide_resolve_link http(s)://->file:// & //pkg/... rewrites, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), single-step jumplist Back/Forward (<C-o>/<C-i>, Mouse4/Mouse5), line-wrapped URLs across unfocused panes, 1st-character and suffix split OSC 8 links (recover_split_osc8_href including mid-token SGR, word-separator prefixes, <branch>@<N> PR links, and wrapped continuations), file URLs with parentheses, Read(...) tool headers, collapsed empty-href args (with matching CWD subdir), and workspace basenames (unparking Editor if hidden)"
                     else
-                        echo "FAIL:bin/ide --open-link focus/line:Expected active=$ed_pane, paren=route.ts:2, jump_back=nested.txt:1, jump_fwd=route.ts:2, hash=foo#bar.txt:3, md_anchor=3/1, osc8_rule=2, wrapped URLs=https://github.com/lock14/home-settings/pull/118, sfx_pr=https://gitlab.com/org/project/-/merge_requests/42, split_osc8=3/1/2/3, and lines 2/3/1/3/2/3/1/2/3/2, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file back=$buf_after_jump_back fwd=$buf_after_jump_fwd host_col=$line_after_host_col_hash colon_l=$line_after_colon_l href_word=$line_after_href_word_line hash=$buf_after_hash_file md_anchor=$line_after_md_file_anchor/$line_after_md_anchor osc8_rule=$line_after_osc8_rule wrap1=$wrap_url_line1 wrap2=$wrap_url_line2 sfx_pr=$sfx_osc8_pr_url split_osc8=$line_after_split_osc8/$line_after_split_sgr/$line_after_split_sep/$line_after_split_wrap"
+                        echo "FAIL:bin/ide --open-link focus/line:Expected active=$ed_pane, paren=route.ts:2, jump_back=nested.txt:1, jump_fwd=route.ts:2, hash=foo#bar.txt:3, md_anchor=3/1, osc8_rule=2/3/1, wrapped URLs=https://github.com/lock14/home-settings/pull/118, sfx_pr=https://gitlab.com/org/project/-/merge_requests/42, split_osc8=3/1/2/3, and lines 2/3/1/3/2/3/1/2/3/2, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file back=$buf_after_jump_back fwd=$buf_after_jump_fwd host_col=$line_after_host_col_hash colon_l=$line_after_colon_l href_word=$line_after_href_word_line hash=$buf_after_hash_file md_anchor=$line_after_md_file_anchor/$line_after_md_anchor osc8_rule=$line_after_osc8_rule/$line_after_root_ref/$line_after_root_wildcard wrap1=$wrap_url_line1 wrap2=$wrap_url_line2 sfx_pr=$sfx_osc8_pr_url split_osc8=$line_after_split_osc8/$line_after_split_sgr/$line_after_split_sep/$line_after_split_wrap"
                     fi
                 else
                     echo "FAIL:bin/ide --open-link filepath:line:col::Command failed on filepath:line:col:"
@@ -742,21 +760,36 @@ SH
                 rm -f "$sock_3p"
             fi
 
-            # Verify `bin/ide --copy` and `bin/ide --paste`
+            # Verify `bin/ide --copy`, `bin/ide --paste`, SSH URL OSC 52 copy, and local <-> SSH session re-attachment env sync
             COPY_MOCK_DIR="$(mktemp -d)"
             cat > "$COPY_MOCK_DIR/xsel" <<'SH'
 #!/usr/bin/env bash
+[ "${DISPLAY:-}" = ":99" ] || exit 1
 if [ "${1:-}" = "-ib" ]; then
     cat > "$COPY_XSEL_OUT"
     exit 0
 fi
-if [ "${1:-}" = "-op" ] || [ "${1:-}" = "-ob" ]; then
-    printf "from-xsel-selection"
+if [ "${1:-}" = "-ob" ]; then
+    printf "from-xsel-clipboard"
+    exit 0
+fi
+if [ "${1:-}" = "-op" ]; then
+    printf "from-xsel-primary"
     exit 0
 fi
 exit 1
 SH
-            chmod +x "$COPY_MOCK_DIR/xsel"
+            cat > "$COPY_MOCK_DIR/open" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$COPY_BROWSER_OUT"
+exit 0
+SH
+            cat > "$COPY_MOCK_DIR/xdg-open" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$COPY_BROWSER_OUT"
+exit 0
+SH
+            chmod +x "$COPY_MOCK_DIR/xsel" "$COPY_MOCK_DIR/open" "$COPY_MOCK_DIR/xdg-open"
             tmux set-environment -t "=ws_3pane_test" -r DISPLAY 2>/dev/null || true
             for ssh_v in SSH_CONNECTION SSH_TTY SSH_CLIENT; do
                 tmux set-environment -g -r "$ssh_v" 2>/dev/null || true
@@ -766,24 +799,53 @@ SH
             printf "solarized-clipboard-payload" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
             copy_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
             copy_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
+            rm -f "$COPY_MOCK_DIR/xsel_out"
+            printf "ssh-copy-payload" | env -u DISPLAY SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
+            copy_ssh_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
+            copy_ssh_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
             env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
             paste_local_got="$(tmux show-buffer 2>/dev/null || true)"
             tmux set-buffer "from-tmux-ssh-buf"
             env -u DISPLAY SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
             paste_ssh_got="$(tmux show-buffer 2>/dev/null || true)"
+            # Simulate re-attaching to the existing local session over SSH (`ide --detach "$IDE_WS_3P"`)
+            env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY SSH_CONNECTION="10.0.0.1 4321 10.0.0.2 22" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
+            rm -f "$COPY_MOCK_DIR/xsel_out"
+            printf "ssh-reattach-copy" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
+            copy_ssh_sess_tmux_got="$(tmux show-buffer 2>/dev/null || true)"
+            copy_ssh_sess_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
             tmux set-buffer "from-tmux-ssh-sess-env"
-            tmux set-environment -t "=ws_3pane_test" SSH_CONNECTION "10.0.0.1 1234 10.0.0.2 22"
             env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
             paste_ssh_sess_got="$(tmux show-buffer 2>/dev/null || true)"
-            tmux set-environment -t "=ws_3pane_test" -r SSH_CONNECTION 2>/dev/null || true
-            tmux set-environment -gu DISPLAY
+            env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT -u IDE_BROWSER COPY_BROWSER_OUT="$COPY_MOCK_DIR/browser_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --open-link "https://example.com/ssh-osc52" "" "$IDE_WS_3P" "ws_3pane_test"
+            ssh_url_buf_got="$(tmux show-buffer 2>/dev/null || true)"
+            ssh_browser_got="$(cat "$COPY_MOCK_DIR/browser_out" 2>/dev/null || true)"
+            # Simulate re-attaching back on local desktop (`DISPLAY=:99`, no `SSH_*`, clearing stale `WAYLAND_DISPLAY=wayland-stale`)
+            tmux set-environment -t "=ws_3pane_test" WAYLAND_DISPLAY "wayland-stale"
+            tmux set-environment -g WAYLAND_DISPLAY "wayland-stale"
+            env -u WAYLAND_DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT DISPLAY=":99" "$SCRIPT_DIR/bin/ide" --detach "$IDE_WS_3P"
+            wayland_after_reattach="$(tmux show-environment -t "=ws_3pane_test" WAYLAND_DISPLAY 2>/dev/null || true)$(tmux show-environment -g WAYLAND_DISPLAY 2>/dev/null || true)"
+            rm -f "$COPY_MOCK_DIR/xsel_out"
+            printf "local-reattach-copy" | env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT COPY_XSEL_OUT="$COPY_MOCK_DIR/xsel_out" PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --copy
+            copy_reattach_local_xsel_got="$(cat "$COPY_MOCK_DIR/xsel_out" 2>/dev/null || true)"
+            tmux set-buffer "stale-ssh-buf"
+            env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" --paste "$term_pane"
+            paste_reattach_local_got="$(tmux show-buffer 2>/dev/null || true)"
+            tmux set-environment -t "=ws_3pane_test" -r DISPLAY 2>/dev/null || true
+            tmux set-environment -gu DISPLAY 2>/dev/null || true
             rm -rf "$COPY_MOCK_DIR"
             if [ "$copy_tmux_got" = "solarized-clipboard-payload" ] && [ "$copy_xsel_got" = "solarized-clipboard-payload" ] && \
-               [ "$paste_local_got" = "from-xsel-selection" ] && [ "$paste_ssh_got" = "from-tmux-ssh-buf" ] && \
-               [ "$paste_ssh_sess_got" = "from-tmux-ssh-sess-env" ]; then
-                echo "PASS:bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11, and --paste prioritizes X11 on local desktop and tmux buffer over SSH (both process and tmux session env)"
+               [ "$copy_ssh_tmux_got" = "ssh-copy-payload" ] && [ -z "$copy_ssh_xsel_got" ] && \
+               [ "$paste_local_got" = "from-xsel-clipboard" ] && [ "$paste_ssh_got" = "from-tmux-ssh-buf" ] && \
+               [ "$copy_ssh_sess_tmux_got" = "ssh-reattach-copy" ] && [ -z "$copy_ssh_sess_xsel_got" ] && \
+               [ "$paste_ssh_sess_got" = "from-tmux-ssh-sess-env" ] && \
+               [ "$ssh_url_buf_got" = "https://example.com/ssh-osc52" ] && [ -z "$ssh_browser_got" ] && \
+               [[ "$wayland_after_reattach" != *"wayland-stale"* ]] && \
+               [ "$copy_reattach_local_xsel_got" = "local-reattach-copy" ] && \
+               [ "$paste_reattach_local_got" = "from-xsel-clipboard" ]; then
+                echo "PASS:bin/ide --copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11 (skipping X11 over SSH), --paste prioritizes CLIPBOARD over PRIMARY on local desktop and tmux buffer over SSH, --open-link copies URLs via OSC 52 without launching local browsers over SSH, and local <-> SSH re-attachment synchronizes session & global env"
             else
-                echo "FAIL:bin/ide --copy / --paste:Expected copy='solarized-clipboard-payload', paste_local='from-xsel-selection', paste_ssh='from-tmux-ssh-buf', paste_ssh_sess='from-tmux-ssh-sess-env', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess='$paste_ssh_sess_got'"
+                echo "FAIL:bin/ide --copy / --paste:Expected copy='solarized-clipboard-payload', ssh_copy='ssh-copy-payload' (xsel=''), paste_local='from-xsel-clipboard', paste_ssh='from-tmux-ssh-buf', copy_ssh_sess='ssh-reattach-copy' (xsel=''), paste_ssh_sess='from-tmux-ssh-sess-env', ssh_url='https://example.com/ssh-osc52' (browser=''), wayland!='WAYLAND_DISPLAY=wayland-stale', copy_reattach_local='local-reattach-copy', reattach_local='from-xsel-clipboard', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' ssh_tmux='$copy_ssh_tmux_got' ssh_xsel='$copy_ssh_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess_copy='$copy_ssh_sess_tmux_got/$copy_ssh_sess_xsel_got' ssh_sess='$paste_ssh_sess_got' ssh_url='$ssh_url_buf_got' browser='$ssh_browser_got' wayland='$wayland_after_reattach' copy_reattach='$copy_reattach_local_xsel_got' reattach_local='$paste_reattach_local_got'"
             fi
 
             # Verify untagged pane recovery and self-healing Editor
@@ -1350,6 +1412,72 @@ if grep -Fq "dconf reset -f /org/gnome/terminal/legacy/profiles:/:11f5ebd6-faab-
     pass "bin/gnome-terminal-solarized purges legacy profile UUID (11f5ebd6-...) and upgrades legacy 'MesloLGS NF 12' font to 'MesloLGS Nerd Font Mono 12'"
 else
     fail "bin/gnome-terminal-solarized mock provisioning" "Unexpected dconf/gsettings calls: $gt_logged"
+fi
+
+MAC_MOCK_DIR="$(mktemp -d)"
+cat > "$MAC_MOCK_DIR/uname" <<'SH'
+#!/usr/bin/env bash
+echo "Darwin"
+SH
+cat > "$MAC_MOCK_DIR/defaults" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+chmod +x "$MAC_MOCK_DIR/uname" "$MAC_MOCK_DIR/defaults"
+HOME="$MAC_MOCK_DIR" PATH="$MAC_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/macos-terminal-solarized" >/dev/null 2>&1
+mac_plist_ok="$(python3 - "$MAC_MOCK_DIR/Library/Preferences/com.apple.Terminal.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], "rb") as f:
+    prefs = plistlib.load(f)
+prof = prefs.get("Window Settings", {}).get("Solarized Dark", {})
+ok = (
+    prefs.get("Default Window Settings") == "Solarized Dark"
+    and prefs.get("Startup Window Settings") == "Solarized Dark"
+    and prof.get("useOptionAsMetaKey") is True
+)
+print("OK" if ok else f"FAIL:{prefs}")
+PY
+)"
+rm -rf "$MAC_MOCK_DIR"
+if [ "$mac_plist_ok" = "OK" ]; then
+    pass "bin/macos-terminal-solarized writes com.apple.Terminal.plist with Solarized Dark default/startup profile and useOptionAsMetaKey = True"
+else
+    fail "bin/macos-terminal-solarized mock Darwin provisioning" "Unexpected plist state: $mac_plist_ok"
+fi
+
+if gt_help="$("$SCRIPT_DIR/bin/gnome-terminal-solarized" --help 2>&1)" && \
+   grep -Fq "Usage: gnome-terminal-solarized [OPTIONS]" <<< "$gt_help" && \
+   grep -Fq -- "--dry-run" <<< "$gt_help" && \
+   ! "$SCRIPT_DIR/bin/gnome-terminal-solarized" --invalid-flag >/dev/null 2>&1; then
+    pass "bin/gnome-terminal-solarized supports -h/--help and rejects unknown options"
+else
+    fail "bin/gnome-terminal-solarized CLI flags" "Expected --help usage output and non-zero exit on --invalid-flag"
+fi
+
+if mt_help="$("$SCRIPT_DIR/bin/macos-terminal-solarized" --help 2>&1)" && \
+   grep -Fq "Usage: macos-terminal-solarized [OPTIONS]" <<< "$mt_help" && \
+   grep -Fq -- "--dry-run" <<< "$mt_help" && \
+   ! "$SCRIPT_DIR/bin/macos-terminal-solarized" --invalid-flag >/dev/null 2>&1; then
+    pass "bin/macos-terminal-solarized supports -h/--help and rejects unknown options"
+else
+    fail "bin/macos-terminal-solarized CLI flags" "Expected --help usage output and non-zero exit on --invalid-flag"
+fi
+
+if gp_help="$("$SCRIPT_DIR/bin/gen-passwd" --help 2>&1)" && \
+   gp_short_help="$("$SCRIPT_DIR/bin/gen-passwd" -u --help 2>&1)" && \
+   grep -Fq "Usage: gen-passwd [-u] [-l] [-n] [-s] [-t] [-h] [length]" <<< "$gp_help" && \
+   grep -Fq "Usage: gen-passwd [-u] [-l] [-n] [-s] [-t] [-h] [length]" <<< "$gp_short_help" && \
+   rus_help="$("$SCRIPT_DIR/bin/repeat-until-success" --help 2>&1)" && \
+   rus_short_help="$("$SCRIPT_DIR/bin/repeat-until-success" -n 2 --help 2>&1)" && \
+   grep -Fq "Usage: repeat-until-success [-n <attempts>] [-d <seconds>] [-t] [-h] <command> [args...]" <<< "$rus_help" && \
+   grep -Fq "Usage: repeat-until-success [-n <attempts>] [-d <seconds>] [-t] [-h] <command> [args...]" <<< "$rus_short_help" && \
+   sum_help="$("$SCRIPT_DIR/bin/sum" --help 2>&1)" && \
+   sum_short_help="$("$SCRIPT_DIR/bin/sum" -a --help 2>&1)" && \
+   grep -Fq "usage: sum [options]" <<< "$sum_help" && \
+   grep -Fq "usage: sum [options]" <<< "$sum_short_help"; then
+    pass "bin/gen-passwd, bin/repeat-until-success, and bin/sum support --help (both first and after short flags)"
+else
+    fail "bin utilities --help" "Expected --help usage output from gen-passwd, repeat-until-success, and sum"
 fi
 
 test_summary

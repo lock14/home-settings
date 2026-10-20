@@ -106,6 +106,7 @@ fi
 echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
 check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
+check_option "&mouse == 'a' && !empty(maparg('<M-c>', 'x')) && !empty(maparg('<M-v>', 'n')) && !empty(maparg('<M-v>', 'i')) && !empty(maparg('<M-v>', 'x'))" "Vim enables mouse=a and maps <M-c> (visual copy) and <M-v> (normal/insert/visual paste)"
 check_option "get(g:, 'netrw_banner', -1) == 0 && get(g:, 'netrw_liststyle', -1) == 3 && get(g:, 'netrw_browse_split', -1) == 4 && get(g:, 'netrw_winsize', -1) == 20" "Vim Netrw configured as tree sidebar (netrw_liststyle=3, browse_split=4, winsize=20)"
 check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') ==? '<C-w>h' && maparg('<M-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'v') =~# 'TmuxNavigate' && maparg('<M-h>', 'i') =~# 'TmuxNavigate' && maparg('<X1Mouse>', 'n') ==? '<C-O>' && (maparg('<X2Mouse>', 'n') ==? '<C-I>' || maparg('<X2Mouse>', 'n') ==? '<Tab>') && maparg('<X1Mouse>', 'i') =~? '<C-O><C-O>' && (maparg('<X2Mouse>', 'i') =~? '<C-O><C-I>' || maparg('<X2Mouse>', 'i') =~? '<C-O><Tab>')" "Vim <leader>e mapped to :Lexplore, <C-h/j/k/l> kept internal to Vim splits (<C-w>h/j/k/l), <M-h/j/k/l> mapped to s:TmuxNavigate, and <X1Mouse>/<X2Mouse> mapped to jumplist Back/Forward"
 
@@ -157,9 +158,10 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q -- '--swap' "$NVIM_CONFIG" && \
        grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
        grep -q 'MiniFilesBufferCreate' "$NVIM_CONFIG" && \
+       grep -Fq '<2-LeftMouse>' "$NVIM_CONFIG" && \
        grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
        grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, <X1Mouse>/<X2Mouse> jumplist Back/Forward, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files with arrow/CR bindings)"
+        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, <X1Mouse>/<X2Mouse> jumplist Back/Forward, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files with arrow/CR/<2-LeftMouse> bindings)"
     else
         fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, <X1Mouse>/<X2Mouse>, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup in init.lua"
     fi
@@ -1009,7 +1011,7 @@ assert_suite("Neovim highlights modern Markdown documents (sample.md) with Seman
     { "is_md_alert_important", probe_cap(md_buf, "> [!IMPORTANT]", "!IMPORTANT", "markup.alert.important"), "true" },
     { "is_md_alert_warning", probe_cap(md_buf, "> [!WARNING]", "!WARNING", "markup.alert.warning"), "true" },
     { "is_md_alert_caution", probe_cap(md_buf, "> [!CAUTION]", "!CAUTION", "markup.alert.caution"), "true" },
-    { "is_md_uri_autolink", probe_cap_fg(md_buf, "<https://github.com/example/home-settings>", "<https://", "markup.link.url"), "true/2aa198" },
+    { "is_md_uri_autolink", probe_cap_fg(md_buf, "<https://github.com/lock14/home-settings>", "<https://", "markup.link.url"), "true/2aa198" },
     { "is_md_email_autolink", probe_cap(md_buf, "<maintainers@example.com>", "<maintainers@", "markup.link.url"), "true" },
     { "is_md_task_checked", probe_cap(md_buf, "- [x]", "[x]", "markup.list.checked"), "true" },
     { "task_chk_fg", hl_fg("@markup.list.checked"), "859900" },
@@ -1579,6 +1581,20 @@ if ok and mf then
     local st_cr = mf.get_explorer_state()
     local cr_buf = vim.api.nvim_buf_get_name(0)
     fk("<leader>e")
+    local dbl_map = vim.fn.maparg("<2-LeftMouse>", "n", false, true)
+    local dbl_map_ok = (dbl_map.buffer == 1 and dbl_map.desc ~= nil and dbl_map.desc:find("double%-click") ~= nil)
+    local mf_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_cursor(mf_win, { 1, 0 })
+    local orig_getmousepos = vim.fn.getmousepos
+    vim.fn.getmousepos = function()
+        return { winid = mf_win, line = 3, column = 1, screenrow = 3, screencol = 1, winrow = 3, wincol = 1 }
+    end
+    fk("<2-LeftMouse>")
+    vim.fn.getmousepos = orig_getmousepos
+    local st_dbl = mf.get_explorer_state()
+    local dbl_buf = vim.api.nvim_buf_get_name(0)
+    vim.cmd("edit " .. cr_buf)
+    fk("<leader>e")
     fk("<S-Right>")
     local st_sright = mf.get_explorer_state()
     fk("<leader>e")
@@ -1602,7 +1618,7 @@ if ok and mf then
     local w2_imag = st_imag.windows and st_imag.windows[2] and vim.api.nvim_win_get_config(st_imag.windows[2].win_id) or {}
     mf.close()
     vim.fn.delete(tmpd, "rf")
-    local nav_ok = (r1 == r0 + 1 and r2 == r0 and (st_left.branch or {})[1] == cwd and st_left.depth_focus == 1 and (st_right.branch or {})[2] == cwd .. "/modules" and st_right.depth_focus == 2 and #(st_sleft.branch or {}) < #(st_right.branch or {}) and st_cr == nil and st_sright == nil and cr_buf:find("/modules/", 1, true) ~= nil)
+    local nav_ok = (r1 == r0 + 1 and r2 == r0 and (st_left.branch or {})[1] == cwd and st_left.depth_focus == 1 and (st_right.branch or {})[2] == cwd .. "/modules" and st_right.depth_focus == 2 and #(st_sleft.branch or {}) < #(st_right.branch or {}) and st_cr == nil and dbl_map_ok and st_dbl == nil and dbl_buf ~= cr_buf and dbl_buf:find("/modules/20-bin.sh", 1, true) ~= nil and st_sright == nil and cr_buf:find("/modules/", 1, true) ~= nil)
     mf_ok = tostring(b0[1] == cwd and b1[1] == cwd .. "/modules" and st_closed == nil and b2[1] == cwd .. "/modules" and #b3 == 1 and b3[1] == cwd and nav_ok)
     mf_layout_ok = tostring(code_wrap == false and #(st1.windows or {}) == 2 and w1_cfg.col == 0 and w1_cfg.width == 35 and w2_cfg.col == 37 and (w2_cfg.col + w2_cfg.width + 2 == 80) and (w2_res.col + w2_res.width + 2 == 120) and (w2_imag.col + (w2_imag.width or 0) + 2 == 80) and wl_cfg.col == 0 and wl_cfg.width == 35 and wr_cfg.col == 0 and wr_cfg.width == 35)
 end
@@ -1653,6 +1669,26 @@ EOF
             fail "Neovim SSH DISPLAY guard, autoread/clipboard, left-anchored mini.files & render-markdown" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|MF=true|MFL=true|MDW=true|RMHL=true|RMT=true|XM=true', got '$SSH_NVIM_OUT'"
         fi
 
+        MD_LINK_RULES="$(mktemp)"
+        cat << 'SH' > "$MD_LINK_RULES"
+ide_resolve_link() {
+    case "$1" in
+        //pkg/sample-code/sample.go:12)
+            printf 'file://%s/sample-code/sample.go#L12\n' "$2"
+            return 0
+            ;;
+        //pkg/sample-code:sample_target)
+            printf 'file://%s/sample-code/sample.go#L15\n' "$2"
+            return 0
+            ;;
+        //pkg/sample-code/...)
+            printf 'file://%s/sample-code/sample.go#L8\n' "$2"
+            return 0
+            ;;
+    esac
+    return 1
+}
+SH
         MD_LINK_SCRIPT="$(mktemp)"
         cat << 'EOF' > "$MD_LINK_SCRIPT"
 local c_mouse = vim.fn.maparg("<C-LeftMouse>", "n", false, true)
@@ -1676,7 +1712,7 @@ local lines = {
     "## Table of Contents",
     "- [Quick Start](#quick-start)",
     "- [Linux & macOS](#linux--macos)",
-    "- [Automated Setup (`doom setup`)](#automated-setup-doom-setup)",
+    "- [Automated Setup (`doom setup` — Diátaxis)](#automated-setup-doom-setup--diátaxis)",
     "- [Notes](#notes)",
     "- [Notes 2](#notes-1)",
     "- [Sample Go File](sample-code/sample.go#L10)",
@@ -1692,14 +1728,15 @@ local lines = {
     "### Linux & macOS",
     "Linux and macOS content.",
     "",
-    "## Automated Setup (`doom setup`)",
+    "## Automated Setup (`doom setup` — Diátaxis)",
     "Automated setup content.",
     "",
     "## Notes",
     "First notes content.",
     "",
     "## Notes",
-    "Second notes content."
+    "Second notes content.",
+    "- Root ref `//pkg/sample-code/sample.go:12` and target `//pkg/sample-code:sample_target` and wildcard `//pkg/sample-code/...`."
 }
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 vim.opt_local.conceallevel = 2
@@ -1738,14 +1775,34 @@ vim.cmd("normal! \15")
 local pos_back = vim.api.nvim_win_get_cursor(0)
 local back_ok = (pos_back[1] == 9)
 
-io.write("MAPS=" .. tostring(maps_ok) .. "|CR=" .. tostring(cr_ok) .. "|QS=" .. tostring(qs_ok) .. "|RET=" .. tostring(ret_ok) .. "|LNX=" .. tostring(linux_ok) .. "|AUTO=" .. tostring(auto_ok) .. "|N2=" .. tostring(notes2_ok) .. "|REL=" .. tostring(rel_ok) .. "|BACK=" .. tostring(back_ok))
+vim.api.nvim_win_set_cursor(0, { 30, 15 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local rule_file1 = vim.fn.expand("%")
+local pos_rule1 = vim.api.nvim_win_get_cursor(0)
+local rule1_ok = (rule_file1:find("sample.go") ~= nil and pos_rule1[1] == 12)
+vim.cmd("normal! \15")
+
+vim.api.nvim_win_set_cursor(0, { 30, 62 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local rule_file2 = vim.fn.expand("%")
+local pos_rule2 = vim.api.nvim_win_get_cursor(0)
+local rule2_ok = (rule_file2:find("sample.go") ~= nil and pos_rule2[1] == 15)
+vim.cmd("normal! \15")
+
+vim.api.nvim_win_set_cursor(0, { 30, 108 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local rule_file3 = vim.fn.expand("%")
+local pos_rule3 = vim.api.nvim_win_get_cursor(0)
+local rule3_ok = (rule_file3:find("sample.go") ~= nil and pos_rule3[1] == 8)
+
+io.write("MAPS=" .. tostring(maps_ok) .. "|CR=" .. tostring(cr_ok) .. "|QS=" .. tostring(qs_ok) .. "|RET=" .. tostring(ret_ok) .. "|LNX=" .. tostring(linux_ok) .. "|AUTO=" .. tostring(auto_ok) .. "|N2=" .. tostring(notes2_ok) .. "|REL=" .. tostring(rel_ok) .. "|BACK=" .. tostring(back_ok) .. "|RULE=" .. tostring(rule1_ok and rule2_ok and rule3_ok))
 EOF
-        MD_LINK_OUT="$( (cd "$SCRIPT_DIR" && run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $MD_LINK_SCRIPT") 2>/dev/null || true)"
-        rm -f "$MD_LINK_SCRIPT"
-        if [ "$MD_LINK_OUT" = "MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true" ]; then
-            pass "Neovim init.lua provides conceal-aware Markdown TOC anchor, duplicate-heading, fenced-code-block-ignoring, relative file line, and 1-step jumplist navigation (<C-LeftMouse>, <M-LeftMouse>, gx, <CR>)"
+        MD_LINK_OUT="$( (cd "$SCRIPT_DIR" && IDE_LINK_RULES="$MD_LINK_RULES" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $MD_LINK_SCRIPT") 2>/dev/null || true)"
+        rm -f "$MD_LINK_SCRIPT" "$MD_LINK_RULES"
+        if [ "$MD_LINK_OUT" = "MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true|RULE=true" ]; then
+            pass "Neovim init.lua provides conceal-aware Markdown TOC anchor, duplicate-heading, fenced-code-block-ignoring, relative file line, custom ide_resolve_link (//pkg/... & :target), and 1-step jumplist navigation (<C-LeftMouse>, <M-LeftMouse>, gx, <CR>)"
         else
-            fail "Neovim Markdown link & TOC navigation" "Expected 'MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true', got '$MD_LINK_OUT'"
+            fail "Neovim Markdown link & TOC navigation" "Expected 'MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true|RULE=true', got '$MD_LINK_OUT'"
         fi
     fi
 else

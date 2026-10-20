@@ -167,9 +167,9 @@ def is_ssh_session(target_arg: str = "") -> bool:
         if os.environ.get(var):
             return True
     if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")) and shutil.which("tmux"):
-        env_target = ""
+        env_lines: list[str] = []
         if target_arg and target_arg.startswith("%"):
-            env_target = target_arg
+            env_lines.extend(tmux_out("show-environment", "-t", target_arg).splitlines())
         else:
             sess = (
                 target_arg
@@ -177,25 +177,41 @@ def is_ssh_session(target_arg: str = "") -> bool:
                 else (resolve_target_session(target_arg) if target_arg else current_ide_session())
             )
             if sess and session_exists(sess):
-                env_target = f"={sess}"
+                env_lines.extend(tmux_out("show-environment", "-t", f"={sess}").splitlines())
             elif os.environ.get("TMUX_PANE"):
-                env_target = os.environ["TMUX_PANE"]
-        if env_target:
-            env_out = tmux_out("show-environment", "-t", env_target)
-            for line in env_out.splitlines():
-                for var in ("SSH_CONNECTION=", "SSH_TTY=", "SSH_CLIENT="):
-                    if line.startswith(var) and len(line) > len(var):
+                env_lines.extend(tmux_out("show-environment", "-t", os.environ["TMUX_PANE"]).splitlines())
+        env_lines.extend(tmux_out("show-environment", "-g").splitlines())
+        seen_vars: set[str] = set()
+        for line in env_lines:
+            for var in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"):
+                if var in seen_vars:
+                    continue
+                if line == f"-{var}":
+                    seen_vars.add(var)
+                    continue
+                prefix = f"{var}="
+                if line.startswith(prefix):
+                    seen_vars.add(var)
+                    if len(line) > len(prefix):
                         return True
     return False
 
 
-def discover_display_env(target_arg: str = "") -> None:
-    if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")) and shutil.which("tmux"):
+def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) -> None:
+    if any(os.environ.get(v) for v in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT")):
+        return
+    if not ignore_tmux_env and is_ssh_session(target_arg):
+        return
+    if not ignore_tmux_env and (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR")) and shutil.which("tmux"):
         env_lines: list[str] = []
         if target_arg and target_arg.startswith("%"):
             env_lines.extend(tmux_out("show-environment", "-t", target_arg).splitlines())
         else:
-            sess = resolve_target_session(target_arg) if target_arg else current_ide_session()
+            sess = (
+                target_arg
+                if (target_arg and session_exists(target_arg))
+                else (resolve_target_session(target_arg) if target_arg else current_ide_session())
+            )
             if sess and session_exists(sess):
                 env_lines.extend(tmux_out("show-environment", "-t", f"={sess}").splitlines())
             elif os.environ.get("TMUX_PANE"):
@@ -212,8 +228,6 @@ def discover_display_env(target_arg: str = "") -> None:
                     if val:
                         os.environ[var] = val
                         seen_vars.add(var)
-    if is_ssh_session(target_arg):
-        return
     if not os.environ.get("DISPLAY") and is_socket_path("/tmp/.X11-unix/X0"):
         os.environ["DISPLAY"] = ":0"
     try:
@@ -374,7 +388,7 @@ def session_exists(sess: str) -> bool:
 def missing_session_msg(sess: str) -> str:
     if sess:
         return f"No active IDE session named '{sess}'."
-    return "Not inside an ide session (pass a session name, e.g. 'ide --quit <dir>')."
+    return "Not inside an ide session (pass a session name, such as 'ide --quit <dir>')."
 
 
 def current_ide_session() -> str:
@@ -1297,6 +1311,14 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
 
 
 def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") -> int:
+    if filepath.startswith("//") or not os.path.exists(filepath):
+        private_url = resolve_private_link(filepath, os.getcwd(), target_arg)
+        if private_url and private_url.startswith("file://"):
+            p_path, p_line = parse_file_target(private_url, os.getcwd())
+            if p_path:
+                filepath = p_path
+                if not line and p_line:
+                    line = p_line
     if not filepath.startswith("/"):
         d = os.path.dirname(filepath) or "."
         b = os.path.basename(filepath)
@@ -1460,39 +1482,53 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
     return 0
 
 
-def copy_to_system_clipboard() -> None:
+def copy_to_system_clipboard(target_arg: str = "") -> None:
     data = sys.stdin.buffer.read()
     with tempfile.NamedTemporaryFile(prefix="ide-clip.", delete=False) as tf:
         tf.write(data)
         tmp_path = tf.name
+
+    def run_clip_in(cmd: list[str]) -> None:
+        try:
+            with open(tmp_path, "rb") as f_in:
+                subprocess.run(
+                    cmd,
+                    stdin=f_in,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=2,
+                    check=False,
+                )
+        except (OSError, subprocess.SubprocessError):
+            pass
+
     try:
         if shutil.which("tmux"):
             if run_tmux("load-buffer", "-w", tmp_path).returncode != 0:
                 run_tmux("load-buffer", tmp_path)
-        if os.environ.get("DISPLAY"):
-            if shutil.which("xsel"):
-                with open(tmp_path, "rb") as f1:
-                    subprocess.run(["xsel", "-ip"], stdin=f1, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-                with open(tmp_path, "rb") as f2:
-                    subprocess.run(["xsel", "-ib"], stdin=f2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            elif shutil.which("xclip"):
-                for sel in ("primary", "clipboard"):
-                    with open(tmp_path, "rb") as fx:
-                        subprocess.Popen(
-                            ["xclip", "-selection", sel, "-i"],
-                            stdin=fx,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True,
-                        )
-        if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
-            with open(tmp_path, "rb") as fw1:
-                subprocess.run(["wl-copy", "--primary"], stdin=fw1, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            with open(tmp_path, "rb") as fw2:
-                subprocess.run(["wl-copy"], stdin=fw2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        if shutil.which("pbcopy"):
-            with open(tmp_path, "rb") as fp:
-                subprocess.run(["pbcopy"], stdin=fp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if not is_ssh_session(target_arg):
+            if os.environ.get("DISPLAY"):
+                if shutil.which("xsel"):
+                    run_clip_in(["xsel", "-ip"])
+                    run_clip_in(["xsel", "-ib"])
+                elif shutil.which("xclip"):
+                    for sel in ("primary", "clipboard"):
+                        try:
+                            with open(tmp_path, "rb") as fx:
+                                subprocess.Popen(
+                                    ["xclip", "-selection", sel, "-i"],
+                                    stdin=fx,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                    start_new_session=True,
+                                )
+                        except OSError:
+                            pass
+            if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
+                run_clip_in(["wl-copy", "--primary"])
+                run_clip_in(["wl-copy"])
+            if shutil.which("pbcopy"):
+                run_clip_in(["pbcopy"])
     finally:
         try:
             os.unlink(tmp_path)
@@ -1512,31 +1548,41 @@ def paste_from_system_clipboard(target_pane: str) -> None:
     data = b""
 
     def try_cmd(cmd: list[str]) -> bytes:
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
-        return res.stdout if res.returncode == 0 and res.stdout else b""
+        try:
+            res = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+                check=False,
+            )
+            return res.stdout if res.returncode == 0 and res.stdout else b""
+        except (OSError, subprocess.SubprocessError):
+            return b""
 
     ssh_active = is_ssh_session(raw_target)
     has_display = bool(os.environ.get("DISPLAY"))
     if ssh_active and shutil.which("tmux"):
         data = try_cmd(["tmux", "show-buffer"])
 
-    if not data and has_display:
-        if shutil.which("xsel"):
-            data = try_cmd(["xsel", "-op"]) or try_cmd(["xsel", "-ob"])
-        if not data and shutil.which("xclip"):
-            for args in (
-                ["xclip", "-selection", "primary", "-t", "UTF8_STRING", "-o"],
-                ["xclip", "-selection", "primary", "-o"],
-                ["xclip", "-selection", "clipboard", "-t", "UTF8_STRING", "-o"],
-                ["xclip", "-selection", "clipboard", "-o"],
-            ):
-                data = try_cmd(args)
-                if data:
-                    break
-    if not data and os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
-        data = try_cmd(["wl-paste", "--primary", "--no-newline"]) or try_cmd(["wl-paste", "--no-newline"])
-    if not data and shutil.which("pbpaste"):
-        data = try_cmd(["pbpaste"])
+    if not ssh_active:
+        if not data and has_display:
+            if shutil.which("xsel"):
+                data = try_cmd(["xsel", "-ob"]) or try_cmd(["xsel", "-op"])
+            if not data and shutil.which("xclip"):
+                for args in (
+                    ["xclip", "-selection", "clipboard", "-t", "UTF8_STRING", "-o"],
+                    ["xclip", "-selection", "clipboard", "-o"],
+                    ["xclip", "-selection", "primary", "-t", "UTF8_STRING", "-o"],
+                    ["xclip", "-selection", "primary", "-o"],
+                ):
+                    data = try_cmd(args)
+                    if data:
+                        break
+        if not data and os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
+            data = try_cmd(["wl-paste", "--no-newline"]) or try_cmd(["wl-paste", "--primary", "--no-newline"])
+        if not data and shutil.which("pbpaste"):
+            data = try_cmd(["pbpaste"])
     if not data and shutil.which("tmux"):
         data = try_cmd(["tmux", "show-buffer"])
 
@@ -1548,18 +1594,29 @@ def paste_from_system_clipboard(target_pane: str) -> None:
             run_tmux("paste-buffer", "-p", "-t", target_pane)
 
 
-def resolve_private_link(link_word: str, link_cwd: str) -> str:
+def resolve_private_link(link_word: str, link_cwd: str, target_arg: str = "") -> str:
+    if not os.environ.get("IDE_WORKDIR") or not os.environ.get("IDE_INITIAL_ROOT"):
+        sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
+        if sess and session_exists(sess):
+            wdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+            init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+            if wdir and not os.environ.get("IDE_WORKDIR"):
+                os.environ["IDE_WORKDIR"] = wdir
+            if init_root and not os.environ.get("IDE_INITIAL_ROOT"):
+                os.environ["IDE_INITIAL_ROOT"] = init_root
     return _call_ide_hook("ide_resolve_link", link_word, link_cwd)
 
 
 _RE_FILE_URI = re.compile(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)")
 _RE_SCHEME = re.compile(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+")
+_WRAP_REF_RE = re.compile(r"(?:(?:https?|file):)?//[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+")
 _RE_LINE_COL = re.compile(r"^([^:]+):[Ll]?([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$")
 _RE_HASH_LINE = re.compile(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$")
 _RE_MD_LABEL = re.compile(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(")
 _RE_MD_LINK = re.compile(
     r"\[(?:`[^`\r\n]+`|[^\[\]\r\n]*(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(([^()\s]+(?:\([^()\s]*\)[^()\s]*)*)\)"
 )
+_RE_MD_DEST_TAIL = re.compile(r"^[^(\[\s]*\]\(([^()\s]+(?:\([^()\s]*\)[^()\s]*)*)\)")
 _RE_TOOL_CALL = re.compile(r"^(Read|Edit|Write|View|Update|Create|Bash)\((.+)$")
 _RE_PCT_ENC = re.compile(r"%[0-9A-Fa-f]{2}")
 _RE_FRAG_ID = re.compile(r"^[A-Za-z0-9_.:-]+$")
@@ -1621,6 +1678,8 @@ def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
 def strip_token_wrappers(s: str) -> str:
     s = s.lstrip("([{\"<'`")
     while s:
+        if s.startswith("//") and s.endswith(("/...", "/..")):
+            break
         if s[-1] in ">\"'`,;.:":
             s = s[:-1]
         elif s[-1] == ")" and s.count(")") > s.count("("):
@@ -1744,15 +1803,19 @@ def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str, fallback
 
 
 _URL_CHARS_RE = re.compile(r"^[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$")
-_URL_TAIL_RE = re.compile(r"((?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+)[)\]>\"'`,;.]*$")
+_URL_TAIL_RE = re.compile(r"((?:(?:https?|file):)?//[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+)[)\]>\"'`,;.]*$")
 
 
 def open_browser_url(url: str, target_arg: str = "") -> bool:
     if not url:
         return False
-    sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
+    sess = (
+        resolve_target_session(target_arg)
+        if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg)
+        else ""
+    )
     has_tmux = bool(os.environ.get("TMUX")) or (bool(sess) and session_exists(sess))
-    ssh_active = is_ssh_session(sess)
+    ssh_active = is_ssh_session(sess or target_arg)
     if has_tmux and shutil.which("tmux"):
         if run_tmux("load-buffer", "-w", "-", input_bytes=url.encode("utf-8")).returncode != 0:
             run_tmux("load-buffer", "-", input_bytes=url.encode("utf-8"))
@@ -1769,7 +1832,7 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
             subprocess.Popen([*parts, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return True
     has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-    for browser in (("xdg-open", "google-chrome") if has_display else ()) + ("open",):
+    for browser in (("xdg-open", "google-chrome") if has_display else ()) + (() if ssh_active else ("open",)):
         if shutil.which(browser):
             subprocess.Popen([browser, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return True
@@ -1807,7 +1870,7 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
     for pt in pane_targets:
         joined_out = tmux_out("capture-pane", "-p", "-J", *pt)
         if joined_out:
-            for m in _RE_SCHEME.finditer(joined_out):
+            for m in _WRAP_REF_RE.finditer(joined_out):
                 full = strip_token_wrappers(m.group(0))
                 if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
                     return full
@@ -1828,7 +1891,7 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
                     break
                 first_tok = next_s.split()[0]
                 cont = strip_token_wrappers(first_tok)
-                if not cont or cont.startswith(("http://", "https://", "file://")) or not _URL_CHARS_RE.match(cont):
+                if not cont or cont.startswith(("http://", "https://", "file://", "//")) or not _URL_CHARS_RE.match(cont):
                     break
                 frags.append(cont)
                 cur_line = raw_lines[j].rstrip()
@@ -1945,7 +2008,8 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
         "local q = vim.treesitter.query.parse('markdown', '(atx_heading (inline) @h)'); "
         "local seen = {}; "
         "for _, n in q:iter_captures(t:root(), 0) do "
-        "local h = vim.treesitter.get_node_text(n, 0):gsub('^%s+', ''):gsub('%s+$', ''):gsub('%[(.-)%]%b()', '%1'):gsub('<[^>]+>', ''):lower():gsub('[^%w%s%-_]', ''):gsub(' ', '-'); "
+        "local h = vim.treesitter.get_node_text(n, 0):gsub('^%s+', ''):gsub('%s+$', ''):gsub('%[(.-)%]%b()', '%1'):gsub('%[(.-)%]%b[]', '%1'):gsub('<[^>]+>', ''):gsub('–', ''):gsub('—', ''):gsub('‘', ''):gsub('’', ''):gsub('“', ''):gsub('”', ''); "
+        "h = vim.fn.tolower(h):gsub('%p', function(c) return (c == '-' or c == '_') and c or '' end):gsub(' ', '-'); "
         "local c = seen[h] or 0; seen[h] = c + 1; "
         "if (c == 0 and h == s) or (string.format('%s-%d', h, c) == s) then "
         "local l = (n:range()) + 1; "
@@ -1960,8 +2024,8 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
 def _open_osc8_href(href: str, word: str, cwd: str, target_arg: str) -> int | None:
     if href.startswith("#"):
         return 0 if _jump_nvim_markdown_anchor(href, target_arg) else None
-    if href.startswith(("http://", "https://")):
-        private_url = resolve_private_link(href, cwd)
+    if not href.startswith("file://"):
+        private_url = resolve_private_link(href, cwd, target_arg)
         if private_url:
             href = private_url
     if href.startswith("file://") or not _RE_SCHEME.match(href):
@@ -1996,6 +2060,10 @@ def _normalize_clicked_word(word: str) -> str:
     m_md_link = _RE_MD_LINK.search(word)
     if m_md_link:
         word = m_md_link.group(1)
+    else:
+        m_dest = _RE_MD_DEST_TAIL.match(word)
+        if m_dest:
+            word = m_dest.group(1)
     return _unwrap_tool_or_token(word)
 
 
@@ -2031,10 +2099,20 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
         return 0
 
     word = _stitch_wrapped_tmux_word(word, target_arg)
-    private_url = resolve_private_link(word, cwd)
+    private_url = resolve_private_link(word, cwd, target_arg)
     if private_url:
-        if private_url.startswith("file://") and resolve_and_open_target(private_url, cwd, target_arg):
-            return 0
+        if private_url.startswith("file://"):
+            priv_path, priv_line = parse_file_target(private_url, cwd)
+            fb_priv_line = (
+                lbl_line
+                if (not priv_line and lbl_line and os.path.basename(priv_path) == os.path.basename(lbl_path))
+                else ""
+            )
+            priv_frag = private_url.rsplit("#", 1)[1] if (not priv_line and not fb_priv_line and "#" in private_url) else ""
+            if resolve_and_open_target(private_url, cwd, target_arg, fallback_line=fb_priv_line):
+                if priv_frag:
+                    _jump_nvim_markdown_anchor(priv_frag, target_arg, focus=False)
+                return 0
         return 0 if open_browser_url(private_url, target_arg) else 1
 
     if word.startswith(("http://", "https://")):
@@ -2054,8 +2132,12 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
         if trunc_base and trunc_base != word and resolve_and_open_target(trunc_base, cwd, target_arg, fallback_line=lbl_line):
             return 0
 
-    if bracket_label and bracket_label != word and resolve_and_open_target(bracket_label, cwd, target_arg):
-        return 0
+    if bracket_label and bracket_label != word:
+        lbl_priv = resolve_private_link(bracket_label, cwd, target_arg)
+        if lbl_priv and lbl_priv.startswith("file://") and resolve_and_open_target(lbl_priv, cwd, target_arg):
+            return 0
+        if resolve_and_open_target(bracket_label, cwd, target_arg):
+            return 0
 
     return 0
 
@@ -2305,11 +2387,13 @@ def main() -> int:
         return status_click(status_click_x, target_arg)
 
     # Populate DISPLAY / WAYLAND_DISPLAY / XAUTHORITY before dispatching --copy, --paste, --open-link, or launch
-    if action in ("copy", "paste", "open-link", "launch"):
+    if action in ("copy", "paste", "open-link"):
         discover_display_env(target_arg)
+    elif action == "launch":
+        discover_display_env(target_arg, ignore_tmux_env=not bool(os.environ.get("TMUX")))
 
     if action == "copy":
-        copy_to_system_clipboard()
+        copy_to_system_clipboard(target_arg)
         return 0
     if action == "paste":
         paste_from_system_clipboard(target_arg)
@@ -2470,15 +2554,38 @@ def main() -> int:
                     if ai_run_cmd:
                         run_tmux("send-keys", "-t", ai_pane_id, f" {ai_run_cmd}", "C-m")
 
+    caller_is_ssh = any(os.environ.get(v) for v in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT")) or (
+        bool(os.environ.get("TMUX")) and is_ssh_session("")
+    )
     env_cmds: list[str] = [
         "set-environment", "-g", "FORCE_HYPERLINK", "1",
         ";",
         "set-environment", "-t", f"={session}", "FORCE_HYPERLINK", "1",
     ]
+    for ssh_var in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"):
+        ssh_val = os.environ.get(ssh_var)
+        if caller_is_ssh and ssh_val:
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", ssh_var, ssh_val])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", ssh_var, ssh_val])
+        elif not caller_is_ssh:
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", "-r", ssh_var])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", "-r", ssh_var])
     for display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"):
         val = os.environ.get(display_var)
-        if val:
+        if val and not caller_is_ssh:
             env_cmds.extend([";", "set-environment", "-t", f"={session}", display_var, val])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", display_var, val])
+        elif caller_is_ssh and display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", "-r", display_var])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", "-r", display_var])
+        elif not caller_is_ssh and display_var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", "-u", display_var])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", "-u", display_var])
     run_tmux(*env_cmds)
 
     tmux_conf = os.path.expanduser("~/.tmux.conf")

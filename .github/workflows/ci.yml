@@ -317,7 +317,7 @@ jobs:
       - name: Verify all checks succeeded
         run: |
           if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "❌ One or more CI checks failed or were cancelled."
+            echo "One or more CI checks failed or were cancelled."
             exit 1
           fi
-          echo "✅ All CI checks passed successfully!"
+          echo "All CI checks passed."

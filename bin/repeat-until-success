@@ -8,15 +8,48 @@ MAX_ATTEMPTS="10"
 SLEEP_SECONDS=30
 
 usage() {
-    echo "usage: $(basename "$0") -n MAX_ATTEMPT cmd" 
+    cat <<EOF
+Usage: $(basename "$0") [-n <attempts>] [-d <seconds>] [-t] [-h] <command> [args...]
+
+Retry a command until it succeeds or the maximum attempt count is reached.
+
+Options:
+  -n <attempts>      Maximum number of attempts (default: 10)
+  -s, -d <seconds>   Delay in seconds between retries (default: 30)
+  -t                 Enable trace output (xtrace)
+  -h, --help         Show this help message
+EOF
 }
 
-while getopts ":n:s:ht" opt; do
+expect_optarg=0
+for arg in "$@"; do
+  if [ "$expect_optarg" -eq 1 ]; then
+    expect_optarg=0
+    continue
+  fi
+  case "$arg" in
+    --) break ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    -n|-s|-d)
+      expect_optarg=1
+      ;;
+    -*)
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+while getopts ":n:s:d:ht" opt; do
   case ${opt} in
     n )
       MAX_ATTEMPTS=$OPTARG
       ;;
-    s )
+    s | d )
       SLEEP_SECONDS=$OPTARG
       ;;
     h )
@@ -28,12 +61,12 @@ while getopts ":n:s:ht" opt; do
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
-      usage
+      usage >&2
       exit 1
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
-      usage
+      usage >&2
       exit 1
       ;;
   esac
@@ -41,20 +74,20 @@ done
 shift $((OPTIND -1))
 
 if ! [[ "$MAX_ATTEMPTS" =~ ^[0-9]+$ ]] || [ "$MAX_ATTEMPTS" -le 0 ]; then
-    echo "error: -n MAX_ATTEMPTS must be a positive integer" >&2
+    echo "Error: -n MAX_ATTEMPTS must be a positive integer" >&2
     usage >&2
     exit 1
 fi
 
 if ! [[ "$SLEEP_SECONDS" =~ ^[0-9]+$ ]]; then
-    echo "error: -s SLEEP_SECONDS must be a non-negative integer" >&2
+    echo "Error: -s SLEEP_SECONDS must be a non-negative integer" >&2
     usage >&2
     exit 1
 fi
 
 if [ "$#" -eq 0 ]; then
-    echo "error: no command specified" 1>&2
-    usage
+    echo "Error: no command specified" 1>&2
+    usage >&2
     exit 1
 fi
 

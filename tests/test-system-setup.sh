@@ -12,7 +12,7 @@ echo "Running System & Cross-Platform Engine Tests"
 echo "========================================"
 
 # Test 1: Bash syntax checks
-echo -e "\n[1/5] Checking syntax with 'bash -n'..."
+echo -e "\n[1/6] Checking syntax with 'bash -n'..."
 if bash -n "$SCRIPT_DIR/setup.sh"; then
     pass "Syntax valid: setup.sh"
 else
@@ -40,7 +40,7 @@ for m in "$SCRIPT_DIR"/modules/*.sh; do
 done
 
 # Test 2: CLI Validation on setup.sh
-echo -e "\n[2/5] Testing parameter validation in setup.sh..."
+echo -e "\n[2/6] Testing parameter validation in setup.sh..."
 
 if help_out=$("$SCRIPT_DIR/setup.sh" --help 2>&1); then
     if grep -Fq "MesloLGS Nerd Font Mono" <<< "$help_out" && ! grep -Fq "MesloLGS NF" <<< "$help_out"; then
@@ -97,7 +97,7 @@ export XDG_CACHE_HOME="$TEMP_SETUP_HOME/.cache"
 export XDG_DATA_HOME="$TEMP_SETUP_HOME/.local/share"
 
 # Test 3: Dry-run Execution across Platforms
-echo -e "\n[3/5] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
+echo -e "\n[3/6] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --dry-run 2>&1); then
     if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" == *"tmux"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
@@ -346,9 +346,9 @@ fi
 rm -rf "$TEMP_SHELL_HOME"
 
 # Test 4: Mise Configuration Validity
-echo -e "\n[4/5] Testing .mise.toml toolchain definition..."
+echo -e "\n[4/6] Testing .mise.toml toolchain definition..."
 if [ -f "$SCRIPT_DIR/.mise.toml" ]; then
-    if grep -q 'java = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'node = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'python = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'ripgrep = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'neovim = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'eza = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'bat = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'btop = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'delta = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'dust = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'fd = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'fzf = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'gh = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'jq = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'sd = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'shellcheck = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'tealdeer = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'yq = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'zoxide = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'glow = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'tree-sitter = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go.set_gobin = false' "$SCRIPT_DIR/.mise.toml" && grep -q 'go.set_gopath = false' "$SCRIPT_DIR/.mise.toml"; then
+    if grep -q 'java = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'node = "lts"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'maven = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'python = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'rust = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'terraform = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'ripgrep = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'neovim = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'eza = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'bat = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'btop = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'delta = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'dust = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'fd = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'fzf = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'gh = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'jq = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'sd = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'shellcheck = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'tealdeer = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'yq = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'zoxide = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'glow = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'tree-sitter = "latest"' "$SCRIPT_DIR/.mise.toml" && grep -q 'go.set_gobin = false' "$SCRIPT_DIR/.mise.toml" && grep -q 'go.set_gopath = false' "$SCRIPT_DIR/.mise.toml"; then
         pass ".mise.toml defaults to LTS for Java/Node, latest for CLI tools, and protects Go paths (gobin/gopath = false)"
     else
         fail ".mise.toml definition" "Missing expected tool configurations"
@@ -358,7 +358,7 @@ else
 fi
 
 # Test 5: Utilities validation (gen-passwd, sum)
-echo -e "\n[5/5] Testing standalone utilities edge cases..."
+echo -e "\n[5/6] Testing standalone utilities edge cases..."
 passwd_symbols=$("$SCRIPT_DIR/bin/gen-passwd" -s 32)
 if [ "${#passwd_symbols}" -eq 32 ] && [[ ! "$passwd_symbols" =~ [0-9a-zA-Z[:space:]] ]]; then
     pass "gen-passwd -s generates pure symbols without numbers or letters"
@@ -425,8 +425,9 @@ fi
 rm -rf "$TEMP_SUM_DIR"
 
 # Test repeat-until-success
-if "$SCRIPT_DIR/bin/repeat-until-success" -n 2 -s 0 true >/dev/null 2>&1; then
-    pass "repeat-until-success succeeds immediately when command succeeds"
+if "$SCRIPT_DIR/bin/repeat-until-success" -n 2 -s 0 true >/dev/null 2>&1 && \
+   "$SCRIPT_DIR/bin/repeat-until-success" -n 2 -d 0 true >/dev/null 2>&1; then
+    pass "repeat-until-success succeeds immediately when command succeeds (-s 0 and -d 0)"
 else
     fail "repeat-until-success true" "Command failed unexpectedly"
 fi
@@ -448,5 +449,246 @@ if ! "$SCRIPT_DIR/bin/repeat-until-success" -n 1 -s -1 true >/dev/null 2>&1; the
 else
     fail "repeat-until-success -s -1" "Command accepted negative sleep duration"
 fi
+
+# Test 6: Documentation hygiene and link validation
+echo -e "\n[6/6] Testing documentation typography, hygiene, and link invariants..."
+if doc_lint_out=$(lint_documentation "$SCRIPT_DIR" 2>&1); then
+    pass "Repository documentation (README.md, AGENTS.md, .github/workflows/ci.yml) passes all typography and link checks"
+else
+    fail "Repository documentation lint" "$doc_lint_out"
+fi
+
+TEMP_DOC_DIR=$(mktemp -d)
+mkdir -p "$TEMP_DOC_DIR/.github/workflows" "$TEMP_DOC_DIR/bin" "$TEMP_DOC_DIR/sample-code" "$TEMP_DOC_DIR/dotfiles/.config/ghostty" "$TEMP_DOC_DIR/dotfiles/.config/nvim"
+sample_user_path="/Users/""johndoe"
+sample_shortcode=":white_check_""mark:"
+sample_emoji=$(printf '\U0001f41b')
+cat > "$TEMP_DOC_DIR/AGENTS.md" <<'EOF'
+# Agent guide
+
+## Existing section
+
+Introductory paragraph.
+EOF
+cat > "$TEMP_DOC_DIR/README.md" <<EOF
+# Sample documentation
+
+Path \`$sample_user_path/work\` and **bold \`code\`**.
+Second stacked line: **[link](missing.md)**.
+Third stacked line: [**bold link**](missing_two.md).
+Fourth stacked line: *\`italic_code\`*.
+*(Note: parenthetical aside)*
+Emoji: $sample_emoji and $sample_shortcode
+Prose arrow: step A -> step B
+Second arrow: step C => step D
+Unmatched backtick: \`([^\s\`*!]+)\`
+Accidental underscore italics: BAT_THEME, EZA_COLORS
+Prose slash: tool/product and Neovim & Vim
+Prose plus: Tmux + Neovim
+Latin abbreviations: e.g. foo, i.e. bar, etc., and A vs. B or C vs D.
+## Tight heading
+No blank line after heading.
+
+## Empty parent
+
+### Child heading
+
+Child content.
+
+| Column | Value |
+| :--- | :--- |
+| **Bold Cell** | Val |
+
+---
+
+[Broken anchor](#nonexistent-heading)
+[Broken cross-file anchor](AGENTS.md#missing-anchor)
+[Broken titled link](missing_titled.md "Title")
+
+\`\`\`
+├── ide # Tmux + Neovim & AI launcher
+\`\`\`
+
+\`\`\`json
+{invalid json}
+\`\`\`
+EOF
+
+cat > "$TEMP_DOC_DIR/setup.sh" <<'EOF'
+#!/bin/bash
+usage() {
+    cat <<HELP
+Usage: setup.sh [OPTIONS]
+  --undocumented-setup-opt   Test option
+HELP
+}
+echo "Error: requires argument (e.g. ubuntu)" >&2
+EOF
+
+cat > "$TEMP_DOC_DIR/Makefile" <<'EOF'
+.PHONY: customtarget
+EOF
+
+cat > "$TEMP_DOC_DIR/.mise.toml" <<'EOF'
+[tools]
+missingtool = "latest"
+EOF
+
+cat > "$TEMP_DOC_DIR/bin/gen-passwd" <<'EOF'
+#!/bin/bash
+usage() {
+    echo "Usage: gen-passwd [-u]"
+}
+while getopts ":uz" opt; do
+    case "$opt" in
+        u|z) ;;
+    esac
+done
+EOF
+
+cat > "$TEMP_DOC_DIR/bin/update-system" <<'EOF'
+#!/bin/bash
+usage() {
+    echo "Usage: update-system [--all]"
+}
+case "${1:-}" in
+    --all|--undocumented-flag) ;;
+esac
+EOF
+
+cat > "$TEMP_DOC_DIR/dotfiles/.config/ghostty/config" <<'EOF'
+keybind = ctrl+shift+d=new_split:auto
+EOF
+
+cat > "$TEMP_DOC_DIR/dotfiles/.config/nvim/init.lua" <<'EOF'
+vim.keymap.set("n", "<leader>zx", "<cmd>echo 1<CR>")
+EOF
+
+cat > "$TEMP_DOC_DIR/sample-code/sample.md" <<'EOF'
+# Sample
+
+Clone https://github.com/example/home-settings and run:
+
+```bash
+./setup.sh --verbose
+```
+
+Prepends `${XDG_DATA_HOME}/bin` and uses MesloLGS NF font.
+Use `el` / `elt` in prose.
+EOF
+
+cat > "$TEMP_DOC_DIR/.github/workflows/ci.yml" <<EOF
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$sample_emoji $sample_user_path"
+EOF
+
+if bad_doc_out=$(lint_documentation "$TEMP_DOC_DIR" 2>&1); then
+    fail "lint_documentation violation detection" "Expected non-zero exit status on synthetic documentation violations"
+else
+    if grep -Fq 'contains personal path' <<< "$bad_doc_out" && \
+       grep -Fq 'contains decorative emoji or shortcode' <<< "$bad_doc_out" && \
+       grep -Fq 'contains stacked formatting span "**bold `code`**"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains stacked formatting span "**[link](missing.md)**"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains stacked formatting span "[**bold link**](missing_two.md)"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains stacked formatting span "*`italic_code`*"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains unmatched inline backtick' <<< "$bad_doc_out" && \
+       grep -Fq 'contains unbackticked underscore span "BAT_THEME, EZA_COLORS"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains prose slash "tool/product"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains prose ampersand " & "' <<< "$bad_doc_out" && \
+       grep -Fq 'contains prose plus connector " + "' <<< "$bad_doc_out" && \
+       grep -Fq 'contains forbidden Latin abbreviation "e.g."' <<< "$bad_doc_out" && \
+       grep -Fq 'is missing a preceding blank line' <<< "$bad_doc_out" && \
+       grep -Fq 'is missing a following blank line' <<< "$bad_doc_out" && \
+       grep -Fq 'is immediately followed by heading "### Child heading" without introductory content' <<< "$bad_doc_out" && \
+       grep -Fq 'untagged opening code fence' <<< "$bad_doc_out" && \
+       grep -Fq 'directory tree comment contains "+" connector' <<< "$bad_doc_out" && \
+       grep -Fq 'directory tree comment contains "&" connector' <<< "$bad_doc_out" && \
+       grep -Fq 'setup.sh: contains forbidden Latin abbreviation "e.g."' <<< "$bad_doc_out" && \
+       grep -Fq 'missing setup.sh option "--undocumented-setup-opt"' <<< "$bad_doc_out" && \
+       grep -Fq 'missing Makefile target "make customtarget"' <<< "$bad_doc_out" && \
+       grep -Fq 'missing .mise.toml tool "missingtool"' <<< "$bad_doc_out" && \
+       grep -Fq 'getopts option "-z" missing from usage()' <<< "$bad_doc_out" && \
+       grep -Fq 'gen-passwd option "-z" missing from Standalone utilities table' <<< "$bad_doc_out" && \
+       grep -Fq 'option "--undocumented-flag" missing from usage()' <<< "$bad_doc_out" && \
+       grep -Fq 'keybinding "Ctrl+Shift+D" (from dotfiles/.config/ghostty/config) missing from README.md prose' <<< "$bad_doc_out" && \
+       grep -Fq 'keybinding "Ctrl+Shift+D" (from dotfiles/.config/ghostty/config) missing from README.md reference table' <<< "$bad_doc_out" && \
+       grep -Fq 'keybinding "Space zx" (from dotfiles/.config/nvim/init.lua) missing from README.md prose' <<< "$bad_doc_out" && \
+       grep -Fq 'sample.md: contains placeholder URL "github.com/example/home-settings"' <<< "$bad_doc_out" && \
+       grep -Fq 'sample.md: contains stale path "${XDG_DATA_HOME}/bin"' <<< "$bad_doc_out" && \
+       grep -Fq 'sample.md: contains legacy font name "MesloLGS NF"' <<< "$bad_doc_out" && \
+       grep -Fq 'sample.md: contains unknown setup.sh flag "--verbose"' <<< "$bad_doc_out" && \
+       grep -Fq 'sample.md: contains prose slash " / "' <<< "$bad_doc_out" && \
+       grep -Fq 'contains italic parenthetical aside' <<< "$bad_doc_out" && \
+       grep -Fq 'contains bolded first-column table cell "| **Bold Cell** |"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains ASCII arrow "->"' <<< "$bad_doc_out" && \
+       grep -Fq 'contains ASCII arrow "=>"' <<< "$bad_doc_out" && \
+       grep -Fq "contains horizontal rule divider '---'" <<< "$bad_doc_out" && \
+       grep -Fq 'broken relative file link "missing.md"' <<< "$bad_doc_out" && \
+       grep -Fq 'broken relative file link "missing_titled.md"' <<< "$bad_doc_out" && \
+       grep -Fq 'broken anchor link "#nonexistent-heading"' <<< "$bad_doc_out" && \
+       grep -Fq 'broken anchor link "AGENTS.md#missing-anchor"' <<< "$bad_doc_out" && \
+       grep -Fq 'invalid JSON code block' <<< "$bad_doc_out"; then
+        pass "lint_documentation detects personal paths, emojis, stacked formatting, unmatched backticks, underscore italics, prose slashes/ampersands/plus connectors, Latin abbreviations, tight/empty headings, untagged fences, tree comment connectors, CLI/setup.sh/keybinding/sample.md drift, broken links/anchors, and invalid JSON blocks"
+    else
+        fail "lint_documentation diagnostics" "Missing expected violation messages in output: $bad_doc_out"
+    fi
+fi
+rm -rf "$TEMP_DOC_DIR"
+
+TEMP_VALID_DOC_DIR=$(mktemp -d)
+touch "$TEMP_VALID_DOC_DIR/file(1).md" "$TEMP_VALID_DOC_DIR/angle.md"
+cat > "$TEMP_VALID_DOC_DIR/AGENTS.md" <<'EOF'
+# Agent instructions
+
+## Sub heading
+
+Section body for sub heading.
+EOF
+cat > "$TEMP_VALID_DOC_DIR/README.md" <<'EOF'
+# Valid documentation
+
+## Examples
+
+<!-- *(Note: hidden in HTML comment)* -->
+
+Inline code with double backticks `` ` -> `` and standard I/O on VS Code.
+Multiple bold spans on one line: **First**: value and **Second**: value.
+
+```text
+---
+a -> b
+```
+
+```json
+{"valid": true}
+```
+
+## Examples
+
+Second examples section content.
+
+## Diátaxis (config_file)
+
+- [First examples](#examples)
+- [Second examples](#examples-1)
+- [Unicode heading](#diátaxis-config_file)
+- [Escaped parens](file\(1\).md)
+- [Angle link](<angle.md>)
+- [Cross-file anchor](AGENTS.md#sub-heading)
+- [External URL](https://example.com/a/b)
+- [Mailto link](mailto:test@example.com)
+EOF
+
+if valid_doc_out=$(lint_documentation "$TEMP_VALID_DOC_DIR" 2>&1); then
+    pass "lint_documentation accepts valid edge cases (fenced blocks, HTML comments, double-backtick spans, VS Code proper noun, duplicate/Unicode headings, escaped parens, cross-file anchors)"
+else
+    fail "lint_documentation valid edge cases" "Unexpected error on valid edge cases: $valid_doc_out"
+fi
+rm -rf "$TEMP_VALID_DOC_DIR"
 
 test_summary

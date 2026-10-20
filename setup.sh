@@ -176,7 +176,7 @@ while [ $# -gt 0 ]; do
             ;;
         --os)
             if [ $# -lt 2 ]; then
-                echo "Error: --os requires an argument (e.g. ubuntu, fedora, macos)" >&2
+                echo "Error: --os requires an argument (such as ubuntu, fedora, or macos)" >&2
                 exit 1
             fi
             TARGET_OS="$2"
@@ -184,7 +184,7 @@ while [ $# -gt 0 ]; do
             ;;
         -i|--ide)
             if [ $# -lt 2 ]; then
-                echo "Error: $1 requires an argument (e.g. intellij, intellij-ultimate, code, none)" >&2
+                echo "Error: $1 requires an argument (such as intellij, intellij-ultimate, code, or none)" >&2
                 exit 1
             fi
             IDE_NAME="$2"
@@ -198,7 +198,7 @@ while [ $# -gt 0 ]; do
             ;;
         --db)
             if [ $# -lt 2 ]; then
-                echo "Error: --db requires an argument (e.g. postgres, mariadb, all, none)" >&2
+                echo "Error: --db requires an argument (such as postgres, mariadb, all, or none)" >&2
                 exit 1
             fi
             DB_CHOICE="$2"

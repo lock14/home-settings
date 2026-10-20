@@ -16,8 +16,30 @@ USE_NUMBERS=0
 USE_SYMBOLS=0
 
 usage() {
-    echo "usage: $(basename "$0") [-u -l -n -s] <length>"
+    cat <<EOF
+Usage: $(basename "$0") [-u] [-l] [-n] [-s] [-t] [-h] [length]
+
+Generate a random password from /dev/urandom (default length: 16, all character sets).
+
+Options:
+  -u          Include uppercase letters (A-Z)
+  -l          Include lowercase letters (a-z)
+  -n          Include numbers (0-9)
+  -s          Include symbols
+  -t          Enable trace output (xtrace)
+  -h, --help  Show this help message
+EOF
 }
+
+for arg in "$@"; do
+  case "$arg" in
+    --) break ;;
+    --help)
+      usage
+      exit 0
+      ;;
+  esac
+done
 
 while getopts ":ulnsht" opt; do
   case ${opt} in
@@ -42,12 +64,12 @@ while getopts ":ulnsht" opt; do
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
-      usage
+      usage >&2
       exit 1
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
-      usage
+      usage >&2
       exit 1
       ;;
   esac
@@ -60,7 +82,7 @@ fi
 
 INTEGER='^[0-9]+$'
 if ! [[ $LENGTH =~ $INTEGER ]] || [ "$LENGTH" -le 0 ]; then
-   echo "error: $LENGTH is not a valid positive length" >&2
+   echo "Error: $LENGTH is not a valid positive length" >&2
    usage >&2
    exit 1
 fi

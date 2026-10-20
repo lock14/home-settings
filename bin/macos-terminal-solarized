@@ -83,6 +83,7 @@ try:
     if 'Window Settings' not in prefs:
         prefs['Window Settings'] = {}
 
+    theme_dict['useOptionAsMetaKey'] = True
     prefs['Window Settings'][profile_name] = theme_dict
     prefs['Default Window Settings'] = profile_name
     prefs['Startup Window Settings'] = profile_name

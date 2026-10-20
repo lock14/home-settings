@@ -189,12 +189,12 @@ import plistlib, sys
 with open(sys.argv[1], "rb") as f:
     d = plistlib.load(f)
 arch = plistlib.loads(d["Font"])
-print(arch["$objects"][2])
+print(arch["$objects"][2], d.get("useOptionAsMetaKey"), sep="|")
 ' "$SCRIPT_DIR/colors/Solarized-Dark.terminal" 2>/dev/null || true)"
-    if [ "$mac_ps_name" = "MesloLGSNFM-Regular" ]; then
-        pass "colors/Solarized-Dark.terminal archived NSFont PostScript name is MesloLGSNFM-Regular (matching ryanoasis MesloLGS Nerd Font Mono)"
+    if [ "$mac_ps_name" = "MesloLGSNFM-Regular|True" ]; then
+        pass "colors/Solarized-Dark.terminal archived NSFont PostScript name is MesloLGSNFM-Regular and useOptionAsMetaKey is True"
     else
-        fail "colors/Solarized-Dark.terminal PostScript font name" "Expected MesloLGSNFM-Regular, got '$mac_ps_name'"
+        fail "colors/Solarized-Dark.terminal PostScript font name & useOptionAsMetaKey" "Expected 'MesloLGSNFM-Regular|True', got '$mac_ps_name'"
     fi
 fi
 
