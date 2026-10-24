@@ -22,6 +22,10 @@ export GOPATH="${XDG_DATA_HOME:-$HOME/.local/share}/go"
 export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
 export PATH="$GOPATH/bin:$PATH"
 
+# Lean 4 / Elan toolchain home (XDG Base Directory compliant)
+export ELAN_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/elan"
+export PATH="$ELAN_HOME/bin:$PATH"
+
 # Default editor (prefer nvim if available, fallback to vim then vi)
 if command -v nvim >/dev/null 2>&1; then
     export EDITOR=nvim

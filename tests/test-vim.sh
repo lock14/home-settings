@@ -452,18 +452,21 @@ if [ -f "$NVIM_CONFIG" ]; then
     HASKELL_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/haskell/highlights.scm"
     OCAML_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/ocaml/highlights.scm"
     CLOJURE_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/clojure/highlights.scm"
+    LEAN_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/lean/highlights.scm"
     if [ -f "$ELIXIR_QUERY" ] && grep -q '"defmodule"' "$ELIXIR_QUERY" && \
        [ -f "$ELIXIR_INJ_QUERY" ] && ! grep -q '"markdown"' "$ELIXIR_INJ_QUERY" && \
        [ -f "$HASKELL_QUERY" ] && grep -q 'decl/signature' "$HASKELL_QUERY" && \
        [ -f "$OCAML_QUERY" ] && grep -q 'type_variable' "$OCAML_QUERY" && \
        [ -f "$CLOJURE_QUERY" ] && grep -q 'defprotocol' "$CLOJURE_QUERY" && \
+       [ -f "$LEAN_QUERY" ] && grep -q 'interpolated_str' "$LEAN_QUERY" && \
        grep -q '"@string\.special\.symbol\.elixir"' "$NVIM_CONFIG" && \
        grep -q '"@string\.special\.symbol\.clojure"' "$NVIM_CONFIG" && \
        grep -q '"elixir"' "$NVIM_CONFIG" && grep -q '"haskell"' "$NVIM_CONFIG" && \
-       grep -q '"ocaml"' "$NVIM_CONFIG" && grep -q '"clojure"' "$NVIM_CONFIG"; then
-        pass "Neovim defines Tree-sitter queries and parser registrations for Elixir (.ex), Haskell (.hs), OCaml (.ml), and Clojure (.clj)"
+       grep -q '"ocaml"' "$NVIM_CONFIG" && grep -q '"clojure"' "$NVIM_CONFIG" && \
+       grep -q '"lean"' "$NVIM_CONFIG" && grep -q 'tree-sitter-lean' "$NVIM_CONFIG"; then
+        pass "Neovim defines Tree-sitter queries and parser registrations for Elixir (.ex), Haskell (.hs), OCaml (.ml), Clojure (.clj), and Lean 4 (.lean)"
     else
-        fail "Neovim Elixir, Haskell, OCaml & Clojure queries/parsers" "Missing or invalid after/queries/{elixir,haskell,ocaml,clojure}/highlights.scm, queries/elixir/injections.scm, or init.lua entries"
+        fail "Neovim Elixir, Haskell, OCaml, Clojure & Lean queries/parsers" "Missing or invalid after/queries/{elixir,haskell,ocaml,clojure}/highlights.scm, queries/{elixir/injections,lean/highlights}.scm, or init.lua entries"
     fi
 
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
@@ -1503,7 +1506,24 @@ assert_suite("Neovim highlights Clojure (sample.clj) with Converged Ergonomic So
     { "thread", probe_cap_fg(tp_buf, "               (-> acc", "->", "function.call"), "true/839496" },
 })
 
--- 40. UI Highlight Groups & Framing Architecture
+-- 40. Inspect Lean 4 (sample.lean)
+tp_buf = open_sample("sample.lean", "lean")
+assert_suite("Neovim highlights Lean 4 (sample.lean) with Converged Ergonomic Solarized: #check/#eval directives in Orange (#cb4b16), import/namespace targets & @[...] attributes in Violet (#6c71c4), theorem/structure/inductive/class/by & scalar primitives (Type, Prop, Nat) in Green (#859900), function/theorem declarations in Blue (#268bd2), match/if/do/return/cases in Yellow (#b58900), constants/none/quoted names (`Core.Telemetry) in Magenta (#d33682), and custom types (MetricSample) & interpolated expressions in calm Base0 (#839496)", "Neovim Lean 4 (.lean) Tree-sitter highlights", {
+    { "imp", probe_cap_fg(tp_buf, "import Std.Data.HashMap", "import", "keyword.import"), "true/6c71c4" },
+    { "mod", probe_cap_fg(tp_buf, "namespace Core.Telemetry", "Core.Telemetry", "module"), "true/6c71c4" },
+    { "attr", probe_cap_fg(tp_buf, "@[simp, inline]", "simp", "attribute"), "true/6c71c4" },
+    { "nat", probe_cap_fg(tp_buf, "def DEFAULT_WINDOW_MS : Nat := 5000", "Nat", "type.builtin"), "true/859900" },
+    { "const", probe_cap_fg(tp_buf, "def DEFAULT_WINDOW_MS : Nat := 5000", "DEFAULT_WINDOW_MS", "constant"), "true/d33682" },
+    { "fn", probe_cap_fg(tp_buf, "def clampScore (val : Nat) (upper : Nat) : Nat :=", "clampScore", "function"), "true/268bd2" },
+    { "thm", probe_cap_fg(tp_buf, "theorem clampScore_le_upper (val upper : Nat) (h : val ≤ upper) :", "clampScore_le_upper", "function"), "true/268bd2" },
+    { "match", probe_cap_fg(tp_buf, "  match sample.active, sample.latencyMs with", "match", "keyword.conditional"), "true/b58900" },
+    { "ret", probe_cap_fg(tp_buf, "    return Except.ok processed", "return", "keyword.return"), "true/b58900" },
+    { "qname", probe_cap_fg(tp_buf, "  let moduleName := `Core.Telemetry", "`Core.Telemetry", "constant"), "true/d33682" },
+    { "interp", probe_cap_fg(tp_buf, "  s!\"[{label}] node={sample.node} score={score}\\n\"", "label", "variable"), "true/839496" },
+    { "chk", probe_cap_fg(tp_buf, "#check clampScore_le_upper", "#check", "keyword.directive"), "true/cb4b16" },
+})
+
+-- 41. UI Highlight Groups & Framing Architecture
 local function hl_info(name)
     local h = vim.api.nvim_get_hl(0, { name = name, link = false })
     local fg = h.fg and string.format("%06x", h.fg) or "none"

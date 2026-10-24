@@ -1,0 +1,238 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: Lean
+file_extensions:
+  - lean
+scope: source.lean
+
+contexts:
+  main:
+    - include: comments
+    - include: directives
+    - include: attributes
+    - include: imports_and_namespaces
+    - include: declarations
+    - include: strings
+    - include: characters
+    - include: quoted_names
+    - include: holes
+    - include: numbers
+    - include: keywords
+    - include: booleans_and_constants
+    - include: types
+    - include: identifiers
+    - include: operators
+    - include: punctuation
+
+  comments:
+    # Single-line comments (-- ...)
+    - match: '--.*$'
+      scope: comment.line.double-dash.lean
+
+    # Nested block, doc, and module-doc comments (/- ... -/, /-- ... -/, /-! ... -/)
+    - match: '/-[!-]?'
+      scope: punctuation.definition.comment.begin.lean
+      push: block_comment
+
+  block_comment:
+    - meta_scope: comment.block.lean
+    - match: '/-'
+      push: block_comment
+    - match: '-/'
+      scope: punctuation.definition.comment.end.lean
+      pop: true
+
+  directives:
+    # Interactive compiler commands & diagnostics (#check, #eval, #print, #reduce, #synth, #exit, #version)
+    - match: '(?<!\w)#(?:check_failure|check|eval|print_axioms|print|reduce|synth|exit|version)\b'
+      scope: keyword.control.directive.lean
+
+  attributes:
+    # Unified atomic attributes (@[simp], @[inline], @[deriving Repr, BEq, Inhabited])
+    - match: '@\[[^\]]*\]'
+      scope: meta.attribute.lean storage.modifier.attribute.lean
+
+  imports_and_namespaces:
+    # Module imports (import Std.Data.HashMap)
+    - match: '\b(import|prelude)\b(?:\s+([A-Za-z_][A-Za-z0-9_'']*(?:\.[A-Za-z_][A-Za-z0-9_'']*)*))?'
+      captures:
+        1: keyword.control.import.lean
+        2: entity.name.namespace.lean
+
+    # Namespace / section / end / open / export declarations
+    - match: '\b(namespace|section|end)\b(?:\s+([A-Za-z_][A-Za-z0-9_'']*(?:\.[A-Za-z_][A-Za-z0-9_'']*)*))?'
+      captures:
+        1: keyword.other.lean
+        2: entity.name.namespace.lean
+
+    - match: '\b(open|export)\b(?:\s+(scoped)\b)?(?:\s+([A-Za-z_][A-Za-z0-9_'']*(?:\.[A-Za-z_][A-Za-z0-9_'']*)*))?'
+      captures:
+        1: keyword.other.lean
+        2: storage.modifier.lean
+        3: entity.name.namespace.lean
+
+    # Standalone attribute command
+    - match: '\b(attribute)\b'
+      scope: keyword.control.import.lean
+
+  declarations:
+    # Routine, theorem, abbrev, axiom, and constant declarations
+    # SCREAMING_SNAKE_CASE constants receive Magenta; routines/theorems receive Blue
+    - match: '\b(def|abbrev|theorem|lemma|axiom|opaque|constant)\s+(?:([A-Z][A-Z0-9_]+)\b|([A-Za-z_][A-Za-z0-9_'']*(?:\.[A-Za-z_][A-Za-z0-9_'']*)*))'
+      captures:
+        1: storage.type.function.lean
+        2: constant.other.lean
+        3: entity.name.function.lean
+
+    # Structure, class, and inductive declarations (type names stay on calm Base0 canvas)
+    - match: '\b(structure|class|inductive)\s+([A-Za-z_][A-Za-z0-9_'']*)'
+      captures:
+        1: keyword.declaration.lean
+        2: entity.name.type.lean
+
+  strings:
+    # Interpolated strings (s!"...", m!"...")
+    - match: '\b(?:s|m)!"'
+      scope: punctuation.definition.string.begin.lean
+      push: interpolated_string
+
+    # Raw strings (r#"..."#)
+    - match: '\br#+"'
+      scope: string.quoted.double.raw.lean
+      push:
+        - meta_scope: string.quoted.double.raw.lean
+        - match: '"#+'
+          scope: punctuation.definition.string.end.lean
+          pop: true
+
+    # Standard double-quoted strings
+    - match: '"'
+      scope: punctuation.definition.string.begin.lean
+      push: double_quoted_string
+
+  double_quoted_string:
+    - meta_scope: string.quoted.double.lean
+    - match: '\\(?:[\\"''rnt0]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\})'
+      scope: constant.character.escape.lean
+    - match: '"'
+      scope: punctuation.definition.string.end.lean
+      pop: true
+
+  interpolated_string:
+    - meta_scope: string.quoted.double.lean
+    - match: '\\(?:[\\"''rnt0]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\})'
+      scope: constant.character.escape.lean
+    - match: '\{'
+      scope: punctuation.section.interpolation.begin.lean
+      push: interpolation_body
+    - match: '"'
+      scope: punctuation.definition.string.end.lean
+      pop: true
+
+  interpolation_body:
+    - meta_content_scope: meta.interpolation.lean
+    - match: '\}'
+      scope: punctuation.section.interpolation.end.lean
+      pop: true
+    - include: main
+
+  characters:
+    - match: '''(?:\\(?:[\\"''rnt0]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\})|[^''\\\n])'''
+      scope: string.quoted.single.lean
+
+  quoted_names:
+    # Quoted Lean symbol names (`Core.Telemetry, ``Foo)
+    - match: '`{1,2}[A-Za-z_][A-Za-z0-9_''.]*'
+      scope: constant.other.symbol.lean
+
+  holes:
+    # Synthetic & named holes (?_, ?goal, and standalone wildcard _)
+    - match: '\?_[A-Za-z0-9_'']*|\?[A-Za-z_][A-Za-z0-9_'']*|\b_\b'
+      scope: variable.language.hole.lean
+
+  numbers:
+    # Scientific / floating-point literals
+    - match: '\b[0-9][0-9_]*\.[0-9_]+(?:[eE][+-]?[0-9_]+)?\b|\b[0-9][0-9_]*[eE][+-]?[0-9_]+\b'
+      scope: constant.numeric.float.lean
+
+    # Hexadecimal, octal, binary, and decimal integer literals
+    - match: '\b(?:0[xX][0-9a-fA-F][0-9a-fA-F_]*|0[oO][0-7][0-7_]*|0[bB][01][01_]*|[0-9][0-9_]*)\b'
+      scope: constant.numeric.integer.lean
+
+  keywords:
+    # Control Flow & Execution Jumps (Solarized Yellow #B58900)
+    - match: '(?<!\.)\b(?:if|then|else|match|with|case|by_cases|induction|cases|unless)\b'
+      scope: keyword.control.conditional.lean
+
+    - match: '(?<!\.)\b(?:do|for|while|repeat|break|continue)\b'
+      scope: keyword.control.loop.lean
+
+    - match: '(?<!\.)\b(?:return)\b'
+      scope: keyword.control.flow.lean
+
+    - match: '(?<!\.)\b(?:try|catch|finally|throw|sorry|admit)\b'
+      scope: keyword.control.exception.lean
+
+    # Modifiers (Solarized Green #859900)
+    - match: '(?<!\.)\b(?:noncomputable|partial|nonrec|private|protected|unsafe|scoped|local|public|meta|mut|rec|nomatch)\b'
+      scope: storage.modifier.lean
+
+    # Structural & Proof Scaffolding Keywords (Solarized Green #859900)
+    - match: '(?<!\.)\b(?:mutual|def|theorem|lemma|example|abbrev|instance|axiom|opaque|constant|structure|inductive|class|where|deriving|extends|variable|universes|universe|open|export|fun|let|letI|have|haveI|obtain|set|suffices|show|from|by|forall|exists|macro_rules|macro|syntax|elab_rules|notation|infixl|infixr|infix|prefix|postfix|alias|builtin_initialize|initialize|set_option)\b'
+      scope: keyword.other.lean
+
+    # Unicode quantifier & binder keywords (∀, ∃, λ, Π, Σ)
+    - match: '[∀∃λΠΣ]'
+      scope: keyword.other.lean
+
+  booleans_and_constants:
+    # Booleans and propositional truth constants (true, false, True, False)
+    - match: '(?<!\.)\b(?:true|false|True|False)\b'
+      scope: constant.language.boolean.lean
+
+    # Sentinel / empty option and lattice constants (none, ⊥, ⊤, ∅, ⊢)
+    - match: '(?<!\.)\b(?:none)\b|[⊥⊤∅⊢]'
+      scope: constant.language.null.lean
+
+    # SCREAMING_SNAKE_CASE constants
+    - match: '\b[A-Z][A-Z0-9_]+\b'
+      scope: constant.other.lean
+
+  types:
+    # Built-in universe and scalar primitive types (Solarized Green #859900)
+    - match: '(?<!\.)\b(?:Type|Sort|Prop|Nat|Int|UInt8|UInt16|UInt32|UInt64|USize|Int8|Int16|Int32|Int64|ISize|Float|Float32|Bool|Char|String|Unit|Empty|PUnit|PEmpty|ByteArray)\b'
+      scope: support.type.primitive.lean
+
+    # UpperCamelCase custom types, typeclasses, and constructors (Calm Base0 #839496)
+    - match: '\b[A-Z][A-Za-z0-9_'']*(?:\.[A-Za-z_][A-Za-z0-9_'']*)*'
+      scope: entity.name.type.lean
+
+  identifiers:
+    # Dotted and plain identifiers (Calm Base0 #839496)
+    - match: '[A-Za-z_α-ωΑ-Ω][A-Za-z0-9_''!?α-ωΑ-Ω]*(?:\.[A-Za-z_α-ωΑ-Ω][A-Za-z0-9_''!?α-ωΑ-Ω]*)*'
+      scope: variable.other.lean
+
+  operators:
+    - match: ':=|::|==|!=|<=|>=|->|<-|=>|\|>|<\||<\|\>|<\$>|<\$|<\*>|\+\+|&&|\|\||[=<>+\-*/%^!@$:≤≥≠¬∧∨↔→←↦∘]'
+      scope: keyword.operator.lean
+
+  punctuation:
+    - match: '#\[|\['
+      scope: punctuation.section.brackets.begin.lean
+    - match: '\]'
+      scope: punctuation.section.brackets.end.lean
+    - match: '\('
+      scope: punctuation.section.parens.begin.lean
+    - match: '\)'
+      scope: punctuation.section.parens.end.lean
+    - match: '[⦃{]'
+      scope: punctuation.section.braces.begin.lean
+    - match: '[⦄}]'
+      scope: punctuation.section.braces.end.lean
+    - match: '[⟨‹⟦⟪⌊⌈]'
+      scope: punctuation.section.brackets.begin.lean
+    - match: '⌋₊|⌉₊|[⟩›⟧⟫⌋⌉]'
+      scope: punctuation.section.brackets.end.lean
+    - match: '[,;.|]'
+      scope: punctuation.separator.lean

@@ -37,9 +37,22 @@ else
 
         # Install runtimes
         echo "  Installing Mise toolchains from .mise.toml..."
+        export ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}"
+        mkdir -p "$ELAN_HOME/toolchains"
         "$MISE_BIN" install -y || true
         if [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" ]; then
             export PATH="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims:$PATH"
+        fi
+
+        # Ensure Lean 4 stable toolchain is initialized when elan is installed
+        if "$MISE_BIN" which elan >/dev/null 2>&1; then
+            if ! "$MISE_BIN" exec -- elan show 2>/dev/null | grep -Fq "(default)"; then
+                "$MISE_BIN" exec -- elan default stable || true
+            fi
+        elif command -v elan >/dev/null 2>&1; then
+            if ! elan show 2>/dev/null | grep -Fq "(default)"; then
+                elan default stable || true
+            fi
         fi
 
         # Rebuild bat cache with modern Mise bat and remove obsolete distro shims

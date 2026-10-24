@@ -145,6 +145,12 @@ else
     fail "GOCACHE export" "Expected $TEMP_HOME/.cache/go-build, got GOCACHE=${GOCACHE:-}"
 fi
 
+if [ "${ELAN_HOME:-}" = "$TEMP_HOME/.local/share/elan" ] && [[ ":$PATH:" == *":$TEMP_HOME/.local/share/elan/bin:"* ]]; then
+    pass "ELAN_HOME and \$ELAN_HOME/bin set cleanly to XDG location ($TEMP_HOME/.local/share/elan)"
+else
+    fail "ELAN_HOME export" "Expected $TEMP_HOME/.local/share/elan, got ELAN_HOME=${ELAN_HOME:-}, PATH=$PATH"
+fi
+
 if [[ "${FZF_DEFAULT_OPTS:-}" == *"#002B36"* ]] && [[ "${FZF_DEFAULT_OPTS:-}" == *"#839496"* ]]; then
     pass "FZF_DEFAULT_OPTS configured with Solarized Dark palette"
 else

@@ -82,7 +82,7 @@ if [ "$SKIP_BASH" = false ]; then
     fi
 fi
 
-# CLI Completions (gh, kubectl, helm)
+# CLI Completions (gh, kubectl, helm, elan)
 if [ "$SKIP_COMPLETIONS" = false ]; then
     COMPLETIONS_DIR="$HOME/.zsh/completions"
     if [ "$DRY_RUN" = true ]; then
@@ -92,6 +92,7 @@ if [ "$SKIP_COMPLETIONS" = false ]; then
         if command -v gh &>/dev/null; then gh completion -s zsh > "$COMPLETIONS_DIR/_gh" || true; fi
         if command -v kubectl &>/dev/null; then kubectl completion zsh > "$COMPLETIONS_DIR/_kubectl" || true; fi
         if command -v helm &>/dev/null; then helm completion zsh > "$COMPLETIONS_DIR/_helm" || true; fi
+        if command -v elan &>/dev/null; then elan completions zsh > "$COMPLETIONS_DIR/_elan" || true; fi
     fi
 fi
 
