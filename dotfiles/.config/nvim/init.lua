@@ -93,7 +93,7 @@ vim.api.nvim_create_autocmd("FileType", {
     end,
 })
 
--- Protocol Buffers, Textproto, GraphQL, Starlark/Bazel, OPA Rego, Dockerfile & Make Filetype & Tree-sitter Registration
+-- Protocol Buffers, Textproto, GraphQL, Starlark/Bazel, OPA Rego, Lean 4, Dockerfile & Make Filetype & Tree-sitter Registration
 if vim.filetype and vim.filetype.add then
     vim.filetype.add({
         extension = {
@@ -109,6 +109,7 @@ if vim.filetype and vim.filetype.add then
             bazel = "bzl",
             star = "bzl",
             rego = "rego",
+            lean = "lean",
             Dockerfile = "dockerfile",
             dockerfile = "dockerfile",
             Containerfile = "dockerfile",
@@ -139,6 +140,7 @@ if vim.treesitter and vim.treesitter.language and vim.treesitter.language.regist
     pcall(vim.treesitter.language.register, "graphql", { "graphql", "graphqls", "gql" })
     pcall(vim.treesitter.language.register, "starlark", { "bzl", "starlark", "bazel" })
     pcall(vim.treesitter.language.register, "rego", { "rego" })
+    pcall(vim.treesitter.language.register, "lean", { "lean" })
 end
 
 -- System Clipboard Integration (GNOME Terminal / X11 / Wayland / macOS + Native Neovim OSC 52)
@@ -1096,23 +1098,38 @@ lazy.setup({
                 "json", "yaml", "toml", "terraform", "sql", "lua",
                 "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
                 "properties", "proto", "textproto", "regex",
-                "elixir", "haskell", "ocaml", "clojure",
+                "elixir", "haskell", "ocaml", "clojure", "lean",
                 "zig", "c_sharp", "scala", "ruby",
                 "graphql", "starlark", "rego", "dockerfile", "make"
             }
 
-            -- Pin tree-sitter-css to revision with Container Query support (PR #96)
+            -- Pin tree-sitter-css (Container Queries PR #96) and register tree-sitter-lean (Lean 4)
             local css_pinned_rev = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
+            local lean_pinned_rev = "916c44f4d89c970f66dd34a49e7ce848f4d29e72"
+            local lean_parser_spec = {
+                install_info = {
+                    url = "https://github.com/Julian/tree-sitter-lean",
+                    revision = lean_pinned_rev,
+                    files = { "src/parser.c", "src/scanner.c" },
+                    location = "",
+                },
+                maintainers = { "@Julian" },
+                tier = 2,
+            }
             local function pin_parsers()
                 local parsers_meta_ok, parsers_meta = pcall(require, "nvim-treesitter.parsers")
                 if parsers_meta_ok then
                     if parsers_meta.css and parsers_meta.css.install_info then
                         parsers_meta.css.install_info.revision = css_pinned_rev
-                    elseif parsers_meta.get_parser_configs then
+                    end
+                    if not parsers_meta.get_parser_configs then
+                        parsers_meta.lean = vim.deepcopy(lean_parser_spec)
+                    else
                         local pconfigs = parsers_meta.get_parser_configs()
                         if pconfigs.css and pconfigs.css.install_info then
                             pconfigs.css.install_info.revision = css_pinned_rev
                         end
+                        pconfigs.lean = vim.deepcopy(lean_parser_spec)
                     end
                 end
             end
@@ -1149,18 +1166,21 @@ lazy.setup({
                 for _, p in ipairs(nts.get_installed()) do
                     installed[p] = true
                 end
-                local css_rev_file = vim.fn.stdpath("data") .. "/site/parser-info/css.revision"
-                local current_css_rev = ""
-                if vim.fn.filereadable(css_rev_file) == 1 then
-                    local rev_lines = vim.fn.readfile(css_rev_file)
-                    if rev_lines and #rev_lines > 0 then
-                        current_css_rev = vim.trim(rev_lines[1])
+                local function read_parser_rev(lang)
+                    local rev_file = vim.fn.stdpath("data") .. "/site/parser-info/" .. lang .. ".revision"
+                    if vim.fn.filereadable(rev_file) == 1 then
+                        local rev_lines = vim.fn.readfile(rev_file)
+                        if rev_lines and #rev_lines > 0 then
+                            return vim.trim(rev_lines[1])
+                        end
                     end
+                    return ""
                 end
-                local need_css_install = (not installed["css"]) or (current_css_rev ~= css_pinned_rev)
+                local need_css_install = (not installed["css"]) or (read_parser_rev("css") ~= css_pinned_rev)
+                local need_lean_install = (not installed["lean"]) or (read_parser_rev("lean") ~= lean_pinned_rev)
                 local to_install = {}
                 for _, p in ipairs(parsers) do
-                    if not installed[p] and p ~= "css" then
+                    if not installed[p] and p ~= "css" and p ~= "lean" then
                         table.insert(to_install, p)
                     end
                 end
@@ -1169,9 +1189,12 @@ lazy.setup({
                         nts.install(to_install)
                     end)
                 end
-                if need_css_install and type(nts.install) == "function" then
+                local pinned_to_install = {}
+                if need_css_install then table.insert(pinned_to_install, "css") end
+                if need_lean_install then table.insert(pinned_to_install, "lean") end
+                if #pinned_to_install > 0 and type(nts.install) == "function" then
                     pcall(function()
-                        nts.install({ "css" }, { force = true }):pwait(60000)
+                        nts.install(pinned_to_install, { force = true }):pwait(60000)
                     end)
                 end
             end
@@ -1386,11 +1409,16 @@ lazy.setup({
                         },
                     },
                 },
+                leanls = {
+                    cmd = { "lake", "serve", "--" },
+                    filetypes = { "lean" },
+                    root_markers = { "lakefile.toml", "lakefile.lean", "lean-toolchain", ".git" },
+                },
             }
 
             -- Configure servers using modern vim.lsp.config (Neovim 0.11+) with legacy fallback
             -- Note: jdtls is managed on-demand via ftplugin/java.lua with nvim-jdtls
-            local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls" }
+            local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls", "leanls" }
             local server_bins = {
                 clangd = "clangd",
                 rust_analyzer = "rust-analyzer",
@@ -1401,6 +1429,7 @@ lazy.setup({
                 terraformls = "terraform-ls",
                 yamlls = "yaml-language-server",
                 jsonls = "vscode-json-language-server",
+                leanls = "lake",
             }
             local mason_bin_dir = vim.fn.stdpath("data") .. "/mason/bin"
             if not (vim.env.PATH or ""):find(mason_bin_dir, 1, true) then

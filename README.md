@@ -136,7 +136,7 @@ The repository is organized into a thin CLI orchestrator (`setup.sh`), stage-bas
 home-settings/
 ├── setup.sh                         # Modular orchestrator CLI
 ├── Makefile                         # Lifecycle targets (install, system, uninstall, test, lint)
-├── .mise.toml                       # Mise polyglot toolchains (Java LTS, Node LTS, latest Go, Python, Rust, and Terraform)
+├── .mise.toml                       # Mise polyglot toolchains (Java LTS, Node LTS, latest Go, Python, Rust, Lean 4, and Terraform)
 ├── AGENTS.md                        # Architecture principles and agent directives
 │
 ├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
@@ -195,7 +195,7 @@ home-settings/
 │   ├── Solarized-Dark.terminal           # macOS Terminal.app Solarized Dark profile
 │   └── gnome-terminal-solarized.dconf    # GNOME Terminal Solarized Dark dconf profile
 │
-├── syntaxes/                        # Enhanced Sublime syntax packages for bat (36 languages)
+├── syntaxes/                        # Enhanced Sublime syntax packages for bat (37 languages)
 │   ├── Bash.sublime-syntax          # Bash and POSIX shell syntax
 │   ├── C.sublime-syntax             # Modern C23 syntax with granular declaration scopes
 │   ├── C++.sublime-syntax           # Modern C++20 and C++23 syntax with concept and template support
@@ -213,6 +213,7 @@ home-settings/
 │   ├── Java.sublime-syntax          # Modern Java 25 LTS (records, pattern matching, annotations)
 │   ├── JavaProperties.sublime-syntax# Java .properties configuration syntax
 │   ├── Kotlin.sublime-syntax        # Modern Kotlin 2.x (value classes, coroutines, annotations)
+│   ├── Lean.sublime-syntax          # Lean 4 theorem prover and functional programming syntax
 │   ├── Lua.sublime-syntax           # Modern Lua 5.4 and LuaJIT syntax (<const>, metamethods)
 │   ├── Makefile.sublime-syntax      # GNU Make syntax (directives, targets, automatic variables)
 │   ├── Markdown.sublime-syntax      # Semantic Architecture Markdown syntax
@@ -284,7 +285,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - **Unified clipboard**: Mouse selection copies immediately in both local and remote SSH sessions (via OSC 52) while keeping the selection highlighted. Press `Alt+c` to copy and clear, `Escape` to clear, or `Alt+v` to paste.
 
 - **LSP, Tree-sitter, and Neovim toolchains**:
-  - **Native LSP**: Automatic language server provisioning (`mason.nvim` and `nvim-lspconfig`) for C, C++, Rust, Go, Python, Java (`nvim-jdtls`), Lua, Bash, Terraform, YAML, and JSON. Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) additionally bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
+  - **Native LSP**: Automatic language server provisioning (`mason.nvim` and `nvim-lspconfig`) for C, C++, Rust, Go, Python, Java (`nvim-jdtls`), Lean 4 (`leanls`), Lua, Bash, Terraform, YAML, and JSON. Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) additionally bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
   - **Tree-sitter and Markdown rendering**: Solarized Dark syntax highlighting aligned with `bat`, plus live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks.
   - **Telescope**: Fuzzy finders for files (`Space ff`), live grep (`Space fg`), open buffers (`Space fb`), and Git status (`Space gs`).
   - **Editor aliases**: `vi`, `vim`, and `v` launch `nvim` (with fallback to `vim`); inside an IDE session, `v [+line] <file>` opens the file directly in the main Editor pane.
@@ -350,7 +351,7 @@ Interactive shells are configured for sub-10ms startup times, fast tab completio
 
 ## Developer toolchains and modern CLI suite
 
-Developer runtimes, language compilers, and modern CLI utilities are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), provisioning LTS Java (17, 21, and 25+), Maven, LTS Node.js, Go, Python, Rust, Terraform, Neovim, and the Tree-sitter CLI alongside a curated suite of 24-bit TrueColor terminal tools:
+Developer runtimes, language compilers, and modern CLI utilities are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), provisioning LTS Java (17, 21, and 25+), Maven, LTS Node.js, Go, Python, Rust, Lean 4 (`elan`), Terraform, Neovim, and the Tree-sitter CLI alongside a curated suite of 24-bit TrueColor terminal tools:
 
 | Tool | Command or shortcut | Role and Solarized Dark integration |
 | :--- | :--- | :--- |
@@ -360,10 +361,11 @@ Developer runtimes, language compilers, and modern CLI utilities are managed dec
 | `go` | `go <cmd>` | Latest stable Go toolchain with XDG-compliant `GOPATH` and `GOCACHE` |
 | `python` | `python3`, `pip` | Latest stable Python runtime and package tooling |
 | `rust` | `cargo`, `rustc`, `rustup` | Latest stable Rust compiler and Cargo build toolchain |
+| `elan` | `elan`, `lean`, `lake`, `leanc` | Lean 4 theorem prover and functional programming toolchain manager with XDG-compliant `ELAN_HOME` |
 | `terraform` | `terraform`, `tf` | Infrastructure-as-code CLI with Zsh and Bash tab completion |
 | `neovim` | `nvim`, `vi`, `vim`, `v` | Modern Lua editor (`neovim = "latest"`) with Native LSP, Tree-sitter, and Solarized Dark theme |
 | `tree-sitter` | `tree-sitter <cmd>` | Tree-sitter parser generator CLI required to compile custom pinned grammar revisions |
-| `bat` | `bat <file>`, `b <file>` | TrueColor syntax-highlighting pager with 36 custom syntaxes matching Neovim Tree-sitter (`cat` remains pure coreutils) |
+| `bat` | `bat <file>`, `b <file>` | TrueColor syntax-highlighting pager with 37 custom syntaxes matching Neovim Tree-sitter (`cat` remains pure coreutils) |
 | `delta` | `git diff`, `git show` | TrueColor diff pager with word-level intra-line highlights, line numbers, and subtle Solarized tints |
 | `dust` | `ds` | Graphical proportional disk space visualizer (Rust `du -sh` alternative) |
 | `tealdeer` | `tldr <cmd>` | Fast offline cheatsheet viewer with Solarized Dark TrueColor styling |

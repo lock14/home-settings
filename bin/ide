@@ -1831,7 +1831,7 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
         if parts and (shutil.which(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
             subprocess.Popen([*parts, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return True
-    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    has_display = not ssh_active and bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     for browser in (("xdg-open", "google-chrome") if has_display else ()) + (() if ssh_active else ("open",)):
         if shutil.which(browser):
             subprocess.Popen([browser, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)

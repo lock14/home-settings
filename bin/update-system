@@ -436,6 +436,13 @@ if [ "$WITH_DEV" = true ]; then
         log_success "Rustup toolchains updated."
     fi
 
+    # Elan (Lean 4) toolchain
+    if command -v elan >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
+        log_step "Updating Lean 4 toolchains via elan..."
+        ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}" run_cmd elan update
+        log_success "Lean 4 toolchains updated."
+    fi
+
     # Oh-My-Zsh update
     omz_dir="${ZSH:-$HOME/.oh-my-zsh}"
     if [ -d "$omz_dir" ] || [ "$DRY_RUN" = true ]; then

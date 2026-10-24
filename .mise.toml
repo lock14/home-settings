@@ -1,11 +1,15 @@
 # Mise cross-platform polyglot toolchain configuration
 # Works identically across Ubuntu, Fedora, and macOS (Apple Silicon + Intel)
 
+[tool_alias]
+elan = "github:leanprover/elan"
+
 [tools]
 bat = "latest"
 btop = "latest"
 delta = "latest"
 dust = "latest"
+elan = { version = "latest", rename_exe = "elan", postinstall = "for b in lean lake leanc leanmake leanchecker; do ln -sf elan \"$MISE_TOOL_INSTALL_PATH/$b\"; done && export ELAN_HOME=\"${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}\" && mkdir -p \"$ELAN_HOME/toolchains\" && (\"$MISE_TOOL_INSTALL_PATH/elan\" default stable || true)" }
 eza = "latest"
 fd = "latest"
 fzf = "latest"

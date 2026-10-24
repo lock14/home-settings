@@ -1947,6 +1947,60 @@ if [ -n "$BAT_BIN" ]; then
     else
         fail "bat Clojure (.clj) rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.clj output"
     fi
+
+    # 2.39 Lean 4 (.lean) Converged Ergonomic Solarized Verification
+    LEAN_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lean" 2>/dev/null || true)"
+    if grep -Fq "${SOL_ORANGE}#check" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_ORANGE}#eval" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}import" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}Std.Data.HashMap" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}Core.Telemetry" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@[simp, inline]" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_VIOLET}@[inline]" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}namespace" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}open" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}universe" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}inductive" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}structure" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}class" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}instance" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}deriving" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}where" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}def" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}abbrev" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}theorem" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}axiom" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}variable" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}by" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}Type" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}Prop" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}Nat" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}Float" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}Bool" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_GREEN}String" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}clampScore" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}classifySample" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}clampScore_le_upper" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BLUE}severity_exhaustive" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}if" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}then" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}else" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}match" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}with" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}do" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}return" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_YELLOW}cases" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}DEFAULT_WINDOW_MS" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}none" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_MAGENTA}\`Core.Telemetry" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}MetricSample" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Severity" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Measurable" <<< "$LEAN_SAMPLE_OUT" && \
+       grep -Fq "${SOL_BASE0}Option" <<< "$LEAN_SAMPLE_OUT"; then
+        pass "bat renders Lean 4 showcase (sample.lean) with Converged Ergonomic Solarized: #check/#eval directives in Orange, import/namespace targets & @[...] attributes in Violet, structure/inductive/class/instance/def/theorem/axiom/by & scalar primitives (Type, Prop, Nat, Float, Bool, String) in Green, function/theorem declarations in Blue, if/then/else/match/with/do/return/cases in Yellow, constants/none/quoted names (\`Core.Telemetry)/holes in Magenta, and custom types (MetricSample, Severity, Measurable, Option) in calm Base0 matching Neovim"
+    else
+        fail "bat Lean 4 (.lean) rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.lean output"
+    fi
 fi
 
 # Test 3: Safe handling of pre-existing physical directory (prevents nested symlinks)

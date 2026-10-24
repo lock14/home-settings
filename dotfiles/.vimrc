@@ -140,6 +140,7 @@ augroup SolarizedFiletypes
     autocmd BufNewFile,BufRead *.scala,*.sc setfiletype scala
     autocmd BufNewFile,BufRead *.ex,*.exs setfiletype elixir
     autocmd BufNewFile,BufRead *.clj,*.cljs,*.cljc,*.edn setfiletype clojure
+    autocmd BufNewFile,BufRead *.lean setfiletype lean
 augroup END
 
 augroup SolarizedDarkFallback

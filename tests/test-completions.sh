@@ -69,7 +69,14 @@ if [ "$1" = "completion" ]; then
     exit 0
 fi
 EOF
-chmod +x "$MOCK_BIN/gh"
+cat << 'EOF' > "$MOCK_BIN/elan"
+#!/bin/sh
+if [ "$1" = "completions" ] && [ "$2" = "zsh" ]; then
+    echo "# mock elan completion"
+    exit 0
+fi
+EOF
+chmod +x "$MOCK_BIN/gh" "$MOCK_BIN/elan"
 
 if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
     :
@@ -77,10 +84,11 @@ else
     fail "setup.sh completions generation" "Execution failed: $output"
 fi
 
-if [ -f "$TEMP_HOME/.zsh/completions/_gh" ] && grep -q "mock gh completion" "$TEMP_HOME/.zsh/completions/_gh"; then
-    pass "Generated completion: ~/.zsh/completions/_gh"
+if [ -f "$TEMP_HOME/.zsh/completions/_gh" ] && grep -q "mock gh completion" "$TEMP_HOME/.zsh/completions/_gh" && \
+   [ -f "$TEMP_HOME/.zsh/completions/_elan" ] && grep -q "mock elan completion" "$TEMP_HOME/.zsh/completions/_elan"; then
+    pass "Generated completions: ~/.zsh/completions/_gh and ~/.zsh/completions/_elan"
 else
-    fail "CLI completion generation" "Failed to generate ~/.zsh/completions/_gh"
+    fail "CLI completion generation" "Failed to generate ~/.zsh/completions/_gh or _elan"
 fi
 
 # Idempotency check
