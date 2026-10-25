@@ -3,8 +3,8 @@
 # git custom workflows
 alias gcommit='git add -A && git commit'
 alias gamend='git add -A && git commit --amend --no-edit'
-alias gpush='git push origin HEAD'
-alias gpushf='git push --force-with-lease origin HEAD'
+alias gpush='git push -u origin HEAD'
+alias gpushf='git push -u --force-with-lease origin HEAD'
 alias gpull='git pull --rebase --autostash'
 alias gup='git pull --rebase --autostash --prune'
 alias gprune='git fetch --prune 2>/dev/null; target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --merged "$target" | sed "s/^[ *]*//" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -d "$b"; done'

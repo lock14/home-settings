@@ -84,8 +84,8 @@ if [ -f "$HOME/.aliases" ]; then
 else
     alias gcommit='git add -A && git commit'
     alias gamend='git add -A && git commit --amend --no-edit'
-    alias gpush='git push origin HEAD'
-    alias gpushf='git push --force-with-lease origin HEAD'
+    alias gpush='git push -u origin HEAD'
+    alias gpushf='git push -u --force-with-lease origin HEAD'
     alias gpull='git pull --rebase --autostash'
     alias gup='git pull --rebase --autostash --prune'
     # shellcheck disable=SC2154
