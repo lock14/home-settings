@@ -78,16 +78,20 @@ if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     GHOSTTY_MAC_DIR="$HOME/Library/Application Support/com.mitchellh.ghostty"
     [ "$DRY_RUN" = true ] || mkdir -p "$GHOSTTY_MAC_DIR"
     link_file "$XDG_CONFIG/ghostty/config" "$GHOSTTY_MAC_DIR/config"
-    if [ -d "$DOTFILES_DIR/.config/ghostty/themes" ]; then
-        link_dir "$DOTFILES_DIR/.config/ghostty/themes" "$GHOSTTY_MAC_DIR/themes"
+    if [ -d "$XDG_CONFIG/ghostty/themes" ] || [ -d "$DOTFILES_DIR/.config/ghostty/themes" ]; then
+        link_dir "$XDG_CONFIG/ghostty/themes" "$GHOSTTY_MAC_DIR/themes"
     fi
 fi
 
-# 5. Bat TrueColor Syntax Highlighting Theme & Granular Syntaxes
+# 5. Bat TrueColor Syntax Highlighting Themes & Granular Syntaxes
 BAT_THEME_SRC="$REPO_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
-if [ -f "$BAT_THEME_SRC" ]; then
-    echo "  Configuring Bat TrueColor theme..."
-    link_file "$BAT_THEME_SRC" "$XDG_CONFIG/bat/themes/Solarized-Dark-TrueColor.tmTheme"
+if [ -d "$REPO_DIR/colors" ]; then
+    echo "  Configuring Bat TrueColor themes..."
+    [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/bat/themes"
+    for tmtheme in "$REPO_DIR/colors"/*.tmTheme; do
+        [ -e "$tmtheme" ] || continue
+        link_file "$tmtheme" "$XDG_CONFIG/bat/themes/$(basename "$tmtheme")"
+    done
 fi
 
 if [ -d "$REPO_DIR/syntaxes" ]; then
@@ -107,6 +111,13 @@ if [ -f "$BAT_THEME_SRC" ] || [ -d "$REPO_DIR/syntaxes" ]; then
         elif [ -f "$BAT_THEME_SRC" ] && [ "$BAT_THEME_SRC" -nt "$BAT_CACHE_DIR/themes.bin" ]; then
             need_bat_build=true
         else
+            for tmtheme in "$REPO_DIR/colors"/*.tmTheme; do
+                [ -e "$tmtheme" ] || continue
+                if [ "$tmtheme" -nt "$BAT_CACHE_DIR/themes.bin" ]; then
+                    need_bat_build=true
+                    break
+                fi
+            done
             for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
                 [ -e "$syn" ] || continue
                 if [ "$syn" -nt "$BAT_CACHE_DIR/syntaxes.bin" ]; then
@@ -126,7 +137,22 @@ if [ -f "$REPO_DIR/.mise.toml" ]; then
     link_file "$REPO_DIR/.mise.toml" "$XDG_CONFIG/mise/config.toml"
 fi
 
+# 7. Re-apply active color theme if configured or previously persisted
+if [ -n "${THEME_NAME:-}" ] && [ -x "$REPO_DIR/bin/theme" ]; then
+    if [ "$DRY_RUN" = true ]; then
+        "$REPO_DIR/bin/theme" --dry-run --no-live "$THEME_NAME"
+    else
+        "$REPO_DIR/bin/theme" --no-live "$THEME_NAME" >/dev/null
+    fi
+elif [ -f "$XDG_CONFIG/home-settings/theme" ] && [ -x "$REPO_DIR/bin/theme" ] && [ "$DRY_RUN" = false ]; then
+    saved_theme="$(tr -d '[:space:]' < "$XDG_CONFIG/home-settings/theme" || true)"
+    if [ -n "$saved_theme" ]; then
+        "$REPO_DIR/bin/theme" --no-live "$saved_theme" >/dev/null 2>&1 || true
+    fi
+fi
+
 # Live servers are intentionally never touched here: this module also runs under a temporary
-# $HOME in tests, and hot-reloading running tmux or Neovim servers would mutate live sessions.
+# $HOME in tests, and hot-reloading running servers would mutate live sessions.
 # `ide` re-sources ~/.tmux.conf on every launch/attach (or press `prefix r`); restart an IDE
 # Editor pane to pick up init.lua changes.
+

@@ -1,0 +1,37 @@
+# Managed Theme: catppuccin-mocha
+THEME_ID="catppuccin-mocha"
+THEME_LABEL="Catppuccin Mocha"
+THEME_DESCRIPTION="Soothing pastel dark theme with warm deep-indigo surfaces"
+THEME_MODE="dark"
+BAT_THEME_NAME="Catppuccin-Mocha-TrueColor"
+BTOP_THEME_NAME="catppuccin_mocha"
+GHOSTTY_THEME_NAME="Catppuccin Mocha"
+
+# Monotone Surface & Content Ramp
+BASE03="#1E1E2E"
+BASE02="#313244"
+BASE04="#181825"
+BASE01="#6C7086"
+BASE00="#7F849C"
+BASE0="#CDD6F4"
+BASE1="#BAC2DE"
+BASE2="#E6E9EF"
+BASE3="#F5E0DC"
+
+# Semantic Accent Palette
+YELLOW="#F9E2AF"
+ORANGE="#FAB387"
+RED="#F38BA8"
+MAGENTA="#F5C2E7"
+VIOLET="#CBA6F7"
+BLUE="#89B4FA"
+CYAN="#94E2D5"
+GREEN="#A6E3A1"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#283B37"
+MIX_RED="#3E2939"
+MIX_YELLOW="#3E3B3B"
+MIX_BLUE="#29384E"
+MIX_MAGENTA="#3E3247"
+MIX_BASE1="#35374B"

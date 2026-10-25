@@ -89,6 +89,11 @@ export LESS_TERMCAP_us="${_esc}[4;38;2;42;161;152m"               # underline/fl
 export LESS_TERMCAP_ue="${_esc}[0m"                               # reset underline
 unset _esc
 
+# Source active color theme overrides (managed by bin/theme)
+if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh" ]; then
+    # shellcheck source=/dev/null
+    . "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh"
+fi
 
 # Source custom environment drop-ins (~/.environment-variables.d/*.sh)
 if [ -d "$HOME/.environment-variables.d" ]; then

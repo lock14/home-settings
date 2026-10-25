@@ -20,11 +20,15 @@ set -euo pipefail
 export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
 
 show_keys_cheatsheet() {
-    local c_orange=$'\033[38;2;203;75;22m'
-    local c_blue=$'\033[38;2;38;139;210m'
-    local c_cyan=$'\033[38;2;42;161;152m'
-    local c_base0=$'\033[38;2;131;148;150m'
-    local c_base01=$'\033[38;2;88;110;117m'
+    if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh" ]; then
+        # shellcheck source=/dev/null
+        . "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh"
+    fi
+    local c_orange="${_HS_ESC_ORANGE:-$'\033[38;2;203;75;22m'}"
+    local c_blue="${_HS_ESC_BLUE:-$'\033[38;2;38;139;210m'}"
+    local c_cyan="${_HS_ESC_CYAN:-$'\033[38;2;42;161;152m'}"
+    local c_base0="${_HS_ESC_BASE0:-$'\033[38;2;131;148;150m'}"
+    local c_base01="${_HS_ESC_BASE01:-$'\033[38;2;88;110;117m'}"
     local c_reset=$'\033[0m'
     local rule="────────────────────────────────────────────────────────────────────────────────"
 
@@ -2591,6 +2595,10 @@ def main() -> int:
     tmux_conf = os.path.expanduser("~/.tmux.conf")
     if os.path.isfile(tmux_conf):
         run_tmux("source-file", tmux_conf)
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    tmux_theme_conf = os.path.join(xdg_cfg, "home-settings", "tmux-theme.conf")
+    if os.path.isfile(tmux_theme_conf):
+        run_tmux("source-file", tmux_theme_conf)
     run_tmux("set-option", "-q", "-t", f"={session}:", "status-position", "top")
 
     if detach_mode:

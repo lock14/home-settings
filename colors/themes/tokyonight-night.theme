@@ -1,0 +1,37 @@
+# Managed Theme: tokyonight-night
+THEME_ID="tokyonight-night"
+THEME_LABEL="TokyoNight Night"
+THEME_DESCRIPTION="Clean neon-inspired Tokyo downtown night palette"
+THEME_MODE="dark"
+BAT_THEME_NAME="TokyoNight-Night-TrueColor"
+BTOP_THEME_NAME="tokyonight_night"
+GHOSTTY_THEME_NAME="TokyoNight Night"
+
+# Monotone Surface & Content Ramp
+BASE03="#1A1B26"
+BASE02="#292E42"
+BASE04="#16161E"
+BASE01="#565F89"
+BASE00="#737AA2"
+BASE0="#C0CAF5"
+BASE1="#A9B1D6"
+BASE2="#E0AF68"
+BASE3="#C0CAF5"
+
+# Semantic Accent Palette
+YELLOW="#E0AF68"
+ORANGE="#FF9E64"
+RED="#F7768E"
+MAGENTA="#BB9AF7"
+VIOLET="#9D7CD8"
+BLUE="#7AA2F7"
+CYAN="#7DCFFF"
+GREEN="#9ECE6A"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#273832"
+MIX_RED="#3B2430"
+MIX_YELLOW="#3B342C"
+MIX_BLUE="#23344D"
+MIX_MAGENTA="#342B44"
+MIX_BASE1="#2F354D"

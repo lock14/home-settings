@@ -102,6 +102,12 @@ else
     fail "Vim highlight persistence" "Inline Solarized Dark highlights were reset by :syntax on or :set background=dark"
 fi
 
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/catppuccin-mocha.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#1E1E2E' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#CDD6F4' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#A6E3A1' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#F9E2AF' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+    pass "Vim .vimrc dynamically applies active theme palette overrides (Catppuccin Mocha #CDD6F4 on #1E1E2E)"
+else
+    fail "Vim active theme override" "Expected Catppuccin Mocha palette when HOME_SETTINGS_THEME_FILE is set"
+fi
+
 # Test 4: Verify Home key mapping, Netrw project tree sidebar, and TmuxNavigate in .vimrc
 echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
 check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
@@ -1823,6 +1829,31 @@ EOF
             pass "Neovim init.lua provides conceal-aware Markdown TOC anchor, duplicate-heading, fenced-code-block-ignoring, relative file line, custom ide_resolve_link (//pkg/... & :target), and 1-step jumplist navigation (<C-LeftMouse>, <M-LeftMouse>, gx, <CR>)"
         else
             fail "Neovim Markdown link & TOC navigation" "Expected 'MAPS=true|CR=true|QS=true|RET=true|LNX=true|AUTO=true|N2=true|REL=true|BACK=true|RULE=true', got '$MD_LINK_OUT'"
+        fi
+
+        NVIM_THEME_SCRIPT="$(mktemp --suffix=.lua)"
+        cat > "$NVIM_THEME_SCRIPT" << 'EOF'
+local function hex_fg(group)
+    local hl = vim.api.nvim_get_hl(0, { name = group, link = false })
+    return hl and hl.fg and string.format("#%06X", hl.fg) or "NONE"
+end
+local function hex_bg(group)
+    local hl = vim.api.nvim_get_hl(0, { name = group, link = false })
+    return hl and hl.bg and string.format("#%06X", hl.bg) or "NONE"
+end
+local id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
+local nord_res = id .. "|" .. hex_bg("Normal") .. "|" .. hex_fg("Normal") .. "|" .. hex_fg("Keyword") .. "|" .. hex_fg("Conditional") .. "|" .. hex_bg("NormalFloat")
+vim.env.HOME_SETTINGS_THEME_FILE = vim.env.SD_THEME_FILE
+local sd_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
+local sd_res = sd_id .. "|" .. hex_bg("Visual") .. "|" .. hex_bg("DiffAdd") .. "|" .. hex_bg("DiffDelete") .. "|" .. hex_bg("Search")
+io.write(nord_res .. "||" .. sd_res)
+EOF
+        NVIM_THEME_OUT="$(HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/nord.theme" SD_THEME_FILE="$SCRIPT_DIR/colors/themes/solarized-dark.theme" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_THEME_SCRIPT" 2>/dev/null || true)"
+        rm -f "$NVIM_THEME_SCRIPT"
+        if [ "$NVIM_THEME_OUT" = "nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||solarized-dark|#2C4E56|#274C25|#422D33|#364725" ]; then
+            pass "Neovim init.lua resolves active theme palette (Nord #D8DEE9 on #2E3440, BASE04 #242933, Keyword #A3BE8C, Conditional #EBCB8B) and preserves Solarized Dark Visual/Diff/Search tints via _G.apply_home_settings_theme()"
+        else
+            fail "Neovim multi-theme resolution" "Expected 'nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||solarized-dark|#2C4E56|#274C25|#422D33|#364725', got '$NVIM_THEME_OUT'"
         fi
     fi
 else

@@ -2079,6 +2079,29 @@ else
 fi
 rm -rf "$TEMP_EMPTY_DROPIN_HOME"
 
+# Verify all 9 managed themes have .tmTheme, btop, and Ghostty theme assets linked and valid
+managed_tmthemes=(
+    "Solarized-Dark-TrueColor.tmTheme"
+    "Solarized-Light-TrueColor.tmTheme"
+    "Catppuccin-Mocha-TrueColor.tmTheme"
+    "Catppuccin-Latte-TrueColor.tmTheme"
+    "Gruvbox-Dark-TrueColor.tmTheme"
+    "TokyoNight-Night-TrueColor.tmTheme"
+    "Kanagawa-Wave-TrueColor.tmTheme"
+    "Nord-TrueColor.tmTheme"
+    "OneDark-TrueColor.tmTheme"
+)
+all_tmthemes_ok=true
+for tmt in "${managed_tmthemes[@]}"; do
+    if [ ! -L "$TEMP_HOME/.config/bat/themes/$tmt" ] || [ ! -f "$SCRIPT_DIR/colors/$tmt" ]; then
+        all_tmthemes_ok=false
+        fail "Managed bat .tmTheme" "Missing $tmt symlink or file"
+    fi
+done
+if [ "$all_tmthemes_ok" = true ]; then
+    pass "All 9 managed bat .tmTheme files exist in colors/ and are symlinked into ~/.config/bat/themes/"
+fi
+
 # Test 5: Uninstallation of dotfiles
 echo -e "\n[5/5] Testing dotfiles uninstallation..."
 HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
@@ -2104,10 +2127,12 @@ for syn in "$SCRIPT_DIR/syntaxes"/*.sublime-syntax; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/bat/themes/Solarized-Dark-TrueColor.tmTheme" ]; then
-    all_unlinked=false
-    fail "Unlink check" "Bat theme is still linked"
-fi
+for tmt in "${managed_tmthemes[@]}"; do
+    if [ -L "$TEMP_HOME/.config/bat/themes/$tmt" ]; then
+        all_unlinked=false
+        fail "Unlink check" "Bat theme $tmt is still linked"
+    fi
+done
 
 if [ -L "$TEMP_HOME/.config/mise/config.toml" ]; then
     all_unlinked=false

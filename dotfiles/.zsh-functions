@@ -220,6 +220,45 @@ gsync() {
     fi
 }
 
+# Color theme manager wrapper (`theme [name | options]`)
+# Runs bin/theme and immediately hot-reloads environment variables, Zsh syntax
+# highlighting, and Powerlevel10k prompt colors in the active shell session.
+theme() {
+    local theme_bin=""
+    if [ -x "$HOME/.local/bin/theme" ]; then
+        theme_bin="$HOME/.local/bin/theme"
+    elif whence -p theme >/dev/null 2>&1; then
+        theme_bin="$(whence -p theme)"
+    else
+        echo "Error: 'theme' binary not found in ~/.local/bin or PATH." >&2
+        return 1
+    fi
+
+    local is_query=0
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -l|--list|-c|--current|-p|--preview|--env|--create|--path|-n|--dry-run|-h|--help|--sync-assets)
+                is_query=1
+                break
+                ;;
+        esac
+    done
+
+    "$theme_bin" "$@"
+    local rc=$?
+    if [ "$rc" -eq 0 ] && [ "$is_query" -eq 0 ]; then
+        local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+        [ -r "$hs_dir/theme-env.sh" ] && source "$hs_dir/theme-env.sh"
+        [ -r "$hs_dir/zsh-theme.zsh" ] && source "$hs_dir/zsh-theme.zsh"
+        if [ -r "$hs_dir/p10k-theme.zsh" ]; then
+            source "$hs_dir/p10k-theme.zsh"
+            (( ! $+functions[p10k] )) || p10k reload
+        fi
+    fi
+    return "$rc"
+}
+
 # Source custom function drop-ins (~/.zsh-functions.d/*.zsh)
 if [ -d "$HOME/.zsh-functions.d" ]; then
     for f in "$HOME/.zsh-functions.d"/*.zsh(N); do

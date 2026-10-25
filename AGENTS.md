@@ -88,21 +88,22 @@ Any AI agent interacting with or modifying this repository must strictly adhere 
 | Delta Git pager config | `dotfiles/.config/git/config` | `${XDG_CONFIG_HOME:-$HOME/.config}/git/config` | `tests/test-dotfiles.sh` |
 | Tealdeer cheatsheet config | `dotfiles/.config/tealdeer/config.toml` | `${XDG_CONFIG_HOME:-$HOME/.config}/tealdeer/config.toml` | `tests/test-dotfiles.sh` |
 | Legacy Vim config | `dotfiles/.vimrc` | `$HOME/.vimrc` | `tests/test-vim.sh` |
-| Bat TrueColor theme | `colors/Solarized-Dark-TrueColor.tmTheme` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
+| Color theme definitions | `colors/themes/*.theme` (9 built-in themes) | `${XDG_CONFIG_HOME:-$HOME/.config}/themes/*.theme` (user custom themes) | `tests/test-bin.sh`, `tests/test-env.sh`, `tests/test-zsh.zsh`, `tests/test-vim.sh` |
+| Bat TrueColor themes | `colors/*.tmTheme` (`Solarized-Dark-TrueColor`, `Solarized-Light-TrueColor`, `Catppuccin-Mocha-TrueColor`, `Catppuccin-Latte-TrueColor`, `Gruvbox-Dark-TrueColor`, `TokyoNight-Night-TrueColor`, `Kanagawa-Wave-TrueColor`, `Nord-TrueColor`, `OneDark-TrueColor`) | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/themes/` | `tests/test-env.sh`, `tests/test-dotfiles.sh`, `tests/test-bin.sh` |
 | Bat syntax packages | `syntaxes/*.sublime-syntax` (C, C++, C#, Clojure, Diff, Dockerfile, Elixir, Go, GraphQL, Haskell, Java, Kotlin, Lean, Lua, Makefile, OCaml, Python, Rego, Ruby, Rust, Scala, Starlark, Swift, Zig, Bash, SQL, Terraform, Markdown, TypeScript, XML, HTML, JSON, TOML, CSS, Java Properties, Protobuf, ProtobufText) | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/syntaxes/` | `tests/test-dotfiles.sh` |
 | Tree-sitter queries and overrides | `dotfiles/.config/nvim/queries/<lang>/` (base supersedures: `html`, `html_tags`, `markdown_inline`, `css`, `properties`, `proto`, `textproto`, `graphql`, `lean`, `rego`, `dockerfile` injections, `elixir` injections, `xml` injections) and `dotfiles/.config/nvim/after/queries/<lang>/` (runtime extensions) | `${XDG_CONFIG_HOME:-$HOME/.config}/nvim/queries/` and `.../after/queries/` | `tests/test-vim.sh`, `tests/test-dotfiles.sh` |
 | GNOME Terminal profile | `colors/gnome-terminal-solarized.dconf` | dconf `/org/gnome/terminal/legacy/profiles:/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | macOS Terminal profile | `colors/Solarized-Dark.terminal` | `~/Library/Preferences/com.apple.Terminal.plist` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | Fontconfig alias | `dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf` | `${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig/conf.d/` | `tests/test-fonts.sh`, `tests/test-dotfiles.sh` |
 | Dircolors database | `dotfiles/.dir-colors/dircolors` | `$HOME/.dir-colors/dircolors` | `tests/test-env.sh`, `tests/test-dotfiles.sh` |
-| Standalone binaries and IDE | `bin/*` (`gen-passwd`, `gnome-terminal-solarized`, `ide`, `macos-terminal-solarized`, `repeat-until-success`, `sum`, `update-system`) | `$HOME/.local/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
+| Standalone binaries and IDE | `bin/*` (`gen-passwd`, `gnome-terminal-solarized`, `ide`, `macos-terminal-solarized`, `repeat-until-success`, `sum`, `theme`, `update-system`) | `$HOME/.local/bin/` | `tests/test-bin.sh`, `tests/test-system-setup.sh` |
 | Polyglot toolchains | `.mise.toml` | `${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml` | `tests/test-system-setup.sh` |
 | Meslo Nerd Fonts | Downloaded dynamically | `${XDG_DATA_HOME:-$HOME/.local/share}/fonts/` or macOS Fonts | `tests/test-fonts.sh` |
 | Shared test harness | `tests/test-helper.sh` | Internal test assertion library | All `tests/*.sh` and `tests/*.zsh` |
 
 ## 3. Visual precision and Solarized Dark TrueColor palette
 
-All UI components across terminal, prompt, file viewers, and editor must strictly adhere to the authentic Ethan Schoonover Solarized Dark specification in 24-bit TrueColor (`COLORTERM=truecolor`):
+All UI components across terminal, prompt, file viewers, and editor adhere to the Ethan Schoonover Solarized Dark specification by default in 24-bit TrueColor (`COLORTERM=truecolor`), while the unified 14-slot semantic role architecture (`base03` through `red`) powers all 9 built-in themes (`solarized-dark`, `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`) and user-defined custom `.theme` palettes via `bin/theme`:
 
 | Role | Color name | Hex code | Purpose and usage |
 | :--- | :--- | :--- | :--- |

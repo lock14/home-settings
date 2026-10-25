@@ -118,6 +118,7 @@ GUI & Desktop Options (Optional, disabled by default):
   -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
 
 User Environment Options:
+  --theme <name>          Initial color theme to apply (default: solarized-dark)
   --skip-user             Skip user dotfiles and environment configuration
   --skip-fonts            Skip MesloLGS Nerd Font Mono font installation
   --skip-tools            Skip Mise polyglot toolchain runtime installation
@@ -137,6 +138,14 @@ EOF
 # Parse CLI arguments
 while [ $# -gt 0 ]; do
     case "$1" in
+        --theme)
+            if [ $# -lt 2 ]; then
+                echo "Error: --theme requires a theme name (such as solarized-dark, catppuccin-mocha, nord)" >&2
+                exit 1
+            fi
+            export HOME_SETTINGS_THEME="$2"
+            shift 2
+            ;;
         --uninstall)
             ACTION="uninstall"
             shift

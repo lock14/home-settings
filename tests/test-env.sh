@@ -757,6 +757,18 @@ EOF
     else
         echo "FAIL:Standalone vi-only fallback:Unexpected alias/editor state ($vi_only_out)"
     fi
+
+    # Test theme() wrapper function in Bash reloads environment exports and PS1 prompt colors
+    mkdir -p "$STANDALONE_HOME/.local/bin"
+    ln -sf "$SCRIPT_DIR/bin/theme" "$STANDALONE_HOME/.local/bin/theme"
+    bash_theme_out=$(HOME="$STANDALONE_HOME" XDG_CONFIG_HOME="$STANDALONE_HOME/.config" "$BASH" -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; theme --set catppuccin-mocha --no-live >/dev/null; printf 'THEME=%s|BAT=%s|PS1=%s\n' \"\${HOME_SETTINGS_THEME:-}\" \"\${BAT_THEME:-}\" \"\$PS1\"")
+    if [[ "$bash_theme_out" == *"THEME=catppuccin-mocha|BAT=Catppuccin-Mocha-TrueColor|"* ]] && \
+       [[ "$bash_theme_out" == *"48;2;49;50;68m"* ]] && \
+       [[ "$bash_theme_out" == *"38;2;137;180;250m"* ]]; then
+        echo "PASS:Bash theme() wrapper updates HOME_SETTINGS_THEME, BAT_THEME, and _solarized_bash_prompt PS1 shelf colors in active session"
+    else
+        echo "FAIL:Bash theme() wrapper:Unexpected state ($bash_theme_out)"
+    fi
 ) > "$STANDALONE_HOME/results.txt"
 
 parse_subshell_results < "$STANDALONE_HOME/results.txt"

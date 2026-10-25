@@ -19,3 +19,53 @@ if [ -d "$HOME/.zsh/completions" ]; then
         }
     fi
 fi
+
+# Completion for `theme` CLI and shell function
+_theme() {
+    local -a opts themes
+    opts=(
+        '-l:List available color themes'
+        '--list:List available color themes'
+        '-c:Print active theme identifier'
+        '--current:Print active theme identifier'
+        '-s:Apply the specified color theme'
+        '--set:Apply the specified color theme'
+        '-p:Render TrueColor palette and syntax preview'
+        '--preview:Render TrueColor palette and syntax preview'
+        '--env:Print shell environment exports for theme'
+        '--create:Scaffold a custom user theme file'
+        '--from:Base theme template for --create'
+        '-f:Overwrite existing custom user theme file'
+        '--force:Overwrite existing custom user theme file'
+        '--path:Print custom user themes directory path'
+        '--no-live:Skip live terminal, Tmux, and Neovim reloads'
+        '-n:Validate and show planned updates without writing files'
+        '--dry-run:Validate and show planned updates without writing files'
+        '-h:Show help message'
+        '--help:Show help message'
+    )
+    local theme_bin=""
+    if [ -x "$HOME/.local/bin/theme" ]; then
+        theme_bin="$HOME/.local/bin/theme"
+    elif whence -p theme >/dev/null 2>&1; then
+        theme_bin="$(whence -p theme)"
+    fi
+    if [ -n "$theme_bin" ]; then
+        themes=(${(f)"$("$theme_bin" --list --plain 2>/dev/null)"})
+    else
+        themes=(solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark)
+    fi
+    if [[ "${words[CURRENT-1]:-}" == (-s|--set|-p|--preview|--env|--from|-n|--dry-run) ]]; then
+        _describe -t themes 'color theme' themes
+        return
+    fi
+    if [[ "${words[CURRENT]:-}" == -* ]]; then
+        _describe -t options 'theme option' opts
+    else
+        _describe -t themes 'color theme' themes
+        _describe -t options 'theme option' opts
+    fi
+}
+if (( $+functions[compdef] )); then
+    compdef _theme theme 2>/dev/null || true
+fi

@@ -750,6 +750,151 @@ end, { nargs = "?", complete = "dir", desc = "Dive IDE Workspace (Editor & Shell
 
 map("n", "<leader>cd", "<cmd>IdeCd<CR>", { desc = "Dive IDE Workspace to Current Buffer Directory" })
 
+-- Active Color Theme Palette Resolution & Live RPC Hot-Reload (managed by bin/theme)
+local default_solarized_palette = {
+    base03 = "#002B36",
+    base02 = "#073642",
+    base04 = "#002731",
+    base01 = "#586E75",
+    base00 = "#657B83",
+    base0 = "#839496",
+    base1 = "#93A1A1",
+    base2 = "#EEE8D5",
+    base3 = "#FDF6E3",
+    yellow = "#B58900",
+    orange = "#CB4B16",
+    red = "#DC322F",
+    magenta = "#D33682",
+    violet = "#6C71C4",
+    blue = "#268BD2",
+    cyan = "#2AA198",
+    green = "#859900",
+    mix_green = "#274C25",
+    mix_yellow = "#364725",
+    mix_blue = "#0B4764",
+    mix_red = "#422D33",
+    mix_magenta = "#3E2E4C",
+    mix_base1 = "#2C4E56",
+}
+
+local theme_key_map = {
+    BASE03 = "base03",
+    BASE02 = "base02",
+    BASE04 = "base04",
+    BASE01 = "base01",
+    BASE00 = "base00",
+    BASE0 = "base0",
+    BASE1 = "base1",
+    BASE2 = "base2",
+    BASE3 = "base3",
+    YELLOW = "yellow",
+    ORANGE = "orange",
+    RED = "red",
+    MAGENTA = "magenta",
+    VIOLET = "violet",
+    BLUE = "blue",
+    CYAN = "cyan",
+    GREEN = "green",
+    MIX_GREEN = "mix_green",
+    MIX_YELLOW = "mix_yellow",
+    MIX_BLUE = "mix_blue",
+    MIX_RED = "mix_red",
+    MIX_MAGENTA = "mix_magenta",
+    MIX_BASE1 = "mix_base1",
+}
+
+local function resolve_active_theme_palette(fallback_colors)
+    local cfg_home = (vim.env.XDG_CONFIG_HOME and vim.env.XDG_CONFIG_HOME ~= "")
+        and vim.env.XDG_CONFIG_HOME
+        or (vim.fn.expand("$HOME") .. "/.config")
+    local theme_file = (vim.env.HOME_SETTINGS_THEME_FILE and vim.env.HOME_SETTINGS_THEME_FILE ~= "")
+        and vim.env.HOME_SETTINGS_THEME_FILE
+        or (cfg_home .. "/home-settings/active-theme.theme")
+    if vim.fn.filereadable(theme_file) ~= 1 and (vim.env.HOME_SETTINGS_THEME or "") ~= "" then
+        local candidate = vim.fn.stdpath("config") .. "/../../colors/themes/" .. vim.env.HOME_SETTINGS_THEME .. ".theme"
+        if vim.fn.filereadable(candidate) == 1 then
+            theme_file = candidate
+        end
+    end
+    local parsed = {}
+    if vim.fn.filereadable(theme_file) == 1 then
+        for _, line in ipairs(vim.fn.readfile(theme_file)) do
+            local k, v = line:match('^([A-Z0-9_]+)="?([^"]*)"?$')
+            if k and v then
+                parsed[k] = v
+            end
+        end
+    end
+    local theme_id = parsed.THEME_ID or "solarized-dark"
+    local theme_mode = parsed.THEME_MODE or "dark"
+    vim.g.home_settings_theme = theme_id
+    vim.g.home_settings_theme_mode = theme_mode
+    vim.env.HOME_SETTINGS_THEME = theme_id
+    vim.env.HOME_SETTINGS_THEME_MODE = theme_mode
+    if parsed.BAT_THEME_NAME and parsed.BAT_THEME_NAME ~= "" then
+        vim.env.BAT_THEME = parsed.BAT_THEME_NAME
+    end
+    if theme_id == "solarized-dark" and fallback_colors ~= nil then
+        return fallback_colors
+    end
+    local out = vim.tbl_extend("force", {}, default_solarized_palette, fallback_colors or {})
+    if parsed.BASE03 and parsed.BASE0 then
+        for env_k, lua_k in pairs(theme_key_map) do
+            if parsed[env_k] and parsed[env_k] ~= "" then
+                out[lua_k] = parsed[env_k]
+            end
+        end
+        if not parsed.BASE04 and parsed.BASE02 then
+            out.base04 = parsed.BASE02
+        end
+    end
+    return out
+end
+
+local build_theme_highlights
+
+_G.apply_home_settings_theme = function()
+    local p = resolve_active_theme_palette(nil)
+    local applied_via_colorscheme = false
+    if package.loaded["solarized"] and _G._hs_solarized_opts then
+        vim.o.background = "dark"
+        applied_via_colorscheme = pcall(function()
+            require("solarized").setup(_G._hs_solarized_opts)
+            vim.cmd.colorscheme("solarized")
+        end)
+    end
+    if not applied_via_colorscheme then
+        if build_theme_highlights then
+            local hl = build_theme_highlights(p)
+            for group, spec in pairs(hl) do
+                pcall(vim.api.nvim_set_hl, 0, group, spec)
+            end
+        else
+            vim.cmd(string.format(
+                "highlight Normal guibg=%s guifg=%s | highlight CursorLine guibg=%s | highlight Comment guifg=%s",
+                p.base03, p.base0, p.base02, p.base01
+            ))
+        end
+    end
+    return vim.g.home_settings_theme or "solarized-dark"
+end
+
+vim.api.nvim_create_user_command("Theme", function(opts)
+    local arg = vim.trim(opts.args or "")
+    if arg == "" then
+        vim.notify("Active theme: " .. tostring(vim.g.home_settings_theme or "solarized-dark"), vim.log.levels.INFO)
+        return
+    end
+    local theme_bin = vim.fn.expand("$HOME/.local/bin/theme")
+    if vim.fn.executable(theme_bin) ~= 1 then
+        theme_bin = vim.fn.exepath("theme")
+    end
+    if theme_bin ~= "" then
+        vim.fn.system({ theme_bin, "--set", arg, "--no-live" })
+    end
+    _G.apply_home_settings_theme()
+end, { nargs = "?", desc = "Switch or inspect active home-settings color theme" })
+
 -- -------------------------------------------------------------
 -- 3. Bootstrap Lazy.nvim Plugin Manager
 -- -------------------------------------------------------------
@@ -771,12 +916,7 @@ vim.opt.rtp:prepend(lazypath)
 -- -------------------------------------------------------------
 local status_ok, lazy = pcall(require, "lazy")
 if not status_ok then
-    -- Fallback Solarized colors if offline/lazy not present
-    vim.cmd([[
-        highlight Normal guibg=#002B36 guifg=#839496
-        highlight CursorLine guibg=#073642
-        highlight Comment guifg=#586E75
-    ]])
+    _G.apply_home_settings_theme()
     return
 end
 
@@ -784,6 +924,7 @@ end
 -- all core options, keymaps, and commands have already been refreshed above;
 -- skip re-running `lazy.setup()` which emits "Re-sourcing your config is not supported with lazy.nvim".
 if package.loaded["lazy.core.config"] then
+    _G.apply_home_settings_theme()
     return
 end
 
@@ -805,7 +946,8 @@ lazy.setup({
                 variables = { italic = false },
                 parameters = { italic = false },
             },
-            on_highlights = function(colors, _)
+            on_highlights = function(base_colors, _)
+                local colors = resolve_active_theme_palette(base_colors)
                 local hl = {
                     -- =========================================================================
                     -- Non-Language-Specific UI & Framing Architecture (Converged Solarized Dark)
@@ -1079,6 +1221,8 @@ lazy.setup({
             end,
         },
         config = function(_, opts)
+            _G._hs_solarized_opts = opts
+            build_theme_highlights = opts.on_highlights
             vim.o.background = "dark"
             require("solarized").setup(opts)
             vim.cmd.colorscheme("solarized")

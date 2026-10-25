@@ -1,0 +1,37 @@
+# Managed Theme: solarized-dark
+THEME_ID="solarized-dark"
+THEME_LABEL="Solarized Dark"
+THEME_DESCRIPTION="Ethan Schoonover precision CIELAB dark palette"
+THEME_MODE="dark"
+BAT_THEME_NAME="Solarized-Dark-TrueColor"
+BTOP_THEME_NAME="solarized_dark"
+GHOSTTY_THEME_NAME="Solarized Dark"
+
+# Monotone Surface & Content Ramp
+BASE03="#002B36"
+BASE02="#073642"
+BASE04="#002731"
+BASE01="#586E75"
+BASE00="#657B83"
+BASE0="#839496"
+BASE1="#93A1A1"
+BASE2="#EEE8D5"
+BASE3="#FDF6E3"
+
+# Semantic Accent Palette
+YELLOW="#B58900"
+ORANGE="#CB4B16"
+RED="#DC322F"
+MAGENTA="#D33682"
+VIOLET="#6C71C4"
+BLUE="#268BD2"
+CYAN="#2AA198"
+GREEN="#859900"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#274C25"
+MIX_RED="#422D33"
+MIX_YELLOW="#364725"
+MIX_BLUE="#0B4764"
+MIX_MAGENTA="#3E2E4C"
+MIX_BASE1="#2C4E56"
