@@ -1482,6 +1482,7 @@ fi
 
 # Test 9: bin/theme unified multi-theme color scheme manager
 echo -e "\n[9/9] Testing bin/theme unified multi-theme manager..."
+unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE
 THEME_TEST_HOME="$(mktemp -d)"
 export THEME_TEST_Cfg="$THEME_TEST_HOME/.config"
 export THEME_TEST_Cache="$THEME_TEST_HOME/.cache"
@@ -1504,7 +1505,7 @@ else
     fail "bin/theme CLI validation" "Unexpected --help or error handling output"
 fi
 
-# Verify default --current and --list across all 9 built-in themes
+# Verify default --current and --list across all 17 built-in themes (9 classic + 8 US Holiday)
 CUR_DEFAULT="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)"
 LIST_PLAIN="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --list --plain)"
 LIST_FULL="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --list)"
@@ -1518,6 +1519,14 @@ managed_themes=(
     "kanagawa-wave"
     "nord"
     "onedark"
+    "new-years"
+    "valentines"
+    "st-patricks"
+    "easter"
+    "independence-day"
+    "halloween"
+    "thanksgiving"
+    "christmas"
 )
 all_listed=true
 for t in "${managed_themes[@]}"; do
@@ -1527,9 +1536,18 @@ for t in "${managed_themes[@]}"; do
     fi
 done
 if [ "$CUR_DEFAULT" = "solarized-dark" ] && [ "$all_listed" = true ] && grep -Fq "* solarized-dark" <<< "$LIST_FULL"; then
-    pass "bin/theme defaults to solarized-dark and lists all 9 built-in themes"
+    pass "bin/theme defaults to solarized-dark and lists all 17 built-in themes (9 classic + 8 US Holiday)"
 else
     fail "bin/theme default & list" "cur='$CUR_DEFAULT' all_listed='$all_listed'"
+fi
+
+# Verify --holiday resolves nearest upcoming US Holiday (e.g. Oct 25 -> halloween, Nov 20 -> thanksgiving)
+HOLIDAY_OCT="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" THEME_HOLIDAY_DATE="2026-10-25" "$SCRIPT_DIR/bin/theme" --holiday --dry-run)"
+HOLIDAY_NOV="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" THEME_HOLIDAY_DATE="2026-11-20" "$SCRIPT_DIR/bin/theme" --holiday --dry-run)"
+if grep -Fq "Halloween (halloween" <<< "$HOLIDAY_OCT" && grep -Fq "Thanksgiving (thanksgiving" <<< "$HOLIDAY_NOV"; then
+    pass "bin/theme --holiday resolves the nearest upcoming US Holiday theme (fixed and movable dates)"
+else
+    fail "bin/theme --holiday" "Unexpected holiday resolution: oct='$HOLIDAY_OCT' nov='$HOLIDAY_NOV'"
 fi
 
 # Verify --preview and --env for managed themes

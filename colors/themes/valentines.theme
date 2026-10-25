@@ -1,0 +1,37 @@
+# Managed Theme: valentines
+THEME_ID="valentines"
+THEME_LABEL="Valentine's Day"
+THEME_DESCRIPTION="Espresso-plum velvet canvas with rose-quartz and ruby accents"
+THEME_MODE="dark"
+BAT_THEME_NAME="Valentines-TrueColor"
+BTOP_THEME_NAME="valentines"
+GHOSTTY_THEME_NAME="Valentines"
+
+# Monotone Surface & Content Ramp
+BASE03="#1B1116"
+BASE02="#2A1B23"
+BASE04="#130C10"
+BASE01="#7A5C6B"
+BASE00="#947282"
+BASE0="#DEC5D0"
+BASE1="#EED9E2"
+BASE2="#F7EBF0"
+BASE3="#FDF7FA"
+
+# Semantic Accent Palette
+YELLOW="#EFC88B"
+ORANGE="#F0926A"
+RED="#F25C78"
+MAGENTA="#F48FB1"
+VIOLET="#C792EA"
+BLUE="#82AAFF"
+CYAN="#7AD0C6"
+GREEN="#98D89E"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#2A352C"
+MIX_RED="#421E29"
+MIX_YELLOW="#41322A"
+MIX_BLUE="#2B2C41"
+MIX_MAGENTA="#432837"
+MIX_BASE1="#382530"

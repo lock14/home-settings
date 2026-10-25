@@ -22,6 +22,7 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
 REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
 
 IFS= read -r -d '' THEME_PY_SRC <<'PY' || true
+import datetime
 import os
 from pathlib import Path
 import re
@@ -41,6 +42,14 @@ MANAGED_ORDER = [
     "kanagawa-wave",
     "nord",
     "onedark",
+    "new-years",
+    "valentines",
+    "st-patricks",
+    "easter",
+    "independence-day",
+    "halloween",
+    "thanksgiving",
+    "christmas",
 ]
 
 CORE_COLOR_KEYS = [
@@ -147,9 +156,18 @@ Managed Themes:
   kanagawa-wave      Kanagawa Wave
   nord               Nord
   onedark            OneDark
+  new-years          New Year's
+  valentines         Valentine's Day
+  st-patricks        St. Patrick's Day
+  easter             Easter
+  independence-day   Independence Day
+  halloween          Halloween
+  thanksgiving       Thanksgiving
+  christmas          Christmas
 
 Options:
   -s, --set <NAME>       Apply theme <NAME> across all managed tools
+  --holiday              Apply the nearest upcoming or active US Holiday theme
   -l, --list             List all managed and user-defined themes
   -c, --current          Print the currently active theme name
   -p, --preview [NAME]   Render a TrueColor palette and syntax preview for [NAME]
@@ -165,6 +183,56 @@ Options:
 
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+
+
+def compute_easter_date(year):
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l_val = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l_val) // 451
+    month = (h + l_val - 7 * m + 114) // 31
+    day = ((h + l_val - 7 * m + 114) % 31) + 1
+    return datetime.date(year, month, day)
+
+
+def compute_thanksgiving_date(year):
+    nov1 = datetime.date(year, 11, 1)
+    offset = (3 - nov1.weekday()) % 7
+    return datetime.date(year, 11, 1 + offset + 21)
+
+
+def get_holiday_schedule_for_year(year):
+    return [
+        (datetime.date(year, 1, 1), "new-years"),
+        (datetime.date(year, 2, 14), "valentines"),
+        (datetime.date(year, 3, 17), "st-patricks"),
+        (compute_easter_date(year), "easter"),
+        (datetime.date(year, 7, 4), "independence-day"),
+        (datetime.date(year, 10, 31), "halloween"),
+        (compute_thanksgiving_date(year), "thanksgiving"),
+        (datetime.date(year, 12, 25), "christmas"),
+    ]
+
+
+def resolve_nearest_holiday_slug(today=None):
+    if today is None:
+        override = os.environ.get("THEME_HOLIDAY_DATE", "").strip()
+        if override:
+            today = datetime.date.fromisoformat(override)
+        else:
+            today = datetime.date.today()
+    candidates = get_holiday_schedule_for_year(today.year) + get_holiday_schedule_for_year(today.year + 1)
+    upcoming = [(d, slug) for d, slug in candidates if d >= today]
+    upcoming.sort(key=lambda item: item[0])
+    return upcoming[0][1]
 
 
 def hex_to_rgb(hex_str):
@@ -304,9 +372,6 @@ def discover_themes(repo_dir):
 
 
 def get_current_theme_slug(themes):
-    env_theme = os.environ.get("HOME_SETTINGS_THEME", "").strip().lower()
-    if env_theme and env_theme in themes:
-        return env_theme
     state_file = get_xdg_config_home() / "home-settings" / "theme"
     if state_file.is_file():
         try:
@@ -315,6 +380,9 @@ def get_current_theme_slug(themes):
                 return saved
         except OSError:
             pass
+    env_theme = os.environ.get("HOME_SETTINGS_THEME", "").strip().lower()
+    if env_theme and env_theme in themes:
+        return env_theme
     return "solarized-dark"
 
 
@@ -1344,7 +1412,7 @@ def render_preview(theme):
     rule_width = max(40, min(width - 4, 68))
     lines = [
         pad_preview_line(
-            f"{c_org}{theme['THEME_LABEL']} {c_b01}({theme['THEME_ID']} · {theme['THEME_MODE']} · {theme['SOURCE']})",
+            f"{c_org}{theme['THEME_LABEL']} {c_b01}({theme['THEME_ID']} | {theme['THEME_MODE']} | {theme['SOURCE']})",
             b02,
             width,
         ),
@@ -1377,7 +1445,7 @@ def render_preview(theme):
         lines.append(pad_preview_line(f"{col1}   {col2}", b03, width, left_pad=4))
 
     lines.append(pad_preview_line(f"{c_b01}{'─' * rule_width}", b03, width))
-    lines.append(pad_preview_line(f"{c_blu}Converged Semantic Code, Diff & Prompt Preview:", b03, width))
+    lines.append(pad_preview_line(f"{c_blu}Converged Semantic Code Preview:", b03, width))
     lines.extend(
         [
             pad_preview_line(f"{c_b01}// {theme['THEME_LABEL']} — 6-Pillar Semantic Highlighting", b03, width, left_pad=4),
@@ -1617,6 +1685,9 @@ def main():
             no_live = True
         elif arg in ("-f", "--force"):
             force = True
+        elif arg == "--holiday":
+            action = "set"
+            target_name = resolve_nearest_holiday_slug()
         elif arg in ("-s", "--set"):
             if i + 1 >= len(args) or args[i + 1].startswith("-"):
                 sys.stderr.write(f"theme: option '{arg}' requires a theme name\n")

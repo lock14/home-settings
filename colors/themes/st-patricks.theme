@@ -1,0 +1,37 @@
+# Managed Theme: st-patricks
+THEME_ID="st-patricks"
+THEME_LABEL="St. Patrick's Day"
+THEME_DESCRIPTION="Celtic peat-moss forest canvas with shamrock green and pot-of-gold amber"
+THEME_MODE="dark"
+BAT_THEME_NAME="St-Patricks-TrueColor"
+BTOP_THEME_NAME="st_patricks"
+GHOSTTY_THEME_NAME="St Patricks"
+
+# Monotone Surface & Content Ramp
+BASE03="#0E1A14"
+BASE02="#172A21"
+BASE04="#09120E"
+BASE01="#587A68"
+BASE00="#6F9480"
+BASE0="#BFD6C8"
+BASE1="#D5E8DC"
+BASE2="#EAF4EE"
+BASE3="#F6FBF8"
+
+# Semantic Accent Palette
+YELLOW="#F0C445"
+ORANGE="#E68A3E"
+RED="#E65F5C"
+MAGENTA="#D982B5"
+VIOLET="#9D8DF1"
+BLUE="#5AA9E6"
+CYAN="#4AD2B8"
+GREEN="#4AD66D"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#1A3B26"
+MIX_RED="#362422"
+MIX_YELLOW="#37361E"
+MIX_BLUE="#1D333B"
+MIX_MAGENTA="#342B34"
+MIX_BASE1="#233C30"

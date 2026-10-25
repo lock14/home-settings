@@ -1,0 +1,37 @@
+# Managed Theme: new-years
+THEME_ID="new-years"
+THEME_LABEL="New Year's"
+THEME_DESCRIPTION="Midnight obsidian canvas with champagne gold and sparkler cyan"
+THEME_MODE="dark"
+BAT_THEME_NAME="New-Years-TrueColor"
+BTOP_THEME_NAME="new_years"
+GHOSTTY_THEME_NAME="New Years"
+
+# Monotone Surface & Content Ramp
+BASE03="#0D101B"
+BASE02="#171C2D"
+BASE04="#090B13"
+BASE01="#5C647E"
+BASE00="#737C99"
+BASE0="#C8D0E7"
+BASE1="#DDE3F4"
+BASE2="#EEF1FA"
+BASE3="#FAFBFD"
+
+# Semantic Accent Palette
+YELLOW="#F4D06F"
+ORANGE="#F29E4C"
+RED="#EF5D60"
+MAGENTA="#E888B7"
+VIOLET="#A78BFA"
+BLUE="#63A4FF"
+CYAN="#56E3D8"
+GREEN="#7BD389"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#1B322C"
+MIX_RED="#351E28"
+MIX_YELLOW="#363128"
+MIX_BLUE="#1A2C47"
+MIX_MAGENTA="#34263B"
+MIX_BASE1="#252C42"

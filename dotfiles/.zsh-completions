@@ -30,6 +30,7 @@ _theme() {
         '--current:Print active theme identifier'
         '-s:Apply the specified color theme'
         '--set:Apply the specified color theme'
+        '--holiday:Apply the nearest upcoming or active US Holiday theme'
         '-p:Render TrueColor palette and syntax preview'
         '--preview:Render TrueColor palette and syntax preview'
         '--env:Print shell environment exports for theme'

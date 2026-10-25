@@ -1,0 +1,37 @@
+# Managed Theme: halloween
+THEME_ID="halloween"
+THEME_LABEL="Halloween"
+THEME_DESCRIPTION="Haunted witching-violet night with jack-o-lantern orange and ectoplasm green"
+THEME_MODE="dark"
+BAT_THEME_NAME="Halloween-TrueColor"
+BTOP_THEME_NAME="halloween"
+GHOSTTY_THEME_NAME="Halloween"
+
+# Monotone Surface & Content Ramp
+BASE03="#120E1A"
+BASE02="#1F182D"
+BASE04="#0B0810"
+BASE01="#6B5E82"
+BASE00="#83749C"
+BASE0="#CEC4DE"
+BASE1="#E2DAF0"
+BASE2="#F0ECF8"
+BASE3="#FAF8FD"
+
+# Semantic Accent Palette
+YELLOW="#F4B942"
+ORANGE="#FF7518"
+RED="#E63956"
+MAGENTA="#E066A6"
+VIOLET="#B388FF"
+BLUE="#6E9EFF"
+CYAN="#48E5C2"
+GREEN="#7AE582"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#1F342A"
+MIX_RED="#3B1927"
+MIX_YELLOW="#3B2F23"
+MIX_BLUE="#242A47"
+MIX_MAGENTA="#3B2239"
+MIX_BASE1="#2D2340"

@@ -417,8 +417,10 @@ Terminal emulator profiles and system monitors are pre-configured with Ethan Sch
 
 The `theme` command switches the active color scheme across all terminal emulators, editors, shell prompts, and CLI utilities simultaneously, persisting the choice to `${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme` and generating shell environment exports in `${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh`:
 
-- **Built-in palettes (9 managed themes)**: `solarized-dark` (default), `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`.
-- **Interactive fuzzy picker**: Running `theme` with no arguments opens an interactive `fzf` selector with a live TrueColor swatch and syntax preview (`theme --preview {1}`), applying the chosen theme immediately on `Enter`.
+- **Built-in palettes (17 managed themes)**:
+  - **Classic developer palettes**: `solarized-dark` (default), `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`.
+  - **Major US Holiday palettes**: `new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`.
+- **Interactive fuzzy picker**: Running `theme` with no arguments opens an interactive `fzf` selector with a full-pane TrueColor swatch, diff, prompt, and syntax preview (`theme --preview {1}`) rendered on the highlighted theme's background, applying the chosen theme immediately on `Enter`.
 - **Unified multi-tool synchronization**: Applying a theme updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences.
 - **User-defined custom themes**: Drop any `.theme` file into `${XDG_CONFIG_HOME:-$HOME/.config}/themes/` (or scaffold one with `theme --create <name> [--from <base>]`) to register a custom 16-color and semantic accent palette that participates in `theme --list`, interactive `fzf` previews, and full tool generation.
 
@@ -426,6 +428,7 @@ The `theme` command switches the active color scheme across all terminal emulato
 | :--- | :--- |
 | `theme` | Open interactive `fzf` picker with live TrueColor palette and syntax preview |
 | `theme <name>` | Switch all terminal emulators, editors, prompts, and CLI tools to `<name>` |
+| `theme --holiday` | Switch to the nearest upcoming or active US Holiday theme |
 | `theme --list` | List all built-in and user-defined themes (marking the active theme with `*`) |
 | `theme --current` | Print the currently active theme name |
 | `theme --preview [name]` | Render a TrueColor 16-color swatch and semantic syntax preview in the terminal |
