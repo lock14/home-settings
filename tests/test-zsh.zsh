@@ -45,6 +45,12 @@ test_aliases() {
         fi
     done
 
+    if [ "$(alias gpush)" = "gpush='git push -u origin HEAD'" ] && [ "$(alias gpushf)" = "gpushf='git push -u --force-with-lease origin HEAD'" ]; then
+        echo "PASS:gpush and gpushf configured with -u upstream tracking"
+    else
+        echo "FAIL:gpush:Expected gpush='git push -u origin HEAD' and gpushf='git push -u --force-with-lease origin HEAD', got $(alias gpush 2>/dev/null || echo none) / $(alias gpushf 2>/dev/null || echo none)"
+    fi
+
     if [ "$(alias gup)" = "gup='git pull --rebase --autostash --prune'" ]; then
         echo "PASS:gup configured as 'git pull --rebase --autostash --prune'"
     else

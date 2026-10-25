@@ -458,8 +458,8 @@ Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` 
 | `fs` | Recursive directory tree search (`fd` and `tree --fromfile`) |
 | `gcommit` | Stage all changes and commit (`git add -A && git commit`) |
 | `gamend` | Stage all changes and amend the previous commit without editing the message |
-| `gpush` | Push current branch to `origin` (`git push origin HEAD`) |
-| `gpushf` | Force-push current branch safely (`git push --force-with-lease origin HEAD`) |
+| `gpush` | Push current branch to `origin` and set upstream (`git push -u origin HEAD`) |
+| `gpushf` | Force-push current branch safely and set upstream (`git push -u --force-with-lease origin HEAD`) |
 | `gpull` | Pull with rebase and autostash (`git pull --rebase --autostash`) |
 | `gup` | Pull with rebase, autostash, and remote branch pruning (`--prune`) |
 | `gprune` | Delete local branches already merged into the default branch |

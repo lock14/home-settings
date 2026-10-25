@@ -252,6 +252,8 @@ STANDALONE_HOME=$(mktemp -d)
     fi
 
     if alias gcommit >/dev/null 2>&1 && alias gamend >/dev/null 2>&1 && \
+       [[ "$(alias gpush 2>/dev/null)" == *"git push -u origin HEAD"* ]] && \
+       [[ "$(alias gpushf 2>/dev/null)" == *"git push -u --force-with-lease origin HEAD"* ]] && \
        alias gup >/dev/null 2>&1 && ! alias gfetch >/dev/null 2>&1 && \
        alias gprune >/dev/null 2>&1 && alias gpurge >/dev/null 2>&1 && \
        alias guser-branch >/dev/null 2>&1 && alias ll >/dev/null 2>&1 && \
