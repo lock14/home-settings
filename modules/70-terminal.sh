@@ -26,9 +26,9 @@ configure_terminal() {
         if gsettings list-schemas 2>/dev/null | grep -q "org.gnome.Terminal.ProfilesList"; then
             echo "  Configuring GNOME Terminal..."
             if [ "$DRY_RUN" = true ]; then
-                "$REPO_DIR/bin/gnome-terminal-solarized" "${theme_args[@]}" --dry-run
+                "$REPO_DIR/bin/gnome-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"} --dry-run
             else
-                "$REPO_DIR/bin/gnome-terminal-solarized" "${theme_args[@]}"
+                "$REPO_DIR/bin/gnome-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"}
             fi
         fi
     fi
@@ -39,7 +39,7 @@ configure_terminal() {
         if [ "$DRY_RUN" = true ]; then
             echo "  [DryRun] Configuring macOS Terminal.app Solarized Dark profile"
         else
-            "$REPO_DIR/bin/macos-terminal-solarized" "${theme_args[@]}"
+            "$REPO_DIR/bin/macos-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"}
         fi
     fi
 }
