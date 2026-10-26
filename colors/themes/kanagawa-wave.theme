@@ -1,0 +1,37 @@
+# Managed Theme: kanagawa-wave
+THEME_ID="kanagawa-wave"
+THEME_LABEL="Kanagawa Wave"
+THEME_DESCRIPTION="Sumi-ink and ukiyo-e inspired dark palette after Hokusai"
+THEME_MODE="dark"
+BAT_THEME_NAME="Kanagawa-Wave-TrueColor"
+BTOP_THEME_NAME="kanagawa_wave"
+GHOSTTY_THEME_NAME="Kanagawa Wave"
+
+# Monotone Surface & Content Ramp
+BASE03="#1F1F28"
+BASE02="#2A2A37"
+BASE04="#16161D"
+BASE01="#727169"
+BASE00="#54546D"
+BASE0="#DCD7BA"
+BASE1="#C8C093"
+BASE2="#E6C384"
+BASE3="#DCD7BA"
+
+# Semantic Accent Palette
+YELLOW="#E6C384"
+ORANGE="#FFA066"
+RED="#E46876"
+MAGENTA="#D27E99"
+VIOLET="#957FB8"
+BLUE="#7E9CD8"
+CYAN="#7AA89F"
+GREEN="#98BB6C"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#2B3328"
+MIX_RED="#43242B"
+MIX_YELLOW="#49443C"
+MIX_BLUE="#252535"
+MIX_MAGENTA="#3A2836"
+MIX_BASE1="#2D4F67"

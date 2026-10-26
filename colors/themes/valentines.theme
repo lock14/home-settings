@@ -1,0 +1,37 @@
+# Managed Theme: valentines
+THEME_ID="valentines"
+THEME_LABEL="Valentine's Day"
+THEME_DESCRIPTION="Velvet bordeaux cherry canvas with cupid hot-pink, sweetheart blush, and champagne gold"
+THEME_MODE="dark"
+BAT_THEME_NAME="Valentines-TrueColor"
+BTOP_THEME_NAME="valentines"
+GHOSTTY_THEME_NAME="Valentines"
+
+# Monotone Surface & Content Ramp
+BASE03="#280716"
+BASE02="#420D25"
+BASE04="#1A040E"
+BASE01="#A65E7E"
+BASE00="#C27898"
+BASE0="#FFE8F2"
+BASE1="#FFF5F9"
+BASE2="#FFFDF9"
+BASE3="#FFFFFF"
+
+# Semantic Accent Palette (Cupid Rose-Pink, Sweetheart Blush & Champagne)
+YELLOW="#FF1744"
+ORANGE="#FF6E6E"
+RED="#FF0033"
+MAGENTA="#FF9EBB"
+VIOLET="#E08DFF"
+BLUE="#FF85B3"
+CYAN="#FFE082"
+GREEN="#FF4081"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#4F1129"
+MIX_RED="#4F061B"
+MIX_YELLOW="#52091E"
+MIX_BLUE="#572139"
+MIX_MAGENTA="#542234"
+MIX_BASE1="#4A1A30"

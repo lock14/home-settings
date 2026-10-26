@@ -59,6 +59,10 @@ else
     export LESS_TERMCAP_se=$'\e[0m'                               # reset standout
     export LESS_TERMCAP_us=$'\e[4;38;2;42;161;152m'               # underline/flags -> Solarized Cyan (#2AA198)
     export LESS_TERMCAP_ue=$'\e[0m'                               # reset underline
+    if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh" ]; then
+        # shellcheck source=/dev/null
+        . "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh"
+    fi
 fi
 
 # Bash History
@@ -1075,16 +1079,16 @@ _solarized_detect_os_icon() {
 _solarized_bash_prompt() {
     local exit_code=$?
     local c_reset='\[\e[0m\]'
-    local bg_shelf='\[\e[48;2;7;54;66m\]'
-    local c_shelf_cap='\[\e[0m\e[38;2;7;54;66m\]'
-    local c_base01='\[\e[38;2;88;110;117m\]'
-    local c_base00='\[\e[38;2;101;123;131m\]'
-    local c_base0='\[\e[38;2;131;148;150m\]'
-    local c_base1='\[\e[38;2;147;161;161m\]'
-    local c_blue='\[\e[38;2;38;139;210m\]'
-    local c_green='\[\e[38;2;133;153;0m\]'
-    local c_yellow='\[\e[38;2;181;137;0m\]'
-    local c_red='\[\e[38;2;220;50;47m\]'
+    local bg_shelf="${_HS_PROMPT_BG_BASE02:-\[\e[48;2;7;54;66m\]}"
+    local c_shelf_cap="${_HS_PROMPT_CAP_BASE02:-\[\e[0m\e[38;2;7;54;66m\]}"
+    local c_base01="${_HS_PROMPT_FG_BASE01:-\[\e[38;2;88;110;117m\]}"
+    local c_base00="${_HS_PROMPT_FG_BASE00:-\[\e[38;2;101;123;131m\]}"
+    local c_base0="${_HS_PROMPT_FG_BASE0:-\[\e[38;2;131;148;150m\]}"
+    local c_base1="${_HS_PROMPT_FG_BASE1:-\[\e[38;2;147;161;161m\]}"
+    local c_blue="${_HS_PROMPT_FG_BLUE:-\[\e[38;2;38;139;210m\]}"
+    local c_green="${_HS_PROMPT_FG_GREEN:-\[\e[38;2;133;153;0m\]}"
+    local c_yellow="${_HS_PROMPT_FG_YELLOW:-\[\e[38;2;181;137;0m\]}"
+    local c_red="${_HS_PROMPT_FG_RED:-\[\e[38;2;220;50;47m\]}"
     local subsep=$'\xee\x82\xb1'   # \uE0B1 thin directional chevron
     local endcap=$'\xee\x82\xb0'   # \uE0B0 solid right-pointing wedge cap
     local git_icon=$'\xef\x84\xa6 ' # \uF126 branch icon
@@ -1401,7 +1405,7 @@ _solarized_bash_prompt() {
             if [ "${TERM:-}" = "linux" ] || { [ "${COLORTERM:-}" != "truecolor" ] && [ "${COLORTERM:-}" != "24bit" ]; }; then
                 c_shelf_cap='\[\e[0m\e[31m\]'
             else
-                c_shelf_cap='\[\e[0m\e[38;2;220;50;47m\]'
+                c_shelf_cap="${_HS_PROMPT_CAP_RED:-\[\e[0m\e[38;2;220;50;47m\]}"
             fi
         fi
         shelf_end="${c_shelf_cap}${endcap}${c_reset}"
@@ -1414,6 +1418,73 @@ _solarized_bash_prompt() {
         PS1="${bg_shelf} ${lead_segment}${c_blue}\w${git_segment} ${shelf_end} ${prompt_symbol} "
     fi
 }
+
+# Color theme manager wrapper (`theme [name | options]`)
+theme() {
+    local theme_bin=""
+    if [ -x "$HOME/.local/bin/theme" ]; then
+        theme_bin="$HOME/.local/bin/theme"
+    elif type -P theme >/dev/null 2>&1; then
+        theme_bin="$(type -P theme)"
+    else
+        echo "Error: 'theme' binary not found in ~/.local/bin or PATH." >&2
+        return 1
+    fi
+
+    local is_query=0
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -l|--list|-c|--current|-p|--preview|--env|--create|--path|-n|--dry-run|-h|--help|--sync-assets)
+                is_query=1
+                break
+                ;;
+        esac
+    done
+
+    "$theme_bin" "$@"
+    local rc=$?
+    if [ "$rc" -eq 0 ] && [ "$is_query" -eq 0 ]; then
+        local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+        if [ -r "$hs_dir/theme-env.sh" ]; then
+            # shellcheck source=/dev/null
+            . "$hs_dir/theme-env.sh"
+        fi
+        _solarized_bash_prompt
+    fi
+    return "$rc"
+}
+
+_theme_bash_complete() {
+    local cur="${COMP_WORDS[COMP_CWORD]:-}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]:-}"
+    local opts="-l --list -c --current -s --set -p --preview --env --create --from -f --force --path --no-live -n --dry-run -h --help"
+    local themes="solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark"
+    local theme_bin=""
+    if [ -x "$HOME/.local/bin/theme" ]; then
+        theme_bin="$HOME/.local/bin/theme"
+    elif type -P theme >/dev/null 2>&1; then
+        theme_bin="$(type -P theme)"
+    fi
+    if [ -n "$theme_bin" ]; then
+        themes="$("$theme_bin" --list --plain 2>/dev/null || echo "$themes")"
+    fi
+    case "$prev" in
+        -s|--set|-p|--preview|--env|--from|-n|--dry-run)
+            # shellcheck disable=SC2207
+            COMPREPLY=($(compgen -W "$themes" -- "$cur"))
+            return 0
+            ;;
+    esac
+    if [[ "$cur" == -* ]]; then
+        # shellcheck disable=SC2207
+        COMPREPLY=($(compgen -W "$opts" -- "$cur"))
+    else
+        # shellcheck disable=SC2207
+        COMPREPLY=($(compgen -W "$themes $opts" -- "$cur"))
+    fi
+}
+complete -F _theme_bash_complete theme 2>/dev/null || true
 
 # Initialize default Solarized Dark PS1
 _solarized_bash_prompt

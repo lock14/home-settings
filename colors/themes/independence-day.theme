@@ -1,0 +1,37 @@
+# Managed Theme: independence-day
+THEME_ID="independence-day"
+THEME_LABEL="Independence Day"
+THEME_DESCRIPTION="Old Glory royal navy canvas with stripes crimson, liberty sky blue, and firework gold"
+THEME_MODE="dark"
+BAT_THEME_NAME="Independence-Day-TrueColor"
+BTOP_THEME_NAME="independence_day"
+GHOSTTY_THEME_NAME="Independence Day"
+
+# Monotone Surface & Content Ramp
+BASE03="#061539"
+BASE02="#10275E"
+BASE04="#030C24"
+BASE01="#6384C7"
+BASE00="#82A0E0"
+BASE0="#F4F7FF"
+BASE1="#FFFFFF"
+BASE2="#FFF9E6"
+BASE3="#FAFAFF"
+
+# Semantic Accent Palette (Old Glory Red, White, Liberty Blue & Firework Gold)
+YELLOW="#FF9F1C"
+ORANGE="#FF5733"
+RED="#FF1744"
+MAGENTA="#FF6B8B"
+VIOLET="#80D4FF"
+BLUE="#38B6FF"
+CYAN="#FFD13B"
+GREEN="#FF2E4C"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#33193C"
+MIX_RED="#33153B"
+MIX_YELLOW="#383033"
+MIX_BLUE="#113864"
+MIX_MAGENTA="#38264A"
+MIX_BASE1="#233769"

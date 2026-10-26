@@ -20,6 +20,7 @@ Host machines require `bash` (4+), `git`, `curl`, and `sudo` (for system package
 - [Interactive shell and Powerlevel10k prompt](#interactive-shell-and-powerlevel10k-prompt)
 - [Developer toolchains and modern CLI suite](#developer-toolchains-and-modern-cli-suite)
 - [Terminal emulators and system monitoring](#terminal-emulators-and-system-monitoring)
+  - [Color theme management (`theme`)](#color-theme-management-theme)
 - [Extensibility and customization](#extensibility-and-customization)
 - [Git and shell shortcuts](#git-and-shell-shortcuts)
 - [Standalone utilities (`bin/`)](#standalone-utilities-bin)
@@ -114,6 +115,7 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 | `--with-apps` | disabled | Install desktop applications (VS Code or IDE) |
 | `--skip-apps` | disabled | Skip desktop application installation |
 | `-i, --ide <name>` | `none` | IDE to install: `intellij`, `intellij-ultimate`, `code`, or `none` |
+| `--theme <name>` | `solarized-dark` | Initial color theme to apply across terminal, editor, multiplexer, and CLI tools |
 | `--skip-system` | disabled | Skip OS package updates and system provisioning |
 | `--skip-packages` | disabled | Skip core system package manager installs |
 | `--skip-user` | disabled | Skip user dotfiles and environment configuration |
@@ -141,11 +143,12 @@ home-settings/
 │
 ├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
-│   ├── gnome-terminal-solarized     # GNOME Terminal Solarized Dark profile provisioner
+│   ├── gnome-terminal-solarized     # GNOME Terminal TrueColor profile provisioner
 │   ├── ide                          # Tmux, Neovim, and AI Agent (agy, claude, codex) IDE workspace launcher
-│   ├── macos-terminal-solarized     # macOS Terminal.app Solarized Dark profile provisioner
+│   ├── macos-terminal-solarized     # macOS Terminal.app TrueColor profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   ├── sum                          # High-performance AWK number summation and stats
+│   ├── theme                        # Multi-theme color scheme manager with interactive fzf preview
 │   └── update-system                # Cross-platform system package, Snap, Flatpak, and toolchain updater
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
@@ -156,24 +159,24 @@ home-settings/
 │   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer and IDE pane bindings
 │   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
 │   ├── .zsh-completions             # Fpath completion registration
-│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), and IDE opener (v, icd) (also auto-loads ~/.zsh-functions.d/*.zsh)
+│   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener (v, icd), and theme switcher (theme)
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
 │   └── .config/
-│       ├── btop/                    # Btop++ system monitor configuration and Solarized Dark theme
+│       ├── btop/                    # Btop++ system monitor configuration and TrueColor themes
 │       │   ├── btop.conf
-│       │   └── themes/solarized_dark.theme
+│       │   └── themes/*.theme
 │       ├── clangd/config.yaml       # Modern C23 and C++20 fallback compiler flags for clangd
 │       ├── fontconfig/conf.d/       # Fontconfig alias mapping MesloLGS NF to MesloLGS Nerd Font Mono
-│       ├── ghostty/                 # Ghostty terminal configuration and Solarized Dark theme
-│       ├── git/config               # XDG Git configuration with Delta Solarized Dark diff pager
+│       ├── ghostty/                 # Ghostty terminal configuration and TrueColor themes
+│       ├── git/config               # XDG Git configuration with Delta TrueColor diff pager
 │       ├── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Tree-sitter, Telescope)
 │       │   ├── init.lua
 │       │   ├── lazy-lock.json
 │       │   ├── ftplugin/java.lua
 │       │   ├── queries/
 │       │   └── after/queries/
-│       └── tealdeer/config.toml     # Tealdeer tldr cheatsheet viewer with Solarized Dark styling
+│       └── tealdeer/config.toml     # Tealdeer tldr cheatsheet viewer with TrueColor styling
 │
 ├── lib/                             # Shared helper libraries
 │   ├── log.sh                       # Terminal logging and dry-run runner
@@ -191,7 +194,8 @@ home-settings/
 │   └── 99-uninstall.sh              # Clean uninstallation of managed components
 │
 ├── colors/                          # 24-bit TrueColor themes and terminal profiles
-│   ├── Solarized-Dark-TrueColor.tmTheme  # Canonical Solarized Dark theme for bat
+│   ├── themes/*.theme                    # Canonical 16-slot palette definitions for all 9 built-in themes
+│   ├── *-TrueColor.tmTheme               # TextMate and bat TrueColor themes for all 9 built-in palettes
 │   ├── Solarized-Dark.terminal           # macOS Terminal.app Solarized Dark profile
 │   └── gnome-terminal-solarized.dconf    # GNOME Terminal Solarized Dark dconf profile
 │
@@ -409,12 +413,36 @@ Terminal emulator profiles and system monitors are pre-configured with Ethan Sch
 | `Alt+Left/Right/Up/Down` | Ghostty | Forward ESC-prefixed arrow sequences to Tmux and shells (with `macos-option-as-alt = true`) |
 | `h/j/k/l`, `g/G` | Btop++ | Navigate process lists and jump to top or bottom using Vim keys |
 
+### Color theme management (`theme`)
+
+The `theme` command switches the active color scheme across all terminal emulators, editors, shell prompts, and CLI utilities simultaneously, persisting the choice to `${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme` and generating shell environment exports in `${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh`:
+
+- **Built-in palettes (17 managed themes)**:
+  - **Classic developer palettes**: `solarized-dark` (default), `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`.
+  - **Major US Holiday palettes**: `new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`.
+- **Interactive fuzzy picker**: Running `theme` with no arguments opens an interactive `fzf` selector with a full-pane TrueColor swatch, diff, prompt, and syntax preview (`theme --preview {1}`) rendered on the highlighted theme's background, applying the chosen theme immediately on `Enter`.
+- **Unified multi-tool synchronization**: Applying a theme updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences.
+- **User-defined custom themes**: Drop any `.theme` file into `${XDG_CONFIG_HOME:-$HOME/.config}/themes/` (or scaffold one with `theme --create <name> [--from <base>]`) to register a custom 16-color and semantic accent palette that participates in `theme --list`, interactive `fzf` previews, and full tool generation.
+
+| Command | Description |
+| :--- | :--- |
+| `theme` | Open interactive `fzf` picker with live TrueColor palette and syntax preview |
+| `theme <name>` | Switch all terminal emulators, editors, prompts, and CLI tools to `<name>` |
+| `theme --holiday` | Switch to the nearest upcoming or active US Holiday theme |
+| `theme --list` | List all built-in and user-defined themes (marking the active theme with `*`) |
+| `theme --current` | Print the currently active theme name |
+| `theme --preview [name]` | Render a TrueColor 16-color swatch and semantic syntax preview in the terminal |
+| `theme --create <name> [--from <base>]` | Scaffold a custom user theme in `~/.config/themes/<name>.theme` |
+| `theme --path` | Print the user custom themes directory path (`~/.config/themes`) |
+| `theme --dry-run <name>` | Preview all configuration changes for `<name>` without modifying files |
+
 ## Extensibility and customization
 
 The repository is structured for local customization without modifying tracked files:
 
 - **Add a dotfile**: Drop any file or directory into `dotfiles/`. It is automatically discovered and symlinked into `$HOME` (backing up any existing physical directory to `.bak.<timestamp>`).
 - **Add a CLI utility**: Drop any executable script into `bin/` to symlink it automatically into `~/.local/bin/`.
+- **Add a custom color theme**: Scaffold a theme with `theme --create <name>` or place a `<name>.theme` file in `~/.config/themes/` and apply it with `theme <name>`.
 - **Local drop-in extensions**: Keep machine-specific or private settings in untracked local hooks:
   - `~/.environment-variables.d/*.sh`: Custom exports and `PATH` entries.
   - `~/.aliases.d/*.sh`: Custom shell aliases.
@@ -427,7 +455,7 @@ The repository is structured for local customization without modifying tracked f
 
 ## Git and shell shortcuts
 
-Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` provide shortcuts for history search, directory jumping, `eza` directory listings, IDE session control, and Git branch maintenance:
+Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` provide shortcuts for history search, directory jumping, `eza` directory listings, IDE session control, theme switching, and Git branch maintenance:
 
 | Shortcut | Description |
 | :--- | :--- |
@@ -442,10 +470,11 @@ Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` 
 | `qide` | Gracefully quit the active IDE workspace session (`ide --quit`) |
 | `idek` | Force-kill the active IDE workspace session (`ide --kill`) |
 | `icd [dir\|--reset]` | Synchronize the working directory across IDE Editor and Shell panes |
+| `theme [name]` | Switch active color scheme across all tools or open interactive `fzf` theme picker |
 | `ds` | Graphical disk space analyzer via `dust` |
 | `tldr <cmd>` | Practical command cheatsheet viewer via `tealdeer` |
 | `update` | Update system packages, Flatpaks, Snaps, and Mise toolchains (`update-system`) |
-| `ls` | Standard directory listing with Solarized color (`ls --color=auto`) |
+| `ls` | Standard directory listing with active theme color (`ls --color=auto`) |
 | `ll` | Long directory listing including hidden files (`ls -alF`) |
 | `la` | Directory listing including hidden files except `.` and `..` (`ls -A`) |
 | `l` | Compact column directory listing (`ls -CF`) |
@@ -475,11 +504,12 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 | Script | Key options and arguments | Description |
 | :--- | :--- | :--- |
 | `gen-passwd` | `-u`, `-l`, `-n`, `-s`, `-t`, `-h, --help`, `[length]` | Generate random passwords with configurable length (default `16`) and character sets (uppercase, lowercase, digits, and symbols) |
-| `gnome-terminal-solarized` | `--dry-run`, `-h, --help` | Provision or preview the Solarized Dark TrueColor profile in GNOME Terminal (`dconf`) |
+| `gnome-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in GNOME Terminal (`dconf`) |
 | `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--cd [dir\|--reset]`, `--open <file> [line]`, `--keys`, `--quit`, `--kill`, `-h, --help`, `[dir]` | Launch and manage multi-pane Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
-| `macos-terminal-solarized` | `--dry-run`, `-h, --help` | Provision or preview the Solarized Dark TrueColor profile in macOS `Terminal.app` |
+| `macos-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in macOS `Terminal.app` |
 | `repeat-until-success` | `-n <attempts>`, `-s, -d <seconds>`, `-t`, `-h, --help`, `<command> [args...]` | Retry a command up to `N` attempts (default `10`) with a configurable delay in seconds (default `30`) |
 | `sum` | `-d <delim>`, `-k <col>`, `-H`, `-a`, `-s`, `-f <fmt>`, `-t`, `-h, --help`, `[numbers... \| files...]` | Sum numbers from stdin, files, or arguments with support for CSV columns, human byte units, averages, and summary statistics |
+| `theme` | `-l, --list`, `-c, --current`, `-s, --set <name>`, `-p, --preview [name]`, `--env [name]`, `--create <name> [--from <base>] [-f, --force]`, `--path`, `--no-live`, `-n, --dry-run [name]`, `-h, --help`, `[name]` | Switch, preview, or scaffold color themes across terminal emulators, Neovim, Vim, Tmux, Bat, Delta, Btop, Tealdeer, Fzf, Eza, and shell prompts |
 | `update-system` | `--all`, `--system-only`, `-n, --dry-run`, `-i, --interactive`, `--skip-snaps`, `--skip-snap`, `--skip-flatpak`, `--with-dev, --dev, --tools`, `--no-cleanup`, `--macos-system`, `--os <distro>`, `-y, --yes`, `-h, --help` | Cross-platform system package and toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, and Mise) |
 
 ## Development and testing

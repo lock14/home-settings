@@ -1,0 +1,37 @@
+# Managed Theme: christmas
+THEME_ID="christmas"
+THEME_LABEL="Christmas"
+THEME_DESCRIPTION="Lush evergreen pine canvas with candy-cane crimson, ornament gold, and mistletoe green"
+THEME_MODE="dark"
+BAT_THEME_NAME="Christmas-TrueColor"
+BTOP_THEME_NAME="christmas"
+GHOSTTY_THEME_NAME="Christmas"
+
+# Monotone Surface & Content Ramp
+BASE03="#072214"
+BASE02="#0F3822"
+BASE04="#04160C"
+BASE01="#5E9E79"
+BASE00="#78B893"
+BASE0="#F0FAF4"
+BASE1="#FFFFFF"
+BASE2="#FFFDF7"
+BASE3="#FAFAFF"
+
+# Semantic Accent Palette (Holly Crimson Red, Ornament Gold, Mistletoe & Frost)
+YELLOW="#FFAE00"
+ORANGE="#FF5E36"
+RED="#FF1744"
+MAGENTA="#FF758F"
+VIOLET="#66E0FF"
+BLUE="#FFD700"
+CYAN="#2EE66B"
+GREEN="#FF334B"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#34251E"
+MIX_RED="#34201D"
+MIX_YELLOW="#3A3E10"
+MIX_BLUE="#3D4A0F"
+MIX_MAGENTA="#3A332D"
+MIX_BASE1="#234231"

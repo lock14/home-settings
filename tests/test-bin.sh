@@ -238,7 +238,7 @@ ide_resolve_link() {
 }
 EOF
 run_link_rules_case() {
-    env -u XDG_CONFIG_HOME -u IDE_LINK_RULES HOME="$TEMP_HOME" PATH="$LINK_TEST_DIR/bin:$PATH" DISPLAY=:99 "$@" \
+    env -u XDG_CONFIG_HOME -u IDE_LINK_RULES -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT HOME="$TEMP_HOME" PATH="$LINK_TEST_DIR/bin:$PATH" DISPLAY=:99 "$@" \
         >/dev/null 2>&1 || true
 }
 # Default rules location; surrounding punctuation is stripped from the clicked word
@@ -1479,5 +1479,252 @@ if gp_help="$("$SCRIPT_DIR/bin/gen-passwd" --help 2>&1)" && \
 else
     fail "bin utilities --help" "Expected --help usage output from gen-passwd, repeat-until-success, and sum"
 fi
+
+# Test 9: bin/theme unified multi-theme color scheme manager
+echo -e "\n[9/9] Testing bin/theme unified multi-theme manager..."
+unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE
+THEME_TEST_HOME="$(mktemp -d)"
+export THEME_TEST_Cfg="$THEME_TEST_HOME/.config"
+export THEME_TEST_Cache="$THEME_TEST_HOME/.cache"
+mkdir -p "$THEME_TEST_Cfg" "$THEME_TEST_Cache"
+
+THEME_HELP="$("$SCRIPT_DIR/bin/theme" --help 2>&1)"
+if grep -Fq "Usage: theme [OPTIONS] [THEME_NAME]" <<< "$THEME_HELP" && \
+   grep -Fq -- "--list" <<< "$THEME_HELP" && \
+   grep -Fq -- "--current" <<< "$THEME_HELP" && \
+   grep -Fq -- "--set" <<< "$THEME_HELP" && \
+   grep -Fq -- "--preview" <<< "$THEME_HELP" && \
+   grep -Fq -- "--env" <<< "$THEME_HELP" && \
+   grep -Fq -- "--create" <<< "$THEME_HELP" && \
+   grep -Fq -- "--path" <<< "$THEME_HELP" && \
+   grep -Fq -- "--dry-run" <<< "$THEME_HELP" && \
+   ! HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --invalid-flag >/dev/null 2>&1 && \
+   ! HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --set nonexistent-theme >/dev/null 2>&1; then
+    pass "bin/theme supports -h/--help and rejects unknown flags and nonexistent themes"
+else
+    fail "bin/theme CLI validation" "Unexpected --help or error handling output"
+fi
+
+# Verify default --current and --list across all 17 built-in themes (9 classic + 8 US Holiday)
+CUR_DEFAULT="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)"
+LIST_PLAIN="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --list --plain)"
+LIST_FULL="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --list)"
+managed_themes=(
+    "solarized-dark"
+    "solarized-light"
+    "catppuccin-mocha"
+    "catppuccin-latte"
+    "gruvbox-dark"
+    "tokyonight-night"
+    "kanagawa-wave"
+    "nord"
+    "onedark"
+    "new-years"
+    "valentines"
+    "st-patricks"
+    "easter"
+    "independence-day"
+    "halloween"
+    "thanksgiving"
+    "christmas"
+)
+all_listed=true
+for t in "${managed_themes[@]}"; do
+    if ! grep -Fxq "$t" <<< "$LIST_PLAIN" || ! grep -Fq "$t" <<< "$LIST_FULL"; then
+        all_listed=false
+        fail "bin/theme --list" "Missing managed theme '$t' in --list output"
+    fi
+done
+if [ "$CUR_DEFAULT" = "solarized-dark" ] && [ "$all_listed" = true ] && grep -Fq "* solarized-dark" <<< "$LIST_FULL"; then
+    pass "bin/theme defaults to solarized-dark and lists all 17 built-in themes (9 classic + 8 US Holiday)"
+else
+    fail "bin/theme default & list" "cur='$CUR_DEFAULT' all_listed='$all_listed'"
+fi
+
+# Verify --holiday resolves nearest upcoming US Holiday (e.g. Oct 25 -> halloween, Nov 20 -> thanksgiving)
+HOLIDAY_OCT="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" THEME_HOLIDAY_DATE="2026-10-25" "$SCRIPT_DIR/bin/theme" --holiday --dry-run)"
+HOLIDAY_NOV="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" THEME_HOLIDAY_DATE="2026-11-20" "$SCRIPT_DIR/bin/theme" --holiday --dry-run)"
+if grep -Fq "Halloween (halloween" <<< "$HOLIDAY_OCT" && grep -Fq "Thanksgiving (thanksgiving" <<< "$HOLIDAY_NOV"; then
+    pass "bin/theme --holiday resolves the nearest upcoming US Holiday theme (fixed and movable dates)"
+else
+    fail "bin/theme --holiday" "Unexpected holiday resolution: oct='$HOLIDAY_OCT' nov='$HOLIDAY_NOV'"
+fi
+
+# Verify --preview and --env for managed themes
+PREVIEW_MOCHA="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --preview catppuccin-mocha)"
+ENV_NORD="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --env nord)"
+if grep -Fq "Catppuccin Mocha" <<< "$PREVIEW_MOCHA" && \
+   grep -Fq "catppuccin-mocha | dark | builtin" <<< "$PREVIEW_MOCHA" && \
+   grep -Fq $'\033[38;2;' <<< "$PREVIEW_MOCHA" && \
+   grep -Fq "Converged Semantic Code Preview:" <<< "$PREVIEW_MOCHA" && \
+   grep -Fq 'export HOME_SETTINGS_THEME="nord"' <<< "$ENV_NORD" && \
+   grep -Fq 'export BAT_THEME="Nord-TrueColor"' <<< "$ENV_NORD" && \
+   grep -Fq 'export FZF_DEFAULT_OPTS=' <<< "$ENV_NORD" && \
+   grep -Fq 'export EZA_COLORS=' <<< "$ENV_NORD" && \
+   grep -Fq 'export JQ_COLORS=' <<< "$ENV_NORD"; then
+    pass "bin/theme --preview renders TrueColor palette & syntax sample and --env emits POSIX shell exports"
+else
+    fail "bin/theme --preview / --env" "Missing expected preview or env output"
+fi
+
+# Verify --dry-run does not mutate state
+DRY_OUT="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --dry-run tokyonight-night)"
+if grep -Fq "[DRY-RUN] Theme: TokyoNight Night (tokyonight-night" <<< "$DRY_OUT" && \
+   [ ! -f "$THEME_TEST_Cfg/home-settings/theme" ]; then
+    pass "bin/theme --dry-run previews planned mutations without writing state files"
+else
+    fail "bin/theme --dry-run" "State file created during --dry-run or missing output: $DRY_OUT"
+fi
+
+# Provision dotfiles into THEME_TEST_HOME and test switching across all 9 managed themes
+HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+
+all_switches_ok=true
+for t in "${managed_themes[@]}"; do
+    HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set "$t" --no-live >/dev/null 2>&1
+    cur_after="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)"
+    if [ "$cur_after" != "$t" ] || \
+       [ ! -f "$THEME_TEST_Cfg/home-settings/active-theme.theme" ] || \
+       [ ! -f "$THEME_TEST_Cfg/home-settings/theme-env.sh" ] || \
+       [ ! -f "$THEME_TEST_Cfg/home-settings/zsh-theme.zsh" ] || \
+       [ ! -f "$THEME_TEST_Cfg/home-settings/p10k-theme.zsh" ] || \
+       [ ! -f "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" ] || \
+       [ ! -L "$THEME_TEST_Cfg/ghostty" ] || \
+       [ ! -L "$THEME_TEST_Cfg/btop" ] || \
+       [ ! -L "$THEME_TEST_Cfg/git" ] || \
+       [ ! -L "$THEME_TEST_Cfg/tealdeer" ]; then
+        all_switches_ok=false
+        fail "bin/theme switch $t" "Failed to materialize state or config symlinks for '$t' (cur='$cur_after')"
+        break
+    fi
+done
+
+# Check light mode vs dark mode config propagation (e.g. solarized-light vs catppuccin-mocha)
+HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" solarized-light --no-live >/dev/null 2>&1
+if grep -Fq "light = true" "$THEME_TEST_Cfg/git/config" && \
+   grep -Fq "syntax-theme = Solarized-Light-TrueColor" "$THEME_TEST_Cfg/git/config" && \
+   grep -Fq 'commit-style = "#d33682"' "$THEME_TEST_Cfg/git/config" && \
+   grep -Fq 'file-style = "#2aa198"' "$THEME_TEST_Cfg/git/config" && \
+   grep -Fq 'plus-style = syntax "#e5ecd0"' "$THEME_TEST_Cfg/git/config" && \
+   ! grep -Fq 'plus-emph-style = syntax "#e5ecd0"' "$THEME_TEST_Cfg/git/config" && \
+   grep -Fq 'color_theme = "solarized_light"' "$THEME_TEST_Cfg/btop/btop.conf" && \
+   grep -Fq 'proc_mem_bytes = true' "$THEME_TEST_Cfg/btop/btop.conf" && \
+   grep -Fq 'theme = "Solarized Light"' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'm/r:^_ide_park_,#W' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
+   grep -Fq "r = 38, g = 139, b = 210" <<< "$(grep -A1 '\[style\.example_text\]' "$THEME_TEST_Cfg/tealdeer/config.toml")" && \
+   grep -Fq "r = 42, g = 161, b = 152" <<< "$(grep -A1 '\[style\.example_code\]' "$THEME_TEST_Cfg/tealdeer/config.toml")"; then
+    :
+else
+    all_switches_ok=false
+    fail "bin/theme solarized-light config propagation" "Expected light=true, distinct plus-emph-style, full btop.conf, _ide_park_ tmux guard, and Blue/Cyan tealdeer styles"
+fi
+
+# Verify dotfiles/.tmux.conf sources ~/.config/home-settings/tmux-theme.conf even when XDG_CONFIG_HOME is unset
+if command -v tmux >/dev/null 2>&1; then
+    TMUX_THEME_SOCK="$THEME_TEST_HOME/tmux-theme.sock"
+    (
+        unset XDG_CONFIG_HOME
+        HOME="$THEME_TEST_HOME" tmux -S "$TMUX_THEME_SOCK" -f "$SCRIPT_DIR/dotfiles/.tmux.conf" new-session -d -s theme_chk "cat" >/dev/null 2>&1
+    )
+    TMUX_LOADED_STYLE="$(HOME="$THEME_TEST_HOME" tmux -S "$TMUX_THEME_SOCK" show-options -g -v status-style 2>/dev/null || true)"
+    HOME="$THEME_TEST_HOME" tmux -S "$TMUX_THEME_SOCK" kill-server >/dev/null 2>&1 || true
+    rm -f "$TMUX_THEME_SOCK"
+    if [ "$TMUX_LOADED_STYLE" != "fg=#657B83,bg=#EEE8D5" ]; then
+        all_switches_ok=false
+        fail "dotfiles/.tmux.conf theme sourcing with unset XDG_CONFIG_HOME" "Expected 'fg=#657B83,bg=#EEE8D5', got '$TMUX_LOADED_STYLE'"
+    fi
+fi
+
+# Switch back to solarized-dark and verify symlinks point back to repo dotfiles without dirtying git repo
+HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" solarized-dark --no-live >/dev/null 2>&1
+if [ "$all_switches_ok" = true ] && \
+   [ "$(readlink "$THEME_TEST_Cfg/btop")" = "$SCRIPT_DIR/dotfiles/.config/btop" ] && \
+   [ "$(readlink "$THEME_TEST_Cfg/git")" = "$SCRIPT_DIR/dotfiles/.config/git" ]; then
+    pass "bin/theme switches cleanly across all 9 managed themes (dark & light) and updates ghostty, btop, delta, tealdeer, tmux, and shell state without dirtying tracked dotfiles"
+else
+    fail "bin/theme 9-theme cycle" "Failed switching or restoring symlinks"
+fi
+
+# Verify custom user themes (--path, --create, --from, --force, apply custom theme, and reject invalid hex)
+USER_THEMES_PATH="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --path)"
+assert_eq "$USER_THEMES_PATH" "$THEME_TEST_Cfg/themes" "bin/theme --path outputs XDG user themes directory"
+
+HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --create cyber-custom --from kanagawa-wave >/dev/null 2>&1
+if [ -f "$THEME_TEST_Cfg/themes/cyber-custom.theme" ] && \
+   ! HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --create cyber-custom >/dev/null 2>&1 && \
+   HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --create cyber-custom --from nord --force >/dev/null 2>&1; then
+    sed -i.bak 's/^BASE03=.*/BASE03="#112233"/' "$THEME_TEST_Cfg/themes/cyber-custom.theme"
+    rm -f "$THEME_TEST_Cfg/themes/cyber-custom.theme.bak"
+    HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" cyber-custom --no-live >/dev/null 2>&1
+    if [ "$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)" = "cyber-custom" ] && \
+       grep -Fq 'BASE03="#112233"' "$THEME_TEST_Cfg/home-settings/active-theme.theme" && \
+       [ -f "$THEME_TEST_Cfg/bat/themes/Cyber-Custom-TrueColor.tmTheme" ] && \
+       [ -f "$THEME_TEST_Cfg/btop/themes/cyber_custom.theme" ] && \
+       [ -f "$THEME_TEST_Cfg/ghostty/themes/Cyber Custom" ]; then
+        pass "bin/theme --create scaffolds custom user theme (--from / --force) and applies custom .tmTheme, btop, and ghostty assets"
+    else
+        fail "bin/theme custom theme apply" "Custom theme assets or state were not generated"
+    fi
+else
+    fail "bin/theme --create" "Failed to scaffold or guard custom user theme file"
+fi
+
+# Verify invalid hex code in custom theme is rejected cleanly
+cat > "$THEME_TEST_Cfg/themes/broken-hex.theme" <<'EOF'
+THEME_ID="broken-hex"
+BASE03="not-a-hex"
+EOF
+if ! HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --set broken-hex --no-live >/dev/null 2>&1; then
+    pass "bin/theme rejects custom theme file containing malformed hex color values"
+else
+    fail "bin/theme malformed hex validation" "Expected non-zero exit for invalid hex color"
+fi
+rm -f "$THEME_TEST_Cfg/themes/broken-hex.theme"
+
+# Verify interactive fzf picker when invoked with no arguments
+FZF_MOCK_BIN="$(mktemp -d)"
+cat > "$FZF_MOCK_BIN/fzf" <<'SH'
+#!/usr/bin/env bash
+for arg in "$@"; do
+    if [[ "$arg" == --preview=* ]]; then
+        echo "$arg" > "$FZF_MOCK_LOG"
+    fi
+done
+cat >/dev/null
+printf '* gruvbox-dark  Gruvbox Dark  [dark]  Warm retro groove dark palette\n'
+SH
+chmod +x "$FZF_MOCK_BIN/fzf"
+FZF_MOCK_LOG="$FZF_MOCK_BIN/preview.log" THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
+if [ "$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)" = "gruvbox-dark" ] && \
+   grep -Fq -- "--preview {1}" "$FZF_MOCK_BIN/preview.log"; then
+    pass "bin/theme (no args) launches interactive fzf picker with live '--preview {1}' and applies selected theme"
+else
+    fail "bin/theme fzf picker" "Expected gruvbox-dark to be applied via fzf picker"
+fi
+rm -rf "$FZF_MOCK_BIN"
+
+# Verify live Neovim RPC hot-reload and live Tmux reload when switching themes
+if command -v nvim >/dev/null 2>&1; then
+    LIVE_NVIM_SOCK="/tmp/nvim-ide-theme-test-$$.sock"
+    ORIG_XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+    rm -f "$LIVE_NVIM_SOCK"
+    (cd "$SCRIPT_DIR" && XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$LIVE_NVIM_SOCK" >/dev/null 2>&1) &
+    LIVE_NVIM_PID=$!
+    if wait_for_nvim_socket "$LIVE_NVIM_SOCK" 30; then
+        HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" NVIM_IDE_SOCKET="$LIVE_NVIM_SOCK" "$SCRIPT_DIR/bin/theme" --set catppuccin-mocha >/dev/null 2>&1
+        NVIM_LIVE_STATE="$(nvim --headless --server "$LIVE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" 2>/dev/null || true)"
+        if [ "$NVIM_LIVE_STATE" = "catppuccin-mocha:#1E1E2E:#CDD6F4" ]; then
+            pass "bin/theme hot-reloads live Neovim server over RPC (g:home_settings_theme=catppuccin-mocha, Normal=#CDD6F4 on #1E1E2E)"
+        else
+            fail "bin/theme live Neovim RPC reload" "Expected 'catppuccin-mocha:#1E1E2E:#CDD6F4', got '$NVIM_LIVE_STATE'"
+        fi
+    else
+        fail "bin/theme live Neovim socket" "Timed out waiting for headless Neovim server"
+    fi
+    kill "$LIVE_NVIM_PID" 2>/dev/null || true
+    rm -f "$LIVE_NVIM_SOCK"
+fi
+
+rm -rf "$THEME_TEST_HOME"
 
 test_summary

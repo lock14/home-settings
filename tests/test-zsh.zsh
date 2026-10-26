@@ -1010,6 +1010,58 @@ EOF
             echo "FAIL:prompt_vcs PR/MR links:Got tier0_prurl='${(V)tier0_prurl_seg}' tier0_merge='${(V)tier0_merge_seg}' tier2_open='${(V)tier2_open_seg}' tier2_dirty='${(V)tier2_dirty_seg}' cache_after_push='${#cache_files_after_push}' unpushed='${(V)tier2_unpushed_seg}' merged='${(V)tier2_merged_seg}' tier1_glab='${(V)tier1_glab_seg}' tier3_bb='${(V)tier3_bb_seg}'"
         fi
     )
+
+    # 8. Verify Zsh theme() wrapper reloads ZSH_HIGHLIGHT_STYLES, environment exports, and Powerlevel10k prompt_vcs colors in-place across multiple sequential switches (including solarized-light palette inversion) with zero stderr
+    mkdir -p "$HOME/.local/bin"
+    ln -sf "$SCRIPT_DIR/bin/theme" "$HOME/.local/bin/theme"
+    (
+        export XDG_CONFIG_HOME="$HOME/.config"
+        local theme_err_file="$HOME/theme-stderr.log"
+        theme --set solarized-light --no-live >/dev/null 2>"$theme_err_file"
+        local sl_err="$(<"$theme_err_file")"
+        local sl_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
+        local sl_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
+
+        theme --set catppuccin-mocha --no-live >/dev/null 2>>"$theme_err_file"
+        local cm_err="$(<"$theme_err_file")"
+        cd "$vcs_test_dir"
+        git checkout main >/dev/null 2>&1
+        git reset --hard HEAD >/dev/null 2>&1
+        git clean -fd >/dev/null 2>&1
+        P10K_SEG_BG="" P10K_SEG_FG=""
+        prompt_vcs
+        local cm_theme="${HOME_SETTINGS_THEME:-}"
+        local cm_bat="${BAT_THEME:-}"
+        local cm_cmd="${ZSH_HIGHLIGHT_STYLES[command]:-}"
+        local cm_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
+        local cm_dir_fg="${POWERLEVEL9K_DIR_FOREGROUND:-}"
+        local cm_vcs_bg="$P10K_SEG_BG"
+        local cm_vcs_fg="$P10K_SEG_FG"
+
+        theme --set nord --no-live >/dev/null 2>>"$theme_err_file"
+        local nd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
+        local nd_dir_fg="${POWERLEVEL9K_DIR_FOREGROUND:-}"
+
+        theme --set solarized-dark --no-live >/dev/null 2>>"$theme_err_file"
+        local sd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
+        local sd_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
+        local all_err="$(<"$theme_err_file")"
+
+        if [ -z "$all_err" ] && \
+           [ "$sl_dir_bg" = "#EEE8D5" ] && [ "$sl_os_fg" = "#657B83" ] && \
+           [ "$cm_theme" = "catppuccin-mocha" ] && \
+           [ "$cm_bat" = "Catppuccin-Mocha-TrueColor" ] && \
+           [ "$cm_cmd" = "fg=#A6E3A1" ] && \
+           [ "$cm_dir_bg" = "#313244" ] && \
+           [ "$cm_dir_fg" = "#89B4FA" ] && \
+           [ "$cm_vcs_bg" = "#313244" ] && [ "$cm_vcs_fg" = "#A6E3A1" ] && \
+           [ "$nd_dir_bg" = "#3B4252" ] && [ "$nd_dir_fg" = "#81A1C1" ] && \
+           [ "$sd_dir_bg" = "#073642" ] && [ "$sd_os_fg" = "#839496" ]; then
+            echo "PASS:Zsh theme() wrapper hot-reloads HOME_SETTINGS_THEME, ZSH_HIGHLIGHT_STYLES, and Powerlevel10k prompt_vcs colors across sequential theme switches (solarized-light -> catppuccin-mocha -> nord -> solarized-dark) with zero stderr"
+        else
+            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' nd='$nd_dir_bg/$nd_dir_fg' sd='$sd_dir_bg/$sd_os_fg'"
+        fi
+    )
 }
 
 parse_subshell_results < <(test_addendum)

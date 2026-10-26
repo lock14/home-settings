@@ -1,0 +1,1849 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# bin/theme — Unified Multi-Theme Color Scheme Manager
+# ==============================================================================
+# Manages the 9 built-in TrueColor themes and user-defined custom themes across:
+#   - Terminal Emulators (Ghostty, GNOME Terminal, macOS Terminal.app, live OSC)
+#   - Editors (Neovim with live RPC hot-reload, standalone Vim)
+#   - Tmux (status bar shelf, 3-state IDE role badges, pane/popup borders)
+#   - CLI Tools (bat, delta, btop, tealdeer/tldr, fzf, eza, jq, less, dircolors)
+#   - Shell Prompts & Highlighting (Powerlevel10k, Zsh syntax/autosuggest, Bash)
+# ==============================================================================
+
+set -euo pipefail
+
+SOURCE_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE_PATH" ]; do
+    SOURCE_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
+    SOURCE_PATH="$(readlink "$SOURCE_PATH")"
+    [[ "$SOURCE_PATH" != /* ]] && SOURCE_PATH="$SOURCE_DIR/$SOURCE_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
+REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+
+IFS= read -r -d '' THEME_PY_SRC <<'PY' || true
+import datetime
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import stat
+import subprocess
+import sys
+
+MANAGED_ORDER = [
+    "solarized-dark",
+    "solarized-light",
+    "catppuccin-mocha",
+    "catppuccin-latte",
+    "gruvbox-dark",
+    "tokyonight-night",
+    "kanagawa-wave",
+    "nord",
+    "onedark",
+    "new-years",
+    "valentines",
+    "st-patricks",
+    "easter",
+    "independence-day",
+    "halloween",
+    "thanksgiving",
+    "christmas",
+]
+
+CORE_COLOR_KEYS = [
+    "BASE03",
+    "BASE02",
+    "BASE01",
+    "BASE00",
+    "BASE0",
+    "BASE1",
+    "BASE2",
+    "BASE3",
+    "YELLOW",
+    "ORANGE",
+    "RED",
+    "MAGENTA",
+    "VIOLET",
+    "BLUE",
+    "CYAN",
+    "GREEN",
+]
+
+ALL_COLOR_KEYS = CORE_COLOR_KEYS + [
+    "BASE04",
+    "MIX_GREEN",
+    "MIX_RED",
+    "MIX_YELLOW",
+    "MIX_BLUE",
+    "MIX_MAGENTA",
+    "MIX_BASE1",
+]
+
+SOLARIZED_DARK_DEFAULTS = {
+    "THEME_ID": "solarized-dark",
+    "THEME_LABEL": "Solarized Dark",
+    "THEME_DESCRIPTION": "Ethan Schoonover precision CIELAB dark palette",
+    "THEME_MODE": "dark",
+    "BAT_THEME_NAME": "Solarized-Dark-TrueColor",
+    "BTOP_THEME_NAME": "solarized_dark",
+    "GHOSTTY_THEME_NAME": "Solarized Dark",
+    "BASE03": "#002B36",
+    "BASE02": "#073642",
+    "BASE04": "#002731",
+    "BASE01": "#586E75",
+    "BASE00": "#657B83",
+    "BASE0": "#839496",
+    "BASE1": "#93A1A1",
+    "BASE2": "#EEE8D5",
+    "BASE3": "#FDF6E3",
+    "YELLOW": "#B58900",
+    "ORANGE": "#CB4B16",
+    "RED": "#DC322F",
+    "MAGENTA": "#D33682",
+    "VIOLET": "#6C71C4",
+    "BLUE": "#268BD2",
+    "CYAN": "#2AA198",
+    "GREEN": "#859900",
+    "MIX_GREEN": "#274C25",
+    "MIX_RED": "#422D33",
+    "MIX_YELLOW": "#364725",
+    "MIX_BLUE": "#0B4764",
+    "MIX_MAGENTA": "#3E2E4C",
+    "MIX_BASE1": "#2C4E56",
+}
+
+SOLARIZED_LIGHT_DEFAULTS = {
+    **SOLARIZED_DARK_DEFAULTS,
+    "THEME_ID": "solarized-light",
+    "THEME_LABEL": "Solarized Light",
+    "THEME_DESCRIPTION": "Ethan Schoonover precision CIELAB light palette",
+    "THEME_MODE": "light",
+    "BAT_THEME_NAME": "Solarized-Light-TrueColor",
+    "BTOP_THEME_NAME": "solarized_light",
+    "GHOSTTY_THEME_NAME": "Solarized Light",
+    "BASE03": "#FDF6E3",
+    "BASE02": "#EEE8D5",
+    "BASE04": "#E6DFCA",
+    "BASE01": "#93A1A1",
+    "BASE00": "#839496",
+    "BASE0": "#657B83",
+    "BASE1": "#586E75",
+    "BASE2": "#073642",
+    "BASE3": "#002B36",
+    "MIX_GREEN": "#E5ECD0",
+    "MIX_RED": "#F6D8D3",
+    "MIX_YELLOW": "#F0E4C0",
+    "MIX_BLUE": "#D8E6EE",
+    "MIX_MAGENTA": "#F3D9E4",
+    "MIX_BASE1": "#E4DEC8",
+}
+
+USAGE_TEXT = """Usage: theme [OPTIONS] [THEME_NAME]
+
+Switch or preview the universal TrueColor color scheme across terminal emulators,
+Neovim, Vim, Tmux, bat, delta, btop, tealdeer, fzf, eza, dircolors, and shells.
+When invoked with no arguments in an interactive terminal, opens an fzf picker.
+
+Managed Themes:
+  solarized-dark     Solarized Dark (default)
+  solarized-light    Solarized Light
+  catppuccin-mocha   Catppuccin Mocha
+  catppuccin-latte   Catppuccin Latte
+  gruvbox-dark       Gruvbox Dark
+  tokyonight-night   TokyoNight Night
+  kanagawa-wave      Kanagawa Wave
+  nord               Nord
+  onedark            OneDark
+  new-years          New Year's
+  valentines         Valentine's Day
+  st-patricks        St. Patrick's Day
+  easter             Easter
+  independence-day   Independence Day
+  halloween          Halloween
+  thanksgiving       Thanksgiving
+  christmas          Christmas
+
+Options:
+  -s, --set <NAME>       Apply theme <NAME> across all managed tools
+  --holiday              Apply the nearest upcoming or active US Holiday theme
+  -l, --list             List all managed and user-defined themes
+  -c, --current          Print the currently active theme name
+  -p, --preview [NAME]   Render a TrueColor palette and syntax preview for [NAME]
+  --env [NAME]           Output shell export commands for [NAME]
+  --create <NAME>        Create a custom user theme file in the user themes directory
+  --from <BASE>          Base theme to copy when used with --create (default: solarized-dark)
+  -f, --force            Overwrite existing custom theme file when used with --create
+  --path                 Print the user custom themes directory path
+  --no-live              Write theme state and configs without signalling running servers
+  -n, --dry-run [NAME]   Show files and targets that would be updated without modifying state
+  -h, --help             Show this help message and exit
+"""
+
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+
+HOLIDAY_META = {
+    "new-years": {
+        "icon": "🥂",
+        "banner": "🥂 🎆 🍾  HAPPY NEW YEAR — MIDNIGHT CHAMPAGNE & FIREWORKS  🍾 🎆 🥂",
+    },
+    "valentines": {
+        "icon": "💘",
+        "banner": "💘 🌹 💝  HAPPY VALENTINE'S DAY — VELVET ROSE & CHAMPAGNE  💝 🌹 💘",
+    },
+    "st-patricks": {
+        "icon": "🍀",
+        "banner": "🍀 🪙 🍺  HAPPY ST. PATRICK'S DAY — SHAMROCK & POT OF GOLD  🍺 🪙 🍀",
+    },
+    "easter": {
+        "icon": "🐣",
+        "banner": "🐣 🌷 🥚  HAPPY EASTER — SPRING MEADOW & PASTEL BLOSSOMS   🥚 🌷 🐣",
+    },
+    "independence-day": {
+        "icon": "🎆",
+        "banner": "🎆 🗽 🦅  HAPPY 4TH OF JULY — STARS, STRIPES & FIREWORKS   🦅 🗽 🎆",
+    },
+    "halloween": {
+        "icon": "🎃",
+        "banner": "🎃 👻 🦇  HAPPY HALLOWEEN — JACK-O'-LANTERN & ECTOPLASM    🦇 👻 🎃",
+    },
+    "thanksgiving": {
+        "icon": "🦃",
+        "banner": "🦃 🍂 🥧  HAPPY THANKSGIVING — AUTUMN HARVEST & HEARTH     🥧 🍂 🦃",
+    },
+    "christmas": {
+        "icon": "🎄",
+        "banner": "🎄 🎅 🎁  MERRY CHRISTMAS — EVERGREEN, HOLLY & ORNAMENTS   🎁 🎅 🎄",
+    },
+}
+
+
+def compute_easter_date(year):
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l_val = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l_val) // 451
+    month = (h + l_val - 7 * m + 114) // 31
+    day = ((h + l_val - 7 * m + 114) % 31) + 1
+    return datetime.date(year, month, day)
+
+
+def compute_thanksgiving_date(year):
+    nov1 = datetime.date(year, 11, 1)
+    offset = (3 - nov1.weekday()) % 7
+    return datetime.date(year, 11, 1 + offset + 21)
+
+
+def get_holiday_schedule_for_year(year):
+    return [
+        (datetime.date(year, 1, 1), "new-years"),
+        (datetime.date(year, 2, 14), "valentines"),
+        (datetime.date(year, 3, 17), "st-patricks"),
+        (compute_easter_date(year), "easter"),
+        (datetime.date(year, 7, 4), "independence-day"),
+        (datetime.date(year, 10, 31), "halloween"),
+        (compute_thanksgiving_date(year), "thanksgiving"),
+        (datetime.date(year, 12, 25), "christmas"),
+    ]
+
+
+def resolve_nearest_holiday_slug(today=None):
+    if today is None:
+        override = os.environ.get("THEME_HOLIDAY_DATE", "").strip()
+        if override:
+            today = datetime.date.fromisoformat(override)
+        else:
+            today = datetime.date.today()
+    candidates = get_holiday_schedule_for_year(today.year) + get_holiday_schedule_for_year(today.year + 1)
+    upcoming = [(d, slug) for d, slug in candidates if d >= today]
+    upcoming.sort(key=lambda item: item[0])
+    return upcoming[0][1]
+
+
+def hex_to_rgb(hex_str):
+    h = hex_str.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def blend_hex(fg_hex, bg_hex, alpha=0.20):
+    fr, fg, fb = hex_to_rgb(fg_hex)
+    br, bg_g, bb = hex_to_rgb(bg_hex)
+    r = int(round(fr * alpha + br * (1.0 - alpha)))
+    g = int(round(fg * alpha + bg_g * (1.0 - alpha)))
+    b = int(round(fb * alpha + bb * (1.0 - alpha)))
+    return f"#{max(0, min(255, r)):02X}{max(0, min(255, g)):02X}{max(0, min(255, b)):02X}"
+
+
+def get_xdg_config_home():
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    if xdg:
+        return Path(xdg)
+    return Path(os.environ.get("HOME", str(Path.home()))) / ".config"
+
+
+def get_user_themes_dirs():
+    dirs = []
+    override = os.environ.get("HOME_SETTINGS_USER_THEMES_DIR", "").strip()
+    if override:
+        dirs.append(Path(override))
+    cfg = get_xdg_config_home()
+    dirs.append(cfg / "themes")
+    dirs.append(cfg / "home-settings" / "themes")
+    seen = set()
+    unique = []
+    for d in dirs:
+        s = str(d)
+        if s not in seen:
+            seen.add(s)
+            unique.append(d)
+    return unique
+
+
+def slug_to_label(slug):
+    return " ".join(part.capitalize() for part in re.split(r"[-_]+", slug) if part)
+
+
+def parse_theme_file(path, default_slug=None, source="builtin"):
+    raw = {}
+    with open(path, encoding="utf-8") as fh:
+        for line_num, line in enumerate(fh, 1):
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            if "=" not in s:
+                raise ValueError(f"{path}:{line_num}: invalid line (expected KEY=VALUE): {s}")
+            k, v = s.split("=", 1)
+            k = k.strip()
+            v = v.strip()
+            if len(v) >= 2 and ((v[0] == '"' and v[-1] == '"') or (v[0] == "'" and v[-1] == "'")):
+                v = v[1:-1]
+            raw[k] = v
+
+    mode = raw.get("THEME_MODE", "dark").strip().lower()
+    if mode not in ("dark", "light"):
+        raise ValueError(f"{path}: invalid THEME_MODE '{mode}' (expected 'dark' or 'light')")
+
+    base_defaults = SOLARIZED_LIGHT_DEFAULTS if mode == "light" else SOLARIZED_DARK_DEFAULTS
+    slug = raw.get("THEME_ID", default_slug or path.stem).strip().lower().replace("_", "-")
+    label = raw.get("THEME_LABEL", slug_to_label(slug)).strip()
+    desc = raw.get("THEME_DESCRIPTION", f"Custom {mode} color theme ({label})").strip()
+
+    theme = {
+        "THEME_ID": slug,
+        "THEME_LABEL": label,
+        "THEME_DESCRIPTION": desc,
+        "THEME_MODE": mode,
+        "SOURCE": source,
+        "PATH": str(path),
+    }
+
+    for key in CORE_COLOR_KEYS:
+        val = raw.get(key, base_defaults[key]).strip().upper()
+        if not HEX_RE.match(val):
+            raise ValueError(f"{path}: invalid hex color for {key}: '{val}' (expected #RRGGBB)")
+        theme[key] = val
+
+    base03 = theme["BASE03"]
+    base02 = theme["BASE02"]
+    default_computed = {
+        "BASE04": blend_hex(base02, base03, 0.50),
+        "MIX_GREEN": blend_hex(theme["GREEN"], base03, 0.18),
+        "MIX_RED": blend_hex(theme["RED"], base03, 0.18),
+        "MIX_YELLOW": blend_hex(theme["YELLOW"], base03, 0.20),
+        "MIX_BLUE": blend_hex(theme["BLUE"], base03, 0.22),
+        "MIX_MAGENTA": blend_hex(theme["MAGENTA"], base03, 0.20),
+        "MIX_BASE1": blend_hex(theme["BASE1"], base03, 0.16),
+    }
+    for key, comp_val in default_computed.items():
+        val = raw.get(key, comp_val).strip().upper()
+        if not HEX_RE.match(val):
+            raise ValueError(f"{path}: invalid hex color for {key}: '{val}' (expected #RRGGBB)")
+        theme[key] = val
+
+    pascal_slug = "-".join(part.capitalize() for part in re.split(r"[-_]+", slug) if part)
+    snake_slug = re.sub(r"[^a-z0-9]+", "_", slug).strip("_")
+    theme["BAT_THEME_NAME"] = raw.get("BAT_THEME_NAME", f"{pascal_slug}-TrueColor").strip()
+    theme["BTOP_THEME_NAME"] = raw.get("BTOP_THEME_NAME", snake_slug).strip()
+    theme["GHOSTTY_THEME_NAME"] = raw.get("GHOSTTY_THEME_NAME", label).strip()
+
+    return theme
+
+
+def discover_themes(repo_dir):
+    themes = {}
+    managed_dir = repo_dir / "colors" / "themes"
+    for slug in MANAGED_ORDER:
+        p = managed_dir / f"{slug}.theme"
+        if p.is_file():
+            themes[slug] = parse_theme_file(p, default_slug=slug, source="builtin")
+
+    if managed_dir.is_dir():
+        for p in sorted(managed_dir.glob("*.theme")):
+            slug = p.stem.lower()
+            if slug not in themes:
+                themes[slug] = parse_theme_file(p, default_slug=slug, source="builtin")
+
+    for udir in get_user_themes_dirs():
+        if not udir.is_dir():
+            continue
+        candidates = sorted(list(udir.glob("*.theme")) + list(udir.glob("*.conf")))
+        for p in candidates:
+            if not p.is_file():
+                continue
+            t = parse_theme_file(p, default_slug=p.stem.lower(), source="user")
+            themes[t["THEME_ID"]] = t
+
+    return themes
+
+
+def get_current_theme_slug(themes):
+    state_file = get_xdg_config_home() / "home-settings" / "theme"
+    if state_file.is_file():
+        try:
+            saved = state_file.read_text(encoding="utf-8").strip().lower()
+            if saved in themes:
+                return saved
+        except OSError:
+            pass
+    env_theme = os.environ.get("HOME_SETTINGS_THEME", "").strip().lower()
+    if env_theme and env_theme in themes:
+        return env_theme
+    return "solarized-dark"
+
+
+def generate_tmtheme_text(base_tmtheme_text, theme):
+    # Replace the 13 Solarized Dark hex colors and the theme name cleanly
+    replacements = {
+        "#002B36": theme["BASE03"],
+        "#073642": theme["BASE02"],
+        "#586E75": theme["BASE01"],
+        "#657B83": theme["BASE00"],
+        "#839496": theme["BASE0"],
+        "#93A1A1": theme["BASE1"],
+        "#EEE8D5": theme["BASE2"],
+        "#FDF6E3": theme["BASE3"],
+        "#B58900": theme["YELLOW"],
+        "#CB4B16": theme["ORANGE"],
+        "#DC322F": theme["RED"],
+        "#D33682": theme["MAGENTA"],
+        "#6C71C4": theme["VIOLET"],
+        "#268BD2": theme["BLUE"],
+        "#2AA198": theme["CYAN"],
+        "#859900": theme["GREEN"],
+    }
+    pattern = re.compile("|".join(re.escape(k) for k in replacements.keys()), re.IGNORECASE)
+    out = pattern.sub(lambda m: replacements[m.group(0).upper()], base_tmtheme_text)
+    out = out.replace(
+        "<string>Solarized-Dark-TrueColor</string>",
+        f"<string>{theme['BAT_THEME_NAME']}</string>",
+    )
+    return out
+
+
+def generate_btop_theme_text(theme):
+    c = {k: v.lower() for k, v in theme.items() if k in ALL_COLOR_KEYS}
+    return f"""# {theme['THEME_LABEL']} TrueColor theme for btop
+# Matches the 16-slot semantic palette architecture
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="{c['BASE03']}"
+
+# Main text color
+theme[main_fg]="{c['BASE0']}"
+
+# Title color for boxes
+theme[title]="{c['BASE1']}"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="{c['YELLOW']}"
+
+# Background color of selected item in processes box
+theme[selected_bg]="{c['BASE02']}"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="{c['BASE1']}"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="{c['BASE01']}"
+
+# Color of text appearing on top of graphs, i.e uptime and current network graph scaling
+theme[graph_text]="{c['BASE00']}"
+
+# Background color of the percentage meters
+theme[meter_bg]="{c['BASE02']}"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="{c['GREEN']}"
+
+# Cpu box outline color
+theme[cpu_box]="{c['BASE01']}"
+
+# Memory/disks box outline color
+theme[mem_box]="{c['BASE01']}"
+
+# Net up/down box outline color
+theme[net_box]="{c['BASE01']}"
+
+# Processes box outline color
+theme[proc_box]="{c['BASE01']}"
+
+# Box divider line and small boxes line color
+theme[div_line]="{c['BASE01']}"
+
+# Temperature graph colors
+theme[temp_start]="{c['GREEN']}"
+theme[temp_mid]="{c['YELLOW']}"
+theme[temp_end]="{c['RED']}"
+
+# CPU graph colors
+theme[cpu_start]="{c['GREEN']}"
+theme[cpu_mid]="{c['CYAN']}"
+theme[cpu_end]="{c['BLUE']}"
+
+# Mem/Disk free meter
+theme[free_start]="{c['BASE01']}"
+theme[free_mid]="{c['BASE00']}"
+theme[free_end]="{c['BASE0']}"
+
+# Mem/Disk cached meter
+theme[cached_start]="{c['CYAN']}"
+theme[cached_mid]="{c['BLUE']}"
+theme[cached_end]="{c['VIOLET']}"
+
+# Mem/Disk available meter
+theme[available_start]="{c['GREEN']}"
+theme[available_mid]="{c['CYAN']}"
+theme[available_end]="{c['BLUE']}"
+
+# Mem/Disk used meter
+theme[used_start]="{c['YELLOW']}"
+theme[used_mid]="{c['ORANGE']}"
+theme[used_end]="{c['RED']}"
+
+# Download graph colors
+theme[download_start]="{c['CYAN']}"
+theme[download_mid]="{c['BLUE']}"
+theme[download_end]="{c['VIOLET']}"
+
+# Upload graph colors
+theme[upload_start]="{c['GREEN']}"
+theme[upload_mid]="{c['YELLOW']}"
+theme[upload_end]="{c['ORANGE']}"
+
+# Process box color gradient for threads, mem and cpu usage
+theme[process_start]="{c['GREEN']}"
+theme[process_mid]="{c['YELLOW']}"
+theme[process_end]="{c['RED']}"
+"""
+
+
+def generate_ghostty_theme_text(theme):
+    c = {k: v.lower() for k, v in theme.items() if k in ALL_COLOR_KEYS}
+    return f"""palette = 0={c['BASE02']}
+palette = 1={c['RED']}
+palette = 2={c['GREEN']}
+palette = 3={c['YELLOW']}
+palette = 4={c['BLUE']}
+palette = 5={c['MAGENTA']}
+palette = 6={c['CYAN']}
+palette = 7={c['BASE2']}
+palette = 8={c['BASE01']}
+palette = 9={c['ORANGE']}
+palette = 10={c['BASE01']}
+palette = 11={c['BASE00']}
+palette = 12={c['BASE0']}
+palette = 13={c['VIOLET']}
+palette = 14={c['BASE1']}
+palette = 15={c['BASE3']}
+background = {c['BASE03']}
+foreground = {c['BASE0']}
+cursor-color = {c['BASE0']}
+cursor-text = {c['BASE02']}
+selection-background = {c['BASE02']}
+selection-foreground = {c['BASE1']}
+"""
+
+
+def generate_ghostty_config_text(theme):
+    c = {k: v for k, v in theme.items() if k in CORE_COLOR_KEYS}
+    return f"""# Ghostty Terminal Configuration ({theme['THEME_LABEL']})
+theme = "{theme['GHOSTTY_THEME_NAME']}"
+background = {c['BASE03']}
+foreground = {c['BASE0']}
+cursor-color = {c['BASE0']}
+cursor-text = {c['BASE03']}
+selection-background = {c['BASE02']}
+selection-foreground = {c['BASE1']}
+palette = 0={c['BASE02']}
+palette = 1={c['RED']}
+palette = 2={c['GREEN']}
+palette = 3={c['YELLOW']}
+palette = 4={c['BLUE']}
+palette = 5={c['MAGENTA']}
+palette = 6={c['CYAN']}
+palette = 7={c['BASE2']}
+palette = 8={c['BASE01']}
+palette = 9={c['ORANGE']}
+palette = 10={c['BASE01']}
+palette = 11={c['BASE00']}
+palette = 12={c['BASE0']}
+palette = 13={c['VIOLET']}
+palette = 14={c['BASE1']}
+palette = 15={c['BASE3']}
+font-family = "MesloLGS Nerd Font Mono"
+font-size = 12
+font-thicken = false
+window-padding-x = 0
+window-padding-y = 0
+window-padding-balance = false
+window-decoration = auto
+cursor-style = block
+cursor-style-blink = false
+copy-on-select = clipboard
+clipboard-read = allow
+clipboard-write = allow
+confirm-close-surface = false
+shell-integration = detect
+mouse-hide-while-typing = true
+macos-option-as-alt = true
+keybind = ctrl+shift+d=new_split:auto
+keybind = ctrl+shift+w=close_surface
+keybind = ctrl+shift+enter=toggle_split_zoom
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+j=goto_split:bottom
+keybind = ctrl+shift+k=goto_split:top
+keybind = ctrl+shift+l=goto_split:right
+"""
+
+
+def generate_btop_config_text(theme, repo_dir=None):
+    if repo_dir is not None:
+        base_btop = repo_dir / "dotfiles" / ".config" / "btop" / "btop.conf"
+        if base_btop.is_file():
+            raw = base_btop.read_text(encoding="utf-8")
+            return re.sub(
+                r'^color_theme\s*=\s*"[^"]*"',
+                f'color_theme = "{theme["BTOP_THEME_NAME"]}"',
+                raw,
+                count=1,
+                flags=re.MULTILINE,
+            )
+    return f"""# btop configuration ({theme['THEME_LABEL']} TrueColor)
+color_theme = "{theme['BTOP_THEME_NAME']}"
+theme_background = true
+truecolor = true
+vim_keys = true
+rounded_corners = true
+graph_symbol = "braille"
+shown_boxes = "cpu mem net proc"
+update_ms = 2000
+proc_sorting = "cpu lazy"
+proc_tree = false
+proc_colors = true
+proc_gradient = true
+save_config_on_exit = false
+"""
+
+
+def generate_git_config_text(theme):
+    c = {k: v.lower() for k, v in theme.items() if k in ALL_COLOR_KEYS}
+    light_val = "true" if theme["THEME_MODE"] == "light" else "false"
+    if theme["THEME_ID"] == "solarized-dark":
+        plus_bg = "#0d3834"
+        plus_emph_bg = c["MIX_GREEN"]
+        minus_bg = "#2d222a"
+        minus_emph_bg = c["MIX_RED"]
+    else:
+        plus_bg = c["MIX_GREEN"]
+        plus_emph_bg = blend_hex(theme["GREEN"], theme["BASE03"], 0.30).lower()
+        minus_bg = c["MIX_RED"]
+        minus_emph_bg = blend_hex(theme["RED"], theme["BASE03"], 0.30).lower()
+    return f"""# Git configuration (XDG-compliant: ~/.config/git/config)
+# Configures delta as the default diff and log pager with authentic {theme['THEME_LABEL']} TrueColor styling
+
+[core]
+    pager = delta
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true
+    light = {light_val}
+    syntax-theme = {theme['BAT_THEME_NAME']}
+    line-numbers = true
+    side-by-side = false
+    commit-style = "{c['MAGENTA']}"
+    file-style = "{c['CYAN']}"
+    file-decoration-style = "{c['BASE01']}" ul
+    hunk-header-style = line-number syntax
+    hunk-header-line-number-style = "{c['BLUE']}"
+    hunk-header-decoration-style = "{c['BASE01']}" box
+    plus-style = syntax "{plus_bg}"
+    plus-emph-style = syntax "{plus_emph_bg}"
+    plus-empty-line-marker-style = normal "{plus_bg}"
+    minus-style = syntax "{minus_bg}"
+    minus-emph-style = syntax "{minus_emph_bg}"
+    minus-empty-line-marker-style = normal "{minus_bg}"
+    line-numbers-plus-style = "{c['GREEN']}"
+    line-numbers-minus-style = "{c['RED']}"
+    line-numbers-left-style = "{c['BASE01']}"
+    line-numbers-right-style = "{c['BASE01']}"
+    line-numbers-zero-style = "{c['BASE01']}"
+    whitespace-error-style = "{c['RED']}" reverse
+
+[merge]
+    conflictstyle = zdiff3
+
+[diff]
+    colorMoved = default
+"""
+
+
+def generate_tealdeer_config_text(theme):
+    b0_r, b0_g, b0_b = hex_to_rgb(theme["BASE0"])
+    gr_r, gr_g, gr_b = hex_to_rgb(theme["GREEN"])
+    cy_r, cy_g, cy_b = hex_to_rgb(theme["CYAN"])
+    bl_r, bl_g, bl_b = hex_to_rgb(theme["BLUE"])
+    mg_r, mg_g, mg_b = hex_to_rgb(theme["MAGENTA"])
+    return f"""# tealdeer (tldr) configuration — {theme['THEME_LABEL']} TrueColor
+# Strict unbolded typography to prevent monospace glyph jitter
+
+[display]
+compact = false
+use_pager = false
+
+[style.description]
+foreground = {{ rgb = {{ r = {b0_r}, g = {b0_g}, b = {b0_b} }} }}
+bold = false
+underline = false
+italic = false
+
+[style.command_name]
+foreground = {{ rgb = {{ r = {gr_r}, g = {gr_g}, b = {gr_b} }} }}
+bold = false
+underline = false
+italic = false
+
+[style.example_text]
+foreground = {{ rgb = {{ r = {bl_r}, g = {bl_g}, b = {bl_b} }} }}
+bold = false
+underline = false
+italic = false
+
+[style.example_code]
+foreground = {{ rgb = {{ r = {cy_r}, g = {cy_g}, b = {cy_b} }} }}
+bold = false
+underline = false
+italic = false
+
+[style.example_variable]
+foreground = {{ rgb = {{ r = {mg_r}, g = {mg_g}, b = {mg_b} }} }}
+bold = false
+underline = true
+italic = false
+
+[updates]
+auto_update = true
+auto_update_interval_hours = 720
+"""
+
+
+def generate_active_theme_file_text(theme):
+    lines = [
+        f"# Active Theme Snapshot: {theme['THEME_ID']}",
+        f'THEME_ID="{theme["THEME_ID"]}"',
+        f'THEME_LABEL="{theme["THEME_LABEL"]}"',
+        f'THEME_DESCRIPTION="{theme["THEME_DESCRIPTION"]}"',
+        f'THEME_MODE="{theme["THEME_MODE"]}"',
+        f'BAT_THEME_NAME="{theme["BAT_THEME_NAME"]}"',
+        f'BTOP_THEME_NAME="{theme["BTOP_THEME_NAME"]}"',
+        f'GHOSTTY_THEME_NAME="{theme["GHOSTTY_THEME_NAME"]}"',
+    ]
+    for key in ALL_COLOR_KEYS:
+        lines.append(f'{key}="{theme[key]}"')
+    return "\n".join(lines) + "\n"
+
+
+def generate_theme_env_sh(theme):
+    def rgb_semi(key):
+        r, g, b = hex_to_rgb(theme[key])
+        return f"{r};{g};{b}"
+
+    blue = rgb_semi("BLUE")
+    cyan = rgb_semi("CYAN")
+    green = rgb_semi("GREEN")
+    orange = rgb_semi("ORANGE")
+    violet = rgb_semi("VIOLET")
+    magenta = rgb_semi("MAGENTA")
+    yellow = rgb_semi("YELLOW")
+    red = rgb_semi("RED")
+    base0 = rgb_semi("BASE0")
+    base01 = rgb_semi("BASE01")
+    base00 = rgb_semi("BASE00")
+    base1 = rgb_semi("BASE1")
+    base02 = rgb_semi("BASE02")
+
+    eza_parts = [
+        f"di=38;2;{blue}",
+        f"ex=38;2;{green}",
+        f"fi=38;2;{base0}",
+        f"pi=38;2;{yellow}",
+        f"so=38;2;{magenta}",
+        f"bd=38;2;{magenta}",
+        f"cd=38;2;{magenta}",
+        f"ln=38;2;{cyan}",
+        f"or=38;2;{red}",
+        f"xx=38;2;{base01}",
+        f"da=38;2;{base0}",
+        f"hd=4;38;2;{base1}",
+        f"lp=38;2;{base0}",
+        f"cc=38;2;{orange}",
+        f"bO=38;2;{red}",
+        f"in=38;2;{base01}",
+        f"bl=38;2;{base01}",
+        f"oc=38;2;{base0}",
+        f"ur=38;2;{base0}",
+        f"uw=38;2;{base0}",
+        f"ux=38;2;{base0}",
+        f"ue=38;2;{base0}",
+        f"gr=38;2;{base0}",
+        f"gw=38;2;{base0}",
+        f"gx=38;2;{base0}",
+        f"tr=38;2;{base0}",
+        f"tw=38;2;{base0}",
+        f"tx=38;2;{base0}",
+        f"su=38;2;{base0}",
+        f"sf=38;2;{base0}",
+        f"xa=38;2;{base0}",
+        f"sn=38;2;{base0}",
+        f"nb=38;2;{base01}",
+        f"nk=38;2;{base0}",
+        f"nm=38;2;{yellow}",
+        f"ng=38;2;{orange}",
+        f"nt=38;2;{red}",
+        f"sb=38;2;{base0}",
+        f"ub=38;2;{base01}",
+        f"uk=38;2;{base0}",
+        f"um=38;2;{yellow}",
+        f"ug=38;2;{orange}",
+        f"ut=38;2;{red}",
+        f"df=38;2;{base0}",
+        f"ds=38;2;{base0}",
+        f"uu=38;2;{base0}",
+        f"uR=38;2;{red}",
+        f"un=38;2;{base0}",
+        f"gu=38;2;{base0}",
+        f"gR=38;2;{red}",
+        f"gn=38;2;{base0}",
+        f"lc=38;2;{base0}",
+        f"lm=38;2;{yellow}",
+        f"ga=38;2;{green}",
+        f"gm=38;2;{yellow}",
+        f"gd=38;2;{red}",
+        f"gv=38;2;{base0}",
+        f"gt=38;2;{base0}",
+        f"gi=38;2;{base01}",
+        f"gc=38;2;{red}",
+        f"Gm=38;2;{green}",
+        f"Go=38;2;{blue}",
+        f"Gc=38;2;{green}",
+        f"Gd=38;2;{yellow}",
+        f"sp=38;2;{orange}",
+        f"mp=38;2;{blue}",
+        f"im=38;2;{violet}",
+        f"vi=38;2;{violet}",
+        f"mu=38;2;{violet}",
+        f"lo=38;2;{violet}",
+        f"cr=38;2;{magenta}",
+        f"do=38;2;{base0}",
+        f"co=38;2;{orange}",
+        f"tm=38;2;{base01}",
+        f"cm=38;2;{base01}",
+        f"bu=38;2;{green}",
+        f"sc=38;2;{base0}",
+        f"Sn=38;2;{base01}",
+        f"Su=38;2;{base0}",
+        f"Sr=38;2;{base0}",
+        f"St=38;2;{base0}",
+        f"Sl=38;2;{base0}",
+        f"ff=38;2;{base0}",
+    ]
+    eza_str = ":".join(eza_parts)
+
+    fzf_str = (
+        f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},hl:{theme['BASE01']} "
+        f"--color=fg:{theme['BASE0']},header:{theme['BASE01']},info:{theme['YELLOW']},pointer:{theme['GREEN']} "
+        f"--color=marker:{theme['GREEN']},fg+:{theme['BASE1']},prompt:{theme['YELLOW']},hl+:{theme['BLUE']} "
+        f"--layout=reverse --border=rounded --info=inline"
+    )
+    jq_str = (
+        f"38;2;{magenta}:38;2;{magenta}:38;2;{magenta}:38;2;{magenta}:"
+        f"38;2;{cyan}:38;2;{base0}:38;2;{base0}:38;2;{green}"
+    )
+
+    return f"""# Generated by bin/theme — Active Theme: {theme['THEME_ID']}
+export HOME_SETTINGS_THEME="{theme['THEME_ID']}"
+export HOME_SETTINGS_THEME_MODE="{theme['THEME_MODE']}"
+export BAT_THEME="{theme['BAT_THEME_NAME']}"
+export FZF_DEFAULT_OPTS='{fzf_str}'
+export EZA_COLORS="{eza_str}"
+export EXA_COLORS="$EZA_COLORS"
+export JQ_COLORS="{jq_str}"
+export LESS="${{LESS:--R}}"
+export GROFF_NO_SGR=1
+_hs_esc="$(printf '\\033')"
+export LESS_TERMCAP_mb="${{_hs_esc}}[38;2;{red}m"
+export LESS_TERMCAP_md="${{_hs_esc}}[1;38;2;{blue}m"
+export LESS_TERMCAP_me="${{_hs_esc}}[0m"
+export LESS_TERMCAP_so="${{_hs_esc}}[38;2;{base1};48;2;{base02}m"
+export LESS_TERMCAP_se="${{_hs_esc}}[0m"
+export LESS_TERMCAP_us="${{_hs_esc}}[4;38;2;{cyan}m"
+export LESS_TERMCAP_ue="${{_hs_esc}}[0m"
+export _HS_ESC_ORANGE="${{_hs_esc}}[38;2;{orange}m"
+export _HS_ESC_BLUE="${{_hs_esc}}[38;2;{blue}m"
+export _HS_ESC_CYAN="${{_hs_esc}}[38;2;{cyan}m"
+export _HS_ESC_BASE0="${{_hs_esc}}[38;2;{base0}m"
+export _HS_ESC_BASE01="${{_hs_esc}}[38;2;{base01}m"
+unset _hs_esc
+export LSCOLORS="exgxfxdxcxfxfxegedabagacad"
+export _HS_PROMPT_BG_BASE02='\\[\\e[48;2;{base02}m\\]'
+export _HS_PROMPT_CAP_BASE02='\\[\\e[0m\\e[38;2;{base02}m\\]'
+export _HS_PROMPT_CAP_RED='\\[\\e[0m\\e[38;2;{red}m\\]'
+export _HS_PROMPT_FG_BASE02='\\[\\e[38;2;{base02}m\\]'
+export _HS_PROMPT_FG_BASE01='\\[\\e[38;2;{base01}m\\]'
+export _HS_PROMPT_FG_BASE00='\\[\\e[38;2;{base00}m\\]'
+export _HS_PROMPT_FG_BASE0='\\[\\e[38;2;{base0}m\\]'
+export _HS_PROMPT_FG_BASE1='\\[\\e[38;2;{base1}m\\]'
+export _HS_PROMPT_FG_YELLOW='\\[\\e[38;2;{yellow}m\\]'
+export _HS_PROMPT_FG_ORANGE='\\[\\e[38;2;{orange}m\\]'
+export _HS_PROMPT_FG_RED='\\[\\e[38;2;{red}m\\]'
+export _HS_PROMPT_FG_VIOLET='\\[\\e[38;2;{violet}m\\]'
+export _HS_PROMPT_FG_BLUE='\\[\\e[38;2;{blue}m\\]'
+export _HS_PROMPT_FG_CYAN='\\[\\e[38;2;{cyan}m\\]'
+export _HS_PROMPT_FG_GREEN='\\[\\e[38;2;{green}m\\]'
+"""
+
+
+def generate_zsh_theme_text(theme):
+    return f"""# Generated by bin/theme — Zsh Highlighting & Autosuggestions ({theme['THEME_ID']})
+export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg={theme['BASE01']}"
+
+typeset -gA ZSH_HIGHLIGHT_STYLES
+ZSH_HIGHLIGHT_STYLES[default]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[unknown-token]="fg={theme['RED']}"
+ZSH_HIGHLIGHT_STYLES[reserved-word]="fg={theme['YELLOW']}"
+ZSH_HIGHLIGHT_STYLES[alias]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[suffix-alias]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[global-alias]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[builtin]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[function]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[command]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[hashed-command]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[precommand]="fg={theme['BLUE']}"
+ZSH_HIGHLIGHT_STYLES[autodirectory]="fg={theme['BLUE']}"
+ZSH_HIGHLIGHT_STYLES[path]="fg={theme['BLUE']}"
+ZSH_HIGHLIGHT_STYLES[path_prefix]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[path_pathseparator]="fg={theme['BASE01']}"
+ZSH_HIGHLIGHT_STYLES[path_prefix_pathseparator]="fg={theme['BASE01']}"
+ZSH_HIGHLIGHT_STYLES[globbing]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[history-expansion]="fg={theme['BLUE']}"
+ZSH_HIGHLIGHT_STYLES[single-hyphen-option]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[double-hyphen-option]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[dollar-quoted-argument]="fg={theme['CYAN']}"
+ZSH_HIGHLIGHT_STYLES[single-quoted-argument]="fg={theme['CYAN']}"
+ZSH_HIGHLIGHT_STYLES[double-quoted-argument]="fg={theme['CYAN']}"
+ZSH_HIGHLIGHT_STYLES[rc-quote]="fg={theme['CYAN']}"
+ZSH_HIGHLIGHT_STYLES[dollar-double-quoted-argument]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[back-double-quoted-argument]="fg={theme['CYAN']}"
+ZSH_HIGHLIGHT_STYLES[back-dollar-quoted-argument]="fg={theme['CYAN']}"
+ZSH_HIGHLIGHT_STYLES[command-substitution]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[command-substitution-unquoted]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[command-substitution-quoted]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter-unquoted]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter-quoted]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[process-substitution]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[process-substitution-delimiter]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[back-quoted-argument]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[back-quoted-argument-unquoted]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[back-quoted-argument-delimiter]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[arithmetic-expansion]="fg={theme['MAGENTA']}"
+ZSH_HIGHLIGHT_STYLES[assign]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[redirection]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[commandseparator]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[named-fd]="fg={theme['MAGENTA']}"
+ZSH_HIGHLIGHT_STYLES[numeric-fd]="fg={theme['MAGENTA']}"
+ZSH_HIGHLIGHT_STYLES[arg0]="fg={theme['GREEN']}"
+ZSH_HIGHLIGHT_STYLES[comment]="fg={theme['BASE01']}"
+ZSH_HIGHLIGHT_STYLES[bracket-level-1]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[bracket-level-2]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[bracket-level-3]="fg={theme['BASE0']}"
+ZSH_HIGHLIGHT_STYLES[bracket-error]="fg={theme['RED']}"
+
+if zmodload zsh/pcre >/dev/null 2>&1; then
+    setopt rematchpcre
+    ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets regexp)
+    typeset -gA ZSH_HIGHLIGHT_REGEXP=()
+    ZSH_HIGHLIGHT_REGEXP+=("(?<=[=\\s]|^)[0-9]+(\\.[0-9]+)?(?=[\\s;|<>&]|$)(?=(?:[^\\\"]*\\\"[^\\\"]*\\\")*[^\\\"]*$)(?=(?:[^']*'[^']*')*[^']*$)" "fg={theme['MAGENTA']}")
+fi
+
+zle_highlight=(region:bg={theme['BASE02']} special:fg={theme['MAGENTA']} isearch:underline,fg={theme['BLUE']})
+"""
+
+
+def generate_p10k_theme_text(theme):
+    return f"""# Generated by bin/theme — Powerlevel10k Palette Remap ({theme['THEME_ID']})
+() {{
+  typeset -gA _HS_P10K_BASE_HEX
+  local _hs_param _hs_val _hs_hex _hs_tok
+  if (( ! ${{#_HS_P10K_BASE_HEX}} )); then
+    for _hs_param in ${{(k)parameters[(I)POWERLEVEL9K_*]}}; do
+      [[ "${{(Pt)_hs_param}}" == scalar* ]] || continue
+      _hs_val="${{(P)_hs_param}}"
+      [[ "$_hs_val" == *"#"* ]] || continue
+      _HS_P10K_BASE_HEX[$_hs_param]="$_hs_val"
+    done
+  fi
+  local -A _hs_p10k_to_slot=(
+    '#002B36' '__HS_BASE03__'
+    '#073642' '__HS_BASE02__'
+    '#586E75' '__HS_BASE01__'
+    '#657B83' '__HS_BASE00__'
+    '#839496' '__HS_BASE0__'
+    '#93A1A1' '__HS_BASE1__'
+    '#EEE8D5' '__HS_BASE2__'
+    '#FDF6E3' '__HS_BASE3__'
+    '#B58900' '__HS_YELLOW__'
+    '#CB4B16' '__HS_ORANGE__'
+    '#DC322F' '__HS_RED__'
+    '#D33682' '__HS_MAGENTA__'
+    '#6C71C4' '__HS_VIOLET__'
+    '#268BD2' '__HS_BLUE__'
+    '#2AA198' '__HS_CYAN__'
+    '#859900' '__HS_GREEN__'
+  )
+  local -A _hs_p10k_from_slot=(
+    '__HS_BASE03__'  '{theme["BASE03"]}'
+    '__HS_BASE02__'  '{theme["BASE02"]}'
+    '__HS_BASE01__'  '{theme["BASE01"]}'
+    '__HS_BASE00__'  '{theme["BASE00"]}'
+    '__HS_BASE0__'   '{theme["BASE0"]}'
+    '__HS_BASE1__'   '{theme["BASE1"]}'
+    '__HS_BASE2__'   '{theme["BASE2"]}'
+    '__HS_BASE3__'   '{theme["BASE3"]}'
+    '__HS_YELLOW__'  '{theme["YELLOW"]}'
+    '__HS_ORANGE__'  '{theme["ORANGE"]}'
+    '__HS_RED__'     '{theme["RED"]}'
+    '__HS_MAGENTA__' '{theme["MAGENTA"]}'
+    '__HS_VIOLET__'  '{theme["VIOLET"]}'
+    '__HS_BLUE__'    '{theme["BLUE"]}'
+    '__HS_CYAN__'    '{theme["CYAN"]}'
+    '__HS_GREEN__'   '{theme["GREEN"]}'
+  )
+  for _hs_param _hs_val in "${{(@kv)_HS_P10K_BASE_HEX}}"; do
+    for _hs_hex _hs_tok in "${{(@kv)_hs_p10k_to_slot}}"; do
+      if [[ "$_hs_val" == *"$_hs_hex"* ]]; then
+        _hs_val="${{_hs_val//$_hs_hex/$_hs_tok}}"
+      fi
+    done
+    for _hs_tok _hs_hex in "${{(@kv)_hs_p10k_from_slot}}"; do
+      if [[ "$_hs_val" == *"$_hs_tok"* ]]; then
+        _hs_val="${{_hs_val//$_hs_tok/$_hs_hex}}"
+      fi
+    done
+    typeset -g "$_hs_param=$_hs_val"
+  done
+  if [[ -n "{HOLIDAY_META.get(theme['THEME_ID'], {}).get('icon', '')}" ]]; then
+    typeset -g POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION='{HOLIDAY_META.get(theme["THEME_ID"], {}).get("icon", "")}'
+  else
+    unset POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION
+  fi
+}}
+"""
+
+
+def generate_tmux_theme_text(theme):
+    b03 = theme["BASE03"]
+    b02 = theme["BASE02"]
+    b01 = theme["BASE01"]
+    b00 = theme["BASE00"]
+    b0 = theme["BASE0"]
+    b1 = theme["BASE1"]
+    orange = theme["ORANGE"]
+    red = theme["RED"]
+    magenta = theme["MAGENTA"]
+    violet = theme["VIOLET"]
+    blue = theme["BLUE"]
+    cyan = theme["CYAN"]
+    green = theme["GREEN"]
+    session_icon = HOLIDAY_META.get(theme["THEME_ID"], {}).get("icon", "")
+
+    return f"""# Generated by bin/theme — Tmux Status Bar & Borders ({theme['THEME_ID']})
+set -g pane-border-style "fg={b01},bg={b03}"
+set -g pane-active-border-style "fg={b01},bg={b03}"
+set -g popup-border-style "fg={b01},bg={b03}"
+set -g popup-style "fg={b0},bg={b03}"
+set -g mode-style "fg={b1},bg={b02}"
+set -g message-style "fg={b1},bg={b02}"
+set -g message-command-style "fg={b1},bg={b02}"
+set -g status-style "fg={b0},bg={b02}"
+
+set -g status-left "#[fg={blue},bg={b02},nobold] {session_icon} #S #[fg={b00},bg={b02},nobold] "
+
+set -g @ide_tab_ai '#{{?#{{==:#{{@ide_role}},ai}}, #[fg={cyan}#,bg={b02}#,nobold]▸ 󰚩 #[fg={b1}#,bg={b02}#,nobold]#{{?#{{!=:#{{@ide_ai_cli}},}},#{{@ide_ai_cli}},AI}} (Alt+a),#{{?#{{==:#{{@ide_ai_parked}},1}}, #[fg={b01}#,bg={b02}#,nobold]󰚩 #{{?#{{!=:#{{@ide_ai_cli}},}},#{{@ide_ai_cli}},AI}} [Alt+a], #[fg={b0}#,bg={b02}#,nobold]󰚩 #{{?#{{!=:#{{@ide_ai_cli}},}},#{{@ide_ai_cli}},AI}} (Alt+a)}}}}'
+set -g @ide_tab_ed '#{{?#{{==:#{{@ide_role}},editor}},#[fg={blue}#,bg={b02}#,nobold]▸  #[fg={b1}#,bg={b02}#,nobold]Editor (Alt+e),#{{?#{{==:#{{@ide_ed_parked}},1}},#[fg={b01}#,bg={b02}#,nobold] Editor [Alt+E],#[fg={b0}#,bg={b02}#,nobold] Editor (Alt+e)}}}}'
+set -g @ide_tab_term '#{{?#{{==:#{{@ide_role}},term}},#[fg={green}#,bg={b02}#,nobold]▸  #[fg={b1}#,bg={b02}#,nobold]Shell (Alt+t) ,#{{?#{{==:#{{@ide_term_parked}},1}},#[fg={b01}#,bg={b02}#,nobold] Shell [Alt+T] ,#[fg={b0}#,bg={b02}#,nobold] Shell (Alt+t) }}}}'
+
+setw -g window-status-format "#{{?#{{m/r:^_ide_park_,#W}},,#[fg={b01}#,bg={b02}#,nobold] #I:#W }}"
+setw -g window-status-current-format "#{{?#{{==:#W,ide}},#{{E:@ide_tab_ai}}#[fg={b01}#,bg={b02}#,nobold] · #{{E:@ide_tab_ed}}#[fg={b01}#,bg={b02}#,nobold] · #{{E:@ide_tab_term}}#{{?window_zoomed_flag,#[fg={b00}#,bg={b02}#,nobold] #[fg={orange}#,bg={b02}#,nobold]󰁌 ZOOM (Alt+z) ,}},#[fg={b1}#,bg={b02}#,nobold] #I:#W#{{?window_zoomed_flag, #[fg={orange}]󰁌 ZOOM,}} }}"
+setw -g window-status-separator ""
+
+set -g status-right "#{{?client_prefix,#[fg={b00}#,bg={b02}#,nobold] #[fg={orange}#,bg={b02}#,nobold]󰘳 PREFIX #[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]#{{?#{{>=:#{{client_width}},120}},HJKL resize · |/- split · b bar · ? keys ,? keys }},#{{?pane_in_mode,#[fg={b00}#,bg={b02}#,nobold] #[fg={magenta}#,bg={b02}#,nobold]󰆏 COPY#{{?#{{!=:#{{scroll_position}},}}, [#{{scroll_position}}/#{{history_size}}],}} #[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]#{{?#{{>=:#{{client_width}},120}},Alt+c copy · Alt+v paste · Esc clear ,Alt+c · Esc }},#{{?pane_synchronized,#[fg={b00}#,bg={b02}#,nobold] #[fg={red}#,bg={b02}#,nobold]󰓦 SYNC ,}}#{{?#{{||:#{{!=:#{{SSH_CONNECTION}},}},#{{!=:#{{SSH_TTY}},}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={violet}#,bg={b02}#,nobold]󰣀 #h ,}}#{{?#{{&&:#{{!=:#{{@ide_workdir}},}},#{{!=:#{{@ide_workdir}},#{{@ide_initial_root}}}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={blue}#,bg={b02}#,nobold]󰉋 #{{b:@ide_workdir}} ,}}#[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]󰋖 Help (Alt+?) }}}}"
+"""
+
+
+def sync_symlink(src_path, dst_path):
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    if dst_path.is_symlink() or dst_path.is_file():
+        dst_path.unlink()
+    elif dst_path.is_dir():
+        shutil.rmtree(dst_path)
+    dst_path.symlink_to(src_path)
+
+
+def sync_managed_repo_assets(repo_dir):
+    base_tmtheme = (repo_dir / "colors" / "Solarized-Dark-TrueColor.tmTheme").read_text(encoding="utf-8")
+    themes = discover_themes(repo_dir)
+    for slug in MANAGED_ORDER:
+        t = themes[slug]
+        tm_path = repo_dir / "colors" / f"{t['BAT_THEME_NAME']}.tmTheme"
+        if slug != "solarized-dark":
+            tm_path.write_text(generate_tmtheme_text(base_tmtheme, t), encoding="utf-8")
+
+        btop_path = repo_dir / "dotfiles" / ".config" / "btop" / "themes" / f"{t['BTOP_THEME_NAME']}.theme"
+        if slug != "solarized-dark":
+            btop_path.write_text(generate_btop_theme_text(t), encoding="utf-8")
+
+        ghostty_path = repo_dir / "dotfiles" / ".config" / "ghostty" / "themes" / t["GHOSTTY_THEME_NAME"]
+        if slug != "solarized-dark":
+            ghostty_path.write_text(generate_ghostty_theme_text(t), encoding="utf-8")
+
+
+def emit_live_osc_sequences(theme):
+    if not (sys.stdout.isatty() or os.environ.get("THEME_FORCE_OSC") == "1"):
+        return
+    if os.environ.get("NO_COLOR"):
+        return
+    in_tmux = bool(os.environ.get("TMUX"))
+    palette_slots = [
+        (0, theme["BASE02"]),
+        (1, theme["RED"]),
+        (2, theme["GREEN"]),
+        (3, theme["YELLOW"]),
+        (4, theme["BLUE"]),
+        (5, theme["MAGENTA"]),
+        (6, theme["CYAN"]),
+        (7, theme["BASE2"]),
+        (8, theme["BASE01"]),
+        (9, theme["ORANGE"]),
+        (10, theme["BASE01"]),
+        (11, theme["BASE00"]),
+        (12, theme["BASE0"]),
+        (13, theme["VIOLET"]),
+        (14, theme["BASE1"]),
+        (15, theme["BASE3"]),
+    ]
+    seqs = [
+        f"\033]10;{theme['BASE0']}\007",
+        f"\033]11;{theme['BASE03']}\007",
+        f"\033]12;{theme['BASE0']}\007",
+    ]
+    for idx, col in palette_slots:
+        seqs.append(f"\033]4;{idx};{col}\007")
+
+    out = []
+    for s in seqs:
+        if in_tmux:
+            escaped = s.replace("\033", "\033\033")
+            out.append(f"\033Ptmux;{escaped}\033\\")
+        else:
+            out.append(s)
+    try:
+        sys.stdout.write("".join(out))
+        sys.stdout.flush()
+    except OSError:
+        pass
+
+
+def broadcast_live_reloads(theme, state_dir, repo_dir):
+    emit_live_osc_sequences(theme)
+
+    # 1. Live Tmux reload if running inside tmux or if THEME_LIVE_TMUX / TMUX_TMPDIR is active
+    tmux_conf = state_dir / "tmux-theme.conf"
+    if shutil.which("tmux") and tmux_conf.is_file():
+        if os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or os.environ.get("THEME_LIVE_TMUX") == "1":
+            subprocess.run(
+                ["tmux", "source-file", str(tmux_conf)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            for k, v in (
+                ("HOME_SETTINGS_THEME", theme["THEME_ID"]),
+                ("BAT_THEME", theme["BAT_THEME_NAME"]),
+            ):
+                subprocess.run(
+                    ["tmux", "set-environment", "-g", k, v],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+
+    # 2. Live Neovim RPC reload
+    if shutil.which("nvim"):
+        sockets = []
+        env_sock = os.environ.get("NVIM_IDE_SOCKET", "").strip()
+        if env_sock:
+            sockets.append(Path(env_sock))
+        if os.environ.get("TMUX") or os.environ.get("THEME_LIVE_NVIM") == "1":
+            for p in Path("/tmp").glob("nvim-ide-*.sock"):
+                if p not in sockets:
+                    sockets.append(p)
+        for sock in sockets:
+            try:
+                st = sock.stat()
+                if stat.S_ISSOCK(st.st_mode) and st.st_uid == os.getuid():
+                    subprocess.run(
+                        [
+                            "nvim",
+                            "--headless",
+                            "--server",
+                            str(sock),
+                            "--remote-expr",
+                            "v:lua.apply_home_settings_theme()",
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=3,
+                        check=False,
+                    )
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+    # 3. Terminal emulator profile updates (GNOME Terminal on Linux, Terminal.app on macOS)
+    if os.environ.get("THEME_UPDATE_TERMINAL_PROFILE", "1") != "0":
+        gt_script = repo_dir / "bin" / "gnome-terminal-solarized"
+        if gt_script.is_file() and shutil.which("dconf") and shutil.which("gsettings"):
+            subprocess.run(
+                [str(gt_script), "--theme", theme["THEME_ID"]],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        if sys.platform == "darwin":
+            mt_script = repo_dir / "bin" / "macos-terminal-solarized"
+            if mt_script.is_file():
+                subprocess.run(
+                    [str(mt_script), "--theme", theme["THEME_ID"]],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+
+
+def apply_theme(theme, repo_dir, dry_run=False, no_live=False):
+    cfg_dir = get_xdg_config_home()
+    state_dir = cfg_dir / "home-settings"
+    active_dir = state_dir / "active"
+    bat_themes_dir = cfg_dir / "bat" / "themes"
+    bat_Theme_file = bat_themes_dir / f"{theme['BAT_THEME_NAME']}.tmTheme"
+
+    if dry_run:
+        print(f"[DRY-RUN] Theme: {theme['THEME_LABEL']} ({theme['THEME_ID']}, mode={theme['THEME_MODE']}, source={theme['SOURCE']})")
+        print(f"[DRY-RUN] Would write active state: {state_dir / 'theme'}")
+        print(f"[DRY-RUN] Would write active palette: {state_dir / 'active-theme.theme'}")
+        print(f"[DRY-RUN] Would write shell environment: {state_dir / 'theme-env.sh'}")
+        print(f"[DRY-RUN] Would write Zsh & p10k theme: {state_dir / 'zsh-theme.zsh'}, {state_dir / 'p10k-theme.zsh'}")
+        print(f"[DRY-RUN] Would write Tmux theme: {state_dir / 'tmux-theme.conf'}")
+        print(f"[DRY-RUN] Would update Ghostty config ({theme['GHOSTTY_THEME_NAME']}): {cfg_dir / 'ghostty' / 'config'}")
+        print(f"[DRY-RUN] Would update btop config ({theme['BTOP_THEME_NAME']}): {cfg_dir / 'btop' / 'btop.conf'}")
+        print(f"[DRY-RUN] Would update Git delta config ({theme['BAT_THEME_NAME']}): {cfg_dir / 'git' / 'config'}")
+        print(f"[DRY-RUN] Would update tealdeer config: {cfg_dir / 'tealdeer' / 'config.toml'}")
+        print(f"[DRY-RUN] Would ensure bat theme: {bat_Theme_file}")
+        print("[DRY-RUN] Would broadcast live reload to Tmux, Neovim RPC, and terminal OSC palette")
+        return 0
+
+    state_dir.mkdir(parents=True, exist_ok=True)
+    active_dir.mkdir(parents=True, exist_ok=True)
+
+    (state_dir / "theme").write_text(f"{theme['THEME_ID']}\n", encoding="utf-8")
+    (state_dir / "active-theme.theme").write_text(generate_active_theme_file_text(theme), encoding="utf-8")
+    (state_dir / "theme-env.sh").write_text(generate_theme_env_sh(theme), encoding="utf-8")
+    (state_dir / "zsh-theme.zsh").write_text(generate_zsh_theme_text(theme), encoding="utf-8")
+    (state_dir / "p10k-theme.zsh").write_text(generate_p10k_theme_text(theme), encoding="utf-8")
+    (state_dir / "tmux-theme.conf").write_text(generate_tmux_theme_text(theme), encoding="utf-8")
+    (state_dir / "delta-theme.gitconfig").write_text(generate_git_config_text(theme), encoding="utf-8")
+
+    # Materialize active app directories under state_dir/active/ so tracked repo dotfiles are never dirtied
+    # 1. Ghostty
+    active_ghostty = active_dir / "ghostty"
+    active_ghostty_themes = active_ghostty / "themes"
+    active_ghostty_themes.mkdir(parents=True, exist_ok=True)
+    repo_ghostty_themes = repo_dir / "dotfiles" / ".config" / "ghostty" / "themes"
+    if repo_ghostty_themes.is_dir():
+        for gt in repo_ghostty_themes.iterdir():
+            if gt.is_file():
+                sync_symlink(gt, active_ghostty_themes / gt.name)
+    custom_gt_path = active_ghostty_themes / theme["GHOSTTY_THEME_NAME"]
+    if not custom_gt_path.exists():
+        custom_gt_path.write_text(generate_ghostty_theme_text(theme), encoding="utf-8")
+    (active_ghostty / "config").write_text(generate_ghostty_config_text(theme), encoding="utf-8")
+    if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "ghostty").is_dir():
+        sync_symlink(repo_dir / "dotfiles" / ".config" / "ghostty", cfg_dir / "ghostty")
+    else:
+        sync_symlink(active_ghostty, cfg_dir / "ghostty")
+
+    # 2. btop
+    active_btop = active_dir / "btop"
+    active_btop_themes = active_btop / "themes"
+    active_btop_themes.mkdir(parents=True, exist_ok=True)
+    repo_btop_themes = repo_dir / "dotfiles" / ".config" / "btop" / "themes"
+    if repo_btop_themes.is_dir():
+        for bt in repo_btop_themes.iterdir():
+            if bt.is_file():
+                sync_symlink(bt, active_btop_themes / bt.name)
+    custom_bt_path = active_btop_themes / f"{theme['BTOP_THEME_NAME']}.theme"
+    if not custom_bt_path.exists():
+        custom_bt_path.write_text(generate_btop_theme_text(theme), encoding="utf-8")
+    (active_btop / "btop.conf").write_text(generate_btop_config_text(theme, repo_dir), encoding="utf-8")
+    if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "btop").is_dir():
+        sync_symlink(repo_dir / "dotfiles" / ".config" / "btop", cfg_dir / "btop")
+    else:
+        sync_symlink(active_btop, cfg_dir / "btop")
+
+    # 3. git / delta
+    active_git = active_dir / "git"
+    active_git.mkdir(parents=True, exist_ok=True)
+    (active_git / "config").write_text(generate_git_config_text(theme), encoding="utf-8")
+    if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "git").is_dir():
+        sync_symlink(repo_dir / "dotfiles" / ".config" / "git", cfg_dir / "git")
+    else:
+        sync_symlink(active_git, cfg_dir / "git")
+
+    # 4. tealdeer
+    active_tealdeer = active_dir / "tealdeer"
+    active_tealdeer.mkdir(parents=True, exist_ok=True)
+    (active_tealdeer / "config.toml").write_text(generate_tealdeer_config_text(theme), encoding="utf-8")
+    if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "tealdeer").is_dir():
+        sync_symlink(repo_dir / "dotfiles" / ".config" / "tealdeer", cfg_dir / "tealdeer")
+    else:
+        sync_symlink(active_tealdeer, cfg_dir / "tealdeer")
+
+    # 5. bat .tmTheme
+    bat_themes_dir.mkdir(parents=True, exist_ok=True)
+    repo_tm = repo_dir / "colors" / f"{theme['BAT_THEME_NAME']}.tmTheme"
+    need_bat_rebuild = False
+    if repo_tm.is_file():
+        if not bat_Theme_file.exists():
+            sync_symlink(repo_tm, bat_Theme_file)
+            need_bat_rebuild = True
+    else:
+        base_tm = (repo_dir / "colors" / "Solarized-Dark-TrueColor.tmTheme").read_text(encoding="utf-8")
+        if bat_Theme_file.is_symlink():
+            bat_Theme_file.unlink()
+        bat_Theme_file.write_text(generate_tmtheme_text(base_tm, theme), encoding="utf-8")
+        need_bat_rebuild = True
+
+    bat_cache_bin = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "bat" / "themes.bin"
+    if not bat_cache_bin.is_file():
+        need_bat_rebuild = True
+    elif bat_Theme_file.exists():
+        try:
+            if bat_Theme_file.stat().st_mtime > bat_cache_bin.stat().st_mtime:
+                need_bat_rebuild = True
+        except OSError:
+            need_bat_rebuild = True
+
+    if need_bat_rebuild:
+        bat_exe = shutil.which("bat") or shutil.which("batcat")
+        if bat_exe:
+            subprocess.run(
+                [bat_exe, "cache", "--build"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+
+    if not no_live:
+        broadcast_live_reloads(theme, state_dir, repo_dir)
+
+    print(f"Applied theme: {theme['THEME_LABEL']} ({theme['THEME_ID']})")
+    return 0
+
+
+ANSI_SGR_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def fg_esc(hex_str):
+    r, g, b = hex_to_rgb(hex_str)
+    return f"\033[38;2;{r};{g};{b}m"
+
+
+def bg_esc(hex_str):
+    r, g, b = hex_to_rgb(hex_str)
+    return f"\033[48;2;{r};{g};{b}m"
+
+
+def visible_len(s):
+    plain = ANSI_SGR_RE.sub("", s)
+    total = 0
+    for ch in plain:
+        cp = ord(ch)
+        if 0x1F300 <= cp <= 0x1FAFF or ch == "✨":
+            total += 2
+        else:
+            total += 1
+    return total
+
+
+def pad_preview_line(content, bg_code, width, left_pad=2):
+    rst = "\033[0m"
+    prefix = f"{bg_code}{' ' * left_pad}{content}{bg_code}"
+    vlen = visible_len(prefix)
+    rem = max(0, width - vlen)
+    return f"{prefix}{' ' * rem}{rst}"
+
+
+def render_preview(theme):
+    fzf_cols = os.environ.get("FZF_PREVIEW_COLUMNS", "").strip()
+    fzf_lines = os.environ.get("FZF_PREVIEW_LINES", "").strip()
+    in_fzf = bool(fzf_cols and fzf_lines)
+
+    try:
+        width = max(60, int(fzf_cols)) if fzf_cols else 76
+    except ValueError:
+        width = 76
+    try:
+        target_height = max(24, int(fzf_lines)) if fzf_lines else 0
+    except ValueError:
+        target_height = 0
+
+    b03 = bg_esc(theme["BASE03"])
+    b02 = bg_esc(theme["BASE02"])
+    b_grn = bg_esc(theme["MIX_GREEN"])
+    b_red = bg_esc(theme["MIX_RED"])
+
+    c_b01 = fg_esc(theme["BASE01"])
+    c_b00 = fg_esc(theme["BASE00"])
+    c_b0 = fg_esc(theme["BASE0"])
+    c_b1 = fg_esc(theme["BASE1"])
+    c_ylw = fg_esc(theme["YELLOW"])
+    c_org = fg_esc(theme["ORANGE"])
+    c_red = fg_esc(theme["RED"])
+    c_mag = fg_esc(theme["MAGENTA"])
+    c_vio = fg_esc(theme["VIOLET"])
+    c_blu = fg_esc(theme["BLUE"])
+    c_cyn = fg_esc(theme["CYAN"])
+    c_grn = fg_esc(theme["GREEN"])
+
+    hmeta = HOLIDAY_META.get(theme["THEME_ID"])
+    session_icon = hmeta["icon"] if hmeta else ""
+    prompt_icon = hmeta["icon"] if hmeta else ""
+
+    rule_width = max(40, min(width - 4, 68))
+    lines = []
+    if hmeta:
+        lines.append(pad_preview_line(f"{c_ylw}{hmeta['banner']}", b02, width))
+    lines.extend(
+        [
+            pad_preview_line(
+                f"{c_org}{theme['THEME_LABEL']} {c_b01}({theme['THEME_ID']} | {theme['THEME_MODE']} | {theme['SOURCE']})",
+                b02,
+                width,
+            ),
+            pad_preview_line(f"{c_b0}{theme['THEME_DESCRIPTION']}", b02, width),
+            pad_preview_line(f"{c_blu}Monotone Surface & Content Ramp:", b03, width),
+        ]
+    )
+
+    mono_row = []
+    for k in ("BASE03", "BASE02", "BASE01", "BASE00", "BASE0", "BASE1", "BASE2", "BASE3"):
+        mono_row.append(f"{fg_esc(theme[k])}██ {c_b0}{k.lower()}:{theme[k]}")
+    lines.append(pad_preview_line("  ".join(mono_row[:4]), b03, width, left_pad=4))
+    lines.append(pad_preview_line("  ".join(mono_row[4:]), b03, width, left_pad=4))
+
+    lines.append(pad_preview_line(f"{c_blu}Semantic Accent Architecture:", b03, width))
+    roles = [
+        ("YELLOW", "control flow"),
+        ("ORANGE", "preprocessor / H1"),
+        ("RED", "errors / deletions"),
+        ("MAGENTA", "constants / numbers"),
+        ("VIOLET", "imports / attributes"),
+        ("BLUE", "function defs / H2"),
+        ("CYAN", "strings / escapes"),
+        ("GREEN", "keywords / types"),
+    ]
+    for i in range(0, len(roles), 2):
+        k1, r1 = roles[i]
+        k2, r2 = roles[i + 1]
+        col1 = f"{fg_esc(theme[k1])}██ {c_b1}{k1:<7} {c_b01}{theme[k1]} {c_b0}({r1:<18})"
+        col2 = f"{fg_esc(theme[k2])}██ {c_b1}{k2:<7} {c_b01}{theme[k2]} {c_b0}({r2})"
+        lines.append(pad_preview_line(f"{col1}   {col2}", b03, width, left_pad=4))
+
+    lines.append(pad_preview_line(f"{c_b01}{'─' * rule_width}", b03, width))
+    lines.append(pad_preview_line(f"{c_blu}Converged Semantic Code Preview:", b03, width))
+    lines.extend(
+        [
+            pad_preview_line(f"{c_b01}// {theme['THEME_LABEL']} — 6-Pillar Semantic Highlighting", b03, width, left_pad=4),
+            pad_preview_line(f"{c_org}#include {c_cyn}<stdio.h>", b03, width, left_pad=4),
+            pad_preview_line(f"{c_vio}import {c_vio}core::telemetry{c_b0};", b03, width, left_pad=4),
+            pad_preview_line(f"{c_vio}#[derive(Clone)]", b03, width, left_pad=4),
+            pad_preview_line(
+                f"{c_grn}pub fn {c_blu}classify_sample{c_b0}(val: {c_grn}i64{c_b0}) -> {c_b0}Option<{c_grn}bool{c_b0}> {{",
+                b03,
+                width,
+                left_pad=4,
+            ),
+            pad_preview_line(f"    {c_ylw}if {c_b0}val >= {c_mag}42 {c_b0}{{", b03, width, left_pad=4),
+            pad_preview_line(f"    {c_red}-   {c_ylw}return {c_b0}Some({c_mag}false{c_b0});", b_red, width, left_pad=4),
+            pad_preview_line(f"    {c_grn}+   {c_ylw}return {c_b0}Some({c_mag}true{c_b0});", b_grn, width, left_pad=4),
+            pad_preview_line(f"    {c_b0}}}", b03, width, left_pad=4),
+            pad_preview_line(f"    {c_b0}emit_log({c_cyn}\"status: %s\\n\"{c_b0});", b03, width, left_pad=4),
+            pad_preview_line(f"    {c_ylw}return {c_mag}None{c_b0};", b03, width, left_pad=4),
+            pad_preview_line(f"{c_b0}}}", b03, width, left_pad=4),
+            pad_preview_line(
+                f"{c_blu}{session_icon} ide {c_b00}\uE0B1 {c_cyn}▸ 󰚩 agy {c_b1}(Alt+a) {c_b01}· {c_b0} Editor (Alt+e) {c_b01}· {c_b0} Shell (Alt+t)",
+                b02,
+                width,
+            ),
+            pad_preview_line(
+                f"{c_b0}{prompt_icon} {c_b01}\uE0B1 {c_blu}~/home-settings {c_b01}\uE0B1 {c_grn} main ✔ {c_grn}❯ {c_grn}theme {c_cyn}{theme['THEME_ID']}",
+                b03,
+                width,
+            ),
+        ]
+    )
+
+    if in_fzf and target_height > len(lines):
+        while len(lines) < target_height:
+            lines.append(pad_preview_line("", b03, width))
+
+    print("\n".join(lines))
+    return 0
+
+
+def format_swatch_strip(theme):
+    rst = "\033[0m"
+    swatches = [
+        fg_esc(theme[k]) + "██"
+        for k in ("BASE03", "BASE0", "GREEN", "BLUE", "YELLOW", "VIOLET", "CYAN", "MAGENTA", "ORANGE", "RED")
+    ]
+    return "".join(swatches) + rst
+
+
+def list_themes(themes, current_slug, plain=False):
+    use_color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    ordered_slugs = [s for s in MANAGED_ORDER if s in themes]
+    for s in sorted(themes.keys()):
+        if s not in ordered_slugs:
+            ordered_slugs.append(s)
+
+    for slug in ordered_slugs:
+        if plain:
+            print(slug)
+            continue
+        t = themes[slug]
+        marker = "*" if slug == current_slug else " "
+        hmeta = HOLIDAY_META.get(slug)
+        display_label = f"{hmeta['icon']} {t['THEME_LABEL']}" if hmeta else t["THEME_LABEL"]
+        if use_color:
+            strip = format_swatch_strip(t)
+            print(
+                f"{marker} {slug:<18} {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {strip}  {display_label} — {t['THEME_DESCRIPTION']}"
+            )
+        else:
+            print(
+                f"{marker} {slug:<18} {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {display_label} — {t['THEME_DESCRIPTION']}"
+            )
+    return 0
+
+
+def run_fzf_picker(themes, current_slug, repo_dir, dry_run=False, no_live=False):
+    fzf_bin = shutil.which("fzf")
+    if not fzf_bin:
+        return list_themes(themes, current_slug)
+
+    ordered_slugs = [s for s in MANAGED_ORDER if s in themes]
+    for s in sorted(themes.keys()):
+        if s not in ordered_slugs:
+            ordered_slugs.append(s)
+
+    lines = []
+    for slug in ordered_slugs:
+        t = themes[slug]
+        active_tag = "(active)" if slug == current_slug else "        "
+        strip = format_swatch_strip(t)
+        hmeta = HOLIDAY_META.get(slug)
+        display_label = f"{hmeta['icon']} {t['THEME_LABEL']}" if hmeta else t["THEME_LABEL"]
+        lines.append(f"{slug:<18}  {active_tag}  {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {strip}  {display_label}")
+
+    cur = themes[current_slug]
+    fzf_colors = (
+        f"--color=bg+:{cur['BASE02']},bg:{cur['BASE03']},spinner:{cur['CYAN']},"
+        f"hl:{cur['BLUE']},fg:{cur['BASE0']},header:{cur['BASE01']},"
+        f"info:{cur['YELLOW']},pointer:{cur['CYAN']},marker:{cur['GREEN']},"
+        f"fg+:{cur['BASE1']},prompt:{cur['BLUE']},hl+:{cur['BLUE']}"
+    )
+    self_bin = str(repo_dir / "bin" / "theme")
+    preview_cmd = f"{shlex.quote(self_bin)} --preview {{1}}"
+    cmd = [
+        fzf_bin,
+        "--ansi",
+        "--no-multi",
+        "--reverse",
+        "--no-scrollbar",
+        "--height=80%",
+        "--border=rounded",
+        "--prompt=Theme > ",
+        "--header=Select a color theme (Enter to apply, Esc to cancel)",
+        f"--preview={preview_cmd}",
+        "--preview-window=right:60%:nowrap:noinfo",
+        fzf_colors,
+    ]
+    proc = subprocess.run(cmd, input="\n".join(lines) + "\n", text=True, capture_output=True, check=False)
+    if proc.returncode != 0:
+        return 0
+    selected = proc.stdout.strip()
+    if not selected:
+        return 0
+    tokens = selected.split()
+    chosen_slug = (tokens[1] if tokens and tokens[0] == "*" and len(tokens) > 1 else tokens[0]).strip().lower()
+    if chosen_slug not in themes:
+        sys.stderr.write(f"theme: unknown theme selected: {chosen_slug}\n")
+        return 1
+    return apply_theme(themes[chosen_slug], repo_dir, dry_run=dry_run, no_live=no_live)
+
+
+def create_user_theme(new_name, base_slug, themes, force=False):
+    slug = new_name.strip().lower().replace("_", "-")
+    if not SLUG_RE.match(slug):
+        sys.stderr.write(f"theme: invalid theme name '{new_name}' (use lowercase letters, numbers, and hyphens)\n")
+        return 1
+    base_key = base_slug.strip().lower().replace("_", "-")
+    if base_key not in themes:
+        sys.stderr.write(f"theme: unknown base theme '{base_slug}'\n")
+        return 1
+    base = themes[base_key]
+    user_dir = get_user_themes_dirs()[0]
+    user_dir.mkdir(parents=True, exist_ok=True)
+    target_path = user_dir / f"{slug}.theme"
+    if target_path.exists() and not force:
+        sys.stderr.write(f"theme: custom theme file already exists: {target_path} (use --force to overwrite)\n")
+        return 1
+
+    label = slug_to_label(slug)
+    pascal_slug = "-".join(part.capitalize() for part in slug.split("-") if part)
+    snake_slug = slug.replace("-", "_")
+    content = f"""# Custom User Theme: {slug} (based on {base['THEME_ID']})
+THEME_ID="{slug}"
+THEME_LABEL="{label}"
+THEME_DESCRIPTION="Custom {base['THEME_MODE']} theme based on {base['THEME_LABEL']}"
+THEME_MODE="{base['THEME_MODE']}"
+BAT_THEME_NAME="{pascal_slug}-TrueColor"
+BTOP_THEME_NAME="{snake_slug}"
+GHOSTTY_THEME_NAME="{label}"
+
+# Monotone Surface & Content Ramp
+BASE03="{base['BASE03']}"
+BASE02="{base['BASE02']}"
+BASE04="{base['BASE04']}"
+BASE01="{base['BASE01']}"
+BASE00="{base['BASE00']}"
+BASE0="{base['BASE0']}"
+BASE1="{base['BASE1']}"
+BASE2="{base['BASE2']}"
+BASE3="{base['BASE3']}"
+
+# Semantic Accent Palette
+YELLOW="{base['YELLOW']}"
+ORANGE="{base['ORANGE']}"
+RED="{base['RED']}"
+MAGENTA="{base['MAGENTA']}"
+VIOLET="{base['VIOLET']}"
+BLUE="{base['BLUE']}"
+CYAN="{base['CYAN']}"
+GREEN="{base['GREEN']}"
+
+# Diff & Search Surface Tints
+MIX_GREEN="{base['MIX_GREEN']}"
+MIX_RED="{base['MIX_RED']}"
+MIX_YELLOW="{base['MIX_YELLOW']}"
+MIX_BLUE="{base['MIX_BLUE']}"
+MIX_MAGENTA="{base['MIX_MAGENTA']}"
+MIX_BASE1="{base['MIX_BASE1']}"
+"""
+    target_path.write_text(content, encoding="utf-8")
+    print(str(target_path))
+    return 0
+
+
+def main():
+    repo_dir = Path(sys.argv[1]).resolve()
+    args = sys.argv[2:]
+
+    for a in args:
+        if a in ("-h", "--help"):
+            print(USAGE_TEXT, end="")
+            return 0
+
+    if "--sync-assets" in args:
+        sync_managed_repo_assets(repo_dir)
+        return 0
+
+    try:
+        themes = discover_themes(repo_dir)
+    except ValueError as err:
+        sys.stderr.write(f"theme: {err}\n")
+        return 1
+
+    current_slug = get_current_theme_slug(themes)
+
+    action = None
+    target_name = None
+    base_name = "solarized-dark"
+    force = False
+    dry_run = False
+    no_live = False
+    plain = False
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-l", "--list"):
+            action = "list"
+        elif arg == "--plain":
+            plain = True
+            if action is None:
+                action = "list"
+        elif arg in ("-c", "--current"):
+            action = "current"
+        elif arg == "--path":
+            action = "path"
+        elif arg in ("-n", "--dry-run"):
+            dry_run = True
+        elif arg == "--no-live":
+            no_live = True
+        elif arg in ("-f", "--force"):
+            force = True
+        elif arg == "--holiday":
+            action = "set"
+            target_name = resolve_nearest_holiday_slug()
+        elif arg in ("-s", "--set"):
+            if i + 1 >= len(args) or args[i + 1].startswith("-"):
+                sys.stderr.write(f"theme: option '{arg}' requires a theme name\n")
+                return 1
+            action = "set"
+            target_name = args[i + 1]
+            i += 1
+        elif arg.startswith("--set="):
+            action = "set"
+            target_name = arg.split("=", 1)[1]
+        elif arg in ("-p", "--preview"):
+            action = "preview"
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                target_name = args[i + 1]
+                i += 1
+        elif arg.startswith("--preview="):
+            action = "preview"
+            target_name = arg.split("=", 1)[1]
+        elif arg == "--env":
+            action = "env"
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                target_name = args[i + 1]
+                i += 1
+        elif arg.startswith("--env="):
+            action = "env"
+            target_name = arg.split("=", 1)[1]
+        elif arg == "--create":
+            if i + 1 >= len(args) or args[i + 1].startswith("-"):
+                sys.stderr.write("theme: option '--create' requires a new theme name\n")
+                return 1
+            action = "create"
+            target_name = args[i + 1]
+            i += 1
+        elif arg.startswith("--create="):
+            action = "create"
+            target_name = arg.split("=", 1)[1]
+        elif arg == "--from":
+            if i + 1 >= len(args) or args[i + 1].startswith("-"):
+                sys.stderr.write("theme: option '--from' requires a base theme name\n")
+                return 1
+            base_name = args[i + 1]
+            i += 1
+        elif arg.startswith("--from="):
+            base_name = arg.split("=", 1)[1]
+        elif arg.startswith("-"):
+            sys.stderr.write(f"theme: unknown option '{arg}' (try 'theme --help')\n")
+            return 1
+        else:
+            if target_name is not None:
+                sys.stderr.write(f"theme: unexpected extra argument '{arg}'\n")
+                return 1
+            target_name = arg
+            if action is None:
+                action = "set"
+        i += 1
+
+    if action == "list":
+        return list_themes(themes, current_slug, plain=plain)
+    if action == "current":
+        print(current_slug)
+        return 0
+    if action == "path":
+        print(str(get_user_themes_dirs()[0]))
+        return 0
+    if action == "create":
+        return create_user_theme(target_name, base_name, themes, force=force)
+
+    if action in ("preview", "env"):
+        slug = (target_name or current_slug).strip().lower().replace("_", "-")
+        if slug not in themes:
+            sys.stderr.write(f"theme: unknown theme '{target_name}' (run 'theme --list' to see available themes)\n")
+            return 1
+        if action == "preview":
+            return render_preview(themes[slug])
+        print(generate_theme_env_sh(themes[slug]), end="")
+        return 0
+
+    if action == "set" or (dry_run and target_name is not None):
+        slug = (target_name or current_slug).strip().lower().replace("_", "-")
+        if slug not in themes:
+            sys.stderr.write(f"theme: unknown theme '{target_name}' (run 'theme --list' to see available themes)\n")
+            return 1
+        return apply_theme(themes[slug], repo_dir, dry_run=dry_run, no_live=no_live)
+
+    if dry_run and target_name is None:
+        return apply_theme(themes[current_slug], repo_dir, dry_run=True, no_live=no_live)
+
+    # No arguments: interactive fzf picker when TTY or forced, else list themes
+    if (sys.stdin.isatty() and sys.stdout.isatty()) or os.environ.get("THEME_FORCE_FZF") == "1":
+        return run_fzf_picker(themes, current_slug, repo_dir, dry_run=dry_run, no_live=no_live)
+    return list_themes(themes, current_slug)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+PY
+
+exec python3 -c "$THEME_PY_SRC" "$REPO_DIR" "$@"

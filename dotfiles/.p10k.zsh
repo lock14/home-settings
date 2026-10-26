@@ -24,7 +24,7 @@
 
   # Unset all configuration options. This allows you to apply configuration changes without
   # restarting zsh. Edit ~/.p10k.zsh and type `source ~/.p10k.zsh`.
-  unset -m '(POWERLEVEL9K_*|DEFAULT_USER)~POWERLEVEL9K_GITSTATUS_DIR'
+  unset -m '(POWERLEVEL9K_*|DEFAULT_USER|_HS_P10K_BASE_HEX)~POWERLEVEL9K_GITSTATUS_DIR'
 
   # Zsh >= 5.1 is required.
   [[ $ZSH_VERSION == (5.<1->*|<6->.*) ]] || return
@@ -1240,22 +1240,27 @@
     esac
     [[ ${POWERLEVEL9K_ICON_PADDING:-none} == none ]] && vcs_icon=${vcs_icon%% #}
 
-    local       meta='%F{#586E75}' # Base01
-    local      clean='%F{#859900}' # Solarized Green
-    local   modified='%F{#B58900}' # Solarized Yellow
-    local conflicted_c='%F{#CB4B16}' # Solarized Orange
+    local meta_hex=${POWERLEVEL9K_VCS_LOADING_FOREGROUND:-#586E75}
+    local clean_hex=${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-#859900}
+    local modified_hex=${POWERLEVEL9K_VCS_MODIFIED_FOREGROUND:-#B58900}
+    local conflicted_hex=${POWERLEVEL9K_VCS_CONFLICTED_FOREGROUND:-#CB4B16}
+    local vcs_bg_hex=${POWERLEVEL9K_VCS_CLEAN_BACKGROUND:-#073642}
+    local       meta="%F{${meta_hex}}"
+    local      clean="%F{${clean_hex}}"
+    local   modified="%F{${modified_hex}}"
+    local conflicted_c="%F{${conflicted_hex}}"
 
     local state='CLEAN'
-    local state_hex='#859900'
+    local state_hex=$clean_hex
     local state_color=$clean
     if (( staged > 0 || unstaged > 0 || untracked > 0 )); then
       state='MODIFIED'
-      state_hex='#B58900'
+      state_hex=$modified_hex
       state_color=$modified
     fi
     if (( conflicted > 0 )); then
       state='CONFLICTED'
-      state_hex='#CB4B16'
+      state_hex=$conflicted_hex
       state_color=$conflicted_c
     fi
 
@@ -1296,11 +1301,11 @@
     typeset -g my_git_format=$res
     if (( $+functions[p10k] )); then
       if [[ -n ${_p9k__prompt_side:-} ]] || [[ ${functions[p10k]} != *_p9k__prompt_side* ]]; then
-        p10k segment -s "$state" -b '#073642' -f "$state_hex" -i "$vcs_icon" -t "$res"
+        p10k segment -s "$state" -b "$vcs_bg_hex" -f "$state_hex" -i "$vcs_icon" -t "$res"
       else
         local _p9k__prompt_side=left _p9k__segment_name=vcs
         local -i _p9k__segment_index=3 _p9k__line_index=1
-        p10k segment -s "$state" -b '#073642' -f "$state_hex" -i "$vcs_icon" -t "$res"
+        p10k segment -s "$state" -b "$vcs_bg_hex" -f "$state_hex" -i "$vcs_icon" -t "$res"
       fi
     fi
   }
@@ -2816,6 +2821,10 @@
   # can slow down prompt by 1-2 milliseconds, so it's better to keep it turned off unless you
   # really need it.
   typeset -g POWERLEVEL9K_DISABLE_HOT_RELOAD=true
+
+  # Active color theme overrides (managed by bin/theme).
+  local p10k_theme=${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/p10k-theme.zsh
+  [[ -r $p10k_theme ]] && source $p10k_theme
 
   # Machine-local overrides that stay out of this repository (e.g. extra directory anchors or
   # workdirs to skip VCS status in). The untracked file runs here, after the defaults above and

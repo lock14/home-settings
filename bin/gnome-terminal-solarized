@@ -4,8 +4,14 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || pwd)"
+SOURCE_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE_PATH" ]; do
+    SOURCE_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" 2>/dev/null && pwd || pwd)"
+    SOURCE_PATH="$(readlink "$SOURCE_PATH")"
+    [[ "$SOURCE_PATH" != /* ]] && SOURCE_PATH="$SOURCE_DIR/$SOURCE_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" 2>/dev/null && pwd || pwd)"
+REPO_DIR="$(cd -P "$SCRIPT_DIR/.." 2>/dev/null && pwd || pwd)"
 DCONF_FILE="$REPO_DIR/colors/gnome-terminal-solarized.dconf"
 
 PROFILE_UUID="321fa646-e6ab-45a1-88d8-00aa66d158d8"
@@ -14,14 +20,16 @@ LEGACY_PROFILE_UUID="11f5ebd6-faab-4bd3-8336-868a6b52ac0d"
 FACTORY_EMPTY_UUID="b1dcc9dd-5262-4d8d-a863-c897e6d979b9"
 
 DRY_RUN=false
+THEME_NAME="${HOME_SETTINGS_THEME:-}"
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Configures authentic 24-bit Solarized Dark TrueColor profile for GNOME Terminal.
+Configures authentic 24-bit TrueColor profile for GNOME Terminal.
 
 Options:
+  --theme <name>  Color theme to apply (default: solarized-dark)
   --dry-run       Preview configuration changes without applying them
   -h, --help      Display this help message
 EOF
@@ -29,6 +37,14 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --theme)
+            if [ $# -lt 2 ]; then
+                echo "Error: --theme requires a theme name" >&2
+                exit 1
+            fi
+            THEME_NAME="$2"
+            shift 2
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -94,6 +110,35 @@ else
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/use-system-font" "false"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/font" "'MesloLGS Nerd Font Mono 12'"
     dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/palette" "['#073642', '#DC322F', '#859900', '#B58900', '#268BD2', '#D33682', '#2AA198', '#EEE8D5', '#586E75', '#CB4B16', '#586E75', '#657B83', '#839496', '#6C71C4', '#93A1A1', '#FDF6E3']"
+fi
+
+if [ -n "$THEME_NAME" ] && [ "$THEME_NAME" != "solarized-dark" ]; then
+    THEME_FILE=""
+    for candidate in \
+        "${HOME_SETTINGS_USER_THEMES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/themes}/$THEME_NAME.theme" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/themes/$THEME_NAME.theme" \
+        "$REPO_DIR/colors/themes/$THEME_NAME.theme" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/active-theme.theme"; do
+        if [ -f "$candidate" ]; then
+            THEME_FILE="$candidate"
+            break
+        fi
+    done
+    if [ -n "$THEME_FILE" ]; then
+        (
+            # shellcheck source=/dev/null
+            . "$THEME_FILE"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/visible-name" "'${THEME_LABEL:-$PROFILE_NAME}'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/background-color" "'$BASE03'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/foreground-color" "'$BASE0'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/bold-color" "'$BASE1'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-background-color" "'$BASE0'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/cursor-foreground-color" "'$BASE03'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-background-color" "'$BASE02'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/highlight-foreground-color" "'$BASE1'"
+            dconf write "/org/gnome/terminal/legacy/profiles:/:$PROFILE_UUID/palette" "['$BASE02', '$RED', '$GREEN', '$YELLOW', '$BLUE', '$MAGENTA', '$CYAN', '$BASE2', '$BASE01', '$ORANGE', '$BASE01', '$BASE00', '$BASE0', '$VIOLET', '$BASE1', '$BASE3']"
+        )
+    fi
 fi
 
 # Clean up legacy custom profile keys if present

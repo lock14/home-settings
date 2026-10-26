@@ -1,0 +1,37 @@
+# Managed Theme: new-years
+THEME_ID="new-years"
+THEME_LABEL="New Year's"
+THEME_DESCRIPTION="Midnight indigo canvas with champagne gold, neon confetti pink, and electric cyan fireworks"
+THEME_MODE="dark"
+BAT_THEME_NAME="New-Years-TrueColor"
+BTOP_THEME_NAME="new_years"
+GHOSTTY_THEME_NAME="New Years"
+
+# Monotone Surface & Content Ramp
+BASE03="#08091A"
+BASE02="#141736"
+BASE04="#040510"
+BASE01="#656D9E"
+BASE00="#8089BD"
+BASE0="#EEF1FF"
+BASE1="#FFFFFF"
+BASE2="#FFFDF2"
+BASE3="#FAFAFF"
+
+# Semantic Accent Palette (Champagne Gold, Electric Fireworks & Confetti)
+YELLOW="#FFAA00"
+ORANGE="#FF7733"
+RED="#FF2E55"
+MAGENTA="#FF85E4"
+VIOLET="#B388FF"
+BLUE="#00F0FF"
+CYAN="#FF66C4"
+GREEN="#FFD700"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#352F1A"
+MIX_RED="#351025"
+MIX_YELLOW="#35261A"
+MIX_BLUE="#063345"
+MIX_MAGENTA="#351E3F"
+MIX_BASE1="#242748"

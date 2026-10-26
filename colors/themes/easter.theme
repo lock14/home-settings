@@ -1,0 +1,37 @@
+# Managed Theme: easter
+THEME_ID="easter"
+THEME_LABEL="Easter"
+THEME_DESCRIPTION="Spring pastel lilac-eggshell canvas with tulip pink, robin's-egg blue, and daffodil gold"
+THEME_MODE="light"
+BAT_THEME_NAME="Easter-TrueColor"
+BTOP_THEME_NAME="easter"
+GHOSTTY_THEME_NAME="Easter"
+
+# Monotone Surface & Content Ramp
+BASE03="#FDF7FF"
+BASE02="#F2E3FA"
+BASE04="#E6D2F2"
+BASE01="#8E6FA3"
+BASE00="#75568A"
+BASE0="#3A224D"
+BASE1="#261236"
+BASE2="#180924"
+BASE3="#0D0414"
+
+# Semantic Accent Palette (Tulip Pink, Robin's-Egg Blue, Mint & Daffodil)
+YELLOW="#D98200"
+ORANGE="#E65100"
+RED="#D50032"
+MAGENTA="#C738BD"
+VIOLET="#8A2BE2"
+BLUE="#0088DD"
+CYAN="#00A86B"
+GREEN="#E82E8A"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#F9D3E6"
+MIX_RED="#F5CAD5"
+MIX_YELLOW="#F6E0CC"
+MIX_BLUE="#C5E2F8"
+MIX_MAGENTA="#F2D1F3"
+MIX_BASE1="#DEC9EC"

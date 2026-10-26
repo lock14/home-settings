@@ -22,9 +22,15 @@ uninstall_dotfiles() {
     echo "  Removing managed dotfile symlinks..."
     local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
     local dotfiles=(
-        "$xdg_config/bat/themes/Solarized-Dark-TrueColor.tmTheme"
         "$xdg_config/mise/config.toml"
     )
+
+    if [ -d "$REPO_DIR/colors" ]; then
+        for tmtheme in "$REPO_DIR/colors"/*.tmTheme; do
+            [ -e "$tmtheme" ] || continue
+            dotfiles+=("$xdg_config/bat/themes/$(basename "$tmtheme")")
+        done
+    fi
 
     if [ -d "$REPO_DIR/dotfiles/.dir-colors" ]; then
         for f in "$REPO_DIR/dotfiles/.dir-colors"/*; do
@@ -73,11 +79,12 @@ uninstall_dotfiles() {
         unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/themes"
     fi
 
-    # Clean up empty bat directories if they exist
+    # Clean up empty bat directories and generated theme state if they exist
     if [ "$DRY_RUN" = false ]; then
         rmdir "$xdg_config/bat/syntaxes" 2>/dev/null || true
         rmdir "$xdg_config/bat/themes" 2>/dev/null || true
         rmdir "$xdg_config/bat" 2>/dev/null || true
+        rm -rf "$xdg_config/home-settings" 2>/dev/null || true
     fi
 
     # Rebuild bat cache to purge uninstalled syntaxes and themes

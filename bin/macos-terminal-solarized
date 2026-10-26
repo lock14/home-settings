@@ -4,21 +4,29 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || pwd)"
+SOURCE_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE_PATH" ]; do
+    SOURCE_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" 2>/dev/null && pwd || pwd)"
+    SOURCE_PATH="$(readlink "$SOURCE_PATH")"
+    [[ "$SOURCE_PATH" != /* ]] && SOURCE_PATH="$SOURCE_DIR/$SOURCE_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" 2>/dev/null && pwd || pwd)"
+REPO_DIR="$(cd -P "$SCRIPT_DIR/.." 2>/dev/null && pwd || pwd)"
 TERMINAL_FILE="$REPO_DIR/colors/Solarized-Dark.terminal"
 PREFS_PLIST="$HOME/Library/Preferences/com.apple.Terminal.plist"
 
 PROFILE_NAME="Solarized Dark"
 DRY_RUN=false
+THEME_NAME="${HOME_SETTINGS_THEME:-}"
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Configures authentic 24-bit Solarized Dark TrueColor profile for macOS Terminal.app.
+Configures authentic 24-bit TrueColor profile for macOS Terminal.app.
 
 Options:
+  --theme <name>  Color theme to apply (default: solarized-dark)
   --dry-run       Preview configuration changes without applying them
   -h, --help      Display this help message
 EOF
@@ -26,6 +34,14 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --theme)
+            if [ $# -lt 2 ]; then
+                echo "Error: --theme requires a theme name" >&2
+                exit 1
+            fi
+            THEME_NAME="$2"
+            shift 2
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -109,6 +125,46 @@ if command -v osascript >/dev/null 2>&1 && pgrep -x Terminal >/dev/null 2>&1; th
             set font antialiasing of settings set "'"$PROFILE_NAME"'" to true
         end try
     end tell' >/dev/null 2>&1 || true
+fi
+
+if [ -n "$THEME_NAME" ] && [ "$THEME_NAME" != "solarized-dark" ]; then
+    THEME_FILE=""
+    for candidate in \
+        "${HOME_SETTINGS_USER_THEMES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/themes}/$THEME_NAME.theme" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/themes/$THEME_NAME.theme" \
+        "$REPO_DIR/colors/themes/$THEME_NAME.theme" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/active-theme.theme"; do
+        if [ -f "$candidate" ]; then
+            THEME_FILE="$candidate"
+            break
+        fi
+    done
+    if [ -n "$THEME_FILE" ] && command -v osascript >/dev/null 2>&1 && pgrep -x Terminal >/dev/null 2>&1; then
+        python3 - "$THEME_FILE" "$PROFILE_NAME" <<'PY' >/dev/null 2>&1 || true
+import re, subprocess, sys
+vals = {}
+with open(sys.argv[1], encoding="utf-8") as f:
+    for line in f:
+        m = re.match(r'^([A-Z0-9_]+)="?([^"\n]*)"?$', line.strip())
+        if m:
+            vals[m.group(1)] = m.group(2)
+def rgb16(key, default):
+    h = vals.get(key, default).lstrip("#")
+    return f"{{{int(h[0:2],16)*257}, {int(h[2:4],16)*257}, {int(h[4:6],16)*257}}}"
+bg = rgb16("BASE03", "#002B36")
+fg = rgb16("BASE0", "#839496")
+bold = rgb16("BASE1", "#93A1A1")
+script = f'''tell application "Terminal"
+    try
+        set background color of settings set "{sys.argv[2]}" to {bg}
+        set normal text color of settings set "{sys.argv[2]}" to {fg}
+        set bold text color of settings set "{sys.argv[2]}" to {bold}
+        set cursor color of settings set "{sys.argv[2]}" to {fg}
+    end try
+end tell'''
+subprocess.run(["osascript", "-e", script], check=False)
+PY
+    fi
 fi
 
 echo "  macOS Terminal.app profile '$PROFILE_NAME' successfully configured as default."
