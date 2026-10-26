@@ -10,24 +10,24 @@
 			<key>settings</key>
 			<dict>
 				<key>background</key>
-				<string>#120E1A</string>
+				<string>#160824</string>
 				<key>caret</key>
-				<string>#CEC4DE</string>
+				<string>#EDE2FA</string>
 				<key>foreground</key>
-				<string>#CEC4DE</string>
+				<string>#EDE2FA</string>
 				<key>invisibles</key>
-				<string>#6B5E82</string>
+				<string>#7D5BA6</string>
 				<key>lineHighlight</key>
-				<string>#1F182D</string>
+				<string>#281040</string>
 				<key>selection</key>
-				<string>#1F182D</string>
+				<string>#281040</string>
 				<key>gutter</key>
-				<string>#120E1A</string>
+				<string>#160824</string>
 				<key>gutterForeground</key>
-				<string>#6B5E82</string>
+				<string>#7D5BA6</string>
 			</dict>
 		</dict>
-		<!-- Comments & Subtle Metadata (Solarized Base01 #6B5E82) -->
+		<!-- Comments & Subtle Metadata (Solarized Base01 #7D5BA6) -->
 		<dict>
 			<key>name</key>
 			<string>Comments and Subtle Metadata</string>
@@ -38,10 +38,10 @@
 				<key>fontStyle</key>
 				<string></string>
 				<key>foreground</key>
-				<string>#6B5E82</string>
+				<string>#7D5BA6</string>
 			</dict>
 		</dict>
-		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #48E5C2) -->
+		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #FFB800) -->
 		<dict>
 			<key>name</key>
 			<string>Strings, Escapes, Format Placeholders, and Special Characters</string>
@@ -50,10 +50,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#48E5C2</string>
+				<string>#FFB800</string>
 			</dict>
 		</dict>
-		<!-- Markdown Inline Code (Solarized Cyan #48E5C2) -->
+		<!-- Markdown Inline Code (Solarized Cyan #FFB800) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Inline Code</string>
@@ -62,10 +62,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#48E5C2</string>
+				<string>#FFB800</string>
 			</dict>
 		</dict>
-		<!-- Markdown Link URL (Solarized Cyan #48E5C2) -->
+		<!-- Markdown Link URL (Solarized Cyan #FFB800) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Link URL</string>
@@ -74,10 +74,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#48E5C2</string>
+				<string>#FFB800</string>
 			</dict>
 		</dict>
-		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #E066A6) -->
+		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #FF5CCD) -->
 		<dict>
 			<key>name</key>
 			<string>Numbers, Constants, Literals, Sentinels, and Regular Expressions</string>
@@ -86,10 +86,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#E066A6</string>
+				<string>#FF5CCD</string>
 			</dict>
 		</dict>
-		<!-- Structural Scaffolding, Declarations & Primitive Types (Solarized Green #7AE582) -->
+		<!-- Structural Scaffolding, Declarations & Primitive Types (Solarized Green #FF7518) -->
 		<dict>
 			<key>name</key>
 			<string>Structural Scaffolding, Declarations, and Primitive Types</string>
@@ -98,10 +98,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#7AE582</string>
+				<string>#FF7518</string>
 			</dict>
 		</dict>
-		<!-- Diff Inserted (Solarized Green #7AE582) -->
+		<!-- Diff Inserted (Solarized Green #FF7518) -->
 		<dict>
 			<key>name</key>
 			<string>Markup Inserted (Diff)</string>
@@ -110,10 +110,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#7AE582</string>
+				<string>#FF7518</string>
 			</dict>
 		</dict>
-		<!-- Control Flow & Execution Jumps (Solarized Yellow #F4B942) -->
+		<!-- Control Flow & Execution Jumps (Solarized Yellow #FF2A55) -->
 		<dict>
 			<key>name</key>
 			<string>Control Flow</string>
@@ -122,10 +122,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#F4B942</string>
+				<string>#FF2A55</string>
 			</dict>
 		</dict>
-		<!-- Monotone Canvas Ground: Custom Types, Invocations, Variables & Operators (Solarized Base0 #CEC4DE) -->
+		<!-- Monotone Canvas Ground: Custom Types, Invocations, Variables & Operators (Solarized Base0 #EDE2FA) -->
 		<dict>
 			<key>name</key>
 			<string>Monotone Canvas Ground (Types, Invocations, Variables, Operators)</string>
@@ -134,10 +134,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#CEC4DE</string>
+				<string>#EDE2FA</string>
 			</dict>
 		</dict>
-		<!-- Namespaces, Modules, Annotations, Decorators, Attributes & Imports (Solarized Violet #B388FF) -->
+		<!-- Namespaces, Modules, Annotations, Decorators, Attributes & Imports (Solarized Violet #C77DFF) -->
 		<dict>
 			<key>name</key>
 			<string>Namespaces, Modules, Annotations, Decorators, Attributes, and Imports</string>
@@ -146,10 +146,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#B388FF</string>
+				<string>#C77DFF</string>
 			</dict>
 		</dict>
-		<!-- Function & Routine Declarations, Section Headers & Diff Ranges (Solarized Blue #6E9EFF) -->
+		<!-- Function & Routine Declarations, Section Headers & Diff Ranges (Solarized Blue #55FF47) -->
 		<dict>
 			<key>name</key>
 			<string>Function Declarations, Section Headers, and Diff Hunk Ranges</string>
@@ -158,10 +158,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#6E9EFF</string>
+				<string>#55FF47</string>
 			</dict>
 		</dict>
-		<!-- Preprocessor Directives, At-Rules & Markdown H1 (Solarized Orange #FF7518) -->
+		<!-- Preprocessor Directives, At-Rules & Markdown H1 (Solarized Orange #FF9E00) -->
 		<dict>
 			<key>name</key>
 			<string>Preprocessor Directives, At-Rules, and Markdown Heading 1</string>
@@ -170,10 +170,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FF7518</string>
+				<string>#FF9E00</string>
 			</dict>
 		</dict>
-		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #E2DAF0) -->
+		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #F8F2FF) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading 4 and Table Headers</string>
@@ -182,10 +182,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#E2DAF0</string>
+				<string>#F8F2FF</string>
 			</dict>
 		</dict>
-		<!-- Markdown Bold (Solarized Base1 Bold #E2DAF0) -->
+		<!-- Markdown Bold (Solarized Base1 Bold #F8F2FF) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Bold</string>
@@ -196,7 +196,7 @@
 				<key>fontStyle</key>
 				<string>bold</string>
 				<key>foreground</key>
-				<string>#E2DAF0</string>
+				<string>#F8F2FF</string>
 			</dict>
 		</dict>
 		<!-- Markdown Italic (Solarized Base0 Italic) -->
@@ -211,7 +211,7 @@
 				<string>italic</string>
 			</dict>
 		</dict>
-		<!-- Diagnostics, Errors & Diff Deletions (Solarized Red #E63956) -->
+		<!-- Diagnostics, Errors & Diff Deletions (Solarized Red #FF1744) -->
 		<dict>
 			<key>name</key>
 			<string>Invalid, Error, and Diff Deleted</string>
@@ -220,7 +220,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#E63956</string>
+				<string>#FF1744</string>
 			</dict>
 		</dict>
 	</array>
