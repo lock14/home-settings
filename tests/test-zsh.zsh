@@ -1042,6 +1042,15 @@ EOF
         local nd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local nd_dir_fg="${POWERLEVEL9K_DIR_FOREGROUND:-}"
 
+        "$SCRIPT_DIR/bin/theme" --set halloween --no-live >/dev/null 2>>"$theme_err_file"
+        _hs_sync_active_theme
+        local hw_theme="${HOME_SETTINGS_THEME:-}"
+        local hw_cmd="${ZSH_HIGHLIGHT_STYLES[command]:-}"
+        local hw_res="${ZSH_HIGHLIGHT_STYLES[reserved-word]:-}"
+        local hw_str="${ZSH_HIGHLIGHT_STYLES[single-quoted-argument]:-}"
+        local hw_icon="${POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION:-}"
+        local hw_precmd="${precmd_functions[(I)_hs_sync_active_theme]:-0}"
+
         theme --set solarized-dark --no-live >/dev/null 2>>"$theme_err_file"
         local sd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local sd_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
@@ -1056,10 +1065,13 @@ EOF
            [ "$cm_dir_fg" = "#89B4FA" ] && \
            [ "$cm_vcs_bg" = "#313244" ] && [ "$cm_vcs_fg" = "#A6E3A1" ] && \
            [ "$nd_dir_bg" = "#3B4252" ] && [ "$nd_dir_fg" = "#81A1C1" ] && \
+           [ "$hw_theme" = "halloween" ] && [ "$hw_cmd" = "fg=#FF7518" ] && \
+           [ "$hw_res" = "fg=#FFE000" ] && [ "$hw_str" = "fg=#2EE6D6" ] && \
+           [ "$hw_icon" = "🎃" ] && [ "$hw_precmd" -gt 0 ] && \
            [ "$sd_dir_bg" = "#073642" ] && [ "$sd_os_fg" = "#839496" ]; then
-            echo "PASS:Zsh theme() wrapper hot-reloads HOME_SETTINGS_THEME, ZSH_HIGHLIGHT_STYLES, and Powerlevel10k prompt_vcs colors across sequential theme switches (solarized-light -> catppuccin-mocha -> nord -> solarized-dark) with zero stderr"
+            echo "PASS:Zsh theme() wrapper and _hs_sync_active_theme precmd hook hot-reload HOME_SETTINGS_THEME, ZSH_HIGHLIGHT_STYLES, and Powerlevel10k prompt_vcs/icon across sequential and cross-pane theme switches with zero stderr"
         else
-            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' nd='$nd_dir_bg/$nd_dir_fg' sd='$sd_dir_bg/$sd_os_fg'"
+            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' nd='$nd_dir_bg/$nd_dir_fg' hw='$hw_theme/$hw_cmd/$hw_res/$hw_str/$hw_icon/$hw_precmd' sd='$sd_dir_bg/$sd_os_fg'"
         fi
     )
 }

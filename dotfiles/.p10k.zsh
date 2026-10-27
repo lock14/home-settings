@@ -394,10 +394,10 @@
     fi
 
     # Styling for different parts of Git status on Base02 background.
-    local       meta='%F{#586E75}' # Base01
-    local      clean='%F{#859900}' # Solarized Green
-    local   modified='%F{#B58900}' # Solarized Yellow
-    local conflicted='%F{#CB4B16}' # Solarized Orange
+    local       meta="%F{${POWERLEVEL9K_VCS_LOADING_FOREGROUND:-#586E75}}" # Base01
+    local      clean="%F{${POWERLEVEL9K_VCS_CLEAN_FOREGROUND:-#859900}}" # Solarized Green
+    local   modified="%F{${POWERLEVEL9K_VCS_MODIFIED_FOREGROUND:-#B58900}}" # Solarized Yellow
+    local conflicted="%F{${POWERLEVEL9K_VCS_CONFLICTED_FOREGROUND:-#CB4B16}}" # Solarized Orange
 
     # Pure Whole-Segment State: unify entire Git segment by dominant repository state
     local state_color=$clean

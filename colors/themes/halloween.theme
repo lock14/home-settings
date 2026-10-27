@@ -18,20 +18,20 @@ BASE1="#F8F2FF"
 BASE2="#FFF8EB"
 BASE3="#FFFFFF"
 
-# Semantic Accent Palette (Jack-o'-Lantern Orange, Ectoplasm Slime Green & Blood Moon)
-YELLOW="#FF2A55"
-ORANGE="#FF9E00"
+# Semantic Accent Palette (Jack-o'-Lantern Orange, Ectoplasm Slime Green, Candy-Corn Gold & Spectral Cyan)
+YELLOW="#FFE000"
+ORANGE="#FF3B00"
 RED="#FF1744"
 MAGENTA="#FF5CCD"
 VIOLET="#C77DFF"
 BLUE="#55FF47"
-CYAN="#FFB800"
+CYAN="#2EE6D6"
 GREEN="#FF7518"
 
 # Diff & Search Surface Tints
-MIX_GREEN="#401C22"
-MIX_RED="#400B2A"
-MIX_YELLOW="#450F2F"
+MIX_GREEN="#1B3D26"
+MIX_RED="#440E26"
+MIX_YELLOW="#45331D"
 MIX_BLUE="#243F2C"
 MIX_MAGENTA="#451946"
 MIX_BASE1="#33204A"
