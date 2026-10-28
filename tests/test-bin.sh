@@ -1640,9 +1640,146 @@ HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME
 if [ "$all_switches_ok" = true ] && \
    [ "$(readlink "$THEME_TEST_Cfg/btop")" = "$SCRIPT_DIR/dotfiles/.config/btop" ] && \
    [ "$(readlink "$THEME_TEST_Cfg/git")" = "$SCRIPT_DIR/dotfiles/.config/git" ]; then
-    pass "bin/theme switches cleanly across all 9 managed themes (dark & light) and updates ghostty, btop, delta, tealdeer, tmux, and shell state without dirtying tracked dotfiles"
+    pass "bin/theme switches cleanly across all 17 managed themes (dark & light) and updates ghostty, btop, delta, tealdeer, tmux, and shell state without dirtying tracked dotfiles"
 else
-    fail "bin/theme 9-theme cycle" "Failed switching or restoring symlinks"
+    fail "bin/theme 17-theme cycle" "Failed switching or restoring symlinks"
+fi
+
+# Verify semantic utility separation (GREEN vs RED vs YELLOW, MIX_GREEN vs MIX_RED, pairwise accent separation, and contrast) across all 17 built-in themes
+if python3 - "$SCRIPT_DIR" "$THEME_TEST_HOME" "$THEME_TEST_Cfg" "$THEME_TEST_Cache" <<'PY'; then
+import colorsys
+import math
+import pathlib
+import re
+import subprocess
+import sys
+
+repo = pathlib.Path(sys.argv[1])
+test_home = sys.argv[2]
+test_cfg = sys.argv[3]
+test_cache = sys.argv[4]
+
+def hex_to_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def rel_lum(rgb):
+    def ch(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = rgb
+    return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+
+def contrast(h1, h2):
+    l1, l2 = rel_lum(hex_to_rgb(h1)), rel_lum(hex_to_rgb(h2))
+    return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+
+def rgb_dist(h1, h2):
+    r1, g1, b1 = hex_to_rgb(h1)
+    r2, g2, b2 = hex_to_rgb(h2)
+    rm = (r1 + r2) / 2.0
+    dr, dg, db = r1 - r2, g1 - g2, b1 - b2
+    return math.sqrt((2 + rm / 256.0) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256.0) * db * db)
+
+def hue_diff(h1, h2):
+    r1, g1, b1 = [x / 255.0 for x in hex_to_rgb(h1)]
+    r2, g2, b2 = [x / 255.0 for x in hex_to_rgb(h2)]
+    hue1, _, _ = colorsys.rgb_to_hsv(r1, g1, b1)
+    hue2, _, _ = colorsys.rgb_to_hsv(r2, g2, b2)
+    d = abs(hue1 - hue2) * 360.0
+    return min(d, 360.0 - d)
+
+classic = [
+    "solarized-dark", "solarized-light", "catppuccin-mocha", "catppuccin-latte",
+    "gruvbox-dark", "tokyonight-night", "kanagawa-wave", "nord", "onedark",
+]
+holidays = [
+    "new-years", "valentines", "st-patricks", "easter",
+    "independence-day", "halloween", "thanksgiving", "christmas",
+]
+accents = ["YELLOW", "ORANGE", "RED", "MAGENTA", "VIOLET", "BLUE", "CYAN", "GREEN"]
+
+for slug in classic + holidays:
+    p = repo / "colors" / "themes" / f"{slug}.theme"
+    d = {}
+    for line in p.read_text(encoding="utf-8").splitlines():
+        m = re.match(r'^([A-Z0-9_]+)="(.*)"$', line.strip())
+        if m:
+            d[m.group(1)] = m.group(2)
+
+    gr_d = rgb_dist(d["GREEN"], d["RED"])
+    gr_h = hue_diff(d["GREEN"], d["RED"])
+    yr_d = rgb_dist(d["YELLOW"], d["RED"])
+    yr_h = hue_diff(d["YELLOW"], d["RED"])
+    yg_d = rgb_dist(d["YELLOW"], d["GREEN"])
+    mix_d = rgb_dist(d["MIX_GREEN"], d["MIX_RED"])
+
+    if gr_d < 190 or gr_h < 28:
+        raise SystemExit(f"{slug}: GREEN ({d['GREEN']}) vs RED ({d['RED']}) too close: dist={gr_d:.1f} hue={gr_h:.1f}")
+    if yr_d < (220 if slug in holidays else 120) or yr_h < 25:
+        raise SystemExit(f"{slug}: YELLOW ({d['YELLOW']}) vs RED ({d['RED']}) too close: dist={yr_d:.1f} hue={yr_h:.1f}")
+    if yg_d < (200 if slug in holidays else 80):
+        raise SystemExit(f"{slug}: YELLOW ({d['YELLOW']}) vs GREEN ({d['GREEN']}) too close: dist={yg_d:.1f}")
+    if mix_d < 30:
+        raise SystemExit(f"{slug}: MIX_GREEN ({d['MIX_GREEN']}) vs MIX_RED ({d['MIX_RED']}) too close: dist={mix_d:.1f}")
+
+    rg, gg, bg = hex_to_rgb(d["MIX_GREEN"])
+    rr, gr, br = hex_to_rgb(d["MIX_RED"])
+    if (gg - rg) <= (gr - rr) + 15:
+        raise SystemExit(f"{slug}: MIX_GREEN ({d['MIX_GREEN']}) vs MIX_RED ({d['MIX_RED']}) lacks green/red polarity")
+
+    or_r, or_g, or_b = hex_to_rgb(d["ORANGE"])
+    if not (or_r > or_g > or_b):
+        raise SystemExit(f"{slug}: ORANGE ({d['ORANGE']}) is not a warm orange/ember hue (R > G > B)")
+
+    if contrast(d["BASE0"], d["BASE03"]) < (7.0 if slug in holidays else 4.0):
+        raise SystemExit(f"{slug}: BASE0 contrast against BASE03 too low")
+
+    if slug in holidays:
+        for i in range(len(accents)):
+            if contrast(d[accents[i]], d["BASE03"]) < 3.0:
+                raise SystemExit(f"{slug}: {accents[i]} ({d[accents[i]]}) contrast against BASE03 < 3.0")
+            for j in range(i + 1, len(accents)):
+                pair_d = rgb_dist(d[accents[i]], d[accents[j]])
+                if pair_d < 100:
+                    raise SystemExit(f"{slug}: {accents[i]} ({d[accents[i]]}) vs {accents[j]} ({d[accents[j]]}) dist={pair_d:.1f} < 100")
+
+# Verify generated zsh-theme.zsh, git/config, p10k-theme.zsh, theme-env.sh, and tmux-theme.conf for holiday vs classic
+env = {"HOME": test_home, "XDG_CONFIG_HOME": test_cfg, "XDG_CACHE_HOME": test_cache, "PATH": "/usr/bin:/bin"}
+cfg_root = pathlib.Path(test_cfg)
+for slug in ("independence-day", "christmas", "valentines", "easter", "halloween"):
+    subprocess.run([str(repo / "bin" / "theme"), "--set", slug, "--no-live"], env=env, stdout=subprocess.DEVNULL, check=True)
+    zsh_txt = (cfg_root / "home-settings" / "zsh-theme.zsh").read_text(encoding="utf-8")
+    cmd_col = re.search(r'ZSH_HIGHLIGHT_STYLES\[command\]="fg=(#[0-9A-Fa-f]{6})"', zsh_txt).group(1)
+    unk_col = re.search(r'ZSH_HIGHLIGHT_STYLES\[unknown-token\]="fg=(#[0-9A-Fa-f]{6})"', zsh_txt).group(1)
+    res_col = re.search(r'ZSH_HIGHLIGHT_STYLES\[reserved-word\]="fg=(#[0-9A-Fa-f]{6})"', zsh_txt).group(1)
+    if rgb_dist(cmd_col, unk_col) < 190 or rgb_dist(res_col, unk_col) < 190 or rgb_dist(cmd_col, res_col) < 150:
+        raise SystemExit(f"{slug}: zsh-theme.zsh command/reserved-word/unknown-token collision: {cmd_col}, {res_col}, {unk_col}")
+
+    git_txt = (cfg_root / "git" / "config").read_text(encoding="utf-8")
+    plus_emph = re.search(r'plus-emph-style = syntax "(#[0-9a-f]{6})"', git_txt).group(1)
+    minus_emph = re.search(r'minus-emph-style = syntax "(#[0-9a-f]{6})"', git_txt).group(1)
+    pe_r, pe_g, _ = hex_to_rgb(plus_emph)
+    me_r, me_g, _ = hex_to_rgb(minus_emph)
+    if (pe_g - pe_r) <= (me_g - me_r) + 20:
+        raise SystemExit(f"{slug}: git delta plus-emph-style ({plus_emph}) vs minus-emph-style ({minus_emph}) lacks green/red polarity")
+
+    env_txt = (cfg_root / "home-settings" / "theme-env.sh").read_text(encoding="utf-8")
+    p10k_txt = (cfg_root / "home-settings" / "p10k-theme.zsh").read_text(encoding="utf-8")
+    tmux_txt = (cfg_root / "home-settings" / "tmux-theme.conf").read_text(encoding="utf-8")
+    if "export _HS_PROMPT_OS_ICON=" not in env_txt or "POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION=" not in p10k_txt or "" in tmux_txt:
+        raise SystemExit(f"{slug}: missing holiday emblem in theme-env.sh, p10k-theme.zsh, or tmux-theme.conf")
+
+subprocess.run([str(repo / "bin" / "theme"), "--set", "solarized-dark", "--no-live"], env=env, stdout=subprocess.DEVNULL, check=True)
+env_txt = (cfg_root / "home-settings" / "theme-env.sh").read_text(encoding="utf-8")
+p10k_txt = (cfg_root / "home-settings" / "p10k-theme.zsh").read_text(encoding="utf-8")
+tmux_txt = (cfg_root / "home-settings" / "tmux-theme.conf").read_text(encoding="utf-8")
+if "unset _HS_PROMPT_OS_ICON" not in env_txt or "unset POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION" not in p10k_txt or " #S" not in tmux_txt:
+    raise SystemExit("solarized-dark: failed to restore neutral OS/Tmux icons")
+PY
+    pass "All 17 built-in themes maintain strict semantic utility separation (GREEN vs RED >= 190, YELLOW vs RED >= 150, pairwise holiday accents >= 100, opposing MIX_GREEN/MIX_RED diff polarity, and holiday prompt/Tmux emblems)"
+else
+    fail "17-theme semantic utility & holiday emblems" "One or more themes violated semantic separation or diff polarity invariants"
 fi
 
 # Verify custom user themes (--path, --create, --from, --force, apply custom theme, and reject invalid hex)
@@ -1723,6 +1860,41 @@ if command -v nvim >/dev/null 2>&1; then
     fi
     kill "$LIVE_NVIM_PID" 2>/dev/null || true
     rm -f "$LIVE_NVIM_SOCK"
+fi
+
+# Verify uniform preview card geometry (standalone 94 cols and narrow fzf 72 cols) and Tmux status-right client_width>=105 holiday guard
+HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set halloween --no-live >/dev/null 2>&1
+if grep -Fq '#{>=:#{client_width},105}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
+   python3 - "$SCRIPT_DIR/bin/theme" "$SCRIPT_DIR/bin/ide" <<'PY'
+import os, re, subprocess, sys
+theme_bin, ide_bin = sys.argv[1], sys.argv[2]
+ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+def vlen(s):
+    plain = ANSI_RE.sub("", s)
+    return sum(2 if (0x1F300 <= ord(c) <= 0x1FAFF or c == "✨") else 1 for c in plain)
+
+for slug in ("solarized-dark", "easter", "halloween", "independence-day", "christmas"):
+    env = dict(os.environ)
+    env.pop("FZF_PREVIEW_COLUMNS", None)
+    env.pop("FZF_PREVIEW_LINES", None)
+    out = subprocess.check_output([theme_bin, "--preview", slug], env=env, text=True).splitlines()
+    if {vlen(line) for line in out} != {94}:
+        raise SystemExit(1)
+    env["FZF_PREVIEW_COLUMNS"] = "72"
+    env["FZF_PREVIEW_LINES"] = "30"
+    out_narrow = subprocess.check_output([theme_bin, "--preview", slug], env=env, text=True).splitlines()
+    status_lines = [line for line in out_narrow if "Editor" in line]
+    if not status_lines or vlen(status_lines[0]) != 72:
+        raise SystemExit(1)
+
+# Verify status_click in bin/ide accounts for 2-column holiday emoji in status-left
+src = open(ide_bin, encoding="utf-8").read()
+assert "#{status-left}" in src and "0x1F300 <= ord(ch) <= 0x1FAFF" in src
+PY
+then
+    pass "bin/theme renders uniform rectangular preview cards (standalone 94-col & narrow 72-col fzf), guards Tmux holiday badge with client_width>=105, and bin/ide status_click accounts for 2-cell holiday emojis"
+else
+    fail "bin/theme preview geometry & Tmux status-bar holiday guards" "Preview card widths, client_width>=105 guard, or bin/ide status-left emoji width calculation failed"
 fi
 
 rm -rf "$THEME_TEST_HOME"

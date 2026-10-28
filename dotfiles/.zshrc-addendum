@@ -97,6 +97,12 @@ setopt HIST_IGNORE_SPACE
 [ -f "$HOME/.zsh-functions" ] && source "$HOME/.zsh-functions"
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
 [ -f "$HOME/.p10k.zsh" ] && source "$HOME/.p10k.zsh"
+if (( $+functions[_hs_sync_active_theme] )); then
+    typeset -ga precmd_functions
+    if (( ${precmd_functions[(I)_hs_sync_active_theme]} == 0 )); then
+        precmd_functions+=(_hs_sync_active_theme)
+    fi
+fi
 
 # Right prompt edge margin (0 = flush with screen edge, eliminates default 1-space gap)
 # Placed after .p10k.zsh sourcing to protect against prompt expansion resets.

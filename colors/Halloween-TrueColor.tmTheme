@@ -41,7 +41,7 @@
 				<string>#7D5BA6</string>
 			</dict>
 		</dict>
-		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #FFB800) -->
+		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #2EE6D6) -->
 		<dict>
 			<key>name</key>
 			<string>Strings, Escapes, Format Placeholders, and Special Characters</string>
@@ -50,10 +50,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FFB800</string>
+				<string>#2EE6D6</string>
 			</dict>
 		</dict>
-		<!-- Markdown Inline Code (Solarized Cyan #FFB800) -->
+		<!-- Markdown Inline Code (Solarized Cyan #2EE6D6) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Inline Code</string>
@@ -62,10 +62,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FFB800</string>
+				<string>#2EE6D6</string>
 			</dict>
 		</dict>
-		<!-- Markdown Link URL (Solarized Cyan #FFB800) -->
+		<!-- Markdown Link URL (Solarized Cyan #2EE6D6) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Link URL</string>
@@ -74,7 +74,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FFB800</string>
+				<string>#2EE6D6</string>
 			</dict>
 		</dict>
 		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #FF5CCD) -->
@@ -113,7 +113,7 @@
 				<string>#FF7518</string>
 			</dict>
 		</dict>
-		<!-- Control Flow & Execution Jumps (Solarized Yellow #FF2A55) -->
+		<!-- Control Flow & Execution Jumps (Solarized Yellow #FFE000) -->
 		<dict>
 			<key>name</key>
 			<string>Control Flow</string>
@@ -122,7 +122,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FF2A55</string>
+				<string>#FFE000</string>
 			</dict>
 		</dict>
 		<!-- Monotone Canvas Ground: Custom Types, Invocations, Variables & Operators (Solarized Base0 #EDE2FA) -->
@@ -161,7 +161,7 @@
 				<string>#55FF47</string>
 			</dict>
 		</dict>
-		<!-- Preprocessor Directives, At-Rules & Markdown H1 (Solarized Orange #FF9E00) -->
+		<!-- Preprocessor Directives, At-Rules & Markdown H1 (Solarized Orange #FF3B00) -->
 		<dict>
 			<key>name</key>
 			<string>Preprocessor Directives, At-Rules, and Markdown Heading 1</string>
@@ -170,7 +170,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FF9E00</string>
+				<string>#FF3B00</string>
 			</dict>
 		</dict>
 		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #F8F2FF) -->

@@ -1843,17 +1843,23 @@ local function hex_bg(group)
 end
 local id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
 local nord_res = id .. "|" .. hex_bg("Normal") .. "|" .. hex_fg("Normal") .. "|" .. hex_fg("Keyword") .. "|" .. hex_fg("Conditional") .. "|" .. hex_bg("NormalFloat")
+vim.env.HOME_SETTINGS_THEME_FILE = vim.env.EASTER_THEME_FILE
+local ea_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
+local ea_res = ea_id .. "|" .. hex_fg("Visual") .. "|" .. hex_bg("Visual") .. "|" .. hex_fg("Added") .. "|" .. hex_fg("Removed") .. "|" .. hex_bg("TelescopeNormal")
+vim.env.HOME_SETTINGS_THEME_FILE = vim.env.HW_THEME_FILE
+local hw_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
+local hw_res = hw_id .. "|" .. hex_fg("RenderMarkdownH1") .. "|" .. hex_fg("RenderMarkdownH2") .. "|" .. hex_fg("Keyword") .. "|" .. hex_fg("Conditional") .. "|" .. hex_fg("String") .. "|" .. hex_bg("DiffAdd") .. "|" .. hex_bg("DiffDelete") .. "|" .. hex_bg("Search")
 vim.env.HOME_SETTINGS_THEME_FILE = vim.env.SD_THEME_FILE
 local sd_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
 local sd_res = sd_id .. "|" .. hex_bg("Visual") .. "|" .. hex_bg("DiffAdd") .. "|" .. hex_bg("DiffDelete") .. "|" .. hex_bg("Search")
-io.write(nord_res .. "||" .. sd_res)
+io.write(nord_res .. "||" .. ea_res .. "||" .. hw_res .. "||" .. sd_res)
 EOF
-        NVIM_THEME_OUT="$(HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/nord.theme" SD_THEME_FILE="$SCRIPT_DIR/colors/themes/solarized-dark.theme" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_THEME_SCRIPT" 2>/dev/null || true)"
+        NVIM_THEME_OUT="$(HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/nord.theme" EASTER_THEME_FILE="$SCRIPT_DIR/colors/themes/easter.theme" HW_THEME_FILE="$SCRIPT_DIR/colors/themes/halloween.theme" SD_THEME_FILE="$SCRIPT_DIR/colors/themes/solarized-dark.theme" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_THEME_SCRIPT" 2>/dev/null || true)"
         rm -f "$NVIM_THEME_SCRIPT"
-        if [ "$NVIM_THEME_OUT" = "nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||solarized-dark|#2C4E56|#274C25|#422D33|#364725" ]; then
-            pass "Neovim init.lua resolves active theme palette (Nord #D8DEE9 on #2E3440, BASE04 #242933, Keyword #A3BE8C, Conditional #EBCB8B) and preserves Solarized Dark Visual/Diff/Search tints via _G.apply_home_settings_theme()"
+        if [ "$NVIM_THEME_OUT" = "nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||easter|#221033|#DEC9EC|#009E3D|#D5001C|#E4C8F0||halloween|#FF3B00|#55FF47|#FF7518|#FFE000|#2EE6D6|#1B3D26|#440E26|#45331D||solarized-dark|#2C4E56|#274C25|#422D33|#364725" ]; then
+            pass "Neovim init.lua resolves active theme palettes (Nord, Easter light-theme, Halloween holiday Markdown/Syntax/Diff/Search, and Solarized Dark) via _G.apply_home_settings_theme()"
         else
-            fail "Neovim multi-theme resolution" "Expected 'nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||solarized-dark|#2C4E56|#274C25|#422D33|#364725', got '$NVIM_THEME_OUT'"
+            fail "Neovim multi-theme resolution" "Expected 'nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||easter|#221033|#DEC9EC|#009E3D|#D5001C|#E4C8F0||halloween|#FF3B00|#55FF47|#FF7518|#FFE000|#2EE6D6|#1B3D26|#440E26|#45331D||solarized-dark|#2C4E56|#274C25|#422D33|#364725', got '$NVIM_THEME_OUT'"
         fi
     fi
 else

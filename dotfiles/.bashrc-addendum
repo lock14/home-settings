@@ -1078,6 +1078,19 @@ _solarized_detect_os_icon() {
 # 4. Zero-Dependency Solarized Dark Single-Line Shelf Prompt Builder
 _solarized_bash_prompt() {
     local exit_code=$?
+    local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+    if [ -r "$hs_dir/theme" ]; then
+        local active_theme=""
+        IFS= read -r active_theme < "$hs_dir/theme" || true
+        active_theme="${active_theme//$'\r'/}"
+        if [ -n "$active_theme" ] && [ "${_HS_LOADED_THEME:-}" != "$active_theme" ]; then
+            _HS_LOADED_THEME="$active_theme"
+            if [ -r "$hs_dir/theme-env.sh" ]; then
+                # shellcheck source=/dev/null
+                . "$hs_dir/theme-env.sh"
+            fi
+        fi
+    fi
     local c_reset='\[\e[0m\]'
     local bg_shelf="${_HS_PROMPT_BG_BASE02:-\[\e[48;2;7;54;66m\]}"
     local c_shelf_cap="${_HS_PROMPT_CAP_BASE02:-\[\e[0m\e[38;2;7;54;66m\]}"
@@ -1094,7 +1107,9 @@ _solarized_bash_prompt() {
     local git_icon=$'\xef\x84\xa6 ' # \uF126 branch icon
     local sym=$'\xe2\x9d\xaf'      # \u276F prompt chevron (used only in non-endcap fallback)
     local os_icon=""
-    if [ -n "${_SOLARIZED_PROMPT_OS_ICON_CACHED:-}" ] && [ "${_SOLARIZED_PROMPT_OSTYPE_CACHED:-}" = "${OSTYPE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_RELEASE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
+    if [ -n "${_HS_PROMPT_OS_ICON:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_RELEASE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
+        os_icon="$_HS_PROMPT_OS_ICON"
+    elif [ -n "${_SOLARIZED_PROMPT_OS_ICON_CACHED:-}" ] && [ "${_SOLARIZED_PROMPT_OSTYPE_CACHED:-}" = "${OSTYPE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_RELEASE:-}" ] && [ -z "${SOLARIZED_PROMPT_OS_ICON+x}" ]; then
         os_icon="$_SOLARIZED_PROMPT_OS_ICON_CACHED"
     else
         os_icon="$(_solarized_detect_os_icon)"
@@ -1458,8 +1473,8 @@ theme() {
 _theme_bash_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]:-}"
     local prev="${COMP_WORDS[COMP_CWORD-1]:-}"
-    local opts="-l --list -c --current -s --set -p --preview --env --create --from -f --force --path --no-live -n --dry-run -h --help"
-    local themes="solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark"
+    local opts="-l --list -c --current -s --set --holiday -p --preview --env --create --from -f --force --path --no-live -n --dry-run -h --help"
+    local themes="solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark new-years valentines st-patricks easter independence-day halloween thanksgiving christmas"
     local theme_bin=""
     if [ -x "$HOME/.local/bin/theme" ]; then
         theme_bin="$HOME/.local/bin/theme"

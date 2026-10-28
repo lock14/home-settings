@@ -2157,14 +2157,20 @@ def status_click(x_str: str, target_arg: str) -> int:
 
     info = tmux_out(
         "display-message", "-p", "-t", f"={sess}:",
-        "#{@ide_role}\t#{@ide_ai_cli}\t#{window_zoomed_flag}",
+        "#{@ide_role}\t#{@ide_ai_cli}\t#{window_zoomed_flag}\t#{status-left}",
     )
-    parts = (info.split("\t") + ["", "", ""])[:3]
+    parts = (info.split("\t") + ["", "", "", ""])[:4]
     role = parts[0] or "ai"
     ai_cli = parts[1] or "AI"
     zoomed = parts[2] == "1"
+    status_left_raw = parts[3]
 
-    left_len = min(48, len(sess) + 6)
+    if status_left_raw:
+        plain_left = re.sub(r"#\[[^\]]*\]", "", status_left_raw).replace("#S", sess)
+        raw_left_len = sum(2 if (0x1F300 <= ord(ch) <= 0x1FAFF or ch == "✨") else 1 for ch in plain_left)
+        left_len = min(48, raw_left_len)
+    else:
+        left_len = min(48, len(sess) + 6)
     rel = x - left_len
     if rel < 0:
         return 0

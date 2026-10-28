@@ -853,8 +853,29 @@ end
 
 local build_theme_highlights
 
+local function sync_solarized_plugin_palette(colors)
+    local ok, palette_mod = pcall(require, "solarized.palette")
+    if not ok or type(palette_mod) ~= "table" or type(palette_mod.solarized) ~= "table" then
+        return
+    end
+    local sp = palette_mod.solarized
+    for k, v in pairs(colors) do
+        sp[k] = v
+    end
+    sp.base4 = colors.base3
+    sp.diag_error = colors.red
+    sp.diag_warning = colors.yellow
+    sp.diag_info = colors.blue
+    sp.diag_hint = colors.cyan
+    sp.diag_ok = colors.green
+    sp.git_add = colors.green
+    sp.git_modify = colors.yellow
+    sp.git_delete = colors.red
+end
+
 _G.apply_home_settings_theme = function()
     local p = resolve_active_theme_palette(nil)
+    sync_solarized_plugin_palette(p)
     local applied_via_colorscheme = false
     if package.loaded["solarized"] and _G._hs_solarized_opts then
         vim.o.background = "dark"
@@ -890,10 +911,29 @@ vim.api.nvim_create_user_command("Theme", function(opts)
         theme_bin = vim.fn.exepath("theme")
     end
     if theme_bin ~= "" then
-        vim.fn.system({ theme_bin, "--set", arg, "--no-live" })
+        if arg == "--holiday" or arg == "holiday" then
+            vim.fn.system({ theme_bin, "--holiday", "--no-live" })
+        else
+            vim.fn.system({ theme_bin, "--set", arg, "--no-live" })
+        end
     end
     _G.apply_home_settings_theme()
-end, { nargs = "?", desc = "Switch or inspect active home-settings color theme" })
+end, {
+    nargs = "?",
+    complete = function(arg_lead)
+        local items = {
+            "solarized-dark", "solarized-light", "catppuccin-mocha", "catppuccin-latte",
+            "gruvbox-dark", "tokyonight-night", "kanagawa-wave", "nord", "onedark",
+            "new-years", "valentines", "st-patricks", "easter",
+            "independence-day", "halloween", "thanksgiving", "christmas",
+            "--holiday",
+        }
+        return vim.tbl_filter(function(item)
+            return item:find(arg_lead, 1, true) == 1
+        end, items)
+    end,
+    desc = "Switch or inspect active home-settings color theme",
+})
 
 -- -------------------------------------------------------------
 -- 3. Bootstrap Lazy.nvim Plugin Manager
@@ -948,6 +988,7 @@ lazy.setup({
             },
             on_highlights = function(base_colors, _)
                 local colors = resolve_active_theme_palette(base_colors)
+                sync_solarized_plugin_palette(colors)
                 local hl = {
                     -- =========================================================================
                     -- Non-Language-Specific UI & Framing Architecture (Converged Solarized Dark)
@@ -959,6 +1000,11 @@ lazy.setup({
                     CursorLine = { bg = colors.base02 },
                     CursorColumn = { bg = colors.base02 },
                     ColorColumn = { bg = colors.base02 },
+                    EndOfBuffer = { fg = colors.base03, bg = "NONE" },
+                    NonText = { fg = colors.base01 },
+                    Whitespace = { fg = colors.base01 },
+                    SpecialKey = { fg = colors.base01 },
+                    Conceal = { fg = colors.base01 },
 
                     -- Gutter & Navigation Coordinates (Calm Monochromatic Luminance)
                     LineNr = { fg = colors.base01, bg = colors.base03 },
@@ -984,15 +1030,40 @@ lazy.setup({
                     MiniFilesTitle = { fg = colors.base01, bg = colors.base02 },
                     MiniFilesTitleFocused = { fg = colors.base1, bg = colors.base02, bold = true },
 
+                    -- Telescope Fuzzy Finder Framing
+                    TelescopeNormal = { fg = colors.base0, bg = colors.base04 },
+                    TelescopeBorder = { fg = colors.base01, bg = colors.base04 },
+                    TelescopePromptNormal = { fg = colors.base0, bg = colors.base04 },
+                    TelescopePromptBorder = { fg = colors.base01, bg = colors.base04 },
+                    TelescopeResultsNormal = { fg = colors.base0, bg = colors.base04 },
+                    TelescopeResultsBorder = { fg = colors.base01, bg = colors.base04 },
+                    TelescopePreviewNormal = { fg = colors.base0, bg = colors.base04 },
+                    TelescopePreviewBorder = { fg = colors.base01, bg = colors.base04 },
+                    TelescopeTitle = { fg = colors.base1, bg = colors.base02, bold = true },
+                    TelescopePromptPrefix = { fg = colors.blue, bg = colors.base04 },
+                    TelescopeSelection = { fg = colors.base1, bg = colors.base02, bold = true },
+                    TelescopeSelectionCaret = { fg = colors.blue, bg = colors.base02 },
+                    TelescopeMatching = { fg = colors.yellow, bold = true },
+
                     -- Delimiter Matching (Luminance Bounding without Syntax Corruption)
                     MatchParen = { fg = colors.base1, bg = colors.base02, bold = true },
 
                     -- Search & Selection Plane (Zero Collision)
-                    Visual = { bg = colors.mix_base1 },
-                    VisualNOS = { bg = colors.mix_base1 },
+                    Visual = { fg = colors.base1, bg = colors.mix_base1 },
+                    VisualNOS = { fg = colors.base1, bg = colors.mix_base1 },
                     Search = { fg = colors.base1, bg = colors.mix_yellow, bold = true },
                     IncSearch = { fg = colors.magenta, bg = colors.mix_magenta, bold = true },
                     CurSearch = { fg = colors.magenta, bg = colors.mix_magenta, bold = true },
+
+                    -- Messages & Status Prompts
+                    Error = { fg = colors.red },
+                    ErrorMsg = { fg = colors.red },
+                    WarningMsg = { fg = colors.yellow },
+                    MoreMsg = { fg = colors.green },
+                    ModeMsg = { fg = colors.base1, bold = true },
+                    Question = { fg = colors.cyan },
+                    Title = { fg = colors.orange, bold = false },
+                    Todo = { fg = colors.magenta, bg = colors.base02, bold = true },
 
                     -- Status, Tabline & Completion Menus
                     StatusLine = { fg = colors.base1, bg = colors.base04 },
@@ -1037,6 +1108,9 @@ lazy.setup({
                     markdownItalic = { italic = true },
                     markdownLinkText = { fg = colors.blue, underline = false },
                     markdownUrl = { fg = colors.cyan, underline = false },
+                    Added = { fg = colors.green },
+                    Changed = { fg = colors.yellow },
+                    Removed = { fg = colors.red },
                     DiffAdd = { fg = colors.green, bg = colors.mix_green },
                     DiffDelete = { fg = colors.red, bg = colors.mix_red },
                     DiffChange = { fg = colors.yellow, bg = colors.mix_yellow },
@@ -1224,6 +1298,7 @@ lazy.setup({
             _G._hs_solarized_opts = opts
             build_theme_highlights = opts.on_highlights
             vim.o.background = "dark"
+            sync_solarized_plugin_palette(resolve_active_theme_palette(nil))
             require("solarized").setup(opts)
             vim.cmd.colorscheme("solarized")
         end,

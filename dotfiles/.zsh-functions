@@ -253,10 +253,33 @@ theme() {
         [ -r "$hs_dir/zsh-theme.zsh" ] && source "$hs_dir/zsh-theme.zsh"
         if [ -r "$hs_dir/p10k-theme.zsh" ]; then
             source "$hs_dir/p10k-theme.zsh"
+            local p10k_local="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/p10k.local.zsh"
+            [ -r "$p10k_local" ] && source "$p10k_local"
             (( ! $+functions[p10k] )) || p10k reload
         fi
     fi
     return "$rc"
+}
+
+# Cross-pane theme synchronization hook (updates Zsh highlighting & prompt when theme changes in another pane)
+_hs_sync_active_theme() {
+    local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+    local theme_file="$hs_dir/theme"
+    [ -r "$theme_file" ] || return 0
+    local active_theme=""
+    IFS= read -r active_theme < "$theme_file" || true
+    active_theme="${active_theme//$'\r'/}"
+    if [ -n "$active_theme" ] && [ "${_HS_LOADED_THEME:-}" != "$active_theme" ]; then
+        _HS_LOADED_THEME="$active_theme"
+        [ -r "$hs_dir/theme-env.sh" ] && source "$hs_dir/theme-env.sh"
+        [ -r "$hs_dir/zsh-theme.zsh" ] && source "$hs_dir/zsh-theme.zsh"
+        if [ -r "$hs_dir/p10k-theme.zsh" ]; then
+            source "$hs_dir/p10k-theme.zsh"
+            local p10k_local="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/p10k.local.zsh"
+            [ -r "$p10k_local" ] && source "$p10k_local"
+            (( ! $+functions[p10k] )) || p10k reload
+        fi
+    fi
 }
 
 # Source custom function drop-ins (~/.zsh-functions.d/*.zsh)

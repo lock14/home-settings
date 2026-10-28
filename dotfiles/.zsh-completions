@@ -54,7 +54,7 @@ _theme() {
     if [ -n "$theme_bin" ]; then
         themes=(${(f)"$("$theme_bin" --list --plain 2>/dev/null)"})
     else
-        themes=(solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark)
+        themes=(solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark new-years valentines st-patricks easter independence-day halloween thanksgiving christmas)
     fi
     if [[ "${words[CURRENT-1]:-}" == (-s|--set|-p|--preview|--env|--from|-n|--dry-run) ]]; then
         _describe -t themes 'color theme' themes

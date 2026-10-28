@@ -457,6 +457,8 @@ STANDALONE_HOME=$(mktemp -d)
     os_darwin=$(OSTYPE=darwin23 _solarized_detect_os_icon)
     os_freebsd=$(OSTYPE=freebsd14 _solarized_detect_os_icon)
     os_override=$(SOLARIZED_PROMPT_OS_ICON='⭐' _solarized_detect_os_icon)
+    _HS_PROMPT_OS_ICON='🎆' _solarized_bash_prompt
+    ps1_holiday_icon="$PS1"
 
     if [ "$os_ubuntu" = "" ] && \
        [ "$os_debian" = "" ] && \
@@ -471,10 +473,11 @@ STANDALONE_HOME=$(mktemp -d)
        [ "$os_idlike" = "" ] && \
        [ "$os_darwin" = "" ] && \
        [ "$os_freebsd" = "" ] && \
-       [ "$os_override" = "⭐" ]; then
-        echo 'PASS:_solarized_detect_os_icon accurately resolves Ubuntu (), Debian (), Fedora (), Arch (), Rocky (), AlmaLinux (), Pop!_OS (), Alpine (), NixOS (), macOS (), FreeBSD (), ID_LIKE inheritance, and generic Linux fallback ()'
+       [ "$os_override" = "⭐" ] && \
+       [[ "$ps1_holiday_icon" == *"🎆"* ]]; then
+        echo 'PASS:_solarized_detect_os_icon accurately resolves Ubuntu (), Debian (), Fedora (), Arch (), Rocky (), AlmaLinux (), Pop!_OS (), Alpine (), NixOS (), macOS (), FreeBSD (), ID_LIKE inheritance, generic Linux fallback (), and _HS_PROMPT_OS_ICON holiday emblems'
     else
-        echo "FAIL:_solarized_detect_os_icon:Unexpected icon resolutions (ubuntu=$os_ubuntu debian=$os_debian fedora=$os_fedora arch=$os_arch rocky=$os_rocky alma=$os_alma pop=$os_pop alpine=$os_alpine nixos=$os_nixos unknown=$os_unknown idlike=$os_idlike darwin=$os_darwin freebsd=$os_freebsd override=$os_override)"
+        echo "FAIL:_solarized_detect_os_icon:Unexpected icon resolutions (ubuntu=$os_ubuntu debian=$os_debian fedora=$os_fedora arch=$os_arch rocky=$os_rocky alma=$os_alma pop=$os_pop alpine=$os_alpine nixos=$os_nixos unknown=$os_unknown idlike=$os_idlike darwin=$os_darwin freebsd=$os_freebsd override=$os_override holiday=$ps1_holiday_icon)"
     fi
 
     # Test VCS remote host icons (GitHub \uF113 , GitLab \uF296 , Bitbucket \uF171 , generic Git \uF1D3 , tracked branch remote, inline comments, linked worktree, and TERM=linux)
@@ -758,14 +761,14 @@ EOF
         echo "FAIL:Standalone vi-only fallback:Unexpected alias/editor state ($vi_only_out)"
     fi
 
-    # Test theme() wrapper function in Bash reloads environment exports and PS1 prompt colors
+    # Test theme() wrapper function in Bash reloads environment exports and PS1 prompt colors, plus cross-pane sync and --holiday completion
     mkdir -p "$STANDALONE_HOME/.local/bin"
     ln -sf "$SCRIPT_DIR/bin/theme" "$STANDALONE_HOME/.local/bin/theme"
-    bash_theme_out=$(HOME="$STANDALONE_HOME" XDG_CONFIG_HOME="$STANDALONE_HOME/.config" "$BASH" -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; theme --set catppuccin-mocha --no-live >/dev/null; printf 'THEME=%s|BAT=%s|PS1=%s\n' \"\${HOME_SETTINGS_THEME:-}\" \"\${BAT_THEME:-}\" \"\$PS1\"")
-    if [[ "$bash_theme_out" == *"THEME=catppuccin-mocha|BAT=Catppuccin-Mocha-TrueColor|"* ]] && \
-       [[ "$bash_theme_out" == *"48;2;49;50;68m"* ]] && \
-       [[ "$bash_theme_out" == *"38;2;137;180;250m"* ]]; then
-        echo "PASS:Bash theme() wrapper updates HOME_SETTINGS_THEME, BAT_THEME, and _solarized_bash_prompt PS1 shelf colors in active session"
+    bash_theme_out=$(HOME="$STANDALONE_HOME" XDG_CONFIG_HOME="$STANDALONE_HOME/.config" "$BASH" -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; theme --set catppuccin-mocha --no-live >/dev/null; '$SCRIPT_DIR/bin/theme' --set halloween --no-live >/dev/null; _solarized_bash_prompt; COMP_WORDS=(theme --h); COMP_CWORD=1; _theme_bash_complete; printf 'THEME=%s|BAT=%s|ICON=%s|COMP=%s|PS1=%s\n' \"\${HOME_SETTINGS_THEME:-}\" \"\${BAT_THEME:-}\" \"\${_HS_PROMPT_OS_ICON:-}\" \"\${COMPREPLY[*]}\" \"\$PS1\"")
+    if [[ "$bash_theme_out" == *"THEME=halloween|BAT=Halloween-TrueColor|ICON=🎃|"* ]] && \
+       [[ "$bash_theme_out" == *"--holiday"* ]] && \
+       [[ "$bash_theme_out" == *"48;2;40;16;64m"* ]]; then
+        echo "PASS:Bash theme() wrapper, cross-pane _solarized_bash_prompt auto-sync, and _theme_bash_complete (--holiday) update active session state"
     else
         echo "FAIL:Bash theme() wrapper:Unexpected state ($bash_theme_out)"
     fi
