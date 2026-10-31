@@ -761,14 +761,37 @@ EOF
         echo "FAIL:Standalone vi-only fallback:Unexpected alias/editor state ($vi_only_out)"
     fi
 
-    # Test theme() wrapper function in Bash reloads environment exports and PS1 prompt colors, plus cross-pane sync and --holiday completion
+    # Test theme() wrapper function in Bash reloads environment exports (including TrueColor LS_COLORS) and PS1 prompt colors, skips reload on read-only queries and fzf cancel, and completes --holiday and --plain
     mkdir -p "$STANDALONE_HOME/.local/bin"
     ln -sf "$SCRIPT_DIR/bin/theme" "$STANDALONE_HOME/.local/bin/theme"
-    bash_theme_out=$(HOME="$STANDALONE_HOME" XDG_CONFIG_HOME="$STANDALONE_HOME/.config" "$BASH" -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; theme --set catppuccin-mocha --no-live >/dev/null; '$SCRIPT_DIR/bin/theme' --set halloween --no-live >/dev/null; _solarized_bash_prompt; COMP_WORDS=(theme --h); COMP_CWORD=1; _theme_bash_complete; printf 'THEME=%s|BAT=%s|ICON=%s|COMP=%s|PS1=%s\n' \"\${HOME_SETTINGS_THEME:-}\" \"\${BAT_THEME:-}\" \"\${_HS_PROMPT_OS_ICON:-}\" \"\${COMPREPLY[*]}\" \"\$PS1\"")
-    if [[ "$bash_theme_out" == *"THEME=halloween|BAT=Halloween-TrueColor|ICON=🎃|"* ]] && \
+    bash_theme_out=$(HOME="$STANDALONE_HOME" XDG_CONFIG_HOME="$STANDALONE_HOME/.config" MISE_DISABLED=1 "$BASH" -c "
+        set -euo pipefail
+        source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'
+        theme --set catppuccin-mocha --no-live >/dev/null
+        cm_ls=\"\${LS_COLORS:-}\"
+        '$SCRIPT_DIR/bin/theme' --set halloween --no-live >/dev/null
+        theme --plain >/dev/null
+        after_plain=\"\${HOME_SETTINGS_THEME:-}\"
+        theme --preview=nord >/dev/null
+        after_prev=\"\${HOME_SETTINGS_THEME:-}\"
+        fzf_cancel_bin=\"$STANDALONE_HOME/fzf-cancel\"
+        mkdir -p \"\$fzf_cancel_bin\"
+        printf '#!/usr/bin/env bash\ncat >/dev/null\nexit 130\n' > \"\$fzf_cancel_bin/fzf\"
+        chmod +x \"\$fzf_cancel_bin/fzf\"
+        THEME_FORCE_FZF=1 PATH=\"\$fzf_cancel_bin:\$PATH\" theme --no-live >/dev/null 2>&1
+        after_cancel=\"\${HOME_SETTINGS_THEME:-}\"
+        _solarized_bash_prompt
+        COMP_WORDS=(theme --); COMP_CWORD=1; _theme_bash_complete
+        printf 'CM_LS=%s|AFTER_Q=%s/%s/%s|THEME=%s|BAT=%s|ICON=%s|HW_LS=%s|COMP=%s|PS1=%s\n' \"\$cm_ls\" \"\$after_plain\" \"\$after_prev\" \"\$after_cancel\" \"\${HOME_SETTINGS_THEME:-}\" \"\${BAT_THEME:-}\" \"\${_HS_PROMPT_OS_ICON:-}\" \"\${LS_COLORS:-}\" \"\${COMPREPLY[*]}\" \"\$PS1\"
+    ")
+    if [[ "$bash_theme_out" == *"CM_LS="*"di=38;2;137;180;250:"* ]] && \
+       [[ "$bash_theme_out" == *"AFTER_Q=catppuccin-mocha/catppuccin-mocha/catppuccin-mocha|"* ]] && \
+       [[ "$bash_theme_out" == *"THEME=halloween|BAT=Halloween-TrueColor|ICON=🎃|"* ]] && \
+       [[ "$bash_theme_out" == *"HW_LS="*"di=38;2;85;255;71:"* ]] && \
        [[ "$bash_theme_out" == *"--holiday"* ]] && \
+       [[ "$bash_theme_out" == *"--plain"* ]] && \
        [[ "$bash_theme_out" == *"48;2;40;16;64m"* ]]; then
-        echo "PASS:Bash theme() wrapper, cross-pane _solarized_bash_prompt auto-sync, and _theme_bash_complete (--holiday) update active session state"
+        echo "PASS:Bash theme() wrapper updates TrueColor LS_COLORS and PS1, skips reloads on read-only queries (--plain, --preview=*) and fzf Esc cancel, auto-syncs cross-pane, and completes --holiday and --plain"
     else
         echo "FAIL:Bash theme() wrapper:Unexpected state ($bash_theme_out)"
     fi

@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/tests/test-helper.sh"
+export HOME_SETTINGS_THEME_FILE="/nonexistent/solarized-dark-baseline"
+unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE
 
 echo "========================================"
 echo "Running Vim Configuration Tests"
@@ -86,9 +88,15 @@ check_option "toupper(synIDattr(hlID('PreProc'), 'fg#', 'gui')) == '#CB4B16'" "V
 check_option "toupper(synIDattr(hlID('String'), 'fg#', 'gui')) == '#2AA198' && toupper(synIDattr(hlID('Character'), 'fg#', 'gui')) == '#2AA198'" "Vim String and Character literals mapped to Solarized Cyan (#2AA198)"
 check_option "toupper(synIDattr(hlID('Constant'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Number'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Boolean'), 'fg#', 'gui')) == '#D33682'" "Vim Constant, Number, and Boolean mapped to Solarized Magenta (#D33682)"
 check_option "toupper(synIDattr(hlID('Error'), 'fg#', 'gui')) == '#DC322F' && toupper(synIDattr(hlID('WarningMsg'), 'fg#', 'gui')) == '#CB4B16'" "Vim Error and WarningMsg mapped to Solarized Red (#DC322F) and Orange (#CB4B16)"
-check_option "synIDattr(hlID('Normal'), 'fg', 'cterm') == '12' && synIDattr(hlID('Conditional'), 'fg', 'cterm') == '3' && synIDattr(hlID('Type'), 'fg', 'cterm') == '2' && synIDattr(hlID('Function'), 'fg', 'cterm') == '4' && synIDattr(hlID('String'), 'fg', 'cterm') == '6' && synIDattr(hlID('Constant'), 'fg', 'cterm') == '5'" "Vim 16/256-color cterm fallback attributes configured alongside TrueColor gui attributes"
+check_option "synIDattr(hlID('Normal'), 'fg', 'cterm') == '12' && empty(synIDattr(hlID('Normal'), 'bg', 'cterm')) && empty(synIDattr(hlID('LineNr'), 'bg', 'cterm')) && empty(synIDattr(hlID('VertSplit'), 'bg', 'cterm')) && empty(synIDattr(hlID('FoldColumn'), 'bg', 'cterm')) && empty(synIDattr(hlID('SignColumn'), 'bg', 'cterm')) && synIDattr(hlID('Conditional'), 'fg', 'cterm') == '3' && synIDattr(hlID('Type'), 'fg', 'cterm') == '2' && synIDattr(hlID('Function'), 'fg', 'cterm') == '4' && synIDattr(hlID('String'), 'fg', 'cterm') == '6' && synIDattr(hlID('Constant'), 'fg', 'cterm') == '5'" "Vim 16/256-color cterm fallback uses ctermbg=NONE on canvas/gutter/splits (zero ctermbg=8 collision) alongside TrueColor gui attributes"
 check_option "toupper(synIDattr(hlID('WildMenu'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('WildMenu'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('StatusLineTerm'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('Added'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Changed'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Removed'), 'fg#', 'gui')) == '#DC322F'" "Vim WildMenu, StatusLineTerm, and Added/Changed/Removed groups mapped to Solarized Dark"
 check_option "toupper(synIDattr(hlID('protoRepeat'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('protoTodo'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('pbtxtMessage'), 'fg#', 'gui')) == '#268BD2' && toupper(synIDattr(hlID('pbtxtField'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('pbtxtEnum'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('pbtxtTodo'), 'fg#', 'gui')) == '#586E75'" "Vim Protocol Buffers (protoRepeat, protoTodo) and Textproto (pbtxtMessage, pbtxtField, pbtxtEnum, pbtxtTodo) fallback groups mapped to Solarized Dark"
+
+if ! grep -Fq 'ctermbg=8' "$SCRIPT_DIR/dotfiles/.vimrc"; then
+    pass "dotfiles/.vimrc contains zero ctermbg=8 rules that collide with ctermfg=10 (#586E75)"
+else
+    fail "dotfiles/.vimrc ctermbg=8" "Found ctermbg=8 in dotfiles/.vimrc"
+fi
 
 if COLORTERM=truecolor vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &termguicolors == 1 | q | else | cquit 1 | endif" >/dev/null 2>&1; then
     pass "Vim enables termguicolors automatically when COLORTERM=truecolor"
@@ -96,17 +104,40 @@ else
     fail "Vim termguicolors" "Expected &termguicolors == 1 when COLORTERM=truecolor"
 fi
 
-if COLORTERM=truecolor vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "syntax on" -c "set background=dark" -c "if toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent HOME_SETTINGS_THEME="" XDG_CONFIG_HOME=/nonexistent vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "syntax on" -c "set background=dark" -c "if toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
     pass "Vim SolarizedDarkFallback augroup preserves inline highlights across :syntax on and :set background=dark"
 else
     fail "Vim highlight persistence" "Inline Solarized Dark highlights were reset by :syntax on or :set background=dark"
 fi
 
-if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/catppuccin-mocha.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#1E1E2E' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#CDD6F4' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#A6E3A1' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#F9E2AF' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
-    pass "Vim .vimrc dynamically applies active theme palette overrides (Catppuccin Mocha #CDD6F4 on #1E1E2E)"
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/catppuccin-mocha.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'dark' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#1E1E2E' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#CDD6F4' && toupper(synIDattr(hlID('CursorLineNr'), 'fg#', 'gui')) == '#DCE0E8' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#A6E3A1' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#F9E2AF' | q | else | cquit 1 | endif" >/dev/null 2>&1 && \
+   COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME="solarized-light" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'light' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#FDF6E3' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#657B83' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+    pass "Vim .vimrc dynamically resolves active theme palettes and sets background=light for light themes (Catppuccin Mocha & Solarized Light)"
 else
-    fail "Vim active theme override" "Expected Catppuccin Mocha palette when HOME_SETTINGS_THEME_FILE is set"
+    fail "Vim active theme override" "Expected Catppuccin Mocha and Solarized Light palettes and background modes in .vimrc"
 fi
+
+VIM_SEC_TMP="$(mktemp -d)"
+mkdir -p "$VIM_SEC_TMP/.config/themes"
+cat > "$VIM_SEC_TMP/evil.theme" <<EOF
+THEME_ID="evil-inject"
+BASE03=#112233 | call writefile(['PWNED'], '$VIM_SEC_TMP/pwned.txt')
+BASE0='#AABBCC' # inline comment
+EOF
+cat > "$VIM_SEC_TMP/.config/themes/paper-conf.conf" <<'EOF'
+export THEME_ID='decoupled-paper' # slug override
+THEME_MODE='light' # light mode
+BASE03='#FAF8F5' # warm paper bg
+BASE0='#2B2D42' # ink fg
+EOF
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$VIM_SEC_TMP/evil.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#002B36' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#AABBCC' | q | else | cquit 1 | endif" >/dev/null 2>&1 && \
+   [ ! -e "$VIM_SEC_TMP/pwned.txt" ] && \
+   COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent XDG_CONFIG_HOME="$VIM_SEC_TMP/.config" HOME_SETTINGS_THEME="decoupled-paper" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'light' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#FAF8F5' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#2B2D42' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+    pass "Vim .vimrc neutralizes malformed hex Ex-command injection payloads and resolves single-quoted/inline-commented .conf user themes"
+else
+    fail "Vim .vimrc security & .conf parsing" "Unexpected Ex-command execution or failed .conf/single-quote theme parsing"
+fi
+rm -rf "$VIM_SEC_TMP"
 
 # Test 4: Verify Home key mapping, Netrw project tree sidebar, and TmuxNavigate in .vimrc
 echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
@@ -1842,25 +1873,131 @@ local function hex_bg(group)
     return hl and hl.bg and string.format("#%06X", hl.bg) or "NONE"
 end
 local id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
-local nord_res = id .. "|" .. hex_bg("Normal") .. "|" .. hex_fg("Normal") .. "|" .. hex_fg("Keyword") .. "|" .. hex_fg("Conditional") .. "|" .. hex_bg("NormalFloat")
+local nord_res = table.concat({
+    id, vim.o.background, hex_bg("Normal"), hex_fg("Normal"), hex_fg("Keyword"), hex_fg("Conditional"), hex_bg("NormalFloat"),
+    tostring(vim.g.terminal_color_0), tostring(vim.g.terminal_color_4), tostring(vim.g.terminal_color_9), tostring(vim.g.terminal_color_13),
+}, "|")
+
 vim.env.HOME_SETTINGS_THEME_FILE = vim.env.EASTER_THEME_FILE
 local ea_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
-local ea_res = ea_id .. "|" .. hex_fg("Visual") .. "|" .. hex_bg("Visual") .. "|" .. hex_fg("Added") .. "|" .. hex_fg("Removed") .. "|" .. hex_bg("TelescopeNormal")
+local ea_res = table.concat({
+    ea_id, vim.o.background, hex_fg("Visual"), hex_bg("Visual"), hex_fg("Added"), hex_fg("Removed"), hex_bg("TelescopeNormal"),
+}, "|")
+
+vim.env.HOME_SETTINGS_THEME_FILE = vim.env.SL_THEME_FILE
+local sl_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
+local sl_res = table.concat({
+    sl_id, vim.o.background, hex_bg("Normal"), hex_fg("Normal"), tostring(vim.g.terminal_color_4), tostring(vim.g.terminal_color_13),
+}, "|")
+
 vim.env.HOME_SETTINGS_THEME_FILE = vim.env.HW_THEME_FILE
 local hw_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
-local hw_res = hw_id .. "|" .. hex_fg("RenderMarkdownH1") .. "|" .. hex_fg("RenderMarkdownH2") .. "|" .. hex_fg("Keyword") .. "|" .. hex_fg("Conditional") .. "|" .. hex_fg("String") .. "|" .. hex_bg("DiffAdd") .. "|" .. hex_bg("DiffDelete") .. "|" .. hex_bg("Search")
+local hw_res = table.concat({
+    hw_id, vim.o.background, hex_fg("RenderMarkdownH1"), hex_fg("RenderMarkdownH2"), hex_fg("Keyword"),
+    hex_fg("Conditional"), hex_fg("String"), hex_bg("DiffAdd"), hex_bg("DiffDelete"), hex_bg("Search"),
+}, "|")
+
 vim.env.HOME_SETTINGS_THEME_FILE = vim.env.SD_THEME_FILE
 local sd_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
-local sd_res = sd_id .. "|" .. hex_bg("Visual") .. "|" .. hex_bg("DiffAdd") .. "|" .. hex_bg("DiffDelete") .. "|" .. hex_bg("Search")
-io.write(nord_res .. "||" .. ea_res .. "||" .. hw_res .. "||" .. sd_res)
+pcall(vim.cmd.colorscheme, "solarized")
+local sd_res = table.concat({
+    sd_id, vim.o.background, hex_bg("Visual"), hex_bg("DiffAdd"), hex_bg("DiffDelete"), hex_bg("Search"),
+    tostring(vim.g.terminal_color_0), tostring(vim.g.terminal_color_4), tostring(vim.g.terminal_color_9),
+    tostring(vim.g.terminal_color_13), tostring(vim.g.terminal_color_15),
+}, "|")
+
+vim.env.HOME_SETTINGS_THEME_FILE = "/nonexistent/active-theme.theme"
+vim.env.HOME_SETTINGS_THEME = "nord"
+local fb_id = _G.apply_home_settings_theme and _G.apply_home_settings_theme() or "missing"
+local fb_res = table.concat({ fb_id, hex_bg("Normal"), tostring(vim.g.terminal_color_4) }, "|")
+
+io.write(table.concat({ nord_res, ea_res, sl_res, hw_res, sd_res, fb_res }, "||"))
 EOF
-        NVIM_THEME_OUT="$(HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/nord.theme" EASTER_THEME_FILE="$SCRIPT_DIR/colors/themes/easter.theme" HW_THEME_FILE="$SCRIPT_DIR/colors/themes/halloween.theme" SD_THEME_FILE="$SCRIPT_DIR/colors/themes/solarized-dark.theme" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_THEME_SCRIPT" 2>/dev/null || true)"
+        NVIM_THEME_OUT="$(HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/nord.theme" EASTER_THEME_FILE="$SCRIPT_DIR/colors/themes/easter.theme" SL_THEME_FILE="$SCRIPT_DIR/colors/themes/solarized-light.theme" HW_THEME_FILE="$SCRIPT_DIR/colors/themes/halloween.theme" SD_THEME_FILE="$SCRIPT_DIR/colors/themes/solarized-dark.theme" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_THEME_SCRIPT" 2>/dev/null || true)"
         rm -f "$NVIM_THEME_SCRIPT"
-        if [ "$NVIM_THEME_OUT" = "nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||easter|#221033|#DEC9EC|#009E3D|#D5001C|#E4C8F0||halloween|#FF3B00|#55FF47|#FF7518|#FFE000|#2EE6D6|#1B3D26|#440E26|#45331D||solarized-dark|#2C4E56|#274C25|#422D33|#364725" ]; then
-            pass "Neovim init.lua resolves active theme palettes (Nord, Easter light-theme, Halloween holiday Markdown/Syntax/Diff/Search, and Solarized Dark) via _G.apply_home_settings_theme()"
+        EXPECTED_NVIM_THEME="nord|dark|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933|#3B4252|#81A1C1|#D08770|#5E81AC||easter|light|#221033|#DEC9EC|#009E3D|#D5001C|#E4C8F0||solarized-light|light|#FDF6E3|#657B83|#268BD2|#6C71C4||halloween|dark|#FF3B00|#55FF47|#FF7518|#FFE000|#2EE6D6|#1B3D26|#440E26|#45331D||solarized-dark|dark|#2C4E56|#274C25|#422D33|#364725|#073642|#268BD2|#CB4B16|#6C71C4|#FDF6E3||nord|#2E3440|#81A1C1"
+        if [ "$NVIM_THEME_OUT" = "$EXPECTED_NVIM_THEME" ]; then
+            pass "Neovim init.lua calibrates all 16 :terminal ANSI slots, sets dynamic light/dark background, and resolves fallback repo themes via _G.apply_home_settings_theme()"
         else
-            fail "Neovim multi-theme resolution" "Expected 'nord|#2E3440|#D8DEE9|#A3BE8C|#EBCB8B|#242933||easter|#221033|#DEC9EC|#009E3D|#D5001C|#E4C8F0||halloween|#FF3B00|#55FF47|#FF7518|#FFE000|#2EE6D6|#1B3D26|#440E26|#45331D||solarized-dark|#2C4E56|#274C25|#422D33|#364725', got '$NVIM_THEME_OUT'"
+            fail "Neovim multi-theme & :terminal ANSI calibration" "Expected '$EXPECTED_NVIM_THEME', got '$NVIM_THEME_OUT'"
         fi
+
+        # Verify :Theme command custom-theme completion, invalid-theme error reporting, peer RPC live reload without self-deadlock, and isolated lazy-lock.json (M4/T4)
+        NVIM_CMD_HOME="$(mktemp -d)"
+        NVIM_SOCK_DIR="$NVIM_CMD_HOME/sockets"
+        ORIG_XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+        mkdir -p "$NVIM_CMD_HOME/.config/themes" "$NVIM_SOCK_DIR"
+        ln -sfn "$SCRIPT_DIR/dotfiles/.config/nvim" "$NVIM_CMD_HOME/.config/nvim"
+        cat > "$NVIM_CMD_HOME/.config/themes/aurora-test.theme" << 'EOF'
+THEME_ID="aurora-test"
+THEME_LABEL="Aurora Test"
+THEME_MODE="dark"
+BASE03="#101820"
+EOF
+        cat > "$NVIM_CMD_HOME/.config/themes/paper-file.conf" << 'EOF'
+export THEME_ID='paper-conf' # custom conf slug
+THEME_MODE='light' # light mode
+BASE03='#FAF8F5' # warm paper
+BASE0='#2B2D42' # ink
+EOF
+        NVIM_CMD_SCRIPT="$NVIM_CMD_HOME/theme-cmd-test.lua"
+        cat > "$NVIM_CMD_SCRIPT" << 'EOF'
+local comps = vim.fn.getcompletion("Theme ", "cmdline")
+local has_custom = vim.tbl_contains(comps, "aurora-test") and vim.tbl_contains(comps, "paper-conf")
+local has_holiday = vim.tbl_contains(comps, "--holiday")
+local orig_notify = vim.notify
+local err_msg, err_lvl = "", nil
+vim.notify = function(msg, lvl)
+    err_msg = tostring(msg or "")
+    err_lvl = lvl
+end
+vim.cmd("Theme nonexistent-theme-xyz")
+vim.notify = orig_notify
+local after_bad = tostring(vim.g.home_settings_theme or "")
+local bad_ok = (err_lvl == vim.log.levels.ERROR and err_msg:find("Theme switch failed", 1, true) ~= nil and after_bad == "solarized-dark")
+
+vim.cmd("Theme paper-conf")
+local hl_paper = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+local paper_bg = hl_paper and hl_paper.bg and string.format("#%06X", hl_paper.bg) or "NONE"
+local paper_ok = (vim.g.home_settings_theme == "paper-conf" and vim.o.background == "light" and paper_bg == "#FAF8F5")
+
+vim.cmd("Theme nord")
+local hl_norm = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+local norm_bg = hl_norm and hl_norm.bg and string.format("#%06X", hl_norm.bg) or "NONE"
+local self_ok = (paper_ok and vim.g.home_settings_theme == "nord" and vim.o.background == "dark" and norm_bg == "#2E3440" and vim.g.terminal_color_4 == "#81A1C1")
+
+local ok_lazy, lazy_cfg = pcall(require, "lazy.core.config")
+local lock_path = (ok_lazy and lazy_cfg and lazy_cfg.options and lazy_cfg.options.lockfile) or ""
+local lock_isolated = (lock_path ~= "" and lock_path:find(vim.fn.stdpath("state"), 1, true) == 1)
+
+return table.concat({
+    "COMP=" .. tostring(has_custom and has_holiday),
+    "BAD=" .. tostring(bad_ok),
+    "SELF=" .. tostring(self_ok),
+    "LOCK=" .. tostring(lock_isolated),
+}, "|")
+EOF
+        PEER_SOCK="$NVIM_SOCK_DIR/nvim-peer.sock"
+        SELF_SOCK="$NVIM_SOCK_DIR/nvim-self.sock"
+        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache" XDG_STATE_HOME="$NVIM_CMD_HOME/.local/state" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$PEER_SOCK" >/dev/null 2>&1) &
+        PEER_PID=$!
+        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache" XDG_STATE_HOME="$NVIM_CMD_HOME/.local/state" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$SELF_SOCK" >/dev/null 2>&1) &
+        SELF_PID=$!
+        if wait_for_nvim_socket "$PEER_SOCK" 60 1 && wait_for_nvim_socket "$SELF_SOCK" 60 1; then
+            SELF_CMD_OUT="$(timeout 20 nvim --headless --server "$SELF_SOCK" --remote-expr "luaeval('dofile(\"$NVIM_CMD_SCRIPT\")')" 2>/dev/null || true)"
+            PEER_CMD_OUT="$(timeout 10 nvim --headless --server "$PEER_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . get(g:, 'terminal_color_4', '')" 2>/dev/null || true)"
+            if [ "$SELF_CMD_OUT" = "COMP=true|BAD=true|SELF=true|LOCK=true" ] && \
+               [ "$PEER_CMD_OUT" = "nord:#2E3440:#81A1C1" ] && \
+               git -C "$SCRIPT_DIR" diff --quiet -- dotfiles/.config/nvim/lazy-lock.json; then
+                pass "Neovim :Theme completes custom .theme/.conf user themes, parses single-quoted/commented palettes, reports errors without mutating state, live-reloads peer Neovim servers, and isolates lazy-lock.json"
+            else
+                fail "Neovim :Theme & lazy-lock.json isolation" "self='$SELF_CMD_OUT' peer='$PEER_CMD_OUT'"
+            fi
+        else
+            fail "Neovim :Theme peer sockets" "Timed out waiting for headless peer/self Neovim sockets"
+        fi
+        kill "$PEER_PID" "$SELF_PID" 2>/dev/null || true
+        rm -rf "$NVIM_CMD_HOME"
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"

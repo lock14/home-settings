@@ -194,8 +194,8 @@ home-settings/
 │   └── 99-uninstall.sh              # Clean uninstallation of managed components
 │
 ├── colors/                          # 24-bit TrueColor themes and terminal profiles
-│   ├── themes/*.theme                    # Canonical 16-slot palette definitions for all 9 built-in themes
-│   ├── *-TrueColor.tmTheme               # TextMate and bat TrueColor themes for all 9 built-in palettes
+│   ├── themes/*.theme                    # Canonical 16-slot palette definitions for all 17 built-in themes
+│   ├── *-TrueColor.tmTheme               # TextMate and bat TrueColor themes for all 17 built-in palettes
 │   ├── Solarized-Dark.terminal           # macOS Terminal.app Solarized Dark profile
 │   └── gnome-terminal-solarized.dconf    # GNOME Terminal Solarized Dark dconf profile
 │
@@ -263,7 +263,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - **Center role switcher**: Shows the `AI`, `Editor`, and `Shell` panes with visual states for focused, unfocused, parked, and zoomed (`Alt+z`). Left-click any badge to focus, restore, or unzoom; right-click for the workspace menu.
     - **Right contextual hints and status**: Shows inline key hints during Tmux prefix (`Ctrl+b`) and copy modes. In normal mode, it displays conditional indicators for synchronized panes (`SYNC`), remote SSH hosts, active subdirectories, and the `Help` cheatsheet button (`Alt+?`).
   - **Pane parking, swapping, splitting, and resizing**:
-    - Hide and restore the Editor (`Alt+Shift+E`), Shell (`Alt+Shift+T`), or AI Agent (`Alt+Shift+A`) without stopping running processes, or press `Prefix + b` to break the active pane into a standalone Tmux window and join it back into `ide`.
+    - Hide and restore the Editor (`Alt+Shift+E`), Shell (`Alt+Shift+T`), or AI Agent (`ide --toggle-ai`) without stopping running processes, toggle the floating AI overlay popup with `Alt+Shift+A` (`ide --run-ai-popup`), or toggle the top Tmux status bar with `Prefix + b` (`set-option status`).
     - Swap panes directionally with `Alt+Shift+H/J/K/L`, split panes horizontally or vertically in the current working directory with `Prefix + |` or `Prefix + -`, resize by dragging borders with the mouse or pressing `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`), and reload `~/.tmux.conf` with `Prefix + r`. Custom pane sizes persist across focus changes, parking, and zoom (`Alt+z`).
   - **Session isolation and quitting**:
     - IDE commands target only the active workspace session so other Tmux sessions are unaffected.
@@ -307,12 +307,12 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 | `Alt+t` | Universal | Focus or unpark Shell pane; press again to bounce back |
 | `Alt+Shift+E` | Universal | Hide or restore the Editor pane (`ide --toggle-editor`) |
 | `Alt+Shift+T` | Universal | Hide or restore the Shell pane (`ide --toggle-term`) |
-| `Alt+Shift+A` | Universal | Hide or restore the AI Agent pane (`ide --toggle-ai`) |
+| `Alt+Shift+A` | Universal | Toggle floating AI overlay popup (`ide --run-ai-popup`) |
 | `Alt+Shift+H/J/K/L` | Tmux | Swap active pane left, down, up, or right (`ide --swap`) |
 | `Alt+z` | Tmux | Toggle full-window pane zoom |
 | `Alt+Left/Down/Up/Right` or `Prefix + H/J/K/L` | Tmux | Resize active pane by 5 cells (or drag borders with the mouse) |
 | `Prefix + \|` or `Prefix + -` | Tmux | Split active pane horizontally (`\|`) or vertically (`-`) in current directory |
-| `Prefix + b` | Tmux | Break active pane into a standalone window or join it back into `ide` |
+| `Prefix + b` | Tmux | Toggle top Tmux status bar visibility (`set-option status`) |
 | `Prefix + r` | Tmux | Reload `~/.tmux.conf` configuration |
 | `Alt+?`, `Space ?`, or `Prefix + ?` | Universal | Open interactive keybinding cheatsheet popup (`ide --keys`) |
 | `Click status bar` | Tmux mouse | Left-click session badge, pane badges, or `Help`; right-click for workspace menu |
@@ -429,7 +429,7 @@ The `theme` command switches the active color scheme across all terminal emulato
 | `theme` | Open interactive `fzf` picker with live TrueColor palette and syntax preview |
 | `theme <name>` | Switch all terminal emulators, editors, prompts, and CLI tools to `<name>` |
 | `theme --holiday` | Switch to the nearest upcoming or active US Holiday theme |
-| `theme --list` | List all built-in and user-defined themes (marking the active theme with `*`) |
+| `theme --list [--plain]` | List all built-in and user-defined themes (marking the active theme with `*`, or raw slugs with `--plain`) |
 | `theme --current` | Print the currently active theme name |
 | `theme --preview [name]` | Render a TrueColor 16-color swatch and semantic syntax preview in the terminal |
 | `theme --create <name> [--from <base>]` | Scaffold a custom user theme in `~/.config/themes/<name>.theme` |
@@ -505,11 +505,11 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 | :--- | :--- | :--- |
 | `gen-passwd` | `-u`, `-l`, `-n`, `-s`, `-t`, `-h, --help`, `[length]` | Generate random passwords with configurable length (default `16`) and character sets (uppercase, lowercase, digits, and symbols) |
 | `gnome-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in GNOME Terminal (`dconf`) |
-| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--cd [dir\|--reset]`, `--open <file> [line]`, `--keys`, `--quit`, `--kill`, `-h, --help`, `[dir]` | Launch and manage multi-pane Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
+| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file>`, `--cd [dir\|--reset]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--keys`, `-q, --quit`, `-f, --force`, `--detach`, `--kill`, `--list`, `-h, --help`, `[dir]` | Launch and manage multi-pane Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces |
 | `macos-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in macOS `Terminal.app` |
 | `repeat-until-success` | `-n <attempts>`, `-s, -d <seconds>`, `-t`, `-h, --help`, `<command> [args...]` | Retry a command up to `N` attempts (default `10`) with a configurable delay in seconds (default `30`) |
 | `sum` | `-d <delim>`, `-k <col>`, `-H`, `-a`, `-s`, `-f <fmt>`, `-t`, `-h, --help`, `[numbers... \| files...]` | Sum numbers from stdin, files, or arguments with support for CSV columns, human byte units, averages, and summary statistics |
-| `theme` | `-l, --list`, `-c, --current`, `-s, --set <name>`, `-p, --preview [name]`, `--env [name]`, `--create <name> [--from <base>] [-f, --force]`, `--path`, `--no-live`, `-n, --dry-run [name]`, `-h, --help`, `[name]` | Switch, preview, or scaffold color themes across terminal emulators, Neovim, Vim, Tmux, Bat, Delta, Btop, Tealdeer, Fzf, Eza, and shell prompts |
+| `theme` | `-l, --list`, `--plain`, `-c, --current`, `-s, --set <name>`, `--holiday`, `-p, --preview [name]`, `--env [name]`, `--create <name> [--from <base>] [-f, --force]`, `--path`, `--no-live`, `-n, --dry-run [name]`, `-h, --help`, `[name]` | Switch, preview, or scaffold color themes across terminal emulators, Neovim, Vim, Tmux, Bat, Delta, Btop, Tealdeer, Fzf, Eza, `LS_COLORS`, and shell prompts |
 | `update-system` | `--all`, `--system-only`, `-n, --dry-run`, `-i, --interactive`, `--skip-snaps`, `--skip-snap`, `--skip-flatpak`, `--with-dev, --dev, --tools`, `--no-cleanup`, `--macos-system`, `--os <distro>`, `-y, --yes`, `-h, --help` | Cross-platform system package and toolchain updater (APT, DNF, Homebrew, Pacman, Snap, Flatpak, and Mise) |
 
 ## Development and testing

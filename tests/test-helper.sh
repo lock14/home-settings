@@ -8,8 +8,8 @@ COLOR_PASS="\033[32m"
 COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
-# Isolate all test suites from any live caller tmux session by default
-unset TMUX TMUX_PANE
+# Isolate all test suites from any live caller tmux session or active theme exports by default
+unset TMUX TMUX_PANE HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE
 
 # Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
 export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
@@ -120,7 +120,7 @@ wait_for_nvim_socket() {
     local tries=0
     while [ "$tries" -lt "$max_tries" ]; do
         if [ -S "$sock" ]; then
-            if [ "$check_rpc" != "1" ] || nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
+            if [ "$check_rpc" != "1" ] || [ "$(nvim --headless --server "$sock" --remote-expr "v:vim_did_enter" 2>/dev/null || true)" = "1" ]; then
                 return 0
             fi
         fi
@@ -783,24 +783,57 @@ if readme_text:
                             f'{readme_where}: {short_script} option "-{opt}" missing from Standalone utilities table'
                         )
 
-    up_path = os.path.join(root_dir, "bin", "update-system")
-    if os.path.isfile(up_path):
-        up_where = up_path.replace("\\", "/")
-        with open(up_path, encoding="utf-8") as ufh:
-            utext = ufh.read()
-        usage_m = re.search(
-            r"usage\(\)\s*\{(.*?)^\}", utext, re.DOTALL | re.MULTILINE
-        )
-        usage_body = usage_m.group(1) if usage_m else ""
-        after_usage = utext[usage_m.end() :] if usage_m else utext
-        for pat_m in re.finditer(r"^\s*(--[a-z0-9|-]+)\)", after_usage, re.MULTILINE):
-            for flag in pat_m.group(1).split("|"):
-                if flag.startswith("--") and not re.search(
-                    rf"{re.escape(flag)}\b", usage_body
+    for long_script in (
+        "theme",
+        "ide",
+        "gnome-terminal-solarized",
+        "macos-terminal-solarized",
+        "update-system",
+    ):
+        lp = os.path.join(root_dir, "bin", long_script)
+        if os.path.isfile(lp):
+            lp_where = lp.replace("\\", "/")
+            with open(lp, encoding="utf-8") as lfh:
+                ltext = lfh.read()
+            usage_m = re.search(
+                r'USAGE_TEXT\s*=\s*"""(.*?)"""', ltext, re.DOTALL
+            ) or re.search(
+                r"usage\(\)\s*\{(.*?)^\}", ltext, re.DOTALL | re.MULTILINE
+            )
+            usage_body = usage_m.group(1) if usage_m else ""
+            standalone_sec = (
+                readme_text.split("## Standalone utilities", 1)[1]
+                if "## Standalone utilities" in readme_text
+                else readme_text
+            )
+            row_m = re.search(
+                rf"^\|\s*`{re.escape(long_script)}`\s*\|.*$",
+                standalone_sec,
+                re.MULTILINE,
+            )
+            row_text = row_m.group(0) if row_m else ""
+            for opt_m in re.finditer(
+                r"^\s{2,}(?:[A-Za-z0-9_-]+,\s*)*(?:-[A-Za-z],\s*)?(--[a-z0-9-]+)(?:,\s*(--[a-z0-9-]+))?",
+                usage_body,
+                re.MULTILINE,
+            ):
+                for flag in (opt_m.group(1), opt_m.group(2)):
+                    if flag and not re.search(rf"{re.escape(flag)}\b", row_text):
+                        errors.append(
+                            f'{readme_where}: {long_script} option "{flag}" missing from Standalone utilities table'
+                        )
+            if long_script == "update-system":
+                after_usage = ltext[usage_m.end() :] if usage_m else ltext
+                for pat_m in re.finditer(
+                    r"^\s*(--[a-z0-9|-]+)\)", after_usage, re.MULTILINE
                 ):
-                    errors.append(
-                        f'{up_where}: option "{flag}" missing from usage()'
-                    )
+                    for flag in pat_m.group(1).split("|"):
+                        if flag.startswith("--") and not re.search(
+                            rf"{re.escape(flag)}\b", usage_body
+                        ):
+                            errors.append(
+                                f'{lp_where}: option "{flag}" missing from usage()'
+                            )
 
     # 6e. Keybindings dual representation in README.md (prose and reference tables)
     keybind_sources = [
@@ -903,6 +936,91 @@ if readme_text:
                     errors.append(
                         f'{readme_where}: keybinding "{key}" (from {rel_src}) missing from README.md reference table'
                     )
+
+    if os.path.isfile(os.path.join(root_dir, "dotfiles", ".tmux.conf")):
+        alt_shift_a_row = re.search(
+            r"^\|\s*`Alt\+Shift\+A`\s*\|.*$", readme_text, re.MULTILINE
+        )
+        if not alt_shift_a_row or "--run-ai-popup" not in alt_shift_a_row.group(0):
+            errors.append(
+                f'{readme_where}: keybinding "Alt+Shift+A" table row must document "ide --run-ai-popup" floating popup target'
+            )
+        prefix_b_row = re.search(
+            r"^\|\s*`Prefix \+ b`\s*\|.*$", readme_text, re.MULTILINE
+        )
+        if not prefix_b_row or "set-option status" not in prefix_b_row.group(0):
+            errors.append(
+                f'{readme_where}: keybinding "Prefix + b" table row must document "set-option status" top bar toggle'
+            )
+
+if errors:
+    for err in errors:
+        print(err, file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+lint_python_embeds() {
+    local root_dir="${1:-.}"
+    python3 - "$root_dir" <<'PY'
+import ast
+import glob
+import os
+import re
+import sys
+
+root_dir = sys.argv[1]
+patterns = [
+    os.path.join(root_dir, "bin", "*"),
+    os.path.join(root_dir, "lib", "*.sh"),
+    os.path.join(root_dir, "modules", "*.sh"),
+    os.path.join(root_dir, "tests", "*.sh"),
+    os.path.join(root_dir, "tests", "*.zsh"),
+    os.path.join(root_dir, "setup.sh"),
+]
+files = []
+for pat in patterns:
+    for path in sorted(glob.glob(pat)):
+        if os.path.isfile(path) and path not in files:
+            files.append(path)
+
+heredoc_re = re.compile(
+    r"(?:\bpython3\b[^\n]*|_PY(?:_SRC)?\s+)<<(-?)\s*'([A-Za-z0-9_]+)'(?:\s*(?:(?:[0-9]*[><]|[|&;#)]).*)?)?$"
+)
+parsed_blocks = 0
+errors = []
+
+for path in files:
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        if not line.lstrip().startswith("#"):
+            m = heredoc_re.search(line)
+            if m:
+                strip_tabs = m.group(1) == "-"
+                tag = m.group(2)
+                start_line = idx + 2
+                block = []
+                idx += 1
+                while idx < len(lines):
+                    candidate = lines[idx].lstrip("\t") if strip_tabs else lines[idx]
+                    if candidate == tag:
+                        break
+                    block.append(lines[idx])
+                    idx += 1
+                src = "\n".join(block) + "\n"
+                parsed_blocks += 1
+                try:
+                    ast.parse(src, filename=f"{path}:{start_line}")
+                except SyntaxError as exc:
+                    err_line = start_line + (exc.lineno or 1) - 1
+                    errors.append(f"{path}:{err_line}: Python SyntaxError: {exc.msg}")
+        idx += 1
+
+if parsed_blocks == 0:
+    errors.append("No embedded Python blocks found across scripts")
 
 if errors:
     for err in errors:

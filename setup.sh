@@ -139,12 +139,21 @@ EOF
 while [ $# -gt 0 ]; do
     case "$1" in
         --theme)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
                 echo "Error: --theme requires a theme name (such as solarized-dark, catppuccin-mocha, nord)" >&2
                 exit 1
             fi
             export HOME_SETTINGS_THEME="$2"
             shift 2
+            ;;
+        --theme=*)
+            theme_arg="${1#--theme=}"
+            if [ -z "$theme_arg" ] || [[ "$theme_arg" == -* ]]; then
+                echo "Error: --theme requires a theme name (such as solarized-dark, catppuccin-mocha, nord)" >&2
+                exit 1
+            fi
+            export HOME_SETTINGS_THEME="$theme_arg"
+            shift
             ;;
         --uninstall)
             ACTION="uninstall"
@@ -184,7 +193,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --os)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
                 echo "Error: --os requires an argument (such as ubuntu, fedora, or macos)" >&2
                 exit 1
             fi
@@ -192,7 +201,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         -i|--ide)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
                 echo "Error: $1 requires an argument (such as intellij, intellij-ultimate, code, or none)" >&2
                 exit 1
             fi
@@ -206,7 +215,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --db)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
                 echo "Error: --db requires an argument (such as postgres, mariadb, all, or none)" >&2
                 exit 1
             fi
@@ -367,6 +376,12 @@ case "$DB_CHOICE" in
         exit 1
         ;;
 esac
+# Validate Color Theme (if explicitly specified via --theme or HOME_SETTINGS_THEME)
+if [ -n "${HOME_SETTINGS_THEME:-}" ] && [ -x "$SCRIPT_DIR/bin/theme" ]; then
+    if ! "$SCRIPT_DIR/bin/theme" --dry-run --no-live --set="$HOME_SETTINGS_THEME" >/dev/null; then
+        exit 1
+    fi
+fi
 
 echo "====================================================="
 echo "       Home-Settings Cross-Platform Setup            "
@@ -375,6 +390,9 @@ echo "Target OS : $OS"
 echo "Arch      : $ARCH"
 echo "IDE Choice: $IDE_NAME"
 echo "Database  : Server: $DB_CHOICE (Clients: $([ "$SKIP_DB" = true ] && echo "skipped" || echo "enabled"))"
+if [ -n "${HOME_SETTINGS_THEME:-}" ]; then
+    echo "Theme     : $HOME_SETTINGS_THEME"
+fi
 if [ "$BOOTSTRAP_MODE" = true ]; then
     echo "Mode      : BOOTSTRAP (Full turnkey machine setup)"
 fi

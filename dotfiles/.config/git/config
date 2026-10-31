@@ -32,3 +32,8 @@
     line-numbers-zero-style = "#586e75"
     whitespace-error-style = "#dc322f" reverse
 
+[merge]
+    conflictstyle = zdiff3
+
+[diff]
+    colorMoved = default

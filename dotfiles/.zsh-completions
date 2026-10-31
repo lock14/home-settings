@@ -26,6 +26,7 @@ _theme() {
     opts=(
         '-l:List available color themes'
         '--list:List available color themes'
+        '--plain:Print theme slugs only (one per line) when listing'
         '-c:Print active theme identifier'
         '--current:Print active theme identifier'
         '-s:Apply the specified color theme'

@@ -7,21 +7,34 @@ use_pager = false
 
 [style.description]
 foreground = { rgb = { r = 131, g = 148, b = 150 } } # Base0
+bold = false
+underline = false
+italic = false
 
 [style.command_name]
 foreground = { rgb = { r = 133, g = 153, b = 0 } }   # Green
 bold = false
+underline = false
+italic = false
 
 [style.example_text]
 foreground = { rgb = { r = 38, g = 139, b = 210 } }  # Blue
+bold = false
+underline = false
+italic = false
 
 [style.example_code]
 foreground = { rgb = { r = 42, g = 161, b = 152 } }  # Cyan
+bold = false
+underline = false
+italic = false
 
 [style.example_variable]
 foreground = { rgb = { r = 211, g = 54, b = 130 } }  # Magenta
+bold = false
 underline = true
+italic = false
 
 [updates]
 auto_update = true
-
+auto_update_interval_hours = 720

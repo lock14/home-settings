@@ -56,6 +56,18 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
         if [ "$target_name" = "nvim" ] && [ "${SKIP_NVIM:-false}" = true ]; then
             continue
         fi
+        if [ "$target_name" = "git" ] && [ -d "$item" ]; then
+            # Keep ~/.config/git as a real directory so user-local files (ignore, attributes) survive theme switches
+            if [ -L "$XDG_CONFIG/git" ]; then
+                unlink_path "$XDG_CONFIG/git"
+            fi
+            [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/git"
+            for git_f in "$item"/*; do
+                [ -e "$git_f" ] || continue
+                link_file "$git_f" "$XDG_CONFIG/git/$(basename "$git_f")"
+            done
+            continue
+        fi
         if [ -d "$item" ]; then
             link_dir "$item" "$XDG_CONFIG/$target_name"
         elif [ -f "$item" ]; then
@@ -138,16 +150,17 @@ if [ -f "$REPO_DIR/.mise.toml" ]; then
 fi
 
 # 7. Re-apply active color theme if configured or previously persisted
-if [ -n "${THEME_NAME:-}" ] && [ -x "$REPO_DIR/bin/theme" ]; then
+EFFECTIVE_THEME="${HOME_SETTINGS_THEME:-${THEME_NAME:-}}"
+if [ -n "$EFFECTIVE_THEME" ] && [ -x "$REPO_DIR/bin/theme" ]; then
     if [ "$DRY_RUN" = true ]; then
-        "$REPO_DIR/bin/theme" --dry-run --no-live "$THEME_NAME"
+        "$REPO_DIR/bin/theme" --dry-run --no-live --set="$EFFECTIVE_THEME"
     else
-        "$REPO_DIR/bin/theme" --no-live "$THEME_NAME" >/dev/null
+        "$REPO_DIR/bin/theme" --no-live --set="$EFFECTIVE_THEME" >/dev/null
     fi
 elif [ -f "$XDG_CONFIG/home-settings/theme" ] && [ -x "$REPO_DIR/bin/theme" ] && [ "$DRY_RUN" = false ]; then
     saved_theme="$(tr -d '[:space:]' < "$XDG_CONFIG/home-settings/theme" || true)"
     if [ -n "$saved_theme" ]; then
-        "$REPO_DIR/bin/theme" --no-live "$saved_theme" >/dev/null 2>&1 || true
+        "$REPO_DIR/bin/theme" --no-live --set="$saved_theme" >/dev/null || true
     fi
 fi
 

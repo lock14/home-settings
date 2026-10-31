@@ -10,10 +10,16 @@ _link_path() {
         echo "  [DryRun] ln $flags $src $dst"
     else
         mkdir -p "$(dirname "$dst")"
-        if [ -d "$dst" ] && [ ! -L "$dst" ]; then
-            local bak
-            bak="${dst}.bak.$(date +%s)"
-            echo "  Backing up pre-existing directory to $bak"
+        if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+            local base_bak bak idx
+            base_bak="${dst}.bak.$(date +%s)"
+            bak="$base_bak"
+            idx=1
+            while [ -e "$bak" ] || [ -L "$bak" ]; do
+                bak="${base_bak}.${idx}"
+                idx=$((idx + 1))
+            done
+            echo "  Backing up pre-existing path to $bak"
             mv "$dst" "$bak"
         fi
         ln "$flags" "$src" "$dst"
