@@ -2826,16 +2826,17 @@
   # subsequent in-place theme switches restore clean baselines without duplicating local appends.
   typeset -gA _HS_P10K_BASE_SCALARS=() _HS_P10K_BASE_ARRAYS=()
   local _hs_bp
+  local -a _hs_bp_arr
   for _hs_bp in ${(k)parameters[(I)POWERLEVEL9K_*]}; do
-    [[ $_hs_bp == POWERLEVEL9K_GITSTATUS_DIR ]] && continue
+    [[ $_hs_bp == POWERLEVEL9K_GITSTATUS_DIR || $_hs_bp == POWERLEVEL9K_CONFIG_FILE ]] && continue
     case ${(Pt)_hs_bp} in
       scalar*) _HS_P10K_BASE_SCALARS[$_hs_bp]=${(P)_hs_bp} ;;
       array*)
-        local -a _hs_bp_arr=( "${(@P)_hs_bp}" )
+        _hs_bp_arr=( "${(@P)_hs_bp}" )
         if (( ${#_hs_bp_arr} == 0 )); then
           _HS_P10K_BASE_ARRAYS[$_hs_bp]=$'\x01EMPTY\x01'
         else
-          _HS_P10K_BASE_ARRAYS[$_hs_bp]=${(pj:\0:)_hs_bp}
+          _HS_P10K_BASE_ARRAYS[$_hs_bp]=${(pj:\0:)_hs_bp_arr}
         fi
         ;;
     esac
