@@ -98,6 +98,13 @@ else
     fail "setup.sh idempotency" "Second run failed: $output"
 fi
 
+if grep -Fq "'--plain:" "$SCRIPT_DIR/dotfiles/.zsh-completions" && \
+   grep -Fq "'--holiday:" "$SCRIPT_DIR/dotfiles/.zsh-completions"; then
+    pass "dotfiles/.zsh-completions registers --plain and --holiday in _theme"
+else
+    fail "_theme_complete options" "Missing --plain or --holiday in dotfiles/.zsh-completions"
+fi
+
 export HOME="$OLD_HOME"
 
 test_summary

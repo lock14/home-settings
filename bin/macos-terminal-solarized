@@ -35,12 +35,20 @@ EOF
 while [ $# -gt 0 ]; do
     case "$1" in
         --theme)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
                 echo "Error: --theme requires a theme name" >&2
                 exit 1
             fi
             THEME_NAME="$2"
             shift 2
+            ;;
+        --theme=*)
+            THEME_NAME="${1#--theme=}"
+            if [ -z "$THEME_NAME" ]; then
+                echo "Error: --theme requires a theme name" >&2
+                exit 1
+            fi
+            shift
             ;;
         --dry-run)
             DRY_RUN=true
@@ -58,7 +66,277 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ "$(uname -s)" != "Darwin" ]; then
+IFS= read -r -d '' MACOS_THEME_PY <<'PY' || true
+import copy
+import os
+from pathlib import Path
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+
+DARK_DEFAULTS = {
+    "THEME_MODE": "dark",
+    "BASE03": "#002B36",
+    "BASE02": "#073642",
+    "BASE01": "#586E75",
+    "BASE00": "#657B83",
+    "BASE0": "#839496",
+    "BASE1": "#93A1A1",
+    "BASE2": "#EEE8D5",
+    "BASE3": "#FDF6E3",
+    "YELLOW": "#B58900",
+    "ORANGE": "#CB4B16",
+    "RED": "#DC322F",
+    "MAGENTA": "#D33682",
+    "VIOLET": "#6C71C4",
+    "BLUE": "#268BD2",
+    "CYAN": "#2AA198",
+    "GREEN": "#859900",
+}
+
+LIGHT_DEFAULTS = dict(
+    DARK_DEFAULTS,
+    THEME_MODE="light",
+    BASE03="#FDF6E3",
+    BASE02="#EEE8D5",
+    BASE01="#93A1A1",
+    BASE00="#839496",
+    BASE0="#657B83",
+    BASE1="#586E75",
+    BASE2="#073642",
+    BASE3="#002B36",
+)
+
+COLOR_KEYS = [
+    "BASE03", "BASE02", "BASE01", "BASE00",
+    "BASE0", "BASE1", "BASE2", "BASE3",
+    "YELLOW", "ORANGE", "RED", "MAGENTA",
+    "VIOLET", "BLUE", "CYAN", "GREEN",
+]
+
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+
+def parse_theme_kv(path):
+    parsed = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export ") or line.startswith("export\t"):
+            line = line[6:].strip()
+        m = ASSIGN_RE.match(line)
+        if not m:
+            continue
+        k, v = m.group(1), m.group(2).strip()
+        if v and v[0] in ("'", '"'):
+            q = v[0]
+            end_idx = v.find(q, 1)
+            if end_idx != -1:
+                rest = v[end_idx + 1 :].strip()
+                if not rest or rest.startswith("#"):
+                    v = v[1:end_idx]
+        else:
+            v = re.split(r"\s+#", v, maxsplit=1)[0].strip()
+        parsed[k] = v
+    return parsed
+
+
+mode_arg = sys.argv[1]
+repo_dir = Path(sys.argv[2])
+raw_name = sys.argv[3].strip()
+plist_path = Path(sys.argv[4])
+template_path = Path(sys.argv[5])
+
+slug = (raw_name or "solarized-dark").lower().replace("_", "-")
+if not SLUG_RE.match(slug):
+    sys.stderr.write(f"Error: Unknown theme '{raw_name}'\n")
+    sys.exit(1)
+
+xdg_cfg = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+user_dir_1 = Path(os.environ.get("HOME_SETTINGS_USER_THEMES_DIR", str(xdg_cfg / "themes")))
+user_dir_2 = xdg_cfg / "home-settings" / "themes"
+
+parsed = None
+direct_user_candidates = [
+    user_dir_1 / f"{slug}.theme",
+    user_dir_1 / f"{slug}.conf",
+    user_dir_2 / f"{slug}.theme",
+    user_dir_2 / f"{slug}.conf",
+]
+for cand in direct_user_candidates:
+    if cand.is_file():
+        parsed = parse_theme_kv(cand)
+        break
+
+if parsed is None:
+    for udir in (user_dir_1, user_dir_2):
+        if not udir.is_dir():
+            continue
+        for cand in sorted(list(udir.glob("*.theme")) + list(udir.glob("*.conf"))):
+            if not cand.is_file():
+                continue
+            kv = parse_theme_kv(cand)
+            cand_id = kv.get("THEME_ID", cand.stem).strip().lower().replace("_", "-")
+            if cand_id == slug:
+                parsed = kv
+                break
+        if parsed is not None:
+            break
+
+if parsed is None:
+    builtin_cand = repo_dir / "colors" / "themes" / f"{slug}.theme"
+    if builtin_cand.is_file():
+        parsed = parse_theme_kv(builtin_cand)
+
+if parsed is None:
+    active_snap = xdg_cfg / "home-settings" / "active-theme.theme"
+    if active_snap.is_file():
+        kv = parse_theme_kv(active_snap)
+        if kv.get("THEME_ID", "").strip().lower().replace("_", "-") == slug:
+            parsed = kv
+
+if parsed is None:
+    if slug == "solarized-dark":
+        parsed = {"THEME_ID": "solarized-dark", "THEME_LABEL": "Solarized Dark"}
+    else:
+        sys.stderr.write(f"Error: Unknown theme '{raw_name or slug}'\n")
+        sys.exit(1)
+
+tmode = parsed.get("THEME_MODE", "dark").strip().lower()
+pal = dict(LIGHT_DEFAULTS if tmode == "light" else DARK_DEFAULTS)
+pal.update(parsed)
+label = pal.get("THEME_LABEL") or " ".join(w.capitalize() for w in slug.split("-") if w)
+for ck in COLOR_KEYS:
+    val = pal.get(ck, "").strip()
+    if not HEX_RE.match(val):
+        sys.stderr.write(f"Error: Invalid hex color {ck}='{val}' in theme '{slug}'\n")
+        sys.exit(1)
+    pal[ck] = val.upper()
+
+if mode_arg == "validate":
+    print(label)
+    sys.exit(0)
+
+if mode_arg == "osascript":
+    def rgb16(key):
+        h = pal[key].lstrip("#")
+        return f"{{{int(h[0:2], 16) * 257}, {int(h[2:4], 16) * 257}, {int(h[4:6], 16) * 257}}}"
+
+    esc_name = label.replace("\\", "\\\\").replace('"', '\\"')
+    script = f'''tell application "Terminal"
+    try
+        set font name of settings set "{esc_name}" to "MesloLGSNFM-Regular"
+        set font size of settings set "{esc_name}" to 12
+        set font antialiasing of settings set "{esc_name}" to true
+        set background color of settings set "{esc_name}" to {rgb16("BASE03")}
+        set normal text color of settings set "{esc_name}" to {rgb16("BASE0")}
+        set bold text color of settings set "{esc_name}" to {rgb16("BASE1")}
+        set cursor color of settings set "{esc_name}" to {rgb16("BASE0")}
+        set default settings to settings set "{esc_name}"
+        set startup settings to settings set "{esc_name}"
+    end try
+end tell'''
+    subprocess.run(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    sys.exit(0)
+
+try:
+    with open(template_path, "rb") as f:
+        theme_dict = plistlib.load(f)
+
+    srgb_archive_template = plistlib.loads(theme_dict["TextColor"])
+
+    def encode_nscolor(hex_str):
+        h = hex_str.lstrip("#")
+        rf = int(h[0:2], 16) / 255.0
+        gf = int(h[2:4], 16) / 255.0
+        bf = int(h[4:6], 16) / 255.0
+        arc = copy.deepcopy(srgb_archive_template)
+        arc["$objects"][1]["NSComponents"] = f"{rf:.10g} {gf:.10g} {bf:.10g} 1".encode("ascii")
+        arc["$objects"][1]["NSRGB"] = f"{rf:.10g} {gf:.10g} {bf:.10g}\x00".encode("ascii")
+        return plistlib.dumps(arc, fmt=plistlib.FMT_BINARY)
+
+    for legacy_k in [k for k in list(theme_dict.keys()) if k.endswith("Colour")]:
+        del theme_dict[legacy_k]
+    color_slot_map = {
+        "BackgroundColor": pal["BASE03"],
+        "TextColor": pal["BASE0"],
+        "TextBoldColor": pal["BASE1"],
+        "CursorColor": pal["BASE0"],
+        "CursorTextColor": pal["BASE03"],
+        "SelectionColor": pal["BASE02"],
+        "ANSIBlackColor": pal["BASE02"],
+        "ANSIRedColor": pal["RED"],
+        "ANSIGreenColor": pal["GREEN"],
+        "ANSIYellowColor": pal["YELLOW"],
+        "ANSIBlueColor": pal["BLUE"],
+        "ANSIMagentaColor": pal["MAGENTA"],
+        "ANSICyanColor": pal["CYAN"],
+        "ANSIWhiteColor": pal["BASE2"],
+        "ANSIBrightBlackColor": pal["BASE01"],
+        "ANSIBrightRedColor": pal["ORANGE"],
+        "ANSIBrightGreenColor": pal["BASE01"],
+        "ANSIBrightYellowColor": pal["BASE00"],
+        "ANSIBrightBlueColor": pal["BASE0"],
+        "ANSIBrightMagentaColor": pal["VIOLET"],
+        "ANSIBrightCyanColor": pal["BASE1"],
+        "ANSIBrightWhiteColor": pal["BASE3"],
+    }
+    for plist_key, hex_val in color_slot_map.items():
+        theme_dict[plist_key] = encode_nscolor(hex_val)
+
+    theme_dict["name"] = label
+    theme_dict["useOptionAsMetaKey"] = True
+
+    prefs = {}
+    loaded_from_cfprefsd = False
+    if shutil.which("defaults"):
+        try:
+            exp = subprocess.run(
+                ["defaults", "export", "com.apple.Terminal", "-"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+            )
+            if exp.returncode == 0 and exp.stdout:
+                exp_dict = plistlib.loads(exp.stdout)
+                if isinstance(exp_dict, dict) and exp_dict:
+                    prefs = exp_dict
+                    loaded_from_cfprefsd = True
+        except Exception:
+            prefs = {}
+
+    if not loaded_from_cfprefsd and plist_path.exists():
+        try:
+            with open(plist_path, "rb") as f:
+                disk_dict = plistlib.load(f)
+                if isinstance(disk_dict, dict):
+                    prefs = disk_dict
+        except Exception:
+            prefs = {}
+
+    if "Window Settings" not in prefs or not isinstance(prefs["Window Settings"], dict):
+        prefs["Window Settings"] = {}
+
+    prefs["Window Settings"][label] = theme_dict
+    prefs["Default Window Settings"] = label
+    prefs["Startup Window Settings"] = label
+
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(plist_path, "wb") as f:
+        plistlib.dump(prefs, f, fmt=plistlib.FMT_BINARY)
+except Exception as e:
+    sys.exit(f"Error updating Terminal preferences: {e}")
+PY
+
+PROFILE_NAME="$(python3 -c "$MACOS_THEME_PY" "validate" "$REPO_DIR" "$THEME_NAME" "$PREFS_PLIST" "$TERMINAL_FILE")"
+
+if [ "$(uname -s)" != "Darwin" ] && [ "${OS:-}" != "macos" ]; then
     echo "  Not running on macOS; skipping macOS Terminal.app configuration."
     exit 0
 fi
@@ -68,103 +346,24 @@ if [ ! -f "$TERMINAL_FILE" ]; then
     exit 1
 fi
 
-echo "  Configuring macOS Terminal.app with authentic Solarized Dark profile..."
+echo "  Configuring macOS Terminal.app with authentic $PROFILE_NAME profile..."
 
 if [ "$DRY_RUN" = true ]; then
-    echo "  [DryRun] Import $TERMINAL_FILE into Terminal.app Window Settings"
+    echo "  [DryRun] Configure '$PROFILE_NAME' in Terminal.app Window Settings ($PREFS_PLIST)"
     echo "  [DryRun] Set Terminal.app default and startup profile to '$PROFILE_NAME'"
     exit 0
 fi
 
-# Configure via Python3 manipulating com.apple.Terminal.plist
-python3 -c "
-import plistlib, os, sys
+# Configure com.apple.Terminal.plist directly with all 22 sRGB NSColor keys (works even when Terminal.app is closed)
+python3 -c "$MACOS_THEME_PY" "apply" "$REPO_DIR" "$THEME_NAME" "$PREFS_PLIST" "$TERMINAL_FILE"
 
-plist_path = sys.argv[1]
-theme_path = sys.argv[2]
-profile_name = sys.argv[3]
-
-try:
-    with open(theme_path, 'rb') as f:
-        theme_dict = plistlib.load(f)
-
-    prefs = {}
-    if os.path.exists(plist_path):
-        try:
-            with open(plist_path, 'rb') as f:
-                prefs = plistlib.load(f)
-        except Exception:
-            prefs = {}
-
-    if 'Window Settings' not in prefs:
-        prefs['Window Settings'] = {}
-
-    theme_dict['useOptionAsMetaKey'] = True
-    prefs['Window Settings'][profile_name] = theme_dict
-    prefs['Default Window Settings'] = profile_name
-    prefs['Startup Window Settings'] = profile_name
-
-    os.makedirs(os.path.dirname(plist_path), exist_ok=True)
-    with open(plist_path, 'wb') as f:
-        plistlib.dump(prefs, f, fmt=plistlib.FMT_BINARY)
-except Exception as e:
-    sys.exit(f'Error updating Terminal preferences: {e}')
-" "$PREFS_PLIST" "$TERMINAL_FILE" "$PROFILE_NAME"
-
-# Refresh macOS preferences cache if defaults/killall is available
+# Import full updated plist into cfprefsd without clobbering Window Settings
 if command -v defaults >/dev/null 2>&1; then
-    defaults write com.apple.Terminal "Default Window Settings" -string "$PROFILE_NAME" 2>/dev/null || true
-    defaults write com.apple.Terminal "Startup Window Settings" -string "$PROFILE_NAME" 2>/dev/null || true
+    defaults import com.apple.Terminal "$PREFS_PLIST" 2>/dev/null || true
 fi
 
 if command -v osascript >/dev/null 2>&1 && pgrep -x Terminal >/dev/null 2>&1; then
-    osascript -e 'tell application "Terminal"
-        try
-            set font name of settings set "'"$PROFILE_NAME"'" to "MesloLGSNFM-Regular"
-            set font size of settings set "'"$PROFILE_NAME"'" to 12
-            set font antialiasing of settings set "'"$PROFILE_NAME"'" to true
-        end try
-    end tell' >/dev/null 2>&1 || true
-fi
-
-if [ -n "$THEME_NAME" ] && [ "$THEME_NAME" != "solarized-dark" ]; then
-    THEME_FILE=""
-    for candidate in \
-        "${HOME_SETTINGS_USER_THEMES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/themes}/$THEME_NAME.theme" \
-        "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/themes/$THEME_NAME.theme" \
-        "$REPO_DIR/colors/themes/$THEME_NAME.theme" \
-        "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/active-theme.theme"; do
-        if [ -f "$candidate" ]; then
-            THEME_FILE="$candidate"
-            break
-        fi
-    done
-    if [ -n "$THEME_FILE" ] && command -v osascript >/dev/null 2>&1 && pgrep -x Terminal >/dev/null 2>&1; then
-        python3 - "$THEME_FILE" "$PROFILE_NAME" <<'PY' >/dev/null 2>&1 || true
-import re, subprocess, sys
-vals = {}
-with open(sys.argv[1], encoding="utf-8") as f:
-    for line in f:
-        m = re.match(r'^([A-Z0-9_]+)="?([^"\n]*)"?$', line.strip())
-        if m:
-            vals[m.group(1)] = m.group(2)
-def rgb16(key, default):
-    h = vals.get(key, default).lstrip("#")
-    return f"{{{int(h[0:2],16)*257}, {int(h[2:4],16)*257}, {int(h[4:6],16)*257}}}"
-bg = rgb16("BASE03", "#002B36")
-fg = rgb16("BASE0", "#839496")
-bold = rgb16("BASE1", "#93A1A1")
-script = f'''tell application "Terminal"
-    try
-        set background color of settings set "{sys.argv[2]}" to {bg}
-        set normal text color of settings set "{sys.argv[2]}" to {fg}
-        set bold text color of settings set "{sys.argv[2]}" to {bold}
-        set cursor color of settings set "{sys.argv[2]}" to {fg}
-    end try
-end tell'''
-subprocess.run(["osascript", "-e", script], check=False)
-PY
-    fi
+    python3 -c "$MACOS_THEME_PY" "osascript" "$REPO_DIR" "$THEME_NAME" "$PREFS_PLIST" "$TERMINAL_FILE" || true
 fi
 
 echo "  macOS Terminal.app profile '$PROFILE_NAME' successfully configured as default."

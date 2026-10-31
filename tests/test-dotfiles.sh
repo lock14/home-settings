@@ -276,10 +276,17 @@ else
     fail "btop theme verification" "Missing or invalid solarized_dark.theme in .config/btop/themes"
 fi
 
-assert_symlink "$TEMP_HOME/.config/git" "" "Auto-discovered and symlinked: .config/git"
+if [ -d "$TEMP_HOME/.config/git" ] && [ ! -L "$TEMP_HOME/.config/git" ]; then
+    pass ".config/git is a real directory so local ignore and attributes files survive"
+else
+    fail ".config/git directory" "Expected .config/git to be a physical directory, not a directory symlink"
+fi
+assert_symlink "$TEMP_HOME/.config/git/config" "" "Auto-discovered and symlinked: .config/git/config"
 if [ -f "$TEMP_HOME/.config/git/config" ] && \
    grep -q 'pager = delta' "$TEMP_HOME/.config/git/config" && \
    grep -q 'diffFilter = delta --color-only' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'conflictstyle = zdiff3' "$TEMP_HOME/.config/git/config" && \
+   grep -q 'colorMoved = default' "$TEMP_HOME/.config/git/config" && \
    grep -q 'syntax-theme = Solarized-Dark-TrueColor' "$TEMP_HOME/.config/git/config" && \
    grep -q 'hunk-header-style = line-number syntax' "$TEMP_HOME/.config/git/config" && \
    grep -q 'hunk-header-line-number-style = "#268bd2"' "$TEMP_HOME/.config/git/config" && \
@@ -288,9 +295,9 @@ if [ -f "$TEMP_HOME/.config/git/config" ] && \
    ! grep -Eq '\bbold\b' "$TEMP_HOME/.config/git/config" && \
    grep -q 'line-numbers-plus-style = "#859900"' "$TEMP_HOME/.config/git/config" && \
    grep -q 'line-numbers-minus-style = "#dc322f"' "$TEMP_HOME/.config/git/config"; then
-    pass "git config configures delta with Solarized-Dark-TrueColor theme, diffFilter, distinct +/- backgrounds, unbolded typography, and line numbers"
+    pass "git config configures delta with Solarized-Dark-TrueColor theme, zdiff3 conflictstyle, colorMoved, diffFilter, distinct +/- backgrounds, unbolded typography, and line numbers"
 else
-    fail "git config verification" "Missing expected delta pager configuration in .config/git/config"
+    fail "git config verification" "Missing expected delta pager or merge/diff configuration in .config/git/config"
 fi
 if command -v delta >/dev/null 2>&1; then
     DELTA_OUT="$(printf 'diff --git a/sample.toml b/sample.toml\n--- a/sample.toml\n+++ b/sample.toml\n@@ -1,1 +1,1 @@\n-bold = true\n+bold = false\n' | GIT_CONFIG_GLOBAL="$TEMP_HOME/.config/git/config" delta --paging=never 2>/dev/null || true)"
@@ -309,8 +316,9 @@ if [ -f "$TEMP_HOME/.config/tealdeer/config.toml" ] && \
    grep -q '\[style\.description\]' "$TEMP_HOME/.config/tealdeer/config.toml" && \
    grep -q 'r = 131, g = 148, b = 150' "$TEMP_HOME/.config/tealdeer/config.toml" && \
    grep -q 'r = 211, g = 54, b = 130' "$TEMP_HOME/.config/tealdeer/config.toml" && \
-   grep -q 'auto_update = true' "$TEMP_HOME/.config/tealdeer/config.toml"; then
-    pass "tealdeer config contains unbolded Solarized Dark TrueColor styling (Magenta variables) and auto_update = true"
+   grep -q 'auto_update = true' "$TEMP_HOME/.config/tealdeer/config.toml" && \
+   grep -q 'auto_update_interval_hours = 720' "$TEMP_HOME/.config/tealdeer/config.toml"; then
+    pass "tealdeer config contains unbolded Solarized Dark TrueColor styling (Magenta variables), auto_update = true, and auto_update_interval_hours = 720"
 else
     fail "tealdeer config verification" "Missing or invalid config.toml in .config/tealdeer"
 fi
@@ -2079,7 +2087,7 @@ else
 fi
 rm -rf "$TEMP_EMPTY_DROPIN_HOME"
 
-# Verify all 9 managed themes have .tmTheme, btop, and Ghostty theme assets linked and valid
+# Verify all 17 managed themes have .tmTheme, btop, and Ghostty theme assets linked and valid
 managed_tmthemes=(
     "Solarized-Dark-TrueColor.tmTheme"
     "Solarized-Light-TrueColor.tmTheme"
@@ -2090,6 +2098,14 @@ managed_tmthemes=(
     "Kanagawa-Wave-TrueColor.tmTheme"
     "Nord-TrueColor.tmTheme"
     "OneDark-TrueColor.tmTheme"
+    "New-Years-TrueColor.tmTheme"
+    "Valentines-TrueColor.tmTheme"
+    "St-Patricks-TrueColor.tmTheme"
+    "Easter-TrueColor.tmTheme"
+    "Independence-Day-TrueColor.tmTheme"
+    "Halloween-TrueColor.tmTheme"
+    "Thanksgiving-TrueColor.tmTheme"
+    "Christmas-TrueColor.tmTheme"
 )
 all_tmthemes_ok=true
 for tmt in "${managed_tmthemes[@]}"; do
@@ -2099,11 +2115,13 @@ for tmt in "${managed_tmthemes[@]}"; do
     fi
 done
 if [ "$all_tmthemes_ok" = true ]; then
-    pass "All 9 managed bat .tmTheme files exist in colors/ and are symlinked into ~/.config/bat/themes/"
+    pass "All 17 managed bat .tmTheme files exist in colors/ and are symlinked into ~/.config/bat/themes/"
 fi
 
-# Test 5: Uninstallation of dotfiles
+# Test 5: Uninstallation of dotfiles (preserving local ~/.config/git/ignore and attributes)
 echo -e "\n[5/5] Testing dotfiles uninstallation..."
+echo "*.local" > "$TEMP_HOME/.config/git/ignore"
+echo "*.pbxproj binary" > "$TEMP_HOME/.config/git/attributes"
 HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
 
 all_unlinked=true
@@ -2114,9 +2132,14 @@ for df in "${expected_top_level[@]}"; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/tealdeer" ] || [ -L "$TEMP_HOME/.config/clangd" ] || [ -L "$TEMP_HOME/.config/fontconfig" ]; then
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/git/config" ] || [ -L "$TEMP_HOME/.config/tealdeer" ] || [ -L "$TEMP_HOME/.config/clangd" ] || [ -L "$TEMP_HOME/.config/fontconfig" ]; then
     all_unlinked=false
-    fail "Unlink check" ".config subtrees still linked"
+    fail "Unlink check" ".config subtrees or git/config still linked"
+fi
+
+if [ ! -f "$TEMP_HOME/.config/git/ignore" ] || [ ! -f "$TEMP_HOME/.config/git/attributes" ]; then
+    all_unlinked=false
+    fail "Unlink check" "User ~/.config/git/ignore or attributes was deleted during uninstallation"
 fi
 
 for syn in "$SCRIPT_DIR/syntaxes"/*.sublime-syntax; do
@@ -2140,7 +2163,7 @@ if [ -L "$TEMP_HOME/.config/mise/config.toml" ]; then
 fi
 
 if [ "$all_unlinked" = true ]; then
-    pass "All managed dotfile symlinks successfully removed by uninstaller"
+    pass "All managed dotfile symlinks removed by uninstaller while preserving local ~/.config/git/ignore and attributes"
 fi
 
 test_summary

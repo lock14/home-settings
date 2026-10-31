@@ -691,4 +691,66 @@ else
 fi
 rm -rf "$TEMP_VALID_DOC_DIR"
 
+# Verify embedded Python AST lint passes on repo and catches syntax errors
+if py_ast_out=$(lint_python_embeds "$SCRIPT_DIR" 2>&1); then
+    pass "lint_python_embeds validates all embedded Python AST blocks across repository scripts"
+else
+    fail "lint_python_embeds repo validation" "$py_ast_out"
+fi
+
+TEMP_PY_AST_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY_AST_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'def broken(:' '    pass' 'PY' > "$TEMP_PY_AST_DIR/bin/bad-py"
+TEMP_PY_VAR_AST_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY_VAR_AST_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' "IFS= read -r -d '' RESOLVE_THEME_PY <<""'PY' || true" 'def broken_var(:' '    pass' 'PY' > "$TEMP_PY_VAR_AST_DIR/bin/bad-var-py"
+if lint_python_embeds "$TEMP_PY_AST_DIR" >/dev/null 2>&1 || lint_python_embeds "$TEMP_PY_VAR_AST_DIR" >/dev/null 2>&1; then
+    fail "lint_python_embeds error detection" "Expected non-zero exit on invalid embedded Python syntax (both python3 and *_PY heredocs)"
+else
+    pass "lint_python_embeds catches syntax errors in both python3 and *_PY heredoc blocks"
+fi
+rm -rf "$TEMP_PY_AST_DIR" "$TEMP_PY_VAR_AST_DIR"
+
+# Test setup.sh --theme validation, --theme --dry-run guard, empty/flag injection guards, stage-10 application, and 70-terminal.sh persisted theme fallback
+TEMP_THEME_SETUP_HOME=$(mktemp -d)
+if HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme --dry-run >/dev/null 2>&1 || \
+   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme "" >/dev/null 2>&1 || \
+   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme="" >/dev/null 2>&1 || \
+   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" HOME_SETTINGS_THEME="--list" "$SCRIPT_DIR/setup.sh" --dry-run --dotfiles-only >/dev/null 2>&1; then
+    fail "setup.sh --theme invalid/empty/flag guard" "Expected non-zero exit on --theme --dry-run, --theme '', --theme='', and HOME_SETTINGS_THEME=--list"
+elif [ -e "$TEMP_THEME_SETUP_HOME/.tmux.conf" ]; then
+    fail "setup.sh --theme --dry-run no-mutation" "Expected zero dotfiles mutations when --theme guard rejects arguments"
+else
+    pass "setup.sh --theme rejects leading-dash flags, empty strings, and flag-like HOME_SETTINGS_THEME values without mutating HOME"
+fi
+
+if HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme nonexistent-theme-xyz >/dev/null 2>&1; then
+    fail "setup.sh --theme unknown validation" "Expected non-zero exit on unknown --theme value"
+else
+    pass "setup.sh --theme validates theme existence upfront before running stages"
+fi
+
+if setup_theme_out=$(HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" XDG_CACHE_HOME="$TEMP_THEME_SETUP_HOME/.cache" THEME_UPDATE_TERMINAL_PROFILE=0 THEME_LIVE_NVIM=0 TMUX="" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal --theme nord 2>&1) && \
+   grep -Fq "Theme     : nord" <<< "$setup_theme_out" && \
+   [ "$(cat "$TEMP_THEME_SETUP_HOME/.config/home-settings/theme" 2>/dev/null || true)" = "nord" ] && \
+   grep -Fq 'THEME_ID="nord"' "$TEMP_THEME_SETUP_HOME/.config/home-settings/active-theme.theme"; then
+    pass "setup.sh --dotfiles-only --theme nord applies requested theme in stage 10 and displays Theme in summary banner"
+else
+    fail "setup.sh --dotfiles-only --theme nord" "Theme was not persisted or applied in stage 10: ${setup_theme_out:-}"
+fi
+
+mkdir -p "$TEMP_THEME_SETUP_HOME/mock-bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$TEMP_THEME_SETUP_HOME/mock-bin/dconf"
+printf '%s\n' '#!/usr/bin/env bash' 'echo "org.gnome.Terminal.ProfilesList"' > "$TEMP_THEME_SETUP_HOME/mock-bin/gsettings"
+chmod +x "$TEMP_THEME_SETUP_HOME/mock-bin/dconf" "$TEMP_THEME_SETUP_HOME/mock-bin/gsettings"
+term_persisted_macos="$(env -u HOME_SETTINGS_THEME DRY_RUN=true OS=macos HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/modules/70-terminal.sh" 2>&1 || true)"
+term_persisted_linux="$(env -u HOME_SETTINGS_THEME PATH="$TEMP_THEME_SETUP_HOME/mock-bin:$PATH" DRY_RUN=true OS=ubuntu DISPLAY=":99" HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/modules/70-terminal.sh" 2>&1 || true)"
+if grep -Fq "Configure 'Nord' in Terminal.app Window Settings" <<< "$term_persisted_macos" && \
+   grep -Fq "Apply Nord profile" <<< "$term_persisted_linux"; then
+    pass "modules/70-terminal.sh honors persisted ~/.config/home-settings/theme on both macOS and Linux when HOME_SETTINGS_THEME is unset"
+else
+    fail "modules/70-terminal.sh persisted theme" "Expected Nord profile in dry-run output: macos='$term_persisted_macos' linux='$term_persisted_linux'"
+fi
+rm -rf "$TEMP_THEME_SETUP_HOME"
+
 test_summary

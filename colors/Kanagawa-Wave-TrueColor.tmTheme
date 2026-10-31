@@ -16,7 +16,7 @@
 				<key>foreground</key>
 				<string>#DCD7BA</string>
 				<key>invisibles</key>
-				<string>#727169</string>
+				<string>#7A7970</string>
 				<key>lineHighlight</key>
 				<string>#2A2A37</string>
 				<key>selection</key>
@@ -24,10 +24,10 @@
 				<key>gutter</key>
 				<string>#1F1F28</string>
 				<key>gutterForeground</key>
-				<string>#727169</string>
+				<string>#7A7970</string>
 			</dict>
 		</dict>
-		<!-- Comments & Subtle Metadata (Solarized Base01 #727169) -->
+		<!-- Comments & Subtle Metadata (Solarized Base01 #7A7970) -->
 		<dict>
 			<key>name</key>
 			<string>Comments and Subtle Metadata</string>
@@ -38,7 +38,7 @@
 				<key>fontStyle</key>
 				<string></string>
 				<key>foreground</key>
-				<string>#727169</string>
+				<string>#7A7970</string>
 			</dict>
 		</dict>
 		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #7AA89F) -->
@@ -173,7 +173,7 @@
 				<string>#FFA066</string>
 			</dict>
 		</dict>
-		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #C8C093) -->
+		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #EAE6D1) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading 4 and Table Headers</string>
@@ -182,10 +182,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#C8C093</string>
+				<string>#EAE6D1</string>
 			</dict>
 		</dict>
-		<!-- Markdown Bold (Solarized Base1 Bold #C8C093) -->
+		<!-- Markdown Bold (Solarized Base1 Bold #EAE6D1) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Bold</string>
@@ -196,7 +196,7 @@
 				<key>fontStyle</key>
 				<string>bold</string>
 				<key>foreground</key>
-				<string>#C8C093</string>
+				<string>#EAE6D1</string>
 			</dict>
 		</dict>
 		<!-- Markdown Italic (Solarized Base0 Italic) -->

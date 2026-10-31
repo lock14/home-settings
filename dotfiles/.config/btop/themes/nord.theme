@@ -20,10 +20,10 @@ theme[selected_bg]="#3b4252"
 theme[selected_fg]="#e5e9f0"
 
 # Color of inactive/disabled text
-theme[inactive_fg]="#616e88"
+theme[inactive_fg]="#8492ac"
 
 # Color of text appearing on top of graphs, i.e uptime and current network graph scaling
-theme[graph_text]="#4c566a"
+theme[graph_text]="#96a4be"
 
 # Background color of the percentage meters
 theme[meter_bg]="#3b4252"
@@ -32,19 +32,19 @@ theme[meter_bg]="#3b4252"
 theme[proc_misc]="#a3be8c"
 
 # Cpu box outline color
-theme[cpu_box]="#616e88"
+theme[cpu_box]="#8492ac"
 
 # Memory/disks box outline color
-theme[mem_box]="#616e88"
+theme[mem_box]="#8492ac"
 
 # Net up/down box outline color
-theme[net_box]="#616e88"
+theme[net_box]="#8492ac"
 
 # Processes box outline color
-theme[proc_box]="#616e88"
+theme[proc_box]="#8492ac"
 
 # Box divider line and small boxes line color
-theme[div_line]="#616e88"
+theme[div_line]="#8492ac"
 
 # Temperature graph colors
 theme[temp_start]="#a3be8c"
@@ -57,8 +57,8 @@ theme[cpu_mid]="#88c0d0"
 theme[cpu_end]="#81a1c1"
 
 # Mem/Disk free meter
-theme[free_start]="#616e88"
-theme[free_mid]="#4c566a"
+theme[free_start]="#8492ac"
+theme[free_mid]="#96a4be"
 theme[free_end]="#d8dee9"
 
 # Mem/Disk cached meter

@@ -13,20 +13,119 @@ if has('termguicolors') && ($COLORTERM ==# 'truecolor' || $COLORTERM ==# '24bit'
     set termguicolors
 endif
 
-" Zero-Dependency Inline Solarized Dark Fallback Palette
-" Applied automatically on remote servers / environments lacking solarized.vim
+" Zero-Dependency Inline Solarized Dark Fallback and Dynamic Active Theme Palette
+let s:vimrc_repo_root = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
+
+function! s:Trim(str) abort
+    return substitute(a:str, '^\s\+\|\s\+$', '', 'g')
+endfunction
+
+function! s:ParseThemeFile(path) abort
+    let l:p = {}
+    if !filereadable(a:path)
+        return l:p
+    endif
+    for l:raw_line in readfile(a:path)
+        let l:line = s:Trim(l:raw_line)
+        if empty(l:line) || l:line[0] ==# '#'
+            continue
+        endif
+        let l:line = substitute(l:line, '^export\s\+', '', '')
+        let l:m = matchlist(l:line, '^\([A-Za-z_][A-Za-z0-9_]*\)\s*=\s*\(.*\)$')
+        if empty(l:m)
+            continue
+        endif
+        let l:k = l:m[1]
+        let l:v = s:Trim(l:m[2])
+        if len(l:v) >= 2 && (l:v[0] ==# '"' || l:v[0] ==# "'")
+            let l:q = l:v[0]
+            let l:end_idx = stridx(l:v, l:q, 1)
+            if l:end_idx > 0
+                let l:rest = s:Trim(strpart(l:v, l:end_idx + 1))
+                if empty(l:rest) || l:rest[0] ==# '#'
+                    let l:v = strpart(l:v, 1, l:end_idx - 1)
+                endif
+            endif
+        else
+            let l:v = s:Trim(substitute(l:v, '\s\+#.*$', '', ''))
+        endif
+        let l:p[l:k] = l:v
+    endfor
+    return l:p
+endfunction
+
+function! s:SafeHex(p, key, fallback) abort
+    let l:val = s:Trim(get(a:p, a:key, ''))
+    if l:val =~? '^#[0-9a-f]\{6\}$'
+        return toupper(l:val)
+    endif
+    return a:fallback
+endfunction
+
+function! s:ReadActiveTheme() abort
+    let l:cfg_home = empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
+    let l:theme_file = !empty($HOME_SETTINGS_THEME_FILE) ? $HOME_SETTINGS_THEME_FILE : (l:cfg_home . '/home-settings/active-theme.theme')
+    let l:req_slug = substitute(tolower(s:Trim($HOME_SETTINGS_THEME)), '_', '-', 'g')
+    let l:p = {}
+    if filereadable(l:theme_file)
+        let l:p = s:ParseThemeFile(l:theme_file)
+    elseif !empty(l:req_slug)
+        let l:user_dirs = []
+        if !empty($HOME_SETTINGS_USER_THEMES_DIR)
+            call add(l:user_dirs, $HOME_SETTINGS_USER_THEMES_DIR)
+        endif
+        call add(l:user_dirs, l:cfg_home . '/themes')
+        call add(l:user_dirs, l:cfg_home . '/home-settings/themes')
+        let l:candidates = []
+        for l:udir in l:user_dirs
+            call add(l:candidates, l:udir . '/' . l:req_slug . '.theme')
+            call add(l:candidates, l:udir . '/' . l:req_slug . '.conf')
+        endfor
+        call add(l:candidates, s:vimrc_repo_root . '/colors/themes/' . l:req_slug . '.theme')
+        for l:cand in l:candidates
+            if filereadable(l:cand)
+                let l:p = s:ParseThemeFile(l:cand)
+                break
+            endif
+        endfor
+        if empty(l:p)
+            for l:udir in l:user_dirs
+                if isdirectory(l:udir)
+                    for l:cand in sort(glob(l:udir . '/*.theme', 0, 1) + glob(l:udir . '/*.conf', 0, 1))
+                        let l:kv = s:ParseThemeFile(l:cand)
+                        let l:cid = substitute(tolower(s:Trim(get(l:kv, 'THEME_ID', fnamemodify(l:cand, ':t:r')))), '_', '-', 'g')
+                        if l:cid ==# l:req_slug
+                            let l:p = l:kv
+                            break
+                        endif
+                    endfor
+                endif
+                if !empty(l:p)
+                    break
+                endif
+            endfor
+        endif
+    endif
+    if !empty(l:p) && !has_key(l:p, 'THEME_ID') && !empty(l:req_slug)
+        let l:p['THEME_ID'] = l:req_slug
+    endif
+    return l:p
+endfunction
+
 function! s:ApplySolarizedDark() abort
-    if &background !=# 'dark'
-        noautocmd set background=dark
+    let l:p = s:ReadActiveTheme()
+    let l:mode = tolower(s:Trim(get(l:p, 'THEME_MODE', 'dark'))) ==# 'light' ? 'light' : 'dark'
+    if &background !=# l:mode
+        execute 'noautocmd set background=' . l:mode
     endif
     if get(g:, 'colors_name', '') !=# 'solarized'
         " Canvas & UI Chrome (Base0 #839496 on Base03 #002B36, Base02 #073642, Base01 #586E75, Base1 #93A1A1)
-        highlight Normal cterm=NONE ctermfg=12 ctermbg=8 gui=NONE guifg=#839496 guibg=#002B36
+        highlight Normal cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=#839496 guibg=#002B36
         highlight Identifier cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=#839496 guibg=NONE
         highlight Delimiter cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=#839496 guibg=NONE
         highlight Comment cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=NONE
-        highlight LineNr cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=#586E75 guibg=#002B36
-        highlight VertSplit cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=#586E75 guibg=#002B36
+        highlight LineNr cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=#002B36
+        highlight VertSplit cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=#002B36
         highlight StatusLine cterm=NONE ctermfg=14 ctermbg=0 gui=NONE guifg=#93A1A1 guibg=#073642
         highlight StatusLineNC cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=#586E75 guibg=#073642
         highlight StatusLineTerm cterm=NONE ctermfg=14 ctermbg=0 gui=NONE guifg=#93A1A1 guibg=#073642
@@ -35,8 +134,8 @@ function! s:ApplySolarizedDark() abort
         highlight SpecialKey cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=NONE
         highlight Conceal cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=NONE
         highlight Folded cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=#586E75 guibg=#073642
-        highlight FoldColumn cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=#586E75 guibg=#002B36
-        highlight SignColumn cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=#586E75 guibg=#002B36
+        highlight FoldColumn cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=#002B36
+        highlight SignColumn cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=#586E75 guibg=#002B36
         highlight CursorLine cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=#073642
         highlight CursorColumn cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=#073642
         highlight ColorColumn cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=#073642
@@ -51,7 +150,7 @@ function! s:ApplySolarizedDark() abort
         highlight WildMenu cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=#93A1A1 guibg=#073642
         highlight TabLine cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=#586E75 guibg=#073642
         highlight TabLineFill cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=#586E75 guibg=#073642
-        highlight TabLineSel cterm=bold ctermfg=14 ctermbg=8 gui=bold guifg=#93A1A1 guibg=#002B36
+        highlight TabLineSel cterm=bold ctermfg=14 ctermbg=NONE gui=bold guifg=#93A1A1 guibg=#002B36
         highlight MatchParen cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=#93A1A1 guibg=#073642
         highlight Search cterm=NONE ctermfg=0 ctermbg=3 gui=NONE guifg=#93A1A1 guibg=#364725
         highlight IncSearch cterm=bold ctermfg=0 ctermbg=9 gui=bold guifg=#002B36 guibg=#CB4B16
@@ -131,126 +230,112 @@ function! s:ApplySolarizedDark() abort
     highlight DiffDelete term=reverse cterm=bold ctermbg=red ctermfg=black gui=NONE guifg=#DC322F guibg=#422D33
 
     " Active Color Theme Override (managed by bin/theme)
-    let l:cfg_home = empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
-    let l:theme_file = !empty($HOME_SETTINGS_THEME_FILE) ? $HOME_SETTINGS_THEME_FILE : (l:cfg_home . '/home-settings/active-theme.theme')
-    if filereadable(l:theme_file)
-        let l:p = {}
-        for l:line in readfile(l:theme_file)
-            let l:m = matchlist(l:line, '^\([A-Z0-9_]\+\)="\?\([^"]*\)"\?$')
-            if !empty(l:m)
-                let l:p[l:m[1]] = l:m[2]
-            endif
-        endfor
-        if get(l:p, 'THEME_ID', 'solarized-dark') !=# 'solarized-dark' && has_key(l:p, 'BASE03') && has_key(l:p, 'BASE0')
-            let l:mode = get(l:p, 'THEME_MODE', 'dark') ==# 'light' ? 'light' : 'dark'
-            if &background !=# l:mode
-                execute 'noautocmd set background=' . l:mode
-            endif
-            let l:b03 = get(l:p, 'BASE03', '#002B36')
-            let l:b02 = get(l:p, 'BASE02', '#073642')
-            let l:b01 = get(l:p, 'BASE01', '#586E75')
-            let l:b0  = get(l:p, 'BASE0', '#839496')
-            let l:b1  = get(l:p, 'BASE1', '#93A1A1')
-            let l:yel = get(l:p, 'YELLOW', '#B58900')
-            let l:ora = get(l:p, 'ORANGE', '#CB4B16')
-            let l:red = get(l:p, 'RED', '#DC322F')
-            let l:mag = get(l:p, 'MAGENTA', '#D33682')
-            let l:vio = get(l:p, 'VIOLET', '#6C71C4')
-            let l:blu = get(l:p, 'BLUE', '#268BD2')
-            let l:cya = get(l:p, 'CYAN', '#2AA198')
-            let l:grn = get(l:p, 'GREEN', '#859900')
-            let l:mgrn = get(l:p, 'MIX_GREEN', '#274C25')
-            let l:myel = get(l:p, 'MIX_YELLOW', '#364725')
-            let l:mblu = get(l:p, 'MIX_BLUE', '#0B4764')
-            let l:mred = get(l:p, 'MIX_RED', '#422D33')
-            execute 'highlight Normal cterm=NONE ctermfg=12 ctermbg=8 gui=NONE guifg=' . l:b0 . ' guibg=' . l:b03
-            execute 'highlight Identifier cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=NONE'
-            execute 'highlight Delimiter cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=NONE'
-            execute 'highlight Comment cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
-            execute 'highlight LineNr cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
-            execute 'highlight VertSplit cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
-            execute 'highlight StatusLine cterm=NONE ctermfg=14 ctermbg=0 gui=NONE guifg=' . l:b1 . ' guibg=' . l:b02
-            execute 'highlight StatusLineNC cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
-            execute 'highlight StatusLineTerm cterm=NONE ctermfg=14 ctermbg=0 gui=NONE guifg=' . l:b1 . ' guibg=' . l:b02
-            execute 'highlight StatusLineTermNC cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
-            execute 'highlight NonText cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
-            execute 'highlight SpecialKey cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
-            execute 'highlight Conceal cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
-            execute 'highlight Folded cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
-            execute 'highlight FoldColumn cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
-            execute 'highlight SignColumn cterm=NONE ctermfg=10 ctermbg=8 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
-            execute 'highlight CursorLine cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
-            execute 'highlight CursorColumn cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
-            execute 'highlight ColorColumn cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
-            execute 'highlight CursorLineNr cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=' . l:b1 . ' guibg=' . l:b02
-            execute 'highlight Visual cterm=reverse ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
-            execute 'highlight VisualNOS cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
-            execute 'highlight Pmenu cterm=NONE ctermfg=12 ctermbg=0 gui=NONE guifg=' . l:b0 . ' guibg=' . l:b02
-            execute 'highlight PmenuSel cterm=bold ctermfg=14 ctermbg=10 gui=bold guifg=' . l:b1 . ' guibg=' . l:b01
-            execute 'highlight PmenuSbar cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
-            execute 'highlight PmenuThumb cterm=NONE ctermfg=NONE ctermbg=10 gui=NONE guifg=NONE guibg=' . l:b01
-            execute 'highlight PmenuShadow cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
-            execute 'highlight WildMenu cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=' . l:b1 . ' guibg=' . l:b02
-            execute 'highlight TabLine cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
-            execute 'highlight TabLineFill cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
-            execute 'highlight TabLineSel cterm=bold ctermfg=14 ctermbg=8 gui=bold guifg=' . l:b1 . ' guibg=' . l:b03
-            execute 'highlight MatchParen cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=' . l:b1 . ' guibg=' . l:b02
-            execute 'highlight Search cterm=NONE ctermfg=0 ctermbg=3 gui=NONE guifg=' . l:b1 . ' guibg=' . l:myel
-            execute 'highlight IncSearch cterm=bold ctermfg=0 ctermbg=9 gui=bold guifg=' . l:b03 . ' guibg=' . l:ora
-            execute 'highlight Directory cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=' . l:blu . ' guibg=NONE'
-            execute 'highlight Title cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
-            execute 'highlight MoreMsg cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight ModeMsg cterm=bold ctermfg=14 ctermbg=NONE gui=bold guifg=' . l:b1 . ' guibg=NONE'
-            execute 'highlight Question cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
-            execute 'highlight Underlined cterm=underline ctermfg=13 ctermbg=NONE gui=underline guifg=' . l:vio . ' guibg=NONE'
-            execute 'highlight Ignore cterm=NONE ctermfg=8 ctermbg=NONE gui=NONE guifg=' . l:b03 . ' guibg=NONE'
-            execute 'highlight SpellBad cterm=underline ctermfg=1 ctermbg=NONE gui=undercurl guisp=' . l:red
-            execute 'highlight SpellCap cterm=underline ctermfg=4 ctermbg=NONE gui=undercurl guisp=' . l:blu
-            execute 'highlight SpellRare cterm=underline ctermfg=13 ctermbg=NONE gui=undercurl guisp=' . l:vio
-            execute 'highlight SpellLocal cterm=underline ctermfg=6 ctermbg=NONE gui=undercurl guisp=' . l:cya
-            execute 'highlight Conditional cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
-            execute 'highlight Repeat cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
-            execute 'highlight Label cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
-            execute 'highlight Exception cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
-            execute 'highlight Statement cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight Keyword cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight Operator cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=NONE'
-            execute 'highlight Type cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight StorageClass cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight Structure cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight Typedef cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight Function cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=' . l:blu . ' guibg=NONE'
-            execute 'highlight Include cterm=NONE ctermfg=13 ctermbg=NONE gui=NONE guifg=' . l:vio . ' guibg=NONE'
-            execute 'highlight PreProc cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
-            execute 'highlight Define cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
-            execute 'highlight Macro cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
-            execute 'highlight PreCondit cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
-            execute 'highlight Special cterm=NONE ctermfg=13 ctermbg=NONE gui=NONE guifg=' . l:vio . ' guibg=NONE'
-            execute 'highlight String cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
-            execute 'highlight Character cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
-            execute 'highlight SpecialChar cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
-            execute 'highlight Constant cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
-            execute 'highlight Number cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
-            execute 'highlight Boolean cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
-            execute 'highlight Float cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
-            execute 'highlight Error cterm=bold ctermfg=1 ctermbg=NONE gui=bold guifg=' . l:red . ' guibg=' . l:b03
-            execute 'highlight ErrorMsg cterm=bold ctermfg=1 ctermbg=NONE gui=bold guifg=' . l:red . ' guibg=' . l:b03
-            execute 'highlight WarningMsg cterm=bold ctermfg=9 ctermbg=NONE gui=bold guifg=' . l:ora . ' guibg=NONE'
-            execute 'highlight Todo cterm=bold ctermfg=5 ctermbg=0 gui=bold guifg=' . l:mag . ' guibg=' . l:b02
-            execute 'highlight Added cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight Changed cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
-            execute 'highlight Removed cterm=NONE ctermfg=1 ctermbg=NONE gui=NONE guifg=' . l:red . ' guibg=NONE'
-            execute 'highlight protoRepeat cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight protoTodo cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
-            execute 'highlight pbtxtMessage cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=' . l:blu . ' guibg=NONE'
-            execute 'highlight pbtxtField cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
-            execute 'highlight pbtxtEnum cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
-            execute 'highlight pbtxtTodo cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
-            execute 'highlight DiffAdd term=reverse cterm=bold ctermbg=green ctermfg=white gui=NONE guifg=' . l:grn . ' guibg=' . l:mgrn
-            execute 'highlight DiffChange term=reverse cterm=bold ctermbg=cyan ctermfg=black gui=NONE guifg=' . l:yel . ' guibg=' . l:myel
-            execute 'highlight DiffText term=reverse cterm=bold ctermbg=gray ctermfg=black gui=bold guifg=' . l:blu . ' guibg=' . l:mblu
-            execute 'highlight DiffDelete term=reverse cterm=bold ctermbg=red ctermfg=black gui=NONE guifg=' . l:red . ' guibg=' . l:mred
-        endif
+    if !empty(l:p) && get(l:p, 'THEME_ID', 'solarized-dark') !=# 'solarized-dark'
+        let l:is_light = l:mode ==# 'light'
+        let l:b03  = s:SafeHex(l:p, 'BASE03', l:is_light ? '#FDF6E3' : '#002B36')
+        let l:b02  = s:SafeHex(l:p, 'BASE02', l:is_light ? '#EEE8D5' : '#073642')
+        let l:b01  = s:SafeHex(l:p, 'BASE01', l:is_light ? '#93A1A1' : '#586E75')
+        let l:b0   = s:SafeHex(l:p, 'BASE0', l:is_light ? '#657B83' : '#839496')
+        let l:b1   = s:SafeHex(l:p, 'BASE1', l:is_light ? '#586E75' : '#93A1A1')
+        let l:yel  = s:SafeHex(l:p, 'YELLOW', '#B58900')
+        let l:ora  = s:SafeHex(l:p, 'ORANGE', '#CB4B16')
+        let l:red  = s:SafeHex(l:p, 'RED', '#DC322F')
+        let l:mag  = s:SafeHex(l:p, 'MAGENTA', '#D33682')
+        let l:vio  = s:SafeHex(l:p, 'VIOLET', '#6C71C4')
+        let l:blu  = s:SafeHex(l:p, 'BLUE', '#268BD2')
+        let l:cya  = s:SafeHex(l:p, 'CYAN', '#2AA198')
+        let l:grn  = s:SafeHex(l:p, 'GREEN', '#859900')
+        let l:mgrn = s:SafeHex(l:p, 'MIX_GREEN', l:is_light ? '#E5ECD0' : '#274C25')
+        let l:myel = s:SafeHex(l:p, 'MIX_YELLOW', l:is_light ? '#F0E4C0' : '#364725')
+        let l:mblu = s:SafeHex(l:p, 'MIX_BLUE', l:is_light ? '#D8E6EE' : '#0B4764')
+        let l:mred = s:SafeHex(l:p, 'MIX_RED', l:is_light ? '#F6D8D3' : '#422D33')
+        execute 'highlight Normal cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=' . l:b03
+        execute 'highlight Identifier cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=NONE'
+        execute 'highlight Delimiter cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=NONE'
+        execute 'highlight Comment cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
+        execute 'highlight LineNr cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
+        execute 'highlight VertSplit cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
+        execute 'highlight StatusLine cterm=NONE ctermfg=14 ctermbg=0 gui=NONE guifg=' . l:b1 . ' guibg=' . l:b02
+        execute 'highlight StatusLineNC cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
+        execute 'highlight StatusLineTerm cterm=NONE ctermfg=14 ctermbg=0 gui=NONE guifg=' . l:b1 . ' guibg=' . l:b02
+        execute 'highlight StatusLineTermNC cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
+        execute 'highlight NonText cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
+        execute 'highlight SpecialKey cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
+        execute 'highlight Conceal cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
+        execute 'highlight Folded cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
+        execute 'highlight FoldColumn cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
+        execute 'highlight SignColumn cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=' . l:b03
+        execute 'highlight CursorLine cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
+        execute 'highlight CursorColumn cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
+        execute 'highlight ColorColumn cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
+        execute 'highlight CursorLineNr cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=' . l:b1 . ' guibg=' . l:b02
+        execute 'highlight Visual cterm=reverse ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
+        execute 'highlight VisualNOS cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
+        execute 'highlight Pmenu cterm=NONE ctermfg=12 ctermbg=0 gui=NONE guifg=' . l:b0 . ' guibg=' . l:b02
+        execute 'highlight PmenuSel cterm=bold ctermfg=14 ctermbg=10 gui=bold guifg=' . l:b1 . ' guibg=' . l:b01
+        execute 'highlight PmenuSbar cterm=NONE ctermfg=NONE ctermbg=0 gui=NONE guifg=NONE guibg=' . l:b02
+        execute 'highlight PmenuThumb cterm=NONE ctermfg=NONE ctermbg=10 gui=NONE guifg=NONE guibg=' . l:b01
+        execute 'highlight PmenuShadow cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
+        execute 'highlight WildMenu cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=' . l:b1 . ' guibg=' . l:b02
+        execute 'highlight TabLine cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
+        execute 'highlight TabLineFill cterm=NONE ctermfg=10 ctermbg=0 gui=NONE guifg=' . l:b01 . ' guibg=' . l:b02
+        execute 'highlight TabLineSel cterm=bold ctermfg=14 ctermbg=NONE gui=bold guifg=' . l:b1 . ' guibg=' . l:b03
+        execute 'highlight MatchParen cterm=bold ctermfg=14 ctermbg=0 gui=bold guifg=' . l:b1 . ' guibg=' . l:b02
+        execute 'highlight Search cterm=NONE ctermfg=0 ctermbg=3 gui=NONE guifg=' . l:b1 . ' guibg=' . l:myel
+        execute 'highlight IncSearch cterm=bold ctermfg=0 ctermbg=9 gui=bold guifg=' . l:b03 . ' guibg=' . l:ora
+        execute 'highlight Directory cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=' . l:blu . ' guibg=NONE'
+        execute 'highlight Title cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
+        execute 'highlight MoreMsg cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight ModeMsg cterm=bold ctermfg=14 ctermbg=NONE gui=bold guifg=' . l:b1 . ' guibg=NONE'
+        execute 'highlight Question cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
+        execute 'highlight Underlined cterm=underline ctermfg=13 ctermbg=NONE gui=underline guifg=' . l:vio . ' guibg=NONE'
+        execute 'highlight Ignore cterm=NONE ctermfg=8 ctermbg=NONE gui=NONE guifg=' . l:b03 . ' guibg=NONE'
+        execute 'highlight SpellBad cterm=underline ctermfg=1 ctermbg=NONE gui=undercurl guisp=' . l:red
+        execute 'highlight SpellCap cterm=underline ctermfg=4 ctermbg=NONE gui=undercurl guisp=' . l:blu
+        execute 'highlight SpellRare cterm=underline ctermfg=13 ctermbg=NONE gui=undercurl guisp=' . l:vio
+        execute 'highlight SpellLocal cterm=underline ctermfg=6 ctermbg=NONE gui=undercurl guisp=' . l:cya
+        execute 'highlight Conditional cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
+        execute 'highlight Repeat cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
+        execute 'highlight Label cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
+        execute 'highlight Exception cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
+        execute 'highlight Statement cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight Keyword cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight Operator cterm=NONE ctermfg=12 ctermbg=NONE gui=NONE guifg=' . l:b0 . ' guibg=NONE'
+        execute 'highlight Type cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight StorageClass cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight Structure cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight Typedef cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight Function cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=' . l:blu . ' guibg=NONE'
+        execute 'highlight Include cterm=NONE ctermfg=13 ctermbg=NONE gui=NONE guifg=' . l:vio . ' guibg=NONE'
+        execute 'highlight PreProc cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
+        execute 'highlight Define cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
+        execute 'highlight Macro cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
+        execute 'highlight PreCondit cterm=NONE ctermfg=9 ctermbg=NONE gui=NONE guifg=' . l:ora . ' guibg=NONE'
+        execute 'highlight Special cterm=NONE ctermfg=13 ctermbg=NONE gui=NONE guifg=' . l:vio . ' guibg=NONE'
+        execute 'highlight String cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
+        execute 'highlight Character cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
+        execute 'highlight SpecialChar cterm=NONE ctermfg=6 ctermbg=NONE gui=NONE guifg=' . l:cya . ' guibg=NONE'
+        execute 'highlight Constant cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
+        execute 'highlight Number cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
+        execute 'highlight Boolean cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
+        execute 'highlight Float cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
+        execute 'highlight Error cterm=bold ctermfg=1 ctermbg=NONE gui=bold guifg=' . l:red . ' guibg=' . l:b03
+        execute 'highlight ErrorMsg cterm=bold ctermfg=1 ctermbg=NONE gui=bold guifg=' . l:red . ' guibg=' . l:b03
+        execute 'highlight WarningMsg cterm=bold ctermfg=9 ctermbg=NONE gui=bold guifg=' . l:ora . ' guibg=NONE'
+        execute 'highlight Todo cterm=bold ctermfg=5 ctermbg=0 gui=bold guifg=' . l:mag . ' guibg=' . l:b02
+        execute 'highlight Added cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight Changed cterm=NONE ctermfg=3 ctermbg=NONE gui=NONE guifg=' . l:yel . ' guibg=NONE'
+        execute 'highlight Removed cterm=NONE ctermfg=1 ctermbg=NONE gui=NONE guifg=' . l:red . ' guibg=NONE'
+        execute 'highlight protoRepeat cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight protoTodo cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
+        execute 'highlight pbtxtMessage cterm=NONE ctermfg=4 ctermbg=NONE gui=NONE guifg=' . l:blu . ' guibg=NONE'
+        execute 'highlight pbtxtField cterm=NONE ctermfg=2 ctermbg=NONE gui=NONE guifg=' . l:grn . ' guibg=NONE'
+        execute 'highlight pbtxtEnum cterm=NONE ctermfg=5 ctermbg=NONE gui=NONE guifg=' . l:mag . ' guibg=NONE'
+        execute 'highlight pbtxtTodo cterm=NONE ctermfg=10 ctermbg=NONE gui=NONE guifg=' . l:b01 . ' guibg=NONE'
+        execute 'highlight DiffAdd term=reverse cterm=bold ctermbg=green ctermfg=white gui=NONE guifg=' . l:grn . ' guibg=' . l:mgrn
+        execute 'highlight DiffChange term=reverse cterm=bold ctermbg=cyan ctermfg=black gui=NONE guifg=' . l:yel . ' guibg=' . l:myel
+        execute 'highlight DiffText term=reverse cterm=bold ctermbg=gray ctermfg=black gui=bold guifg=' . l:blu . ' guibg=' . l:mblu
+        execute 'highlight DiffDelete term=reverse cterm=bold ctermbg=red ctermfg=black gui=NONE guifg=' . l:red . ' guibg=' . l:mred
     endif
 endfunction
 
@@ -279,7 +364,13 @@ augroup END
 
 " Syntax & Visual Theme
 syntax enable
-set background=dark
+let s:initial_theme = s:ReadActiveTheme()
+if get(s:initial_theme, 'THEME_MODE', 'dark') ==# 'light'
+    set background=light
+else
+    set background=dark
+endif
+unlet s:initial_theme
 silent! colorscheme solarized
 call s:ApplySolarizedDark()
 

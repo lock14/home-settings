@@ -1011,19 +1011,25 @@ EOF
         fi
     )
 
-    # 8. Verify Zsh theme() wrapper reloads ZSH_HIGHLIGHT_STYLES, environment exports, and Powerlevel10k prompt_vcs colors in-place across multiple sequential switches (including solarized-light palette inversion) with zero stderr
-    mkdir -p "$HOME/.local/bin"
+    # 8. Verify Zsh theme() wrapper reloads ZSH_HIGHLIGHT_STYLES, TrueColor LS_COLORS, environment exports, and Powerlevel10k prompt_vcs colors across sequential switches without duplicating p10k.local.zsh additive overrides or reloading on read-only queries
+    mkdir -p "$HOME/.local/bin" "$HOME/.config/zsh"
     ln -sf "$SCRIPT_DIR/bin/theme" "$HOME/.local/bin/theme"
+    cat > "$HOME/.config/zsh/p10k.local.zsh" <<'EOF'
+typeset -g POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN:-~}|/mnt/slow-nfs/*"
+typeset -ga POWERLEVEL9K_CUSTOM_TEST_ARR=( "${POWERLEVEL9K_CUSTOM_TEST_ARR[@]}" "local-hook" )
+EOF
     (
         export XDG_CONFIG_HOME="$HOME/.config"
+        typeset -g POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="~"
+        typeset -ga POWERLEVEL9K_CUSTOM_TEST_ARR=( "base" )
+        unset _HS_P10K_BASE_CAPTURED
         local theme_err_file="$HOME/theme-stderr.log"
         theme --set solarized-light --no-live >/dev/null 2>"$theme_err_file"
-        local sl_err="$(<"$theme_err_file")"
         local sl_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local sl_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
 
         theme --set catppuccin-mocha --no-live >/dev/null 2>>"$theme_err_file"
-        local cm_err="$(<"$theme_err_file")"
+        local cm_ls="${LS_COLORS:-}"
         cd "$vcs_test_dir"
         git checkout main >/dev/null 2>&1
         git reset --hard HEAD >/dev/null 2>&1
@@ -1038,7 +1044,20 @@ EOF
         local cm_vcs_bg="$P10K_SEG_BG"
         local cm_vcs_fg="$P10K_SEG_FG"
 
-        theme --set nord --no-live >/dev/null 2>>"$theme_err_file"
+        # Read-only queries (--plain, --preview=nord) and fzf Escape cancel must NOT reload prompt or sync cross-pane changes
+        "$SCRIPT_DIR/bin/theme" --set nord --no-live >/dev/null 2>>"$theme_err_file"
+        theme --plain >/dev/null 2>>"$theme_err_file"
+        local after_plain="${HOME_SETTINGS_THEME:-}"
+        theme --preview=nord >/dev/null 2>>"$theme_err_file"
+        local after_prev="${HOME_SETTINGS_THEME:-}"
+        local fzf_cancel_dir="$HOME/fzf-cancel-zsh"
+        mkdir -p "$fzf_cancel_dir"
+        printf '#!/usr/bin/env bash\ncat >/dev/null\nexit 130\n' > "$fzf_cancel_dir/fzf"
+        chmod +x "$fzf_cancel_dir/fzf"
+        THEME_FORCE_FZF=1 PATH="$fzf_cancel_dir:$PATH" theme --no-live >/dev/null 2>>"$theme_err_file"
+        local after_cancel="${HOME_SETTINGS_THEME:-}"
+
+        _hs_sync_active_theme
         local nd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local nd_dir_fg="${POWERLEVEL9K_DIR_FOREGROUND:-}"
 
@@ -1050,10 +1069,13 @@ EOF
         local hw_str="${ZSH_HIGHLIGHT_STYLES[single-quoted-argument]:-}"
         local hw_icon="${POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION:-}"
         local hw_precmd="${precmd_functions[(I)_hs_sync_active_theme]:-0}"
+        local hw_ls="${LS_COLORS:-}"
 
         theme --set solarized-dark --no-live >/dev/null 2>>"$theme_err_file"
         local sd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local sd_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
+        local final_disabled_pat="${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN:-}"
+        local final_arr_str="${POWERLEVEL9K_CUSTOM_TEST_ARR[*]:-}"
         local all_err="$(<"$theme_err_file")"
 
         if [ -z "$all_err" ] && \
@@ -1064,16 +1086,24 @@ EOF
            [ "$cm_dir_bg" = "#313244" ] && \
            [ "$cm_dir_fg" = "#89B4FA" ] && \
            [ "$cm_vcs_bg" = "#313244" ] && [ "$cm_vcs_fg" = "#A6E3A1" ] && \
+           [[ "$cm_ls" == *"di=38;2;137;180;250:"* ]] && \
+           [ "$after_plain" = "catppuccin-mocha" ] && \
+           [ "$after_prev" = "catppuccin-mocha" ] && \
+           [ "$after_cancel" = "catppuccin-mocha" ] && \
            [ "$nd_dir_bg" = "#3B4252" ] && [ "$nd_dir_fg" = "#81A1C1" ] && \
            [ "$hw_theme" = "halloween" ] && [ "$hw_cmd" = "fg=#FF7518" ] && \
            [ "$hw_res" = "fg=#FFE000" ] && [ "$hw_str" = "fg=#2EE6D6" ] && \
+           [[ "$hw_ls" == *"di=38;2;85;255;71:"* ]] && \
            [ "$hw_icon" = "🎃" ] && [ "$hw_precmd" -gt 0 ] && \
-           [ "$sd_dir_bg" = "#073642" ] && [ "$sd_os_fg" = "#839496" ]; then
-            echo "PASS:Zsh theme() wrapper and _hs_sync_active_theme precmd hook hot-reload HOME_SETTINGS_THEME, ZSH_HIGHLIGHT_STYLES, and Powerlevel10k prompt_vcs/icon across sequential and cross-pane theme switches with zero stderr"
+           [ "$sd_dir_bg" = "#073642" ] && [ "$sd_os_fg" = "#839496" ] && \
+           [ "$final_disabled_pat" = "~|/mnt/slow-nfs/*" ] && \
+           [ "$final_arr_str" = "base local-hook" ]; then
+            echo "PASS:Zsh theme() wrapper and _hs_sync_active_theme hot-reload HOME_SETTINGS_THEME, TrueColor LS_COLORS, ZSH_HIGHLIGHT_STYLES, and Powerlevel10k without duplicating p10k.local.zsh additive overrides or reloading on read-only queries"
         else
-            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' nd='$nd_dir_bg/$nd_dir_fg' hw='$hw_theme/$hw_cmd/$hw_res/$hw_str/$hw_icon/$hw_precmd' sd='$sd_dir_bg/$sd_os_fg'"
+            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' q='$after_plain/$after_prev/$after_cancel' nd='$nd_dir_bg/$nd_dir_fg' hw='$hw_theme/$hw_cmd/$hw_res/$hw_str/$hw_icon/$hw_precmd' sd='$sd_dir_bg/$sd_os_fg' pat='$final_disabled_pat' arr='$final_arr_str'"
         fi
     )
+    rm -f "$HOME/.config/zsh/p10k.local.zsh"
 }
 
 parse_subshell_results < <(test_addendum)

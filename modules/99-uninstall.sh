@@ -70,7 +70,23 @@ uninstall_dotfiles() {
     if [ -d "$REPO_DIR/dotfiles/.config" ]; then
         for item in "$REPO_DIR/dotfiles/.config"/*; do
             [ -e "$item" ] || continue
-            unlink_path "$xdg_config/$(basename "$item")"
+            local cfg_name
+            cfg_name="$(basename "$item")"
+            if [ "$cfg_name" = "git" ] && [ -d "$item" ]; then
+                if [ -L "$xdg_config/git" ]; then
+                    unlink_path "$xdg_config/git"
+                else
+                    for git_f in "$item"/*; do
+                        [ -e "$git_f" ] || continue
+                        unlink_path "$xdg_config/git/$(basename "$git_f")"
+                    done
+                    if [ "$DRY_RUN" = false ]; then
+                        rmdir "$xdg_config/git" 2>/dev/null || true
+                    fi
+                fi
+                continue
+            fi
+            unlink_path "$xdg_config/$cfg_name"
         done
     fi
 

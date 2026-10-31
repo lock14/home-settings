@@ -750,7 +750,14 @@ end, { nargs = "?", complete = "dir", desc = "Dive IDE Workspace (Editor & Shell
 
 map("n", "<leader>cd", "<cmd>IdeCd<CR>", { desc = "Dive IDE Workspace to Current Buffer Directory" })
 
--- Active Color Theme Palette Resolution & Live RPC Hot-Reload (managed by bin/theme)
+-- Active Color Theme Palette Resolution and Live RPC Hot-Reload (managed by bin/theme)
+local nvim_init_source = debug.getinfo(1, "S").source
+local nvim_init_path = (nvim_init_source and nvim_init_source:sub(1, 1) == "@")
+    and nvim_init_source:sub(2)
+    or (vim.fn.stdpath("config") .. "/init.lua")
+local nvim_init_real = ((vim.uv or vim.loop).fs_realpath(nvim_init_path)) or nvim_init_path
+local nvim_repo_root = vim.fn.fnamemodify(nvim_init_real, ":h:h:h:h")
+
 local default_solarized_palette = {
     base03 = "#002B36",
     base02 = "#073642",
@@ -775,6 +782,39 @@ local default_solarized_palette = {
     mix_red = "#422D33",
     mix_magenta = "#3E2E4C",
     mix_base1 = "#2C4E56",
+}
+
+local default_solarized_light_palette = {
+    base03 = "#FDF6E3",
+    base02 = "#EEE8D5",
+    base04 = "#E6DFCA",
+    base01 = "#93A1A1",
+    base00 = "#839496",
+    base0 = "#657B83",
+    base1 = "#586E75",
+    base2 = "#073642",
+    base3 = "#002B36",
+    yellow = "#B58900",
+    orange = "#CB4B16",
+    red = "#DC322F",
+    magenta = "#D33682",
+    violet = "#6C71C4",
+    blue = "#268BD2",
+    cyan = "#2AA198",
+    green = "#859900",
+    mix_green = "#E5ECD0",
+    mix_yellow = "#F0E4C0",
+    mix_blue = "#D8E6EE",
+    mix_red = "#F6D8D3",
+    mix_magenta = "#F3D9E4",
+    mix_base1 = "#E4DEC8",
+}
+
+local builtin_theme_slugs = {
+    "solarized-dark", "solarized-light", "catppuccin-mocha", "catppuccin-latte",
+    "gruvbox-dark", "tokyonight-night", "kanagawa-wave", "nord", "onedark",
+    "new-years", "valentines", "st-patricks", "easter",
+    "independence-day", "halloween", "thanksgiving", "christmas",
 }
 
 local theme_key_map = {
@@ -803,30 +843,109 @@ local theme_key_map = {
     MIX_BASE1 = "mix_base1",
 }
 
-local function resolve_active_theme_palette(fallback_colors)
+local function theme_search_dirs(cfg_home)
+    local cfg_real = ((vim.uv or vim.loop).fs_realpath(vim.fn.stdpath("config"))) or vim.fn.stdpath("config")
+    local dirs = {}
+    if vim.env.HOME_SETTINGS_USER_THEMES_DIR and vim.env.HOME_SETTINGS_USER_THEMES_DIR ~= "" then
+        table.insert(dirs, vim.env.HOME_SETTINGS_USER_THEMES_DIR)
+    end
+    table.insert(dirs, cfg_home .. "/themes")
+    table.insert(dirs, cfg_home .. "/home-settings/themes")
+    table.insert(dirs, nvim_repo_root .. "/colors/themes")
+    table.insert(dirs, cfg_real .. "/../../../colors/themes")
+    return dirs
+end
+
+local function parse_theme_file_kv(path)
+    local kv = {}
+    if vim.fn.filereadable(path) ~= 1 then
+        return kv
+    end
+    for _, raw_line in ipairs(vim.fn.readfile(path)) do
+        local s = vim.trim(raw_line)
+        if s ~= "" and s:sub(1, 1) ~= "#" then
+            s = s:gsub("^export%s+", "")
+            local k, v = s:match("^([A-Za-z_][A-Za-z0-9_]*)%s*=%s*(.*)$")
+            if k and v then
+                v = vim.trim(v)
+                local q = v:sub(1, 1)
+                if (q == '"' or q == "'") and #v >= 2 then
+                    local end_idx = v:find(q, 2, true)
+                    if end_idx then
+                        local rest = vim.trim(v:sub(end_idx + 1))
+                        if rest == "" or rest:sub(1, 1) == "#" then
+                            v = v:sub(2, end_idx - 1)
+                        end
+                    end
+                else
+                    v = vim.trim((v:gsub("%s+#.*$", "")))
+                end
+                kv[k] = v
+            end
+        end
+    end
+    return kv
+end
+
+local function is_valid_hex(val)
+    return type(val) == "string"
+        and val:match("^#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$") ~= nil
+end
+
+local function resolve_active_theme_palette(_)
     local cfg_home = (vim.env.XDG_CONFIG_HOME and vim.env.XDG_CONFIG_HOME ~= "")
         and vim.env.XDG_CONFIG_HOME
         or (vim.fn.expand("$HOME") .. "/.config")
     local theme_file = (vim.env.HOME_SETTINGS_THEME_FILE and vim.env.HOME_SETTINGS_THEME_FILE ~= "")
         and vim.env.HOME_SETTINGS_THEME_FILE
         or (cfg_home .. "/home-settings/active-theme.theme")
-    if vim.fn.filereadable(theme_file) ~= 1 and (vim.env.HOME_SETTINGS_THEME or "") ~= "" then
-        local candidate = vim.fn.stdpath("config") .. "/../../colors/themes/" .. vim.env.HOME_SETTINGS_THEME .. ".theme"
-        if vim.fn.filereadable(candidate) == 1 then
-            theme_file = candidate
-        end
-    end
+    local requested_slug = vim.trim(vim.env.HOME_SETTINGS_THEME or ""):lower():gsub("_", "-")
     local parsed = {}
+    local found_file = false
     if vim.fn.filereadable(theme_file) == 1 then
-        for _, line in ipairs(vim.fn.readfile(theme_file)) do
-            local k, v = line:match('^([A-Z0-9_]+)="?([^"]*)"?$')
-            if k and v then
-                parsed[k] = v
+        parsed = parse_theme_file_kv(theme_file)
+        found_file = true
+    elseif requested_slug ~= "" then
+        local search_dirs = theme_search_dirs(cfg_home)
+        for _, dir in ipairs(search_dirs) do
+            for _, ext in ipairs({ ".theme", ".conf" }) do
+                local candidate = dir .. "/" .. requested_slug .. ext
+                if vim.fn.filereadable(candidate) == 1 then
+                    parsed = parse_theme_file_kv(candidate)
+                    found_file = true
+                    break
+                end
+            end
+            if found_file then
+                break
+            end
+        end
+        if not found_file then
+            for _, dir in ipairs(search_dirs) do
+                local files = vim.list_extend(
+                    vim.fn.glob(dir .. "/*.theme", false, true),
+                    vim.fn.glob(dir .. "/*.conf", false, true)
+                )
+                table.sort(files)
+                for _, f in ipairs(files) do
+                    local kv = parse_theme_file_kv(f)
+                    local cid = vim.trim(kv.THEME_ID or vim.fn.fnamemodify(f, ":t:r")):lower():gsub("_", "-")
+                    if cid == requested_slug then
+                        parsed = kv
+                        found_file = true
+                        break
+                    end
+                end
+                if found_file then
+                    break
+                end
             end
         end
     end
-    local theme_id = parsed.THEME_ID or "solarized-dark"
-    local theme_mode = parsed.THEME_MODE or "dark"
+    local theme_id = (parsed.THEME_ID and parsed.THEME_ID ~= "")
+        and parsed.THEME_ID:lower():gsub("_", "-")
+        or ((requested_slug ~= "" and found_file) and requested_slug or "solarized-dark")
+    local theme_mode = (tostring(parsed.THEME_MODE or ""):lower() == "light") and "light" or "dark"
     vim.g.home_settings_theme = theme_id
     vim.g.home_settings_theme_mode = theme_mode
     vim.env.HOME_SETTINGS_THEME = theme_id
@@ -834,51 +953,102 @@ local function resolve_active_theme_palette(fallback_colors)
     if parsed.BAT_THEME_NAME and parsed.BAT_THEME_NAME ~= "" then
         vim.env.BAT_THEME = parsed.BAT_THEME_NAME
     end
-    if theme_id == "solarized-dark" and fallback_colors ~= nil then
-        return fallback_colors
+    local base_defaults = (theme_mode == "light") and default_solarized_light_palette or default_solarized_palette
+    local out = vim.tbl_extend("force", {}, base_defaults)
+    for env_k, lua_k in pairs(theme_key_map) do
+        if is_valid_hex(parsed[env_k]) then
+            out[lua_k] = parsed[env_k]:upper()
+        end
     end
-    local out = vim.tbl_extend("force", {}, default_solarized_palette, fallback_colors or {})
-    if parsed.BASE03 and parsed.BASE0 then
-        for env_k, lua_k in pairs(theme_key_map) do
-            if parsed[env_k] and parsed[env_k] ~= "" then
-                out[lua_k] = parsed[env_k]
-            end
-        end
-        if not parsed.BASE04 and parsed.BASE02 then
-            out.base04 = parsed.BASE02
-        end
+    if not is_valid_hex(parsed.BASE04) and is_valid_hex(parsed.BASE02) then
+        out.base04 = parsed.BASE02:upper()
     end
     return out
+end
+
+local function apply_terminal_ansi_palette(colors)
+    vim.g.terminal_color_0 = colors.base02
+    vim.g.terminal_color_1 = colors.red
+    vim.g.terminal_color_2 = colors.green
+    vim.g.terminal_color_3 = colors.yellow
+    vim.g.terminal_color_4 = colors.blue
+    vim.g.terminal_color_5 = colors.magenta
+    vim.g.terminal_color_6 = colors.cyan
+    vim.g.terminal_color_7 = colors.base2
+    vim.g.terminal_color_8 = colors.base01
+    vim.g.terminal_color_9 = colors.orange
+    vim.g.terminal_color_10 = colors.base01
+    vim.g.terminal_color_11 = colors.base00
+    vim.g.terminal_color_12 = colors.base0
+    vim.g.terminal_color_13 = colors.violet
+    vim.g.terminal_color_14 = colors.base1
+    vim.g.terminal_color_15 = colors.base3
 end
 
 local build_theme_highlights
 
 local function sync_solarized_plugin_palette(colors)
     local ok, palette_mod = pcall(require, "solarized.palette")
-    if not ok or type(palette_mod) ~= "table" or type(palette_mod.solarized) ~= "table" then
-        return
+    if ok and type(palette_mod) == "table" and type(palette_mod.solarized) == "table" then
+        local sp = palette_mod.solarized
+        for k, v in pairs(colors) do
+            sp[k] = v
+        end
+        sp.base4 = colors.base3
+        sp.diag_error = colors.red
+        sp.diag_warning = colors.yellow
+        sp.diag_info = colors.blue
+        sp.diag_hint = colors.cyan
+        sp.diag_ok = colors.green
+        sp.git_add = colors.green
+        sp.git_modify = colors.yellow
+        sp.git_delete = colors.red
     end
-    local sp = palette_mod.solarized
-    for k, v in pairs(colors) do
-        sp[k] = v
+    local ok_light, light_mod = pcall(require, "solarized.palette.solarized-light")
+    if ok_light and type(light_mod) == "table" and type(light_mod.solarized) == "table" then
+        local lp = light_mod.solarized
+        lp.base3 = colors.base03
+        lp.base2 = colors.base02
+        lp.base4 = colors.base04
+        lp.base1 = colors.base01
+        lp.base0 = colors.base00
+        lp.base00 = colors.base0
+        lp.base01 = colors.base1
+        lp.base02 = colors.base2
+        lp.base03 = colors.base3
+        lp.yellow = colors.yellow
+        lp.orange = colors.orange
+        lp.red = colors.red
+        lp.magenta = colors.magenta
+        lp.violet = colors.violet
+        lp.blue = colors.blue
+        lp.cyan = colors.cyan
+        lp.green = colors.green
+        lp.mix_green = colors.mix_green
+        lp.mix_yellow = colors.mix_yellow
+        lp.mix_blue = colors.mix_blue
+        lp.mix_red = colors.mix_red
+        lp.mix_magenta = colors.mix_magenta
+        lp.mix_base1 = colors.mix_base1
+        lp.mix_base01 = colors.mix_base1
+        lp.diag_error = colors.red
+        lp.diag_warning = colors.yellow
+        lp.diag_info = colors.blue
+        lp.diag_hint = colors.cyan
+        lp.diag_ok = colors.green
+        lp.git_add = colors.green
+        lp.git_modify = colors.yellow
+        lp.git_delete = colors.red
     end
-    sp.base4 = colors.base3
-    sp.diag_error = colors.red
-    sp.diag_warning = colors.yellow
-    sp.diag_info = colors.blue
-    sp.diag_hint = colors.cyan
-    sp.diag_ok = colors.green
-    sp.git_add = colors.green
-    sp.git_modify = colors.yellow
-    sp.git_delete = colors.red
 end
 
 _G.apply_home_settings_theme = function()
     local p = resolve_active_theme_palette(nil)
+    local target_bg = (vim.g.home_settings_theme_mode == "light") and "light" or "dark"
+    vim.o.background = target_bg
     sync_solarized_plugin_palette(p)
     local applied_via_colorscheme = false
     if package.loaded["solarized"] and _G._hs_solarized_opts then
-        vim.o.background = "dark"
         applied_via_colorscheme = pcall(function()
             require("solarized").setup(_G._hs_solarized_opts)
             vim.cmd.colorscheme("solarized")
@@ -897,8 +1067,23 @@ _G.apply_home_settings_theme = function()
             ))
         end
     end
+    apply_terminal_ansi_palette(p)
     return vim.g.home_settings_theme or "solarized-dark"
 end
+
+do
+    local initial_palette = resolve_active_theme_palette(nil)
+    vim.o.background = (vim.g.home_settings_theme_mode == "light") and "light" or "dark"
+    apply_terminal_ansi_palette(initial_palette)
+end
+
+vim.api.nvim_create_autocmd("ColorScheme", {
+    group = vim.api.nvim_create_augroup("SolarizedTerminalAnsiPalette", { clear = true }),
+    pattern = "solarized",
+    callback = function()
+        apply_terminal_ansi_palette(resolve_active_theme_palette(nil))
+    end,
+})
 
 vim.api.nvim_create_user_command("Theme", function(opts)
     local arg = vim.trim(opts.args or "")
@@ -908,26 +1093,71 @@ vim.api.nvim_create_user_command("Theme", function(opts)
     end
     local theme_bin = vim.fn.expand("$HOME/.local/bin/theme")
     if vim.fn.executable(theme_bin) ~= 1 then
-        theme_bin = vim.fn.exepath("theme")
-    end
-    if theme_bin ~= "" then
-        if arg == "--holiday" or arg == "holiday" then
-            vim.fn.system({ theme_bin, "--holiday", "--no-live" })
+        local repo_bin = nvim_repo_root .. "/bin/theme"
+        if vim.fn.executable(repo_bin) == 1 then
+            theme_bin = repo_bin
         else
-            vim.fn.system({ theme_bin, "--set", arg, "--no-live" })
+            theme_bin = vim.fn.exepath("theme")
         end
+    end
+    if theme_bin == "" or vim.fn.executable(theme_bin) ~= 1 then
+        vim.notify("Theme executable not found", vim.log.levels.ERROR)
+        return
+    end
+    local cmd = (arg == "--holiday" or arg == "holiday")
+        and { theme_bin, "--holiday" }
+        or { theme_bin, "--set=" .. arg }
+    local prev_skip = vim.env.THEME_SKIP_NVIM_SOCKET
+    vim.env.THEME_SKIP_NVIM_SOCKET = vim.v.servername or ""
+    local out = vim.fn.system(cmd)
+    local rc = vim.v.shell_error
+    vim.env.THEME_SKIP_NVIM_SOCKET = prev_skip
+    if rc ~= 0 then
+        local msg = vim.trim(out or "")
+        vim.notify("Theme switch failed: " .. (msg ~= "" and msg or arg), vim.log.levels.ERROR)
+        return
     end
     _G.apply_home_settings_theme()
 end, {
     nargs = "?",
     complete = function(arg_lead)
-        local items = {
-            "solarized-dark", "solarized-light", "catppuccin-mocha", "catppuccin-latte",
-            "gruvbox-dark", "tokyonight-night", "kanagawa-wave", "nord", "onedark",
-            "new-years", "valentines", "st-patricks", "easter",
-            "independence-day", "halloween", "thanksgiving", "christmas",
-            "--holiday",
-        }
+        local cfg_home = (vim.env.XDG_CONFIG_HOME and vim.env.XDG_CONFIG_HOME ~= "")
+            and vim.env.XDG_CONFIG_HOME
+            or (vim.fn.expand("$HOME") .. "/.config")
+        local seen = {}
+        local items = {}
+        local function add_item(name)
+            if name and name ~= "" and not seen[name] then
+                seen[name] = true
+                table.insert(items, name)
+            end
+        end
+        for _, slug in ipairs(builtin_theme_slugs) do
+            add_item(slug)
+        end
+        local custom = {}
+        for _, dir in ipairs(theme_search_dirs(cfg_home)) do
+            local files = vim.list_extend(
+                vim.fn.glob(dir .. "/*.theme", false, true),
+                vim.fn.glob(dir .. "/*.conf", false, true)
+            )
+            for _, f in ipairs(files) do
+                local stem = vim.fn.fnamemodify(f, ":t:r")
+                if stem ~= "active-theme" then
+                    local kv = parse_theme_file_kv(f)
+                    local slug = vim.trim(kv.THEME_ID or stem):lower():gsub("_", "-")
+                    if slug ~= "" and slug ~= "active-theme" and not seen[slug] then
+                        seen[slug] = true
+                        table.insert(custom, slug)
+                    end
+                end
+            end
+        end
+        table.sort(custom)
+        for _, slug in ipairs(custom) do
+            table.insert(items, slug)
+        end
+        add_item("--holiday")
         return vim.tbl_filter(function(item)
             return item:find(arg_lead, 1, true) == 1
         end, items)
@@ -960,12 +1190,38 @@ if not status_ok then
     return
 end
 
--- If init.lua is re-sourced inside a running session (e.g. `:source $MYVIMRC`),
+-- If init.lua is re-sourced inside a running session (for example `:source $MYVIMRC`),
 -- all core options, keymaps, and commands have already been refreshed above;
 -- skip re-running `lazy.setup()` which emits "Re-sourcing your config is not supported with lazy.nvim".
 if package.loaded["lazy.core.config"] then
     _G.apply_home_settings_theme()
     return
+end
+
+local default_data_home = (vim.fn.expand("$HOME") .. "/.local/share"):gsub("/+$", "")
+local current_data_home = (vim.env.XDG_DATA_HOME and vim.env.XDG_DATA_HOME ~= "")
+    and vim.env.XDG_DATA_HOME:gsub("/+$", "")
+    or default_data_home
+local cfg_lockfile = vim.fn.stdpath("config") .. "/lazy-lock.json"
+local repo_lockfile = nvim_repo_root .. "/dotfiles/.config/nvim/lazy-lock.json"
+local lazy_lockfile = cfg_lockfile
+if current_data_home ~= default_data_home
+    or not (vim.uv or vim.loop).fs_stat(vim.fn.stdpath("data") .. "/lazy/solarized.nvim")
+then
+    local uv = vim.uv or vim.loop
+    local state_dir = vim.fn.stdpath("state")
+    vim.fn.mkdir(state_dir, "p")
+    lazy_lockfile = state_dir .. "/lazy-lock.json"
+    local seed_lockfile = (vim.fn.filereadable(cfg_lockfile) == 1 and cfg_lockfile) or repo_lockfile
+    local lock_stat = uv.fs_stat(lazy_lockfile)
+    if vim.fn.filereadable(seed_lockfile) == 1 and not (lock_stat and (lock_stat.size or 0) > 0) then
+        local tmp_lock = string.format("%s.%d.tmp", lazy_lockfile, vim.fn.getpid())
+        if pcall(vim.fn.writefile, vim.fn.readfile(seed_lockfile), tmp_lock) then
+            if not uv.fs_rename(tmp_lock, lazy_lockfile) then
+                uv.fs_unlink(tmp_lock)
+            end
+        end
+    end
 end
 
 lazy.setup({
@@ -1297,10 +1553,12 @@ lazy.setup({
         config = function(_, opts)
             _G._hs_solarized_opts = opts
             build_theme_highlights = opts.on_highlights
-            vim.o.background = "dark"
-            sync_solarized_plugin_palette(resolve_active_theme_palette(nil))
+            local p = resolve_active_theme_palette(nil)
+            vim.o.background = (vim.g.home_settings_theme_mode == "light") and "light" or "dark"
+            sync_solarized_plugin_palette(p)
             require("solarized").setup(opts)
             vim.cmd.colorscheme("solarized")
+            apply_terminal_ansi_palette(p)
         end,
     },
 
@@ -1856,4 +2114,6 @@ lazy.setup({
             yaml = { enabled = false },
         },
     },
+}, {
+    lockfile = lazy_lockfile,
 })

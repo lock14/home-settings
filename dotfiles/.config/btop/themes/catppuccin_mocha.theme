@@ -8,7 +8,7 @@ theme[main_bg]="#1e1e2e"
 theme[main_fg]="#cdd6f4"
 
 # Title color for boxes
-theme[title]="#bac2de"
+theme[title]="#dce0e8"
 
 # Highlight color for keyboard shortcuts
 theme[hi_fg]="#f9e2af"
@@ -17,7 +17,7 @@ theme[hi_fg]="#f9e2af"
 theme[selected_bg]="#313244"
 
 # Foreground color of selected item in processes box
-theme[selected_fg]="#bac2de"
+theme[selected_fg]="#dce0e8"
 
 # Color of inactive/disabled text
 theme[inactive_fg]="#6c7086"

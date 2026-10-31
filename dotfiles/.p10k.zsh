@@ -24,7 +24,7 @@
 
   # Unset all configuration options. This allows you to apply configuration changes without
   # restarting zsh. Edit ~/.p10k.zsh and type `source ~/.p10k.zsh`.
-  unset -m '(POWERLEVEL9K_*|DEFAULT_USER|_HS_P10K_BASE_HEX)~POWERLEVEL9K_GITSTATUS_DIR'
+  unset -m '(POWERLEVEL9K_*|DEFAULT_USER|_HS_P10K_BASE_*)~POWERLEVEL9K_GITSTATUS_DIR'
 
   # Zsh >= 5.1 is required.
   [[ $ZSH_VERSION == (5.<1->*|<6->.*) ]] || return
@@ -2821,6 +2821,25 @@
   # can slow down prompt by 1-2 milliseconds, so it's better to keep it turned off unless you
   # really need it.
   typeset -g POWERLEVEL9K_DISABLE_HOT_RELOAD=true
+
+  # Snapshot pristine POWERLEVEL9K_* defaults before theme and machine-local overrides run so
+  # subsequent in-place theme switches restore clean baselines without duplicating local appends.
+  typeset -gA _HS_P10K_BASE_SCALARS=() _HS_P10K_BASE_ARRAYS=()
+  local _hs_bp
+  for _hs_bp in ${(k)parameters[(I)POWERLEVEL9K_*]}; do
+    [[ $_hs_bp == POWERLEVEL9K_GITSTATUS_DIR ]] && continue
+    case ${(Pt)_hs_bp} in
+      scalar*) _HS_P10K_BASE_SCALARS[$_hs_bp]=${(P)_hs_bp} ;;
+      array*)
+        local -a _hs_bp_arr=( "${(@P)_hs_bp}" )
+        if (( ${#_hs_bp_arr} == 0 )); then
+          _HS_P10K_BASE_ARRAYS[$_hs_bp]=$'\x01EMPTY\x01'
+        else
+          _HS_P10K_BASE_ARRAYS[$_hs_bp]=${(pj:\0:)_hs_bp}
+        fi
+        ;;
+    esac
+  done
 
   # Active color theme overrides (managed by bin/theme).
   local p10k_theme=${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/p10k-theme.zsh

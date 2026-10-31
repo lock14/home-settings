@@ -16,7 +16,7 @@
 				<key>foreground</key>
 				<string>#D8DEE9</string>
 				<key>invisibles</key>
-				<string>#616E88</string>
+				<string>#8492AC</string>
 				<key>lineHighlight</key>
 				<string>#3B4252</string>
 				<key>selection</key>
@@ -24,10 +24,10 @@
 				<key>gutter</key>
 				<string>#2E3440</string>
 				<key>gutterForeground</key>
-				<string>#616E88</string>
+				<string>#8492AC</string>
 			</dict>
 		</dict>
-		<!-- Comments & Subtle Metadata (Solarized Base01 #616E88) -->
+		<!-- Comments & Subtle Metadata (Solarized Base01 #8492AC) -->
 		<dict>
 			<key>name</key>
 			<string>Comments and Subtle Metadata</string>
@@ -38,7 +38,7 @@
 				<key>fontStyle</key>
 				<string></string>
 				<key>foreground</key>
-				<string>#616E88</string>
+				<string>#8492AC</string>
 			</dict>
 		</dict>
 		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #88C0D0) -->

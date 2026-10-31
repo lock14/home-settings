@@ -238,15 +238,28 @@ theme() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            -l|--list|-c|--current|-p|--preview|--env|--create|--path|-n|--dry-run|-h|--help|--sync-assets)
+            -l|--list|--plain|-c|--current|-p|--preview|--preview=*|--env|--env=*|--create|--create=*|--path|-n|--dry-run|--dry-run=*|-h|--help|--sync-assets)
                 is_query=1
                 break
                 ;;
         esac
     done
+    local has_target=0
+    for arg in "$@"; do
+        if [ "$arg" != "--no-live" ]; then
+            has_target=1
+            break
+        fi
+    done
+    if [ "$has_target" -eq 0 ] && { [ ! -t 0 ] || [ ! -t 1 ]; } && [ "${THEME_FORCE_FZF:-0}" != "1" ]; then
+        is_query=1
+    fi
 
-    "$theme_bin" "$@"
-    local rc=$?
+    local rc=0
+    THEME_SHELL_WRAPPER=1 "$theme_bin" "$@" || rc=$?
+    if [ "$rc" -eq 130 ]; then
+        return 0
+    fi
     if [ "$rc" -eq 0 ] && [ "$is_query" -eq 0 ]; then
         local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
         [ -r "$hs_dir/theme-env.sh" ] && source "$hs_dir/theme-env.sh"

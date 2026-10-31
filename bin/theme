@@ -23,6 +23,7 @@ REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
 
 IFS= read -r -d '' THEME_PY_SRC <<'PY' || true
 import datetime
+import getpass
 import os
 from pathlib import Path
 import re
@@ -31,6 +32,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 
 MANAGED_ORDER = [
     "solarized-dark",
@@ -169,6 +171,7 @@ Options:
   -s, --set <NAME>       Apply theme <NAME> across all managed tools
   --holiday              Apply the nearest upcoming or active US Holiday theme
   -l, --list             List all managed and user-defined themes
+  --plain                Print theme slugs only (one per line) when listing
   -c, --current          Print the currently active theme name
   -p, --preview [NAME]   Render a TrueColor palette and syntax preview for [NAME]
   --env [NAME]           Output shell export commands for [NAME]
@@ -328,13 +331,22 @@ def parse_theme_file(path, default_slug=None, source="builtin"):
             s = line.strip()
             if not s or s.startswith("#"):
                 continue
+            if s.startswith("export ") or s.startswith("export\t"):
+                s = s[6:].strip()
             if "=" not in s:
                 raise ValueError(f"{path}:{line_num}: invalid line (expected KEY=VALUE): {s}")
             k, v = s.split("=", 1)
             k = k.strip()
             v = v.strip()
-            if len(v) >= 2 and ((v[0] == '"' and v[-1] == '"') or (v[0] == "'" and v[-1] == "'")):
-                v = v[1:-1]
+            if v and v[0] in ('"', "'"):
+                q = v[0]
+                end_idx = v.find(q, 1)
+                if end_idx != -1:
+                    rest = v[end_idx + 1 :].strip()
+                    if not rest or rest.startswith("#"):
+                        v = v[1:end_idx]
+            else:
+                v = re.split(r"\s+#", v, maxsplit=1)[0].strip()
             raw[k] = v
 
     mode = raw.get("THEME_MODE", "dark").strip().lower()
@@ -576,7 +588,7 @@ palette = 15={c['BASE3']}
 background = {c['BASE03']}
 foreground = {c['BASE0']}
 cursor-color = {c['BASE0']}
-cursor-text = {c['BASE02']}
+cursor-text = {c['BASE03']}
 selection-background = {c['BASE02']}
 selection-foreground = {c['BASE1']}
 """
@@ -789,7 +801,107 @@ def generate_active_theme_file_text(theme):
     return "\n".join(lines) + "\n"
 
 
-def generate_theme_env_sh(theme):
+DIRCOLORS_KEYWORD_MAP = {
+    "NORMAL": "no",
+    "FILE": "fi",
+    "RESET": "rs",
+    "DIR": "di",
+    "OTHER_WRITABLE": "ow",
+    "LINK": "ln",
+    "MULTIHARDLINK": "mh",
+    "FIFO": "pi",
+    "SOCK": "so",
+    "DOOR": "do",
+    "BLK": "bd",
+    "CHR": "cd",
+    "ORPHAN": "or",
+    "MISSING": "mi",
+    "SETUID": "su",
+    "SETGID": "sg",
+    "CAPABILITY": "ca",
+    "STICKY_OTHER_WRITABLE": "tw",
+    "STICKY": "st",
+    "EXEC": "ex",
+}
+
+
+def compile_truecolor_ls_colors(theme, repo_dir=None):
+    def rgb_semi(key):
+        r, g, b = hex_to_rgb(theme[key])
+        return f"{r};{g};{b}"
+
+    sgr_map = {
+        "30": f"38;2;{rgb_semi('BASE03')}",
+        "31": f"38;2;{rgb_semi('RED')}",
+        "32": f"38;2;{rgb_semi('GREEN')}",
+        "33": f"38;2;{rgb_semi('YELLOW')}",
+        "34": f"38;2;{rgb_semi('BLUE')}",
+        "35": f"38;2;{rgb_semi('MAGENTA')}",
+        "36": f"38;2;{rgb_semi('CYAN')}",
+        "37": f"38;2;{rgb_semi('BASE2')}",
+        "90": f"38;2;{rgb_semi('BASE01')}",
+        "91": f"38;2;{rgb_semi('ORANGE')}",
+        "92": f"38;2;{rgb_semi('BASE01')}",
+        "93": f"38;2;{rgb_semi('BASE00')}",
+        "94": f"38;2;{rgb_semi('BASE0')}",
+        "95": f"38;2;{rgb_semi('VIOLET')}",
+        "96": f"38;2;{rgb_semi('BASE1')}",
+        "97": f"38;2;{rgb_semi('BASE3')}",
+        "40": f"48;2;{rgb_semi('BASE02')}",
+        "41": f"48;2;{rgb_semi('RED')}",
+        "42": f"48;2;{rgb_semi('GREEN')}",
+        "43": f"48;2;{rgb_semi('YELLOW')}",
+        "44": f"48;2;{rgb_semi('BLUE')}",
+        "45": f"48;2;{rgb_semi('MAGENTA')}",
+        "46": f"48;2;{rgb_semi('CYAN')}",
+        "47": f"48;2;{rgb_semi('BASE2')}",
+    }
+    base0_sgr = f"38;2;{rgb_semi('BASE0')}"
+
+    dc_file = (repo_dir / "dotfiles" / ".dir-colors" / "dircolors") if repo_dir else None
+    entries = []
+    if dc_file and dc_file.is_file():
+        for raw_line in dc_file.read_text(encoding="utf-8").splitlines():
+            stripped = raw_line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            line = re.split(r"\s+#", stripped, maxsplit=1)[0].strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) != 2 or parts[0] == "TERM":
+                continue
+            key, code = parts[0], parts[1].strip()
+            ls_key = DIRCOLORS_KEYWORD_MAP.get(key)
+            if ls_key is None:
+                ls_key = f"*{key}" if key.startswith(".") else key
+            if code == "0":
+                ls_val = "0"
+            elif code == "00":
+                ls_val = "00" if key in ("NORMAL", "MULTIHARDLINK") else base0_sgr
+            else:
+                ls_val = ";".join(sgr_map.get(tok, tok) for tok in code.split(";"))
+            entries.append(f"{ls_key}={ls_val}")
+    if not entries:
+        entries = [
+            "rs=0",
+            f"di={sgr_map['34']}",
+            f"ln={sgr_map['36']}",
+            "mh=00",
+            f"pi={sgr_map['33']}",
+            f"so={sgr_map['35']}",
+            f"do={sgr_map['35']}",
+            f"bd={sgr_map['35']}",
+            f"cd={sgr_map['35']}",
+            f"or={sgr_map['31']}",
+            f"mi={sgr_map['31']}",
+            f"ex={sgr_map['32']}",
+            f"fi={base0_sgr}",
+        ]
+    return ":".join(entries) + ":"
+
+
+def generate_theme_env_sh(theme, repo_dir=None):
     def rgb_semi(key):
         r, g, b = hex_to_rgb(theme[key])
         return f"{r};{g};{b}"
@@ -894,6 +1006,7 @@ def generate_theme_env_sh(theme):
         f"ff=38;2;{base0}",
     ]
     eza_str = ":".join(eza_parts)
+    ls_str = compile_truecolor_ls_colors(theme, repo_dir)
 
     fzf_str = (
         f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},hl:{theme['BASE01']} "
@@ -937,6 +1050,7 @@ export _HS_ESC_CYAN="${{_hs_esc}}[38;2;{cyan}m"
 export _HS_ESC_BASE0="${{_hs_esc}}[38;2;{base0}m"
 export _HS_ESC_BASE01="${{_hs_esc}}[38;2;{base01}m"
 unset _hs_esc
+export LS_COLORS='{ls_str}'
 export LSCOLORS="exgxfxdxcxfxfxegedabagacad"
 {os_icon_line}
 export _HS_PROMPT_BG_BASE02='\\[\\e[48;2;{base02}m\\]'
@@ -1029,15 +1143,50 @@ zle_highlight=(region:bg={theme['BASE02']} special:fg={theme['MAGENTA']} isearch
 def generate_p10k_theme_text(theme):
     return f"""# Generated by bin/theme — Powerlevel10k Palette Remap ({theme['THEME_ID']})
 () {{
-  typeset -gA _HS_P10K_BASE_HEX
+  typeset -gA _HS_P10K_BASE_SCALARS _HS_P10K_BASE_ARRAYS _HS_P10K_BASE_HEX
   local _hs_param _hs_val _hs_hex _hs_tok
-  if (( ! ${{#_HS_P10K_BASE_HEX}} )); then
+  if (( ! ${{#_HS_P10K_BASE_SCALARS}} )); then
     for _hs_param in ${{(k)parameters[(I)POWERLEVEL9K_*]}}; do
-      [[ "${{(Pt)_hs_param}}" == scalar* ]] || continue
-      _hs_val="${{(P)_hs_param}}"
-      [[ "$_hs_val" == *"#"* ]] || continue
-      _HS_P10K_BASE_HEX[$_hs_param]="$_hs_val"
+      [[ "$_hs_param" == "POWERLEVEL9K_GITSTATUS_DIR" ]] && continue
+      case "${{(Pt)_hs_param}}" in
+        scalar*)
+          _hs_val="${{(P)_hs_param}}"
+          _HS_P10K_BASE_SCALARS[$_hs_param]="$_hs_val"
+          [[ "$_hs_val" == *"#"* ]] && _HS_P10K_BASE_HEX[$_hs_param]="$_hs_val"
+          ;;
+        array*)
+          local -a _hs_arr_copy
+          _hs_arr_copy=( "${{(@P)_hs_param}}" )
+          if (( ${{#_hs_arr_copy}} == 0 )); then
+            _HS_P10K_BASE_ARRAYS[$_hs_param]=$'\\x01EMPTY\\x01'
+          else
+            _HS_P10K_BASE_ARRAYS[$_hs_param]="${{(pj:\\0:)_hs_param}}"
+          fi
+          ;;
+      esac
     done
+  else
+    for _hs_param in ${{(k)parameters[(I)POWERLEVEL9K_*]}}; do
+      [[ "$_hs_param" == "POWERLEVEL9K_GITSTATUS_DIR" ]] && continue
+      if (( ! ${{+_HS_P10K_BASE_SCALARS[$_hs_param]}} && ! ${{+_HS_P10K_BASE_ARRAYS[$_hs_param]}} )); then
+        unset "$_hs_param"
+      fi
+    done
+    for _hs_param _hs_val in "${{(@kv)_HS_P10K_BASE_SCALARS}}"; do
+      typeset -g "$_hs_param=$_hs_val"
+    done
+    for _hs_param _hs_val in "${{(@kv)_HS_P10K_BASE_ARRAYS}}"; do
+      if [[ "$_hs_val" == $'\\x01EMPTY\\x01' ]]; then
+        set -A "$_hs_param"
+      else
+        set -A "$_hs_param" "${{(@0)_hs_val}}"
+      fi
+    done
+    if (( ! ${{#_HS_P10K_BASE_HEX}} )); then
+      for _hs_param _hs_val in "${{(@kv)_HS_P10K_BASE_SCALARS}}"; do
+        [[ "$_hs_val" == *"#"* ]] && _HS_P10K_BASE_HEX[$_hs_param]="$_hs_val"
+      done
+    fi
   fi
   local -A _hs_p10k_to_slot=(
     '#002B36' '__HS_BASE03__'
@@ -1146,10 +1295,16 @@ set -g status-right "#{{?client_prefix,#[fg={b00}#,bg={b02}#,nobold] #[fg={or
 
 def sync_symlink(src_path, dst_path):
     dst_path.parent.mkdir(parents=True, exist_ok=True)
-    if dst_path.is_symlink() or dst_path.is_file():
+    if dst_path.is_symlink():
         dst_path.unlink()
-    elif dst_path.is_dir():
-        shutil.rmtree(dst_path)
+    elif dst_path.exists():
+        ts = int(time.time())
+        bak = dst_path.parent / f"{dst_path.name}.bak.{ts}"
+        idx = 1
+        while bak.exists() or bak.is_symlink():
+            bak = dst_path.parent / f"{dst_path.name}.bak.{ts}.{idx}"
+            idx += 1
+        dst_path.rename(bak)
     dst_path.symlink_to(src_path)
 
 
@@ -1242,17 +1397,52 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
                 )
 
     # 2. Live Neovim RPC reload
-    if shutil.which("nvim"):
+    if shutil.which("nvim") and os.environ.get("THEME_LIVE_NVIM", "1") != "0":
+        skip_sock = os.environ.get("THEME_SKIP_NVIM_SOCKET", "").strip()
+        skip_resolved = Path(skip_sock).resolve() if skip_sock else None
         sockets = []
+        sock_dir_override = os.environ.get("THEME_NVIM_SOCKET_DIR", "").strip()
         env_sock = os.environ.get("NVIM_IDE_SOCKET", "").strip()
         if env_sock:
             sockets.append(Path(env_sock))
-        if os.environ.get("TMUX") or os.environ.get("THEME_LIVE_NVIM") == "1":
+        if sock_dir_override:
+            sock_dir_path = Path(sock_dir_override)
+            if sock_dir_path.is_dir():
+                for pat in ("*.sock", "nvim.*.0", "*/nvim.*.0"):
+                    for p in sock_dir_path.glob(pat):
+                        if p not in sockets:
+                            sockets.append(p)
+        else:
             for p in Path("/tmp").glob("nvim-ide-*.sock"):
                 if p not in sockets:
                     sockets.append(p)
+            xdg_rt = os.environ.get("XDG_RUNTIME_DIR", "").strip()
+            if xdg_rt and Path(xdg_rt).is_dir():
+                for p in Path(xdg_rt).glob("nvim.*.0"):
+                    if p not in sockets:
+                        sockets.append(p)
+            try:
+                nvim_user = os.environ.get("USER", "").strip() or getpass.getuser()
+            except Exception:
+                nvim_user = ""
+            if nvim_user:
+                tmp_candidates = [Path("/tmp")]
+                env_tmp = os.environ.get("TMPDIR", "").strip()
+                if env_tmp:
+                    env_tmp_path = Path(env_tmp)
+                    if env_tmp_path not in tmp_candidates:
+                        tmp_candidates.insert(0, env_tmp_path)
+                for base_tmp in tmp_candidates:
+                    user_nvim_dir = base_tmp / f"nvim.{nvim_user}"
+                    if user_nvim_dir.is_dir():
+                        for pat in ("nvim.*.0", "*/nvim.*.0"):
+                            for p in user_nvim_dir.glob(pat):
+                                if p not in sockets:
+                                    sockets.append(p)
         for sock in sockets:
             try:
+                if skip_resolved and sock.resolve() == skip_resolved:
+                    continue
                 st = sock.stat()
                 if stat.S_ISSOCK(st.st_mode) and st.st_uid == os.getuid():
                     subprocess.run(
@@ -1272,21 +1462,31 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
             except (OSError, subprocess.SubprocessError):
                 pass
 
-    # 3. Terminal emulator profile updates (GNOME Terminal on Linux, Terminal.app on macOS)
+    # 3. Terminal emulator profile updates (Ghostty SIGUSR2, GNOME Terminal on Linux, Terminal.app on macOS)
     if os.environ.get("THEME_UPDATE_TERMINAL_PROFILE", "1") != "0":
-        gt_script = repo_dir / "bin" / "gnome-terminal-solarized"
-        if gt_script.is_file() and shutil.which("dconf") and shutil.which("gsettings"):
-            subprocess.run(
-                [str(gt_script), "--theme", theme["THEME_ID"]],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-        if sys.platform == "darwin":
+        if shutil.which("pkill"):
+            for proc_name in ("ghostty", "Ghostty"):
+                subprocess.run(
+                    ["pkill", "-USR2", "-u", str(os.getuid()), "-x", proc_name],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+        is_macos = sys.platform == "darwin" or os.environ.get("OS") == "macos"
+        if is_macos:
             mt_script = repo_dir / "bin" / "macos-terminal-solarized"
             if mt_script.is_file():
                 subprocess.run(
-                    [str(mt_script), "--theme", theme["THEME_ID"]],
+                    [str(mt_script), f"--theme={theme['THEME_ID']}"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+        else:
+            gt_script = repo_dir / "bin" / "gnome-terminal-solarized"
+            if gt_script.is_file() and shutil.which("dconf") and shutil.which("gsettings"):
+                subprocess.run(
+                    [str(gt_script), f"--theme={theme['THEME_ID']}"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     check=False,
@@ -1320,7 +1520,7 @@ def apply_theme(theme, repo_dir, dry_run=False, no_live=False):
 
     (state_dir / "theme").write_text(f"{theme['THEME_ID']}\n", encoding="utf-8")
     (state_dir / "active-theme.theme").write_text(generate_active_theme_file_text(theme), encoding="utf-8")
-    (state_dir / "theme-env.sh").write_text(generate_theme_env_sh(theme), encoding="utf-8")
+    (state_dir / "theme-env.sh").write_text(generate_theme_env_sh(theme, repo_dir), encoding="utf-8")
     (state_dir / "zsh-theme.zsh").write_text(generate_zsh_theme_text(theme), encoding="utf-8")
     (state_dir / "p10k-theme.zsh").write_text(generate_p10k_theme_text(theme), encoding="utf-8")
     (state_dir / "tmux-theme.conf").write_text(generate_tmux_theme_text(theme), encoding="utf-8")
@@ -1337,13 +1537,20 @@ def apply_theme(theme, repo_dir, dry_run=False, no_live=False):
             if gt.is_file():
                 sync_symlink(gt, active_ghostty_themes / gt.name)
     custom_gt_path = active_ghostty_themes / theme["GHOSTTY_THEME_NAME"]
-    if not custom_gt_path.exists():
+    if theme["SOURCE"] == "user" or not (repo_ghostty_themes / theme["GHOSTTY_THEME_NAME"]).is_file():
+        if custom_gt_path.is_symlink():
+            custom_gt_path.unlink()
         custom_gt_path.write_text(generate_ghostty_theme_text(theme), encoding="utf-8")
     (active_ghostty / "config").write_text(generate_ghostty_config_text(theme), encoding="utf-8")
     if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "ghostty").is_dir():
         sync_symlink(repo_dir / "dotfiles" / ".config" / "ghostty", cfg_dir / "ghostty")
     else:
         sync_symlink(active_ghostty, cfg_dir / "ghostty")
+    if sys.platform == "darwin" or os.environ.get("OS") == "macos":
+        macos_gt_dir = Path.home() / "Library" / "Application Support" / "com.mitchellh.ghostty"
+        macos_gt_dir.mkdir(parents=True, exist_ok=True)
+        sync_symlink(cfg_dir / "ghostty" / "config", macos_gt_dir / "config")
+        sync_symlink(cfg_dir / "ghostty" / "themes", macos_gt_dir / "themes")
 
     # 2. btop
     active_btop = active_dir / "btop"
@@ -1355,7 +1562,9 @@ def apply_theme(theme, repo_dir, dry_run=False, no_live=False):
             if bt.is_file():
                 sync_symlink(bt, active_btop_themes / bt.name)
     custom_bt_path = active_btop_themes / f"{theme['BTOP_THEME_NAME']}.theme"
-    if not custom_bt_path.exists():
+    if theme["SOURCE"] == "user" or not (repo_btop_themes / f"{theme['BTOP_THEME_NAME']}.theme").is_file():
+        if custom_bt_path.is_symlink():
+            custom_bt_path.unlink()
         custom_bt_path.write_text(generate_btop_theme_text(theme), encoding="utf-8")
     (active_btop / "btop.conf").write_text(generate_btop_config_text(theme, repo_dir), encoding="utf-8")
     if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "btop").is_dir():
@@ -1363,14 +1572,18 @@ def apply_theme(theme, repo_dir, dry_run=False, no_live=False):
     else:
         sync_symlink(active_btop, cfg_dir / "btop")
 
-    # 3. git / delta
+    # 3. git / delta (keep cfg_dir / "git" as a real directory so user ignore/attributes survive)
     active_git = active_dir / "git"
     active_git.mkdir(parents=True, exist_ok=True)
     (active_git / "config").write_text(generate_git_config_text(theme), encoding="utf-8")
-    if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "git").is_dir():
-        sync_symlink(repo_dir / "dotfiles" / ".config" / "git", cfg_dir / "git")
+    git_cfg_dir = cfg_dir / "git"
+    if git_cfg_dir.is_symlink():
+        git_cfg_dir.unlink()
+    git_cfg_dir.mkdir(parents=True, exist_ok=True)
+    if theme["THEME_ID"] == "solarized-dark" and (repo_dir / "dotfiles" / ".config" / "git" / "config").is_file():
+        sync_symlink(repo_dir / "dotfiles" / ".config" / "git" / "config", git_cfg_dir / "config")
     else:
-        sync_symlink(active_git, cfg_dir / "git")
+        sync_symlink(active_git / "config", git_cfg_dir / "config")
 
     # 4. tealdeer
     active_tealdeer = active_dir / "tealdeer"
@@ -1392,7 +1605,7 @@ def apply_theme(theme, repo_dir, dry_run=False, no_live=False):
                 sync_symlink(tm_src, dst_tm)
                 need_bat_rebuild = True
     repo_tm = colors_dir / f"{theme['BAT_THEME_NAME']}.tmTheme"
-    if repo_tm.is_file():
+    if repo_tm.is_file() and theme["SOURCE"] != "user":
         if not bat_Theme_file.exists():
             sync_symlink(repo_tm, bat_Theme_file)
             need_bat_rebuild = True
@@ -1627,9 +1840,11 @@ def list_themes(themes, current_slug, plain=False):
 
 
 def run_fzf_picker(themes, current_slug, repo_dir, dry_run=False, no_live=False):
+    in_wrapper = os.environ.get("THEME_SHELL_WRAPPER") == "1"
     fzf_bin = shutil.which("fzf")
     if not fzf_bin:
-        return list_themes(themes, current_slug)
+        rc = list_themes(themes, current_slug)
+        return 130 if (in_wrapper and rc == 0) else rc
 
     ordered_slugs = [s for s in MANAGED_ORDER if s in themes]
     for s in sorted(themes.keys()):
@@ -1670,10 +1885,10 @@ def run_fzf_picker(themes, current_slug, repo_dir, dry_run=False, no_live=False)
     ]
     proc = subprocess.run(cmd, input="\n".join(lines) + "\n", text=True, capture_output=True, check=False)
     if proc.returncode != 0:
-        return 0
+        return 130 if in_wrapper else 0
     selected = proc.stdout.strip()
     if not selected:
-        return 0
+        return 130 if in_wrapper else 0
     tokens = selected.split()
     chosen_slug = (tokens[1] if tokens and tokens[0] == "*" and len(tokens) > 1 else tokens[0]).strip().lower()
     if chosen_slug not in themes:
@@ -1749,12 +1964,130 @@ def main():
     repo_dir = Path(sys.argv[1]).resolve()
     args = sys.argv[2:]
 
-    for a in args:
-        if a in ("-h", "--help"):
+    action = None
+    target_name = None
+    base_name = "solarized-dark"
+    force = False
+    dry_run = False
+    no_live = False
+    plain = False
+
+    i = 0
+    end_of_opts = False
+    while i < len(args):
+        arg = args[i]
+        if not end_of_opts and arg == "--":
+            end_of_opts = True
+        elif not end_of_opts and arg in ("-h", "--help"):
             print(USAGE_TEXT, end="")
             return 0
+        elif not end_of_opts and arg == "--sync-assets":
+            action = "sync-assets"
+        elif not end_of_opts and arg in ("-l", "--list"):
+            action = "list"
+        elif not end_of_opts and arg == "--plain":
+            plain = True
+            if action is None:
+                action = "list"
+        elif not end_of_opts and arg in ("-c", "--current"):
+            action = "current"
+        elif not end_of_opts and arg == "--path":
+            action = "path"
+        elif not end_of_opts and arg in ("-n", "--dry-run"):
+            dry_run = True
+        elif not end_of_opts and arg == "--no-live":
+            no_live = True
+        elif not end_of_opts and arg in ("-f", "--force"):
+            force = True
+        elif not end_of_opts and arg == "--holiday":
+            action = "set"
+            target_name = resolve_nearest_holiday_slug()
+        elif not end_of_opts and arg in ("-s", "--set"):
+            if i + 1 >= len(args) or not args[i + 1].strip() or args[i + 1].startswith("-"):
+                sys.stderr.write(f"theme: option '{arg}' requires a theme name\n")
+                return 1
+            action = "set"
+            target_name = args[i + 1]
+            i += 1
+        elif not end_of_opts and arg.startswith("--set="):
+            val = arg.split("=", 1)[1]
+            if not val.strip():
+                sys.stderr.write("theme: option '--set' requires a theme name\n")
+                return 1
+            action = "set"
+            target_name = val
+        elif not end_of_opts and arg in ("-p", "--preview"):
+            action = "preview"
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                if not args[i + 1].strip():
+                    sys.stderr.write(f"theme: option '{arg}' requires a theme name\n")
+                    return 1
+                target_name = args[i + 1]
+                i += 1
+        elif not end_of_opts and arg.startswith("--preview="):
+            val = arg.split("=", 1)[1]
+            if not val.strip():
+                sys.stderr.write("theme: option '--preview' requires a theme name\n")
+                return 1
+            action = "preview"
+            target_name = val
+        elif not end_of_opts and arg == "--env":
+            action = "env"
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                if not args[i + 1].strip():
+                    sys.stderr.write("theme: option '--env' requires a theme name\n")
+                    return 1
+                target_name = args[i + 1]
+                i += 1
+        elif not end_of_opts and arg.startswith("--env="):
+            val = arg.split("=", 1)[1]
+            if not val.strip():
+                sys.stderr.write("theme: option '--env' requires a theme name\n")
+                return 1
+            action = "env"
+            target_name = val
+        elif not end_of_opts and arg == "--create":
+            if i + 1 >= len(args) or not args[i + 1].strip() or args[i + 1].startswith("-"):
+                sys.stderr.write("theme: option '--create' requires a new theme name\n")
+                return 1
+            action = "create"
+            target_name = args[i + 1]
+            i += 1
+        elif not end_of_opts and arg.startswith("--create="):
+            val = arg.split("=", 1)[1]
+            if not val.strip():
+                sys.stderr.write("theme: option '--create' requires a new theme name\n")
+                return 1
+            action = "create"
+            target_name = val
+        elif not end_of_opts and arg == "--from":
+            if i + 1 >= len(args) or not args[i + 1].strip() or args[i + 1].startswith("-"):
+                sys.stderr.write("theme: option '--from' requires a base theme name\n")
+                return 1
+            base_name = args[i + 1]
+            i += 1
+        elif not end_of_opts and arg.startswith("--from="):
+            val = arg.split("=", 1)[1]
+            if not val.strip():
+                sys.stderr.write("theme: option '--from' requires a base theme name\n")
+                return 1
+            base_name = val
+        elif not end_of_opts and arg.startswith("-"):
+            sys.stderr.write(f"theme: unknown option '{arg}' (try 'theme --help')\n")
+            return 1
+        else:
+            if not arg.strip():
+                sys.stderr.write("theme: theme name must not be empty\n")
+                return 1
+            if target_name is not None:
+                sys.stderr.write(f"theme: unexpected extra argument '{arg}'\n")
+                return 1
+            target_name = arg
+            if action is None:
+                action = "set"
+        i += 1
 
-    if "--sync-assets" in args:
+    if action == "sync-assets":
         sync_managed_repo_assets(repo_dir)
         return 0
 
@@ -1765,92 +2098,6 @@ def main():
         return 1
 
     current_slug = get_current_theme_slug(themes)
-
-    action = None
-    target_name = None
-    base_name = "solarized-dark"
-    force = False
-    dry_run = False
-    no_live = False
-    plain = False
-
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg in ("-l", "--list"):
-            action = "list"
-        elif arg == "--plain":
-            plain = True
-            if action is None:
-                action = "list"
-        elif arg in ("-c", "--current"):
-            action = "current"
-        elif arg == "--path":
-            action = "path"
-        elif arg in ("-n", "--dry-run"):
-            dry_run = True
-        elif arg == "--no-live":
-            no_live = True
-        elif arg in ("-f", "--force"):
-            force = True
-        elif arg == "--holiday":
-            action = "set"
-            target_name = resolve_nearest_holiday_slug()
-        elif arg in ("-s", "--set"):
-            if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                sys.stderr.write(f"theme: option '{arg}' requires a theme name\n")
-                return 1
-            action = "set"
-            target_name = args[i + 1]
-            i += 1
-        elif arg.startswith("--set="):
-            action = "set"
-            target_name = arg.split("=", 1)[1]
-        elif arg in ("-p", "--preview"):
-            action = "preview"
-            if i + 1 < len(args) and not args[i + 1].startswith("-"):
-                target_name = args[i + 1]
-                i += 1
-        elif arg.startswith("--preview="):
-            action = "preview"
-            target_name = arg.split("=", 1)[1]
-        elif arg == "--env":
-            action = "env"
-            if i + 1 < len(args) and not args[i + 1].startswith("-"):
-                target_name = args[i + 1]
-                i += 1
-        elif arg.startswith("--env="):
-            action = "env"
-            target_name = arg.split("=", 1)[1]
-        elif arg == "--create":
-            if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                sys.stderr.write("theme: option '--create' requires a new theme name\n")
-                return 1
-            action = "create"
-            target_name = args[i + 1]
-            i += 1
-        elif arg.startswith("--create="):
-            action = "create"
-            target_name = arg.split("=", 1)[1]
-        elif arg == "--from":
-            if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                sys.stderr.write("theme: option '--from' requires a base theme name\n")
-                return 1
-            base_name = args[i + 1]
-            i += 1
-        elif arg.startswith("--from="):
-            base_name = arg.split("=", 1)[1]
-        elif arg.startswith("-"):
-            sys.stderr.write(f"theme: unknown option '{arg}' (try 'theme --help')\n")
-            return 1
-        else:
-            if target_name is not None:
-                sys.stderr.write(f"theme: unexpected extra argument '{arg}'\n")
-                return 1
-            target_name = arg
-            if action is None:
-                action = "set"
-        i += 1
 
     if action == "list":
         return list_themes(themes, current_slug, plain=plain)
@@ -1864,19 +2111,21 @@ def main():
         return create_user_theme(target_name, base_name, themes, force=force)
 
     if action in ("preview", "env"):
-        slug = (target_name or current_slug).strip().lower().replace("_", "-")
+        raw_target = current_slug if target_name is None else target_name
+        slug = raw_target.strip().lower().replace("_", "-")
         if slug not in themes:
-            sys.stderr.write(f"theme: unknown theme '{target_name}' (run 'theme --list' to see available themes)\n")
+            sys.stderr.write(f"theme: unknown theme '{raw_target}' (run 'theme --list' to see available themes)\n")
             return 1
         if action == "preview":
             return render_preview(themes[slug])
-        print(generate_theme_env_sh(themes[slug]), end="")
+        print(generate_theme_env_sh(themes[slug], repo_dir), end="")
         return 0
 
     if action == "set" or (dry_run and target_name is not None):
-        slug = (target_name or current_slug).strip().lower().replace("_", "-")
+        raw_target = current_slug if target_name is None else target_name
+        slug = raw_target.strip().lower().replace("_", "-")
         if slug not in themes:
-            sys.stderr.write(f"theme: unknown theme '{target_name}' (run 'theme --list' to see available themes)\n")
+            sys.stderr.write(f"theme: unknown theme '{raw_target}' (run 'theme --list' to see available themes)\n")
             return 1
         return apply_theme(themes[slug], repo_dir, dry_run=dry_run, no_live=no_live)
 

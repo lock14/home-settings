@@ -85,6 +85,8 @@ lint:
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi
+	@echo "Checking embedded Python AST syntax..."
+	@bash -c '. tests/test-helper.sh && lint_python_embeds .'
 	@echo "Checking documentation hygiene and links..."
 	@bash -c '. tests/test-helper.sh && lint_documentation .'
 	@echo "All lint checks passed."
