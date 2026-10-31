@@ -1145,9 +1145,10 @@ def generate_p10k_theme_text(theme):
 () {{
   typeset -gA _HS_P10K_BASE_SCALARS _HS_P10K_BASE_ARRAYS _HS_P10K_BASE_HEX
   local _hs_param _hs_val _hs_hex _hs_tok
+  local -a _hs_arr_copy
   if (( ! ${{#_HS_P10K_BASE_SCALARS}} )); then
     for _hs_param in ${{(k)parameters[(I)POWERLEVEL9K_*]}}; do
-      [[ "$_hs_param" == "POWERLEVEL9K_GITSTATUS_DIR" ]] && continue
+      [[ "$_hs_param" == "POWERLEVEL9K_GITSTATUS_DIR" || "$_hs_param" == "POWERLEVEL9K_CONFIG_FILE" ]] && continue
       case "${{(Pt)_hs_param}}" in
         scalar*)
           _hs_val="${{(P)_hs_param}}"
@@ -1155,19 +1156,18 @@ def generate_p10k_theme_text(theme):
           [[ "$_hs_val" == *"#"* ]] && _HS_P10K_BASE_HEX[$_hs_param]="$_hs_val"
           ;;
         array*)
-          local -a _hs_arr_copy
           _hs_arr_copy=( "${{(@P)_hs_param}}" )
           if (( ${{#_hs_arr_copy}} == 0 )); then
             _HS_P10K_BASE_ARRAYS[$_hs_param]=$'\\x01EMPTY\\x01'
           else
-            _HS_P10K_BASE_ARRAYS[$_hs_param]="${{(pj:\\0:)_hs_param}}"
+            _HS_P10K_BASE_ARRAYS[$_hs_param]="${{(pj:\\0:)_hs_arr_copy}}"
           fi
           ;;
       esac
     done
   else
     for _hs_param in ${{(k)parameters[(I)POWERLEVEL9K_*]}}; do
-      [[ "$_hs_param" == "POWERLEVEL9K_GITSTATUS_DIR" ]] && continue
+      [[ "$_hs_param" == "POWERLEVEL9K_GITSTATUS_DIR" || "$_hs_param" == "POWERLEVEL9K_CONFIG_FILE" ]] && continue
       if (( ! ${{+_HS_P10K_BASE_SCALARS[$_hs_param]}} && ! ${{+_HS_P10K_BASE_ARRAYS[$_hs_param]}} )); then
         unset "$_hs_param"
       fi
@@ -1176,6 +1176,7 @@ def generate_p10k_theme_text(theme):
       typeset -g "$_hs_param=$_hs_val"
     done
     for _hs_param _hs_val in "${{(@kv)_HS_P10K_BASE_ARRAYS}}"; do
+      typeset -ga "$_hs_param"
       if [[ "$_hs_val" == $'\\x01EMPTY\\x01' ]]; then
         set -A "$_hs_param"
       else

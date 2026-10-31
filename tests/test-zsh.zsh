@@ -10,6 +10,20 @@ echo "========================================"
 echo "Running Zsh Configuration Tests"
 echo "========================================"
 
+run_zsh_subtest() {
+    local fn_name="$1"
+    local pass_prefix="${2:-}"
+    local fail_prefix="${3:-}"
+    local sub_out sub_rc=0
+    sub_out="$(mktemp)"
+    ( "$fn_name" ) > "$sub_out" || sub_rc=$?
+    parse_subshell_results "$pass_prefix" "$fail_prefix" < "$sub_out"
+    rm -f "$sub_out"
+    if [ "$sub_rc" -ne 0 ]; then
+        fail "$fn_name subshell execution" "Subshell '$fn_name' exited unexpectedly with status $sub_rc"
+    fi
+}
+
 # Test 1: Syntax check with zsh -n
 echo "\n[1/5] Checking Zsh file syntax with 'zsh -n'..."
 for f in "$SCRIPT_DIR/dotfiles/.aliases" "$SCRIPT_DIR/dotfiles/.zsh-functions" "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SCRIPT_DIR/dotfiles/.p10k.zsh"; do
@@ -71,7 +85,7 @@ test_aliases() {
     fi
 }
 
-parse_subshell_results "Alias defined: " "Alias missing: " < <(test_aliases)
+run_zsh_subtest test_aliases "Alias defined: " "Alias missing: "
 
 # Test 3: Source zsh-functions and verify functions
 echo "\n[3/5] Testing dotfiles/.zsh-functions..."
@@ -172,7 +186,7 @@ test_functions() {
     fi
 }
 
-parse_subshell_results < <(test_functions)
+run_zsh_subtest test_functions
 
 # Test 4: Functional test of gsync & git aliases in a mock git repository
 echo "\n[4/5] Testing git functions and aliases behavior..."
@@ -287,7 +301,7 @@ test_git_integration() {
     fi
 }
 
-parse_subshell_results < <(test_git_integration)
+run_zsh_subtest test_git_integration
 
 # Test 5: Test zshrc-addendum sourcing
 echo "\n[5/5] Testing dotfiles/.zshrc-addendum..."
@@ -1022,11 +1036,12 @@ EOF
         export XDG_CONFIG_HOME="$HOME/.config"
         typeset -g POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN="~"
         typeset -ga POWERLEVEL9K_CUSTOM_TEST_ARR=( "base" )
-        unset _HS_P10K_BASE_CAPTURED
+        unset _HS_P10K_BASE_SCALARS _HS_P10K_BASE_ARRAYS _HS_P10K_BASE_HEX
         local theme_err_file="$HOME/theme-stderr.log"
         theme --set solarized-light --no-live >/dev/null 2>"$theme_err_file"
         local sl_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local sl_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
+        local sl_left="${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}"
 
         theme --set catppuccin-mocha --no-live >/dev/null 2>>"$theme_err_file"
         local cm_ls="${LS_COLORS:-}"
@@ -1074,12 +1089,23 @@ EOF
         theme --set solarized-dark --no-live >/dev/null 2>>"$theme_err_file"
         local sd_dir_bg="${POWERLEVEL9K_DIR_BACKGROUND:-}"
         local sd_os_fg="${POWERLEVEL9K_OS_ICON_FOREGROUND:-}"
+        local final_left="${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}"
+        local final_right="${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}"
+        local final_cfg_file="${POWERLEVEL9K_CONFIG_FILE:-}"
         local final_disabled_pat="${POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN:-}"
         local final_arr_str="${POWERLEVEL9K_CUSTOM_TEST_ARR[*]:-}"
+
+        # Also verify post-setup startup path: sourcing ~/.p10k.zsh when p10k-theme.zsh already exists on disk
+        rm -f "$HOME/.config/zsh/p10k.local.zsh"
+        source "$HOME/.p10k.zsh" 2>>"$theme_err_file"
+        local startup_left="${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]:-}"
+        local startup_right="${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]:-}"
+        local startup_vcs_backends="${POWERLEVEL9K_VCS_BACKENDS[*]:-}"
         local all_err="$(<"$theme_err_file")"
 
         if [ -z "$all_err" ] && \
            [ "$sl_dir_bg" = "#EEE8D5" ] && [ "$sl_os_fg" = "#657B83" ] && \
+           [ "$sl_left" = "os_icon dir vcs" ] && \
            [ "$cm_theme" = "catppuccin-mocha" ] && \
            [ "$cm_bat" = "Catppuccin-Mocha-TrueColor" ] && \
            [ "$cm_cmd" = "fg=#A6E3A1" ] && \
@@ -1096,16 +1122,22 @@ EOF
            [[ "$hw_ls" == *"di=38;2;85;255;71:"* ]] && \
            [ "$hw_icon" = "🎃" ] && [ "$hw_precmd" -gt 0 ] && \
            [ "$sd_dir_bg" = "#073642" ] && [ "$sd_os_fg" = "#839496" ] && \
+           [ "$final_left" = "os_icon dir vcs" ] && \
+           [[ "$final_right" == *"status command_execution_time"* && "$final_right" == *"terraform_version"* ]] && \
+           [ -n "$final_cfg_file" ] && \
            [ "$final_disabled_pat" = "~|/mnt/slow-nfs/*" ] && \
-           [ "$final_arr_str" = "base local-hook" ]; then
-            echo "PASS:Zsh theme() wrapper and _hs_sync_active_theme hot-reload HOME_SETTINGS_THEME, TrueColor LS_COLORS, ZSH_HIGHLIGHT_STYLES, and Powerlevel10k without duplicating p10k.local.zsh additive overrides or reloading on read-only queries"
+           [ "$final_arr_str" = "base local-hook" ] && \
+           [ "$startup_left" = "os_icon dir vcs" ] && \
+           [[ "$startup_right" == *"status command_execution_time"* && "$startup_right" == *"terraform_version"* ]] && \
+           [ "$startup_vcs_backends" = "git" ]; then
+            echo "PASS:Zsh theme() wrapper, _hs_sync_active_theme, and .p10k.zsh startup preserve POWERLEVEL9K_* prompt segment arrays, hot-reload colors/LS_COLORS/ZSH_HIGHLIGHT_STYLES, and avoid duplicating p10k.local.zsh overrides"
         else
-            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' q='$after_plain/$after_prev/$after_cancel' nd='$nd_dir_bg/$nd_dir_fg' hw='$hw_theme/$hw_cmd/$hw_res/$hw_str/$hw_icon/$hw_precmd' sd='$sd_dir_bg/$sd_os_fg' pat='$final_disabled_pat' arr='$final_arr_str'"
+            echo "FAIL:Zsh theme() wrapper:err='$all_err' sl='$sl_dir_bg/$sl_os_fg/$sl_left' cm='$cm_theme/$cm_cmd/$cm_dir_bg/$cm_dir_fg/$cm_vcs_bg/$cm_vcs_fg' q='$after_plain/$after_prev/$after_cancel' nd='$nd_dir_bg/$nd_dir_fg' hw='$hw_theme/$hw_cmd/$hw_res/$hw_str/$hw_icon/$hw_precmd' sd='$sd_dir_bg/$sd_os_fg' left='$final_left/$startup_left' cfg='$final_cfg_file' pat='$final_disabled_pat' arr='$final_arr_str' vcs_backends='$startup_vcs_backends'"
         fi
     )
     rm -f "$HOME/.config/zsh/p10k.local.zsh"
 }
 
-parse_subshell_results < <(test_addendum)
+run_zsh_subtest test_addendum
 
 test_summary
