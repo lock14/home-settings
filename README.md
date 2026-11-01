@@ -153,11 +153,11 @@ home-settings/
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, CLI, and Terraform shortcuts (also auto-loads ~/.aliases.d/*.sh)
-│   ├── .bashrc-addendum             # Bash integration hook and zoxide
+│   ├── .bashrc-addendum             # Standalone Bash prompt, theme switcher, and zoxide hook
 │   ├── .environment-variables       # Environment, COLORTERM, and PATH (also auto-loads ~/.environment-variables.d/*.sh)
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
 │   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer and IDE pane bindings
-│   ├── .vimrc                       # Fallback Solarized Dark Vim configuration
+│   ├── .vimrc                       # Standalone TrueColor Vim configuration and :Theme switcher
 │   ├── .zsh-completions             # Fpath completion registration
 │   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener (v, icd), and theme switcher (theme)
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
@@ -421,14 +421,15 @@ The `theme` command switches the active color scheme across all terminal emulato
   - **Classic developer palettes**: `solarized-dark` (default), `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`.
   - **Major US Holiday palettes**: `new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`.
 - **Interactive fuzzy picker**: Running `theme` with no arguments opens an interactive `fzf` selector with a full-pane TrueColor swatch, diff, prompt, and syntax preview (`theme --preview {1}`) rendered on the highlighted theme's background, applying the chosen theme immediately on `Enter`.
-- **Unified multi-tool synchronization**: Applying a theme updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences.
-- **User-defined custom themes**: Drop any `.theme` file into `${XDG_CONFIG_HOME:-$HOME/.config}/themes/` (or scaffold one with `theme --create <name> [--from <base>]`) to register a custom 16-color and semantic accent palette that participates in `theme --list`, interactive `fzf` previews, and full tool generation.
+- **Unified multi-tool synchronization**: Applying a theme (via `theme <name>` in the shell or `:Theme <name>` inside Neovim and Vim) updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences. Both `dotfiles/.bashrc-addendum` and `dotfiles/.vimrc` also embed all 17 palettes and custom theme support for zero-dependency 2-file deployment on remote servers.
+- **User-defined custom themes**: Drop any `.theme` or `.conf` file into `${XDG_CONFIG_HOME:-$HOME/.config}/themes/` (or scaffold one with `theme --create <name> [--from <base>]`) to register a custom 16-color and semantic accent palette that participates in `theme --list`, `:Theme` completion, interactive `fzf` previews, and full tool generation.
 
 | Command | Description |
 | :--- | :--- |
 | `theme` | Open interactive `fzf` picker with live TrueColor palette and syntax preview |
 | `theme <name>` | Switch all terminal emulators, editors, prompts, and CLI tools to `<name>` |
 | `theme --holiday` | Switch to the nearest upcoming or active US Holiday theme |
+| `:Theme [name\|--holiday]` | View or switch the active color theme directly inside Neovim or Vim (with tab completion) |
 | `theme --list [--plain]` | List all built-in and user-defined themes (marking the active theme with `*`, or raw slugs with `--plain`) |
 | `theme --current` | Print the currently active theme name |
 | `theme --preview [name]` | Render a TrueColor 16-color swatch and semantic syntax preview in the terminal |

@@ -4,11 +4,59 @@
 # with .vimrc to remote servers or restricted environments.
 
 # 1. Environment Variables & Standalone Server Fallbacks
+_HS_CALLER_COLORTERM_SET="${COLORTERM+1}"
+_HS_CALLER_COLORTERM_VAL="${COLORTERM:-}"
+_HS_CALLER_THEME_PRE="${HOME_SETTINGS_THEME:-}"
+_HS_CALLER_TFILE_PRE="${HOME_SETTINGS_THEME_FILE:-}"
+if [ -n "${_HS_LOADED_THEME:-}" ]; then
+    unset HOME_SETTINGS_THEME_MODE BAT_THEME FZF_DEFAULT_OPTS EZA_COLORS EXA_COLORS JQ_COLORS LS_COLORS \
+        LESS_TERMCAP_mb LESS_TERMCAP_md LESS_TERMCAP_me LESS_TERMCAP_so LESS_TERMCAP_se LESS_TERMCAP_us LESS_TERMCAP_ue
+fi
+unset _HS_LOADED_THEME _HS_LOADED_ENV_RAW _HS_LOADED_UFILE_RAW _HS_LOADED_TFILE_RAW _HS_LOADED_TFILE_PATH _HS_INTERNAL_ENV_THEME _HS_USER_ENV_THEME _HS_USER_ENV_TFILE _HS_POST_SOURCE_SYNC _HS_LAST_SEEN_TFILE _HS_LAST_TC_LS_COLORS \
+    _HS_PROMPT_OS_ICON _HS_PROMPT_BG_BASE02 _HS_PROMPT_CAP_BASE02 _HS_PROMPT_CAP_RED \
+    _HS_PROMPT_FG_BASE02 _HS_PROMPT_FG_BASE01 _HS_PROMPT_FG_BASE00 _HS_PROMPT_FG_BASE0 _HS_PROMPT_FG_BASE1 \
+    _HS_PROMPT_FG_YELLOW _HS_PROMPT_FG_ORANGE _HS_PROMPT_FG_RED _HS_PROMPT_FG_VIOLET _HS_PROMPT_FG_BLUE _HS_PROMPT_FG_CYAN _HS_PROMPT_FG_GREEN \
+    _HS_ESC_ORANGE _HS_ESC_BLUE _HS_ESC_CYAN _HS_ESC_BASE0 _HS_ESC_BASE01 \
+    _SOLARIZED_PROMPT_OS_ICON_CACHED _SOLARIZED_PROMPT_OSTYPE_CACHED
+
+_HS_BASHRC_SELF_PATH=""
+_HS_BASHRC_REPO_ROOT=""
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    _hs_src="${BASH_SOURCE[0]}"
+    _hs_sdir="${_hs_src%/*}"
+    [ "$_hs_sdir" = "$_hs_src" ] && _hs_sdir="."
+    if _hs_abs_dir="$(cd "$_hs_sdir" 2>/dev/null && pwd -P)"; then
+        _HS_BASHRC_SELF_PATH="$_hs_abs_dir/${_hs_src##*/}"
+    fi
+    if [ -L "$_hs_src" ] && command -v readlink >/dev/null 2>&1; then
+        while [ -L "$_hs_src" ]; do
+            _hs_dir="${_hs_src%/*}"
+            [ "$_hs_dir" = "$_hs_src" ] && _hs_dir="."
+            _hs_link="$(readlink "$_hs_src" 2>/dev/null || true)"
+            [ -n "$_hs_link" ] || break
+            [[ "$_hs_link" != /* ]] && _hs_src="$_hs_dir/$_hs_link" || _hs_src="$_hs_link"
+        done
+    fi
+    _hs_dir="${_hs_src%/*}"
+    [ "$_hs_dir" = "$_hs_src" ] && _hs_dir="."
+    if [ -d "$_hs_dir/../colors/themes" ]; then
+        _HS_BASHRC_REPO_ROOT="$(cd -P "$_hs_dir/.." 2>/dev/null && pwd || true)"
+    fi
+    unset _hs_src _hs_sdir _hs_abs_dir _hs_dir _hs_link
+fi
+
 if [ -f "$HOME/.environment-variables" ]; then
     # shellcheck source=/dev/null
     source "$HOME/.environment-variables"
+    if [ -n "$_HS_CALLER_COLORTERM_SET" ]; then
+        export COLORTERM="$_HS_CALLER_COLORTERM_VAL"
+    fi
 else
-    export COLORTERM="${COLORTERM:-truecolor}"
+    if [ -z "$_HS_CALLER_COLORTERM_SET" ]; then
+        export COLORTERM="truecolor"
+    else
+        export COLORTERM="$_HS_CALLER_COLORTERM_VAL"
+    fi
     export FORCE_HYPERLINK="${FORCE_HYPERLINK:-1}"
     case ":$PATH:" in
         *":$HOME/.local/bin:"*) ;;
@@ -59,10 +107,6 @@ else
     export LESS_TERMCAP_se=$'\e[0m'                               # reset standout
     export LESS_TERMCAP_us=$'\e[4;38;2;42;161;152m'               # underline/flags -> Solarized Cyan (#2AA198)
     export LESS_TERMCAP_ue=$'\e[0m'                               # reset underline
-    if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh" ]; then
-        # shellcheck source=/dev/null
-        . "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh"
-    fi
 fi
 
 # Bash History
@@ -70,17 +114,682 @@ export HISTSIZE="${HISTSIZE:-50000}"
 export HISTFILESIZE="${HISTFILESIZE:-100000}"
 export HISTCONTROL="${HISTCONTROL:-ignoreboth:erasedups}"
 
-# 2. Directory & Filesystem Colors (pre-compiled TrueColor theme-env.sh, dircolors database, or inline Solarized Dark fallback)
-if [ -z "${_HS_LOADED_THEME:-}" ] || [ -z "${LS_COLORS:-}" ]; then
+# 1.5. Zero-Dependency 17-Theme + Custom-Theme Engine & Filesystem Color Calibration
+# Calibrated 16-color Solarized Dark LS_COLORS template:
+# Directories Blue (34), Symlinks Cyan (36), Executables unbolded Green (32),
+# Archives Orange (91), Media Violet (95), Crypto/Keys Magenta (35), Text/Code Base0 (00), Temp/Logs Base01 (90)
+_HS_ANSI_LS_COLORS="rs=0:di=34:ln=36:mh=00:pi=33:so=35:do=35:bd=35:cd=35:or=31:mi=31:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;40:st=37;44:ex=32:*.tar=91:*.tgz=91:*.arc=91:*.arj=91:*.taz=91:*.lha=91:*.lz4=91:*.lzh=91:*.lzma=91:*.tlz=91:*.txz=91:*.tzo=91:*.t7z=91:*.zip=91:*.z=91:*.dz=91:*.gz=91:*.lrz=91:*.lz=91:*.lzo=91:*.xz=91:*.zst=91:*.tzst=91:*.bz2=91:*.bz=91:*.tbz=91:*.tbz2=91:*.tz=91:*.deb=91:*.rpm=91:*.jar=91:*.war=91:*.ear=91:*.sar=91:*.rar=91:*.7z=91:*.cab=91:*.dmg=91:*.iso=91:*.apk=91:*.gem=91:*.msi=91:*.xpi=91:*.jpg=95:*.jpeg=95:*.gif=95:*.bmp=95:*.pbm=95:*.pgm=95:*.ppm=95:*.tga=95:*.xbm=95:*.xpm=95:*.tif=95:*.tiff=95:*.png=95:*.svg=95:*.svgz=95:*.webp=95:*.mov=95:*.mpg=95:*.mpeg=95:*.mkv=95:*.webm=95:*.mp4=95:*.m4v=95:*.avi=95:*.flv=95:*.wmv=95:*.aac=95:*.flac=95:*.m4a=95:*.mid=95:*.midi=95:*.mka=95:*.mp3=95:*.ogg=95:*.wav=95:*.key=35:*.pem=35:*.crt=35:*.cer=35:*.gpg=35:*.pgp=35:*.asc=35:*.3des=35:*.aes=35:*.enc=35:*.txt=00:*.md=00:*.mkd=00:*.markdown=00:*.json=00:*.yaml=00:*.yml=00:*.toml=00:*.xml=00:*.html=00:*.css=00:*.properties=00:*.proto=00:*.textproto=00:*.pbtxt=00:*.textpb=00:*.prototxt=00:*.sh=00:*.bash=00:*.zsh=00:*.py=00:*.go=00:*.rs=00:*.c=00:*.cc=00:*.cpp=00:*.h=00:*.hpp=00:*.java=00:*.js=00:*.ts=00:*.sql=00:*.tf=00:*.kt=00:*.kts=00:*.swift=00:*.zig=00:*.cs=00:*.scala=00:*.sc=00:*.rb=00:*.graphql=00:*.graphqls=00:*.gql=00:*.bzl=00:*.bazel=00:*.rego=00:*.lua=00:*.mk=00:*.ex=00:*.exs=00:*.hs=00:*.lean=00:*.ml=00:*.mli=00:*.clj=00:*.cljs=00:*.cljc=00:*.edn=00:*.diff=00:*.patch=00:*.bak=90:*.old=90:*.orig=90:*.swp=90:*.swo=90:*.log=90:"
+
+_HS_BUILTIN_THEME_ORDER=(
+    solarized-dark solarized-light catppuccin-mocha catppuccin-latte
+    gruvbox-dark tokyonight-night kanagawa-wave nord onedark
+    new-years valentines st-patricks easter
+    independence-day halloween thanksgiving christmas
+)
+
+_hs_bash_is_truecolor() {
+    [ "${TERM:-}" != "linux" ] && { [ "${COLORTERM:-}" = "truecolor" ] || [ "${COLORTERM:-}" = "24bit" ]; }
+}
+
+_hs_bash_apply_ansi_ls_colors() {
     if command -v dircolors >/dev/null 2>&1 && [ -f "$HOME/.dir-colors/dircolors" ]; then
         eval "$(dircolors "$HOME/.dir-colors/dircolors")"
     else
-        # Calibrated Solarized Dark LS_COLORS:
-        # Directories Blue (34), Symlinks Cyan (36), Executables unbolded Green (32),
-        # Archives Orange (91), Media Violet (95), Crypto/Keys Magenta (35), Text/Code Base0 (00), Temp/Logs Base01 (90)
-        export LS_COLORS="rs=0:di=34:ln=36:mh=00:pi=33:so=35:do=35:bd=35:cd=35:or=31:mi=31:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;40:st=37;44:ex=32:*.tar=91:*.tgz=91:*.arc=91:*.arj=91:*.taz=91:*.lha=91:*.lz4=91:*.lzh=91:*.lzma=91:*.tlz=91:*.txz=91:*.tzo=91:*.t7z=91:*.zip=91:*.z=91:*.dz=91:*.gz=91:*.lrz=91:*.lz=91:*.lzo=91:*.xz=91:*.zst=91:*.tzst=91:*.bz2=91:*.bz=91:*.tbz=91:*.tbz2=91:*.tz=91:*.deb=91:*.rpm=91:*.jar=91:*.war=91:*.ear=91:*.sar=91:*.rar=91:*.7z=91:*.cab=91:*.dmg=91:*.iso=91:*.apk=91:*.gem=91:*.msi=91:*.xpi=91:*.jpg=95:*.jpeg=95:*.gif=95:*.bmp=95:*.pbm=95:*.pgm=95:*.ppm=95:*.tga=95:*.xbm=95:*.xpm=95:*.tif=95:*.tiff=95:*.png=95:*.svg=95:*.svgz=95:*.webp=95:*.mov=95:*.mpg=95:*.mpeg=95:*.mkv=95:*.webm=95:*.mp4=95:*.m4v=95:*.avi=95:*.flv=95:*.wmv=95:*.aac=95:*.flac=95:*.m4a=95:*.mid=95:*.midi=95:*.mka=95:*.mp3=95:*.ogg=95:*.wav=95:*.key=35:*.pem=35:*.crt=35:*.cer=35:*.gpg=35:*.pgp=35:*.asc=35:*.3des=35:*.aes=35:*.enc=35:*.txt=00:*.md=00:*.mkd=00:*.markdown=00:*.json=00:*.yaml=00:*.yml=00:*.toml=00:*.xml=00:*.html=00:*.css=00:*.properties=00:*.proto=00:*.textproto=00:*.pbtxt=00:*.textpb=00:*.prototxt=00:*.sh=00:*.bash=00:*.zsh=00:*.py=00:*.go=00:*.rs=00:*.c=00:*.cc=00:*.cpp=00:*.h=00:*.hpp=00:*.java=00:*.js=00:*.ts=00:*.sql=00:*.tf=00:*.kt=00:*.kts=00:*.swift=00:*.zig=00:*.cs=00:*.scala=00:*.sc=00:*.rb=00:*.graphql=00:*.graphqls=00:*.gql=00:*.bzl=00:*.bazel=00:*.rego=00:*.lua=00:*.mk=00:*.ex=00:*.exs=00:*.hs=00:*.lean=00:*.ml=00:*.mli=00:*.clj=00:*.cljs=00:*.cljc=00:*.edn=00:*.diff=00:*.patch=00:*.bak=90:*.old=90:*.orig=90:*.swp=90:*.swo=90:*.log=90:"
-        export LSCOLORS="${LSCOLORS:-exgxfxdxcxfxfxegedabagacad}"
+        export LS_COLORS="$_HS_ANSI_LS_COLORS"
     fi
+    export LSCOLORS="${LSCOLORS:-exgxfxdxcxfxfxegedabagacad}"
+}
+
+_hs_bash_norm_slug() {
+    local s="${1:-}" out="" ch
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    local i len="${#s}"
+    for ((i = 0; i < len; i++)); do
+        ch="${s:i:1}"
+        case "$ch" in
+            A) ch=a ;; B) ch=b ;; C) ch=c ;; D) ch=d ;; E) ch=e ;; F) ch=f ;;
+            G) ch=g ;; H) ch=h ;; I) ch=i ;; J) ch=j ;; K) ch=k ;; L) ch=l ;;
+            M) ch=m ;; N) ch=n ;; O) ch=o ;; P) ch=p ;; Q) ch=q ;; R) ch=r ;;
+            S) ch=s ;; T) ch=t ;; U) ch=u ;; V) ch=v ;; W) ch=w ;; X) ch=x ;;
+            Y) ch=y ;; Z) ch=z ;; _) ch=- ;;
+        esac
+        out="${out}${ch}"
+    done
+    REPLY="$out"
+}
+
+# Compact 26-field built-in palette lookup (1:1 with colors/themes/*.theme):
+# LABEL|MODE|BAT_THEME|B03|B02|B04|B01|B00|B0|B1|B2|B3|YEL|ORA|RED|MAG|VIO|BLU|CYA|GRN|MGRN|MRED|MYEL|MBLU|MMAG|MB1
+_hs_bash_builtin_spec() {
+    REPLY=""
+    case "${1:-}" in
+        solarized-dark)   REPLY="Solarized Dark|dark|Solarized-Dark-TrueColor|#002B36|#073642|#002731|#586E75|#657B83|#839496|#93A1A1|#EEE8D5|#FDF6E3|#B58900|#CB4B16|#DC322F|#D33682|#6C71C4|#268BD2|#2AA198|#859900|#274C25|#422D33|#364725|#0B4764|#3E2E4C|#2C4E56" ;;
+        solarized-light)  REPLY="Solarized Light|light|Solarized-Light-TrueColor|#FDF6E3|#EEE8D5|#E6DFCA|#93A1A1|#839496|#657B83|#586E75|#073642|#002B36|#B58900|#CB4B16|#DC322F|#D33682|#6C71C4|#268BD2|#2AA198|#859900|#E5ECD0|#F6D8D3|#F0E4C0|#D8E6EE|#F3D9E4|#E4DEC8" ;;
+        catppuccin-mocha) REPLY="Catppuccin Mocha|dark|Catppuccin-Mocha-TrueColor|#1E1E2E|#313244|#181825|#6C7086|#7F849C|#CDD6F4|#DCE0E8|#E6E9EF|#F5E0DC|#F9E2AF|#FAB387|#F38BA8|#F5C2E7|#CBA6F7|#89B4FA|#94E2D5|#A6E3A1|#283B37|#3E2939|#3E3B3B|#29384E|#3E3247|#35374B" ;;
+        catppuccin-latte) REPLY="Catppuccin Latte|light|Catppuccin-Latte-TrueColor|#EFF1F5|#CCD0DA|#E6E9EF|#686B7D|#5C5F77|#4C4F69|#383A50|#313244|#1E1E2E|#8F5902|#B34300|#D20F39|#A82B8A|#8839EF|#1E66F5|#0E7075|#2D761D|#DCEAD9|#F2D5DD|#EFE4D2|#D6E1F8|#F3DFEF|#D5D8E2" ;;
+        gruvbox-dark)     REPLY="Gruvbox Dark|dark|Gruvbox-Dark-TrueColor|#282828|#3C3836|#1D2021|#928374|#A89984|#EBDBB2|#FBF1C7|#D5C4A1|#FBF1C7|#FABD2F|#FE8019|#FB4934|#D3869B|#B16286|#83A598|#8EC07C|#B8BB26|#3B3D24|#472825|#473F25|#2E3B36|#422E36|#45403D" ;;
+        tokyonight-night) REPLY="TokyoNight Night|dark|TokyoNight-Night-TrueColor|#1A1B26|#292E42|#16161E|#565F89|#737AA2|#C0CAF5|#D5DCF8|#E0AF68|#E2E8FF|#E0AF68|#FF9E64|#F7768E|#BB9AF7|#9D7CD8|#7AA2F7|#7DCFFF|#9ECE6A|#273832|#3B2430|#3B342C|#23344D|#342B44|#2F354D" ;;
+        kanagawa-wave)    REPLY="Kanagawa Wave|dark|Kanagawa-Wave-TrueColor|#1F1F28|#2A2A37|#16161D|#7A7970|#939288|#DCD7BA|#EAE6D1|#E6C384|#F2EFE0|#E6C384|#FFA066|#E46876|#D27E99|#957FB8|#7E9CD8|#7AA89F|#98BB6C|#2B3328|#43242B|#49443C|#252535|#3A2836|#2D4F67" ;;
+        nord)             REPLY="Nord|dark|Nord-TrueColor|#2E3440|#3B4252|#242933|#8492AC|#96A4BE|#D8DEE9|#E5E9F0|#ECEFF4|#ECEFF4|#EBCB8B|#D08770|#BF616A|#B48EAD|#5E81AC|#81A1C1|#88C0D0|#A3BE8C|#394548|#443943|#494647|#384354|#423F4E|#434C5E" ;;
+        onedark)          REPLY="OneDark|dark|OneDark-TrueColor|#282C34|#31353F|#21252B|#5C6370|#7F848E|#ABB2BF|#C8CCD4|#E5C07B|#FFFFFF|#E5C07B|#D19A66|#E06C75|#C678DD|#B268CA|#61AFEF|#56B6C2|#98C379|#2E3E38|#3F2D34|#3E3A34|#283B4C|#3B2F44|#3E4451" ;;
+        new-years)        REPLY="New Year's|dark|New-Years-TrueColor|#07081C|#14183D|#040510|#6872AA|#848FC7|#EEF1FF|#FFFFFF|#FFFDF2|#FFFFFF|#44FF77|#FF8024|#FF1744|#5C9DFF|#B388FF|#00F0FF|#FF66C4|#FFD700|#103B2B|#3B1026|#143D29|#063647|#1A294D|#24294D" ;;
+        valentines)       REPLY="Valentine's Day|dark|Valentines-TrueColor|#260715|#400D24|#18040D|#A65E7E|#C27898|#FFE8F2|#FFF5F9|#FFFDF9|#FFFFFF|#44F088|#FF8547|#FF1738|#66B2FF|#C77DFF|#FF6BB5|#2EE6C8|#FFD700|#143D31|#520A22|#19422D|#521B38|#332645|#4A1A30" ;;
+        st-patricks)      REPLY="St. Patrick's Day|dark|St-Patricks-TrueColor|#042210|#0A3B1E|#021509|#529E6E|#6BB887|#E6FAEC|#F5FFF8|#FFFDF0|#FFFFFF|#FF9100|#FF5722|#FF1744|#FF66B2|#B88CFF|#FFD700|#38E5FF|#00F556|#054A20|#451220|#38390E|#3B4B0D|#382E30|#1B4D2B" ;;
+        easter)           REPLY="Easter|light|Easter-TrueColor|#FDF7FF|#F0DCF8|#E4C8F0|#86659C|#6E4E85|#361E4A|#221033|#160822|#0C0312|#A87400|#E04F00|#D5001C|#008B8B|#7B1FA2|#C21878|#0070D6|#009E3D|#D4F5DF|#FAD2D8|#F5E4C3|#F5CFE8|#CEEFEB|#DEC9EC" ;;
+        independence-day) REPLY="Independence Day|dark|Independence-Day-TrueColor|#061436|#10275E|#030B20|#6588CC|#85A5E6|#F4F8FF|#FFFFFF|#FFF9E6|#FAFAFF|#2EE6A6|#FF7733|#FF1738|#5CE6FF|#9E8CFF|#38B6FF|#FF6B9E|#FFD700|#0E3B2C|#3D1228|#0E403E|#113864|#163F62|#233769" ;;
+        halloween)        REPLY="Halloween|dark|Halloween-TrueColor|#160824|#281040|#0E0418|#7D5BA6|#9B78C4|#EDE2FA|#F8F2FF|#FFF8EB|#FFFFFF|#FFE000|#FF3B00|#FF1744|#FF5CCD|#C77DFF|#55FF47|#2EE6D6|#FF7518|#1B3D26|#440E26|#45331D|#243F2C|#451946|#33204A" ;;
+        thanksgiving)     REPLY="Thanksgiving|dark|Thanksgiving-TrueColor|#221107|#381C0C|#150A04|#9C7458|#B88E70|#F7E8D8|#FFF6EB|#FFFDF9|#FFFFFF|#FFD000|#FFA866|#FF1F2D|#FF6699|#C780FF|#FF7814|#38D9B8|#8CE645|#243D14|#4D1214|#4F3809|#4F260B|#4F2224|#472A1A" ;;
+        christmas)        REPLY="Christmas|dark|Christmas-TrueColor|#062012|#0E3820|#03140B|#5C9E78|#78B894|#F0FAF4|#FFFFFF|#FFFDF7|#FAFAFF|#38E5FF|#FF7B24|#FF1738|#B8FF3D|#C788FF|#FFD700|#FF6B9E|#2EE66B|#0F4224|#3D1620|#0F3E3B|#3D4A0F|#2A471A|#234231" ;;
+        *)                return 1 ;;
+    esac
+    return 0
+}
+
+_hs_bash_holiday_icon() {
+    REPLY=""
+    case "${1:-}" in
+        new-years)        REPLY="🥂" ;;
+        valentines)       REPLY="💘" ;;
+        st-patricks)      REPLY="🍀" ;;
+        easter)           REPLY="🐣" ;;
+        independence-day) REPLY="🎆" ;;
+        halloween)        REPLY="🎃" ;;
+        thanksgiving)     REPLY="🦃" ;;
+        christmas)        REPLY="🎄" ;;
+        *)                return 1 ;;
+    esac
+    return 0
+}
+
+_hs_bash_blend_hex() {
+    local fg="$1" bg="$2" pct="$3"
+    local fr=$((16#${fg:1:2})) fg_g=$((16#${fg:3:2})) fb=$((16#${fg:5:2}))
+    local br=$((16#${bg:1:2})) bg_g=$((16#${bg:3:2})) bb=$((16#${bg:5:2}))
+    local r=$(( (fr * pct + br * (100 - pct) + 50) / 100 ))
+    local g=$(( (fg_g * pct + bg_g * (100 - pct) + 50) / 100 ))
+    local b=$(( (fb * pct + bb * (100 - pct) + 50) / 100 ))
+    printf -v REPLY '#%02X%02X%02X' "$r" "$g" "$b"
+}
+
+_hs_bash_safe_hex() {
+    local val="${1:-}" fb="$2"
+    if [[ "$val" =~ ^#[0-9A-Fa-f]{6}$ ]]; then
+        printf -v REPLY '#%02X%02X%02X' "$((16#${val:1:2}))" "$((16#${val:3:2}))" "$((16#${val:5:2}))"
+    else
+        REPLY="$fb"
+    fi
+}
+
+_hs_bash_rgb_semi() {
+    local h="$1"
+    printf -v REPLY '%d;%d;%d' "$((16#${h:1:2}))" "$((16#${h:3:2}))" "$((16#${h:5:2}))"
+}
+
+_hs_bash_user_theme_dirs() {
+    local cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+    _HS_USER_DIRS=()
+    if [ -n "${HOME_SETTINGS_USER_THEMES_DIR:-}" ]; then
+        _HS_USER_DIRS+=("$HOME_SETTINGS_USER_THEMES_DIR")
+    fi
+    _HS_USER_DIRS+=("$cfg/themes" "$cfg/home-settings/themes")
+}
+
+# Safely parse a .theme or .conf file into _HS_RAW_* variables without executing shell code
+_hs_bash_reset_raw() {
+    _HS_RAW_ID="" _HS_RAW_LABEL="" _HS_RAW_MODE="" _HS_RAW_BAT=""
+    _HS_RAW_B03="" _HS_RAW_B02="" _HS_RAW_B04="" _HS_RAW_B01="" _HS_RAW_B00="" _HS_RAW_B0="" _HS_RAW_B1="" _HS_RAW_B2="" _HS_RAW_B3=""
+    _HS_RAW_YEL="" _HS_RAW_ORA="" _HS_RAW_RED="" _HS_RAW_MAG="" _HS_RAW_VIO="" _HS_RAW_BLU="" _HS_RAW_CYA="" _HS_RAW_GRN=""
+    _HS_RAW_MGRN="" _HS_RAW_MRED="" _HS_RAW_MYEL="" _HS_RAW_MBLU="" _HS_RAW_MMAG="" _HS_RAW_MB1=""
+}
+
+_hs_bash_parse_file() {
+    local path="$1"
+    _hs_bash_reset_raw
+    [ -r "$path" ] || return 1
+    local line="" k="" v="" q="" rest=""
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [ -z "$line" ] || [[ "$line" == \#* ]] && continue
+        if [[ "$line" == "export "* || "$line" == $'export\t'* ]]; then
+            line="${line#export}"
+            line="${line#"${line%%[![:space:]]*}"}"
+        fi
+        [[ "$line" == *=* ]] || continue
+        k="${line%%=*}"
+        k="${k%"${k##*[![:space:]]}"}"
+        v="${line#*=}"
+        v="${v#"${v%%[![:space:]]*}"}"
+        if [ "${#v}" -ge 2 ] && { [[ "$v" == \"* ]] || [[ "$v" == \'* ]]; }; then
+            q="${v:0:1}"
+            rest="${v:1}"
+            if [[ "$rest" == *"$q"* ]]; then
+                local after="${rest#*"$q"}"
+                after="${after#"${after%%[![:space:]]*}"}"
+                if [ -z "$after" ] || [[ "$after" == \#* ]]; then
+                    v="${rest%%"$q"*}"
+                fi
+            fi
+        else
+            v="${v%"${v##*[![:space:]]}"}"
+            if [[ "$v" =~ ^(.*[^[:space:]])[[:space:]]+#.*$ ]]; then
+                v="${BASH_REMATCH[1]}"
+            elif [[ "$v" == \#* ]] && [[ ! "$v" =~ ^#[0-9A-Fa-f]{6}$ ]]; then
+                v=""
+            fi
+        fi
+        case "$k" in
+            THEME_ID)       _HS_RAW_ID="$v" ;;
+            THEME_LABEL)    _HS_RAW_LABEL="$v" ;;
+            THEME_MODE)     _HS_RAW_MODE="$v" ;;
+            BAT_THEME_NAME) _HS_RAW_BAT="$v" ;;
+            BASE03)         _HS_RAW_B03="$v" ;;
+            BASE02)         _HS_RAW_B02="$v" ;;
+            BASE04)         _HS_RAW_B04="$v" ;;
+            BASE01)         _HS_RAW_B01="$v" ;;
+            BASE00)         _HS_RAW_B00="$v" ;;
+            BASE0)          _HS_RAW_B0="$v" ;;
+            BASE1)          _HS_RAW_B1="$v" ;;
+            BASE2)          _HS_RAW_B2="$v" ;;
+            BASE3)          _HS_RAW_B3="$v" ;;
+            YELLOW)         _HS_RAW_YEL="$v" ;;
+            ORANGE)         _HS_RAW_ORA="$v" ;;
+            RED)            _HS_RAW_RED="$v" ;;
+            MAGENTA)        _HS_RAW_MAG="$v" ;;
+            VIOLET)         _HS_RAW_VIO="$v" ;;
+            BLUE)           _HS_RAW_BLU="$v" ;;
+            CYAN)           _HS_RAW_CYA="$v" ;;
+            GREEN)          _HS_RAW_GRN="$v" ;;
+            MIX_GREEN)      _HS_RAW_MGRN="$v" ;;
+            MIX_RED)        _HS_RAW_MRED="$v" ;;
+            MIX_YELLOW)     _HS_RAW_MYEL="$v" ;;
+            MIX_BLUE)       _HS_RAW_MBLU="$v" ;;
+            MIX_MAGENTA)    _HS_RAW_MMAG="$v" ;;
+            MIX_BASE1)      _HS_RAW_MB1="$v" ;;
+        esac
+    done < "$path"
+    return 0
+}
+
+_hs_bash_unpack_spec_to_raw() {
+    local slug="$1" spec="$2"
+    _hs_bash_reset_raw
+    _HS_RAW_ID="$slug"
+    IFS='|' read -r \
+        _HS_RAW_LABEL _HS_RAW_MODE _HS_RAW_BAT \
+        _HS_RAW_B03 _HS_RAW_B02 _HS_RAW_B04 _HS_RAW_B01 _HS_RAW_B00 _HS_RAW_B0 _HS_RAW_B1 _HS_RAW_B2 _HS_RAW_B3 \
+        _HS_RAW_YEL _HS_RAW_ORA _HS_RAW_RED _HS_RAW_MAG _HS_RAW_VIO _HS_RAW_BLU _HS_RAW_CYA _HS_RAW_GRN \
+        _HS_RAW_MGRN _HS_RAW_MRED _HS_RAW_MYEL _HS_RAW_MBLU _HS_RAW_MMAG _HS_RAW_MB1 <<< "$spec"
+}
+
+_hs_bash_find_user_theme_file() {
+    REPLY=""
+    local slug="$1"
+    [[ "$slug" == [a-z0-9]* && "$slug" != */* && "$slug" != *..* ]] || return 1
+    _hs_bash_user_theme_dirs
+    local udir cand stem cid d_idx
+    for ((d_idx = 0; d_idx < ${#_HS_USER_DIRS[@]}; d_idx++)); do
+        udir="${_HS_USER_DIRS[$d_idx]}"
+        for cand in "$udir/$slug.theme" "$udir/$slug.conf"; do
+            if [ -r "$cand" ]; then
+                _hs_bash_parse_file "$cand" || continue
+                _hs_bash_norm_slug "${_HS_RAW_ID:-$slug}"
+                if [ "$REPLY" = "$slug" ]; then
+                    REPLY="$cand"
+                    return 0
+                fi
+            fi
+        done
+    done
+    local -a cands=()
+    local had_fg=0 had_ng=0
+    shopt -q failglob && had_fg=1
+    shopt -q nullglob && had_ng=1
+    shopt -u failglob
+    shopt -s nullglob
+    for ((d_idx = 0; d_idx < ${#_HS_USER_DIRS[@]}; d_idx++)); do
+        udir="${_HS_USER_DIRS[$d_idx]}"
+        [ -d "$udir" ] && cands+=("$udir"/*.theme "$udir"/*.conf)
+    done
+    (( had_ng == 0 )) && shopt -u nullglob
+    (( had_fg == 1 )) && shopt -s failglob
+    for cand in ${cands[@]+"${cands[@]}"}; do
+        [ -r "$cand" ] || continue
+        stem="${cand##*/}"
+        stem="${stem%.*}"
+        [ "$stem" = "active-theme" ] && continue
+        _hs_bash_parse_file "$cand" || continue
+        _hs_bash_norm_slug "${_HS_RAW_ID:-$stem}"
+        cid="$REPLY"
+        if [ "$cid" = "$slug" ]; then
+            REPLY="$cand"
+            return 0
+        fi
+    done
+    REPLY=""
+    return 1
+}
+
+_hs_bash_resolve_slug_to_raw() {
+    _hs_bash_norm_slug "${1:-}"
+    local slug="$REPLY"
+    [[ "$slug" == [a-z0-9]* && "$slug" != */* && "$slug" != *..* ]] || return 1
+    _HS_RESOLVED_UFILE=""
+    if _hs_bash_find_user_theme_file "$slug"; then
+        _HS_RESOLVED_UFILE="$REPLY"
+        _hs_bash_parse_file "$_HS_RESOLVED_UFILE" || return 1
+        [ -z "$_HS_RAW_ID" ] && _HS_RAW_ID="$slug"
+        return 0
+    fi
+    if [ -n "${_HS_BASHRC_REPO_ROOT:-}" ] && [ -r "$_HS_BASHRC_REPO_ROOT/colors/themes/$slug.theme" ]; then
+        _hs_bash_parse_file "$_HS_BASHRC_REPO_ROOT/colors/themes/$slug.theme" || return 1
+        [ -z "$_HS_RAW_ID" ] && _HS_RAW_ID="$slug"
+        return 0
+    fi
+    if _hs_bash_builtin_spec "$slug"; then
+        _hs_bash_unpack_spec_to_raw "$slug" "$REPLY"
+        return 0
+    fi
+    return 1
+}
+
+# Finalize _HS_RAW_* into validated _HS_C_* palette (filling defaults + blended tints)
+_hs_bash_finalize_palette() {
+    local fallback_slug="${1:-solarized-dark}"
+    _hs_bash_norm_slug "${_HS_RAW_ID:-$fallback_slug}"
+    _HS_C_ID="${REPLY:-solarized-dark}"
+    [[ "$_HS_C_ID" =~ ^[a-z0-9][a-z0-9-]*$ ]] || _HS_C_ID="solarized-dark"
+    _hs_bash_norm_slug "${_HS_RAW_MODE:-dark}"
+    if [ "$REPLY" = "light" ]; then
+        _HS_C_MODE="light"
+    else
+        _HS_C_MODE="dark"
+    fi
+
+    local base_spec=""
+    if [ "$_HS_C_MODE" = "light" ]; then
+        _hs_bash_builtin_spec "solarized-light"
+    else
+        _hs_bash_builtin_spec "solarized-dark"
+    fi
+    base_spec="$REPLY"
+    local _bl _bm _bb db03 db02 db04 db01 db00 db0 db1 db2 db3 dyel dora dred dmag dvio dblu dcya dgrn dmgrn dmred dmyel dmblu dmmag dmb1
+    IFS='|' read -r _bl _bm _bb db03 db02 db04 db01 db00 db0 db1 db2 db3 dyel dora dred dmag dvio dblu dcya dgrn dmgrn dmred dmyel dmblu dmmag dmb1 <<< "$base_spec"
+
+    if [ -n "$_HS_RAW_LABEL" ]; then
+        _HS_C_LABEL="$_HS_RAW_LABEL"
+    elif _hs_bash_builtin_spec "$_HS_C_ID"; then
+        _HS_C_LABEL="${REPLY%%|*}"
+    else
+        _HS_C_LABEL="$_HS_C_ID"
+    fi
+    _HS_C_LABEL="${_HS_C_LABEL//$'\r'/}"
+    _HS_C_LABEL="${_HS_C_LABEL//$'\n'/ }"
+    _HS_C_LABEL="${_HS_C_LABEL//\"/}"
+    _HS_C_LABEL="${_HS_C_LABEL//\\/}"
+    _HS_C_LABEL="${_HS_C_LABEL//\$/}"
+    _HS_C_LABEL="${_HS_C_LABEL//\`/}"
+    [ -z "$_HS_C_LABEL" ] && _HS_C_LABEL="$_HS_C_ID"
+
+    if [ -n "$_HS_RAW_BAT" ] && [[ "$_HS_RAW_BAT" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        _HS_C_BAT="$_HS_RAW_BAT"
+    elif _hs_bash_builtin_spec "$_HS_C_ID"; then
+        local rem="${REPLY#*|}"
+        rem="${rem#*|}"
+        _HS_C_BAT="${rem%%|*}"
+    else
+        local part="" cap="" pascal="" rest_id="$_HS_C_ID"
+        while [ -n "$rest_id" ]; do
+            if [[ "$rest_id" == *-* ]]; then
+                part="${rest_id%%-*}"
+                rest_id="${rest_id#*-}"
+            else
+                part="$rest_id"
+                rest_id=""
+            fi
+            if [ -n "$part" ]; then
+                cap="${part:0:1}"
+                case "$cap" in
+                    a) cap=A ;; b) cap=B ;; c) cap=C ;; d) cap=D ;; e) cap=E ;; f) cap=F ;;
+                    g) cap=G ;; h) cap=H ;; i) cap=I ;; j) cap=J ;; k) cap=K ;; l) cap=L ;;
+                    m) cap=M ;; n) cap=N ;; o) cap=O ;; p) cap=P ;; q) cap=Q ;; r) cap=R ;;
+                    s) cap=S ;; t) cap=T ;; u) cap=U ;; v) cap=V ;; w) cap=W ;; x) cap=X ;;
+                    y) cap=Y ;; z) cap=Z ;;
+                esac
+                pascal="${pascal:+$pascal-}${cap}${part:1}"
+            fi
+        done
+        _HS_C_BAT="${pascal:-Solarized-Dark}-TrueColor"
+    fi
+
+    _hs_bash_safe_hex "$_HS_RAW_B03" "$db03"; _HS_C_B03="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B02" "$db02"; _HS_C_B02="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B01" "$db01"; _HS_C_B01="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B00" "$db00"; _HS_C_B00="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B0"  "$db0";  _HS_C_B0="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B1"  "$db1";  _HS_C_B1="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B2"  "$db2";  _HS_C_B2="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_B3"  "$db3";  _HS_C_B3="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_YEL" "$dyel"; _HS_C_YEL="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_ORA" "$dora"; _HS_C_ORA="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_RED" "$dred"; _HS_C_RED="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_MAG" "$dmag"; _HS_C_MAG="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_VIO" "$dvio"; _HS_C_VIO="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_BLU" "$dblu"; _HS_C_BLU="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_CYA" "$dcya"; _HS_C_CYA="$REPLY"
+    _hs_bash_safe_hex "$_HS_RAW_GRN" "$dgrn"; _HS_C_GRN="$REPLY"
+
+    local fb
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_B02" = "$db02" ]; then fb="$db04";  else _hs_bash_blend_hex "$_HS_C_B02" "$_HS_C_B03" 50; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_B04"  "$fb"; _HS_C_B04="$REPLY"
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_GRN" = "$dgrn" ]; then fb="$dmgrn"; else _hs_bash_blend_hex "$_HS_C_GRN" "$_HS_C_B03" 18; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_MGRN" "$fb"; _HS_C_MGRN="$REPLY"
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_RED" = "$dred" ]; then fb="$dmred"; else _hs_bash_blend_hex "$_HS_C_RED" "$_HS_C_B03" 18; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_MRED" "$fb"; _HS_C_MRED="$REPLY"
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_YEL" = "$dyel" ]; then fb="$dmyel"; else _hs_bash_blend_hex "$_HS_C_YEL" "$_HS_C_B03" 20; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_MYEL" "$fb"; _HS_C_MYEL="$REPLY"
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_BLU" = "$dblu" ]; then fb="$dmblu"; else _hs_bash_blend_hex "$_HS_C_BLU" "$_HS_C_B03" 22; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_MBLU" "$fb"; _HS_C_MBLU="$REPLY"
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_MAG" = "$dmag" ]; then fb="$dmmag"; else _hs_bash_blend_hex "$_HS_C_MAG" "$_HS_C_B03" 20; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_MMAG" "$fb"; _HS_C_MMAG="$REPLY"
+    if [ "$_HS_C_B03" = "$db03" ] && [ "$_HS_C_B1"  = "$db1"  ]; then fb="$dmb1";  else _hs_bash_blend_hex "$_HS_C_B1"  "$_HS_C_B03" 16; fb="$REPLY"; fi; _hs_bash_safe_hex "$_HS_RAW_MB1"  "$fb"; _HS_C_MB1="$REPLY"
+}
+
+_hs_bash_build_truecolor_ls_colors() {
+    local b03="$1" b02="$2" b01="$3" b0="$4" b2="$5" yel="$6" ora="$7" red="$8" mag="$9" vio="${10}" blu="${11}" cya="${12}" grn="${13}"
+    local ls_out=":$_HS_ANSI_LS_COLORS"
+    ls_out="${ls_out//:su=37;41:/:su=38;2;${b2};48;2;${red}:}"
+    ls_out="${ls_out//:sg=30;43:/:sg=38;2;${b03};48;2;${yel}:}"
+    ls_out="${ls_out//:ca=30;41:/:ca=38;2;${b03};48;2;${red}:}"
+    ls_out="${ls_out//:tw=30;42:/:tw=38;2;${b03};48;2;${grn}:}"
+    ls_out="${ls_out//:ow=34;40:/:ow=38;2;${blu};48;2;${b02}:}"
+    ls_out="${ls_out//:st=37;44:/:st=38;2;${b2};48;2;${blu}:}"
+    ls_out="${ls_out//:di=34:/:di=38;2;${blu}:}"
+    ls_out="${ls_out//:ln=36:/:ln=38;2;${cya}:}"
+    ls_out="${ls_out//:pi=33:/:pi=38;2;${yel}:}"
+    ls_out="${ls_out//:so=35:/:so=38;2;${mag}:}"
+    ls_out="${ls_out//:do=35:/:do=38;2;${mag}:}"
+    ls_out="${ls_out//:bd=35:/:bd=38;2;${mag}:}"
+    ls_out="${ls_out//:cd=35:/:cd=38;2;${mag}:}"
+    ls_out="${ls_out//:or=31:/:or=38;2;${red}:}"
+    ls_out="${ls_out//:mi=31:/:mi=38;2;${red}:}"
+    ls_out="${ls_out//:ex=32:/:ex=38;2;${grn}:}"
+    ls_out="${ls_out//:mh=00:/:mh=__MH00__:}"
+    ls_out="${ls_out//=91:/=38;2;${ora}:}"
+    ls_out="${ls_out//=95:/=38;2;${vio}:}"
+    ls_out="${ls_out//=35:/=38;2;${mag}:}"
+    ls_out="${ls_out//=90:/=38;2;${b01}:}"
+    ls_out="${ls_out//=00:/=38;2;${b0}:}"
+    ls_out="${ls_out//:mh=__MH00__:/:mh=00:}"
+    REPLY="${ls_out#:}fi=38;2;${b0}:"
+}
+
+# Apply finalized _HS_C_* palette directly to current Bash environment (zero forks)
+_hs_bash_apply_finalized_palette() {
+    local b03 b02 b01 b00 b0 b1 b2 yel ora red mag vio blu cya grn
+    _hs_bash_rgb_semi "$_HS_C_B03"; b03="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B02"; b02="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B01"; b01="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B00"; b00="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B0";  b0="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B1";  b1="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B2";  b2="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_YEL"; yel="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_ORA"; ora="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_RED"; red="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_MAG"; mag="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_VIO"; vio="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_BLU"; blu="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_CYA"; cya="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_GRN"; grn="$REPLY"
+
+    _HS_INTERNAL_ENV_THEME="$_HS_C_ID"
+    export HOME_SETTINGS_THEME="$_HS_C_ID"
+    export HOME_SETTINGS_THEME_MODE="$_HS_C_MODE"
+    export BAT_THEME="$_HS_C_BAT"
+    export FZF_DEFAULT_OPTS="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01} --color=fg:${_HS_C_B0},header:${_HS_C_B01},info:${_HS_C_YEL},pointer:${_HS_C_GRN} --color=marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU} --layout=reverse --border=rounded --info=inline"
+    export EZA_COLORS="di=38;2;${blu}:ex=38;2;${grn}:fi=38;2;${b0}:pi=38;2;${yel}:so=38;2;${mag}:bd=38;2;${mag}:cd=38;2;${mag}:ln=38;2;${cya}:or=38;2;${red}:xx=38;2;${b01}:da=38;2;${b0}:hd=4;38;2;${b1}:lp=38;2;${b0}:cc=38;2;${ora}:bO=38;2;${red}:in=38;2;${b01}:bl=38;2;${b01}:oc=38;2;${b0}:ur=38;2;${b0}:uw=38;2;${b0}:ux=38;2;${b0}:ue=38;2;${b0}:gr=38;2;${b0}:gw=38;2;${b0}:gx=38;2;${b0}:tr=38;2;${b0}:tw=38;2;${b0}:tx=38;2;${b0}:su=38;2;${b0}:sf=38;2;${b0}:xa=38;2;${b0}:sn=38;2;${b0}:nb=38;2;${b01}:nk=38;2;${b0}:nm=38;2;${yel}:ng=38;2;${ora}:nt=38;2;${red}:sb=38;2;${b0}:ub=38;2;${b01}:uk=38;2;${b0}:um=38;2;${yel}:ug=38;2;${ora}:ut=38;2;${red}:df=38;2;${b0}:ds=38;2;${b0}:uu=38;2;${b0}:uR=38;2;${red}:un=38;2;${b0}:gu=38;2;${b0}:gR=38;2;${red}:gn=38;2;${b0}:lc=38;2;${b0}:lm=38;2;${yel}:ga=38;2;${grn}:gm=38;2;${yel}:gd=38;2;${red}:gv=38;2;${b0}:gt=38;2;${b0}:gi=38;2;${b01}:gc=38;2;${red}:Gm=38;2;${grn}:Go=38;2;${blu}:Gc=38;2;${grn}:Gd=38;2;${yel}:sp=38;2;${ora}:mp=38;2;${blu}:im=38;2;${vio}:vi=38;2;${vio}:mu=38;2;${vio}:lo=38;2;${vio}:cr=38;2;${mag}:do=38;2;${b0}:co=38;2;${ora}:tm=38;2;${b01}:cm=38;2;${b01}:bu=38;2;${grn}:sc=38;2;${b0}:Sn=38;2;${b01}:Su=38;2;${b0}:Sr=38;2;${b0}:St=38;2;${b0}:Sl=38;2;${b0}:ff=38;2;${b0}"
+    export EXA_COLORS="$EZA_COLORS"
+    export JQ_COLORS="38;2;${mag}:38;2;${mag}:38;2;${mag}:38;2;${mag}:38;2;${cya}:38;2;${b0}:38;2;${b0}:38;2;${grn}"
+    export LESS="${LESS:--R}"
+    export GROFF_NO_SGR=1
+    local esc=$'\033'
+    export LESS_TERMCAP_mb="${esc}[38;2;${red}m"
+    export LESS_TERMCAP_md="${esc}[1;38;2;${blu}m"
+    export LESS_TERMCAP_me="${esc}[0m"
+    export LESS_TERMCAP_so="${esc}[38;2;${b1};48;2;${b02}m"
+    export LESS_TERMCAP_se="${esc}[0m"
+    export LESS_TERMCAP_us="${esc}[4;38;2;${cya}m"
+    export LESS_TERMCAP_ue="${esc}[0m"
+    export _HS_ESC_ORANGE="${esc}[38;2;${ora}m"
+    export _HS_ESC_BLUE="${esc}[38;2;${blu}m"
+    export _HS_ESC_CYAN="${esc}[38;2;${cya}m"
+    export _HS_ESC_BASE0="${esc}[38;2;${b0}m"
+    export _HS_ESC_BASE01="${esc}[38;2;${b01}m"
+    export LSCOLORS="exgxfxdxcxfxfxegedabagacad"
+
+    _hs_bash_build_truecolor_ls_colors "$b03" "$b02" "$b01" "$b0" "$b2" "$yel" "$ora" "$red" "$mag" "$vio" "$blu" "$cya" "$grn"
+    _HS_LAST_TC_LS_COLORS="$REPLY"
+    if _hs_bash_is_truecolor; then
+        export LS_COLORS="$_HS_LAST_TC_LS_COLORS"
+    else
+        _hs_bash_apply_ansi_ls_colors
+    fi
+
+    if _hs_bash_holiday_icon "$_HS_C_ID"; then
+        export _HS_PROMPT_OS_ICON="$REPLY"
+    else
+        unset _HS_PROMPT_OS_ICON
+    fi
+
+    export _HS_PROMPT_BG_BASE02="\\[\\e[48;2;${b02}m\\]"
+    export _HS_PROMPT_CAP_BASE02="\\[\\e[0m\\e[38;2;${b02}m\\]"
+    export _HS_PROMPT_CAP_RED="\\[\\e[0m\\e[38;2;${red}m\\]"
+    export _HS_PROMPT_FG_BASE02="\\[\\e[38;2;${b02}m\\]"
+    export _HS_PROMPT_FG_BASE01="\\[\\e[38;2;${b01}m\\]"
+    export _HS_PROMPT_FG_BASE00="\\[\\e[38;2;${b00}m\\]"
+    export _HS_PROMPT_FG_BASE0="\\[\\e[38;2;${b0}m\\]"
+    export _HS_PROMPT_FG_BASE1="\\[\\e[38;2;${b1}m\\]"
+    export _HS_PROMPT_FG_YELLOW="\\[\\e[38;2;${yel}m\\]"
+    export _HS_PROMPT_FG_ORANGE="\\[\\e[38;2;${ora}m\\]"
+    export _HS_PROMPT_FG_RED="\\[\\e[38;2;${red}m\\]"
+    export _HS_PROMPT_FG_VIOLET="\\[\\e[38;2;${vio}m\\]"
+    export _HS_PROMPT_FG_BLUE="\\[\\e[38;2;${blu}m\\]"
+    export _HS_PROMPT_FG_CYAN="\\[\\e[38;2;${cya}m\\]"
+    export _HS_PROMPT_FG_GREEN="\\[\\e[38;2;${grn}m\\]"
+    export _HS_LOADED_THEME="$_HS_C_ID"
+}
+
+# Synchronize active theme state (startup & cross-pane prompt check; zero subprocess forks)
+_hs_bash_sync_theme_state() {
+    local is_startup="${1:-0}"
+    local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+
+    # Track explicit caller overrides (including VAR=val prefix assignments on `source`)
+    local cur_tfile_state="${HOME_SETTINGS_THEME_FILE-__UNSET__}"
+    if [ "$is_startup" = "1" ]; then
+        _HS_USER_ENV_THEME="$_HS_CALLER_THEME_PRE"
+        _HS_USER_ENV_TFILE="$_HS_CALLER_TFILE_PRE"
+        _HS_POST_SOURCE_SYNC=1
+        _HS_LAST_SEEN_TFILE="$cur_tfile_state"
+    elif [ "${_HS_POST_SOURCE_SYNC:-0}" = "1" ]; then
+        _HS_POST_SOURCE_SYNC=0
+        _HS_LAST_SEEN_TFILE="$cur_tfile_state"
+        if [ -n "${HOME_SETTINGS_THEME_FILE:-}" ]; then
+            _HS_USER_ENV_TFILE="$HOME_SETTINGS_THEME_FILE"
+        fi
+        if [ -n "${HOME_SETTINGS_THEME:-}" ] && [ "${HOME_SETTINGS_THEME}" != "${_HS_INTERNAL_ENV_THEME:-}" ]; then
+            _HS_USER_ENV_THEME="$HOME_SETTINGS_THEME"
+        elif [ -z "${HOME_SETTINGS_THEME:-}" ] && [ -n "${_HS_USER_ENV_THEME:-}" ] && [ -n "${_HS_INTERNAL_ENV_THEME:-}" ]; then
+            export HOME_SETTINGS_THEME="$_HS_INTERNAL_ENV_THEME"
+        fi
+    else
+        if [ "$cur_tfile_state" != "${_HS_LAST_SEEN_TFILE:-__UNSET__}" ]; then
+            _HS_LAST_SEEN_TFILE="$cur_tfile_state"
+            _HS_USER_ENV_TFILE="${HOME_SETTINGS_THEME_FILE:-}"
+        fi
+        if [ "${HOME_SETTINGS_THEME:-}" != "${_HS_INTERNAL_ENV_THEME:-}" ]; then
+            _HS_USER_ENV_THEME="${HOME_SETTINGS_THEME:-}"
+        fi
+    fi
+
+    # 1. Explicit $HOME_SETTINGS_THEME_FILE override
+    local eff_tfile="${HOME_SETTINGS_THEME_FILE:-${_HS_USER_ENV_TFILE:-}}"
+    if [ -n "$eff_tfile" ]; then
+        if [ -r "$eff_tfile" ]; then
+            local tf_raw=""
+            IFS= read -r -d '' tf_raw < "$eff_tfile" || true
+            if [ "$tf_raw" != "${_HS_LOADED_TFILE_RAW:-}" ] || [ "${_HS_LOADED_TFILE_PATH:-}" != "$eff_tfile" ]; then
+                _HS_LOADED_TFILE_RAW="$tf_raw"
+                _HS_LOADED_TFILE_PATH="$eff_tfile"
+                _hs_bash_parse_file "$eff_tfile" || return 0
+                local stem="${eff_tfile##*/}"
+                _hs_bash_finalize_palette "${stem%.*}"
+                _hs_bash_apply_finalized_palette
+            elif [ -z "${HOME_SETTINGS_THEME:-}" ] && [ -n "${_HS_LOADED_THEME:-}" ]; then
+                export HOME_SETTINGS_THEME="$_HS_LOADED_THEME"
+            fi
+        elif [ -n "${_HS_USER_ENV_THEME:-}" ]; then
+            _hs_bash_norm_slug "$_HS_USER_ENV_THEME"
+            local req="$REPLY"
+            if [ "${_HS_LOADED_THEME:-}" != "$req" ] && _hs_bash_resolve_slug_to_raw "$req"; then
+                _hs_bash_finalize_palette "$req"
+                _hs_bash_apply_finalized_palette
+            fi
+        elif [ -n "${_HS_LOADED_THEME:-}" ]; then
+            _hs_bash_builtin_spec "solarized-dark" && _hs_bash_unpack_spec_to_raw "solarized-dark" "$REPLY"
+            _hs_bash_finalize_palette "solarized-dark"
+            _hs_bash_apply_finalized_palette
+            unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE _HS_INTERNAL_ENV_THEME _HS_LOADED_THEME _HS_LAST_TC_LS_COLORS _HS_PROMPT_OS_ICON
+            _hs_bash_apply_ansi_ls_colors
+        fi
+        if ! _hs_bash_is_truecolor; then
+            if [[ "${LS_COLORS:-}" == *"38;2;"* ]]; then
+                _hs_bash_apply_ansi_ls_colors
+            fi
+        elif [ -n "${_HS_LOADED_THEME:-}" ] && [ -n "${_HS_LAST_TC_LS_COLORS:-}" ] && [[ "${LS_COLORS:-}" != *"38;2;"* ]]; then
+            export LS_COLORS="$_HS_LAST_TC_LS_COLORS"
+        fi
+        return 0
+    fi
+
+    # 2. Persistent state directory ($XDG_CONFIG_HOME/home-settings)
+    local active_theme=""
+    if [ -r "$hs_dir/theme" ]; then
+        IFS= read -r active_theme < "$hs_dir/theme" || true
+        active_theme="${active_theme//$'\r'/}"
+        _hs_bash_norm_slug "$active_theme"
+        active_theme="$REPLY"
+    fi
+
+    if [ -n "$active_theme" ]; then
+        # Check if a custom user .theme/.conf file was edited at or after theme-env.sh (including same-second edits)
+        local ufile=""
+        if _hs_bash_find_user_theme_file "$active_theme"; then
+            ufile="$REPLY"
+        fi
+        if [ -n "$ufile" ] && { [ ! -r "$hs_dir/theme-env.sh" ] || ! [ "$hs_dir/theme-env.sh" -nt "$ufile" ]; }; then
+            local uf_raw=""
+            IFS= read -r -d '' uf_raw < "$ufile" || true
+            if [ "${_HS_LOADED_THEME:-}" != "$active_theme" ] || [ "$uf_raw" != "${_HS_LOADED_UFILE_RAW:-}" ]; then
+                _HS_LOADED_UFILE_RAW="$uf_raw"
+                _HS_LOADED_ENV_RAW=""
+                _hs_bash_parse_file "$ufile" || return 0
+                _hs_bash_finalize_palette "$active_theme"
+                _hs_bash_apply_finalized_palette
+            fi
+        elif [ -r "$hs_dir/theme-env.sh" ]; then
+            local env_raw=""
+            IFS= read -r -d '' env_raw < "$hs_dir/theme-env.sh" || true
+            # Guard against partial writes: verify complete footer matching active_theme before sourcing
+            if [[ "$env_raw" == *"_HS_LOADED_THEME='${active_theme}'"* || "$env_raw" == *"_HS_LOADED_THEME=\"${active_theme}\""* ]]; then
+                if [ "${_HS_LOADED_THEME:-}" != "$active_theme" ] || [ "$env_raw" != "${_HS_LOADED_ENV_RAW:-}" ]; then
+                    _HS_LOADED_ENV_RAW="$env_raw"
+                    _HS_LOADED_UFILE_RAW=""
+                    # shellcheck source=/dev/null
+                    . "$hs_dir/theme-env.sh"
+                    [[ "${LS_COLORS:-}" == *"38;2;"* ]] && _HS_LAST_TC_LS_COLORS="$LS_COLORS"
+                    _HS_INTERNAL_ENV_THEME="${HOME_SETTINGS_THEME:-$active_theme}"
+                fi
+            elif { [ -z "$env_raw" ] || [[ "$env_raw" == *"_HS_LOADED_THEME="* ]]; } && [ "${_HS_LOADED_THEME:-}" != "$active_theme" ]; then
+                # theme-env.sh is empty or complete for an older theme (not a partial write): load active-theme.theme or slug
+                local loaded_from_af=0
+                if [ -r "$hs_dir/active-theme.theme" ] && _hs_bash_parse_file "$hs_dir/active-theme.theme"; then
+                    _hs_bash_norm_slug "${_HS_RAW_ID:-}"
+                    if [ "$REPLY" = "$active_theme" ]; then
+                        _hs_bash_finalize_palette "$active_theme"
+                        _hs_bash_apply_finalized_palette
+                        loaded_from_af=1
+                    fi
+                fi
+                if [ "$loaded_from_af" -eq 0 ] && _hs_bash_resolve_slug_to_raw "$active_theme"; then
+                    _hs_bash_finalize_palette "$active_theme"
+                    _hs_bash_apply_finalized_palette
+                fi
+            fi
+        elif [ -r "$hs_dir/active-theme.theme" ]; then
+            local af_raw=""
+            IFS= read -r -d '' af_raw < "$hs_dir/active-theme.theme" || true
+            if [ "${_HS_LOADED_THEME:-}" != "$active_theme" ] || [ "$af_raw" != "${_HS_LOADED_ENV_RAW:-}" ]; then
+                _HS_LOADED_ENV_RAW="$af_raw"
+                _hs_bash_parse_file "$hs_dir/active-theme.theme" || return 0
+                _hs_bash_finalize_palette "$active_theme"
+                _hs_bash_apply_finalized_palette
+            fi
+        elif [ "${_HS_LOADED_THEME:-}" != "$active_theme" ] && _hs_bash_resolve_slug_to_raw "$active_theme"; then
+            _hs_bash_finalize_palette "$active_theme"
+            _hs_bash_apply_finalized_palette
+        fi
+    elif [ -r "$hs_dir/theme-env.sh" ]; then
+        local env_raw=""
+        IFS= read -r -d '' env_raw < "$hs_dir/theme-env.sh" || true
+        if [[ "$env_raw" == *"_HS_LOADED_THEME="* ]] && [ "$env_raw" != "${_HS_LOADED_ENV_RAW:-}" ]; then
+            _HS_LOADED_ENV_RAW="$env_raw"
+            # shellcheck source=/dev/null
+            . "$hs_dir/theme-env.sh"
+            [[ "${LS_COLORS:-}" == *"38;2;"* ]] && _HS_LAST_TC_LS_COLORS="$LS_COLORS"
+            _HS_INTERNAL_ENV_THEME="${HOME_SETTINGS_THEME:-}"
+        fi
+    elif [ -r "$hs_dir/active-theme.theme" ]; then
+        local af_raw=""
+        IFS= read -r -d '' af_raw < "$hs_dir/active-theme.theme" || true
+        if [ "$af_raw" != "${_HS_LOADED_ENV_RAW:-}" ]; then
+            _HS_LOADED_ENV_RAW="$af_raw"
+            _hs_bash_parse_file "$hs_dir/active-theme.theme" || return 0
+            _hs_bash_finalize_palette "solarized-dark"
+            _hs_bash_apply_finalized_palette
+        fi
+    elif [ -n "${_HS_USER_ENV_THEME:-}" ]; then
+        _hs_bash_norm_slug "$_HS_USER_ENV_THEME"
+        local env_slug="$REPLY"
+        if [ -n "$env_slug" ] && [ "${_HS_LOADED_THEME:-}" != "$env_slug" ] && _hs_bash_resolve_slug_to_raw "$env_slug"; then
+            _hs_bash_finalize_palette "$env_slug"
+            _hs_bash_apply_finalized_palette
+        elif [ -n "$env_slug" ] && [ "${_HS_LOADED_THEME:-}" = "$env_slug" ] && [ -z "${HOME_SETTINGS_THEME:-}" ]; then
+            export HOME_SETTINGS_THEME="$_HS_LOADED_THEME"
+        fi
+    elif [ -n "${_HS_LOADED_THEME:-}" ]; then
+        _HS_LOADED_ENV_RAW=""
+        _HS_LOADED_UFILE_RAW=""
+        _hs_bash_builtin_spec "solarized-dark" && _hs_bash_unpack_spec_to_raw "solarized-dark" "$REPLY"
+        _hs_bash_finalize_palette "solarized-dark"
+        _hs_bash_apply_finalized_palette
+        unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE _HS_INTERNAL_ENV_THEME _HS_LOADED_THEME _HS_LAST_TC_LS_COLORS _HS_PROMPT_OS_ICON
+        _hs_bash_apply_ansi_ls_colors
+    fi
+
+    if ! _hs_bash_is_truecolor; then
+        if [[ "${LS_COLORS:-}" == *"38;2;"* ]]; then
+            _hs_bash_apply_ansi_ls_colors
+        fi
+    elif [ -n "${_HS_LOADED_THEME:-}" ] && [ -n "${_HS_LAST_TC_LS_COLORS:-}" ] && [[ "${LS_COLORS:-}" != *"38;2;"* ]]; then
+        export LS_COLORS="$_HS_LAST_TC_LS_COLORS"
+    fi
+}
+
+unset _HS_LOADED_ENV_RAW _HS_LOADED_UFILE_RAW _HS_LOADED_TFILE_RAW _HS_LOADED_TFILE_PATH
+_hs_bash_sync_theme_state 1
+unset _HS_CALLER_COLORTERM_SET _HS_CALLER_COLORTERM_VAL _HS_CALLER_THEME_PRE _HS_CALLER_TFILE_PRE
+
+# 2. Directory & Filesystem Colors (pre-compiled TrueColor theme-env.sh, dircolors database, or inline Solarized Dark fallback)
+if ! _hs_bash_is_truecolor || [ -z "${_HS_LOADED_THEME:-}" ] || [ -z "${LS_COLORS:-}" ]; then
+    _hs_bash_apply_ansi_ls_colors
 fi
 
 # 3. Aliases & Git Workflow Helpers (sources ~/.aliases or provides standalone server fallbacks)
@@ -239,7 +948,7 @@ v() {
                 if [ "${#abs_args[@]}" -gt 0 ]; then
                     nvim --server "$sock" --remote "${abs_args[@]}"
                 fi
-                for p_cmd in "${plus_cmds[@]}"; do
+                for p_cmd in ${plus_cmds[@]+"${plus_cmds[@]}"}; do
                     esc_cmd="${p_cmd//\\/\\\\}"
                     esc_cmd="${esc_cmd//\"/\\\"}"
                     nvim --headless --server "$sock" --remote-expr "execute(\"$esc_cmd\")" >/dev/null 2>&1 || true
@@ -347,7 +1056,7 @@ _solarized_parse_git_config() {
         return 0
     fi
     local s
-    for s in "${seen_cfgs[@]}"; do
+    for s in ${seen_cfgs[@]+"${seen_cfgs[@]}"}; do
         [ "$s" = "$cfg_file" ] && return 0
     done
     seen_cfgs+=("$cfg_file")
@@ -650,7 +1359,18 @@ _solarized_vcs_build_pr_url() {
             if [[ "$proj" == \~* ]]; then
                 built_url="${scheme}://${host}/users/${proj#\~}/repos/${repo}/pull-requests/${pr_num}"
             else
-                local proj_upper="${proj^^}"
+                local proj_upper="" _pi _pc
+                for ((_pi = 0; _pi < ${#proj}; _pi++)); do
+                    _pc="${proj:$_pi:1}"
+                    case "$_pc" in
+                        a) _pc=A ;; b) _pc=B ;; c) _pc=C ;; d) _pc=D ;; e) _pc=E ;; f) _pc=F ;;
+                        g) _pc=G ;; h) _pc=H ;; i) _pc=I ;; j) _pc=J ;; k) _pc=K ;; l) _pc=L ;;
+                        m) _pc=M ;; n) _pc=N ;; o) _pc=O ;; p) _pc=P ;; q) _pc=Q ;; r) _pc=R ;;
+                        s) _pc=S ;; t) _pc=T ;; u) _pc=U ;; v) _pc=V ;; w) _pc=W ;; x) _pc=X ;;
+                        y) _pc=Y ;; z) _pc=Z ;;
+                    esac
+                    proj_upper="${proj_upper}${_pc}"
+                done
                 built_url="${scheme}://${host}/projects/${proj_upper}/repos/${repo}/pull-requests/${pr_num}"
             fi
             ;;
@@ -1080,19 +1800,7 @@ _solarized_detect_os_icon() {
 # 4. Zero-Dependency Solarized Dark Single-Line Shelf Prompt Builder
 _solarized_bash_prompt() {
     local exit_code=$?
-    local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
-    if [ -r "$hs_dir/theme" ]; then
-        local active_theme=""
-        IFS= read -r active_theme < "$hs_dir/theme" || true
-        active_theme="${active_theme//$'\r'/}"
-        if [ -n "$active_theme" ] && [ "${_HS_LOADED_THEME:-}" != "$active_theme" ]; then
-            _HS_LOADED_THEME="$active_theme"
-            if [ -r "$hs_dir/theme-env.sh" ]; then
-                # shellcheck source=/dev/null
-                . "$hs_dir/theme-env.sh"
-            fi
-        fi
-    fi
+    _hs_bash_sync_theme_state 0
     local c_reset='\[\e[0m\]'
     local bg_shelf="${_HS_PROMPT_BG_BASE02:-\[\e[48;2;7;54;66m\]}"
     local c_shelf_cap="${_HS_PROMPT_CAP_BASE02:-\[\e[0m\e[38;2;7;54;66m\]}"
@@ -1103,6 +1811,7 @@ _solarized_bash_prompt() {
     local c_blue="${_HS_PROMPT_FG_BLUE:-\[\e[38;2;38;139;210m\]}"
     local c_green="${_HS_PROMPT_FG_GREEN:-\[\e[38;2;133;153;0m\]}"
     local c_yellow="${_HS_PROMPT_FG_YELLOW:-\[\e[38;2;181;137;0m\]}"
+    local c_orange="${_HS_PROMPT_FG_ORANGE:-\[\e[38;2;203;75;22m\]}"
     local c_red="${_HS_PROMPT_FG_RED:-\[\e[38;2;220;50;47m\]}"
     local subsep=$'\xee\x82\xb1'   # \uE0B1 thin directional chevron
     local endcap=$'\xee\x82\xb0'   # \uE0B0 solid right-pointing wedge cap
@@ -1131,8 +1840,10 @@ _solarized_bash_prompt() {
         c_blue='\[\e[34m\]'
         c_green='\[\e[32m\]'
         c_yellow='\[\e[33m\]'
+        c_orange='\[\e[91m\]'
         c_red='\[\e[31m\]'
         if [ "${TERM:-}" = "linux" ]; then
+            c_orange='\[\e[33m\]'
             subsep='>'
             endcap=''
             git_icon=''
@@ -1196,7 +1907,7 @@ _solarized_bash_prompt() {
     if [ -n "$gitdir" ] && command -v git >/dev/null 2>&1; then
         local status_out=""
         if status_out=$(git --no-optional-locks status --porcelain=v2 --branch --ignore-submodules=dirty 2>/dev/null); then
-            local raw_branch="" branch_oid="" branch_upstream="" is_dirty=0 is_detached=0 s_line="" branch=""
+            local raw_branch="" branch_oid="" branch_upstream="" is_dirty=0 is_conflicted=0 is_detached=0 s_line="" branch=""
             while IFS= read -r s_line || [ -n "$s_line" ]; do
                 if [[ "$s_line" == "# branch.head "* ]]; then
                     raw_branch="${s_line#\# branch.head }"
@@ -1204,9 +1915,12 @@ _solarized_bash_prompt() {
                     branch_oid="${s_line#\# branch.oid }"
                 elif [[ "$s_line" == "# branch.upstream "* ]]; then
                     branch_upstream="${s_line#\# branch.upstream }"
-                elif [[ "$s_line" != \#* ]]; then
+                elif [[ "$s_line" == "u "* ]]; then
+                    is_conflicted=1
                     is_dirty=1
                     break
+                elif [[ "$s_line" != \#* ]]; then
+                    is_dirty=1
                 fi
             done <<< "$status_out"
 
@@ -1397,7 +2111,10 @@ _solarized_bash_prompt() {
                 branch="${branch//\`/\\\\\`}"
                 local git_color="$c_green"
                 local dirty_suffix=""
-                if [ "$is_dirty" = "1" ]; then
+                if [ "$is_conflicted" = "1" ]; then
+                    git_color="$c_orange"
+                    dirty_suffix="~"
+                elif [ "$is_dirty" = "1" ]; then
                     git_color="$c_yellow"
                     dirty_suffix="*"
                 fi
@@ -1436,6 +2153,796 @@ _solarized_bash_prompt() {
     fi
 }
 
+# Pure-Bash Gregorian Easter + 4th-Thursday Thanksgiving US holiday schedule (1:1 with bin/theme)
+_hs_bash_nearest_holiday() {
+    local ymd="${THEME_HOLIDAY_DATE:-}"
+    ymd="${ymd#"${ymd%%[![:space:]]*}"}"
+    ymd="${ymd%"${ymd##*[![:space:]]}"}"
+    if [ -z "$ymd" ]; then
+        printf -v ymd '%(%Y-%m-%d)T' -1 2>/dev/null || ymd="$(date +%Y-%m-%d 2>/dev/null || echo 2026-01-01)"
+    fi
+    if ! [[ "$ymd" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})$ ]]; then
+        echo "Error: invalid THEME_HOLIDAY_DATE '$ymd' (expected YYYY-MM-DD)." >&2
+        return 1
+    fi
+    local yr=$((10#${BASH_REMATCH[1]})) mo=$((10#${BASH_REMATCH[2]})) da=$((10#${BASH_REMATCH[3]}))
+    local max_da=31
+    case "$mo" in
+        4|6|9|11) max_da=30 ;;
+        2)
+            if (( (yr % 4 == 0 && yr % 100 != 0) || (yr % 400 == 0) )); then
+                max_da=29
+            else
+                max_da=28
+            fi
+            ;;
+    esac
+    if [ "$mo" -lt 1 ] || [ "$mo" -gt 12 ] || [ "$da" -lt 1 ] || [ "$da" -gt "$max_da" ]; then
+        echo "Error: invalid THEME_HOLIDAY_DATE '$ymd'." >&2
+        return 1
+    fi
+    local today_num=$(( yr * 10000 + mo * 100 + da )) cy
+    for cy in "$yr" $((yr + 1)); do
+        local ea=$(( cy % 19 )) eb=$(( cy / 100 )) ec=$(( cy % 100 ))
+        local ed=$(( eb / 4 )) ee=$(( eb % 4 )) ef=$(( (eb + 8) / 25 ))
+        local eg=$(( (eb - ef + 1) / 3 ))
+        local eh=$(( (19 * ea + eb - ed - eg + 15) % 30 ))
+        local ei=$(( ec / 4 )) ek=$(( ec % 4 ))
+        local el=$(( ((32 + 2 * ee + 2 * ei - eh - ek) % 7 + 7) % 7 ))
+        local em=$(( (ea + 11 * eh + 22 * el) / 451 ))
+        local emon=$(( (eh + el - 7 * em + 114) / 31 ))
+        local eday=$(( ((eh + el - 7 * em + 114) % 31) + 1 ))
+        local easter_num=$(( cy * 10000 + emon * 100 + eday ))
+        local nov1_dow=$(( (cy + cy / 4 - cy / 100 + cy / 400 + 3) % 7 ))
+        local tg_day=$(( 1 + ((4 - nov1_dow + 7) % 7) + 21 ))
+        local tg_num=$(( cy * 10000 + 1100 + tg_day ))
+
+        if [ "$today_num" -le $(( cy * 10000 + 101 )) ]; then REPLY="new-years"; return 0; fi
+        if [ "$today_num" -le $(( cy * 10000 + 214 )) ]; then REPLY="valentines"; return 0; fi
+        if [ "$today_num" -le $(( cy * 10000 + 317 )) ]; then REPLY="st-patricks"; return 0; fi
+        if [ "$today_num" -le "$easter_num" ]; then REPLY="easter"; return 0; fi
+        if [ "$today_num" -le $(( cy * 10000 + 704 )) ]; then REPLY="independence-day"; return 0; fi
+        if [ "$today_num" -le $(( cy * 10000 + 1031 )) ]; then REPLY="halloween"; return 0; fi
+        if [ "$today_num" -le "$tg_num" ]; then REPLY="thanksgiving"; return 0; fi
+        if [ "$today_num" -le $(( cy * 10000 + 1225 )) ]; then REPLY="christmas"; return 0; fi
+    done
+    REPLY="new-years"
+    return 0
+}
+
+_hs_bash_collect_all_slugs() {
+    _HS_ALL_SLUGS=("${_HS_BUILTIN_THEME_ORDER[@]}")
+    _hs_bash_user_theme_dirs
+    local -a custom_slugs=() cands=()
+    local udir cand stem cid s d_idx dup had_fg=0 had_ng=0
+    shopt -q failglob && had_fg=1
+    shopt -q nullglob && had_ng=1
+    shopt -u failglob
+    shopt -s nullglob
+    for ((d_idx = 0; d_idx < ${#_HS_USER_DIRS[@]}; d_idx++)); do
+        udir="${_HS_USER_DIRS[$d_idx]}"
+        [ -d "$udir" ] && cands+=("$udir"/*.theme "$udir"/*.conf)
+    done
+    (( had_ng == 0 )) && shopt -u nullglob
+    (( had_fg == 1 )) && shopt -s failglob
+    for cand in ${cands[@]+"${cands[@]}"}; do
+        [ -r "$cand" ] || continue
+        stem="${cand##*/}"
+        stem="${stem%.*}"
+        [ "$stem" = "active-theme" ] && continue
+        _hs_bash_parse_file "$cand" || continue
+        _hs_bash_norm_slug "${_HS_RAW_ID:-$stem}"
+        cid="$REPLY"
+        [[ "$cid" =~ ^[a-z0-9][a-z0-9-]*$ && "$cid" != "active-theme" ]] || continue
+        dup=0
+        for s in "${_HS_ALL_SLUGS[@]}" ${custom_slugs[@]+"${custom_slugs[@]}"}; do
+            if [ "$s" = "$cid" ]; then dup=1; break; fi
+        done
+        [ "$dup" -eq 0 ] && custom_slugs+=("$cid")
+    done
+    if [ "${#custom_slugs[@]}" -gt 0 ]; then
+        local i j tmp
+        for ((i = 0; i < ${#custom_slugs[@]}; i++)); do
+            for ((j = i + 1; j < ${#custom_slugs[@]}; j++)); do
+                if [[ "${custom_slugs[$j]}" < "${custom_slugs[$i]}" ]]; then
+                    tmp="${custom_slugs[$i]}"
+                    custom_slugs[$i]="${custom_slugs[$j]}"
+                    custom_slugs[$j]="$tmp"
+                fi
+            done
+        done
+        _HS_ALL_SLUGS+=("${custom_slugs[@]}")
+    fi
+}
+
+_hs_bash_emit_active_theme_file() {
+    cat <<EOF
+# Generated by standalone theme() — Active Theme: $_HS_C_ID
+THEME_ID="$_HS_C_ID"
+THEME_LABEL="$_HS_C_LABEL"
+THEME_MODE="$_HS_C_MODE"
+BAT_THEME_NAME="$_HS_C_BAT"
+BASE03="$_HS_C_B03"
+BASE02="$_HS_C_B02"
+BASE04="$_HS_C_B04"
+BASE01="$_HS_C_B01"
+BASE00="$_HS_C_B00"
+BASE0="$_HS_C_B0"
+BASE1="$_HS_C_B1"
+BASE2="$_HS_C_B2"
+BASE3="$_HS_C_B3"
+YELLOW="$_HS_C_YEL"
+ORANGE="$_HS_C_ORA"
+RED="$_HS_C_RED"
+MAGENTA="$_HS_C_MAG"
+VIOLET="$_HS_C_VIO"
+BLUE="$_HS_C_BLU"
+CYAN="$_HS_C_CYA"
+GREEN="$_HS_C_GRN"
+MIX_GREEN="$_HS_C_MGRN"
+MIX_RED="$_HS_C_MRED"
+MIX_YELLOW="$_HS_C_MYEL"
+MIX_BLUE="$_HS_C_MBLU"
+MIX_MAGENTA="$_HS_C_MMAG"
+MIX_BASE1="$_HS_C_MB1"
+EOF
+}
+
+_hs_bash_emit_theme_env_sh() {
+    local b03 b02 b01 b00 b0 b1 b2 yel ora red mag vio blu cya grn ls_str
+    _hs_bash_rgb_semi "$_HS_C_B03"; b03="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B02"; b02="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B01"; b01="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B00"; b00="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B0";  b0="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B1";  b1="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_B2";  b2="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_YEL"; yel="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_ORA"; ora="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_RED"; red="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_MAG"; mag="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_VIO"; vio="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_BLU"; blu="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_CYA"; cya="$REPLY"
+    _hs_bash_rgb_semi "$_HS_C_GRN"; grn="$REPLY"
+    _hs_bash_build_truecolor_ls_colors "$b03" "$b02" "$b01" "$b0" "$b2" "$yel" "$ora" "$red" "$mag" "$vio" "$blu" "$cya" "$grn"
+    ls_str="$REPLY"
+    local os_icon_line="unset _HS_PROMPT_OS_ICON"
+    if _hs_bash_holiday_icon "$_HS_C_ID"; then
+        os_icon_line="export _HS_PROMPT_OS_ICON='$REPLY'"
+    fi
+    cat <<EOF
+# Generated by standalone theme() — Active Theme: $_HS_C_ID
+export HOME_SETTINGS_THEME='${_HS_C_ID}'
+export HOME_SETTINGS_THEME_MODE='${_HS_C_MODE}'
+export BAT_THEME='${_HS_C_BAT}'
+export FZF_DEFAULT_OPTS='--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01} --color=fg:${_HS_C_B0},header:${_HS_C_B01},info:${_HS_C_YEL},pointer:${_HS_C_GRN} --color=marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU} --layout=reverse --border=rounded --info=inline'
+export EZA_COLORS="di=38;2;${blu}:ex=38;2;${grn}:fi=38;2;${b0}:pi=38;2;${yel}:so=38;2;${mag}:bd=38;2;${mag}:cd=38;2;${mag}:ln=38;2;${cya}:or=38;2;${red}:xx=38;2;${b01}:da=38;2;${b0}:hd=4;38;2;${b1}:lp=38;2;${b0}:cc=38;2;${ora}:bO=38;2;${red}:in=38;2;${b01}:bl=38;2;${b01}:oc=38;2;${b0}:ur=38;2;${b0}:uw=38;2;${b0}:ux=38;2;${b0}:ue=38;2;${b0}:gr=38;2;${b0}:gw=38;2;${b0}:gx=38;2;${b0}:tr=38;2;${b0}:tw=38;2;${b0}:tx=38;2;${b0}:su=38;2;${b0}:sf=38;2;${b0}:xa=38;2;${b0}:sn=38;2;${b0}:nb=38;2;${b01}:nk=38;2;${b0}:nm=38;2;${yel}:ng=38;2;${ora}:nt=38;2;${red}:sb=38;2;${b0}:ub=38;2;${b01}:uk=38;2;${b0}:um=38;2;${yel}:ug=38;2;${ora}:ut=38;2;${red}:df=38;2;${b0}:ds=38;2;${b0}:uu=38;2;${b0}:uR=38;2;${red}:un=38;2;${b0}:gu=38;2;${b0}:gR=38;2;${red}:gn=38;2;${b0}:lc=38;2;${b0}:lm=38;2;${yel}:ga=38;2;${grn}:gm=38;2;${yel}:gd=38;2;${red}:gv=38;2;${b0}:gt=38;2;${b0}:gi=38;2;${b01}:gc=38;2;${red}:Gm=38;2;${grn}:Go=38;2;${blu}:Gc=38;2;${grn}:Gd=38;2;${yel}:sp=38;2;${ora}:mp=38;2;${blu}:im=38;2;${vio}:vi=38;2;${vio}:mu=38;2;${vio}:lo=38;2;${vio}:cr=38;2;${mag}:do=38;2;${b0}:co=38;2;${ora}:tm=38;2;${b01}:cm=38;2;${b01}:bu=38;2;${grn}:sc=38;2;${b0}:Sn=38;2;${b01}:Su=38;2;${b0}:Sr=38;2;${b0}:St=38;2;${b0}:Sl=38;2;${b0}:ff=38;2;${b0}"
+export EXA_COLORS="\$EZA_COLORS"
+export JQ_COLORS="38;2;${mag}:38;2;${mag}:38;2;${mag}:38;2;${mag}:38;2;${cya}:38;2;${b0}:38;2;${b0}:38;2;${grn}"
+export LESS="\${LESS:--R}"
+export GROFF_NO_SGR=1
+_hs_esc="\$(printf '\\033')"
+export LESS_TERMCAP_mb="\${_hs_esc}[38;2;${red}m"
+export LESS_TERMCAP_md="\${_hs_esc}[1;38;2;${blu}m"
+export LESS_TERMCAP_me="\${_hs_esc}[0m"
+export LESS_TERMCAP_so="\${_hs_esc}[38;2;${b1};48;2;${b02}m"
+export LESS_TERMCAP_se="\${_hs_esc}[0m"
+export LESS_TERMCAP_us="\${_hs_esc}[4;38;2;${cya}m"
+export LESS_TERMCAP_ue="\${_hs_esc}[0m"
+export _HS_ESC_ORANGE="\${_hs_esc}[38;2;${ora}m"
+export _HS_ESC_BLUE="\${_hs_esc}[38;2;${blu}m"
+export _HS_ESC_CYAN="\${_hs_esc}[38;2;${cya}m"
+export _HS_ESC_BASE0="\${_hs_esc}[38;2;${b0}m"
+export _HS_ESC_BASE01="\${_hs_esc}[38;2;${b01}m"
+unset _hs_esc
+export LS_COLORS='${ls_str}'
+export LSCOLORS="exgxfxdxcxfxfxegedabagacad"
+${os_icon_line}
+export _HS_PROMPT_BG_BASE02='\[\e[48;2;${b02}m\]'
+export _HS_PROMPT_CAP_BASE02='\[\e[0m\e[38;2;${b02}m\]'
+export _HS_PROMPT_CAP_RED='\[\e[0m\e[38;2;${red}m\]'
+export _HS_PROMPT_FG_BASE02='\[\e[38;2;${b02}m\]'
+export _HS_PROMPT_FG_BASE01='\[\e[38;2;${b01}m\]'
+export _HS_PROMPT_FG_BASE00='\[\e[38;2;${b00}m\]'
+export _HS_PROMPT_FG_BASE0='\[\e[38;2;${b0}m\]'
+export _HS_PROMPT_FG_BASE1='\[\e[38;2;${b1}m\]'
+export _HS_PROMPT_FG_YELLOW='\[\e[38;2;${yel}m\]'
+export _HS_PROMPT_FG_ORANGE='\[\e[38;2;${ora}m\]'
+export _HS_PROMPT_FG_RED='\[\e[38;2;${red}m\]'
+export _HS_PROMPT_FG_VIOLET='\[\e[38;2;${vio}m\]'
+export _HS_PROMPT_FG_BLUE='\[\e[38;2;${blu}m\]'
+export _HS_PROMPT_FG_CYAN='\[\e[38;2;${cya}m\]'
+export _HS_PROMPT_FG_GREEN='\[\e[38;2;${grn}m\]'
+export _HS_LOADED_THEME='${_HS_C_ID}'
+EOF
+}
+
+_hs_bash_emit_live_osc() {
+    [ -z "${NO_COLOR:-}" ] || return 0
+    [ "${TERM:-}" != "linux" ] && [ "${TERM:-}" != "dumb" ] || return 0
+    if [ ! -t 1 ] && [ "${THEME_FORCE_OSC:-0}" != "1" ]; then
+        return 0
+    fi
+    local -a slots=(
+        "$_HS_C_B02" "$_HS_C_RED" "$_HS_C_GRN" "$_HS_C_YEL"
+        "$_HS_C_BLU" "$_HS_C_MAG" "$_HS_C_CYA" "$_HS_C_B2"
+        "$_HS_C_B01" "$_HS_C_ORA" "$_HS_C_B01" "$_HS_C_B00"
+        "$_HS_C_B0"  "$_HS_C_VIO" "$_HS_C_B1"  "$_HS_C_B3"
+    )
+    local out="" s idx
+    for s in $'\033]10;'"${_HS_C_B0}"$'\007' $'\033]11;'"${_HS_C_B03}"$'\007' $'\033]12;'"${_HS_C_B0}"$'\007'; do
+        if [ -n "${TMUX:-}" ]; then
+            out="${out}"$'\033Ptmux;\033'"${s}"$'\033\\'
+        else
+            out="${out}${s}"
+        fi
+    done
+    for ((idx = 0; idx < 16; idx++)); do
+        s=$'\033]4;'"${idx};${slots[$idx]}"$'\007'
+        if [ -n "${TMUX:-}" ]; then
+            out="${out}"$'\033Ptmux;\033'"${s}"$'\033\\'
+        else
+            out="${out}${s}"
+        fi
+    done
+    printf '%s' "$out"
+}
+
+_hs_bash_swatch_strip() {
+    local out="" hex c
+    for hex in "$_HS_C_B03" "$_HS_C_B0" "$_HS_C_GRN" "$_HS_C_BLU" "$_HS_C_YEL" "$_HS_C_VIO" "$_HS_C_CYA" "$_HS_C_MAG" "$_HS_C_ORA" "$_HS_C_RED"; do
+        _hs_bash_rgb_semi "$hex"
+        c="$REPLY"
+        out="${out}"$'\033[38;2;'"${c}m██"
+    done
+    REPLY="${out}"$'\033[0m'
+}
+
+_hs_bash_list_themes() {
+    local current_slug="$1" plain="${2:-0}"
+    _hs_bash_collect_all_slugs
+    local s mark disp_label src_kind
+    if [ "$plain" -eq 1 ]; then
+        for s in "${_HS_ALL_SLUGS[@]}"; do
+            printf '%s\n' "$s"
+        done
+        return 0
+    fi
+    local use_color=0
+    if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "linux" ]; then
+        use_color=1
+    fi
+    for s in "${_HS_ALL_SLUGS[@]}"; do
+        _hs_bash_resolve_slug_to_raw "$s" || continue
+        src_kind="builtin"
+        [ -n "${_HS_RESOLVED_UFILE:-}" ] && src_kind="user"
+        _hs_bash_finalize_palette "$s"
+        mark=" "
+        [ "$s" = "$current_slug" ] && mark="*"
+        disp_label="$_HS_C_LABEL"
+        if _hs_bash_holiday_icon "$s"; then
+            disp_label="$REPLY $disp_label"
+        fi
+        if [ "$use_color" -eq 1 ]; then
+            _hs_bash_swatch_strip
+            printf '%s %-18s %-6s %-7s %s  %s\n' "$mark" "$s" "[$_HS_C_MODE]" "$src_kind" "$REPLY" "$disp_label"
+        else
+            printf '%s %-20s %-6s %s\n' "$mark" "$s" "[$_HS_C_MODE]" "$disp_label"
+        fi
+    done
+    return 0
+}
+
+_hs_bash_create_user_theme() {
+    local new_name="${1:-}" base_name="${2:-solarized-dark}" force="${3:-0}"
+    _hs_bash_norm_slug "$new_name"
+    local slug="$REPLY"
+    if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || [ "$slug" = "active-theme" ]; then
+        echo "theme: invalid theme name '$new_name' (use lowercase letters, numbers, and hyphens)" >&2
+        return 1
+    fi
+    _hs_bash_norm_slug "$base_name"
+    local base_slug="$REPLY"
+    if [ -z "$base_slug" ] || ! _hs_bash_resolve_slug_to_raw "$base_slug"; then
+        echo "theme: unknown base theme '$base_name'" >&2
+        return 1
+    fi
+    _hs_bash_finalize_palette "$base_slug"
+    local base_id="$_HS_C_ID" base_label="$_HS_C_LABEL" base_mode="$_HS_C_MODE"
+    local user_dir="${HOME_SETTINGS_USER_THEMES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/themes}"
+    local target_path="$user_dir/$slug.theme"
+    if [ -e "$target_path" ] && [ "$force" -eq 0 ]; then
+        echo "theme: custom theme file already exists: $target_path (use --force to overwrite)" >&2
+        return 1
+    fi
+    local part="" cap="" label="" pascal="" rest_slug="$slug"
+    while [ -n "$rest_slug" ]; do
+        if [[ "$rest_slug" == *-* ]]; then
+            part="${rest_slug%%-*}"
+            rest_slug="${rest_slug#*-}"
+        else
+            part="$rest_slug"
+            rest_slug=""
+        fi
+        if [ -n "$part" ]; then
+            cap="${part:0:1}"
+            case "$cap" in
+                a) cap=A ;; b) cap=B ;; c) cap=C ;; d) cap=D ;; e) cap=E ;; f) cap=F ;;
+                g) cap=G ;; h) cap=H ;; i) cap=I ;; j) cap=J ;; k) cap=K ;; l) cap=L ;;
+                m) cap=M ;; n) cap=N ;; o) cap=O ;; p) cap=P ;; q) cap=Q ;; r) cap=R ;;
+                s) cap=S ;; t) cap=T ;; u) cap=U ;; v) cap=V ;; w) cap=W ;; x) cap=X ;;
+                y) cap=Y ;; z) cap=Z ;;
+            esac
+            label="${label:+$label }${cap}${part:1}"
+            pascal="${pascal:+$pascal-}${cap}${part:1}"
+        fi
+    done
+    local snake_slug="${slug//-/_}"
+    local tmp_target="$target_path.tmp.$$.${BASHPID:-0}"
+    if ! mkdir -p "$user_dir" 2>/dev/null || ! (
+        cat > "$tmp_target" <<EOF
+# Custom User Theme: $slug (based on $base_id)
+THEME_ID="$slug"
+THEME_LABEL="$label"
+THEME_DESCRIPTION="Custom $base_mode theme based on $base_label"
+THEME_MODE="$base_mode"
+BAT_THEME_NAME="${pascal}-TrueColor"
+BTOP_THEME_NAME="$snake_slug"
+GHOSTTY_THEME_NAME="$label"
+
+# Monotone Surface & Content Ramp
+BASE03="$_HS_C_B03"
+BASE02="$_HS_C_B02"
+BASE04="$_HS_C_B04"
+BASE01="$_HS_C_B01"
+BASE00="$_HS_C_B00"
+BASE0="$_HS_C_B0"
+BASE1="$_HS_C_B1"
+BASE2="$_HS_C_B2"
+BASE3="$_HS_C_B3"
+
+# Semantic Accent Palette
+YELLOW="$_HS_C_YEL"
+ORANGE="$_HS_C_ORA"
+RED="$_HS_C_RED"
+MAGENTA="$_HS_C_MAG"
+VIOLET="$_HS_C_VIO"
+BLUE="$_HS_C_BLU"
+CYAN="$_HS_C_CYA"
+GREEN="$_HS_C_GRN"
+
+# Diff & Search Surface Tints
+MIX_GREEN="$_HS_C_MGRN"
+MIX_RED="$_HS_C_MRED"
+MIX_YELLOW="$_HS_C_MYEL"
+MIX_BLUE="$_HS_C_MBLU"
+MIX_MAGENTA="$_HS_C_MMAG"
+MIX_BASE1="$_HS_C_MB1"
+EOF
+    ) 2>/dev/null || ! mv -f "$tmp_target" "$target_path" 2>/dev/null; then
+        rm -f "$tmp_target" 2>/dev/null || true
+        echo "theme: cannot write custom theme file: $target_path" >&2
+        return 1
+    fi
+    printf '%s\n' "$target_path"
+    return 0
+}
+
+_hs_bash_render_preview() {
+    local slug="${1:-}"
+    (
+        _hs_bash_resolve_slug_to_raw "$slug" || { echo "Error: unknown theme '$slug'." >&2; exit 1; }
+        _hs_bash_finalize_palette "$slug"
+        if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "linux" ]; then
+            printf 'Theme: %s (%s) [%s]\n  bg=%s surface=%s fg=%s comment=%s\n  green=%s yellow=%s blue=%s cyan=%s magenta=%s violet=%s orange=%s red=%s\n' \
+                "$_HS_C_LABEL" "$_HS_C_ID" "$_HS_C_MODE" "$_HS_C_B03" "$_HS_C_B02" "$_HS_C_B0" "$_HS_C_B01" \
+                "$_HS_C_GRN" "$_HS_C_YEL" "$_HS_C_BLU" "$_HS_C_CYA" "$_HS_C_MAG" "$_HS_C_VIO" "$_HS_C_ORA" "$_HS_C_RED"
+            exit 0
+        fi
+        local b03 b02 b01 b0 b1 yel ora red mag vio blu cya grn
+        _hs_bash_rgb_semi "$_HS_C_B03"; b03="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_B02"; b02="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_B01"; b01="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_B0";  b0="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_B1";  b1="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_YEL"; yel="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_ORA"; ora="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_RED"; red="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_MAG"; mag="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_VIO"; vio="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_BLU"; blu="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_CYA"; cya="$REPLY"
+        _hs_bash_rgb_semi "$_HS_C_GRN"; grn="$REPLY"
+        printf '\033[48;2;%sm\033[38;2;%sm  %s (%s) [%s]  \033[0m\n' "$b02" "$b1" "$_HS_C_LABEL" "$_HS_C_ID" "$_HS_C_MODE"
+        printf '\033[48;2;%sm  \033[38;2;%sm// Comment %s\033[0m\n' "$b03" "$b01" "$_HS_C_B01"
+        printf '\033[48;2;%sm  \033[38;2;%smfunc\033[38;2;%sm \033[38;2;%smServe\033[38;2;%sm(port \033[38;2;%smint\033[38;2;%sm) { \033[38;2;%smif\033[38;2;%sm port == \033[38;2;%sm443\033[38;2;%sm { \033[38;2;%smreturn\033[38;2;%sm \033[38;2;%sm"tls"\033[38;2;%sm } }  \033[0m\n' \
+            "$b03" "$grn" "$b0" "$blu" "$b0" "$grn" "$b0" "$yel" "$b0" "$mag" "$b0" "$yel" "$b0" "$cya" "$b0"
+        printf '  \033[38;2;%sm██\033[0m GRN \033[38;2;%sm██\033[0m YEL \033[38;2;%sm██\033[0m BLU \033[38;2;%sm██\033[0m CYA \033[38;2;%sm██\033[0m MAG \033[38;2;%sm██\033[0m VIO \033[38;2;%sm██\033[0m ORA \033[38;2;%sm██\033[0m RED\n' \
+            "$grn" "$yel" "$blu" "$cya" "$mag" "$vio" "$ora" "$red"
+    )
+}
+
+_hs_bash_standalone_current_slug() {
+    local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings" cur=""
+    if [ -r "$hs_dir/theme" ]; then
+        IFS= read -r cur < "$hs_dir/theme" || true
+        cur="${cur//$'\r'/}"
+        _hs_bash_norm_slug "$cur"
+        cur="$REPLY"
+    fi
+    if [ -z "$cur" ]; then
+        cur="${_HS_LOADED_THEME:-${HOME_SETTINGS_THEME:-solarized-dark}}"
+        _hs_bash_norm_slug "$cur"
+        cur="${REPLY:-solarized-dark}"
+    fi
+    REPLY="$cur"
+}
+
+# Zero-dependency standalone theme manager (used when bin/theme is absent on 2-file remote servers)
+_hs_bash_standalone_theme() {
+    local act="" target="" base_name="solarized-dark" force=0 plain=0 no_live=0 dry_run=0 end_opts=0
+    while [ $# -gt 0 ]; do
+        if [ "$end_opts" -eq 0 ] && [ "$1" = "--" ]; then
+            end_opts=1
+            shift
+            continue
+        fi
+        if [ "$end_opts" -eq 0 ]; then
+            case "$1" in
+                -h|--help)
+                    cat <<'EOF'
+Usage: theme [OPTIONS] [THEME_NAME]
+
+Standalone Bash color theme manager (17 built-in + custom ${XDG_CONFIG_HOME:-$HOME/.config}/themes/*.{theme,conf}).
+
+Options:
+  -s, --set <NAME>       Apply theme <NAME>
+  --holiday              Apply nearest upcoming or active US Holiday theme
+  -l, --list             List all available themes
+  --plain                Print theme slugs only (one per line)
+  -c, --current          Print currently active theme slug
+  -p, --preview [NAME]   Render a TrueColor palette preview
+  --env [NAME]           Output shell export commands for [NAME]
+  --create <NAME>        Create a custom user theme file
+  --from <BASE>          Base theme when used with --create (default: solarized-dark)
+  -f, --force            Overwrite existing custom theme file with --create
+  --path                 Print user custom themes directory path
+  --no-live              Write state without emitting live terminal OSC sequences
+  -n, --dry-run [NAME]   Validate and preview target updates without modifying state
+  -h, --help             Show this help message
+EOF
+                    return 0
+                    ;;
+                --path)
+                    printf '%s\n' "${HOME_SETTINGS_USER_THEMES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/themes}"
+                    return 0
+                    ;;
+                -c|--current)
+                    act="current"
+                    shift
+                    continue
+                    ;;
+                -l|--list)
+                    act="list"
+                    shift
+                    continue
+                    ;;
+                --plain)
+                    plain=1
+                    [ -z "$act" ] && act="list"
+                    shift
+                    continue
+                    ;;
+                --no-live)
+                    no_live=1
+                    shift
+                    continue
+                    ;;
+                -f|--force)
+                    force=1
+                    shift
+                    continue
+                    ;;
+                --holiday)
+                    act="holiday"
+                    shift
+                    continue
+                    ;;
+                -n|--dry-run)
+                    dry_run=1
+                    if [ $# -ge 2 ] && [[ "${2:-}" != -* ]]; then
+                        target="$2"
+                        shift 2
+                    else
+                        shift
+                    fi
+                    continue
+                    ;;
+                --dry-run=*)
+                    dry_run=1
+                    target="${1#*=}"
+                    shift
+                    continue
+                    ;;
+                -p|--preview)
+                    act="preview"
+                    if [ $# -ge 2 ] && [[ "${2:-}" != -* ]]; then
+                        target="$2"
+                        shift 2
+                    else
+                        shift
+                    fi
+                    continue
+                    ;;
+                --preview=*)
+                    act="preview"
+                    target="${1#*=}"
+                    shift
+                    continue
+                    ;;
+                --env)
+                    act="env"
+                    if [ $# -ge 2 ] && [[ "${2:-}" != -* ]]; then
+                        target="$2"
+                        shift 2
+                    else
+                        shift
+                    fi
+                    continue
+                    ;;
+                --env=*)
+                    act="env"
+                    target="${1#*=}"
+                    shift
+                    continue
+                    ;;
+                --create)
+                    if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
+                        echo "theme: option '--create' requires a new theme name" >&2
+                        return 1
+                    fi
+                    act="create"
+                    target="$2"
+                    shift 2
+                    continue
+                    ;;
+                --create=*)
+                    act="create"
+                    target="${1#*=}"
+                    if [ -z "$target" ]; then
+                        echo "theme: option '--create' requires a new theme name" >&2
+                        return 1
+                    fi
+                    shift
+                    continue
+                    ;;
+                --from)
+                    if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
+                        echo "theme: option '--from' requires a base theme name" >&2
+                        return 1
+                    fi
+                    base_name="$2"
+                    shift 2
+                    continue
+                    ;;
+                --from=*)
+                    base_name="${1#*=}"
+                    if [ -z "$base_name" ]; then
+                        echo "theme: option '--from' requires a base theme name" >&2
+                        return 1
+                    fi
+                    shift
+                    continue
+                    ;;
+                -s|--set)
+                    if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
+                        echo "Error: '$1' requires a theme name." >&2
+                        return 1
+                    fi
+                    act="set"
+                    target="$2"
+                    shift 2
+                    continue
+                    ;;
+                --set=*)
+                    act="set"
+                    target="${1#*=}"
+                    if [ -z "$target" ]; then
+                        echo "Error: '--set=' requires a theme name." >&2
+                        return 1
+                    fi
+                    shift
+                    continue
+                    ;;
+                -*)
+                    echo "Error: unsupported option '$1' in standalone mode." >&2
+                    return 1
+                    ;;
+            esac
+        fi
+        if [ -n "$target" ] || { [ -n "$act" ] && [ "$act" != "set" ] && [ "$act" != "preview" ] && [ "$act" != "env" ]; }; then
+            echo "Error: unexpected argument '$1'." >&2
+            return 1
+        fi
+        [ -z "$act" ] && act="set"
+        target="$1"
+        shift
+    done
+
+    _hs_bash_standalone_current_slug
+    local current_slug="$REPLY"
+
+    if [ "$act" = "current" ]; then
+        printf '%s\n' "$current_slug"
+        return 0
+    fi
+
+    if [ "$act" = "list" ]; then
+        _hs_bash_list_themes "$current_slug" "$plain"
+        return 0
+    fi
+
+    if [ "$act" = "create" ]; then
+        _hs_bash_create_user_theme "$target" "$base_name" "$force"
+        return $?
+    fi
+
+    if [ "$act" = "preview" ]; then
+        [ -z "$target" ] && target="$current_slug"
+        _hs_bash_render_preview "$target"
+        return $?
+    fi
+
+    if [ "$act" = "env" ]; then
+        [ -z "$target" ] && target="$current_slug"
+        (
+            _hs_bash_resolve_slug_to_raw "$target" || { echo "Error: unknown theme '$target'." >&2; exit 1; }
+            _hs_bash_finalize_palette "$target"
+            _hs_bash_emit_theme_env_sh
+        )
+        return $?
+    fi
+
+    if [ "$act" = "holiday" ]; then
+        _hs_bash_nearest_holiday || return 1
+        target="$REPLY"
+        act="set"
+    fi
+
+    if [ "$dry_run" -eq 1 ] && { [ -n "$target" ] || { { [ ! -t 0 ] || [ ! -t 1 ]; } && [ "${THEME_FORCE_FZF:-0}" != "1" ]; }; }; then
+        [ -z "$target" ] && target="$current_slug"
+        (
+            _hs_bash_resolve_slug_to_raw "$target" || { echo "Error: unknown theme '$target'." >&2; exit 1; }
+            _hs_bash_finalize_palette "$target"
+            local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+            printf '[DRY-RUN] Theme: %s (%s, %s)\n  Would write: %s/active-theme.theme\n  Would write: %s/theme-env.sh\n  Would write: %s/theme\n' \
+                "$_HS_C_ID" "$_HS_C_LABEL" "$_HS_C_MODE" "$hs_dir" "$hs_dir" "$hs_dir"
+        )
+        return $?
+    fi
+
+    if [ -z "$act" ] && [ -z "$target" ]; then
+        if { [ -t 0 ] && [ -t 1 ]; } || [ "${THEME_FORCE_FZF:-0}" = "1" ]; then
+            if command -v fzf >/dev/null 2>&1; then
+                _hs_bash_collect_all_slugs
+                local fzf_lines="" s act_tag src_kind disp_label strip
+                for s in "${_HS_ALL_SLUGS[@]}"; do
+                    _hs_bash_resolve_slug_to_raw "$s" || continue
+                    src_kind="builtin"
+                    [ -n "${_HS_RESOLVED_UFILE:-}" ] && src_kind="user"
+                    _hs_bash_finalize_palette "$s"
+                    act_tag="        "
+                    [ "$s" = "$current_slug" ] && act_tag="(active)"
+                    _hs_bash_swatch_strip
+                    strip="$REPLY"
+                    disp_label="$_HS_C_LABEL"
+                    if _hs_bash_holiday_icon "$s"; then
+                        disp_label="$REPLY $disp_label"
+                    fi
+                    local row=""
+                    printf -v row '%-18s  %-8s  %-5s  %-7s  %s  %s\n' "$s" "$act_tag" "$_HS_C_MODE" "$src_kind" "$strip" "$disp_label"
+                    fzf_lines="${fzf_lines}${row}"
+                done
+                if ! _hs_bash_resolve_slug_to_raw "$current_slug"; then
+                    _hs_bash_builtin_spec "solarized-dark" && _hs_bash_unpack_spec_to_raw "solarized-dark" "$REPLY"
+                fi
+                _hs_bash_finalize_palette "$current_slug"
+                local fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_CYA},hl:${_HS_C_BLU},fg:${_HS_C_B0},header:${_HS_C_B01},info:${_HS_C_YEL},pointer:${_HS_C_CYA},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_BLU},hl+:${_HS_C_BLU}"
+                local -a preview_args=()
+                if [ -n "${_HS_BASHRC_SELF_PATH:-}" ] && [ -r "$_HS_BASHRC_SELF_PATH" ]; then
+                    local sq_bash="'${BASH//\'/\'\\\'\'}'"
+                    local sq_self="'${_HS_BASHRC_SELF_PATH//\'/\'\\\'\'}'"
+                    preview_args=(
+                        "--preview=${sq_bash} -c '. \"\$1\" >/dev/null 2>&1 && _hs_bash_render_preview \"\$2\"' _ ${sq_self} {1}"
+                        "--preview-window=right:60%:nowrap:noinfo"
+                    )
+                fi
+                local picked="" fzf_rc=0
+                picked="$(printf '%s' "$fzf_lines" | fzf --ansi --no-multi --reverse --height=80% --border=rounded --prompt="Theme > " --header="Select a color theme (Enter to apply, Esc to cancel)" ${preview_args[@]+"${preview_args[@]}"} "$fzf_colors")" || fzf_rc=$?
+                if [ "$fzf_rc" -eq 130 ] || [ -z "$picked" ]; then
+                    return 0
+                fi
+                if [ "$fzf_rc" -ne 0 ]; then
+                    return "$fzf_rc"
+                fi
+                picked="${picked#"${picked%%[![:space:]]*}"}"
+                if [[ "$picked" == "* "* ]]; then
+                    picked="${picked#\* }"
+                    picked="${picked#"${picked%%[![:space:]]*}"}"
+                fi
+                target="${picked%%[[:space:]]*}"
+                act="set"
+            else
+                _hs_bash_list_themes "$current_slug" 0
+                return 0
+            fi
+        else
+            _hs_bash_list_themes "$current_slug" 0
+            return 0
+        fi
+    fi
+
+    if [ "$dry_run" -eq 1 ]; then
+        [ -z "$target" ] && target="$current_slug"
+        (
+            _hs_bash_resolve_slug_to_raw "$target" || { echo "Error: unknown theme '$target'." >&2; exit 1; }
+            _hs_bash_finalize_palette "$target"
+            local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+            printf '[DRY-RUN] Theme: %s (%s, %s)\n  Would write: %s/active-theme.theme\n  Would write: %s/theme-env.sh\n  Would write: %s/theme\n' \
+                "$_HS_C_ID" "$_HS_C_LABEL" "$_HS_C_MODE" "$hs_dir" "$hs_dir" "$hs_dir"
+        )
+        return $?
+    fi
+
+    _hs_bash_norm_slug "$target"
+    local norm_target="$REPLY"
+    if [ -z "$norm_target" ] || ! ( _hs_bash_resolve_slug_to_raw "$norm_target" >/dev/null 2>&1 ); then
+        echo "Error: unknown theme '$target'." >&2
+        return 1
+    fi
+
+    _hs_bash_resolve_slug_to_raw "$norm_target" || return 1
+    _hs_bash_finalize_palette "$norm_target"
+
+    local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
+    local tmp_sfx="$$.${BASHPID:-0}"
+    if ! mkdir -p "$hs_dir" 2>/dev/null || \
+       ! ( _hs_bash_emit_active_theme_file > "$hs_dir/active-theme.theme.tmp.$tmp_sfx" ) 2>/dev/null || \
+       ! mv -f "$hs_dir/active-theme.theme.tmp.$tmp_sfx" "$hs_dir/active-theme.theme" 2>/dev/null || \
+       ! ( _hs_bash_emit_theme_env_sh > "$hs_dir/theme-env.sh.tmp.$tmp_sfx" ) 2>/dev/null || \
+       ! mv -f "$hs_dir/theme-env.sh.tmp.$tmp_sfx" "$hs_dir/theme-env.sh" 2>/dev/null || \
+       ! ( printf '%s\n' "$_HS_C_ID" > "$hs_dir/theme.tmp.$tmp_sfx" ) 2>/dev/null || \
+       ! mv -f "$hs_dir/theme.tmp.$tmp_sfx" "$hs_dir/theme" 2>/dev/null; then
+        rm -f "$hs_dir/active-theme.theme.tmp.$tmp_sfx" "$hs_dir/theme-env.sh.tmp.$tmp_sfx" "$hs_dir/theme.tmp.$tmp_sfx" 2>/dev/null || true
+        echo "Error: cannot write theme state in '$hs_dir'." >&2
+        return 1
+    fi
+
+    local applied_label="$_HS_C_LABEL" applied_id="$_HS_C_ID"
+    unset HOME_SETTINGS_THEME_FILE
+    _HS_USER_ENV_THEME=""
+    _HS_USER_ENV_TFILE=""
+    _HS_LAST_SEEN_TFILE="__UNSET__"
+    _HS_LOADED_TFILE_RAW=""
+    _HS_LOADED_TFILE_PATH=""
+    _hs_bash_apply_finalized_palette
+    local env_raw=""
+    IFS= read -r -d '' env_raw < "$hs_dir/theme-env.sh" || true
+    _HS_LOADED_ENV_RAW="$env_raw"
+    _HS_LOADED_UFILE_RAW=""
+    if [ -n "${_HS_RESOLVED_UFILE:-}" ] && [ -r "$_HS_RESOLVED_UFILE" ]; then
+        IFS= read -r -d '' _HS_LOADED_UFILE_RAW < "$_HS_RESOLVED_UFILE" || true
+    fi
+
+    if [ "$no_live" -eq 0 ]; then
+        _hs_bash_emit_live_osc
+    fi
+    _solarized_bash_prompt
+    printf 'Applied theme: %s (%s)\n' "$applied_label" "$applied_id"
+    return 0
+}
+
 # Color theme manager wrapper (`theme [name | options]`)
 theme() {
     local theme_bin=""
@@ -1444,8 +2951,8 @@ theme() {
     elif type -P theme >/dev/null 2>&1; then
         theme_bin="$(type -P theme)"
     else
-        echo "Error: 'theme' binary not found in ~/.local/bin or PATH." >&2
-        return 1
+        _hs_bash_standalone_theme "$@"
+        return $?
     fi
 
     local is_query=0
@@ -1475,10 +2982,24 @@ theme() {
         return 0
     fi
     if [ "$rc" -eq 0 ] && [ "$is_query" -eq 0 ]; then
+        unset HOME_SETTINGS_THEME_FILE
+        _HS_USER_ENV_THEME=""
+        _HS_USER_ENV_TFILE=""
+        _HS_LAST_SEEN_TFILE="__UNSET__"
+        _HS_LOADED_TFILE_RAW=""
+        _HS_LOADED_TFILE_PATH=""
         local hs_dir="${XDG_CONFIG_HOME:-$HOME/.config}/home-settings"
         if [ -r "$hs_dir/theme-env.sh" ]; then
+            local env_raw=""
+            IFS= read -r -d '' env_raw < "$hs_dir/theme-env.sh" || true
+            _HS_LOADED_ENV_RAW="$env_raw"
             # shellcheck source=/dev/null
             . "$hs_dir/theme-env.sh"
+            [[ "${LS_COLORS:-}" == *"38;2;"* ]] && _HS_LAST_TC_LS_COLORS="$LS_COLORS"
+            _HS_INTERNAL_ENV_THEME="${HOME_SETTINGS_THEME:-}"
+            if ! _hs_bash_is_truecolor && [[ "${LS_COLORS:-}" == *"38;2;"* ]]; then
+                _hs_bash_apply_ansi_ls_colors
+            fi
         fi
         _solarized_bash_prompt
     fi
@@ -1489,7 +3010,7 @@ _theme_bash_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]:-}"
     local prev="${COMP_WORDS[COMP_CWORD-1]:-}"
     local opts="-l --list --plain -c --current -s --set --holiday -p --preview --env --create --from -f --force --path --no-live -n --dry-run -h --help"
-    local themes="solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark new-years valentines st-patricks easter independence-day halloween thanksgiving christmas"
+    local themes=""
     local theme_bin=""
     if [ -x "$HOME/.local/bin/theme" ]; then
         theme_bin="$HOME/.local/bin/theme"
@@ -1497,7 +3018,11 @@ _theme_bash_complete() {
         theme_bin="$(type -P theme)"
     fi
     if [ -n "$theme_bin" ]; then
-        themes="$("$theme_bin" --list --plain 2>/dev/null || echo "$themes")"
+        themes="$("$theme_bin" --list --plain 2>/dev/null || true)"
+    fi
+    if [ -z "$themes" ]; then
+        _hs_bash_collect_all_slugs
+        themes="${_HS_ALL_SLUGS[*]}"
     fi
     case "$prev" in
         -s|--set|-p|--preview|--env|--from|-n|--dry-run)
@@ -1518,21 +3043,26 @@ complete -F _theme_bash_complete theme 2>/dev/null || true
 
 # Initialize default Solarized Dark PS1
 _solarized_bash_prompt
+_HS_POST_SOURCE_SYNC=1
 
 # 5. Interactive Shell Ergonomics & Optional Tool Integrations (zoxide, mise, fzf)
 if [[ "$-" == *i* ]]; then
-    shopt -s histappend checkwinsize
-    shopt -s autocd dirspell cdspell 2>/dev/null || true
+    shopt -s histappend checkwinsize cdspell
+    if (( BASH_VERSINFO[0] >= 4 )); then
+        shopt -s autocd dirspell
+    fi
 
     bind 'set completion-ignore-case on' 2>/dev/null || true
     bind 'set show-all-if-ambiguous on' 2>/dev/null || true
+    bind 'set colored-stats on' 2>/dev/null || true
+    bind 'set colored-completion-prefix off' 2>/dev/null || true
     bind '"\e[A": history-search-backward' 2>/dev/null || true
     bind '"\e[B": history-search-forward' 2>/dev/null || true
 
     # shellcheck disable=SC2128,SC2178
     if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-        if [[ " ${PROMPT_COMMAND[*]} " != *" _solarized_bash_prompt "* ]]; then
-            PROMPT_COMMAND=("_solarized_bash_prompt" "${PROMPT_COMMAND[@]}")
+        if [[ " ${PROMPT_COMMAND[*]:-} " != *" _solarized_bash_prompt "* ]]; then
+            PROMPT_COMMAND=("_solarized_bash_prompt" ${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"})
         fi
     elif [[ ";${PROMPT_COMMAND:-};" != *";_solarized_bash_prompt;"* ]]; then
         PROMPT_COMMAND="_solarized_bash_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"

@@ -9,7 +9,7 @@ COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
 # Isolate all test suites from any live caller tmux session or active theme exports by default
-unset TMUX TMUX_PANE HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE
+unset TMUX TMUX_PANE HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
 
 # Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
 export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"

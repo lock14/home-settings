@@ -15,10 +15,20 @@ echo "========================================"
 
 # Test 1: Vimrc loads without errors
 echo -e "\n[1/6] Testing dotfiles/.vimrc loading without syntax errors..."
-if vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "q" >/dev/null 2>&1; then
+if vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "q" </dev/null >/dev/null 2>&1; then
     pass ".vimrc loaded cleanly without errors"
 else
     fail ".vimrc load" "Vim reported errors when loading dotfiles/.vimrc"
+fi
+
+if command -v vim.tiny >/dev/null 2>&1; then
+    TINY_ERR="$(mktemp)"
+    if vim.tiny -Nu "$SCRIPT_DIR/dotfiles/.vimrc" -i NONE -es -c "qall!" </dev/null >/dev/null 2>"$TINY_ERR" && [ ! -s "$TINY_ERR" ]; then
+        pass "dotfiles/.vimrc loads cleanly on minimal server vim.tiny (-eval) with zero E319 errors"
+    else
+        fail "dotfiles/.vimrc vim.tiny (-eval)" "vim.tiny failed or emitted errors: $(tr '\n' ' ' < "$TINY_ERR")"
+    fi
+    rm -f "$TINY_ERR"
 fi
 
 if ! grep -E '^highlight Diff[A-Za-z]+.*[ \t]+$' "$SCRIPT_DIR/dotfiles/.vimrc" >/dev/null 2>&1; then
@@ -43,7 +53,7 @@ init_vim_option_cache() {
         echo "call writefile(s:out, '${vim_script}.out')"
         echo "qall!"
     } > "$vim_script"
-    vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -S "$vim_script" >/dev/null 2>&1 || true
+    vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -S "$vim_script" </dev/null >/dev/null 2>&1 || true
     if [ -f "${vim_script}.out" ]; then
         while IFS= read -r res; do
             VIM_OPT_CACHE["${exprs[$idx]}"]="$res"
@@ -87,9 +97,10 @@ check_option "toupper(synIDattr(hlID('Include'), 'fg#', 'gui')) == '#6C71C4' && 
 check_option "toupper(synIDattr(hlID('PreProc'), 'fg#', 'gui')) == '#CB4B16'" "Vim PreProc mapped to Solarized Orange (#CB4B16)"
 check_option "toupper(synIDattr(hlID('String'), 'fg#', 'gui')) == '#2AA198' && toupper(synIDattr(hlID('Character'), 'fg#', 'gui')) == '#2AA198'" "Vim String and Character literals mapped to Solarized Cyan (#2AA198)"
 check_option "toupper(synIDattr(hlID('Constant'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Number'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('Boolean'), 'fg#', 'gui')) == '#D33682'" "Vim Constant, Number, and Boolean mapped to Solarized Magenta (#D33682)"
-check_option "toupper(synIDattr(hlID('Error'), 'fg#', 'gui')) == '#DC322F' && toupper(synIDattr(hlID('WarningMsg'), 'fg#', 'gui')) == '#CB4B16'" "Vim Error and WarningMsg mapped to Solarized Red (#DC322F) and Orange (#CB4B16)"
+check_option "toupper(synIDattr(hlID('Error'), 'fg#', 'gui')) == '#DC322F' && toupper(synIDattr(hlID('WarningMsg'), 'fg#', 'gui')) == '#B58900' && synIDattr(hlID('WarningMsg'), 'fg', 'cterm') == '3'" "Vim Error and WarningMsg mapped to Solarized Red (#DC322F) and Yellow (#B58900, converged with Neovim diagnostic ladder)"
 check_option "synIDattr(hlID('Normal'), 'fg', 'cterm') == '12' && empty(synIDattr(hlID('Normal'), 'bg', 'cterm')) && empty(synIDattr(hlID('LineNr'), 'bg', 'cterm')) && empty(synIDattr(hlID('VertSplit'), 'bg', 'cterm')) && empty(synIDattr(hlID('FoldColumn'), 'bg', 'cterm')) && empty(synIDattr(hlID('SignColumn'), 'bg', 'cterm')) && synIDattr(hlID('Conditional'), 'fg', 'cterm') == '3' && synIDattr(hlID('Type'), 'fg', 'cterm') == '2' && synIDattr(hlID('Function'), 'fg', 'cterm') == '4' && synIDattr(hlID('String'), 'fg', 'cterm') == '6' && synIDattr(hlID('Constant'), 'fg', 'cterm') == '5'" "Vim 16/256-color cterm fallback uses ctermbg=NONE on canvas/gutter/splits (zero ctermbg=8 collision) alongside TrueColor gui attributes"
 check_option "toupper(synIDattr(hlID('WildMenu'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('WildMenu'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('StatusLineTerm'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('Added'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Changed'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Removed'), 'fg#', 'gui')) == '#DC322F'" "Vim WildMenu, StatusLineTerm, and Added/Changed/Removed groups mapped to Solarized Dark"
+check_option "toupper(synIDattr(hlID('Visual'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('Visual'), 'bg#', 'gui')) == '#2C4E56' && toupper(synIDattr(hlID('IncSearch'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('IncSearch'), 'bg#', 'gui')) == '#3E2E4C' && toupper(synIDattr(hlID('NormalFloat'), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('PopupTitle')), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(synIDtrans(hlID('PopupTitle')), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(synIDtrans(hlID('PmenuBorder')), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(hlID('FloatBorder'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('WinSeparator'), 'fg#', 'gui')) == '#586E75' && len(get(g:, 'terminal_ansi_colors', [])) == 16 && toupper(g:terminal_ansi_colors[9]) == '#CB4B16' && toupper(g:terminal_ansi_colors[13]) == '#6C71C4'" "Vim Visual (MIX_BASE1), IncSearch (MIX_MAGENTA), NormalFloat/Popup/PopupBorder/PopupTitle/PmenuBorder/PopupNotification/MessageWindow/FloatBorder (BASE04/BASE01), WinSeparator, and 16-slot g:terminal_ansi_colors match Neovim palette"
 check_option "toupper(synIDattr(hlID('protoRepeat'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('protoTodo'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('pbtxtMessage'), 'fg#', 'gui')) == '#268BD2' && toupper(synIDattr(hlID('pbtxtField'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('pbtxtEnum'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('pbtxtTodo'), 'fg#', 'gui')) == '#586E75'" "Vim Protocol Buffers (protoRepeat, protoTodo) and Textproto (pbtxtMessage, pbtxtField, pbtxtEnum, pbtxtTodo) fallback groups mapped to Solarized Dark"
 
 if ! grep -Fq 'ctermbg=8' "$SCRIPT_DIR/dotfiles/.vimrc"; then
@@ -98,20 +109,20 @@ else
     fail "dotfiles/.vimrc ctermbg=8" "Found ctermbg=8 in dotfiles/.vimrc"
 fi
 
-if COLORTERM=truecolor vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &termguicolors == 1 | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+if COLORTERM=truecolor vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &termguicolors == 1 | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
     pass "Vim enables termguicolors automatically when COLORTERM=truecolor"
 else
     fail "Vim termguicolors" "Expected &termguicolors == 1 when COLORTERM=truecolor"
 fi
 
-if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent HOME_SETTINGS_THEME="" XDG_CONFIG_HOME=/nonexistent vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "syntax on" -c "set background=dark" -c "if toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent HOME_SETTINGS_THEME="" XDG_CONFIG_HOME=/nonexistent vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "syntax on" -c "set background=dark" -c "if toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#B58900' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
     pass "Vim SolarizedDarkFallback augroup preserves inline highlights across :syntax on and :set background=dark"
 else
     fail "Vim highlight persistence" "Inline Solarized Dark highlights were reset by :syntax on or :set background=dark"
 fi
 
-if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/catppuccin-mocha.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'dark' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#1E1E2E' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#CDD6F4' && toupper(synIDattr(hlID('CursorLineNr'), 'fg#', 'gui')) == '#DCE0E8' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#A6E3A1' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#F9E2AF' | q | else | cquit 1 | endif" >/dev/null 2>&1 && \
-   COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME="solarized-light" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'light' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#FDF6E3' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#657B83' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$SCRIPT_DIR/colors/themes/catppuccin-mocha.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'dark' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#1E1E2E' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#CDD6F4' && toupper(synIDattr(hlID('CursorLineNr'), 'fg#', 'gui')) == '#DCE0E8' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) == '#A6E3A1' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) == '#F9E2AF' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1 && \
+   COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME="solarized-light" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'light' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#FDF6E3' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#657B83' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
     pass "Vim .vimrc dynamically resolves active theme palettes and sets background=light for light themes (Catppuccin Mocha & Solarized Light)"
 else
     fail "Vim active theme override" "Expected Catppuccin Mocha and Solarized Light palettes and background modes in .vimrc"
@@ -130,14 +141,263 @@ THEME_MODE='light' # light mode
 BASE03='#FAF8F5' # warm paper bg
 BASE0='#2B2D42' # ink fg
 EOF
-if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$VIM_SEC_TMP/evil.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#002B36' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#AABBCC' | q | else | cquit 1 | endif" >/dev/null 2>&1 && \
+if COLORTERM=truecolor HOME_SETTINGS_THEME_FILE="$VIM_SEC_TMP/evil.theme" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#002B36' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#AABBCC' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1 && \
    [ ! -e "$VIM_SEC_TMP/pwned.txt" ] && \
-   COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent XDG_CONFIG_HOME="$VIM_SEC_TMP/.config" HOME_SETTINGS_THEME="decoupled-paper" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'light' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#FAF8F5' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#2B2D42' | q | else | cquit 1 | endif" >/dev/null 2>&1; then
+   COLORTERM=truecolor HOME_SETTINGS_THEME_FILE=/nonexistent XDG_CONFIG_HOME="$VIM_SEC_TMP/.config" HOME_SETTINGS_THEME="decoupled-paper" vim -u "$SCRIPT_DIR/dotfiles/.vimrc" -N -es -c "if &background ==# 'light' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) == '#FAF8F5' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) == '#2B2D42' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
     pass "Vim .vimrc neutralizes malformed hex Ex-command injection payloads and resolves single-quoted/inline-commented .conf user themes"
 else
     fail "Vim .vimrc security & .conf parsing" "Unexpected Ex-command execution or failed .conf/single-quote theme parsing"
 fi
 rm -rf "$VIM_SEC_TMP"
+
+# Test standalone 2-file .vimrc 1:1 embedded 17-theme parity, :Theme command + completion + switch-back + --holiday, FocusGained live reload, and filetype syntax overrides
+VIM_STANDALONE_TMP="$(mktemp -d)"
+cp "$SCRIPT_DIR/dotfiles/.vimrc" "$VIM_STANDALONE_TMP/.vimrc"
+mkdir -p "$VIM_STANDALONE_TMP/home/.config/themes"
+cat > "$VIM_STANDALONE_TMP/home/.config/themes/ocean-mist.theme" <<'EOF'
+THEME_ID="ocean-mist"
+THEME_MODE="dark"
+BASE03="#0A192F"
+BASE02="#112240"
+BASE0="#8892B0"
+EOF
+cat > "$VIM_STANDALONE_TMP/home/.config/themes/active-theme.theme" <<'EOF'
+THEME_ID="active-theme"
+EOF
+
+vim_17_fail=""
+for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
+    t_id="$(awk -F'"' '/^THEME_ID=/ {print $2}' "$tf")"
+    t_mode="$(awk -F'"' '/^THEME_MODE=/ {print $2}' "$tf")"
+    t_bat="$(awk -F'"' '/^BAT_THEME_NAME=/ {print $2}' "$tf")"
+    t_b03="$(awk -F'"' '/^BASE03=/ {print toupper($2)}' "$tf")"
+    t_b01="$(awk -F'"' '/^BASE01=/ {print toupper($2)}' "$tf")"
+    t_b0="$(awk -F'"' '/^BASE0=/ {print toupper($2)}' "$tf")"
+    t_b04="$(awk -F'"' '/^BASE04=/ {print toupper($2)}' "$tf")"
+    t_grn="$(awk -F'"' '/^GREEN=/ {print toupper($2)}' "$tf")"
+    t_yel="$(awk -F'"' '/^YELLOW=/ {print toupper($2)}' "$tf")"
+    t_ora="$(awk -F'"' '/^ORANGE=/ {print toupper($2)}' "$tf")"
+    t_vio="$(awk -F'"' '/^VIOLET=/ {print toupper($2)}' "$tf")"
+    if ! HOME="$VIM_STANDALONE_TMP/empty-home" XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME_FILE=/nonexistent HOME_SETTINGS_THEME="$t_id" COLORTERM=truecolor \
+        vim -u "$VIM_STANDALONE_TMP/.vimrc" -N -es \
+        -c "if &background ==# '$t_mode' && \$BAT_THEME ==# '$t_bat' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) ==# '$t_b03' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) ==# '$t_b0' && toupper(synIDattr(hlID('NormalFloat'), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'fg#', 'gui')) ==# '$t_b01' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('PmenuBorder')), 'fg#', 'gui')) ==# '$t_b01' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) ==# '$t_grn' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) ==# '$t_yel' && toupper(g:terminal_ansi_colors[9]) ==# '$t_ora' && toupper(g:terminal_ansi_colors[13]) ==# '$t_vio' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
+        vim_17_fail="$t_id"
+        break
+    fi
+done
+if [ -z "$vim_17_fail" ]; then
+    pass "Standalone copied .vimrc embeds all 17 built-in themes with 1:1 Normal/NormalFloat/Popup/PopupBorder/PmenuBorder/PopupNotification/MessageWindow/Statement/Conditional/BAT_THEME/terminal_ansi_colors parity"
+else
+    fail "Standalone .vimrc 17-theme parity" "Mismatch on theme '$vim_17_fail'"
+fi
+
+cat > "$VIM_STANDALONE_TMP/verify_theme_lifecycle.vim" <<'EOF'
+let s:errs = []
+let g:colors_name = 'solarized'
+Theme nord
+if g:home_settings_theme !=# 'nord' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#2E3440'
+    call add(s:errs, 'nord-apply:' . g:home_settings_theme . ':' . synIDattr(hlID('Normal'), 'bg#', 'gui'))
+endif
+let g:colors_name = 'solarized'
+Theme solarized-dark
+if g:home_settings_theme !=# 'solarized-dark' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#002B36'
+    call add(s:errs, 'solarized-dark-switchback:' . g:home_settings_theme . ':' . synIDattr(hlID('Normal'), 'bg#', 'gui'))
+endif
+let $THEME_HOLIDAY_DATE = '2026-10-31'
+Theme --holiday
+if g:home_settings_theme !=# 'halloween' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#160824'
+    call add(s:errs, 'holiday-halloween:' . g:home_settings_theme)
+endif
+let $THEME_HOLIDAY_DATE = '2024-02-29'
+Theme --holiday
+if g:home_settings_theme !=# 'st-patricks'
+    call add(s:errs, 'holiday-leapday:' . g:home_settings_theme)
+endif
+let $THEME_HOLIDAY_DATE = '2026-04-01'
+Theme --holiday
+if g:home_settings_theme !=# 'easter' || &background !=# 'light' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#FDF7FF'
+    call add(s:errs, 'holiday-easter:' . g:home_settings_theme . ':' . &background)
+endif
+for s:bad_date in ['not-a-valid-date', '2026-02-29', '2026-04-31']
+    let $THEME_HOLIDAY_DATE = s:bad_date
+    Theme --holiday
+    if g:home_settings_theme !=# 'easter'
+        call add(s:errs, 'invalid-holiday-date-clobbered:' . s:bad_date . ':' . g:home_settings_theme)
+    endif
+endfor
+let $THEME_HOLIDAY_DATE = ''
+Theme no-such-theme-xyz
+if g:home_settings_theme !=# 'easter'
+    call add(s:errs, 'invalid-theme-clobbered:' . g:home_settings_theme)
+endif
+let $HOME_SETTINGS_THEME_FILE = expand('$XDG_CONFIG_HOME/themes/ocean-mist.theme')
+doautocmd FocusGained
+if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#0A192F'
+    call add(s:errs, 'tfile-initial-apply:' . synIDattr(hlID('Normal'), 'bg#', 'gui'))
+endif
+Theme nord
+if g:home_settings_theme !=# 'nord' || !empty($HOME_SETTINGS_THEME_FILE) || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#2E3440'
+    call add(s:errs, 'tfile-theme-override:' . g:home_settings_theme . ':' . $HOME_SETTINGS_THEME_FILE . ':' . synIDattr(hlID('Normal'), 'bg#', 'gui'))
+endif
+" Stale/unreadable HOME_SETTINGS_THEME_FILE must also be cleared by :Theme so subsequent FocusGained cross-pane sync works
+let $HOME_SETTINGS_THEME_FILE = '/nonexistent/deleted-theme-file.theme'
+Theme solarized-dark
+call writefile(['nord'], expand('$XDG_CONFIG_HOME/home-settings/theme'))
+doautocmd FocusGained
+if !empty($HOME_SETTINGS_THEME_FILE) || g:home_settings_theme !=# 'nord' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#2E3440'
+    call add(s:errs, 'stale-unreadable-tfile-sync:' . $HOME_SETTINGS_THEME_FILE . ':' . g:home_settings_theme)
+endif
+" Read-only XDG_CONFIG_HOME must fail gracefully without uncaught E739/E482 and preserve active theme
+let s:orig_xdg = $XDG_CONFIG_HOME
+let s:ro_xdg = fnamemodify(s:orig_xdg, ':h') . '/ro-config'
+call mkdir(s:ro_xdg, 'p', 0500)
+let $XDG_CONFIG_HOME = s:ro_xdg
+Theme halloween
+call setfperm(s:ro_xdg, 'rwx------')
+let $XDG_CONFIG_HOME = s:orig_xdg
+if g:home_settings_theme !=# 'nord' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#2E3440'
+    call add(s:errs, 'readonly-xdg-clobbered:' . g:home_settings_theme . ':' . synIDattr(hlID('Normal'), 'bg#', 'gui'))
+endif
+let s:comps = getcompletion('Theme ', 'cmdline')
+if index(s:comps, 'nord') < 0 || index(s:comps, 'halloween') < 0 || index(s:comps, 'ocean-mist') < 0 || index(s:comps, '--holiday') < 0 || index(s:comps, 'active-theme') >= 0
+    call add(s:errs, 'completion:' . join(s:comps, ','))
+endif
+Theme ocean-mist
+if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#0A192F' || toupper(synIDattr(hlID('Visual'), 'bg#', 'gui')) ==# '#2C4E56'
+    call add(s:errs, 'custom-ocean-mist-blend')
+endif
+" Sub-second same-mtime in-place custom theme edit + BAT_THEME_NAME sanitization (zero sleep)
+call writefile(['THEME_ID="ocean-mist"', 'THEME_MODE="dark"', 'BAT_THEME_NAME="$(evil)"', 'BASE03="#1B2B34"', 'BASE02="#343D46"', 'BASE0="#CDD3DE"'], expand('$XDG_CONFIG_HOME/themes/ocean-mist.theme'))
+doautocmd FocusGained
+if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#1B2B34' || toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) !=# '#CDD3DE' || $BAT_THEME !=# 'Ocean-Mist-TrueColor'
+    call add(s:errs, 'focusgained-subsecond-custom-reload:' . synIDattr(hlID('Normal'), 'bg#', 'gui') . ':' . $BAT_THEME)
+endif
+call writefile(['gruvbox-dark'], expand('$XDG_CONFIG_HOME/home-settings/theme'))
+doautocmd FocusGained
+if g:home_settings_theme !=# 'gruvbox-dark' || toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) !=# '#282828'
+    call add(s:errs, 'focusgained-state-reload:' . g:home_settings_theme . ':' . synIDattr(hlID('Normal'), 'bg#', 'gui'))
+endif
+" Live :terminal buffer ANSI palette propagation across :Theme, FocusGained, finished jobs, and termguicolors toggles
+if exists('*term_start') && exists('*term_list') && exists('*term_getansicolors') && exists('*term_setansicolors')
+    Theme solarized-dark
+    let s:tbuf = term_start(['/bin/sh', '-c', 'read x'], {'hidden': 1})
+    let s:fbuf = term_start(['/bin/sh', '-c', 'exit 0'], {'hidden': 1})
+    let s:twait = 0
+    while term_getstatus(s:fbuf) !~# 'finished' && s:twait < 50
+        sleep 20m
+        let s:twait += 1
+    endwhile
+    if toupper(get(term_getansicolors(s:tbuf), 0, '')) !=# '#073642' || toupper(get(term_getansicolors(s:tbuf), 9, '')) !=# '#CB4B16' || toupper(get(term_getansicolors(s:tbuf), 13, '')) !=# '#6C71C4'
+        call add(s:errs, 'term-init-solarized:' . string(term_getansicolors(s:tbuf)))
+    endif
+    Theme nord
+    if toupper(get(term_getansicolors(s:tbuf), 0, '')) !=# '#3B4252' || toupper(get(term_getansicolors(s:tbuf), 9, '')) !=# '#D08770' || toupper(get(term_getansicolors(s:tbuf), 13, '')) !=# '#5E81AC'
+        call add(s:errs, 'term-live-nord:' . string(term_getansicolors(s:tbuf)))
+    endif
+    call writefile(['halloween'], expand('$XDG_CONFIG_HOME/home-settings/theme'))
+    doautocmd FocusGained
+    if toupper(get(term_getansicolors(s:tbuf), 0, '')) !=# '#281040' || toupper(get(term_getansicolors(s:tbuf), 9, '')) !=# '#FF3B00' || toupper(get(term_getansicolors(s:tbuf), 13, '')) !=# '#C77DFF'
+        call add(s:errs, 'term-focusgained-halloween:' . string(term_getansicolors(s:tbuf)))
+    endif
+    set notermguicolors
+    Theme catppuccin-mocha
+    noautocmd set termguicolors
+    if toupper(get(term_getansicolors(s:tbuf), 1, '')) ==# '#000000'
+        call add(s:errs, 'term-notermguicolors-clobbered:' . string(term_getansicolors(s:tbuf)))
+    endif
+    if exists('##OptionSet')
+        doautocmd OptionSet termguicolors
+        if toupper(get(term_getansicolors(s:tbuf), 0, '')) !=# '#313244' || toupper(get(term_getansicolors(s:tbuf), 9, '')) !=# '#FAB387' || toupper(get(term_getansicolors(s:tbuf), 13, '')) !=# '#CBA6F7'
+            call add(s:errs, 'term-optionset-termguicolors:' . string(term_getansicolors(s:tbuf)))
+        endif
+    endif
+    execute 'bwipeout! ' . s:fbuf
+    execute 'bwipeout! ' . s:tbuf
+endif
+Theme solarized-dark
+syntax on
+setlocal filetype=markdown
+if toupper(synIDattr(hlID('markdownH1'), 'fg#', 'gui')) !=# '#CB4B16' || synIDattr(hlID('markdownH1'), 'bold', 'gui') == 1 || toupper(synIDattr(hlID('markdownH2'), 'fg#', 'gui')) !=# '#268BD2' || toupper(synIDattr(hlID('markdownH3'), 'fg#', 'gui')) !=# '#6C71C4' || toupper(synIDattr(hlID('markdownH4'), 'fg#', 'gui')) !=# '#93A1A1' || toupper(synIDattr(hlID('markdownHeadingDelimiter'), 'fg#', 'gui')) !=# '#586E75'
+    call add(s:errs, 'ft-markdown')
+endif
+setlocal filetype=json
+if toupper(synIDattr(hlID('jsonKeyword'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('jsonNull'), 'fg#', 'gui')) !=# '#D33682'
+    call add(s:errs, 'ft-json:' . synIDattr(hlID('jsonKeyword'), 'fg#', 'gui'))
+endif
+setlocal filetype=yaml
+if toupper(synIDattr(hlID('yamlBlockMappingKey'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('yamlBlockMappingMerge'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('yamlNodeTag'), 'fg#', 'gui')) !=# '#839496' || toupper(synIDattr(hlID('yamlAnchor'), 'fg#', 'gui')) !=# '#586E75' || toupper(synIDattr(hlID('yamlAlias'), 'fg#', 'gui')) !=# '#586E75' || toupper(synIDattr(hlID('yamlBlockCollectionItemStart'), 'fg#', 'gui')) !=# '#839496'
+    call add(s:errs, 'ft-yaml:' . synIDattr(hlID('yamlBlockMappingMerge'), 'fg#', 'gui'))
+endif
+setlocal filetype=toml
+if toupper(synIDattr(hlID('tomlTable'), 'fg#', 'gui')) !=# '#268BD2' || toupper(synIDattr(hlID('tomlKey'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('tomlDate'), 'fg#', 'gui')) !=# '#D33682'
+    call add(s:errs, 'ft-toml')
+endif
+setlocal filetype=html
+if toupper(synIDattr(hlID('htmlSpecialTagName'), 'fg#', 'gui')) !=# '#268BD2' || toupper(synIDattr(hlID('htmlArg'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('htmlH1'), 'fg#', 'gui')) !=# '#839496' || synIDattr(hlID('htmlBoldItalic'), 'bold', 'gui') == 1 || synIDattr(hlID('htmlBoldUnderline'), 'underline', 'gui') == 1
+    call add(s:errs, 'ft-html:' . synIDattr(hlID('htmlSpecialTagName'), 'fg#', 'gui'))
+endif
+enew!
+call setline(1, 'div[data-status="healthy"] { --bg-main: #002b36; }')
+setlocal filetype=css
+if toupper(synIDattr(hlID('cssCustomProp'), 'fg#', 'gui')) !=# '#839496' || toupper(synIDattr(hlID('cssAttr'), 'fg#', 'gui')) !=# '#839496' || toupper(synIDattr(hlID('cssAttributeSelector'), 'fg#', 'gui')) !=# '#839496' || toupper(synIDattr(hlID('cssClassName'), 'fg#', 'gui')) !=# '#268BD2' || toupper(synIDattr(hlID('cssPseudoClassId'), 'fg#', 'gui')) !=# '#6C71C4' || toupper(synIDattr(hlID('cssImportant'), 'fg#', 'gui')) !=# '#DC322F' || toupper(synIDattr(synIDtrans(synID(1, 7, 1)), 'fg#', 'gui')) !=# '#839496' || toupper(synIDattr(synIDtrans(synID(1, 19, 1)), 'fg#', 'gui')) !=# '#2AA198'
+    call add(s:errs, 'ft-css:' . synIDattr(synIDtrans(synID(1, 7, 1)), 'fg#', 'gui') . ':' . synIDattr(synIDtrans(synID(1, 19, 1)), 'fg#', 'gui'))
+endif
+enew!
+setlocal filetype=xml
+if toupper(synIDattr(hlID('xmlProcessing'), 'fg#', 'gui')) !=# '#CB4B16' || toupper(synIDattr(hlID('xmlTagName'), 'fg#', 'gui')) !=# '#268BD2' || toupper(synIDattr(hlID('xmlAttrib'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('xmlCdataCdata'), 'fg#', 'gui')) !=# '#6C71C4' || toupper(synIDattr(hlID('xmlCdata'), 'fg#', 'gui')) !=# '#839496'
+    call add(s:errs, 'ft-xml')
+endif
+enew!
+setlocal filetype=proto
+if toupper(synIDattr(hlID('protoSyntax'), 'fg#', 'gui')) !=# '#CB4B16' || toupper(synIDattr(hlID('protoStructure'), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(hlID('protoRepeat'), 'fg#', 'gui')) !=# '#859900'
+    call add(s:errs, 'ft-proto')
+endif
+enew!
+call setline(1, ['app.endpoint=https://${service.host}:4317', 'server.port=8080', 'feature.enabled: true', 'app.version=3.8.1', 'unclosed.ref=${missing', 'after.unclosed=-42   ', 'cont.str=\', '    8080', 'final.key=false'])
+setlocal filetype=jproperties
+if toupper(synIDattr(synIDtrans(synID(1, 2, 1)), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(synIDtrans(synID(1, 16, 1)), 'fg#', 'gui')) !=# '#2AA198' || toupper(synIDattr(synIDtrans(synID(1, 26, 1)), 'fg#', 'gui')) !=# '#839496' || toupper(synIDattr(synIDtrans(synID(1, 39, 1)), 'fg#', 'gui')) !=# '#2AA198' || toupper(synIDattr(synIDtrans(synID(2, 2, 1)), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(synIDtrans(synID(2, 14, 1)), 'fg#', 'gui')) !=# '#D33682' || toupper(synIDattr(synIDtrans(synID(3, 2, 1)), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(synIDtrans(synID(3, 19, 1)), 'fg#', 'gui')) !=# '#D33682' || toupper(synIDattr(synIDtrans(synID(4, 2, 1)), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(synIDtrans(synID(4, 14, 1)), 'fg#', 'gui')) !=# '#2AA198' || toupper(synIDattr(synIDtrans(synID(6, 2, 1)), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(synIDtrans(synID(6, 16, 1)), 'fg#', 'gui')) !=# '#D33682' || toupper(synIDattr(synIDtrans(synID(8, 6, 1)), 'fg#', 'gui')) !=# '#2AA198' || toupper(synIDattr(synIDtrans(synID(9, 2, 1)), 'fg#', 'gui')) !=# '#859900' || toupper(synIDattr(synIDtrans(synID(9, 12, 1)), 'fg#', 'gui')) !=# '#D33682'
+    call add(s:errs, 'ft-jproperties:' . synIDattr(synIDtrans(synID(3, 2, 1)), 'fg#', 'gui') . ':' . synIDattr(synIDtrans(synID(4, 2, 1)), 'fg#', 'gui') . ':' . synIDattr(synIDtrans(synID(6, 2, 1)), 'fg#', 'gui'))
+endif
+if filereadable(expand('$SAMPLE_PROPERTIES_PATH'))
+    execute 'edit ' . fnameescape(expand('$SAMPLE_PROPERTIES_PATH'))
+    vnew
+    setlocal filetype=json
+    call setline(1, '{"ok": true}')
+    syntax off
+    syntax enable
+    syntax reset
+    wincmd p
+    for s:ln in range(1, line('$'))
+        let s:txt = getline(s:ln)
+        if s:txt !~# '^\s*$' && s:txt !~# '^\s*[#!]' && s:txt !~# '^\s\+https://'
+            if synIDattr(synID(s:ln, 1, 1), 'name') !=# 'jpropertiesIdentifier' || toupper(synIDattr(synIDtrans(synID(s:ln, 1, 1)), 'fg#', 'gui')) !=# '#859900'
+                call add(s:errs, 'sample-props-L' . s:ln . ':' . synIDattr(synID(s:ln, 1, 1), 'name'))
+                break
+            endif
+        endif
+    endfor
+endif
+if toupper(synIDattr(hlID('Comment'), 'fg#', 'gui')) !=# '#586E75' || toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) !=# '#859900'
+    call add(s:errs, 'syntax-reset:' . synIDattr(hlID('Comment'), 'fg#', 'gui'))
+endif
+call writefile(s:errs, expand('$VIM_STANDALONE_OUT'))
+qall!
+EOF
+
+VIM_BIN_DIR="$(dirname "$(command -v vim)")"
+HOME="$VIM_STANDALONE_TMP/home" XDG_CONFIG_HOME="$VIM_STANDALONE_TMP/home/.config" \
+    HOME_SETTINGS_THEME_FILE="" HOME_SETTINGS_THEME="" COLORTERM=truecolor \
+    SAMPLE_PROPERTIES_PATH="$SCRIPT_DIR/sample-code/sample.properties" \
+    VIM_STANDALONE_OUT="$VIM_STANDALONE_TMP/lifecycle.out" \
+    PATH="$VIM_BIN_DIR:/usr/bin:/bin" \
+    vim -u "$VIM_STANDALONE_TMP/.vimrc" -N -es -S "$VIM_STANDALONE_TMP/verify_theme_lifecycle.vim" </dev/null >/dev/null 2>&1 || true
+
+if [ -f "$VIM_STANDALONE_TMP/lifecycle.out" ] && [ ! -s "$VIM_STANDALONE_TMP/lifecycle.out" ]; then
+    pass "Standalone .vimrc :Theme command, solarized-dark switch-back, --holiday schedule, tab completion, sub-second FocusGained reload, and Markdown/JSON/YAML/TOML/HTML/CSS/XML/Protobuf/Java Properties syntax overrides work without bin/theme"
+else
+    fail "Standalone .vimrc lifecycle & syntax overrides" "Errors: $(tr '\n' ' ' < "$VIM_STANDALONE_TMP/lifecycle.out" 2>/dev/null || echo 'vim failed to write output')"
+fi
+rm -rf "$VIM_STANDALONE_TMP"
 
 # Test 4: Verify Home key mapping, Netrw project tree sidebar, and TmuxNavigate in .vimrc
 echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
@@ -1979,13 +2239,13 @@ return table.concat({
 EOF
         PEER_SOCK="$NVIM_SOCK_DIR/nvim-peer.sock"
         SELF_SOCK="$NVIM_SOCK_DIR/nvim-self.sock"
-        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache" XDG_STATE_HOME="$NVIM_CMD_HOME/.local/state" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$PEER_SOCK" >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-peer" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-peer" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-peer.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$PEER_SOCK" </dev/null >/dev/null 2>&1) &
         PEER_PID=$!
-        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache" XDG_STATE_HOME="$NVIM_CMD_HOME/.local/state" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$SELF_SOCK" >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-self" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-self" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-self.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$SELF_SOCK" </dev/null >/dev/null 2>&1) &
         SELF_PID=$!
         if wait_for_nvim_socket "$PEER_SOCK" 60 1 && wait_for_nvim_socket "$SELF_SOCK" 60 1; then
-            SELF_CMD_OUT="$(timeout 20 nvim --headless --server "$SELF_SOCK" --remote-expr "luaeval('dofile(\"$NVIM_CMD_SCRIPT\")')" 2>/dev/null || true)"
-            PEER_CMD_OUT="$(timeout 10 nvim --headless --server "$PEER_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . get(g:, 'terminal_color_4', '')" 2>/dev/null || true)"
+            SELF_CMD_OUT="$(timeout 20 nvim --headless --server "$SELF_SOCK" --remote-expr "luaeval('dofile(\"$NVIM_CMD_SCRIPT\")')" </dev/null 2>/dev/null || true)"
+            PEER_CMD_OUT="$(timeout 10 nvim --headless --server "$PEER_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . get(g:, 'terminal_color_4', '')" </dev/null 2>/dev/null || true)"
             if [ "$SELF_CMD_OUT" = "COMP=true|BAD=true|SELF=true|LOCK=true" ] && \
                [ "$PEER_CMD_OUT" = "nord:#2E3440:#81A1C1" ] && \
                git -C "$SCRIPT_DIR" diff --quiet -- dotfiles/.config/nvim/lazy-lock.json; then
@@ -1997,6 +2257,7 @@ EOF
             fail "Neovim :Theme peer sockets" "Timed out waiting for headless peer/self Neovim sockets"
         fi
         kill "$PEER_PID" "$SELF_PID" 2>/dev/null || true
+        wait "$PEER_PID" "$SELF_PID" 2>/dev/null || true
         rm -rf "$NVIM_CMD_HOME"
     fi
 else
