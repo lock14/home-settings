@@ -300,7 +300,7 @@ else
     fail "git config verification" "Missing expected delta pager or merge/diff configuration in .config/git/config"
 fi
 if command -v delta >/dev/null 2>&1; then
-    DELTA_OUT="$(printf 'diff --git a/sample.toml b/sample.toml\n--- a/sample.toml\n+++ b/sample.toml\n@@ -1,1 +1,1 @@\n-bold = true\n+bold = false\n' | GIT_CONFIG_GLOBAL="$TEMP_HOME/.config/git/config" delta --paging=never 2>/dev/null || true)"
+    DELTA_OUT="$(printf 'diff --git a/sample.toml b/sample.toml\n--- a/sample.toml\n+++ b/sample.toml\n@@ -1,1 +1,1 @@\n-bold = true\n+bold = false\n' | HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" GIT_CONFIG_GLOBAL="$TEMP_HOME/.config/git/config" delta --paging=never 2>/dev/null || true)"
     if grep -Fq $'\033[38;2;38;139;210m1\033[0m:' <<< "$DELTA_OUT" && \
        grep -Fq $'\033[48;2;45;34;42' <<< "$DELTA_OUT" && \
        grep -Fq $'\033[48;2;13;56;52' <<< "$DELTA_OUT"; then

@@ -795,6 +795,325 @@ EOF
     else
         echo "FAIL:Bash theme() wrapper:Unexpected state ($bash_theme_out)"
     fi
+
+    # Test 2-file standalone copied .bashrc-addendum: 1:1 17-theme parity without repo/bin/theme
+    TWOFILE_DIR="$STANDALONE_HOME/twofile-isolated"
+    mkdir -p "$TWOFILE_DIR"
+    cp "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$TWOFILE_DIR/.bashrc-addendum"
+    bash_17_fail=""
+    for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
+        t_id="$(awk -F'"' '/^THEME_ID=/ {print $2}' "$tf")"
+        t_mode="$(awk -F'"' '/^THEME_MODE=/ {print $2}' "$tf")"
+        t_bat="$(awk -F'"' '/^BAT_THEME_NAME=/ {print $2}' "$tf")"
+        t_b03="$(awk -F'"' '/^BASE03=/ {print toupper($2)}' "$tf")"
+        t_b02_rgb="$(awk -F'"' '/^BASE02=/ {h=substr($2,2); printf "%d;%d;%d", strtonum("0x" substr(h,1,2)), strtonum("0x" substr(h,3,2)), strtonum("0x" substr(h,5,2))}' "$tf" 2>/dev/null || python3 -c "h='$(awk -F'\"' '/^BASE02=/ {print $2}' "$tf")'[1:]; print(f'{int(h[0:2],16)};{int(h[2:4],16)};{int(h[4:6],16)}')")"
+        t_blu_rgb="$(awk -F'"' '/^BLUE=/ {h=substr($2,2); printf "%d;%d;%d", strtonum("0x" substr(h,1,2)), strtonum("0x" substr(h,3,2)), strtonum("0x" substr(h,5,2))}' "$tf" 2>/dev/null || python3 -c "h='$(awk -F'\"' '/^BLUE=/ {print $2}' "$tf")'[1:]; print(f'{int(h[0:2],16)};{int(h[2:4],16)};{int(h[4:6],16)}')")"
+        chk_out="$(HOME="$TWOFILE_DIR/empty" XDG_CONFIG_HOME="/nonexistent" HOME_SETTINGS_THEME_FILE="" HOME_SETTINGS_THEME="$t_id" COLORTERM="truecolor" PATH="/usr/bin:/bin" "$BASH" -c "
+            set -euo pipefail
+            source '$TWOFILE_DIR/.bashrc-addendum'
+            printf '%s|%s|%s|%s|%s\n' \"\${HOME_SETTINGS_THEME_MODE:-}\" \"\${BAT_THEME:-}\" \"\${FZF_DEFAULT_OPTS:-}\" \"\${LS_COLORS:-}\" \"\${PS1:-}\"
+        ")"
+        if [[ "$chk_out" != "$t_mode|$t_bat|"* ]] || \
+           [[ "$chk_out" != *"bg:$t_b03"* ]] || \
+           [[ "$chk_out" != *"di=38;2;${t_blu_rgb}:"* ]] || \
+           [[ "$chk_out" != *"48;2;${t_b02_rgb}m"* ]]; then
+            bash_17_fail="$t_id ($chk_out)"
+            break
+        fi
+    done
+    if [ -z "$bash_17_fail" ]; then
+        echo "PASS:Standalone copied .bashrc-addendum embeds all 17 built-in themes with 1:1 BAT_THEME, FZF_DEFAULT_OPTS, TrueColor LS_COLORS, and PS1 parity"
+    else
+        echo "FAIL:Standalone .bashrc-addendum 17-theme parity:Mismatch on $bash_17_fail"
+    fi
+
+    # Test HOME_SETTINGS_THEME_FILE / BAT_THEME_NAME injection safety, unquoted #RRGGBB values, subshell isolation, and bidirectional TrueColor LS_COLORS guard
+    PWN_FILE="$TWOFILE_DIR/pwned-by-theme"
+    PWN_FILE2="$TWOFILE_DIR/pwned-by-bat-env"
+    EVIL_THEME="$TWOFILE_DIR/evil.theme"
+    cat > "$EVIL_THEME" <<EOF
+THEME_ID="evil-bash"
+THEME_LABEL="\$(touch '$PWN_FILE')"
+BAT_THEME_NAME="\$(touch '$PWN_FILE2')"
+BASE03="\$(touch '$PWN_FILE')"
+BASE02=#112233
+BLUE=#445566 # inline comment
+EOF
+    sec_and_guard_out="$(HOME="$TWOFILE_DIR/sec-home" XDG_CONFIG_HOME="/nonexistent" COLORTERM="truecolor" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        HOME_SETTINGS_THEME_FILE='$EVIL_THEME' source '$TWOFILE_DIR/.bashrc-addendum'
+        tc_ls=\"\${LS_COLORS:-}\"
+        tc_ps1=\"\${PS1:-}\"
+        tc_fzf=\"\${FZF_DEFAULT_OPTS:-}\"
+        COLORTERM='' _solarized_bash_prompt
+        downgraded_ls=\"\${LS_COLORS:-}\"
+        COLORTERM='truecolor' _solarized_bash_prompt
+        restored_ls=\"\${LS_COLORS:-}\"
+        sub_mode=\"\$(HOME='$TWOFILE_DIR/unconfigured-sub' XDG_CONFIG_HOME='/nonexistent' HOME_SETTINGS_THEME_FILE='' HOME_SETTINGS_THEME='' HOME_SETTINGS_THEME_MODE='light' _HS_LOADED_THEME='solarized-light' '$BASH' -c \"source '$TWOFILE_DIR/.bashrc-addendum' && printf '%s' \\\${HOME_SETTINGS_THEME_MODE:-<unset>}\")\"
+        printf 'TC_LS=%s|TC_PS1=%s|FZF=%s|DG_LS=%s|RS_LS=%s|SUB_MODE=%s\n' \"\$tc_ls\" \"\$tc_ps1\" \"\$tc_fzf\" \"\$downgraded_ls\" \"\$restored_ls\" \"\$sub_mode\"
+    ")"
+    mkdir -p "$TWOFILE_DIR/sec2-home/.config/themes"
+    cp "$EVIL_THEME" "$TWOFILE_DIR/sec2-home/.config/themes/evil-bash.theme"
+    bat_inj_out="$(HOME="$TWOFILE_DIR/sec2-home" XDG_CONFIG_HOME="$TWOFILE_DIR/sec2-home/.config" COLORTERM="truecolor" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        source '$TWOFILE_DIR/.bashrc-addendum'
+        theme --set evil-bash --no-live >/dev/null
+    " && HOME="$TWOFILE_DIR/sec2-home" XDG_CONFIG_HOME="$TWOFILE_DIR/sec2-home/.config" COLORTERM="truecolor" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        source '$TWOFILE_DIR/.bashrc-addendum'
+        printf '%s\n' \"\${BAT_THEME:-}\"
+    ")"
+    linux_ls_out="$(HOME="$TWOFILE_DIR/sec-home" XDG_CONFIG_HOME="/nonexistent" HOME_SETTINGS_THEME="nord" TERM="linux" COLORTERM="truecolor" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        source '$TWOFILE_DIR/.bashrc-addendum'
+        printf '%s\n' \"\${LS_COLORS:-}\"
+    ")"
+    pref_th_out="$(HOME="$TWOFILE_DIR/unconfigured-sub" XDG_CONFIG_HOME="/nonexistent" HOME_SETTINGS_THEME_FILE="" HOME_SETTINGS_THEME="" COLORTERM="truecolor" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        HOME_SETTINGS_THEME='nord' source '$TWOFILE_DIR/.bashrc-addendum'
+        _solarized_bash_prompt
+        printf '%s:%s\n' \"\${HOME_SETTINGS_THEME:-<unset>}\" \"\${BAT_THEME:-<unset>}\"
+    ")"
+    dg_ls_only="${sec_and_guard_out#*DG_LS=}"
+    dg_ls_only="${dg_ls_only%%|RS_LS=*}"
+    if [ ! -e "$PWN_FILE" ] && [ ! -e "$PWN_FILE2" ] && \
+       [ "$bat_inj_out" = "Evil-Bash-TrueColor" ] && \
+       [ "$pref_th_out" = "nord:Nord-TrueColor" ] && \
+       [[ "$sec_and_guard_out" == *"TC_LS="*"di=38;2;68;85;102:"* ]] && \
+       [[ "$sec_and_guard_out" == *"48;2;17;34;51m"* ]] && \
+       [[ "$sec_and_guard_out" == *"bg+:#112233"* ]] && \
+       [[ "$dg_ls_only" == *"di=34:"* ]] && \
+       [[ "$dg_ls_only" != *"38;2;"* ]] && \
+       [[ "$sec_and_guard_out" == *"RS_LS="*"di=38;2;68;85;102:"* ]] && \
+       [[ "$sec_and_guard_out" == *"SUB_MODE=<unset>"* ]] && \
+       [[ "$linux_ls_out" == *"di=34:"* ]] && [[ "$linux_ls_out" != *"38;2;"* ]]; then
+        echo "PASS:Standalone .bashrc-addendum neutralizes first- and second-order theme-env.sh injection, preserves unquoted #RRGGBB values, isolates subshell state, and downgrades/restores TrueColor LS_COLORS"
+    else
+        echo "FAIL:HOME_SETTINGS_THEME_FILE/BAT_THEME_NAME security & LS_COLORS guard:pwn1=$([ -e "$PWN_FILE" ] && echo yes || echo no) pwn2=$([ -e "$PWN_FILE2" ] && echo yes || echo no) bat='$bat_inj_out' pref='$pref_th_out' out=$sec_and_guard_out linux=$linux_ls_out"
+    fi
+
+    # Test standalone theme() fallback when bin/theme is absent, Vim :Theme cross-pane sync, --create, fzf --preview, same-second custom .conf reload, partial-write guard, and state-deletion reset
+    cp "$SCRIPT_DIR/dotfiles/.vimrc" "$TWOFILE_DIR/.vimrc"
+    VIM_BIN_PATH="$(type -P vim || true)"
+    SA_TH_HOME="$TWOFILE_DIR/sa-home"
+    mkdir -p "$SA_TH_HOME/.config/themes" "$TWOFILE_DIR/mock-fzf-bin"
+    cat > "$TWOFILE_DIR/mock-fzf-bin/fzf" <<'MOCKFZF'
+#!/bin/sh
+prev_cmd=""
+for arg in "$@"; do
+    case "$arg" in
+        --preview=*) prev_cmd="${arg#--preview=}" ;;
+    esac
+done
+stdin_data="$(cat)"
+if [ -n "$prev_cmd" ]; then
+    eval_cmd="$(printf '%s' "$prev_cmd" | sed "s/{1}/'nord'/g")"
+    prev_out="$(/bin/sh -c "$eval_cmd" 2>&1 || true)"
+    printf '%s\n' "$prev_out" > "${MOCK_FZF_PREVIEW_OUT:?}"
+fi
+printf '%s\n' "$stdin_data" | grep '^kanagawa-wave ' | head -n 1
+MOCKFZF
+    chmod +x "$TWOFILE_DIR/mock-fzf-bin/fzf"
+    cat > "$SA_TH_HOME/.config/themes/aurora-borealis.conf" <<'EOF'
+export THEME_ID='aurora-borealis'
+THEME_LABEL='Aurora Borealis'
+THEME_MODE='dark'
+BASE03='#0B132B'
+BASE02='#1C2541'
+BLUE='#5BC0BE'
+EOF
+    sa_theme_out="$(HOME="$SA_TH_HOME" XDG_CONFIG_HOME="$SA_TH_HOME/.config" COLORTERM="truecolor" VIM_BIN_PATH="$VIM_BIN_PATH" MOCK_FZF_PREVIEW_OUT="$TWOFILE_DIR/fzf-prev.txt" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        source '$TWOFILE_DIR/.bashrc-addendum'
+        shopt -s failglob
+        list_cnt=\"\$(theme --list --plain | wc -l | tr -d ' ')\"
+        theme --set nord --no-live >/dev/null
+        _solarized_bash_prompt
+        fg_preserved=0
+        if shopt -q failglob && ! shopt -q nullglob; then
+            fg_preserved=1
+        fi
+        shopt -u failglob
+        cur1=\"\$(theme --current)\"
+        nontty_list=\"\$(theme </dev/null)\"
+        theme --preview=gruvbox-dark >/dev/null
+        theme --env=solarized-light >/dev/null
+        theme --dry-run=halloween >/dev/null
+        cur_after_ro=\"\${HOME_SETTINGS_THEME:-}\"
+        bad_rc=0
+        theme --set no-such-theme-xyz >/dev/null 2>&1 || bad_rc=\$?
+        extra_rc=0
+        theme nord gruvbox-dark >/dev/null 2>&1 || extra_rc=\$?
+        cur_after_bad=\"\${HOME_SETTINGS_THEME:-}\"
+        export HOME_SETTINGS_THEME_FILE='$SA_TH_HOME/.config/themes/aurora-borealis.conf'
+        _solarized_bash_prompt
+        tfile_before=\"\${HOME_SETTINGS_THEME:-}\"
+        theme --set nord --no-live >/dev/null
+        tfile_override=\"\${HOME_SETTINGS_THEME:-}:\${HOME_SETTINGS_THEME_FILE:-<unset>}\"
+        _solarized_vcs_build_pr_url 'https://stash.example.com/scm/core_plat/gateway.git' '42' 'bitbucket-server' >/dev/null
+        bb_pr_url=\"\$REPLY\"
+        # Cross-pane standalone Vim :Theme -> Bash prompt sync
+        vim_sync='skipped'
+        if [ -n \"\${VIM_BIN_PATH:-}\" ]; then
+            \"\$VIM_BIN_PATH\" -u '$TWOFILE_DIR/.vimrc' -N -es -c 'Theme gruvbox-dark' -c 'qall!' </dev/null >/dev/null 2>&1
+            _solarized_bash_prompt
+            vim_sync=\"\${HOME_SETTINGS_THEME:-}:\${BAT_THEME:-}\"
+        else
+            printf 'gruvbox-dark\n' > '$SA_TH_HOME/.config/home-settings/theme'
+            _solarized_bash_prompt
+            vim_sync=\"\${HOME_SETTINGS_THEME:-}:\${BAT_THEME:-}\"
+        fi
+        # Stale complete theme-env.sh fallback when external writer updates theme file
+        theme --set nord --no-live >/dev/null
+        printf 'catppuccin-mocha\n' > '$SA_TH_HOME/.config/home-settings/theme'
+        rm -f '$SA_TH_HOME/.config/home-settings/active-theme.theme'
+        _solarized_bash_prompt
+        stale_sync=\"\${HOME_SETTINGS_THEME:-}:\${BAT_THEME:-}\"
+        # Standalone theme --create / --from / --force & interactive fzf --preview
+        created_file=\"\$(theme --create remote-berry --from nord)\"
+        dup_rc=0
+        theme --create remote-berry >/dev/null 2>&1 || dup_rc=\$?
+        theme --create remote-berry --from gruvbox-dark --force >/dev/null
+        theme --set remote-berry --no-live >/dev/null
+        created_state=\"\${HOME_SETTINGS_THEME:-}:\${BAT_THEME:-}:\${dup_rc}\"
+        rm -f \"\$created_file\"
+        THEME_FORCE_FZF=1 PATH='$TWOFILE_DIR/mock-fzf-bin':\"\$PATH\" theme --no-live >/dev/null
+        fzf_picked=\"\${HOME_SETTINGS_THEME:-}\"
+        THEME_HOLIDAY_DATE=2024-02-29 theme --holiday --no-live >/dev/null
+        leap_state=\"\${HOME_SETTINGS_THEME:-}\"
+        THEME_HOLIDAY_DATE=2026-11-20 theme --holiday --no-live >/dev/null
+        tg_state=\"\${HOME_SETTINGS_THEME:-}:\${_HS_PROMPT_OS_ICON:-}\"
+        THEME_HOLIDAY_DATE=2026-12-28 theme --holiday --no-live >/dev/null
+        ny_state=\"\${HOME_SETTINGS_THEME:-}:\${_HS_PROMPT_OS_ICON:-}\"
+        bad_feb_rc=0
+        THEME_HOLIDAY_DATE=2026-02-29 theme --holiday --no-live >/dev/null 2>&1 || bad_feb_rc=\$?
+        bad_apr_rc=0
+        THEME_HOLIDAY_DATE=2026-04-31 theme --holiday --no-live >/dev/null 2>&1 || bad_apr_rc=\$?
+        # Read-only XDG_CONFIG_HOME under interactive non-errexit mode must fail with exit 1 without false Applied output or state clobbering
+        mkdir -p '$TWOFILE_DIR/ro-xdg'
+        chmod 500 '$TWOFILE_DIR/ro-xdg'
+        set +e
+        ro_set_out=\"\$(XDG_CONFIG_HOME='$TWOFILE_DIR/ro-xdg' theme --set nord --no-live 2>&1)\"
+        ro_set_rc=\$?
+        ro_create_out=\"\$(HOME_SETTINGS_USER_THEMES_DIR='$TWOFILE_DIR/ro-xdg/themes' theme --create nope-ro 2>&1)\"
+        ro_create_rc=\$?
+        set -e
+        chmod 700 '$TWOFILE_DIR/ro-xdg'
+        ro_applied_leak=0
+        [[ \"\$ro_set_out\" == *'Applied theme:'* || -n \"\${ro_create_out%%*cannot write*}\" && \"\$ro_create_rc\" -eq 0 ]] && ro_applied_leak=1
+        ro_preserved=\"\${HOME_SETTINGS_THEME:-}\"
+        # Partial-write guard: corrupt theme-env.sh without _HS_LOADED_THEME footer while changing theme file
+        printf 'aurora-borealis\n' > '$SA_TH_HOME/.config/home-settings/theme'
+        printf 'export BAT_THEME=\"PARTIAL_CORRUPT\"\n' > '$SA_TH_HOME/.config/home-settings/theme-env.sh'
+        rm -f '$SA_TH_HOME/.config/themes/aurora-borealis.conf'
+        _solarized_bash_prompt
+        partial_bat=\"\${BAT_THEME:-}\"
+        # Also verify empty user themes dir under set -u
+        empty_list_cnt=\"\$(theme --list --plain | wc -l | tr -d ' ')\"
+        # Restore custom theme and apply via standalone theme()
+        cat > '$SA_TH_HOME/.config/themes/aurora-borealis.conf' <<'INNER'
+THEME_ID='aurora-borealis'
+THEME_MODE='dark'
+BASE03='#0B132B'
+BASE02='#1C2541'
+BLUE='#5BC0BE'
+INNER
+        theme --set aurora-borealis --no-live >/dev/null
+        ab_ls1=\"\${LS_COLORS:-}\"
+        # Edit custom theme file in place WITHOUT sleep (same-second edit) and verify zero-fork prompt auto-reload
+        cat > '$SA_TH_HOME/.config/themes/aurora-borealis.conf' <<'INNER2'
+THEME_ID='aurora-borealis'
+THEME_MODE='dark'
+BASE03='#0B132B'
+BASE02='#223344'
+BLUE='#11AAEE'
+INNER2
+        _solarized_bash_prompt
+        ab_ls2=\"\${LS_COLORS:-}\"
+        ab_ps1=\"\${PS1:-}\"
+        COMP_WORDS=(theme aurora); COMP_CWORD=1; _theme_bash_complete
+        ab_comp=\"\${COMPREPLY[*]}\"
+        # Delete state directory and verify live pane resets to unconfigured Solarized Dark
+        rm -rf '$SA_TH_HOME/.config/home-settings'
+        _solarized_bash_prompt
+        reset_ls=\"\${LS_COLORS:-}\"
+        reset_th=\"\${HOME_SETTINGS_THEME:-<unset>}\"
+        nontty_has_star=0
+        [[ \"\$nontty_list\" == *'* nord'* ]] && nontty_has_star=1
+        printf 'CNT=%s/%s|FG=%s|CUR=%s/%s/%s|NONTTY=%s|BAD=%s/%s|TFO=%s/%s|BB=%s|VIMSYNC=%s|STALESYNC=%s|CREATE=%s|FZF=%s|LEAP=%s|TG=%s|NY=%s|BADCAL=%s/%s|RO=%s/%s/%s/%s|PARTIAL=%s|LS1=%s|LS2=%s|PS1=%s|COMP=%s|RESET=%s/%s\n' \"\$list_cnt\" \"\$empty_list_cnt\" \"\$fg_preserved\" \"\$cur1\" \"\$cur_after_ro\" \"\$cur_after_bad\" \"\$nontty_has_star\" \"\$bad_rc\" \"\$extra_rc\" \"\$tfile_before\" \"\$tfile_override\" \"\$bb_pr_url\" \"\$vim_sync\" \"\$stale_sync\" \"\$created_state\" \"\$fzf_picked\" \"\$leap_state\" \"\$tg_state\" \"\$ny_state\" \"\$bad_feb_rc\" \"\$bad_apr_rc\" \"\$ro_set_rc\" \"\$ro_create_rc\" \"\$ro_applied_leak\" \"\$ro_preserved\" \"\$partial_bat\" \"\$ab_ls1\" \"\$ab_ls2\" \"\$ab_ps1\" \"\$ab_comp\" \"\$reset_th\" \"\$reset_ls\"
+    ")"
+    fzf_prev_content=""
+    [ -r "$TWOFILE_DIR/fzf-prev.txt" ] && IFS= read -r -d '' fzf_prev_content < "$TWOFILE_DIR/fzf-prev.txt" || true
+    bash4_hits=0
+    if grep -Eq '(\$\{[A-Za-z_][A-Za-z0-9_]*(\^\^|,,)\}|declare[[:space:]]+-A|local[[:space:]]+-A|\b(mapfile|readarray)\b)' "$TWOFILE_DIR/.bashrc-addendum"; then
+        bash4_hits=1
+    fi
+    if [ "$bash4_hits" -eq 0 ] && \
+       [[ "$sa_theme_out" == *"CNT=18/17|FG=1|CUR=nord/nord/nord|NONTTY=1|BAD=1/1|TFO=aurora-borealis/nord:<unset>|BB=https://stash.example.com/projects/CORE_PLAT/repos/gateway/pull-requests/42|VIMSYNC=gruvbox-dark:Gruvbox-Dark-TrueColor|STALESYNC=catppuccin-mocha:Catppuccin-Mocha-TrueColor|CREATE=remote-berry:Remote-Berry-TrueColor:1|FZF=kanagawa-wave|LEAP=st-patricks|TG=thanksgiving:🦃|NY=new-years:🥂|BADCAL=1/1|RO=1/1/0/new-years|"* ]] && \
+       [[ "$fzf_prev_content" == *"Nord (nord)"* ]] && \
+       [[ "$sa_theme_out" != *"PARTIAL=PARTIAL_CORRUPT"* ]] && \
+       [[ "$sa_theme_out" == *"LS1="*"di=38;2;91;192;190:"* ]] && \
+       [[ "$sa_theme_out" == *"LS2="*"di=38;2;17;170;238:"* ]] && \
+       [[ "$sa_theme_out" == *"48;2;34;51;68m"* ]] && \
+       [[ "$sa_theme_out" == *"COMP=aurora-borealis|"* ]] && \
+       [[ "$sa_theme_out" == *"RESET=<unset>/"*"di=34:"* ]]; then
+        echo "PASS:Standalone theme() manages all 17 built-in + custom themes (--create/--from/--force, fzf --preview, non-TTY list), syncs cross-pane with Vim :Theme, reloads same-second edits, guards partial/read-only writes, and resets cleanly"
+    else
+        echo "FAIL:Standalone theme() fallback & cross-pane sync:bash4=$bash4_hits out='$sa_theme_out' fzf_prev='$fzf_prev_content'"
+    fi
+
+    # Test conflicted Git merge state (Orange #CB4B16 / ANSI 91 / linux 33 with ~ suffix) and Readline colored-stats
+    CONFLICT_REPO="$TWOFILE_DIR/conflict-repo"
+    git init -b main "$CONFLICT_REPO" >/dev/null 2>&1
+    (
+        export HOME="$SA_TH_HOME"
+        export XDG_CONFIG_HOME="$SA_TH_HOME/.config"
+        cd "$CONFLICT_REPO"
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git config commit.gpgsign false
+        git remote add origin "https://github.com/octocat/Hello-World.git"
+        printf 'clean\n' > a-modified.txt
+        printf 'base\n' > z-conflict.txt
+        git add a-modified.txt z-conflict.txt && git commit -m "base" >/dev/null 2>&1
+        git checkout -q -b side
+        printf 'side\n' > z-conflict.txt
+        git commit -am "side" >/dev/null 2>&1
+        git checkout -q main
+        git checkout -q -b feat/conflict-pr
+        printf 'ours\n' > z-conflict.txt
+        git commit -am "ours" >/dev/null 2>&1
+        git config branch.feat/conflict-pr.pr 77
+        git merge side >/dev/null 2>&1 || true
+        printf 'modified-first\n' > a-modified.txt
+
+        true
+        COLORTERM="truecolor" _solarized_bash_prompt
+        ps1_conf_tc="$PS1"
+
+        true
+        COLORTERM="" TERM="xterm-256color" _solarized_bash_prompt
+        ps1_conf_16="$PS1"
+
+        true
+        TERM="linux" _solarized_bash_prompt
+        ps1_conf_linux="$PS1"
+
+        printf 'set colored-completion-prefix on\n' > "$TWOFILE_DIR/test-inputrc"
+        readline_vars="$(INPUTRC="$TWOFILE_DIR/test-inputrc" HOME="$SA_TH_HOME" "$BASH" --norc -i -c "source '$TWOFILE_DIR/.bashrc-addendum'; bind -v" </dev/null 2>/dev/null || true)"
+
+        if [[ "$ps1_conf_tc" == *"38;2;203;75;22m\\]  feat/conflict-pr"* ]] && \
+           [[ "$ps1_conf_tc" == *"@\\[\\e[38;2;203;75;22m\\]77\\[\\e]8;;\\a\\]~"* ]] && \
+           [[ "$ps1_conf_16" == *"\\e[91m\\]  feat/conflict-pr"* ]] && \
+           [[ "$ps1_conf_16" == *"~"* ]] && \
+           [[ "$ps1_conf_linux" == *"\\e[33m\\]feat/conflict-pr\\[\\e[90m\\]@\\[\\e[33m\\]77~"* ]] && \
+           { ! grep -Fq "colored-stats" <<< "$readline_vars" || grep -Fq "set colored-stats on" <<< "$readline_vars"; } && \
+           ! grep -Fq "set colored-completion-prefix on" <<< "$readline_vars"; then
+            echo "PASS:Standalone _solarized_bash_prompt renders conflicted Git merges in Orange (#CB4B16 / ANSI 91 / VT 33) with ~ suffix even alongside modified files, and interactive Bash enables Readline colored-stats while forcing colored-completion-prefix off"
+        else
+            echo "FAIL:Conflicted Git prompt & Readline colored-stats:tc='$ps1_conf_tc' c16='$ps1_conf_16' linux='$ps1_conf_linux' rl='$readline_vars'"
+        fi
+    )
 ) > "$STANDALONE_HOME/results.txt"
 
 parse_subshell_results < "$STANDALONE_HOME/results.txt"
