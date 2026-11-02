@@ -33,9 +33,10 @@ done
 # Test 2: Symlink creation into temporary HOME
 echo -e "\n[2/8] Testing binaries symlinking into ~/.local/bin..."
 TEMP_HOME=$(mktemp -d)
-TMUX_TEST_TMPDIR=""
+TMUX_TEST_TMPDIR=$(mktemp -d)
 QUIT_TMPDIR=""
 MOUSE_TMPDIR=""
+export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
 # Tear down the isolated tmux servers (by their explicit sockets, never via $TMUX) even when a check aborts
 # or the run is interrupted, so no test server or Editor outlives the suite
 cleanup_test_bin() {
@@ -120,10 +121,16 @@ if grep -q -- '--3pane' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-term' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-ai' <<< "$IDE_HELP" && \
    grep -q -- '--swap' <<< "$IDE_HELP" && \
-   grep -q -- '--keys' <<< "$IDE_HELP"; then
-    pass "bin/ide --help displays usage for 2-pane, --3pane, --toggle-editor/term/ai, --swap, --keys, --kill, and --list"
+   grep -q -- '--sessions' <<< "$IDE_HELP" && \
+   grep -q -- '--send' <<< "$IDE_HELP" && \
+   grep -q -- '--plain' <<< "$IDE_HELP" && \
+   grep -q -- '--keys' <<< "$IDE_HELP" && \
+   grep -q -- '--next-attention' <<< "$IDE_HELP" && \
+   grep -q -- '--agent-state' <<< "$IDE_HELP" && \
+   ! grep -q -- '--on-bell' <<< "$IDE_HELP"; then
+    pass "bin/ide --help displays usage for 2-pane, --3pane, --sessions, --next-attention, --agent-state, --send, --toggle-editor/term/ai, --swap, --keys, --kill, and --list [--plain]"
 else
-    fail "bin/ide --help" "Expected --3pane, --toggle-editor/term/ai, --swap, --keys, and --kill in bin/ide --help output"
+    fail "bin/ide --help" "Expected --3pane, --sessions, --next-attention, --agent-state, --send, --toggle-editor/term/ai, --swap, --keys, --kill, and --plain (without --on-bell) in bin/ide --help output"
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" --keys)"
@@ -181,24 +188,36 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    ! "$SCRIPT_DIR/bin/ide" --keys --unknown-flag >/dev/null 2>&1 && \
    ! "$SCRIPT_DIR/bin/ide" --ai invalid-agent --keys >/dev/null 2>&1 && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+s / Prefix+s" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+S" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Click top bar" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+E" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+T" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Vis Space a / id" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space il / Space s" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "a   (copy-mode)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
+   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 22 ] && \
    [ "$(grep -c 'show_keys_cheatsheet()' "$SCRIPT_DIR/bin/ide")" -eq 1 ] && \
    [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
-    pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including focus, swap, resize, mini.files h/l or Left/Right, Space m Markdown toggle, Mouse4/5 or C-o/i jumplist back/forward, clipboard, and quit shortcuts) and drains multi-byte escape sequences on PTY"
+    pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including session switcher, Alt+Shift+S attention jump, focus, swap, resize, context dispatch, mini.files, Space m, jumplist, clipboard, and quit shortcuts) within popup height and drains multi-byte escape sequences on PTY"
 else
-    fail "bin/ide --keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet(), or PTY key handling failed ($IDE_KEYS_PTY_OK)"
+    fail "bin/ide --keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet(), line overflow, or PTY key handling failed ($IDE_KEYS_PTY_OK)"
 fi
 
-if "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1; then
-    fail "bin/ide invalid flag" "Expected non-zero exit status on unknown flag"
+if ! "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/ide" --on-bell >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/ide" --agent-state >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/ide" --agent-state bogus >/dev/null 2>&1 && \
+   TMUX="" TMUX_PANE="" "$SCRIPT_DIR/bin/ide" --agent-state running >/dev/null 2>&1 && \
+   TMUX="" TMUX_PANE="" "$SCRIPT_DIR/bin/ide" --next-attention >/dev/null 2>&1; then
+    pass "bin/ide rejects unknown/--on-bell/invalid --agent-state flags while treating --agent-state and --next-attention outside tmux as safe exit-0 no-ops"
 else
-    pass "bin/ide rejects unknown CLI flags"
+    fail "bin/ide flag validation" "Expected non-zero on unknown/--on-bell/invalid state and exit-0 outside tmux for --agent-state/--next-attention"
 fi
 
 if "$SCRIPT_DIR/bin/ide" --swap diagonal >/dev/null 2>&1; then
@@ -261,7 +280,6 @@ fi
 rm -rf "$LINK_TEST_DIR" "$TEMP_HOME/.config/ide"
 
 if command -v tmux >/dev/null 2>&1; then
-    TMUX_TEST_TMPDIR="$(mktemp -d)"
     QUIT_TMPDIR="$(mktemp -d)"
     MOUSE_TMPDIR="$(mktemp -d)"
     export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
@@ -1033,7 +1051,7 @@ LUA
             args_log="$(LC_ALL=C sort "$ARGS_LOG")"
             args_expected="$(printf '%s\n' "--cd $ARGS_DIR args-sess" "--quit" "--quit" "--quit --force args-sess" "--quit args-sess" "--swap left args-sess" "--toggle args-sess" "--toggle-editor args-sess" | LC_ALL=C sort)"
             popup_cmd="$(cat "$TEMP_HOME/popup_cmd.log" 2>/dev/null || true)"
-            popup_expected="tmux|display-popup|-t|%42|-E|-w|86|-h|25|'$ARGS_HOME/space home/.local/bin/ide' --keys"
+            popup_expected="tmux|display-popup|-t|%42|-E|-w|86|-h|27|'$ARGS_HOME/space home/.local/bin/ide' --keys"
             if [ "$args_log" = "$args_expected" ] && [ "$popup_cmd" = "$popup_expected" ]; then
                 echo "PASS:The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME, --toggle-editor NAME, --swap DIR NAME), passes -t \$TMUX_PANE and shell-escaped path in open_ide_keys_popup, and omits session when \$IDE_SESSION is empty"
             else
@@ -1624,6 +1642,7 @@ for t in "${managed_themes[@]}"; do
        [ ! -f "$THEME_TEST_Cfg/home-settings/zsh-theme.zsh" ] || \
        [ ! -f "$THEME_TEST_Cfg/home-settings/p10k-theme.zsh" ] || \
        [ ! -f "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" ] || \
+       ! grep -Fq '#{&&:#{==:#{@ide_ai_state},done},#{==:#{@ide_ai_attn},1}}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" || \
        [ ! -L "$THEME_TEST_Cfg/ghostty" ] || \
        [ ! -L "$THEME_TEST_Cfg/btop" ] || \
        [ ! -d "$THEME_TEST_Cfg/git" ] || [ -L "$THEME_TEST_Cfg/git" ] || \
@@ -2107,5 +2126,1025 @@ else
 fi
 
 rm -rf "$THEME_TEST_HOME"
+
+# End-to-end hermetic multi-session workspace switcher, parked-window exclusion, live ANSI preview, and context dispatch tests
+if command -v tmux >/dev/null 2>&1; then
+    FLEET_TEST_OUT="$(python3 - "$SCRIPT_DIR" 2>&1 <<'PY'
+import fcntl
+import os
+import pty
+import re
+import select
+import shlex
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+
+repo_dir = sys.argv[1]
+ide_src = os.path.join(repo_dir, "bin", "ide")
+tmux_conf_src = os.path.join(repo_dir, "dotfiles", ".tmux.conf")
+
+root = tempfile.mkdtemp(prefix="ide-fleet-suite.")
+client_proc = None
+client_mfd = None
+client2_proc = None
+client2_mfd = None
+base_env = {}
+
+def run_cmd(args, env=None, input_text=None, check=True, cwd=None):
+    e = dict(base_env if env is None else env)
+    return subprocess.run(
+        args,
+        input=input_text,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=e,
+        cwd=cwd,
+        check=check,
+    )
+
+def tmux(*args, check=False):
+    return run_cmd(["tmux", *args], env={**base_env, "TMUX": "", "TMUX_PANE": ""}, check=check)
+
+def tmux_out(*args):
+    r = tmux(*args, check=False)
+    return r.stdout.rstrip("\n") if r.returncode == 0 else ""
+
+def wait_until(pred, timeout=3.0, step=0.03):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        val = pred()
+        if val:
+            return val
+        time.sleep(step)
+    return pred()
+
+try:
+    thome = os.path.join(root, "home")
+    tmux_tmp = os.path.join(root, "tmux_tmp")
+    xdg_cfg = os.path.join(thome, ".config")
+    xdg_cache = os.path.join(thome, ".cache")
+    xdg_run = os.path.join(root, "run")
+    bin_dir = os.path.join(thome, ".local", "bin")
+    for d in (thome, tmux_tmp, xdg_cfg, xdg_cache, xdg_run, bin_dir):
+        os.makedirs(d, mode=0o700, exist_ok=True)
+
+    ide_bin = os.path.join(bin_dir, "ide")
+    os.symlink(ide_src, ide_bin)
+    os.symlink(tmux_conf_src, os.path.join(thome, ".tmux.conf"))
+
+    clean_path = f"{bin_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}"
+    base_env = {
+        "HOME": thome,
+        "PATH": clean_path,
+        "TMUX_TMPDIR": tmux_tmp,
+        "XDG_CONFIG_HOME": xdg_cfg,
+        "XDG_CACHE_HOME": xdg_cache,
+        "XDG_RUNTIME_DIR": xdg_run,
+        "TERM": "xterm-256color",
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "NO_COLOR": "1",
+    }
+
+    # 1. Server-down safety for --list, --list --plain, --sessions, and --send error paths
+    r_plain0 = run_cmd([ide_bin, "--list", "--plain"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_plain0.returncode == 0 and r_plain0.stdout.strip() == "", f"plain0={r_plain0}"
+    r_list0 = run_cmd([ide_bin, "--list"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_list0.returncode == 0 and "No active IDE sessions." in r_list0.stdout, f"list0={r_list0.stdout}"
+    r_sess0 = run_cmd([ide_bin, "--sessions"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_sess0.returncode == 0 and "No active IDE sessions." in r_sess0.stdout, f"sess0={r_sess0.stdout}"
+    r_send_missing_mode = run_cmd([ide_bin, "--send"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_send_missing_mode.returncode != 0, "expected non-zero when --send has no payload flag"
+    r_send_missing_sess = run_cmd([ide_bin, "--send", "--text", "hi", "missing-sess"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_send_missing_sess.returncode != 0, "expected non-zero when --send targets missing session"
+
+    # Boot isolated server with non-IDE session + ai-*/agy-* popup sessions (all must be excluded)
+    tmux("-f", os.path.join(thome, ".tmux.conf"), "new-session", "-d", "-s", "plain-non-ide", "-x", "160", "-y", "48", "exec sleep 300", check=True)
+    tmux("new-session", "-d", "-s", "ai-alpha-ws", "-x", "120", "-y", "40", "exec sleep 300", check=True)
+    tmux("new-session", "-d", "-s", "agy-beta-ws", "-x", "120", "-y", "40", "exec sleep 300", check=True)
+    tmux("set-option", "-q", "-t", "=ai-alpha-ws:", "@ide_session", "ai-alpha-ws", check=True)
+    tmux("set-option", "-q", "-t", "=agy-beta-ws:", "@ide_session", "agy-beta-ws", check=True)
+
+    def make_ws(name, ai_cmd="exec sleep 300", ed_cmd="exec sleep 300", ai_cli="agy", git_branch="", git_dirty=False, in_home=False):
+        ws_parent = os.path.join(thome, "projects") if in_home else os.path.join(root, "ws")
+        ws_dir = os.path.join(ws_parent, name)
+        os.makedirs(os.path.join(ws_dir, "sub"), exist_ok=True)
+        with open(os.path.join(ws_dir, "README.md"), "w", encoding="utf-8") as f:
+            f.write(f"# {name}\nline2\nline3\n")
+        with open(os.path.join(ws_dir, "sub", "mod.py"), "w", encoding="utf-8") as f:
+            f.write("\n".join(f"line_{i}" for i in range(1, 25)) + "\n")
+        if git_branch:
+            run_cmd(["git", "-C", ws_dir, "init", "-q", "-b", git_branch], check=True)
+            run_cmd(["git", "-C", ws_dir, "config", "user.email", "test@example.com"], check=True)
+            run_cmd(["git", "-C", ws_dir, "config", "user.name", "Test User"], check=True)
+            run_cmd(["git", "-C", ws_dir, "add", "."], check=True)
+            run_cmd(["git", "-C", ws_dir, "commit", "-q", "-m", "init"], check=True)
+            if git_dirty:
+                with open(os.path.join(ws_dir, "README.md"), "a", encoding="utf-8") as f:
+                    f.write("dirty\n")
+
+        sock_path = os.path.join(xdg_run, f"nvim-ide-{name}.sock")
+        env_flags = [
+            "-e", f"IDE_SESSION={name}",
+            "-e", f"IDE_AI_CLI={ai_cli}",
+            "-e", f"NVIM_IDE_SOCKET={sock_path}",
+            "-e", f"IDE_INITIAL_ROOT={ws_dir}",
+        ]
+        ai_shell = "/bin/sh" if ai_cmd == "exec /bin/sh" else f"/bin/sh -c {shlex.quote(ai_cmd + '; :')}"
+        ed_shell = "exec sleep 300" if ed_cmd == "exec sleep 300" else f"/bin/sh -c {shlex.quote(ed_cmd + '; :')}"
+        init = tmux_out(
+            "new-session", "-d", "-P", "-F", "#{pane_id}\t#{window_id}",
+            "-s", name, "-n", "ide", "-c", ws_dir, "-x", "160", "-y", "48",
+            *env_flags, ai_shell,
+        )
+        p_ai, m_win = init.split("\t")
+        p_ed = tmux_out("split-window", "-h", "-P", "-F", "#{pane_id}", "-t", p_ai, "-l", "50%", "-c", ws_dir, *env_flags, ed_shell)
+        p_tm = tmux_out("split-window", "-f", "-v", "-P", "-F", "#{pane_id}", "-t", m_win, "-l", "25%", "-c", ws_dir, *env_flags, "exec /bin/sh")
+        tmux(
+            "set-option", "-w", "-t", m_win, "automatic-rename", "off", ";",
+            "set-option", "-w", "-t", m_win, "allow-rename", "off", ";",
+            "set-option", "-p", "-t", p_ai, "@ide_role", "ai", ";",
+            "set-option", "-p", "-t", p_ed, "@ide_role", "editor", ";",
+            "set-option", "-p", "-t", p_tm, "@ide_role", "term", ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_session", name, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_ai_cli", ai_cli, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_socket", sock_path, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_initial_root", ws_dir, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_workdir", ws_dir, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_main_win", m_win, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_ai_pane", p_ai, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_editor_pane", p_ed, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_term_pane", p_tm, ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_layout_mode", "3pane", ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_ai_parked", "0", ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_ed_parked", "0", ";",
+            "set-option", "-q", "-t", f"={name}:", "@ide_term_parked", "0", ";",
+            "set-environment", "-t", f"={name}", "IDE_SESSION", name, ";",
+            "select-pane", "-t", p_ai,
+            check=True,
+        )
+        return {"dir": ws_dir, "win": m_win, "ai": p_ai, "ed": p_ed, "tm": p_tm}
+
+    def sess_env(sess, pane=""):
+        meta = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{socket_path},#{pid},#{session_id}\t#{pane_id}")
+        t_env, p_id = meta.split("\t")
+        return {**base_env, "TMUX": t_env, "TMUX_PANE": pane or p_id, "IDE_SESSION": sess}
+
+    # 2. Create 3 IDE workspaces with distinct agents, Git states, and home-shortened vs non-home paths
+    ws_alpha = make_ws(
+        "alpha-ws",
+        ai_cmd="printf '\\033[36mALPHA_AI_VIEWPORT_LINE\\033[0m\\n'; sleep 300",
+        ed_cmd="printf 'ALPHA_EDITOR_VIEWPORT_LINE\\n'; sleep 300",
+        ai_cli="claude",
+        git_branch="feat/switcher",
+        git_dirty=True,
+        in_home=True,
+    )
+    ws_beta = make_ws(
+        "beta-ws",
+        ai_cmd="printf 'BETA_AI_READY\\n'; sleep 300",
+        ed_cmd="printf 'BETA_EDITOR_VISIBLE_LINE\\n'; sleep 300",
+        ai_cli="codex",
+        git_branch="main",
+        git_dirty=False,
+        in_home=True,
+    )
+    ws_gamma = make_ws(
+        "gamma-ws",
+        ai_cmd="printf 'GAMMA_SHELL_VIEW\\n'; sleep 300",
+        ai_cli="agy",
+        git_branch="",
+        in_home=False,
+    )
+
+    assert wait_until(
+        lambda: "ALPHA_AI_VIEWPORT_LINE" in tmux_out("capture-pane", "-p", "-t", ws_alpha["ai"])
+        and "BETA_EDITOR_VISIBLE_LINE" in tmux_out("capture-pane", "-p", "-t", ws_beta["ed"]),
+        timeout=4.0,
+    ), "timed out waiting for workspace pane viewports"
+
+    # Make beta-ws strictly newer in #{session_activity} than gamma-ws while testing from alpha-ws
+    time.sleep(1.05)
+    tmux("send-keys", "-t", ws_beta["tm"], "echo activity_bump", "C-m", check=True)
+    assert wait_until(lambda: "activity_bump" in tmux_out("capture-pane", "-p", "-t", ws_beta["tm"]))
+
+    plain_lines = run_cmd([ide_bin, "--list", "--plain"], env=sess_env("alpha-ws"), check=True).stdout.splitlines()
+    assert plain_lines == ["alpha-ws", "beta-ws", "gamma-ws"], f"unexpected --list --plain order: {plain_lines}"
+    assert "plain-non-ide" not in plain_lines and "ai-alpha-ws" not in plain_lines and "agy-beta-ws" not in plain_lines
+
+    list_out = run_cmd([ide_bin, "--list"], env=sess_env("alpha-ws"), check=True).stdout
+    list_lines = [ln for ln in list_out.splitlines() if ln.strip()]
+    assert "SESSION" in list_lines[0] and "AGENT" in list_lines[0] and "STATE" in list_lines[0] and "BRANCH" in list_lines[0] and "WORKSPACE" in list_lines[0], f"bad header: {list_lines[0]}"
+    assert list_lines[1].startswith("* alpha-ws") and "claude" in list_lines[1] and " - " in list_lines[1] and "feat/switcher*" in list_lines[1] and "~/projects/alpha-ws" in list_lines[1], f"bad row1: {list_lines[1]}"
+    assert "beta-ws" in list_lines[2] and "codex" in list_lines[2] and " - " in list_lines[2] and "main" in list_lines[2] and "main*" not in list_lines[2] and "~/projects/beta-ws" in list_lines[2], f"bad row2: {list_lines[2]}"
+    assert "gamma-ws" in list_lines[3] and "agy" in list_lines[3] and " - " in list_lines[3], f"bad row3: {list_lines[3]}"
+
+    # 3. Live ANSI --session-preview & _ide_park_* exclusion
+    prev_alpha = run_cmd([ide_bin, "--session-preview", "alpha-ws"], env={**sess_env("alpha-ws"), "NO_COLOR": ""}, check=True).stdout
+    assert "alpha-ws" in prev_alpha and "claude" in prev_alpha and "State:" in prev_alpha and "feat/switcher (" in prev_alpha, f"bad alpha preview header: {prev_alpha}"
+    assert "\x1b[36mALPHA_AI_VIEWPORT_LINE" in prev_alpha, f"expected live ANSI sequence from AI pane in preview: {prev_alpha!r}"
+
+    # Park beta-ws AI pane into _ide_park_ai -> preview must skip _ide_park_ai and render visible Editor pane instead!
+    run_cmd([ide_bin, "--toggle-ai", "beta-ws"], env=sess_env("beta-ws", ws_beta["ed"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_parked") == "1"
+    prev_beta_parked = run_cmd([ide_bin, "--session-preview", "beta-ws"], env=sess_env("alpha-ws"), check=True).stdout
+    assert "BETA_EDITOR_VISIBLE_LINE" in prev_beta_parked and "BETA_AI_READY" not in prev_beta_parked, f"parked _ide_park_ai leaked into preview: {prev_beta_parked}"
+
+    # Non-git preview uses calm BASE01 (#586E75 -> 88;110;117), never Green (#859900 -> 133;153;0)
+    prev_gamma = run_cmd([ide_bin, "--session-preview", "gamma-ws"], env={**sess_env("alpha-ws"), "NO_COLOR": ""}, check=True).stdout
+    git_line_gamma = next((ln for ln in prev_gamma.splitlines() if "Git      :" in ln), "")
+    assert "not a git repository" in git_line_gamma and "38;2;88;110;117mnot a git repository" in git_line_gamma, f"non-git line wrong color: {git_line_gamma!r}"
+    prev_missing = run_cmd([ide_bin, "--session-preview", "no-such-ws"], env=sess_env("alpha-ws"), check=True).stdout
+    assert "Session is no longer active." in prev_missing
+
+    # 4. Attach real PTY client to alpha-ws & verify status_click() column accuracy on calm 3-state status bar
+    def set_ctty(sfd):
+        os.setsid()
+        fcntl.ioctl(sfd, termios.TIOCSCTTY, 0)
+
+    client_mfd, client_sfd = pty.openpty()
+    fcntl.ioctl(client_sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 48, 160, 0, 0))
+    client_proc = subprocess.Popen(
+        ["tmux", "attach-session", "-t", "=alpha-ws"],
+        stdin=client_sfd,
+        stdout=client_sfd,
+        stderr=client_sfd,
+        env={**base_env, "TMUX": "", "TMUX_PANE": ""},
+        close_fds=True,
+        preexec_fn=lambda sfd=client_sfd: set_ctty(sfd),
+    )
+    os.close(client_sfd)
+
+    def drain_pty():
+        while True:
+            r, _, _ = select.select([client_mfd], [], [], 0)
+            if not r:
+                break
+            try:
+                if not os.read(client_mfd, 8192):
+                    break
+            except OSError:
+                break
+
+    client_name = wait_until(lambda: (drain_pty() or tmux_out("list-clients", "-t", "=alpha-ws", "-F", "#{client_name}").strip()))
+    assert client_name, "failed to attach PTY tmux client to alpha-ws"
+
+    run_cmd([ide_bin, "--focus-editor", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    sleft_raw = tmux_out("display-message", "-p", "-t", ws_alpha["ed"], "#{E:status-left}")
+    wcur_raw = tmux_out("display-message", "-p", "-t", ws_alpha["ed"], "#{E:window-status-current-format}")
+    strip_tags = lambda s: re.sub(r"#\[[^\]]*\]", "", s)
+    sleft_plain = strip_tags(sleft_raw)
+    wcur_plain = strip_tags(wcur_raw)
+    ed_col = len(sleft_plain) + wcur_plain.index("Editor") + 2
+    sh_col = len(sleft_plain) + wcur_plain.index("Shell") + 2
+
+    run_cmd([ide_bin, "--status-click", str(sh_col), "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term"
+    run_cmd([ide_bin, "--status-click", str(ed_col), "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["tm"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor"
+
+    # 5. Interactive Workspace Switcher (ide -s / --sessions) with mock IDE_FZF_BIN (in-process + live display-popup)
+    mock_fzf = os.path.join(root, "mock-fzf.py")
+    with open(mock_fzf, "w", encoding="utf-8") as f:
+        f.write(
+            "#!/usr/bin/env python3\n"
+            "import os, sys\n"
+            "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
+            "assert all('\\t' in l for l in lines), f'missing tab delimiter: {lines}'\n"
+            "rc = int(os.environ.get('MOCK_FZF_EXIT', '0'))\n"
+            "if rc != 0:\n"
+            "    sys.exit(rc)\n"
+            "target = os.environ.get('MOCK_FZF_TARGET', '')\n"
+            "key = os.environ.get('MOCK_FZF_KEY', '')\n"
+            "picked = next((l for l in lines if l.split('\\t', 1)[0] == target), lines[0])\n"
+            "print(key)\n"
+            "print(picked)\n"
+        )
+    os.chmod(mock_fzf, 0o755)
+
+    # alt-s abort (exit 130) returns 0 cleanly without switching
+    r_abort = run_cmd(
+        [ide_bin, "--sessions", "alpha-ws"],
+        env={**sess_env("alpha-ws", ws_alpha["ed"]), "IDE_NO_POPUP": "1", "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_EXIT": "130", "IDE_CLIENT": client_name},
+        check=False,
+    )
+    assert r_abort.returncode == 0
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"
+
+    # Enter (empty --expect key) switches session preserving target's focused pane
+    run_cmd([ide_bin, "--focus-editor", "gamma-ws"], env=sess_env("gamma-ws", ws_gamma["ed"]), check=True)
+    run_cmd(
+        [ide_bin, "-s", "alpha-ws"],
+        env={**sess_env("alpha-ws", ws_alpha["ed"]), "IDE_NO_POPUP": "1", "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "", "MOCK_FZF_TARGET": "gamma-ws", "IDE_CLIENT": client_name},
+        check=True,
+    )
+    drain_pty()
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "gamma-ws"
+    assert tmux_out("display-message", "-p", "-t", "=gamma-ws:", "#{@ide_role}") == "editor"
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+    drain_pty()
+
+    # ctrl-e does NOT bounce when editor is already active
+    run_cmd(
+        [ide_bin, "-s", "alpha-ws"],
+        env={**sess_env("alpha-ws", ws_alpha["ed"]), "IDE_NO_POPUP": "1", "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "ctrl-e", "MOCK_FZF_TARGET": "alpha-ws", "IDE_CLIENT": client_name},
+        check=True,
+    )
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor"
+
+    # ctrl-t unparks parked Shell and does NOT bounce when Shell is already active
+    run_cmd([ide_bin, "--toggle-term", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_term_parked") == "1"
+    run_cmd(
+        [ide_bin, "--sessions", "alpha-ws"],
+        env={**sess_env("alpha-ws", ws_alpha["ed"]), "IDE_NO_POPUP": "1", "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "ctrl-t", "MOCK_FZF_TARGET": "alpha-ws", "IDE_CLIENT": client_name},
+        check=True,
+    )
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_term_parked") == "0"
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term"
+    run_cmd(
+        [ide_bin, "--sessions", "alpha-ws"],
+        env={**sess_env("alpha-ws", ws_alpha["tm"]), "IDE_NO_POPUP": "1", "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "ctrl-t", "MOCK_FZF_TARGET": "alpha-ws", "IDE_CLIENT": client_name},
+        check=True,
+    )
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term"
+
+    # Live display-popup path: switches attached PTY client to beta-ws and unparks its parked AI pane via ctrl-a!
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_parked") == "1"
+    tmux("set-environment", "-g", "IDE_FZF_BIN", mock_fzf, check=True)
+    tmux("set-environment", "-g", "MOCK_FZF_KEY", "ctrl-a", check=True)
+    tmux("set-environment", "-g", "MOCK_FZF_TARGET", "beta-ws", check=True)
+    run_cmd(
+        [ide_bin, "--sessions", "alpha-ws"],
+        env={**sess_env("alpha-ws", ws_alpha["tm"]), "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "ctrl-a", "MOCK_FZF_TARGET": "beta-ws", "IDE_CLIENT": client_name},
+        check=True,
+    )
+    drain_pty()
+    assert wait_until(lambda: (drain_pty() or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "beta-ws")), "live display-popup --sessions did not switch client to beta-ws"
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_parked") == "0"
+    assert tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{@ide_role}") == "ai"
+
+    # 6. Context Dispatch (ide --send: --ref, L1==L2, empty no-op, after icd, external path, --text --no-focus, --stdin, live copy-mode-vi 'a', and untouched default tmux buffer)
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+    tmux("set-buffer", "SACRED_DEFAULT_BUFFER", check=True)
+    recv_root = os.path.join(root, "ai_recv_root.txt")
+    tmux(
+        "respawn-pane", "-k", "-t", ws_alpha["ai"], "-c", ws_alpha["dir"],
+        f"/bin/sh -c 'stty -echo -icanon min 1 time 0; exec cat > {recv_root}'",
+        check=True,
+    )
+    time.sleep(0.1)
+    run_cmd([ide_bin, "--focus-editor", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+
+    # Empty payloads (--stdin empty, --text "", --ref "   ") return 0 WITHOUT switching focus away from Editor!
+    run_cmd([ide_bin, "--send", "--stdin", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), input_text="", check=True)
+    run_cmd([ide_bin, "--send", "--text", "", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    run_cmd([ide_bin, "--send", "--ref", "   ", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor", "empty --send payload spuriously switched focus away from Editor"
+
+    mod_file = os.path.join(ws_alpha["dir"], "sub", "mod.py")
+    run_cmd([ide_bin, "--send", "--ref", f"{mod_file}:10-20", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "ai"
+
+    # L1 == L2 normalizes to #L15
+    run_cmd([ide_bin, "--send", "--ref", f"{mod_file}:15-15", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+
+    # --no-focus keeps Editor focused
+    run_cmd([ide_bin, "--focus-editor", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    run_cmd([ide_bin, "--send", "--text", "[NOFOCUS]", "--no-focus", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor"
+
+    # --stdin (all ide --send calls must leave default tmux buffer untouched)
+    run_cmd([ide_bin, "--send", "--stdin", "--no-focus", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), input_text="[STDIN_OK]", check=True)
+    assert tmux_out("show-buffer") == "SACRED_DEFAULT_BUFFER", f"default tmux buffer clobbered by ide --send: {tmux_out('show-buffer')!r}"
+    assert "_ide_send_" not in tmux_out("list-buffers"), "temporary _ide_send_ buffer leaked"
+
+    # Live Tmux copy-mode-vi 'a' binding from Shell pane
+    tmux("send-keys", "-t", ws_alpha["tm"], "echo COPY_MODE_PAYLOAD", "C-m", check=True)
+    assert wait_until(lambda: "\nCOPY_MODE_PAYLOAD" in "\n" + tmux_out("capture-pane", "-p", "-t", ws_alpha["tm"])), "missing COPY_MODE_PAYLOAD in Shell pane"
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+    tmux("select-pane", "-t", ws_alpha["tm"], check=True)
+    tmux("copy-mode", "-t", ws_alpha["tm"], check=True)
+    drain_pty()
+    tmux("send-keys", "-t", ws_alpha["tm"], "-X", "search-backward", "COPY_MODE_PAYLOAD", check=True)
+    tmux("send-keys", "-t", ws_alpha["tm"], "-X", "begin-selection", check=True)
+    tmux("send-keys", "-t", ws_alpha["tm"], "-X", "next-space-end", check=True)
+    os.write(client_mfd, b"a")
+
+    def root_recv_complete():
+        drain_pty()
+        if not os.path.isfile(recv_root):
+            return False
+        data = open(recv_root, encoding="utf-8", errors="replace").read()
+        return "COPY_MODE_PAYLOAD" in data
+    assert wait_until(root_recv_complete, timeout=3.0), f"copy-mode-vi 'a' payload never reached AI pane: {open(recv_root).read() if os.path.isfile(recv_root) else 'missing'}"
+    got_root = open(recv_root, encoding="utf-8", errors="replace").read()
+    clean_root = got_root.replace("\x1b[200~", "").replace("\x1b[201~", "")
+    assert "@sub/mod.py#L10-L20 @sub/mod.py#L15 [NOFOCUS][STDIN_OK]COPY_MODE_PAYLOAD" == clean_root, f"unexpected AI root stream: {clean_root!r}"
+    assert "_ide_send_" not in tmux_out("list-buffers"), "temporary _ide_send_ buffer leaked after copy-mode-vi"
+
+    # Relative path resolution after icd into subdirectory (<ws>/sub) + outside-workspace fallback
+    recv_sub = os.path.join(root, "ai_recv_sub.txt")
+    sub_dir = os.path.join(ws_alpha["dir"], "sub")
+    tmux("set-option", "-q", "-t", "=alpha-ws:", "@ide_workdir", sub_dir, check=True)
+    tmux(
+        "respawn-pane", "-k", "-t", ws_alpha["ai"], "-c", sub_dir,
+        f"/bin/sh -c 'stty -echo -icanon min 1 time 0; exec cat > {recv_sub}'",
+        check=True,
+    )
+    time.sleep(0.1)
+    readme_file = os.path.join(ws_alpha["dir"], "README.md")
+    ext_file = os.path.join(root, "outside-ws.txt")
+    with open(ext_file, "w", encoding="utf-8") as f:
+        f.write("ext\n")
+    ext_real = os.path.realpath(ext_file)
+    run_cmd([ide_bin, "--send", "--ref", f"{mod_file}:7", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    run_cmd([ide_bin, "--send", "--ref", f"{readme_file}:1-3", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    run_cmd([ide_bin, "--send", "--ref", f"{ext_file}:4", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert wait_until(lambda: os.path.isfile(recv_sub) and ext_real in open(recv_sub, encoding="utf-8").read()), "subdir --ref payloads did not arrive"
+    clean_sub = open(recv_sub, encoding="utf-8").read().replace("\x1b[200~", "").replace("\x1b[201~", "")
+    assert clean_sub == f"@mod.py#L7 @../README.md#L1-L3 @{ext_real}#L4 ", f"unexpected AI subdir stream: {clean_sub!r}"
+
+    # 7. Multi-client Alt+s isolation, non-IDE Alt+s, relative invocation, popup ctrl-x self-quit + reload highlight, --ref/--send edge cases, and dirty-buffer --quit guard
+    popup_env_log = os.path.join(root, "popup_env.txt")
+    with open(mock_fzf, "w", encoding="utf-8") as f:
+        f.write(
+            "#!/usr/bin/env python3\n"
+            "import os, sys\n"
+            f"with open({popup_env_log!r}, 'w', encoding='utf-8') as out:\n"
+            "    out.write(os.environ.get('IDE_CLIENT', '') + '\\t' + ' '.join(sys.argv[1:]))\n"
+            "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
+            "target = os.environ.get('MOCK_FZF_TARGET', '')\n"
+            "key = os.environ.get('MOCK_FZF_KEY', '')\n"
+            "picked = next((l for l in lines if l.split('\\t', 1)[0] == target), lines[0])\n"
+            "print(key)\n"
+            "print(picked)\n"
+        )
+    os.chmod(mock_fzf, 0o755)
+
+    # (7a) Attach second PTY client (client2) to alpha-ws while client1 stays on alpha-ws; press real Alt+s (\x1bs) on client2
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+    drain_pty()
+    client2_mfd, client2_sfd = pty.openpty()
+    fcntl.ioctl(client2_sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 48, 160, 0, 0))
+    client2_proc = subprocess.Popen(
+        ["tmux", "attach-session", "-t", "=alpha-ws"],
+        stdin=client2_sfd,
+        stdout=client2_sfd,
+        stderr=client2_sfd,
+        env={**base_env, "TMUX": "", "TMUX_PANE": ""},
+        close_fds=True,
+        preexec_fn=lambda sfd=client2_sfd: set_ctty(sfd),
+    )
+    os.close(client2_sfd)
+
+    def drain_pty_both():
+        drain_pty()
+        while True:
+            r, _, _ = select.select([client2_mfd], [], [], 0)
+            if not r:
+                break
+            try:
+                if not os.read(client2_mfd, 8192):
+                    break
+            except OSError:
+                break
+
+    def find_client2():
+        drain_pty_both()
+        cls = [c.strip() for c in tmux_out("list-clients", "-t", "=alpha-ws", "-F", "#{client_name}").splitlines() if c.strip() and c.strip() != client_name]
+        return cls[0] if cls else ""
+
+    client2_name = wait_until(find_client2)
+    assert client2_name, "failed to attach second PTY client to alpha-ws"
+
+    tmux("set-environment", "-g", "IDE_FZF_BIN", mock_fzf, check=True)
+    tmux("set-environment", "-g", "MOCK_FZF_KEY", "", check=True)
+    tmux("set-environment", "-g", "MOCK_FZF_TARGET", "beta-ws", check=True)
+    if os.path.exists(popup_env_log):
+        os.unlink(popup_env_log)
+    os.write(client2_mfd, b"\x1bs")
+    assert wait_until(lambda: (drain_pty_both() or tmux_out("display-message", "-p", "-t", client2_name, "#{session_name}") == "beta-ws")), "Alt+s on client2 did not switch client2 to beta-ws"
+    time.sleep(0.2)
+    drain_pty_both()
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws", "Alt+s on client2 wrongly switched client1!"
+    recorded_env = open(popup_env_log, encoding="utf-8").read()
+    rec_client, _ = recorded_env.split("\t", 1)
+    assert rec_client == client2_name and "#{" not in recorded_env, f"unexpanded format or wrong IDE_CLIENT in popup: {recorded_env!r}"
+
+    # Real Alt+s from non-IDE session (plain-non-ide) switches client2 cleanly into gamma-ws
+    tmux("switch-client", "-c", client2_name, "-t", "=plain-non-ide", check=True)
+    time.sleep(0.1)
+    drain_pty_both()
+    tmux("set-environment", "-g", "MOCK_FZF_TARGET", "gamma-ws", check=True)
+    os.write(client2_mfd, b"\x1bs")
+    assert wait_until(lambda: (drain_pty_both() or tmux_out("display-message", "-p", "-t", client2_name, "#{session_name}") == "gamma-ws")), "Alt+s on non-IDE session did not switch client2 to gamma-ws"
+    time.sleep(0.2)
+    drain_pty_both()
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"
+
+    # (7b) Relative invocation (./.local/bin/ide -s) from thome normalizes ide_self for display-popup and fzf callbacks
+    tmux("set-environment", "-g", "MOCK_FZF_TARGET", "beta-ws", check=True)
+    run_cmd(
+        ["./.local/bin/ide", "-s", "gamma-ws"],
+        env={**sess_env("gamma-ws", ws_gamma["ed"]), "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "", "MOCK_FZF_TARGET": "beta-ws", "IDE_CLIENT": client2_name},
+        cwd=thome,
+        check=True,
+    )
+    assert wait_until(lambda: (drain_pty_both() or tmux_out("display-message", "-p", "-t", client2_name, "#{session_name}") == "beta-ws")), "relative ./ide -s popup failed"
+    _, rel_fzf_args = open(popup_env_log, encoding="utf-8").read().split("\t", 1)
+    assert os.path.abspath(ide_bin) in rel_fzf_args or os.path.realpath(ide_bin) in rel_fzf_args, f"relative path leaked into fzf args: {rel_fzf_args}"
+
+    # (7c) Quitting the active session from inside the popup (IDE_IN_POPUP=1, ctrl-x) switches attached client to the most recently active surviving IDE session, and --sessions-lines re-highlights the new session
+    ws_killme = make_ws("killme-ws", ai_cmd="sleep 300")
+    tmux("switch-client", "-c", client2_name, "-t", "=killme-ws", check=True)
+    drain_pty_both()
+    run_cmd([ide_bin, "--quit", "killme-ws"], env={**sess_env("killme-ws", ws_killme["ed"]), "IDE_IN_POPUP": "1", "IDE_CLIENT": client2_name}, check=True)
+    drain_pty_both()
+    surviving_sess = tmux_out("display-message", "-p", "-t", client2_name, "#{session_name}")
+    assert surviving_sess in ("alpha-ws", "beta-ws", "gamma-ws"), f"popup self-quit switched to unexpected session: {surviving_sess!r}"
+    reloaded_rows = run_cmd([ide_bin, "--sessions-lines", "killme-ws"], env={**base_env, "IDE_IN_POPUP": "1", "IDE_CLIENT": client2_name}, check=True).stdout.splitlines()
+    assert reloaded_rows and reloaded_rows[0].split("\t", 1)[0] == surviving_sess and "▸" in reloaded_rows[0], f"reload after ctrl-x did not highlight new client session {surviving_sess}: {reloaded_rows}"
+
+    # (7d) Relative --ref from outside workspace CWD, '#' in filename, reversed flag order (--ref ... --send), and '--' leading-dash text
+    tmux("set-option", "-q", "-t", "=alpha-ws:", "@ide_workdir", ws_alpha["dir"], check=True)
+    hash_file = os.path.join(ws_alpha["dir"], "sub", "issue#12")
+    with open(hash_file, "w", encoding="utf-8") as f:
+        f.write("tracked\n")
+    recv_edge = os.path.join(root, "ai_recv_edge.txt")
+    tmux(
+        "respawn-pane", "-k", "-t", ws_alpha["ai"], "-c", ws_alpha["dir"],
+        f"/bin/sh -c 'stty -echo -icanon min 1 time 0; exec cat > {recv_edge}'",
+        check=True,
+    )
+    time.sleep(0.1)
+    run_cmd([ide_bin, "--ref", "sub/mod.py:4-4", "--send", "--no-focus", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), cwd=root, check=True)
+    run_cmd([ide_bin, "--send", "--ref", "sub/issue#12", "--no-focus", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), cwd=root, check=True)
+    run_cmd([ide_bin, "--send", "--no-focus", "--text", "- leading-dash ", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), cwd=root, check=True)
+    run_cmd([ide_bin, "--send", "--no-focus", "--", "--literal-end", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), cwd=root, check=True)
+    assert wait_until(lambda: os.path.isfile(recv_edge) and "--literal-end" in open(recv_edge, encoding="utf-8").read()), "edge --send payloads did not arrive"
+    clean_edge = open(recv_edge, encoding="utf-8").read().replace("\x1b[200~", "").replace("\x1b[201~", "")
+    assert clean_edge == "@sub/mod.py#L4 @sub/issue#12 - leading-dash --literal-end", f"unexpected edge --send stream: {clean_edge!r}"
+
+    # (7e) ide --quit refuses to close workspace when Neovim server has unsaved changes; --quit --force closes it
+    if shutil.which("nvim"):
+        ws_dirty = make_ws("dirty-ws", ai_cmd="sleep 300")
+        dirty_sock = tmux_out("show-options", "-qv", "-t", "=dirty-ws:", "@ide_socket")
+        dirty_file = os.path.join(ws_dirty["dir"], "unsaved.txt")
+        tmux(
+            "respawn-pane", "-k", "-t", ws_dirty["ed"], "-c", ws_dirty["dir"],
+            f"nvim --headless -u NONE -i NONE --listen {shlex.quote(dirty_sock)} -c {shlex.quote('edit ' + dirty_file)} -c \"call setline(1, 'dirty')\"",
+            check=True,
+        )
+        assert wait_until(lambda: os.path.exists(dirty_sock)), "dirty-ws nvim socket did not appear"
+        time.sleep(0.15)
+        r_dirty_quit = run_cmd([ide_bin, "--quit", "dirty-ws"], env={**base_env, "TMUX": ""}, check=False)
+        assert r_dirty_quit.returncode != 0, f"expected ide --quit to refuse dirty buffer, got {r_dirty_quit}"
+        assert tmux("has-session", "-t", "=dirty-ws", check=False).returncode == 0, "dirty-ws was killed despite unsaved buffer!"
+        run_cmd([ide_bin, "--quit", "--force", "dirty-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert tmux("has-session", "-t", "=dirty-ws", check=False).returncode != 0, "dirty-ws survived --quit --force"
+
+    # 8. Deterministic Hook-Only AI Lifecycle State, Zero Heuristic Invention, FIFO --next-attention, Parked AI Preservation, Stale-Hook SHELL Guard, and Top-Bar Width Invariance
+    ide_src = open(ide_bin, encoding="utf-8").read()
+    for banned_heuristic in ("inspect_fleet_procs", "inspect_ai_viewport", "alert-bell", "--on-bell"):
+        assert banned_heuristic not in ide_src, f"heuristic remnant {banned_heuristic!r} found in bin/ide"
+
+    # Detach client2 so client_name is the sole attached viewer on alpha-ws Editor pane
+    tmux("detach-client", "-t", client2_name, check=False)
+    drain_pty_both()
+    tmux("respawn-pane", "-k", "-t", ws_alpha["ai"], "-c", ws_alpha["dir"], "/bin/sh -c 'sleep 300; :'", check=True)
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    tmux("select-pane", "-t", ws_gamma["ed"], check=True)
+    drain_pty()
+
+    # (8a) Prompt-like text + terminal bell (\a) in gamma-ws AI pane MUST NOT invent WORKING or ATTN without hooks!
+    tmux(
+        "respawn-pane", "-k", "-t", ws_gamma["ai"], "-c", ws_gamma["dir"],
+        "/bin/sh -c 'printf \"Allow tool execution? [Y/n] \\a\\n\"; sleep 300; :'",
+        check=True,
+    )
+    assert wait_until(lambda: "Allow tool execution" in tmux_out("capture-pane", "-p", "-t", ws_gamma["ai"]))
+    run_cmd([ide_bin, "--refresh-attn"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") in ("", "0")
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_count") == "3"
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0"
+
+    # (8b) Unfocused @ide_tab_ai character width invariance across all 4 states:
+    # neutral -> running (Cyan) -> unacknowledged done (Green) -> approval (Orange), both visible and parked!
+    wcur_neutral = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    run_cmd([ide_bin, "--agent-state", "running", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    wcur_running = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "1"
+    sright_active = tmux_out("display-message", "-p", "-t", ws_alpha["ed"], "#{E:status-right}")
+    assert "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]1 active#[fg=#839496,bg=#073642,nobold] (Alt+s)" in sright_active, f"bad active fleet pill: {sright_active!r}"
+
+    run_cmd([ide_bin, "--agent-state", "done", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "done"
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") == "1"
+    wcur_done = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+
+    run_cmd([ide_bin, "--agent-state", "approval", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    wcur_approval = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    assert strip_tags(wcur_neutral) == strip_tags(wcur_running) == strip_tags(wcur_done) == strip_tags(wcur_approval), (
+        f"@ide_tab_ai shifted character width! neutral={strip_tags(wcur_neutral)!r} running={strip_tags(wcur_running)!r} done={strip_tags(wcur_done)!r} approval={strip_tags(wcur_approval)!r}"
+    )
+    assert "fg=#839496,bg=#073642,nobold]󰚩 codex (Alt+a)" in wcur_neutral, f"expected Base0 neutral tint: {wcur_neutral!r}"
+    assert "fg=#2AA198,bg=#073642,nobold]󰚩 codex (Alt+a)" in wcur_running, f"expected Cyan running tint: {wcur_running!r}"
+    assert "fg=#859900,bg=#073642,nobold]󰚩 codex (Alt+a)" in wcur_done, f"expected Green unacknowledged done tint: {wcur_done!r}"
+    assert "fg=#CB4B16,bg=#073642,nobold]󰚩 codex (Alt+a)" in wcur_approval, f"expected Orange approval tint: {wcur_approval!r}"
+
+    # Verify parked [Alt+a] @ide_tab_ai across all 4 states as well (zero character width shift)
+    run_cmd([ide_bin, "--toggle-ai", "beta-ws"], env=sess_env("beta-ws", ws_beta["ed"]), check=True)
+    wpark_approval = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    run_cmd([ide_bin, "--agent-state", "idle", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    wpark_neutral = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    run_cmd([ide_bin, "--agent-state", "running", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    wpark_running = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    run_cmd([ide_bin, "--agent-state", "done", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    wpark_done = tmux_out("display-message", "-p", "-t", ws_beta["ed"], "#{E:window-status-current-format}")
+    assert strip_tags(wpark_neutral) == strip_tags(wpark_running) == strip_tags(wpark_done) == strip_tags(wpark_approval), (
+        f"parked @ide_tab_ai shifted character width! neutral={strip_tags(wpark_neutral)!r} running={strip_tags(wpark_running)!r} done={strip_tags(wpark_done)!r} approval={strip_tags(wpark_approval)!r}"
+    )
+    assert "fg=#586E75,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_neutral, f"expected Base01 parked neutral: {wpark_neutral!r}"
+    assert "fg=#2AA198,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_running, f"expected Cyan parked running: {wpark_running!r}"
+    assert "fg=#859900,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_done, f"expected Green parked done: {wpark_done!r}"
+    assert "fg=#CB4B16,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_approval, f"expected Orange parked approval: {wpark_approval!r}"
+    run_cmd([ide_bin, "--toggle-ai", "beta-ws"], env=sess_env("beta-ws", ws_beta["ed"]), check=True)
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    run_cmd([ide_bin, "--agent-state", "approval", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+
+    # Verify status_click still clicks Editor & Shell accurately when @ide_tab_ai is tinted!
+    run_cmd([ide_bin, "--status-click", str(sh_col), "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term"
+    run_cmd([ide_bin, "--status-click", str(ed_col), "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["tm"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor"
+
+    # (8c) Foreground done vs Background done + Mixed FIFO queue (beta-ws approval, gamma-ws background done)
+    # Foreground done: when alpha-ws is attached and its AI pane IS focused, done sets @ide_ai_attn=0 (not queued)
+    tmux("select-pane", "-t", ws_alpha["ai"], check=True)
+    drain_pty()
+    run_cmd([ide_bin, "--agent-state", "done", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_state") == "done"
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") == "0", "foreground done while viewing AI pane must not set @ide_ai_attn=1!"
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn_ts") == ""
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "beta-ws", "foreground done must not enter @ide_attn_summary!"
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    drain_pty()
+    wcur_alpha_fg_done = tmux_out("display-message", "-p", "-t", ws_alpha["ed"], "#{E:window-status-current-format}")
+    assert "fg=#839496,bg=#073642,nobold]󰚩 claude (Alt+a)" in wcur_alpha_fg_done, f"acknowledged foreground done must stay neutral Base0: {wcur_alpha_fg_done!r}"
+    list_fg_done = run_cmd([ide_bin, "--list"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True).stdout
+    assert any("alpha-ws" in ln and "DONE" in ln for ln in list_fg_done.splitlines()), f"expected DONE for alpha-ws: {list_fg_done}"
+    run_cmd([ide_bin, "--agent-state", "idle", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ai"]), check=True)
+    list_idle = run_cmd([ide_bin, "--list"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True).stdout
+    assert any("alpha-ws" in ln and "IDLE" in ln for ln in list_idle.splitlines()), f"expected IDLE for alpha-ws: {list_idle}"
+
+    # Background done: gamma-ws finishes turn while detached -> @ide_ai_attn=1, @ide_attn_summary == "beta-ws +1", FIFO order
+    time.sleep(0.03)
+    run_cmd([ide_bin, "--agent-state", "done", "gamma-ws"], env=sess_env("gamma-ws", ws_gamma["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_state") == "done"
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") == "1"
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "beta-ws +1"
+    sright_attn = tmux_out("display-message", "-p", "-t", ws_alpha["ed"], "#{E:status-right}")
+    assert "range=user|attn]#[fg=#CB4B16,bg=#073642,nobold]󰂚 beta-ws +1 " in sright_attn, f"missing urgent attn pill: {sright_attn!r}"
+
+    fifo_plain = run_cmd([ide_bin, "--list", "--plain"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True).stdout.splitlines()
+    assert fifo_plain == ["beta-ws", "gamma-ws", "alpha-ws"], f"mixed ATTN + background DONE FIFO sort failed: {fifo_plain}"
+
+    list_mixed_plain = run_cmd([ide_bin, "--list"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=True).stdout.splitlines()
+    assert any(ln.lstrip().startswith("! ") and "beta-ws" in ln and "ATTN" in ln for ln in list_mixed_plain), f"missing ! ATTN row: {list_mixed_plain}"
+    assert any(ln.lstrip().startswith("! ") and "gamma-ws" in ln and "DONE" in ln for ln in list_mixed_plain), f"missing ! DONE row: {list_mixed_plain}"
+
+    color_env = {k: v for k, v in sess_env("alpha-ws", ws_alpha["ed"]).items() if k != "NO_COLOR"}
+    slines_ansi = run_cmd([ide_bin, "--sessions-lines", "alpha-ws"], env=color_env, check=True).stdout.splitlines()
+    beta_ansi = next(ln for ln in slines_ansi if ln.startswith("beta-ws\t"))
+    gamma_ansi = next(ln for ln in slines_ansi if ln.startswith("gamma-ws\t"))
+    assert "\x1b[38;2;203;75;22m󰂚\x1b[0m" in beta_ansi and "\x1b[38;2;203;75;22mbeta-ws" in beta_ansi, f"expected Orange bell & session on ATTN row: {beta_ansi!r}"
+    assert "\x1b[38;2;133;153;0m󰂚\x1b[0m" in gamma_ansi and "\x1b[38;2;133;153;0mgamma-ws" in gamma_ansi and "\x1b[38;2;133;153;0mDONE" in gamma_ansi, f"expected Green bell, session & DONE on unacknowledged DONE row: {gamma_ansi!r}"
+    l_mfd, l_sfd = pty.openpty()
+    try:
+        l_proc = subprocess.Popen([ide_bin, "--list"], stdin=subprocess.DEVNULL, stdout=l_sfd, stderr=l_sfd, env=color_env)
+        os.close(l_sfd)
+        l_chunks = []
+        while True:
+            try:
+                chunk = os.read(l_mfd, 16384)
+                if not chunk:
+                    break
+                l_chunks.append(chunk)
+            except OSError:
+                break
+        assert l_proc.wait(timeout=5.0) == 0
+    finally:
+        try:
+            os.close(l_mfd)
+        except OSError:
+            pass
+    list_mixed_ansi = b"".join(l_chunks).decode("utf-8", "replace").splitlines()
+    beta_list_ansi = next(ln for ln in list_mixed_ansi if "beta-ws" in ln)
+    gamma_list_ansi = next(ln for ln in list_mixed_ansi if "gamma-ws" in ln)
+    assert "\x1b[38;2;203;75;22m󰂚\x1b[0m" in beta_list_ansi and "\x1b[38;2;203;75;22mbeta-ws" in beta_list_ansi, f"expected Orange bell & session in TTY --list: {beta_list_ansi!r}"
+    assert "\x1b[38;2;133;153;0m󰂚\x1b[0m" in gamma_list_ansi and "\x1b[38;2;133;153;0mgamma-ws" in gamma_list_ansi, f"expected Green bell & session in TTY --list: {gamma_list_ansi!r}"
+
+    # (8d) ide --next-attention jumps to oldest needs_attn session (beta-ws approval), focuses AI pane, auto-acknowledges, and updates @ide_attn_summary -> "gamma-ws"
+    run_cmd([ide_bin, "--next-attention", "alpha-ws"], env={**sess_env("alpha-ws", ws_alpha["ed"]), "IDE_CLIENT": client_name}, check=True)
+    drain_pty()
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "beta-ws"
+    assert tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{@ide_role}") == "ai"
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") in ("", "0")
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "gamma-ws"
+
+    # Real Alt+Shift+S (\x1bS) on attached PTY jumps to next needs_attn session (gamma-ws background done), transitions done -> idle, and clears @ide_attn_summary!
+    os.write(client_mfd, b"\x1bS")
+    assert wait_until(lambda: (drain_pty() or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "gamma-ws")), "Alt+Shift+S did not jump to background-done gamma-ws"
+    assert wait_until(lambda: (drain_pty() or tmux_out("show-options", "-gqv", "@ide_attn_summary") == "")), "Alt+Shift+S focus hook did not clear @ide_attn_summary"
+    assert tmux_out("display-message", "-p", "-t", "=gamma-ws:", "#{@ide_role}") == "ai"
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_state") == "idle"
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") in ("", "0")
+
+    # Attached session with Editor focused receiving --agent-state done ALSO queues attention & jumps to AI pane!
+    tmux("select-pane", "-t", ws_gamma["ed"], check=True)
+    drain_pty()
+    run_cmd([ide_bin, "--agent-state", "done", "gamma-ws"], env=sess_env("gamma-ws", ws_gamma["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") == "1"
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "gamma-ws"
+    run_cmd([ide_bin, "--next-attention", "gamma-ws"], env={**sess_env("gamma-ws", ws_gamma["ed"]), "IDE_CLIENT": client_name}, check=True)
+    drain_pty()
+    assert tmux_out("display-message", "-p", "-t", "=gamma-ws:", "#{@ide_role}") == "ai"
+    assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") in ("", "0")
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""
+
+    # Calling --next-attention when queue is empty is a safe exit-0 no-op
+    run_cmd([ide_bin, "--next-attention", "gamma-ws"], env={**sess_env("gamma-ws", ws_gamma["ai"]), "IDE_CLIENT": client_name}, check=True)
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "gamma-ws"
+
+    # Calling --next-attention outside tmux with TTY stdin but redirected stdout (IDE_NO_ATTACH=0) exits 0 without 'open terminal failed'
+    run_cmd([ide_bin, "--agent-state", "done", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") == "1"
+    na_mfd, na_sfd = pty.openpty()
+    try:
+        na_env = {**base_env, "TMUX": "", "TMUX_PANE": "", "IDE_CLIENT": "", "IDE_NO_ATTACH": "0"}
+        na_res = subprocess.run([ide_bin, "--next-attention"], stdin=na_sfd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=na_env, text=True, check=False)
+        assert na_res.returncode == 0, f"outside-tmux --next-attention with redirected stdout failed: {na_res.stderr!r}"
+    finally:
+        os.close(na_sfd)
+        os.close(na_mfd)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") in ("", "0")
+
+    # (8e) Parked AI pane (_ide_park_ai) preserves live WORKING state
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    run_cmd([ide_bin, "--agent-state", "running", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    run_cmd([ide_bin, "--toggle-ai", "beta-ws"], env=sess_env("beta-ws", ws_beta["ed"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_parked") == "1"
+    list_parked_run = run_cmd([ide_bin, "--list"], env=sess_env("gamma-ws", ws_gamma["ai"]), check=True).stdout
+    assert any("beta-ws" in ln and "WORKING" in ln for ln in list_parked_run.splitlines()), f"parked running AI lost WORKING state: {list_parked_run}"
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "1"
+    run_cmd([ide_bin, "--toggle-ai", "beta-ws"], env=sess_env("beta-ws", ws_beta["ed"]), check=True)
+
+    # (8f) Stale-hook guard: if AI CLI exits back to bare shell (0 child processes), report SHELL and clear stale @ide_ai_state/@ide_ai_attn!
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    run_cmd([ide_bin, "--agent-state", "approval", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "beta-ws"
+    tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec /bin/sh", check=True)
+    assert wait_until(
+        lambda: any("beta-ws" in ln and "SHELL" in ln for ln in run_cmd([ide_bin, "--list"], env=sess_env("gamma-ws", ws_gamma["ai"]), check=True).stdout.splitlines()),
+        timeout=3.0,
+    ), "bare-shell AI pane did not transition to SHELL"
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == ""
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") in ("", "0")
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0"
+
+    # (8g) Exec-launched childless foreground AI process (0 child PIDs, non-shell pane_current_command) retains hook state!
+    tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec sleep 300", check=True)
+    assert wait_until(lambda: tmux_out("display-message", "-p", "-t", ws_beta["ai"], "#{pane_current_command}") == "sleep")
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    run_cmd([ide_bin, "--agent-state", "approval", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") == "1", "exec-launched childless AI lost approval state!"
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "beta-ws", "exec-launched childless AI wiped from @ide_attn_summary!"
+
+    # (8h) Real SGR mouse clicks on top status bar: Help (Alt+?) popup, #[range=user|attn], and #[range=user|fleet]
+    import unicodedata as _ud
+    _ansi_strip_re = re.compile(r"\x1b(?:\[[0-9;?]*[A-Za-z~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[()][A-Z0-9])")
+
+    def _cell_w(text):
+        total = 0
+        for ch in text:
+            cp = ord(ch)
+            if 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0x10FFFF:
+                total += 1
+            elif cp >= 0x10000 or _ud.east_asian_width(ch) in ("W", "F"):
+                total += 2
+            elif not _ud.combining(ch):
+                total += 1
+        return total
+
+    def _read_pty_chunk(sec=0.5):
+        end_t = time.monotonic() + sec
+        buf = []
+        while time.monotonic() < end_t:
+            rdy, _, _ = select.select([client_mfd], [], [], max(0.01, end_t - time.monotonic()))
+            if rdy:
+                try:
+                    buf.append(os.read(client_mfd, 65536))
+                except OSError:
+                    break
+        return b"".join(buf)
+
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    tmux("refresh-client", "-t", client_name, "-S", check=True)
+    _read_pty_chunk(0.35)
+
+    c_width = int(tmux_out("display-message", "-p", "-t", client_name, "#{client_width}"))
+    sr_raw = subprocess.run(
+        ["tmux", "-u", "display-message", "-t", "=alpha-ws:", "-p", "#{T:status-right}"],
+        env=base_env, text=True, capture_output=True, check=True,
+    ).stdout.rstrip("\n")
+    sr_vis = re.sub(r"#\[[^\]]*\]", "", sr_raw)
+
+    def _sr_col(label):
+        pos = sr_vis.index(label)
+        return c_width - _cell_w(sr_vis[pos:]) + 1
+
+    # Click 1: Help (Alt+?) while BOTH attn and fleet pills are rendered to its left
+    help_x = _sr_col("Help")
+    os.write(client_mfd, f"\x1b[<0;{help_x};1M\x1b[<0;{help_x};1m".encode())
+    help_out = _ansi_strip_re.sub("", _read_pty_chunk(0.8).decode("utf-8", "replace"))
+    assert "IDE Workspace & Editor Keybindings" in help_out, f"Help SGR click failed: {help_out[-250:]!r}"
+    os.write(client_mfd, b"q")
+    _read_pty_chunk(0.4)
+
+    # Click 2: Urgent #[range=user|attn] pill ("beta-ws") jumps client to beta-ws and auto-acks
+    attn_x = _sr_col("beta-ws")
+    os.write(client_mfd, f"\x1b[<0;{attn_x};1M\x1b[<0;{attn_x};1m".encode())
+    assert wait_until(lambda: (_read_pty_chunk(0.08) or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "beta-ws")), "attn pill SGR click did not jump to beta-ws"
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("show-options", "-gqv", "@ide_attn_summary") == "")), "attn pill SGR click did not clear @ide_attn_summary"
+
+    # Click 3: #[range=user|fleet] pill ("(Alt+s)") opens --sessions popup and switches back to alpha-ws
+    tmux("set-environment", "-g", "MOCK_FZF_KEY", "", check=True)
+    tmux("set-environment", "-g", "MOCK_FZF_TARGET", "alpha-ws", check=True)
+    _read_pty_chunk(0.35)
+    sr_raw2 = subprocess.run(
+        ["tmux", "-u", "display-message", "-t", "=beta-ws:", "-p", "#{T:status-right}"],
+        env=base_env, text=True, capture_output=True, check=True,
+    ).stdout.rstrip("\n")
+    sr_vis2 = re.sub(r"#\[[^\]]*\]", "", sr_raw2)
+    fleet_x = c_width - _cell_w(sr_vis2[sr_vis2.index("(Alt+s)"):]) + 1
+    os.write(client_mfd, f"\x1b[<0;{fleet_x};1M\x1b[<0;{fleet_x};1m".encode())
+    assert wait_until(lambda: (_read_pty_chunk(0.1) or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"), timeout=4.0), "fleet pill SGR click did not switch to alpha-ws"
+    _read_pty_chunk(0.2)
+
+    # (8i) Zero-fork pure-C if-shell -F guard on pane-focus-in & client-session-changed:
+    # Switching between Editor and Shell (or into idle/empty AI panes or non-IDE sessions) must NEVER
+    # invoke ~/.local/bin/ide --ack-ai, whereas focusing AI when @ide_ai_attn == 1 (approval or
+    # background done) immediately invokes --ack-ai --hook and clears @ide_ai_attn and @ide_attn_summary.
+    for s_clean in ("alpha-ws", "beta-ws", "gamma-ws"):
+        run_cmd([ide_bin, "--agent-state", "idle", s_clean], env=sess_env(s_clean), check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    _read_pty_chunk(0.25)
+
+    real_ide_path = os.path.realpath(ide_bin)
+    ack_hook_log = os.path.join(root, "ack_hook.log")
+    open(ack_hook_log, "w", encoding="utf-8").close()
+    os.unlink(ide_bin)
+    with open(ide_bin, "w", encoding="utf-8") as wf:
+        wf.write(
+            "#!/usr/bin/env python3\n"
+            "import os, sys\n"
+            f"log_p = {ack_hook_log!r}\n"
+            f"real_p = {real_ide_path!r}\n"
+            "if '--ack-ai' in sys.argv[1:]:\n"
+            "    with open(log_p, 'a', encoding='utf-8') as lf:\n"
+            "        lf.write(' '.join(sys.argv[1:]) + '\\n')\n"
+            "os.execv(real_p, [real_p, *sys.argv[1:]])\n"
+        )
+    os.chmod(ide_bin, 0o755)
+
+    # Routine focus switches while @ide_ai_state is idle or empty:
+    tmux("select-pane", "-t", ws_alpha["tm"], check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    os.write(client_mfd, b"\x1bt")
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term")), "Alt+t did not focus Shell"
+    os.write(client_mfd, b"\x1bk")
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor")), "Alt+k from Shell did not focus Editor"
+    tmux("select-pane", "-t", ws_alpha["ai"], check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    tmux("set-option", "-q", "-u", "-t", "=alpha-ws:", "@ide_ai_state", check=True)
+    tmux("select-pane", "-t", ws_alpha["ai"], check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    tmux("switch-client", "-c", client_name, "-t", "=plain-non-ide", check=True)
+    tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
+
+    # Even while @ide_ai_attn == 1 (background done), switching between Editor and Shell must NOT invoke --ack-ai!
+    run_cmd([ide_bin, "--agent-state", "done", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") == "1"
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "alpha-ws"
+    tmux("select-pane", "-t", ws_alpha["tm"], check=True)
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    _read_pty_chunk(0.3)
+    logged_false = open(ack_hook_log, encoding="utf-8").read()
+    assert logged_false == "", f"if-shell -F guard leaked --ack-ai calls during non-AI/idle switches: {logged_false!r}"
+
+    # Focusing AI pane while @ide_ai_attn == 1 (background done) immediately triggers --ack-ai --hook and clears!
+    tmux("select-pane", "-t", ws_alpha["ai"], check=True)
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook alpha-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on background-done AI did not invoke --ack-ai --hook"
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "pane-focus-in did not clear @ide_ai_attn/@ide_attn_summary on done"
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_state") == "idle"
+
+    # Focusing AI pane while @ide_ai_attn == 1 (approval) immediately triggers --ack-ai --hook and clears!
+    tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    _read_pty_chunk(0.15)
+    open(ack_hook_log, "w", encoding="utf-8").close()
+    run_cmd([ide_bin, "--agent-state", "approval", "alpha-ws"], env=sess_env("alpha-ws", ws_alpha["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") == "1"
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "alpha-ws"
+    tmux("select-pane", "-t", ws_alpha["ai"], check=True)
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook alpha-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on approval AI did not invoke --ack-ai --hook"
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "pane-focus-in did not clear @ide_ai_attn/@ide_attn_summary on approval"
+    assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_state") == "idle"
+
+    # Switching client to a session whose AI pane is active with @ide_ai_attn == 1 triggers client-session-changed --ack-ai --hook!
+    tmux("select-pane", "-t", ws_beta["ai"], check=True)
+    _read_pty_chunk(0.15)
+    open(ack_hook_log, "w", encoding="utf-8").close()
+    run_cmd([ide_bin, "--agent-state", "approval", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") == "1"
+    assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "beta-ws"
+    tmux("switch-client", "-c", client_name, "-t", "=beta-ws", check=True)
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook beta-ws" in open(ack_hook_log, encoding="utf-8").read())), "client-session-changed did not invoke --ack-ai --hook beta-ws"
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "client-session-changed did not clear @ide_ai_attn/@ide_attn_summary"
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "idle"
+
+    # Crashed 'running' AI CLI (exited to bare /bin/sh without Stop hook):
+    # 1) Focusing AI from Editor triggers pane-focus-in running guard (--ack-ai --hook) and clears @ide_ai_state & @ide_fleet_active!
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    _read_pty_chunk(0.15)
+    open(ack_hook_log, "w", encoding="utf-8").close()
+    run_cmd([ide_bin, "--agent-state", "running", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "1"
+    tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec /bin/sh", check=True)
+    assert wait_until(lambda: tmux_out("display-message", "-p", "-t", ws_beta["ai"], "#{pane_current_command}") == "sh")
+    tmux("select-pane", "-t", ws_beta["ai"], check=True)
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook beta-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on crashed running AI did not invoke --ack-ai --hook"
+    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "" and tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0"))), "pane-focus-in did not clear stale running state after AI exit"
+
+    # 2) If AI crashes while running AND user is already in AI pane, bouncing out via Alt+a (--toggle) clears stale running & @ide_fleet_active!
+    tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec sleep 300", check=True)
+    assert wait_until(lambda: tmux_out("display-message", "-p", "-t", ws_beta["ai"], "#{pane_current_command}") == "sleep")
+    tmux("select-pane", "-t", ws_beta["ai"], check=True)
+    run_cmd([ide_bin, "--agent-state", "running", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "1"
+    tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec /bin/sh", check=True)
+    assert wait_until(lambda: tmux_out("display-message", "-p", "-t", ws_beta["ai"], "#{pane_current_command}") == "sh")
+    run_cmd([ide_bin, "--toggle", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
+    assert tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{@ide_role}") == "editor"
+    assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "", "bouncing out of crashed running AI via --toggle left stale @ide_ai_state!"
+    assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0", "bouncing out of crashed running AI via --toggle left stale @ide_fleet_active!"
+
+    print("ALL_FLEET_OK")
+finally:
+    for mfd in (client2_mfd, client_mfd):
+        if mfd is not None:
+            try:
+                os.close(mfd)
+            except OSError:
+                pass
+    for cproc in (client2_proc, client_proc):
+        if cproc is not None:
+            try:
+                cproc.terminate()
+                cproc.wait(timeout=2.0)
+            except Exception:
+                try:
+                    cproc.kill()
+                except Exception:
+                    pass
+    try:
+        subprocess.run(
+            ["tmux", "kill-server"],
+            env={**base_env, "TMUX": "", "TMUX_PANE": ""} if base_env else None,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception:
+        pass
+    shutil.rmtree(root, ignore_errors=True)
+PY
+    )" || true
+    if grep -Fq "ALL_FLEET_OK" <<< "$FLEET_TEST_OUT"; then
+        pass "bin/ide multi-session workspace switcher (--list [--plain], -s/--sessions popup & fzf ctrl-a/e/t/ctrl-x/alt-s, --session-preview), deterministic hook-only AI lifecycle (--agent-state, FIFO --next-attention, Alt+Shift+S, stale-hook SHELL guard, parked AI preservation, zero-shift top-bar tinting), and context dispatch (--send)"
+    else
+        fail "bin/ide multi-session workspace switcher & lifecycle suite" "Suite failed: $FLEET_TEST_OUT"
+    fi
+fi
 
 test_summary

@@ -1847,7 +1847,7 @@ assert_suite("Neovim highlights Editor UI & Framing Architecture with Converged 
 })
 EOF
         NVIM_RESULTS="$(XDG_CONFIG_HOME="$TEMP_NVIM_XDG_CONFIG" run_nvim_headless -u "$NVIM_CONFIG" -c "edit $SCRIPT_DIR/sample-code/sample.c" -c "luafile $TEMP_NVIM_XDG_CONFIG/inspect.lua" 2>/dev/null || true)"
-        rm -rf "$TEMP_NVIM_XDG_CONFIG"
+        rm -rf "$TEMP_NVIM_XDG_CONFIG" 2>/dev/null || { sleep 0.2; rm -rf "$TEMP_NVIM_XDG_CONFIG" || true; }
         parse_subshell_results <<< "$NVIM_RESULTS"
     fi
 
@@ -2258,7 +2258,147 @@ EOF
         fi
         kill "$PEER_PID" "$SELF_PID" 2>/dev/null || true
         wait "$PEER_PID" "$SELF_PID" 2>/dev/null || true
-        rm -rf "$NVIM_CMD_HOME"
+        rm -rf "$NVIM_CMD_HOME" 2>/dev/null || { sleep 0.2; rm -rf "$NVIM_CMD_HOME" || true; }
+
+        # Verify IDE Fleet Switcher (<leader>s / <M-s>), Urgent AI Jump (<M-S>), and Editor-to-AI Context Dispatch (Visual <leader>a, <leader>il, <leader>id)
+        NVIM_FLEET_DIR="$(mktemp -d)"
+        NVIM_FLEET_SCRIPT="$NVIM_FLEET_DIR/ide-dispatch-test.lua"
+        cat > "$NVIM_FLEET_DIR/sample.py" << 'EOF'
+def alpha():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+EOF
+        cat > "$NVIM_FLEET_SCRIPT" << 'EOF'
+local jobs = {}
+local notes = {}
+local orig_jobstart = vim.fn.jobstart
+local orig_notify = vim.notify
+vim.fn.jobstart = function(cmd, _opts)
+    if type(cmd) == "table" then
+        table.insert(jobs, table.concat(cmd, "|"))
+    else
+        table.insert(jobs, tostring(cmd))
+    end
+    return 1
+end
+vim.notify = function(msg, lvl)
+    table.insert(notes, tostring(lvl or "") .. ":" .. tostring(msg or ""))
+end
+
+local test_dir = vim.env.NVIM_FLEET_DIR
+local ide_home = test_dir .. "/mock home"
+local ide_bin = ide_home .. "/.local/bin/ide"
+vim.env.HOME = ide_home
+vim.env.TMUX = "/tmp/mock-tmux,999,0"
+vim.env.TMUX_PANE = "%42"
+vim.env.IDE_SESSION = "fleet-sess"
+
+local function feed(keys)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "mx", false)
+end
+
+-- 1. Mode coverage for <M-s> and <M-S>
+local modes_ok = true
+for _, m in ipairs({ "n", "i", "v", "t" }) do
+    if type(vim.fn.maparg("<M-s>", m, false, true).callback) ~= "function" then
+        modes_ok = false
+    end
+    if type(vim.fn.maparg("<M-S>", m, false, true).callback) ~= "function" then
+        modes_ok = false
+    end
+end
+
+-- 2. Normal-mode <leader>a stays 0ms focus toggle
+jobs = {}
+feed("<Space>a")
+local norm_a_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--toggle|fleet-sess")
+
+-- 3. Named file buffer: Visual <leader>a (forward 2..4 & reverse 4..2) and Normal <leader>il
+local file_path = vim.fn.fnamemodify(test_dir .. "/sample.py", ":p")
+vim.cmd("edit " .. vim.fn.fnameescape(file_path))
+jobs = {}
+feed("2GVjj<Space>a")
+local mode_after_vis = vim.fn.mode()
+local vis_fwd_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":2-4|fleet-sess" and mode_after_vis == "n")
+
+jobs = {}
+feed("4GVkk<Space>a")
+local vis_rev_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":2-4|fleet-sess" and vim.fn.mode() == "n")
+
+jobs = {}
+feed("3G<Space>il")
+local il_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":3|fleet-sess")
+
+-- 4. <leader>id empty buffer notification vs sorted multi-severity diagnostics dispatch
+jobs = {}
+notes = {}
+vim.diagnostic.reset()
+feed("<Space>id")
+local id_empty_ok = (#jobs == 0 and #notes == 1 and notes[1]:find("No diagnostics in current buffer", 1, true) ~= nil)
+
+local ns = vim.api.nvim_create_namespace("ide_diag_test")
+vim.diagnostic.set(ns, 0, {
+    { lnum = 3, col = 4, severity = vim.diagnostic.severity.WARN, message = "unused value" },
+    { lnum = 0, col = 1, severity = vim.diagnostic.severity.ERROR, message = "bad symbol\ndetail" },
+})
+jobs = {}
+feed("<Space>id")
+local id_expected_body = "- [ERROR] L1:2: bad symbol detail\n- [WARN] L4:5: unused value\n"
+local id_pop_ok = (#jobs == 1 and jobs[1]:find(ide_bin .. "|--send|--text|Diagnostics in ", 1, true) == 1 and jobs[1]:find(id_expected_body .. "|fleet-sess", 1, true) ~= nil)
+vim.diagnostic.reset(ns, 0)
+
+-- 5. Unnamed scratch buffer: Visual <leader>a sends selected text literal
+vim.cmd("enew!")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "first scratch", "second scratch", "third scratch" })
+jobs = {}
+feed("ggVj<Space>a")
+local vis_scratch_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--text|first scratch\nsecond scratch|fleet-sess" and vim.fn.mode() == "n")
+
+-- 6. <leader>s, <M-s>, <M-S>, and <leader>? popup commands
+jobs = {}
+vim.fn.maparg("<leader>s", "n", false, true).callback()
+local sess_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--sessions|fleet-sess")
+
+jobs = {}
+vim.fn.maparg("<M-s>", "n", false, true).callback()
+local sess_alt_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--sessions|fleet-sess")
+local sess_popup_ok = sess_leader_ok and sess_alt_ok
+
+jobs = {}
+vim.fn.maparg("<M-S>", "n", false, true).callback()
+local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--next-attention|fleet-sess")
+
+jobs = {}
+vim.fn.maparg("<leader>?", "n", false, true).callback()
+local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|86|-h|27|" .. vim.fn.shellescape(ide_bin) .. " --keys")
+
+vim.fn.jobstart = orig_jobstart
+vim.notify = orig_notify
+
+io.write(table.concat({
+    "MODES=" .. tostring(modes_ok),
+    "NORMA=" .. tostring(norm_a_ok),
+    "VISF=" .. tostring(vis_fwd_ok),
+    "VISR=" .. tostring(vis_rev_ok),
+    "IL=" .. tostring(il_ok),
+    "ID0=" .. tostring(id_empty_ok),
+    "ID1=" .. tostring(id_pop_ok),
+    "SCR=" .. tostring(vis_scratch_ok),
+    "POP=" .. tostring(sess_popup_ok),
+    "ATTN=" .. tostring(next_attn_ok),
+    "KEYS=" .. tostring(keys_popup_ok),
+}, "|"))
+EOF
+        NVIM_FLEET_OUT="$( (cd "$NVIM_FLEET_DIR" && NVIM_FLEET_DIR="$NVIM_FLEET_DIR" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_FLEET_SCRIPT") 2>/dev/null || true)"
+        rm -rf "$NVIM_FLEET_DIR" 2>/dev/null || { sleep 0.2; rm -rf "$NVIM_FLEET_DIR" || true; }
+        EXPECTED_NVIM_FLEET="MODES=true|NORMA=true|VISF=true|VISR=true|IL=true|ID0=true|ID1=true|SCR=true|POP=true|ATTN=true|KEYS=true"
+        if [ "$NVIM_FLEET_OUT" = "$EXPECTED_NVIM_FLEET" ]; then
+            pass "Neovim init.lua preserves Normal <leader>a 0ms toggle, dispatches Visual <leader>a, <leader>il, and <leader>id context to AI, and wires <leader>s/<M-s> session switcher and <M-S> next-attention across n/i/v/t modes"
+        else
+            fail "Neovim IDE session switcher & context dispatch keymaps" "Expected '$EXPECTED_NVIM_FLEET', got '$NVIM_FLEET_OUT'"
+        fi
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"

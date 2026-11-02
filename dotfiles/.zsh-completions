@@ -71,3 +71,195 @@ _theme() {
 if (( $+functions[compdef] )); then
     compdef _theme theme 2>/dev/null || true
 fi
+
+# Completion for `ide` workspace launcher, session switcher, and session aliases
+_ide() {
+    local -a opts send_opts list_opts subcmds agents agent_states swap_dirs sessions
+    opts=(
+        '--3pane:Launch default 3-pane layout (AI, Editor, and Shell)'
+        '--2pane:Launch 2-pane layout (AI and Editor)'
+        '--ai:Select AI CLI agent (agy, claude, or codex)'
+        '--agent:Select AI CLI agent (agy, claude, or codex)'
+        '--open:Open file in the Main Editor pane via RPC and focus Editor'
+        '--preview:Preview file in the Main Editor pane via RPC without changing focus'
+        '--cd:Dive into directory across Editor and Shell'
+        '-s:Open interactive multi-session IDE workspace switcher'
+        '--sessions:Open interactive multi-session IDE workspace switcher'
+        '--next-attention:Jump to oldest IDE session waiting for AI attention'
+        '--agent-state:Record deterministic AI lifecycle state (running, approval, done, or idle)'
+        '--send:Dispatch context (--stdin, --ref, --text) to AI Agent'
+        '--stdin:Read context payload from standard input (with --send)'
+        '--ref:Format file and line reference relative to AI CWD (with --send)'
+        '--text:Send literal text payload to AI Agent (with --send)'
+        '--no-focus:Keep current pane focus when dispatching with --send'
+        '--toggle:Toggle focus between AI Agent and Text Editor'
+        '--show-editor:Focus Text Editor pane or bounce back'
+        '--show-ai:Focus AI Agent pane or bounce back'
+        '--show-term:Focus Interactive Shell pane or bounce back'
+        '--toggle-editor:Hide or show Text Editor pane'
+        '--toggle-ai:Hide or show AI Agent pane'
+        '--toggle-term:Hide or show Interactive Shell pane'
+        '--swap:Swap active pane with neighbor (left, down, up, or right)'
+        '--keys:Display IDE keybinding cheatsheet'
+        '-q:Safely quit IDE workspace session'
+        '--quit:Safely quit IDE workspace session'
+        '-f:Force-quit when used with --quit'
+        '--force:Force-quit when used with --quit'
+        '--detach:Create or update workspace session in background without attaching'
+        '--kill:Force-quit IDE session without unsaved-buffer check'
+        '--list:List active IDE workspace sessions'
+        '--plain:Print session names only (one per line) when listing'
+        '-h:Show help message'
+        '--help:Show help message'
+    )
+    send_opts=(
+        '--stdin:Read context payload from standard input'
+        '--ref:Format file and line reference relative to AI CWD'
+        '--text:Send literal text payload to AI Agent'
+        '--no-focus:Keep current pane focus when dispatching'
+    )
+    list_opts=(
+        '--plain:Print session names only (one per line)'
+    )
+    subcmds=(
+        'cd:Dive into directory across Editor and Shell'
+        'quit:Safely quit IDE workspace session'
+    )
+    agents=(
+        'agy:Default AI CLI agent'
+        'claude:Anthropic Claude Code CLI'
+        'codex:OpenAI Codex CLI'
+    )
+    agent_states=(
+        'running:AI agent is actively executing a turn'
+        'approval:AI agent is waiting for user approval or input'
+        'done:AI agent completed its turn'
+        'idle:AI agent is idle at prompt'
+    )
+    swap_dirs=(
+        'left:Swap active pane left'
+        'down:Swap active pane down'
+        'up:Swap active pane up'
+        'right:Swap active pane right'
+    )
+
+    local ide_bin=""
+    if [ -x "$HOME/.local/bin/ide" ]; then
+        ide_bin="$HOME/.local/bin/ide"
+    elif whence -p ide >/dev/null 2>&1; then
+        ide_bin="$(whence -p ide)"
+    fi
+    if [ -n "$ide_bin" ]; then
+        sessions=(${(f)"$("$ide_bin" --list --plain 2>/dev/null)"})
+    fi
+
+    local prev="${words[CURRENT-1]:-}"
+    local prev2="${words[CURRENT-2]:-}"
+    case "$prev" in
+        --ai|--agent)
+            _describe -t agents 'AI agent CLI' agents
+            return
+            ;;
+        --agent-state)
+            _describe -t states 'AI lifecycle state' agent_states
+            return
+            ;;
+        --swap)
+            _describe -t directions 'swap direction' swap_dirs
+            return
+            ;;
+        --list)
+            _describe -t options 'ide list option' list_opts
+            return
+            ;;
+        --open|--preview|--ref)
+            _files
+            return
+            ;;
+        --text)
+            return
+            ;;
+        cd|--cd)
+            _files -/
+            return
+            ;;
+        quit|-q|--quit|--kill|-s|--sessions|--next-attention|--ack-ai|--toggle|--show-editor|--show-ai|--show-term|--focus-editor|--focus-ai|--focus-term|--toggle-editor|--toggle-ai|--toggle-term)
+            if [[ "${words[CURRENT]:-}" == -* ]]; then
+                _describe -t options 'ide option' opts
+            elif (( ${#sessions} )); then
+                _describe -t sessions 'IDE session' sessions
+            fi
+            return
+            ;;
+    esac
+
+    local in_send=0 has_send_payload=0 idx=2 w=""
+    while (( idx < CURRENT )); do
+        w="${words[idx]:-}"
+        case "$w" in
+            --send)
+                in_send=1
+                ;;
+            --stdin|--ref=*|--text=*)
+                in_send=1
+                has_send_payload=1
+                ;;
+            --ref|--text)
+                in_send=1
+                if (( idx + 1 < CURRENT )); then
+                    has_send_payload=1
+                    (( idx++ ))
+                fi
+                ;;
+            --ai|--agent|--agent-state)
+                (( idx++ ))
+                ;;
+            -*)
+                ;;
+            *)
+                if (( in_send )); then
+                    has_send_payload=1
+                fi
+                ;;
+        esac
+        (( idx++ ))
+    done
+
+    if (( in_send )); then
+        if (( ! has_send_payload )) || [[ "${words[CURRENT]:-}" == -* ]]; then
+            _describe -t options 'ide send option' send_opts
+        elif (( ${#sessions} )); then
+            _describe -t sessions 'IDE session' sessions
+        fi
+        return
+    fi
+
+    if [[ "$prev2" == ("--swap"|"--agent-state") && "${words[CURRENT]:-}" != -* ]]; then
+        if (( ${#sessions} )); then
+            _describe -t sessions 'IDE session' sessions
+        fi
+        return
+    fi
+
+    if [[ "${words[1]:-}" == (qide|idek) && "${words[CURRENT]:-}" != -* ]]; then
+        if (( ${#sessions} )); then
+            _describe -t sessions 'IDE session' sessions
+        fi
+        return
+    fi
+
+    if [[ "${words[CURRENT]:-}" == -* ]]; then
+        _describe -t options 'ide option' opts
+    else
+        if (( CURRENT == 2 )) && [[ "${words[1]:-}" == ide ]]; then
+            _describe -t subcommands 'ide subcommand' subcmds
+        fi
+        if (( ${#sessions} )); then
+            _describe -t sessions 'IDE session' sessions
+        fi
+        _files -/
+    fi
+}
+if (( $+functions[compdef] )); then
+    compdef _ide ide ide2 ide3 qide idek 2>/dev/null || true
+fi

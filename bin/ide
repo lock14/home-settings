@@ -40,7 +40,9 @@ show_keys_cheatsheet() {
         "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Edit/Shell" "$c_cyan" "Alt+Arrow Keys" "$c_base0" "Resize pane (5 cells)" "$c_reset" \
         "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide / show Editor" "$c_cyan" "Alt+z" "$c_base0" "Toggle 100% zoom" "$c_reset" \
         "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide / show Shell" "$c_cyan" "Mouse drag border" "$c_base0" "Resize panes" "$c_reset" \
-        "$c_cyan" "Click top bar" "$c_base0" "Switch role / Help" "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_reset"
+        "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send selection to AI" "$c_reset" \
+        "$c_cyan" "Alt+Shift+S" "$c_base0" "Next attention AI" "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane H / V" "$c_reset" \
+        "$c_cyan" "Click top bar" "$c_base0" "Role / Fleet / Help" "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_reset"
     printf '\n  %s%-42s%sCLIPBOARD, LINKS & WORKSPACE%s\n' "$c_blue" "NEOVIM & MINI.FILES (Space = Leader)" "$c_blue" "$c_reset"
     printf '  %s%-18s%s %-21s  %s%-18s%s %s%s\n' \
         "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select & copy" "$c_reset" \
@@ -48,6 +50,7 @@ show_keys_cheatsheet() {
         "$c_cyan" "=      (in files)" "$c_base0" "Apply file edits" "$c_cyan" "Ctrl/Alt+Click" "$c_base0" "Open link / jump def" "$c_reset" \
         "$c_cyan" "g? / q (in files)" "$c_base0" "Help / close tree" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back / forward" "$c_reset" \
         "$c_cyan" "Space ff / fg / gs" "$c_base0" "Find / Grep / Git" "$c_cyan" "v [+line] <file>" "$c_base0" "Open file in Editor" "$c_reset" \
+        "$c_cyan" "Vis Space a / id" "$c_base0" "Send lines / diags" "$c_cyan" "Space il / Space s" "$c_base0" "Send line / Switch" "$c_reset" \
         "$c_cyan" "Space m" "$c_base0" "Toggle MD render" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Shift workspace dir" "$c_reset" \
         "$c_cyan" "H / L  (normal)" "$c_base0" "Prev / next buffer" "$c_cyan" ":Q / Alt+q / Alt+Q" "$c_base0" "Quit / Force-quit IDE" "$c_reset" \
         "$c_cyan" "Ctrl+h / j / k / l" "$c_base0" "Move Neovim splits" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
@@ -82,6 +85,10 @@ fi
 
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
 import os
+try:
+    os.close(9)
+except OSError:
+    pass
 from pathlib import Path
 import re
 import shlex
@@ -104,6 +111,10 @@ Options:
   --open <FILE>            Open <FILE> in the Main Editor pane via RPC and focus Editor
   --preview <FILE>         Preview <FILE> in the Main Editor pane via RPC without changing focus
   cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
+  -s, --sessions [SESSION] Open interactive multi-session IDE workspace switcher (Alt+s / Prefix+s)
+  --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in FIFO order (Alt+Shift+S / Prefix+S)
+  --agent-state <STATE> [SESSION] Record deterministic AI lifecycle state: running, approval, done, or idle
+  --send <PAYLOAD> [SESSION] Dispatch context (--stdin, --ref <PATH>[:L1[-L2]], --text <TEXT>, --no-focus) to AI Agent
   --toggle [SESSION]       Toggle focus between the AI Agent and the Text Editor (unparking if hidden)
   --show-editor [SESSION]  Focus the Text Editor pane (unparking if hidden), or bounce back if already focused
   --show-ai [SESSION]      Focus the AI Agent pane (unparking if hidden), or bounce back if already focused
@@ -117,7 +128,7 @@ Options:
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
   --kill [NAME]            Force-quit IDE session NAME without the unsaved-buffer check
-  --list                   List active tmux IDE sessions
+  --list [--plain]         List active IDE workspace sessions with agent CLI, state, Git branch, and directory
   -h, --help               Show this help message and exit
 
 Without NAME / SESSION, session commands act only on the ide session of the calling pane
@@ -395,6 +406,25 @@ def missing_session_msg(sess: str) -> str:
     return "Not inside an ide session (pass a session name, such as 'ide --quit <dir>')."
 
 
+def is_ide_session_meta(sess_name: str, ide_sess: str, ide_sock: str, ide_win: str) -> bool:
+    if not sess_name or re.match(r"^(ai|agy)-", sess_name):
+        return False
+    return bool(ide_sess or ide_sock or ide_win or sess_name.startswith("ide-"))
+
+
+def check_is_ide_session(sess: str) -> bool:
+    if not sess or re.match(r"^(ai|agy)-", sess):
+        return False
+    info = tmux_out(
+        "display-message", "-p", "-t", f"={sess}:",
+        "#{session_name}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}",
+    )
+    if not info or "\t" not in info:
+        return False
+    parts = (info.split("\t") + ["", "", "", ""])[:4]
+    return is_ide_session_meta(parts[0], parts[1], parts[2], parts[3])
+
+
 def current_ide_session() -> str:
     tmux_env = os.environ.get("TMUX", "")
     if not tmux_env:
@@ -418,12 +448,14 @@ def current_ide_session() -> str:
     pid, sess_name, ide_sess, ide_sock, ide_win = fparts[0], fparts[1], fparts[2], fparts[3], fparts[4]
     if pid != server_pid:
         return ""
-    if ide_sess or ide_sock or ide_win or sess_name.startswith("ide-"):
+    if is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
         return sess_name
     return ""
 
 
 def resolve_target_session(arg: str = "") -> str:
+    if arg.startswith("#{") and arg.endswith("}"):
+        arg = ""
     if arg:
         if session_exists(arg):
             return arg
@@ -1172,7 +1204,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
     if not init_root:
         init_root = cur_dir
 
-    need_term = (layout_mode or "3pane") != "2pane" or mode in ("term", "toggle-term")
+    need_term = (layout_mode or "3pane") != "2pane" or mode in ("term", "focus-term", "toggle-term")
     ed_just_healed = False
     ai_just_healed = False
     term_just_healed = False
@@ -1249,6 +1281,9 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
         else:
             unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
             focus_pane_preserving_zoom(main_win, ai_pane)
+    elif mode == "focus-ai":
+        unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
+        focus_pane_preserving_zoom(main_win, ai_pane)
     elif mode == "editor":
         if active_pane == editor_pane or active_role == "editor":
             if ed_just_healed or ensure_editor_nvim_running(editor_pane, sock):
@@ -1292,6 +1327,9 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
         else:
             unpark_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
             focus_pane_preserving_zoom(main_win, term_pane)
+    elif mode == "focus-term":
+        unpark_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
+        focus_pane_preserving_zoom(main_win, term_pane)
     elif mode == "toggle-editor":
         if ed_just_healed or pane_is_parked(editor_pane, main_win):
             unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
@@ -1311,6 +1349,8 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
             focus_pane_preserving_zoom(main_win, term_pane)
         else:
             park_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
+
+    ack_ai_session(sess, from_hook=True, refresh_always=False)
     return 0
 
 
@@ -1424,8 +1464,18 @@ def quit_ide(target_arg: str, force_quit: bool, is_kill: bool) -> int:
             except OSError:
                 pass
 
+    if os.environ.get("IDE_IN_POPUP") == "1":
+        other_ide = [e for e in classify_ide_fleet(include_git=False, cur_sess="") if str(e["sess"]) != sess]
+        if other_ide:
+            next_sess = str(other_ide[0]["sess"])
+            for cl in tmux_out("list-clients", "-t", f"={sess}", "-F", "#{client_name}").splitlines():
+                cl_s = cl.strip()
+                if cl_s:
+                    run_tmux("switch-client", "-c", cl_s, "-t", f"={next_sess}")
+
     for target_sess in (f"=ai-{sess}", f"=agy-{sess}", f"={sess}"):
         run_tmux("kill-session", "-t", target_sess)
+    refresh_fleet_topbar()
     if is_kill:
         print(f"Terminated IDE session: {sess}")
     return 0
@@ -2193,10 +2243,1130 @@ def status_click(x_str: str, target_arg: str) -> int:
     return 0
 
 
+DEFAULT_THEME_HEX = {
+    "BASE03": "#002B36",
+    "BASE02": "#073642",
+    "BASE01": "#586E75",
+    "BASE00": "#657B83",
+    "BASE0": "#839496",
+    "BASE1": "#93A1A1",
+    "BASE2": "#EEE8D5",
+    "BASE3": "#FDF6E3",
+    "YELLOW": "#B58900",
+    "ORANGE": "#CB4B16",
+    "RED": "#DC322F",
+    "MAGENTA": "#D33682",
+    "VIOLET": "#6C71C4",
+    "BLUE": "#268BD2",
+    "CYAN": "#2AA198",
+    "GREEN": "#859900",
+}
+
+_THEME_KV_RE = re.compile(r'^([A-Z0-9_]+)="?(#[0-9A-Fa-f]{6})"?$')
+
+
+def _hex_to_fg(hex_code: str) -> str:
+    h = hex_code.lstrip("#")
+    if len(h) != 6:
+        return ""
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"\033[38;2;{r};{g};{b}m"
+    except ValueError:
+        return ""
+
+
+def load_active_palette() -> tuple[dict[str, str], dict[str, str]]:
+    hex_map = dict(DEFAULT_THEME_HEX)
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    active_file = os.path.join(xdg_cfg, "home-settings", "active-theme.theme")
+    try:
+        with open(active_file, "r", encoding="utf-8") as fh:
+            for raw_line in fh:
+                m = _THEME_KV_RE.match(raw_line.strip())
+                if m and m.group(1) in hex_map:
+                    hex_map[m.group(1)] = m.group(2)
+    except OSError:
+        pass
+    esc_map = {k: _hex_to_fg(v) for k, v in hex_map.items()}
+    esc_map["RESET"] = "\033[0m"
+    return hex_map, esc_map
+
+
+def build_fzf_env(hex_map: dict[str, str]) -> dict[str, str]:
+    env = os.environ.copy()
+    if not env.get("FZF_DEFAULT_OPTS"):
+        xdg_cfg = env.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        theme_env_path = os.path.join(xdg_cfg, "home-settings", "theme-env.sh")
+        loaded_opts = ""
+        try:
+            with open(theme_env_path, "r", encoding="utf-8") as fh:
+                text = fh.read()
+            m = re.search(r'export\s+FZF_DEFAULT_OPTS="([^"]+)"', text)
+            if m:
+                loaded_opts = m.group(1)
+        except OSError:
+            pass
+        if loaded_opts:
+            env["FZF_DEFAULT_OPTS"] = loaded_opts
+        else:
+            env["FZF_DEFAULT_OPTS"] = (
+                f"--color=bg+:{hex_map['BASE02']},bg:{hex_map['BASE03']},spinner:{hex_map['CYAN']},"
+                f"hl:{hex_map['BLUE']},fg:{hex_map['BASE0']},header:{hex_map['BASE01']},"
+                f"info:{hex_map['YELLOW']},pointer:{hex_map['CYAN']},marker:{hex_map['GREEN']},"
+                f"fg+:{hex_map['BASE1']},prompt:{hex_map['BLUE']},hl+:{hex_map['BLUE']} "
+                "--border=rounded --no-scrollbar"
+            )
+    return env
+
+
+def _pids_with_children(pids: set[int]) -> set[int]:
+    if not pids:
+        return set()
+    found: set[int] = set()
+    my_pid = os.getpid()
+    if os.path.isfile(f"/proc/{my_pid}/task/{my_pid}/children"):
+        for pid in pids:
+            task_dir = f"/proc/{pid}/task"
+            try:
+                tids = os.listdir(task_dir)
+            except OSError:
+                continue
+            for tid in tids:
+                try:
+                    with open(f"{task_dir}/{tid}/children", "r", encoding="utf-8") as fh:
+                        if fh.read().strip():
+                            found.add(pid)
+                            break
+                except OSError:
+                    continue
+        return found
+
+    if os.path.isfile("/proc/stat"):
+        try:
+            for entry in os.listdir("/proc"):
+                if not entry.isdigit():
+                    continue
+                try:
+                    with open(f"/proc/{entry}/stat", "r", encoding="utf-8", errors="replace") as fh:
+                        stat_txt = fh.read()
+                except OSError:
+                    continue
+                rparen = stat_txt.rfind(")")
+                if rparen < 0:
+                    continue
+                fields = stat_txt[rparen + 2:].split(None, 2)
+                if len(fields) >= 2 and fields[1].isdigit():
+                    ppid = int(fields[1])
+                    if ppid in pids:
+                        found.add(ppid)
+                        if len(found) == len(pids):
+                            break
+            return found
+        except OSError:
+            pass
+
+    try:
+        res = subprocess.run(
+            ["ps", "-eo", "ppid="],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=0.5,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout:
+            for tok in res.stdout.split():
+                if tok.isdigit():
+                    ppid = int(tok)
+                    if ppid in pids:
+                        found.add(ppid)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return found
+
+
+_BARE_SHELL_CMD_RE = re.compile(
+    r"^-?(?:(?:ba|z|da|k|mk|a|tc|c|fi)?sh|nu|elvish|xonsh|pwsh)$",
+    re.IGNORECASE,
+)
+
+
+def _is_bare_shell_cmd(cmd: str) -> bool:
+    s = os.path.basename(cmd.strip())
+    return not s or bool(_BARE_SHELL_CMD_RE.match(s))
+
+
+def pane_has_child_procs(pane_pid: str, pane_cmd: str = "") -> bool:
+    p = pane_pid.strip()
+    if not p.isdigit():
+        return False
+    pid = int(p)
+    if pid <= 0:
+        return False
+    if pane_cmd.strip() and not _is_bare_shell_cmd(pane_cmd):
+        return True
+    return pid in _pids_with_children({pid})
+
+
+def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]:
+    res = run_tmux(
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{session_activity}\t#{session_attached}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}\t#{@ide_ai_pane}\t#{@ide_ai_cli}\t#{@ide_workdir}\t#{@ide_initial_root}\t#{@ide_ai_state}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}",
+    )
+    if res.returncode != 0:
+        return ([], False)
+    if not res.stdout:
+        return ([], True)
+    items: list[dict[str, str]] = []
+    for line in res.stdout.splitlines():
+        cols = (line.split("\t") + [""] * 13)[:13]
+        (
+            sess_name,
+            activity,
+            attached,
+            ide_sess,
+            ide_sock,
+            ide_win,
+            ai_pane,
+            ai_cli,
+            workdir,
+            init_root,
+            ai_state,
+            ai_attn,
+            ai_attn_ts,
+        ) = cols
+        if not is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
+            continue
+        items.append({
+            "sess": sess_name,
+            "activity": activity,
+            "attached": attached,
+            "ide_sess": ide_sess,
+            "ide_sock": ide_sock,
+            "ide_win": ide_win,
+            "ai_pane": ai_pane,
+            "ai_cli": ai_cli or "agy",
+            "workdir": workdir or init_root,
+            "init_root": init_root or workdir,
+            "ai_state": ai_state,
+            "ai_attn": ai_attn,
+            "ai_attn_ts": ai_attn_ts,
+        })
+    return (items, True)
+
+
+def list_ide_sessions_raw() -> list[dict[str, str]]:
+    items, _ = _list_ide_sessions_with_server_status()
+    return items
+
+
+def _parse_attn_ts(raw_ts: str, fallback: float) -> float:
+    s = raw_ts.strip()
+    if not s:
+        return fallback
+    try:
+        val = float(s)
+        return val if val > 0 else fallback
+    except ValueError:
+        return fallback
+
+
+def _git_summary(workdir: str) -> tuple[str, bool, str]:
+    if not workdir or not os.path.isdir(workdir) or not shutil.which("git"):
+        return ("-", False, "not a git repository")
+    try:
+        res = subprocess.run(
+            ["git", "-C", workdir, "--no-optional-locks", "status", "--porcelain=v2", "--branch"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=0.4,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ("-", False, "unavailable")
+    if res.returncode != 0 or not res.stdout:
+        return ("-", False, "not a git repository")
+    branch = ""
+    oid = ""
+    staged = 0
+    modified = 0
+    untracked = 0
+    for line in res.stdout.splitlines():
+        if line.startswith("# branch.head "):
+            branch = line[len("# branch.head "):].strip()
+        elif line.startswith("# branch.oid "):
+            oid = line[len("# branch.oid "):].strip()
+        elif line.startswith("? "):
+            untracked += 1
+        elif line.startswith(("1 ", "2 ", "u ")):
+            parts = line.split(" ", 2)
+            xy = parts[1] if len(parts) > 1 else ".."
+            if len(xy) >= 2:
+                if xy[0] != ".":
+                    staged += 1
+                if xy[1] != ".":
+                    modified += 1
+    if branch in ("", "(detached)"):
+        branch = f"@{oid[:7]}" if oid and oid != "(initial)" else "HEAD"
+    dirty = (staged + modified + untracked) > 0
+    if not dirty:
+        detail = f"{branch} (clean)"
+    else:
+        counts = []
+        if staged:
+            counts.append(f"+{staged} staged")
+        if modified:
+            counts.append(f"~{modified} modified")
+        if untracked:
+            counts.append(f"?{untracked} untracked")
+        detail = f"{branch} ({', '.join(counts)})"
+    return (branch, dirty, detail)
+
+
+def _shorten_home(path: str) -> str:
+    if not path:
+        return "-"
+    home = os.path.expanduser("~").rstrip("/")
+    if home and (path == home or path.startswith(home + "/")):
+        return "~" + path[len(home):]
+    return path
+
+
+def _state_color(state: str, esc: dict[str, str]) -> str:
+    if state == "ATTN":
+        return esc["ORANGE"]
+    if state == "WORKING":
+        return esc["CYAN"]
+    if state == "DONE":
+        return esc["GREEN"]
+    if state == "IDLE":
+        return esc["BASE0"]
+    return esc["BASE01"]
+
+
+def _format_attn_summary(fleet: list[dict[str, object]]) -> str:
+    attn_items = sorted(
+        ((float(e["attn_ts"]), str(e["sess"])) for e in fleet if bool(e["needs_attn"])),
+        key=lambda x: (x[0], x[1]),
+    )
+    if not attn_items:
+        return ""
+    if len(attn_items) == 1:
+        return attn_items[0][1]
+    return f"{attn_items[0][1]} +{len(attn_items) - 1}"
+
+
+def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dict[str, object]]:
+    raw_sessions = list_ide_sessions_raw()
+    if not raw_sessions:
+        return []
+
+    panes_res = run_tmux(
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{window_id}\t#{window_name}\t#{pane_id}\t#{pane_pid}\t#{pane_active}\t#{window_active}\t#{@ide_role}\t#{pane_current_path}\t#{pane_current_command}",
+    )
+    panes_by_sess: dict[str, list[tuple[str, str, str, str, str, str, str, str, str]]] = {}
+    if panes_res.returncode == 0 and panes_res.stdout:
+        for line in panes_res.stdout.splitlines():
+            pcols = (line.split("\t") + [""] * 10)[:10]
+            panes_by_sess.setdefault(pcols[0], []).append(
+                (pcols[1], pcols[2], pcols[3], pcols[4], pcols[5], pcols[6], pcols[7], pcols[8], pcols[9])
+            )
+
+    preview_pane_by_sess: dict[str, str] = {}
+    active_role_by_sess: dict[str, str] = {}
+    fallback_dir_by_sess: dict[str, str] = {}
+    ai_pid_by_sess: dict[str, int] = {}
+    ai_cmd_by_sess: dict[str, str] = {}
+
+    for item in raw_sessions:
+        sess = item["sess"]
+        spanes = panes_by_sess.get(sess, [])
+        rec_ai = item["ai_pane"]
+        ai_pid_str = ""
+        ai_cmd_str = ""
+        visible_ai = ""
+        active_vis_pane = ""
+        first_vis_pane = ""
+        act_role = ""
+        fb_dir = ""
+        for _, wname, pid, ppid, p_act, w_act, prole, ppath, pcmd in spanes:
+            if rec_ai and pid == rec_ai and not ai_pid_str:
+                ai_pid_str = ppid
+                ai_cmd_str = pcmd
+            if wname.startswith("_ide_park_"):
+                continue
+            if not first_vis_pane:
+                first_vis_pane = pid
+            if not fb_dir and ppath:
+                fb_dir = ppath
+            if w_act == "1" and p_act == "1":
+                active_vis_pane = pid
+                act_role = prole or "shell"
+            if rec_ai and pid == rec_ai:
+                visible_ai = pid
+        if not ai_pid_str:
+            for _, _, _, ppid, _, _, prole, _, pcmd in spanes:
+                if prole == "ai":
+                    ai_pid_str = ppid
+                    ai_cmd_str = pcmd
+                    break
+        if not visible_ai:
+            for _, wname, pid, _, _, _, prole, _, _ in spanes:
+                if wname.startswith("_ide_park_"):
+                    continue
+                if prole == "ai":
+                    visible_ai = pid
+                    break
+        preview_pane_by_sess[sess] = visible_ai or active_vis_pane or first_vis_pane
+        active_role_by_sess[sess] = act_role or "ai"
+        fallback_dir_by_sess[sess] = fb_dir
+        if ai_pid_str.strip().isdigit():
+            ai_pid_by_sess[sess] = int(ai_pid_str.strip())
+            ai_cmd_by_sess[sess] = ai_cmd_str.strip()
+
+    alive_child_pids = _pids_with_children(set(ai_pid_by_sess.values()))
+    stale_cleanup_cmds: list[str] = []
+
+    fleet: list[dict[str, object]] = []
+    for item in raw_sessions:
+        sess = item["sess"]
+        workdir = item["workdir"] or fallback_dir_by_sess.get(sess, "")
+        if include_git:
+            git_branch, git_dirty, git_detail = _git_summary(workdir)
+        else:
+            git_branch, git_dirty, git_detail = ("-", False, "-")
+
+        act_ts = int(item["activity"]) if item["activity"].isdigit() else 0
+        ai_pid = ai_pid_by_sess.get(sess, 0)
+        ai_cmd = ai_cmd_by_sess.get(sess, "")
+        has_child = bool(ai_pid) and (
+            ai_pid in alive_child_pids or not _is_bare_shell_cmd(ai_cmd)
+        )
+        raw_state = item["ai_state"].strip().lower()
+        raw_attn = item["ai_attn"].strip()
+        raw_attn_ts = item["ai_attn_ts"].strip()
+        needs_attn = False
+
+        if not has_child:
+            state = "SHELL"
+            attn_ts = 0.0
+            if raw_state or raw_attn not in ("", "0") or raw_attn_ts:
+                if stale_cleanup_cmds:
+                    stale_cleanup_cmds.append(";")
+                stale_cleanup_cmds.extend([
+                    "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "",
+                    ";",
+                    "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
+                    ";",
+                    "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
+                ])
+        else:
+            needs_attn = bool(raw_attn == "1" or raw_state == "approval")
+            attn_ts = _parse_attn_ts(raw_attn_ts, float(act_ts or time.time())) if needs_attn else 0.0
+            if raw_state == "approval" or (raw_attn == "1" and raw_state != "done"):
+                state = "ATTN"
+            elif raw_state == "running":
+                state = "WORKING"
+            elif raw_state == "done":
+                state = "DONE"
+            elif raw_state == "idle":
+                state = "IDLE"
+            else:
+                state = "-"
+
+        fleet.append({
+            "sess": sess,
+            "ai_cli": item["ai_cli"] or "agy",
+            "state": state,
+            "needs_attn": needs_attn,
+            "attn_ts": attn_ts,
+            "workdir": workdir,
+            "short_path": _shorten_home(workdir),
+            "git_branch": git_branch,
+            "git_dirty": git_dirty,
+            "git_detail": git_detail,
+            "preview_pane": preview_pane_by_sess.get(sess, ""),
+            "active_role": active_role_by_sess.get(sess, "ai"),
+            "attached": item["attached"] not in ("", "0"),
+            "activity": act_ts,
+            "is_current": sess == cur_sess,
+        })
+
+    if stale_cleanup_cmds:
+        active_cnt = sum(1 for e in fleet if e["state"] == "WORKING")
+        stale_cleanup_cmds.extend([
+            ";",
+            "set-option", "-gq", "@ide_fleet_count", str(len(fleet)),
+            ";",
+            "set-option", "-gq", "@ide_fleet_active", str(active_cnt),
+            ";",
+            "set-option", "-gq", "@ide_attn_summary", _format_attn_summary(fleet),
+            ";",
+            "refresh-client", "-S",
+        ])
+        run_tmux(*stale_cleanup_cmds)
+
+    def _fleet_sort_key(entry: dict[str, object]) -> tuple[int, float, int, int, str]:
+        if bool(entry["needs_attn"]):
+            return (0, float(entry["attn_ts"]), 0, 0, str(entry["sess"]))
+        is_cur = 0 if bool(entry["is_current"]) else 1
+        neg_act = -int(entry["activity"])
+        return (1, 0.0, is_cur, neg_act, str(entry["sess"]))
+
+    fleet.sort(key=_fleet_sort_key)
+    return fleet
+
+
+def refresh_fleet_topbar() -> int:
+    raw_sessions, server_up = _list_ide_sessions_with_server_status()
+    if not server_up:
+        return 0
+    fleet = classify_ide_fleet(include_git=False, cur_sess="") if raw_sessions else []
+    fleet_count = len(fleet)
+    active_count = sum(1 for e in fleet if e["state"] == "WORKING")
+    attn_summary = _format_attn_summary(fleet)
+
+    run_tmux(
+        "set-option", "-gq", "@ide_fleet_count", str(fleet_count),
+        ";",
+        "set-option", "-gq", "@ide_fleet_active", str(active_count),
+        ";",
+        "set-option", "-gq", "@ide_attn_summary", attn_summary,
+        ";",
+        "refresh-client", "-S",
+    )
+    return 0
+
+
+def set_agent_state(raw_state: str, target_arg: str) -> int:
+    state = raw_state.strip().lower()
+    if state not in ("running", "approval", "done", "idle"):
+        print(
+            f"Error: Invalid '--agent-state' value '{raw_state}'. Expected: running, approval, done, or idle.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if target_arg:
+        sess = resolve_target_session(target_arg)
+        if not sess or not session_exists(sess) or not check_is_ide_session(sess):
+            print(f"Error: {missing_session_msg(sess or target_arg)}", file=sys.stderr)
+            return 1
+    else:
+        if not os.environ.get("TMUX"):
+            return 0
+        sess = current_ide_session()
+        if not sess or not session_exists(sess):
+            return 0
+
+    if state == "approval":
+        cur_meta = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{@ide_ai_attn}\t#{@ide_ai_attn_ts}")
+        cur_attn, cur_ts = (cur_meta.split("\t", 1) + [""])[:2]
+        ts_val = cur_ts.strip() if (cur_attn.strip() == "1" and cur_ts.strip()) else f"{time.time():.6f}"
+        run_tmux(
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "approval",
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "1",
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", ts_val,
+        )
+    elif state == "done":
+        cur_meta = tmux_out(
+            "display-message",
+            "-p",
+            "-t",
+            f"={sess}:",
+            "#{session_attached}\t#{window_name}\t#{@ide_role}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}",
+        )
+        parts = (cur_meta.split("\t") + [""] * 5)[:5]
+        attached, wname, prole, cur_attn, cur_ts = (p.strip() for p in parts)
+        if attached not in ("", "0") and not wname.startswith("_ide_park_") and prole == "ai":
+            run_tmux(
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "done",
+                ";",
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
+                ";",
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
+            )
+        else:
+            ts_val = cur_ts if (cur_attn == "1" and cur_ts) else f"{time.time():.6f}"
+            run_tmux(
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "done",
+                ";",
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "1",
+                ";",
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", ts_val,
+            )
+    else:
+        run_tmux(
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", state,
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
+        )
+
+    refresh_fleet_topbar()
+    return 0
+
+
+def ack_ai_session(target_arg: str, from_hook: bool = False, refresh_always: bool = True) -> int:
+    if target_arg:
+        sess = resolve_target_session(target_arg)
+    elif os.environ.get("TMUX"):
+        sess = current_ide_session()
+    else:
+        sess = ""
+
+    if sess and session_exists(sess) and check_is_ide_session(sess):
+        meta = tmux_out(
+            "display-message",
+            "-p",
+            "-t",
+            f"={sess}:",
+            "#{session_attached}\t#{window_name}\t#{@ide_role}\t#{@ide_ai_state}\t#{@ide_ai_attn}",
+        )
+        parts = (meta.split("\t") + [""] * 5)[:5]
+        attached, wname, prole, ai_state, ai_attn = (p.strip() for p in parts)
+        can_ack = (
+            (attached not in ("", "0") and not wname.startswith("_ide_park_") and prole == "ai")
+            if from_hook
+            else True
+        )
+        if can_ack and (ai_attn not in ("", "0") or ai_state in ("approval", "done")):
+            next_state = "idle" if ai_state in ("approval", "done") else ai_state
+            run_tmux(
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", next_state,
+                ";",
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
+                ";",
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
+            )
+            refresh_always = True
+        elif ai_state in ("running", "approval", "done") or ai_attn not in ("", "0"):
+            refresh_always = True
+
+    if refresh_always:
+        refresh_fleet_topbar()
+    return 0
+
+
+def next_attention(target_arg: str) -> int:
+    resolved_arg = resolve_target_session(target_arg) if target_arg else ""
+    origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else current_ide_session()
+    fleet = classify_ide_fleet(include_git=False, cur_sess=origin_sess)
+    attn_entries = [e for e in fleet if bool(e["needs_attn"])]
+    if not attn_entries:
+        refresh_fleet_topbar()
+        if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+            run_tmux("display-message", "No IDE agents waiting for attention.")
+        else:
+            print("No IDE agents waiting for attention.")
+        return 0
+
+    oldest = str(attn_entries[0]["sess"])
+    toggle_main_pane("focus-ai", oldest)
+    ack_ai_session(oldest, from_hook=False, refresh_always=True)
+    return switch_or_attach_session(oldest, origin_sess)
+
+
+def list_ide_fleet(plain: bool = False) -> int:
+    cur_sess = current_ide_session()
+    if plain:
+        fleet_plain = classify_ide_fleet(include_git=False, cur_sess=cur_sess)
+        for entry in fleet_plain:
+            print(str(entry["sess"]))
+        return 0
+
+    fleet = classify_ide_fleet(include_git=True, cur_sess=cur_sess)
+    if not fleet:
+        print("No active IDE sessions.")
+        return 0
+
+    use_color = sys.stdout.isatty() and not bool(os.environ.get("NO_COLOR"))
+    _, esc = load_active_palette()
+    sess_w = max(7, min(28, max(len(str(e["sess"])) for e in fleet)))
+    cli_w = max(5, min(12, max(len(str(e["ai_cli"])) for e in fleet)))
+    state_w = 7
+    git_labels = [
+        f"{e['git_branch']}{'*' if e['git_dirty'] else ''}" if e["git_branch"] != "-" else "-"
+        for e in fleet
+    ]
+    git_w = max(6, min(24, max(len(g) for g in git_labels)))
+
+    if use_color:
+        c_hdr = esc["BASE01"]
+        c_rst = esc["RESET"]
+        print(
+            f"  {c_hdr}{'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  WORKSPACE{c_rst}"
+        )
+    else:
+        print(f"  {'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  WORKSPACE")
+
+    for entry, git_lbl in zip(fleet, git_labels):
+        sess = str(entry["sess"])
+        ai_cli = str(entry["ai_cli"])
+        state = str(entry["state"])
+        short_path = str(entry["short_path"])
+        is_cur = bool(entry["is_current"])
+        needs_attn = bool(entry["needs_attn"])
+        s_trunc = sess if len(sess) <= sess_w else (sess[: sess_w - 1] + "…")
+        c_trunc = ai_cli if len(ai_cli) <= cli_w else (ai_cli[: cli_w - 1] + "…")
+        g_trunc = git_lbl if len(git_lbl) <= git_w else (git_lbl[: git_w - 1] + "…")
+        if use_color:
+            attn_c = esc["GREEN"] if state == "DONE" else esc["ORANGE"]
+            if is_cur:
+                marker = f"{esc['CYAN']}▸{esc['RESET']}"
+            elif needs_attn:
+                marker = f"{attn_c}󰂚{esc['RESET']}"
+            else:
+                marker = " "
+            c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
+            c_state = _state_color(state, esc)
+            c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_lbl != "-" else esc["BASE01"])
+            print(
+                f"{marker} {c_sess}{s_trunc:<{sess_w}}{esc['RESET']}  "
+                f"{esc['BASE0']}{c_trunc:<{cli_w}}{esc['RESET']}  "
+                f"{c_state}{state:<{state_w}}{esc['RESET']}  "
+                f"{c_git}{g_trunc:<{git_w}}{esc['RESET']}  "
+                f"{esc['BASE0']}{short_path}{esc['RESET']}"
+            )
+        else:
+            marker = "*" if is_cur else ("!" if needs_attn else " ")
+            print(f"{marker} {s_trunc:<{sess_w}}  {c_trunc:<{cli_w}}  {state:<{state_w}}  {g_trunc:<{git_w}}  {short_path}")
+    return 0
+
+
+def build_sessions_lines(cur_sess: str = "") -> list[str]:
+    if cur_sess and not session_exists(cur_sess):
+        cur_sess = ""
+    if not cur_sess:
+        cl = os.environ.get("IDE_CLIENT", "").strip()
+        if cl and not cl.startswith("#{"):
+            cand = tmux_out("display-message", "-p", "-c", cl, "#{session_name}").strip()
+            if cand and check_is_ide_session(cand):
+                cur_sess = cand
+        if not cur_sess:
+            cur_sess = current_ide_session()
+    fleet = classify_ide_fleet(include_git=True, cur_sess=cur_sess)
+    if not fleet:
+        return []
+    _, esc = load_active_palette()
+    sess_w = max(8, min(24, max(len(str(e["sess"])) for e in fleet)))
+    cli_w = max(5, min(10, max(len(str(e["ai_cli"])) for e in fleet)))
+    state_w = 7
+    git_labels = [
+        f"{e['git_branch']}{'*' if e['git_dirty'] else ''}" if e["git_branch"] != "-" else "-"
+        for e in fleet
+    ]
+    git_w = max(6, min(20, max(len(g) for g in git_labels)))
+    rows: list[str] = []
+    for entry, git_lbl in zip(fleet, git_labels):
+        sess = str(entry["sess"])
+        ai_cli = str(entry["ai_cli"])
+        state = str(entry["state"])
+        short_path = str(entry["short_path"])
+        is_cur = bool(entry["is_current"])
+        needs_attn = bool(entry["needs_attn"])
+        attn_c = esc["GREEN"] if state == "DONE" else esc["ORANGE"]
+        s_trunc = sess if len(sess) <= sess_w else (sess[: sess_w - 1] + "…")
+        c_trunc = ai_cli if len(ai_cli) <= cli_w else (ai_cli[: cli_w - 1] + "…")
+        g_trunc = git_lbl if len(git_lbl) <= git_w else (git_lbl[: git_w - 1] + "…")
+        if is_cur:
+            marker = f"{esc['CYAN']}▸{esc['RESET']}"
+        elif needs_attn:
+            marker = f"{attn_c}󰂚{esc['RESET']}"
+        else:
+            marker = " "
+        c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
+        c_state = _state_color(state, esc)
+        c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_lbl != "-" else esc["BASE01"])
+        display = (
+            f"{marker} {c_sess}{s_trunc:<{sess_w}}{esc['RESET']}  "
+            f"{esc['BASE0']}{c_trunc:<{cli_w}}{esc['RESET']}  "
+            f"{c_state}{state:<{state_w}}{esc['RESET']}  "
+            f"{c_git}{g_trunc:<{git_w}}{esc['RESET']}  "
+            f"{esc['BASE01']}{short_path}{esc['RESET']}"
+        )
+        rows.append(f"{sess}\t{display}")
+    return rows
+
+
+def render_session_preview(target_arg: str) -> int:
+    sess = target_arg.strip()
+    if not sess or not session_exists(sess):
+        print("Session is no longer active.")
+        return 0
+    fleet = classify_ide_fleet(include_git=True, cur_sess=current_ide_session())
+    entry = next((e for e in fleet if str(e["sess"]) == sess), None)
+    _, esc = load_active_palette()
+    c_rst = esc["RESET"]
+    if entry is None:
+        print(f"{esc['BLUE']}{sess}{c_rst}")
+        return 0
+
+    ai_cli = str(entry["ai_cli"])
+    state = str(entry["state"])
+    short_path = str(entry["short_path"])
+    git_branch = str(entry["git_branch"])
+    git_detail = str(entry["git_detail"])
+    preview_pane = str(entry["preview_pane"])
+    active_role = str(entry["active_role"])
+    c_state = _state_color(state, esc)
+    c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_branch != "-" else esc["BASE01"])
+    rule = "─" * 56
+
+    print(f"{esc['BLUE']} {sess}{c_rst}  {esc['BASE01']}(focused: {active_role}){c_rst}")
+    print(f"{esc['BASE01']}Agent    :{c_rst} {esc['CYAN']}{ai_cli}{c_rst}  {esc['BASE01']}State:{c_rst} {c_state}{state}{c_rst}")
+    print(f"{esc['BASE01']}Workspace:{c_rst} {esc['BASE0']}{short_path}{c_rst}")
+    print(f"{esc['BASE01']}Git      :{c_rst} {c_git}{git_detail}{c_rst}")
+    print(f"{esc['BASE01']}{rule}{c_rst}")
+
+    if preview_pane and pane_exists(preview_pane):
+        cap = tmux_out("capture-pane", "-e", "-p", "-S", "-40", "-t", preview_pane)
+        cap_lines = cap.splitlines()
+        while cap_lines and not _SGR_RE.sub("", cap_lines[-1]).strip():
+            cap_lines.pop()
+        tail = cap_lines[-35:]
+        if tail:
+            print("\n".join(tail) + c_rst)
+        else:
+            print(f"{esc['BASE01']}(Viewport is empty){c_rst}")
+    else:
+        print(f"{esc['BASE01']}(No active pane in session){c_rst}")
+    return 0
+
+
+def _most_recent_client(target: str) -> str:
+    if not target:
+        return ""
+    tmux_target = target if target.startswith("$") else f"={target}"
+    lines = tmux_out("list-clients", "-t", tmux_target, "-F", "#{client_activity}\t#{client_name}").splitlines()
+    best_act = -1
+    best_client = ""
+    for line in lines:
+        parts = line.split("\t", 1)
+        if len(parts) == 2 and parts[1].strip():
+            act = int(parts[0]) if parts[0].strip().isdigit() else 0
+            if act >= best_act:
+                best_act = act
+                best_client = parts[1].strip()
+    return best_client
+
+
+def _resolve_active_client(origin_sess: str = "") -> str:
+    ide_client = os.environ.get("IDE_CLIENT", "").strip()
+    if ide_client and not ide_client.startswith("#{"):
+        return ide_client
+    if origin_sess:
+        found = _most_recent_client(origin_sess)
+        if found:
+            return found
+    tmux_env = os.environ.get("TMUX", "")
+    if tmux_env:
+        parts = tmux_env.split(",")
+        if len(parts) >= 3:
+            last_part = parts[-1].lstrip("$")
+            if last_part:
+                found = _most_recent_client(f"${last_part}")
+                if found:
+                    return found
+    cl = tmux_out("display-message", "-p", "#{client_name}").strip()
+    return "" if cl.startswith("#{") else cl
+
+
+def switch_or_attach_session(target_sess: str, origin_sess: str = "") -> int:
+    if not target_sess or not session_exists(target_sess):
+        return 1
+    if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+        ide_client = _resolve_active_client(origin_sess)
+        if ide_client:
+            res = run_tmux("switch-client", "-c", ide_client, "-t", f"={target_sess}")
+            if res.returncode == 0:
+                return 0
+        if os.environ.get("TMUX"):
+            run_tmux("switch-client", "-t", f"={target_sess}")
+            return 0
+    if os.environ.get("IDE_NO_ATTACH", "0") == "1" or not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return 0
+    os.execvp("tmux", ["tmux", "attach-session", "-t", f"={target_sess}"])
+    return 0
+
+
+def run_sessions_picker(target_arg: str, ide_self: str) -> int:
+    resolved_arg = resolve_target_session(target_arg) if target_arg else ""
+    origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
+    cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
+    if os.environ.get("TMUX") and os.environ.get("IDE_IN_POPUP") != "1" and os.environ.get("IDE_NO_POPUP") != "1":
+        client_name = _resolve_active_client(origin_sess or cur_sess)
+        raw_cur = (
+            tmux_out("display-message", "-p", "-c", client_name, "#{session_name}")
+            if client_name
+            else (origin_sess or tmux_out("display-message", "-p", "#{session_name}"))
+        )
+        if re.match(r"^(ai|agy)-", raw_cur):
+            if client_name:
+                run_tmux("detach-client", "-t", client_name)
+            else:
+                run_tmux("detach-client")
+            return 0
+        if client_name:
+            popup_cmd = ["display-popup", "-c", client_name]
+            inner_cmd = f"IDE_IN_POPUP=1 IDE_CLIENT={shlex.quote(client_name)} {shlex.quote(ide_self)} --sessions"
+            if cur_sess:
+                inner_cmd += f" {shlex.quote(cur_sess)}"
+            popup_cmd.extend(["-E", "-w", "88%", "-h", "80%", inner_cmd])
+            pop_res = run_tmux(*popup_cmd)
+            if pop_res.returncode == 0 or not sys.stdin.isatty():
+                return 0 if pop_res.returncode in (0, 130) else pop_res.returncode
+
+    rows = build_sessions_lines(cur_sess)
+    if not rows:
+        if os.environ.get("TMUX"):
+            run_tmux("display-message", "No active IDE sessions.")
+        else:
+            print("No active IDE sessions.")
+        return 0
+
+    fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
+    if not fzf_bin:
+        return list_ide_fleet(plain=False)
+
+    hex_map, _ = load_active_palette()
+    env = build_fzf_env(hex_map)
+    self_q = shlex.quote(ide_self)
+    reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
+    quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{1}})+reload({reload_cmd})"
+    preview_cmd = f"{self_q} --session-preview {{1}}"
+    fzf_args = [
+        fzf_bin,
+        "--ansi",
+        "--delimiter=\t",
+        "--with-nth=2..",
+        "--no-multi",
+        "--layout=reverse",
+        "--info=inline-right",
+        "--prompt=IDE > ",
+        "--header=Enter: switch  C-a: AI  C-e: Editor  C-t: Shell  C-x: quit  C-r: reload  Alt+s: close",
+        "--expect=ctrl-a,ctrl-e,ctrl-t",
+        "--bind=alt-s:abort",
+        f"--bind=ctrl-r:reload({reload_cmd})",
+        f"--bind={quit_bind}",
+        f"--preview={preview_cmd}",
+        "--preview-window=right:56%:wrap",
+    ]
+    proc = subprocess.run(
+        fzf_args,
+        input="\n".join(rows) + "\n",
+        stdout=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=False,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return 0
+    out_lines = proc.stdout.splitlines()
+    if not out_lines:
+        return 0
+    if out_lines[0] in ("", "enter", "ctrl-a", "ctrl-e", "ctrl-t"):
+        pressed = out_lines[0]
+        selected_line = out_lines[1] if len(out_lines) > 1 else ""
+    else:
+        pressed = ""
+        selected_line = out_lines[0]
+    chosen_sess = selected_line.split("\t", 1)[0].strip()
+    if not chosen_sess or not session_exists(chosen_sess):
+        return 0
+
+    if pressed == "ctrl-a":
+        toggle_main_pane("focus-ai", chosen_sess)
+    elif pressed == "ctrl-e":
+        toggle_main_pane("focus-editor", chosen_sess)
+    elif pressed == "ctrl-t":
+        toggle_main_pane("focus-term", chosen_sess)
+
+    rc = switch_or_attach_session(chosen_sess, origin_sess or cur_sess)
+    ack_ai_session(chosen_sess, from_hook=True, refresh_always=False)
+    return rc
+
+
+_SEND_REF_SPEC_RE = re.compile(r"^(.*?)(?:[:#][Ll]?([0-9]+)(?:-[Ll]?([0-9]+))?)?$")
+
+
+def _format_ai_ref(raw_ref: str, sess: str, ai_pane: str) -> str:
+    stripped = raw_ref.strip()
+    ai_cwd = tmux_out("display-message", "-p", "-t", ai_pane, "#{pane_current_path}").strip()
+    workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+    init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+    cand_roots = [r for r in (ai_cwd, workdir, init_root) if r]
+    base_cwd = ai_cwd or workdir or init_root
+
+    def _existing_target(path_str: str) -> str:
+        if not path_str:
+            return ""
+        if os.path.isabs(path_str):
+            return path_str if os.path.exists(path_str) else ""
+        for root in cand_roots:
+            joined = os.path.join(root, path_str)
+            if os.path.exists(joined):
+                return joined
+        if os.path.exists(path_str):
+            return os.path.abspath(path_str)
+        return ""
+
+    exact_existing = _existing_target(stripped)
+    if exact_existing:
+        raw_path, l1_s, l2_s = exact_existing, None, None
+    else:
+        m = _SEND_REF_SPEC_RE.match(stripped)
+        if not m:
+            return f"@{stripped} "
+        raw_path, l1_s, l2_s = m.group(1), m.group(2), m.group(3)
+        if not raw_path:
+            raw_path = stripped
+            l1_s = l2_s = None
+
+    suffix = ""
+    if l1_s and l2_s:
+        lo, hi = max(1, min(int(l1_s), int(l2_s))), max(1, max(int(l1_s), int(l2_s)))
+        suffix = f"#L{lo}" if lo == hi else f"#L{lo}-L{hi}"
+    elif l1_s:
+        suffix = f"#L{max(1, int(l1_s))}"
+
+    resolved_existing = _existing_target(raw_path)
+    if resolved_existing:
+        abs_path = os.path.abspath(resolved_existing)
+    elif os.path.isabs(raw_path):
+        abs_path = os.path.abspath(raw_path)
+    elif base_cwd:
+        abs_path = os.path.abspath(os.path.join(base_cwd, raw_path))
+    else:
+        abs_path = os.path.abspath(raw_path)
+
+    if os.path.exists(abs_path):
+        real_file = os.path.realpath(abs_path)
+    else:
+        parent_dir = os.path.dirname(abs_path)
+        real_parent = os.path.realpath(parent_dir) if os.path.isdir(parent_dir) else parent_dir
+        real_file = os.path.join(real_parent, os.path.basename(abs_path))
+
+    real_base = os.path.realpath(base_cwd) if base_cwd and os.path.isdir(base_cwd) else base_cwd
+
+    in_workspace = False
+    for cand_root in cand_roots:
+        real_root = os.path.realpath(cand_root) if os.path.isdir(cand_root) else os.path.abspath(cand_root)
+        if real_root == "/":
+            continue
+        try:
+            if os.path.commonpath([real_file, real_root]) == real_root:
+                in_workspace = True
+                break
+        except ValueError:
+            pass
+
+    if in_workspace and real_base:
+        try:
+            rel_path = os.path.relpath(real_file, real_base)
+            display_path = rel_path
+        except ValueError:
+            display_path = real_file
+    else:
+        display_path = real_file
+
+    return f"@{display_path}{suffix} "
+
+
+def send_to_ai(send_mode: str, send_payload: str, no_focus: bool, target_arg: str) -> int:
+    if not send_mode:
+        print("Error: '--send' requires '--stdin', '--ref <PATH>', or '--text <TEXT>'.", file=sys.stderr)
+        return 1
+
+    sess = resolve_target_session(target_arg)
+    if not sess or not session_exists(sess):
+        print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
+        return 1
+
+    stdin_text = ""
+    if send_mode == "stdin":
+        stdin_text = sys.stdin.buffer.read().decode("utf-8", errors="replace")
+        if not stdin_text:
+            return 0
+    elif send_mode == "ref":
+        if not send_payload.strip():
+            return 0
+    elif not send_payload:
+        return 0
+
+    prev_pane = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}") if no_focus else ""
+    if not no_focus:
+        toggle_main_pane("focus-ai", sess)
+        ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
+    else:
+        editor_pane = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
+        ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
+        term_pane = resolve_role_pane(sess, "term", "@ide_term_pane", "IDE_TERM_PANE")
+        main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
+        if not pane_exists(ai_pane):
+            toggle_main_pane("focus-ai", sess)
+            ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
+            if pane_exists(prev_pane):
+                run_tmux("select-pane", "-t", prev_pane)
+        elif pane_is_parked(ai_pane, main_win):
+            unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, "")
+            if pane_exists(prev_pane):
+                run_tmux("select-pane", "-t", prev_pane)
+
+    if not pane_exists(ai_pane):
+        print(f"Error: Could not resolve AI pane for session '{sess}'.", file=sys.stderr)
+        return 1
+
+    if send_mode == "stdin":
+        payload = stdin_text
+    elif send_mode == "ref":
+        payload = _format_ai_ref(send_payload, sess, ai_pane)
+    else:
+        payload = send_payload
+
+    if not payload:
+        return 0
+
+    buf_name = f"_ide_send_{os.getpid()}"
+    with tempfile.NamedTemporaryFile(prefix="ide-send.", delete=False) as tf:
+        tf.write(payload.encode("utf-8"))
+        tmp_path = tf.name
+    try:
+        if run_tmux("load-buffer", "-b", buf_name, tmp_path).returncode == 0:
+            if tmux_out("display-message", "-p", "-t", ai_pane, "#{pane_in_mode}") == "1":
+                run_tmux("copy-mode", "-q", "-t", ai_pane)
+            paste_res = run_tmux("paste-buffer", "-p", "-d", "-b", buf_name, "-t", ai_pane)
+            if paste_res.returncode != 0:
+                run_tmux("paste-buffer", "-d", "-b", buf_name, "-t", ai_pane)
+            run_tmux("delete-buffer", "-b", buf_name)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    return 0
+
+
 def main() -> int:
-    ide_self = os.environ.pop("IDE_SELF", "")
+    raw_self = os.environ.pop("IDE_SELF", "")
+    ide_self = os.path.abspath(raw_self) if raw_self else ""
     os.environ["FORCE_HYPERLINK"] = "1"
+    argv = sys.argv[1:]
     if not shutil.which("tmux"):
+        if "--list" in argv and "--plain" in argv:
+            return 0
         print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
         return 1
 
@@ -2204,6 +3374,7 @@ def main() -> int:
     action = "launch"
     detach_mode = os.environ.get("IDE_NO_ATTACH", "0") == "1"
     force_quit = False
+    plain_list = False
     ai_cli = os.environ.get("IDE_AI_CLI") or "agy"
     ai_cli_from_flag = False
     target_arg = ""
@@ -2214,13 +3385,28 @@ def main() -> int:
     link_href = ""
     link_word = ""
     link_cwd = ""
+    send_mode = ""
+    send_payload = ""
+    send_no_focus = False
+    agent_state_val = ""
+    ack_from_hook = False
+    end_of_opts = False
 
-    argv = sys.argv[1:]
     i = 0
     n = len(argv)
     while i < n:
         arg = argv[i]
-        if arg == "--2pane":
+        if end_of_opts:
+            if action == "send" and not send_mode:
+                send_mode = "text"
+                send_payload = arg
+            else:
+                target_arg = arg
+            i += 1
+        elif arg == "--":
+            end_of_opts = True
+            i += 1
+        elif arg == "--2pane":
             layout_mode = "2pane"
             i += 1
         elif arg == "--3pane":
@@ -2259,15 +3445,102 @@ def main() -> int:
             else:
                 cd_target = os.getcwd()
                 i += 1
+        elif arg in ("-s", "--sessions"):
+            action = "sessions"
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                target_arg = argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        elif arg == "--sessions-lines":
+            action = "sessions-lines"
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                target_arg = argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        elif arg == "--session-preview":
+            action = "session-preview"
+            if i + 1 >= n:
+                print("Error: '--session-preview' requires a session name.", file=sys.stderr)
+                return 1
+            target_arg = argv[i + 1]
+            i += 2
+        elif arg == "--agent-state":
+            action = "agent-state"
+            if i + 1 >= n or argv[i + 1].startswith("-"):
+                print("Error: '--agent-state' requires a state (running, approval, done, or idle).", file=sys.stderr)
+                return 1
+            agent_state_val = argv[i + 1]
+            if i + 2 < n and not argv[i + 2].startswith("-"):
+                target_arg = argv[i + 2]
+                i += 3
+            else:
+                i += 2
+        elif arg.startswith("--agent-state="):
+            action = "agent-state"
+            agent_state_val = arg.split("=", 1)[1]
+            if not agent_state_val:
+                print("Error: '--agent-state' requires a state (running, approval, done, or idle).", file=sys.stderr)
+                return 1
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                target_arg = argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        elif arg == "--hook":
+            ack_from_hook = True
+            i += 1
+        elif arg == "--send":
+            action = "send"
+            i += 1
+        elif arg == "--stdin":
+            action = "send"
+            send_mode = "stdin"
+            i += 1
+        elif arg == "--ref":
+            if i + 1 >= n:
+                print("Error: '--ref' requires a file path.", file=sys.stderr)
+                return 1
+            action = "send"
+            send_mode = "ref"
+            send_payload = argv[i + 1]
+            i += 2
+        elif arg.startswith("--ref="):
+            action = "send"
+            send_mode = "ref"
+            send_payload = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--text":
+            if i + 1 >= n:
+                print("Error: '--text' requires a text string.", file=sys.stderr)
+                return 1
+            action = "send"
+            send_mode = "text"
+            send_payload = argv[i + 1]
+            i += 2
+        elif arg.startswith("--text="):
+            action = "send"
+            send_mode = "text"
+            send_payload = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--no-focus":
+            send_no_focus = True
+            i += 1
         elif arg in (
             "--toggle",
             "--show-editor",
             "--focus-editor",
+            "--focus-ai",
+            "--focus-term",
             "--show-ai",
             "--show-term",
             "--toggle-editor",
             "--toggle-ai",
             "--toggle-term",
+            "--next-attention",
+            "--ack-ai",
+            "--refresh-attn",
             "--run-ai-popup",
             "--paste",
             "--kill",
@@ -2367,6 +3640,11 @@ def main() -> int:
         elif arg == "--list":
             action = "list"
             i += 1
+        elif arg == "--plain":
+            plain_list = True
+            if action == "launch":
+                action = "list"
+            i += 1
         elif arg in ("-h", "--help"):
             usage(sys.stdout)
             return 0
@@ -2375,7 +3653,11 @@ def main() -> int:
             usage(sys.stderr)
             return 1
         else:
-            target_arg = arg
+            if action == "send" and not send_mode:
+                send_mode = "text"
+                send_payload = arg
+            else:
+                target_arg = arg
             i += 1
 
     if ai_cli in ("agy", "claude", "codex"):
@@ -2395,6 +3677,24 @@ def main() -> int:
         os.execvp("bash", ["bash", ide_self, "--keys"])
     if action == "status-click":
         return status_click(status_click_x, target_arg)
+    if action == "sessions":
+        return run_sessions_picker(target_arg, ide_self)
+    if action == "sessions-lines":
+        for row in build_sessions_lines(target_arg):
+            print(row)
+        return 0
+    if action == "session-preview":
+        return render_session_preview(target_arg)
+    if action == "agent-state":
+        return set_agent_state(agent_state_val, target_arg)
+    if action == "ack-ai":
+        return ack_ai_session(target_arg, from_hook=ack_from_hook, refresh_always=True)
+    if action == "next-attention":
+        return next_attention(target_arg)
+    if action == "refresh-attn":
+        return refresh_fleet_topbar()
+    if action == "send":
+        return send_to_ai(send_mode, send_payload, send_no_focus, target_arg)
 
     # Populate DISPLAY / WAYLAND_DISPLAY / XAUTHORITY before dispatching --copy, --paste, --open-link, or launch
     if action in ("copy", "paste", "open-link"):
@@ -2420,8 +3720,8 @@ def main() -> int:
         return toggle_main_pane("toggle", target_arg)
     if action == "show-editor":
         return toggle_main_pane("editor", target_arg)
-    if action == "focus-editor":
-        return toggle_main_pane("focus-editor", target_arg)
+    if action in ("focus-editor", "focus-ai", "focus-term"):
+        return toggle_main_pane(action, target_arg)
     if action == "show-ai":
         return toggle_main_pane("ai", target_arg)
     if action == "show-term":
@@ -2436,10 +3736,7 @@ def main() -> int:
     if action == "quit":
         return quit_ide(target_arg, force_quit, False)
     if action == "list":
-        res = subprocess.run(["tmux", "list-sessions"], stderr=subprocess.DEVNULL, check=False)
-        if res.returncode != 0:
-            print("No active tmux sessions.")
-        return 0
+        return list_ide_fleet(plain=plain_list)
     if action == "kill":
         return quit_ide(target_arg, True, True)
 
@@ -2496,6 +3793,9 @@ def main() -> int:
             ("@ide_ai_parked", "IDE_AI_PARKED", "0"),
             ("@ide_ed_parked", "IDE_ED_PARKED", "0"),
             ("@ide_term_parked", "IDE_TERM_PARKED", "0" if layout_mode == "3pane" else "1"),
+            ("@ide_ai_state", "IDE_AI_STATE", ""),
+            ("@ide_ai_attn", "IDE_AI_ATTN", "0"),
+            ("@ide_ai_attn_ts", "IDE_AI_ATTN_TS", ""),
             ("@ide_force_hyperlink", "FORCE_HYPERLINK", "1"),
         ]
 
@@ -2538,6 +3838,14 @@ def main() -> int:
             existing_ai_cli = get_ide_var(session, "@ide_ai_cli", "IDE_AI_CLI")
             set_ide_var(session, "@ide_ai_cli", "IDE_AI_CLI", ide_ai_cli)
             if ide_ai_cli != existing_ai_cli:
+                set_ide_vars(
+                    session,
+                    [
+                        ("@ide_ai_state", "IDE_AI_STATE", ""),
+                        ("@ide_ai_attn", "IDE_AI_ATTN", "0"),
+                        ("@ide_ai_attn_ts", "IDE_AI_ATTN_TS", ""),
+                    ],
+                )
                 run_tmux("kill-session", "-t", f"=ai-{session}")
                 ai_pane_id = resolve_role_pane(session, "ai", "@ide_ai_pane", "IDE_AI_PANE")
                 ed_pane_id = ed_pane_existing
@@ -2606,6 +3914,7 @@ def main() -> int:
     if os.path.isfile(tmux_theme_conf):
         run_tmux("source-file", tmux_theme_conf)
     run_tmux("set-option", "-q", "-t", f"={session}:", "status-position", "top")
+    refresh_fleet_topbar()
 
     if detach_mode:
         return 0
@@ -2620,8 +3929,16 @@ def main() -> int:
 if __name__ == "__main__":
     sys.exit(main())
 PY
+IDE_PY_BIN="python3"
 if [ -x /usr/bin/python3 ]; then
-    IDE_SELF="${BASH_SOURCE[0]}" exec /usr/bin/python3 -c "$IDE_PY_SRC" "$@"
+    IDE_PY_BIN="/usr/bin/python3"
+fi
+if [ -r /dev/fd/9 ] 9<<< "" 2>/dev/null; then
+    IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"
 else
-    IDE_SELF="${BASH_SOURCE[0]}" exec python3 -c "$IDE_PY_SRC" "$@"
+    IDE_TMP_PY="$(mktemp "${TMPDIR:-/tmp}/ide-py.XXXXXX")"
+    trap 'rm -f "$IDE_TMP_PY"' EXIT INT TERM
+    printf '%s\n' "$IDE_PY_SRC" > "$IDE_TMP_PY"
+    IDE_SELF="${BASH_SOURCE[0]}" "$IDE_PY_BIN" -B "$IDE_TMP_PY" "$@"
+    exit $?
 fi

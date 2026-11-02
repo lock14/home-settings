@@ -11,10 +11,12 @@ COLOR_RESET="\033[0m"
 # Isolate all test suites from any live caller tmux session or active theme exports by default
 unset TMUX TMUX_PANE HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
 
-# Preserve mise data/cache/state paths when individual tests override HOME or XDG_*
+# Preserve mise data/cache/state paths when individual tests override HOME or XDG_*,
+# and disable background Go/gopls telemetry writes into ephemeral XDG_CONFIG_HOME directories.
 export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
 export MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
 export MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
+export GOTELEMETRY="off"
 
 # Ethan Schoonover Solarized Dark TrueColor ANSI 24-bit Escape Sequences
 case "${COLORTERM:-}" in
