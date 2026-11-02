@@ -527,6 +527,29 @@ test_addendum() {
         echo "FAIL:zshrc-addendum sourcing:.zsh-functions was not sourced"
     fi
 
+    # Verify .zshrc-addendum fzf < 0.48.0 fallback discovery across ~/.fzf/shell and standard distro/Homebrew paths
+    local mock_legacy_fzf_dir="$TEMP_HOME/mock-legacy-fzf"
+    mkdir -p "$mock_legacy_fzf_dir" "$TEMP_HOME/.fzf/shell"
+    printf '#!/usr/bin/env bash\nexit 1\n' > "$mock_legacy_fzf_dir/fzf"
+    chmod +x "$mock_legacy_fzf_dir/fzf"
+    printf 'export _HS_LEGACY_FZF_KEYS_LOADED=1\n' > "$TEMP_HOME/.fzf/shell/key-bindings.zsh"
+    printf 'export _HS_LEGACY_FZF_COMP_LOADED=1\n' > "$TEMP_HOME/.fzf/shell/completion.zsh"
+    local legacy_fzf_out=""
+    legacy_fzf_out="$(
+        HOME="$TEMP_HOME" ZDOTDIR="$TEMP_HOME" PATH="$mock_legacy_fzf_dir:/usr/bin:/bin" \
+            zsh -f -i -c 'unset _HS_LEGACY_FZF_KEYS_LOADED _HS_LEGACY_FZF_COMP_LOADED; source "$1"; printf "%s:%s" "${_HS_LEGACY_FZF_KEYS_LOADED:-0}" "${_HS_LEGACY_FZF_COMP_LOADED:-0}"' \
+            _ "$SCRIPT_DIR/dotfiles/.zshrc-addendum" </dev/null 2>/dev/null
+    )"
+    rm -rf "$mock_legacy_fzf_dir" "$TEMP_HOME/.fzf"
+    if [ "$legacy_fzf_out" = "1:1" ] && \
+       grep -Fq '/usr/share/fzf/shell' "$SCRIPT_DIR/dotfiles/.zshrc-addendum" && \
+       grep -Fq '/opt/homebrew/opt/fzf/shell' "$SCRIPT_DIR/dotfiles/.zshrc-addendum" && \
+       grep -Fq '/usr/local/opt/fzf/shell' "$SCRIPT_DIR/dotfiles/.zshrc-addendum"; then
+        echo "PASS:.zshrc-addendum falls back cleanly when fzf < 0.48.0 lacks --zsh across Debian, Fedora, Arch/Alpine (/usr/share/fzf/shell), Homebrew, and ~/.fzf/shell"
+    else
+        echo "FAIL:.zshrc-addendum legacy fzf discovery:out='$legacy_fzf_out'"
+    fi
+
     if [ "${POWERLEVEL9K_DISABLE_GITSTATUS:-}" = "true" ] && typeset -f prompt_vcs >/dev/null 2>&1; then
         echo "PASS:p10k gitstatusd retired (POWERLEVEL9K_DISABLE_GITSTATUS=true) with native prompt_vcs defined"
     else

@@ -1114,6 +1114,462 @@ INNER2
             echo "FAIL:Conflicted Git prompt & Readline colored-stats:tc='$ps1_conf_tc' c16='$ps1_conf_16' linux='$ps1_conf_linux' rl='$readline_vars'"
         fi
     )
+
+    # Test Layer 1 Readline/history hardening + Layer 2 zero-dependency inline Ctrl+r history drawer (unit + real PTY)
+    if ! grep -Eq 'bind [^#\n]*2>/dev/null|history -a[^#\n]*2>/dev/null|\bhistory[[:space:]]+-c\b' "$TWOFILE_DIR/.bashrc-addendum"; then
+        echo "PASS:.bashrc-addendum contains zero blind stderr suppression on bind/history -a and zero destructive history -c"
+    else
+        echo "FAIL:.bashrc-addendum hygiene:Found forbidden 2>/dev/null on bind/history -a or history -c"
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        CTRLR_SUITE_OUT="$(python3 - "$BASH" "$TWOFILE_DIR/.bashrc-addendum" 2>&1 <<'PY'
+import fcntl
+import os
+import pty
+import re
+import select
+import shutil
+import stat
+import struct
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+
+bash_bin, addendum_path = sys.argv[1], sys.argv[2]
+root = tempfile.mkdtemp(prefix="hs-bash-ctrlr-")
+
+try:
+    # Build a clean PATH directory without fzf/zoxide/mise so Layer 2 activates deterministically even when host has /usr/bin/fzf
+    no_fzf_bin = os.path.join(root, "no_fzf_bin")
+    os.makedirs(no_fzf_bin, exist_ok=True)
+    for sys_dir in ("/usr/bin", "/bin"):
+        if os.path.isdir(sys_dir):
+            for entry in os.listdir(sys_dir):
+                if entry in ("fzf", "zoxide", "mise"):
+                    continue
+                dst = os.path.join(no_fzf_bin, entry)
+                if not os.path.lexists(dst):
+                    os.symlink(os.path.join(sys_dir, entry), dst)
+
+    # 1. Layer 1 smart HISTSIZE / HISTFILESIZE / HISTCONTROL upgrades vs custom preservation + Readline options/bindings + legacy fzf discovery
+    h1 = os.path.join(root, "h_unit")
+    os.makedirs(h1, exist_ok=True)
+    base_env = {
+        "HOME": h1,
+        "XDG_CONFIG_HOME": os.path.join(h1, ".config"),
+        "XDG_CACHE_HOME": os.path.join(h1, ".cache"),
+        "PATH": no_fzf_bin,
+        "TERM": "xterm-256color",
+        "COLORTERM": "truecolor",
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+    }
+
+    def bash_eval(script, extra_env=None):
+        env = {**base_env, **(extra_env or {})}
+        r = subprocess.run(
+            [bash_bin, "--norc", "-i", "-c", script],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        return r.stdout, r.stderr, r.returncode
+
+    out_def, _, _ = bash_eval(
+        f"HISTSIZE=1000; HISTFILESIZE=2000; HISTCONTROL=ignoreboth; source {addendum_path!r}; "
+        "printf '%s|%s|%s|' \"$HISTSIZE\" \"$HISTFILESIZE\" \"$HISTCONTROL\"; "
+        "shopt -q histappend checkwinsize cdspell cmdhist histverify && printf 'SHOPT_OK|' || printf 'SHOPT_BAD|'; "
+        "shopt -q lithist && printf 'LITHIST_BAD' || printf 'NO_LITHIST'"
+    )
+    assert out_def == "50000|100000|ignoreboth:erasedups|SHOPT_OK|NO_LITHIST", f"bad default upgrade: {out_def!r}"
+
+    out_500, _, _ = bash_eval(
+        f"HISTSIZE=500; HISTFILESIZE=500; HISTCONTROL=ignoredups; source {addendum_path!r}; "
+        "printf '%s|%s|%s' \"$HISTSIZE\" \"$HISTFILESIZE\" \"$HISTCONTROL\""
+    )
+    assert out_500 == "50000|100000|ignoreboth:erasedups", f"bad 500 upgrade: {out_500!r}"
+
+    for custom_sz in ("0", "-1", "77777"):
+        out_cust, _, _ = bash_eval(
+            f"HISTSIZE={custom_sz}; HISTFILESIZE=88888; HISTCONTROL=ignorespace:erasedups; source {addendum_path!r}; "
+            "printf '%s|%s|%s' \"$HISTSIZE\" \"$HISTFILESIZE\" \"$HISTCONTROL\""
+        )
+        assert out_cust == f"{custom_sz}|88888|ignorespace:erasedups", f"clobbered custom history ({custom_sz}): {out_cust!r}"
+
+    # Readline variables, CSI+SS3 keymaps across emacs/vi-insert/vi-command, and active-region-start-color sync across themes/16-color/NO_COLOR
+    rl_check, _, _ = bash_eval(
+        f"source {addendum_path!r}; "
+        "vars=\"$(bind -v)\"; "
+        "printf 'REV=%s|' \"$(grep -c 'set revert-all-at-newline on' <<< \"$vars\" || true)\"; "
+        "if grep -Fq 'search-ignore-case' <<< \"$vars\"; then "
+        "  printf 'SIC=%s|' \"$(grep -c 'set search-ignore-case on' <<< \"$vars\" || true)\"; "
+        "else printf 'SIC=1|'; fi; "
+        "if grep -Fq 'enable-active-region' <<< \"$vars\"; then "
+        "  sd_en=\"$(bind -v | grep 'set enable-active-region on' || true)\"; "
+        "  sd_spec=\"${_HS_LAST_RL_REGION_SPEC:-}\"; "
+        "  sd_reg=\"$(bind -v | grep 'active-region-start-color' || true)\"; "
+        "  theme --set nord --no-live >/dev/null; "
+        "  nd_en=\"$(bind -v | grep 'set enable-active-region on' || true)\"; "
+        "  nd_spec=\"${_HS_LAST_RL_REGION_SPEC:-}\"; "
+        "  nd_reg=\"$(bind -v | grep 'active-region-start-color' || true)\"; "
+        "  COLORTERM='' _hs_bash_refresh_readline_region; "
+        "  c16_en=\"$(bind -v | grep 'set enable-active-region on' || true)\"; "
+        "  c16_spec=\"${_HS_LAST_RL_REGION_SPEC:-}\"; "
+        "  c16_reg=\"$(bind -v | grep 'active-region-start-color' || true)\"; "
+        "  NO_COLOR=1 _hs_bash_refresh_readline_region; "
+        "  nc_reg=\"$(bind -v | grep 'set enable-active-region off' || true)\"; "
+        "  nc_spec=\"${_HS_LAST_RL_REGION_SPEC:-}\"; "
+        "  ok_reg=1; "
+        "  [[ -n \"$sd_en\" && \"$sd_spec\" == 'tc:147;161;161:7;54;66' && -n \"$nd_en\" && \"$nd_spec\" == 'tc:229;233;240:59;66;82' && -n \"$c16_en\" && \"$c16_spec\" == 'ansi7' && -n \"$nc_reg\" && \"$nc_spec\" == 'off' ]] || ok_reg=0; "
+        "  if grep -Fq 'active-region-start-color' <<< \"$vars\"; then "
+        "    [[ \"$sd_reg\" == *'48;2;7;54;66'* && \"$nd_reg\" == *'48;2;59;66;82'* && \"$c16_reg\" == *'7m'* ]] || ok_reg=0; "
+        "  fi; "
+        "  [ \"$ok_reg\" -eq 1 ] && printf 'REG=OK|' || printf 'REG=BAD:%s/%s/%s/%s/%s/%s/%s/%s|' \"$sd_spec\" \"$nd_spec\" \"$c16_spec\" \"$nc_spec\" \"$sd_reg\" \"$nd_reg\" \"$c16_reg\" \"$nc_reg\"; "
+        "else printf 'REG=OK|'; fi; "
+        "ok_km=1; "
+        "for km in emacs-standard vi-insert vi-command; do "
+        "  p=\"$(bind -m \"$km\" -p)\"; "
+        "  [[ \"$p\" == *'\"\\e[A\": history-search-backward'* && \"$p\" == *'\"\\eOA\": history-search-backward'* && \"$p\" == *'\"\\e[B\": history-search-forward'* && \"$p\" == *'\"\\eOB\": history-search-forward'* ]] || ok_km=0; "
+        "done; "
+        "printf 'KM=%s' \"$ok_km\""
+    )
+    assert rl_check == "REV=1|SIC=1|REG=OK|KM=1", f"readline check failed: {rl_check!r}"
+
+    # Default Layer 2 binding when fzf is absent vs native opt-out (HOME_SETTINGS_BASH_CTRL_R=native) & fzf < 0.48.0 fallback discovery
+    def_bind_out, _, _ = bash_eval(f"source {addendum_path!r}; bind -X")
+    assert "_hs_bash_history_widget" in def_bind_out, f"expected Layer 2 widget when fzf absent: {def_bind_out!r}"
+
+    nat_out, _, _ = bash_eval(
+        f"HOME_SETTINGS_BASH_CTRL_R=native source {addendum_path!r}; bind -X",
+    )
+    assert "_hs_bash_history_widget" not in nat_out, f"native opt-out bound widget: {nat_out!r}"
+
+    mock_fzf_dir = os.path.join(root, "mock_legacy_fzf")
+    os.makedirs(mock_fzf_dir, exist_ok=True)
+    with open(os.path.join(mock_fzf_dir, "fzf"), "w", encoding="utf-8") as f:
+        f.write("#!/usr/bin/env bash\nexit 1\n")
+    os.chmod(os.path.join(mock_fzf_dir, "fzf"), 0o755)
+    fzf_home = os.path.join(root, "h_fzf")
+    os.makedirs(os.path.join(fzf_home, ".fzf", "shell"), exist_ok=True)
+    with open(os.path.join(fzf_home, ".fzf", "shell", "key-bindings.bash"), "w", encoding="utf-8") as f:
+        f.write("_HS_TEST_FZF_KB=1\n")
+    with open(os.path.join(fzf_home, ".fzf", "shell", "completion.bash"), "w", encoding="utf-8") as f:
+        f.write("_HS_TEST_FZF_COMP=1\n")
+    fzf_out, _, _ = bash_eval(
+        f"source {addendum_path!r}; printf '%s:%s:%s' \"${{_HS_TEST_FZF_KB:-0}}\" \"${{_HS_TEST_FZF_COMP:-0}}\" \"$(bind -X)\"",
+        extra_env={"HOME": fzf_home, "PATH": f"{mock_fzf_dir}:{no_fzf_bin}"},
+    )
+    assert fzf_out.startswith("1:1:") and "_hs_bash_history_widget" not in fzf_out, f"legacy fzf discovery failed: {fzf_out!r}"
+
+    # 2. Real Interactive PTY Suite (Layer 1 prompt history -a + Layer 2 inline Ctrl+r drawer)
+    def spawn_pty_bash(home_dir, extra_env=None, rows=24, cols=100):
+        os.makedirs(home_dir, exist_ok=True)
+        rc_file = os.path.join(home_dir, ".bashrc")
+        with open(rc_file, "w", encoding="utf-8") as f:
+            f.write(f"source {addendum_path!r}\nPS1='PROMPT> '\nPROMPT_COMMAND='_solarized_bash_prompt; PS1=\"PROMPT> \"'\n")
+        mfd, sfd = pty.openpty()
+        fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        env = {
+            **base_env,
+            "HOME": home_dir,
+            "XDG_CONFIG_HOME": os.path.join(home_dir, ".config"),
+            "XDG_CACHE_HOME": os.path.join(home_dir, ".cache"),
+            **(extra_env or {}),
+        }
+        def _attach_ctty():
+            os.setsid()
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+        proc = subprocess.Popen(
+            [bash_bin, "--rcfile", rc_file, "-i"],
+            stdin=sfd,
+            stdout=sfd,
+            stderr=sfd,
+            env=env,
+            preexec_fn=_attach_ctty,
+            close_fds=True,
+        )
+        os.close(sfd)
+        return proc, mfd
+
+    _ansi_re = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+    def strip_ansi(s):
+        return _ansi_re.sub("", s)
+
+    def read_until(mfd, needle, timeout=4.0):
+        buf = b""
+        deadline = time.monotonic() + timeout
+        needle_s = needle.decode("utf-8", "replace") if isinstance(needle, bytes) else needle
+        while time.monotonic() < deadline:
+            r, _, _ = select.select([mfd], [], [], 0.03)
+            if r:
+                try:
+                    chunk = os.read(mfd, 8192)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                decoded = buf.decode("utf-8", "replace")
+                if needle_s in decoded or needle_s in strip_ansi(decoded):
+                    return decoded
+        raise AssertionError(f"Timed out waiting for {needle!r}; got: {buf.decode('utf-8', 'replace')!r}")
+
+    def drain(mfd, quiet_sec=0.06):
+        buf = b""
+        deadline = time.monotonic() + quiet_sec
+        while time.monotonic() < deadline:
+            r, _, _ = select.select([mfd], [], [], 0.015)
+            if r:
+                try:
+                    chunk = os.read(mfd, 8192)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                deadline = time.monotonic() + quiet_sec
+        return buf.decode("utf-8", "replace")
+
+    # (2a) Empty history graceful display + bare Esc cancel
+    h_empty = os.path.join(root, "h_empty")
+    p_emp, m_emp = spawn_pty_bash(h_empty)
+    try:
+        read_until(m_emp, "PROMPT> ")
+        os.write(m_emp, b"\x12")  # Ctrl+r
+        emp_draw = read_until(m_emp, "(history is empty)")
+        assert "History" in emp_draw
+        os.write(m_emp, b"\x1b")  # bare Esc
+        drain(m_emp)
+        os.write(m_emp, b"echo AFTER_EMPTY_ESC\r")
+        after_emp = read_until(m_emp, "PROMPT> ")
+        assert "AFTER_EMPTY_ESC" in after_emp
+    finally:
+        os.close(m_emp)
+        p_emp.terminate()
+        p_emp.wait(timeout=2.0)
+
+    # (2b) Full interactive session: prompt history -a flush, read-only HISTFILE safety, smart-case + anchors + !exclude + lone operators, Tab/Enter non-executing placement, multi-line ↵ & indentation, READLINE_LINE pre-seeding, Ctrl+c preservation, and bracketed paste
+    h_main = os.path.join(root, "h_main")
+    p_main, m_main = spawn_pty_bash(h_main)
+    try:
+        read_until(m_main, "PROMPT> ")
+
+        # Prompt-time history -a persistence before exit
+        os.write(m_main, b"echo KUBE_PROD_TARGET --ns=prod-cluster\r")
+        read_until(m_main, "PROMPT> ")
+        hist_file = os.path.join(h_main, ".bash_history")
+        assert os.path.isfile(hist_file) and "KUBE_PROD_TARGET" in open(hist_file, encoding="utf-8").read(), "prompt history -a did not flush immediately"
+
+        # Read-only HISTFILE must emit zero stderr on prompt render
+        os.chmod(hist_file, stat.S_IRUSR)
+        os.write(m_main, b"echo KUBE_STAG_SKIP --ns=stag-cluster\r")
+        ro_out = read_until(m_main, "PROMPT> ")
+        assert "permission denied" not in ro_out.lower() and "history:" not in ro_out.lower(), f"read-only HISTFILE emitted error: {ro_out!r}"
+        os.chmod(hist_file, stat.S_IRUSR | stat.S_IWUSR)
+
+        # Smart-case candidates
+        os.write(m_main, b"echo smartcase_lower_only\r")
+        read_until(m_main, "PROMPT> ")
+        os.write(m_main, b"echo SmartCase_Upper_Match\r")
+        read_until(m_main, "PROMPT> ")
+
+        # Multi-line command literal with 4-space indentation (preserved across cmdhist without lithist)
+        os.write(m_main, b'echo "first_line\n    MULTI_INDENT_OK"\r')
+        ml_run = read_until(m_main, "PROMPT> ")
+        assert "MULTI_INDENT_OK" in ml_run
+
+        # Test multi-token out-of-order + ^prefix + suffix$ + !exclude + lone ! ^ $ ignored + Tab places without executing!
+        os.write(m_main, b"\x12")  # Ctrl+r
+        read_until(m_main, "History")
+        drain(m_main, 0.04)
+        os.write(m_main, b"cluster$ ^echo !stag prod ! ^ $")
+        read_until(m_main, "KUBE_PROD_TARGET")
+        os.write(m_main, b"\t")  # Tab places onto prompt WITHOUT executing!
+        tab_placed = drain(m_main, 0.12)
+        assert "\nKUBE_PROD_TARGET --ns=prod-cluster\r\n" not in tab_placed, f"Tab auto-executed command! {tab_placed!r}"
+        os.write(m_main, b" EXTRA_TAIL\r")
+        tab_exec = read_until(m_main, "PROMPT> ")
+        assert "KUBE_PROD_TARGET --ns=prod-cluster EXTRA_TAIL" in tab_exec, f"Tab placement + edit failed: {tab_exec!r}"
+
+        # Test case-sensitive smart-case trigger ("Smart" skips smartcase_lower_only) + Enter places without auto-executing!
+        os.write(m_main, b"\x12")
+        read_until(m_main, "History")
+        drain(m_main, 0.04)
+        os.write(m_main, b"Smart")
+        sc_draw = read_until(m_main, "SmartCase_Upper_Match")
+        sc_draw += drain(m_main, 0.04)
+        assert "smartcase_lower_only" not in sc_draw, f"uppercase token did not trigger case-sensitive match: {sc_draw!r}"
+        os.write(m_main, b"\r")  # Enter places onto prompt without executing
+        drain(m_main, 0.1)
+        os.write(m_main, b" CONFIRMED\r")
+        sc_exec = read_until(m_main, "PROMPT> ")
+        assert "SmartCase_Upper_Match CONFIRMED" in sc_exec, f"Enter placement failed: {sc_exec!r}"
+
+        # Test multi-line ↵ glyph in drawer and full \n + 4-space indentation restoration
+        os.write(m_main, b"\x12")
+        read_until(m_main, "History")
+        drain(m_main, 0.04)
+        os.write(m_main, b"MULTI_INDENT_OK")
+        ml_draw = read_until(m_main, "↵")
+        ml_draw += drain(m_main, 0.05)
+        assert "first_line" in ml_draw and "MULTI_INDENT_OK" in ml_draw, f"expected dim ↵ newline glyph in drawer: {ml_draw!r}"
+        os.write(m_main, b"\r")  # Place multi-line command onto Readline buffer
+        drain(m_main, 0.1)
+        os.write(m_main, b"\r")  # Execute restored multi-line command
+        ml_restored = read_until(m_main, "PROMPT> ")
+        assert "MULTI_INDENT_OK" in ml_restored
+        os.write(m_main, b"builtin fc -ln -1\r")
+        fc_check = read_until(m_main, "PROMPT> ")
+        assert "\n    MULTI_INDENT_OK" in fc_check.replace("\r\n", "\n"), f"4-space indentation lost: {fc_check!r}"
+
+        # Test READLINE_LINE pre-seeding + Ctrl+c cancel preserving existing READLINE_LINE!
+        os.write(m_main, b"echo PRESEED_SURVIVES")
+        drain(m_main, 0.08)
+        os.write(m_main, b"\x12")  # Ctrl+r pre-seeds query with "echo PRESEED_SURVIVES"
+        pre_draw = read_until(m_main, "PRESEED_SURVIVES")
+        assert "History" in pre_draw
+        os.write(m_main, b" _unmatched_suffix")
+        read_until(m_main, "(no matching history entries)")
+        os.write(m_main, b"\x03")  # Ctrl+c cancels drawer WITHOUT wiping parent READLINE_LINE!
+        drain(m_main, 0.1)
+        os.write(m_main, b" NOW\r")
+        c_exec = read_until(m_main, "PROMPT> ")
+        assert "PRESEED_SURVIVES NOW" in c_exec, f"Ctrl+c wiped READLINE_LINE: {c_exec!r}"
+
+        # Test bracketed paste (\e[200~...\e[201~) + Down/Up navigation
+        os.write(m_main, b"\x12")
+        read_until(m_main, "History")
+        drain(m_main, 0.04)
+        os.write(m_main, b"\x1b[200~KUBE_\x1b[201~")
+        read_until(m_main, "KUBE_PROD_TARGET")
+        os.write(m_main, b"\x1b[B\x1b[A\r")
+        drain(m_main, 0.1)
+        os.write(m_main, b"\r")
+        bp_exec = read_until(m_main, "PROMPT> ")
+        assert "KUBE_" in bp_exec
+    finally:
+        os.close(m_main)
+        p_main.terminate()
+        p_main.wait(timeout=2.0)
+
+    # (2c) TERM=linux + NO_COLOR=1 ASCII borders & zero color SGR escapes
+    h_linux = os.path.join(root, "h_linux")
+    os.makedirs(h_linux, exist_ok=True)
+    with open(os.path.join(h_linux, ".bash_history"), "w", encoding="utf-8") as f:
+        f.write("echo LINUX_NOCOLOR_CMD\n")
+    p_lnx, m_lnx = spawn_pty_bash(h_linux, extra_env={"TERM": "linux", "NO_COLOR": "1", "COLORTERM": ""})
+    try:
+        read_until(m_lnx, "PROMPT> ")
+        os.write(m_lnx, b"\x12")
+        lnx_draw = read_until(m_lnx, "+---")
+        lnx_draw += drain(m_lnx, 0.05)
+        assert "+ History" in lnx_draw and "+---" in lnx_draw and "\x1b[38;" not in lnx_draw and "\x1b[48;" not in lnx_draw, f"TERM=linux NO_COLOR leaked Unicode/SGR: {lnx_draw!r}"
+        os.write(m_lnx, b"\x1b")
+        drain(m_lnx)
+    finally:
+        os.close(m_lnx)
+        p_lnx.terminate()
+        p_lnx.wait(timeout=2.0)
+
+    # (2d) CJK 3-byte wide-glyph truncation & right-border alignment, live TIOCSWINSZ shrink auto-wakeup without scroll-off, and UTF-8 multi-line bracketed paste
+    import unicodedata as _ud_cjk
+    def _disp_w(txt):
+        acc = 0
+        for c in txt:
+            cp = ord(c)
+            if 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0x10FFFF:
+                acc += 1
+            elif cp >= 0x10000 or _ud_cjk.east_asian_width(c) in ("W", "F"):
+                acc += 2
+            elif not _ud_cjk.combining(c):
+                acc += 1
+        return acc
+
+    h_cjk = os.path.join(root, "h_cjk")
+    os.makedirs(h_cjk, exist_ok=True)
+    with open(os.path.join(h_cjk, ".bash_history"), "w", encoding="utf-8") as f:
+        f.write("echo 日本語テスト日本語テスト日本語テスト日本語テストEND\n")
+        f.write("echo café 🚀 日本語\n")
+    p_cjk, m_cjk = spawn_pty_bash(h_cjk, rows=30, cols=50)
+    try:
+        read_until(m_cjk, "PROMPT> ")
+        os.write(m_cjk, b"\x12")
+        cjk_frame = read_until(m_cjk, "\x1b[?25h")
+        cjk_frame += drain(m_cjk, 0.08)
+        rows_50g = 0
+        for rln in cjk_frame.split("\n"):
+            if "\x1b[50G" in rln:
+                rows_50g += 1
+                pre = strip_ansi(rln.split("\x1b[50G")[0].replace("\r", ""))
+                assert _disp_w(pre) <= 49, f"CJK row overflowed 50-col drawer: w={_disp_w(pre)}, pre={pre!r}"
+        assert rows_50g >= 4, f"expected >=4 50G rows: {cjk_frame!r}"
+
+        # Shrink PTY 30x50 -> 7x50 without any keypress; verify automatic wakeup, <=5 newlines (h=6), and intact ╰/╯ corners
+        fcntl.ioctl(m_cjk, termios.TIOCSWINSZ, struct.pack("HHHH", 7, 50, 0, 0))
+        winch_frame = read_until(m_cjk, "╰", timeout=3.0)
+        winch_frame += drain(m_cjk, 0.08)
+        assert len(winch_frame) > 50, f"TIOCSWINSZ shrink did not wake drawer automatically: {winch_frame!r}"
+        assert winch_frame.count("\n") <= 5, f"TIOCSWINSZ shrink scrolled 7-row viewport ({winch_frame.count(chr(10))} newlines): {winch_frame!r}"
+        assert "╰" in winch_frame and "╯" in winch_frame, f"Bottom corners missing after shrink clear: {winch_frame!r}"
+
+        # UTF-8 + multi-line bracketed paste inside drawer
+        os.write(m_cjk, "\x1b[200~café 🚀\n日本語\x1b[201~".encode("utf-8"))
+        read_until(m_cjk, "1/2", timeout=3.0)
+        drain(m_cjk, 0.06)
+        os.write(m_cjk, b"\r")
+        placed_utf8 = strip_ansi(read_until(m_cjk, "echo café 🚀 日本語", timeout=3.0))
+        assert "echo café 🚀 日本語" in placed_utf8, f"UTF-8 bracketed paste selection failed: {placed_utf8!r}"
+    finally:
+        os.close(m_cjk)
+        p_cjk.terminate()
+        p_cjk.wait(timeout=2.0)
+
+    # (2e) Legacy Bash 3.2 dd + fetch-history Readline macro path (_HS_BASH_FORCE_LEGACY_CTRL_R=1) across emacs, vi-insert, and vi-command
+    for leg_idx, (mode_setup, key_seq, exp_out) in enumerate([
+        ("", b"\x12multi_leg\r", "MULTI_LEG_1"),
+        ("set -o vi\r", b"\x12multi_leg\r", "MULTI_LEG_1"),
+        ("set -o vi\r", b"\x1b\x12LEGACY_SINGLE_OK\r", "LEGACY_SINGLE_OK"),
+    ]):
+        h_leg = os.path.join(root, f"h_leg_{leg_idx}")
+        os.makedirs(h_leg, exist_ok=True)
+        with open(os.path.join(h_leg, ".bash_history"), "w", encoding="utf-8") as f:
+            f.write("echo LEGACY_SINGLE_OK\n")
+        p_leg, m_leg = spawn_pty_bash(h_leg, extra_env={"_HS_BASH_FORCE_LEGACY_CTRL_R": "1"}, rows=24, cols=80)
+        try:
+            read_until(m_leg, "PROMPT> ")
+            os.write(m_leg, b"history -s $'for k in 1; do\\n    echo MULTI_LEG_$k\\ndone'\r")
+            read_until(m_leg, "PROMPT> ")
+            if mode_setup:
+                os.write(m_leg, mode_setup.encode())
+                read_until(m_leg, "PROMPT> ")
+            os.write(m_leg, key_seq)
+            drain(m_leg, 0.5)
+            os.write(m_leg, b"\r")
+            leg_exec = read_until(m_leg, "PROMPT> ")
+            assert exp_out in leg_exec, f"Legacy Bash 3.2 macro failed ({leg_idx}): {leg_exec!r}"
+        finally:
+            os.close(m_leg)
+            p_leg.terminate()
+            p_leg.wait(timeout=2.0)
+
+    print("CTRLR_ALL_OK")
+finally:
+    shutil.rmtree(root, ignore_errors=True)
+PY
+        )" || true
+        if grep -Fq "CTRLR_ALL_OK" <<< "$CTRLR_SUITE_OUT"; then
+            echo "PASS:Bash Layer 1 Readline/history hardening (smart HISTSIZE/HISTCONTROL upgrades, prompt history -a with read-only guard, CSI+SS3 bindings, live active-region-start-color, legacy fzf discovery) and Layer 2 inline Ctrl+r drawer (smart-case, ^/\$/! tokens, multi-line ↵ & indent, CJK wide-glyph alignment, live TIOCSWINSZ resize, UTF-8 bracketed paste, Bash 3.2 legacy macro, TERM=linux/NO_COLOR, native opt-out) verified in real PTY"
+        else
+            echo "FAIL:Bash Layer 1 + Layer 2 Ctrl+r suite:${CTRLR_SUITE_OUT//$'\n'/ | }"
+        fi
+    fi
 ) > "$STANDALONE_HOME/results.txt"
 
 parse_subshell_results < "$STANDALONE_HOME/results.txt"

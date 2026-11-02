@@ -153,7 +153,7 @@ home-settings/
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, CLI, and Terraform shortcuts (also auto-loads ~/.aliases.d/*.sh)
-│   ├── .bashrc-addendum             # Standalone Bash prompt, theme switcher, and zoxide hook
+│   ├── .bashrc-addendum             # Standalone Bash prompt, Readline history drawer, theme switcher, and zoxide hook
 │   ├── .environment-variables       # Environment, COLORTERM, and PATH (also auto-loads ~/.environment-variables.d/*.sh)
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
 │   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer and IDE pane bindings
@@ -365,7 +365,7 @@ Interactive shells are configured for sub-10ms startup times, fast tab completio
   - **Daemon-free Git status**: Queries `git status --porcelain=v2` directly without `gitstatusd`, supporting standard, SHA-256, and `reftable` repositories.
   - **Clickable pull and merge request badges**: Renders `<branch>@<N>` as a clickable link to the active pull or merge request on GitHub, GitLab, Bitbucket, Gitea, Forgejo, and Codeberg. Pull request numbers are resolved and cached in the background via forge CLIs or `git ls-remote` so the prompt never blocks.
 - **Syntax highlighting**: 24-bit Solarized Dark command highlighting (`zsh-syntax-highlighting`) that colors valid commands in Green, strings in Cyan, numbers in Magenta, paths in Blue, and errors in Red while keeping flags and operators in neutral Base0 grey.
-- **Autosuggestions and history search**: Asynchronous inline history suggestions (`zsh-autosuggestions`) paired with interactive `Ctrl+R` fuzzy history search via `fzf`.
+- **Autosuggestions and history search**: Asynchronous inline history suggestions (`zsh-autosuggestions`) and prefix arrow history navigation paired with interactive `Ctrl+R` fuzzy history search via `fzf`. In Bash environments where `fzf` is unavailable, `.bashrc-addendum` provides a zero-dependency inline `Ctrl+R` history drawer with multi-token smart-case filtering, multi-line command restoration, and active theme highlighting alongside incremental prompt-time history persistence (set `HOME_SETTINGS_BASH_CTRL_R=native` to use stock Readline incremental search).
 - **Smart directory jumping**: Frecency-based directory jumping via `zoxide` (`z <dir>`) with interactive tree previews (`zi`).
 
 ## Developer toolchains and modern CLI suite
@@ -436,7 +436,7 @@ The `theme` command switches the active color scheme across all terminal emulato
   - **Classic developer palettes**: `solarized-dark` (default), `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`.
   - **Major US Holiday palettes**: `new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`.
 - **Interactive fuzzy picker**: Running `theme` with no arguments opens an interactive `fzf` selector with a full-pane TrueColor swatch, diff, prompt, and syntax preview (`theme --preview {1}`) rendered on the highlighted theme's background, applying the chosen theme immediately on `Enter`.
-- **Unified multi-tool synchronization**: Applying a theme (via `theme <name>` in the shell or `:Theme <name>` inside Neovim and Vim) updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences. Both `dotfiles/.bashrc-addendum` and `dotfiles/.vimrc` also embed all 17 palettes and custom theme support for zero-dependency 2-file deployment on remote servers.
+- **Unified multi-tool synchronization**: Applying a theme (via `theme <name>` in the shell or `:Theme <name>` inside Neovim and Vim) updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt and Readline history drawer (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences. Both `dotfiles/.bashrc-addendum` and `dotfiles/.vimrc` also embed all 17 palettes and custom theme support for zero-dependency 2-file deployment on remote servers.
 - **User-defined custom themes**: Drop any `.theme` or `.conf` file into `${XDG_CONFIG_HOME:-$HOME/.config}/themes/` (or scaffold one with `theme --create <name> [--from <base>]`) to register a custom 16-color and semantic accent palette that participates in `theme --list`, `:Theme` completion, interactive `fzf` previews, and full tool generation.
 
 | Command | Description |
@@ -475,7 +475,8 @@ Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` 
 
 | Shortcut | Description |
 | :--- | :--- |
-| `Ctrl+R` | Fuzzy search command history via `fzf` |
+| `Ctrl+R` | Fuzzy search command history via `fzf` (with zero-dependency inline drawer fallback in Bash when `fzf` is absent) |
+| `HOME_SETTINGS_BASH_CTRL_R=native` | Disable the fallback Bash `Ctrl+R` inline history drawer and use stock Readline incremental search when `fzf` is absent |
 | `z <dir>` | Jump to frecency-ranked directory via `zoxide` |
 | `zi` | Interactive directory jump with live `eza` preview |
 | `sd <find> <replace> <file>` | Regex find-and-replace via `sd` |
