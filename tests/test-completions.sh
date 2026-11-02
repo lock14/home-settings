@@ -105,6 +105,125 @@ else
     fail "_theme_complete options" "Missing --plain or --holiday in dotfiles/.zsh-completions"
 fi
 
+# Test 4: _ide completion registration and dynamic candidate dispatch
+MOCK_IDE_HOME="$(mktemp -d)"
+mkdir -p "$MOCK_IDE_HOME/.local/bin"
+cat << 'EOF' > "$MOCK_IDE_HOME/.local/bin/ide"
+#!/bin/sh
+if [ "$1" = "--list" ] && [ "$2" = "--plain" ]; then
+    printf "alpha-ws\nbeta-ws\n"
+    exit 0
+fi
+exit 0
+EOF
+chmod +x "$MOCK_IDE_HOME/.local/bin/ide"
+
+cat << 'EOF' > "$MOCK_IDE_HOME/test-ide-comp.zsh"
+#!/usr/bin/env zsh
+set -euo pipefail
+typeset -gA COMP_MAP=()
+typeset -ga OFFERED=()
+compdef() {
+    local fn="$1"
+    shift
+    local cmd
+    for cmd in "$@"; do
+        COMP_MAP[$cmd]="$fn"
+    done
+}
+_describe() {
+    if [[ "${1:-}" == "-t" ]]; then
+        shift 2
+    fi
+    local arr_name="$2"
+    local item
+    for item in "${(@P)arr_name}"; do
+        OFFERED+=("${item%%:*}")
+    done
+}
+_files() {
+    OFFERED+=("_FILES_${*:-any}")
+}
+
+source "$1"
+
+for c in ide ide2 ide3 qide idek; do
+    [[ "${COMP_MAP[$c]:-}" == "_ide" ]] || { print -u2 "missing compdef for $c"; exit 1; }
+done
+
+run_case() {
+    OFFERED=()
+    words=("$@")
+    CURRENT=${#words}
+    _ide
+    print -r -- "${(j:,:)OFFERED}"
+}
+
+out_opts="$(run_case ide --)"
+[[ ",$out_opts," == *",--sessions,"* && ",$out_opts," == *",--send,"* && ",$out_opts," == *",--list,"* && ",$out_opts," == *",--next-attention,"* && ",$out_opts," == *",--agent-state,"* && ",$out_opts," != *",--on-bell,"* ]] || { print -u2 "bad opts: $out_opts"; exit 1; }
+
+out_ai="$(run_case ide --ai "")"
+[[ "$out_ai" == "agy,claude,codex" ]] || { print -u2 "bad --ai: $out_ai"; exit 1; }
+
+out_swap="$(run_case ide --swap "")"
+[[ "$out_swap" == "left,down,up,right" ]] || { print -u2 "bad --swap: $out_swap"; exit 1; }
+
+out_list="$(run_case ide --list "")"
+[[ "$out_list" == "--plain" ]] || { print -u2 "bad --list: $out_list"; exit 1; }
+
+out_sess="$(run_case ide -s "")"
+[[ "$out_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad -s: $out_sess"; exit 1; }
+
+out_next_attn="$(run_case ide --next-attention "")"
+[[ "$out_next_attn" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --next-attention: $out_next_attn"; exit 1; }
+
+out_agent_state="$(run_case ide --agent-state "")"
+[[ "$out_agent_state" == "running,approval,done,idle" ]] || { print -u2 "bad --agent-state: $out_agent_state"; exit 1; }
+
+out_agent_state_sess="$(run_case ide --agent-state running "")"
+[[ "$out_agent_state_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --agent-state sess: $out_agent_state_sess"; exit 1; }
+
+out_quit="$(run_case ide --quit "")"
+[[ "$out_quit" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --quit: $out_quit"; exit 1; }
+
+out_qide="$(run_case qide "")"
+[[ "$out_qide" == "alpha-ws,beta-ws" ]] || { print -u2 "bad qide: $out_qide"; exit 1; }
+
+out_open="$(run_case ide --open "")"
+[[ "$out_open" == "_FILES_any" ]] || { print -u2 "bad --open: $out_open"; exit 1; }
+
+out_cd="$(run_case ide --cd "")"
+[[ "$out_cd" == "_FILES_-/" ]] || { print -u2 "bad --cd: $out_cd"; exit 1; }
+
+out_send_sub="$(run_case ide --send "")"
+[[ "$out_send_sub" == "--stdin,--ref,--text,--no-focus" ]] || { print -u2 "bad --send subflags: $out_send_sub"; exit 1; }
+
+out_send_stdin="$(run_case ide --send --stdin "")"
+[[ "$out_send_stdin" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --stdin: $out_send_stdin"; exit 1; }
+
+out_send_ref="$(run_case ide --send --ref "")"
+[[ "$out_send_ref" == "_FILES_any" ]] || { print -u2 "bad --send --ref: $out_send_ref"; exit 1; }
+
+out_send_ref_sess="$(run_case ide --send --ref src/app.py "")"
+[[ "$out_send_ref_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --ref sess: $out_send_ref_sess"; exit 1; }
+
+out_send_text_val="$(run_case ide --send --text "")"
+[[ "$out_send_text_val" == "" ]] || { print -u2 "bad --send --text arg: $out_send_text_val"; exit 1; }
+
+out_send_text_sess="$(run_case ide --send --text "hello" "")"
+[[ "$out_send_text_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --text sess: $out_send_text_sess"; exit 1; }
+
+out_root="$(run_case ide "")"
+[[ ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
+EOF
+
+if ide_comp_err="$(HOME="$MOCK_IDE_HOME" zsh "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)"; then
+    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek and completes flags, --ai, --swap, --list --plain, --send subflags, file/dir paths, and live IDE sessions"
+else
+    fail "_ide Zsh completion" "Unexpected _ide completion behavior: $ide_comp_err"
+fi
+rm -rf "$MOCK_IDE_HOME"
+
 export HOME="$OLD_HOME"
 
 test_summary

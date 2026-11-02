@@ -1136,6 +1136,24 @@ EOF
         fi
     )
     rm -f "$HOME/.config/zsh/p10k.local.zsh"
+
+    # 9. Verify _ide completion function and compdef bindings for ide, ide2, ide3, qide, and idek
+    cp "$SCRIPT_DIR/dotfiles/.zsh-completions" "$HOME/.zsh-completions"
+    (
+        autoload -Uz compinit
+        compinit -i -u -d "$HOME/.zcompdump"
+        source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
+        if (( $+functions[_ide] )) && \
+           [ "${_comps[ide]:-}" = "_ide" ] && \
+           [ "${_comps[ide2]:-}" = "_ide" ] && \
+           [ "${_comps[ide3]:-}" = "_ide" ] && \
+           [ "${_comps[qide]:-}" = "_ide" ] && \
+           [ "${_comps[idek]:-}" = "_ide" ]; then
+            echo "PASS:Zsh startup loads _ide completion and binds ide, ide2, ide3, qide, and idek"
+        else
+            echo "FAIL:Zsh _ide completion bindings:fn=${+functions[_ide]} ide='${_comps[ide]:-}' ide2='${_comps[ide2]:-}' ide3='${_comps[ide3]:-}' qide='${_comps[qide]:-}' idek='${_comps[idek]:-}'"
+        fi
+    )
 }
 
 run_zsh_subtest test_addendum

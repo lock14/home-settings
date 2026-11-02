@@ -123,12 +123,35 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q '@ide_tab_term' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_ed_parked' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_term_parked' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q 'alert-bell' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -q -- '--on-bell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_ai_attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_ai_state' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_attn_summary' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_fleet_count' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '@ide_fleet_active' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|fleet' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi a.*--send --stdin' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g status-right-length 160' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-s if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind s if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-S.*--next-attention' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind S.*--next-attention' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'IDE_CLIENT=#{q:client_name}.*--sessions #{q:session_name}' "$TEMP_HOME/.tmux.conf" && \
+   grep -q -- '--sessions' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-?.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind ?.*--keys' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n MouseDown1StatusLeft choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1StatusLeft.*--sessions.*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1Status.*--status-click' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n MouseDown1StatusRight.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1StatusRight.*mouse_status_range},attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'mouse_status_range},fleet.*--sessions.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown3Status display-menu' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g pane-focus-in "if-shell -F .*--ack-ai --hook' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g client-session-changed "if-shell -F .*--ack-ai --hook' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g session-created.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g session-closed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g session-renamed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'scroll_position' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'history_size' "$TEMP_HOME/.tmux.conf" && \
@@ -136,14 +159,14 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'SSH_CONNECTION' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'SSH_TTY' "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '#\([^)]+\)' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures Solarized Dark top header bar (fixed status-left, 3-state @ide_tab_* role switcher with parked indicators, mode-contextual status-right, Alt+? cheatsheet popup, clickable status bar), deduplicated @ide_is_editor predicate, extended-keys, TrueColor undercurls, xclip/OSC52 clipboard pipeline, 4-layer Alt focus/swap/toggle bindings, and mouse/arrow border resizing"
+    pass ".tmux.conf configures event-driven Solarized Dark top header bar (fixed status-left, zero-shift @ide_tab_* state tinting, clickable attn/fleet pills, Alt+s/Alt+Shift+S navigation, copy-mode a dispatch, Alt+? cheatsheet), zero-fork if-shell -F lifecycle hooks, TrueColor undercurls, and 4-layer Alt navigation"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_tab_* 3-state badges, Alt+? cheatsheet popup, @ide_is_editor deduplication, extended-keys, clipboard, 4-layer keybinding, or mouse/arrow border resize settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_tab_* state tinting, attn/fleet pills, Alt+s/Alt+Shift+S bindings, zero-fork lifecycle hooks, or 4-layer navigation settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_SOCK="test-tmux-cfg-$$"
-    if TMUX="" TMUX_PANE="" env -u SSH_CONNECTION -u SSH_TTY tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test -n ide "exec sleep 30" >/dev/null 2>&1; then
+    if HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" TMUX="" TMUX_PANE="" env -u SSH_CONNECTION -u SSH_TTY tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test -n ide "exec sleep 30" >/dev/null 2>&1; then
         cfg_pane="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "=cfg_test:" '#{pane_id}')"
         for _ in $(seq 1 20); do
             [ "$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{pane_current_command}')" = "sleep" ] && break
@@ -159,7 +182,22 @@ if command -v tmux >/dev/null 2>&1; then
         eval_editor_non_shell="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
         eval_sleft="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-left}')"
         eval_wcur="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_state "running"
+        eval_wcur_run="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_attn "1"
+        eval_wcur_attn="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_state "done"
+        eval_wcur_done="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -u -t "=cfg_test:" @ide_ai_attn
+        tmux -L "$TMUX_TEST_SOCK" set-option -u -t "=cfg_test:" @ide_ai_state
         eval_sright_root="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_attn_summary "alpha-ws +1"
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 3
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 2
+        eval_sright_fleet="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -gu @ide_attn_summary
+        tmux -L "$TMUX_TEST_SOCK" set-option -gu @ide_fleet_count
+        tmux -L "$TMUX_TEST_SOCK" set-option -gu @ide_fleet_active
         tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_workdir "/tmp/ws/subdir"
         eval_sright_sub="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role ai
@@ -174,13 +212,24 @@ if command -v tmux >/dev/null 2>&1; then
         eval_sright_copy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" send-keys -t "$cfg_pane" -X cancel
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
+        plain_wcur_base="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur")"
+        plain_wcur_run="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_run")"
+        plain_wcur_attn="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_attn")"
+        plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
+           [ "$plain_wcur_base" = "$plain_wcur_run" ] && [ "$plain_wcur_base" = "$plain_wcur_attn" ] && [ "$plain_wcur_base" = "$plain_wcur_done" ] && \
+           grep -Fq "fg=#2AA198,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_run" && \
+           grep -Fq "fg=#CB4B16,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_attn" && \
+           grep -Fq "fg=#859900,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_done" && \
            grep -Fq "cfg_test" <<< "$eval_sleft" && \
            grep -Fq "agy (Alt+a)" <<< "$eval_wcur" && \
            grep -Fq "▸ " <<< "$eval_wcur" && \
            grep -Fq "Editor (Alt+e)" <<< "$eval_wcur" && \
            grep -Fq "Shell [Alt+T]" <<< "$eval_wcur" && \
            grep -Fq "Help (Alt+?)" <<< "$eval_sright_root" && \
+           ! grep -Fq "(Alt+s)" <<< "$eval_sright_root" && \
+           grep -Fq "range=user|attn]#[fg=#CB4B16,bg=#073642,nobold]󰂚 alpha-ws +1 " <<< "$eval_sright_fleet" && \
+           grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]2 active#[fg=#839496,bg=#073642,nobold] (Alt+s)" <<< "$eval_sright_fleet" && \
            ! grep -Fq "subdir" <<< "$eval_sright_root" && \
            ! grep -Fq "SYNC" <<< "$eval_sright_root" && \
            ! grep -Fq "󰣀" <<< "$eval_sright_root" && \
@@ -188,9 +237,9 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "󰓦 SYNC" <<< "$eval_sright_sync" && \
            grep -Fq "󰣀" <<< "$eval_sright_ssh" && \
            grep -Fq "󰆏 COPY [" <<< "$eval_sright_copy"; then
-            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor}, fixed status-left, 3-state window-status-current-format, DoubleClick1Pane if-shell copy-mode chain, and conditional status-right"
+            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor}, fixed status-left, zero-shift @ide_tab_* state tinting (Cyan running, Orange approval, Green done), clickable attn/fleet right-shelf pills, DoubleClick1Pane copy-mode chain, and conditional status-right"
         else
-            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor sleft='$eval_sleft' wcur='$eval_wcur' sright_root='$eval_sright_root' sright_sub='$eval_sright_sub' sright_sync='$eval_sright_sync' sright_ssh='$eval_sright_ssh' sright_copy='$eval_sright_copy'"
+            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor wcur='$eval_wcur' run='$eval_wcur_run' attn='$eval_wcur_attn' done='$eval_wcur_done' fleet='$eval_sright_fleet' sright_root='$eval_sright_root'"
         fi
     else
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true

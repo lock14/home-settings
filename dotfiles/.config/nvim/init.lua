@@ -609,12 +609,105 @@ map("n", "<leader>E", function()
     toggle_file_explorer(true)
 end, { desc = "Toggle Mini.files Navigator (Workspace Root)" })
 
--- Workspace Role Jump, Visibility Toggle & Directional Swap Keybindings (Editor <-> AI Agent <-> Shell)
+-- Workspace Role Jump, Visibility Toggle, Fleet Switcher & Context Dispatch (Editor <-> AI Agent <-> Shell)
 map("n", "<leader>a", function()
     if vim.env.TMUX then
         ide_job("--toggle")
     end
 end, { desc = "Toggle Focus: Editor <-> AI Agent" })
+map("x", "<leader>a", function()
+    local cur_mode = vim.fn.mode()
+    local in_visual = (cur_mode == "v" or cur_mode == "V" or cur_mode == "\22")
+    local v1, v2
+    if in_visual then
+        v1 = vim.fn.line("v")
+        v2 = vim.fn.line(".")
+    else
+        v1 = vim.fn.line("'<")
+        v2 = vim.fn.line("'>")
+        if v1 == 0 or v2 == 0 then
+            v1 = vim.fn.line(".")
+            v2 = v1
+        end
+    end
+    local l1 = math.min(v1, v2)
+    local l2 = math.max(v1, v2)
+    local buf_name = vim.api.nvim_buf_get_name(0)
+    local is_file_buf = (vim.bo.buftype == "" and buf_name ~= "")
+    local region_lines = nil
+    if not is_file_buf then
+        if in_visual and vim.fn.getregion then
+            local ok, reg = pcall(vim.fn.getregion, vim.fn.getpos("v"), vim.fn.getpos("."), { type = cur_mode })
+            if ok and reg and #reg > 0 then
+                region_lines = reg
+            end
+        end
+        if not region_lines then
+            region_lines = vim.api.nvim_buf_get_lines(0, math.max(0, l1 - 1), l2, false)
+        end
+    end
+    if in_visual then
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+    end
+    if not vim.env.TMUX then
+        return
+    end
+    if is_file_buf then
+        local buf_path = vim.fn.fnamemodify(buf_name, ":p")
+        ide_job("--send", "--ref", string.format("%s:%d-%d", buf_path, l1, l2))
+    elseif region_lines then
+        local text = table.concat(region_lines, "\n")
+        if text ~= "" then
+            ide_job("--send", "--text", text)
+        end
+    end
+end, { desc = "Send Visual Selection Reference to AI Agent" })
+map("n", "<leader>il", function()
+    if not vim.env.TMUX then
+        return
+    end
+    local buf_name = vim.api.nvim_buf_get_name(0)
+    if vim.bo.buftype == "" and buf_name ~= "" then
+        local buf_path = vim.fn.fnamemodify(buf_name, ":p")
+        ide_job("--send", "--ref", string.format("%s:%d", buf_path, vim.fn.line(".")))
+    else
+        local line_text = vim.api.nvim_get_current_line()
+        if line_text ~= "" then
+            ide_job("--send", "--text", line_text)
+        end
+    end
+end, { desc = "Send Current Line Reference to AI Agent" })
+map("n", "<leader>id", function()
+    local diags = vim.diagnostic.get(0)
+    if not diags or #diags == 0 then
+        vim.notify("No diagnostics in current buffer", vim.log.levels.INFO)
+        return
+    end
+    if not vim.env.TMUX then
+        return
+    end
+    table.sort(diags, function(a, b)
+        if a.lnum ~= b.lnum then
+            return a.lnum < b.lnum
+        end
+        return (a.col or 0) < (b.col or 0)
+    end)
+    local sev_names = {
+        [vim.diagnostic.severity.ERROR] = "ERROR",
+        [vim.diagnostic.severity.WARN] = "WARN",
+        [vim.diagnostic.severity.INFO] = "INFO",
+        [vim.diagnostic.severity.HINT] = "HINT",
+    }
+    local buf_name = vim.api.nvim_buf_get_name(0)
+    local header_path = (buf_name ~= "") and vim.fn.fnamemodify(buf_name, ":.") or "[No Name]"
+    local out = { string.format("Diagnostics in %s:", header_path) }
+    for _, d in ipairs(diags) do
+        local sev = sev_names[d.severity] or "DIAG"
+        local msg = tostring(d.message or ""):gsub("%s*\n%s*", " ")
+        table.insert(out, string.format("- [%s] L%d:%d: %s", sev, (d.lnum or 0) + 1, (d.col or 0) + 1, msg))
+    end
+    ide_job("--send", "--text", table.concat(out, "\n") .. "\n")
+end, { desc = "Send Buffer Diagnostics to AI Agent" })
 map({ "n", "i", "v", "t" }, "<M-a>", function()
     if vim.env.TMUX then
         ide_job("--toggle")
@@ -660,6 +753,18 @@ map({ "n", "i", "v", "t" }, "<M-L>", function()
         ide_job("--swap", "right")
     end
 end, { desc = "Swap Active Pane Right" })
+local function open_ide_sessions_popup()
+    if vim.env.TMUX then
+        ide_job("--sessions")
+    end
+end
+map("n", "<leader>s", open_ide_sessions_popup, { desc = "Switch IDE Workspace Session" })
+map({ "n", "i", "v", "t" }, "<M-s>", open_ide_sessions_popup, { desc = "Switch IDE Workspace Session" })
+map({ "n", "i", "v", "t" }, "<M-S>", function()
+    if vim.env.TMUX then
+        ide_job("--next-attention")
+    end
+end, { desc = "Jump to Next Attention AI Agent" })
 local function open_ide_keys_popup()
     if vim.env.TMUX then
         local cmd = { "tmux", "display-popup" }
@@ -667,7 +772,7 @@ local function open_ide_keys_popup()
             table.insert(cmd, "-t")
             table.insert(cmd, vim.env.TMUX_PANE)
         end
-        vim.list_extend(cmd, { "-E", "-w", "86", "-h", "25", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
+        vim.list_extend(cmd, { "-E", "-w", "86", "-h", "27", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
         vim.fn.jobstart(cmd, { detach = true })
     end
 end
