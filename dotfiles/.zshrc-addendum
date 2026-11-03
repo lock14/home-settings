@@ -127,12 +127,21 @@ fi
 if [[ -o interactive ]] && command -v fzf >/dev/null 2>&1; then
     if fzf --zsh >/dev/null 2>&1; then
         eval "$(fzf --zsh)"
-    elif [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
-        source /usr/share/doc/fzf/examples/key-bindings.zsh
-        [ -f /usr/share/doc/fzf/examples/completion.zsh ] && source /usr/share/doc/fzf/examples/completion.zsh || true
-    elif [ -f /usr/share/fzf/key-bindings.zsh ]; then
-        source /usr/share/fzf/key-bindings.zsh
-        [ -f /usr/share/fzf/completion.zsh ] && source /usr/share/fzf/completion.zsh || true
+    else
+        for _hs_fzf_dir in \
+            "$HOME/.fzf/shell" \
+            /opt/homebrew/opt/fzf/shell \
+            /usr/local/opt/fzf/shell \
+            /usr/share/fzf/shell \
+            /usr/share/fzf \
+            /usr/share/doc/fzf/examples; do
+            if [ -f "$_hs_fzf_dir/key-bindings.zsh" ]; then
+                source "$_hs_fzf_dir/key-bindings.zsh"
+                [ -f "$_hs_fzf_dir/completion.zsh" ] && source "$_hs_fzf_dir/completion.zsh" || true
+                break
+            fi
+        done
+        unset _hs_fzf_dir
     fi
 fi
 
