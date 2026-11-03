@@ -220,14 +220,36 @@ while [ $# -gt 0 ]; do
                 exit 1
             fi
             DB_CHOICE="$2"
+            [ "$DB_CHOICE" = "postgresql" ] && DB_CHOICE="postgres"
+            [ "$DB_CHOICE" != "none" ] && SKIP_DB=false
             shift 2
             ;;
+        --db=*)
+            DB_CHOICE="${1#*=}"
+            if [ -z "$DB_CHOICE" ]; then
+                echo "Error: --db requires an argument (such as postgres, mariadb, all, or none)" >&2
+                exit 1
+            fi
+            [ "$DB_CHOICE" = "postgresql" ] && DB_CHOICE="postgres"
+            [ "$DB_CHOICE" != "none" ] && SKIP_DB=false
+            shift
+            ;;
         --with-postgres|--with-postgresql)
-            DB_CHOICE="postgres"
+            SKIP_DB=false
+            if [ "$DB_CHOICE" = "mariadb" ] || [ "$DB_CHOICE" = "all" ]; then
+                DB_CHOICE="all"
+            else
+                DB_CHOICE="postgres"
+            fi
             shift
             ;;
         --with-mariadb)
-            DB_CHOICE="mariadb"
+            SKIP_DB=false
+            if [ "$DB_CHOICE" = "postgres" ] || [ "$DB_CHOICE" = "postgresql" ] || [ "$DB_CHOICE" = "all" ]; then
+                DB_CHOICE="all"
+            else
+                DB_CHOICE="mariadb"
+            fi
             shift
             ;;
         --skip-db)

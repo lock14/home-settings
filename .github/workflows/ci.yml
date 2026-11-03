@@ -39,15 +39,132 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install test dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y zsh vim git tree fd-find bat tmux
+          sudo apt-get install -y zsh vim git tree fd-find bat tmux ripgrep curl build-essential
           if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
             sudo ln -s "$(which fdfind)" /usr/local/bin/fd
           fi
           if command -v batcat &>/dev/null && ! command -v bat &>/dev/null; then
             sudo ln -s "$(which batcat)" /usr/local/bin/bat
           fi
+          curl -fsSL https://mise.run | sudo MISE_INSTALL_PATH=/usr/local/bin/mise sh
+          : > /tmp/ci-mise-empty.toml
+          MISE_GLOBAL_CONFIG_FILE=/tmp/ci-mise-empty.toml MISE_DATA_DIR=/tmp/ci-mise-data MISE_CACHE_DIR=/tmp/ci-mise-cache MISE_STATE_DIR=/tmp/ci-mise-state \
+            mise --no-config -C /tmp install neovim@latest tree-sitter@latest fzf@latest
+          for tool_spec in "neovim@latest:nvim" "tree-sitter@latest:tree-sitter" "fzf@latest:fzf"; do
+            spec="${tool_spec%%:*}"
+            bin_name="${tool_spec#*:}"
+            bin_path="$(MISE_GLOBAL_CONFIG_FILE=/tmp/ci-mise-empty.toml MISE_DATA_DIR=/tmp/ci-mise-data MISE_CACHE_DIR=/tmp/ci-mise-cache MISE_STATE_DIR=/tmp/ci-mise-state mise --no-config -C /tmp which "$bin_name" --tool "$spec")"
+            sudo ln -sf "$bin_path" "/usr/local/bin/$bin_name"
+          done
+          rm -f /tmp/ci-mise-empty.toml
+          nvim --version
+          tree-sitter --version
+          fzf --version
+
+      - name: Cache Neovim plugins and compiled Tree-sitter parsers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/nvim/lazy
+            ~/.local/share/nvim/site
+          key: nvim-ts-${{ runner.os }}-${{ hashFiles('dotfiles/.config/nvim/lazy-lock.json', 'dotfiles/.config/nvim/init.lua') }}
+          restore-keys: |
+            nvim-ts-${{ runner.os }}-
+
+      - name: Bootstrap headless Neovim plugins and Tree-sitter parsers
+        run: |
+          boot_cfg="$(mktemp -d)"
+          ln -sfn "$PWD/dotfiles/.config/nvim" "$boot_cfg/nvim"
+          cat <<'EOF' > /tmp/ci_nvim_lazy.lua
+          local ok, lazy = pcall(require, "lazy")
+          if not ok then
+            io.stderr:write("Failed to load lazy.nvim\n")
+            vim.cmd("cquit 1")
+          end
+          lazy.restore({ wait = true, show = false })
+          EOF
+          XDG_CONFIG_HOME="$boot_cfg" NVIM_LOG_FILE=/dev/null NVIM_TS_SKIP_AUTO_INSTALL=1 \
+            timeout 180 nvim --headless -u "$PWD/dotfiles/.config/nvim/init.lua" \
+            -c "luafile /tmp/ci_nvim_lazy.lua" -c "qall!" </dev/null
+          cat <<'EOF' > /tmp/ci_nvim_ts.lua
+          local required = {
+            "c", "cpp", "go", "java", "kotlin", "swift", "python", "rust",
+            "typescript", "javascript", "bash", "markdown", "markdown_inline",
+            "json", "yaml", "toml", "terraform", "sql", "lua",
+            "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
+            "properties", "proto", "textproto", "regex",
+            "elixir", "haskell", "ocaml", "clojure", "lean",
+            "zig", "c_sharp", "scala", "ruby",
+            "graphql", "starlark", "rego", "dockerfile", "make",
+          }
+          local pinned_revs = {
+            css = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032",
+            lean = "916c44f4d89c970f66dd34a49e7ce848f4d29e72",
+          }
+          local function read_rev(lang)
+            local rev_file = vim.fn.stdpath("data") .. "/site/parser-info/" .. lang .. ".revision"
+            if vim.fn.filereadable(rev_file) == 1 then
+              local lines = vim.fn.readfile(rev_file)
+              if lines and #lines > 0 then
+                return vim.trim(lines[1])
+              end
+            end
+            return ""
+          end
+          local ok, nts = pcall(require, "nvim-treesitter")
+          if not ok or type(nts.install) ~= "function" then
+            io.stderr:write("Failed to load nvim-treesitter installer\n")
+            vim.cmd("cquit 1")
+          end
+          local function installed_parsers()
+            local ok_p, list = pcall(nts.get_installed, "parsers")
+            if not ok_p or type(list) ~= "table" then
+              list = nts.get_installed()
+            end
+            local map = {}
+            for _, p in ipairs(list) do
+              map[p] = true
+            end
+            return map
+          end
+          local have = installed_parsers()
+          local to_install = {}
+          local to_force = {}
+          for _, p in ipairs(required) do
+            if pinned_revs[p] then
+              if (not have[p]) or (read_rev(p) ~= pinned_revs[p]) then
+                table.insert(to_force, p)
+              end
+            elseif not have[p] then
+              table.insert(to_install, p)
+            end
+          end
+          if #to_install > 0 then
+            nts.install(to_install, { max_jobs = 4 }):pwait(300000)
+          end
+          if #to_force > 0 then
+            nts.install(to_force, { force = true, max_jobs = 2 }):pwait(120000)
+          end
+          local after = installed_parsers()
+          local missing = {}
+          for _, p in ipairs(required) do
+            if not after[p] then
+              table.insert(missing, p)
+            end
+          end
+          if #missing > 0 then
+            io.stderr:write("Missing Tree-sitter parsers: " .. table.concat(missing, ", ") .. "\n")
+            vim.cmd("cquit 1")
+          end
+          EOF
+          XDG_CONFIG_HOME="$boot_cfg" NVIM_LOG_FILE=/dev/null NVIM_TS_SKIP_AUTO_INSTALL=1 \
+            timeout 360 nvim --headless -u "$PWD/dotfiles/.config/nvim/init.lua" \
+            -c "luafile /tmp/ci_nvim_ts.lua" -c "qall!" </dev/null
+          rm -rf "$boot_cfg" /tmp/ci_nvim_lazy.lua /tmp/ci_nvim_ts.lua
 
       - name: Run unit tests
         run: make test

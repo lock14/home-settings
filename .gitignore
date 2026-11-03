@@ -8,6 +8,7 @@ Thumbs.db
 *~
 *.bak
 *.tmp
+nvim.log
 
 # Vim Netrw History
 .netrwhist

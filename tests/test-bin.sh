@@ -112,10 +112,29 @@ printf "15\n25\n" > "$COMMA_FILE"
 SUM_COMMA_FILE_OUT="$("$SCRIPT_DIR/bin/sum" "$COMMA_FILE")"
 assert_eq "$SUM_COMMA_FILE_OUT" "40" "bin/sum reads files whose paths contain commas"
 
+SUM_NUM_ARGS_OUT="$("$SCRIPT_DIR/bin/sum" 10 -2.5 +7.5)"
+assert_eq "$SUM_NUM_ARGS_OUT" "15" "bin/sum sums direct signed numeric CLI tokens"
+
+sum_missing_stdout=""
+sum_missing_stderr=""
+if sum_missing_stdout="$("$SCRIPT_DIR/bin/sum" "$TEMP_HOME/no-such-file.txt" 2>"$TEMP_HOME/sum_missing.err")"; then
+    fail "bin/sum nonexistent file argument" "Expected non-zero exit on nonexistent file, got stdout='$sum_missing_stdout'"
+else
+    sum_missing_stderr="$(cat "$TEMP_HOME/sum_missing.err")"
+    if [ -z "$sum_missing_stdout" ] && grep -Fq "Error:" <<< "$sum_missing_stderr" && \
+       ! "$SCRIPT_DIR/bin/sum" "$TEMP_HOME" >/dev/null 2>&1; then
+        pass "bin/sum fails with non-zero exit and stderr diagnostic on nonexistent or directory arguments instead of printing 0"
+    else
+        fail "bin/sum error output" "Expected empty stdout and Error stderr, got stdout='$sum_missing_stdout' stderr='$sum_missing_stderr'"
+    fi
+fi
+
 # Test 6: bin/ide CLI validation & headless tmux session orchestration
 echo -e "\n[6/8] Testing bin/ide workspace launcher..."
-IDE_HELP="$("$SCRIPT_DIR/bin/ide" --help)"
+IDE_HELP="$(IDE_PY_BIN="$(command -v python3)" "$SCRIPT_DIR/bin/ide" --help)"
 if grep -q -- '--3pane' <<< "$IDE_HELP" && \
+   grep -Fq -- '--open <FILE> [LINE]' <<< "$IDE_HELP" && \
+   grep -Fq -- '--preview <FILE> [LINE]' <<< "$IDE_HELP" && \
    grep -q -- '--kill' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-editor' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-term' <<< "$IDE_HELP" && \
@@ -128,9 +147,9 @@ if grep -q -- '--3pane' <<< "$IDE_HELP" && \
    grep -q -- '--next-attention' <<< "$IDE_HELP" && \
    grep -q -- '--agent-state' <<< "$IDE_HELP" && \
    ! grep -q -- '--on-bell' <<< "$IDE_HELP"; then
-    pass "bin/ide --help displays usage for 2-pane, --3pane, --sessions, --next-attention, --agent-state, --send, --toggle-editor/term/ai, --swap, --keys, --kill, and --list [--plain]"
+    pass "bin/ide --help (with IDE_PY_BIN override) displays usage for 2-pane, --3pane, --open/--preview [LINE], --sessions, --next-attention, --agent-state, --send, --toggle-editor/term/ai, --swap, --keys, --kill, and --list [--plain]"
 else
-    fail "bin/ide --help" "Expected --3pane, --sessions, --next-attention, --agent-state, --send, --toggle-editor/term/ai, --swap, --keys, --kill, and --plain (without --on-bell) in bin/ide --help output"
+    fail "bin/ide --help" "Expected --3pane, --open/--preview [LINE], --sessions, --next-attention, --agent-state, --send, --toggle-editor/term/ai, --swap, --keys, --kill, and --plain (without --on-bell) in bin/ide --help output"
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" --keys)"
@@ -773,6 +792,63 @@ SH
             else
                 echo "FAIL:bin/ide --open-link file://#L<line>:Command failed on file://#L<line>"
             fi
+
+            # Verify `bin/ide --open <file> [line]`, `--preview <file> [line]`, `file:line:col`, `file#Lline`, and literal colon filenames
+            printf "c1\nc2\nc3\n" > "$IDE_WS_3P/subdir/colon:file.txt"
+            tmux select-pane -t "$ai_pane"
+            "$SCRIPT_DIR/bin/ide" --open "$IDE_WS_3P/subdir/nested.txt" 3 "ws_3pane_test"
+            open_pos_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+            open_pos_line="3"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                open_pos_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+            fi
+            tmux select-pane -t "$ai_pane"
+            (cd /tmp && "$SCRIPT_DIR/bin/ide" --open "subdir/nested.txt:2:1" "ws_3pane_test")
+            open_col_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+            open_col_line="2"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                open_col_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+            fi
+            tmux select-pane -t "$ai_pane"
+            "$SCRIPT_DIR/bin/ide" --preview "$IDE_WS_3P/subdir/nested.txt" 1 "ws_3pane_test"
+            prev_pos_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+            prev_pos_line="1"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                prev_pos_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+            fi
+            (cd /tmp && "$SCRIPT_DIR/bin/ide" --preview "subdir/nested.txt#L3" "ws_3pane_test")
+            prev_hash_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
+            prev_hash_line="3"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                prev_hash_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+            fi
+            "$SCRIPT_DIR/bin/ide" --open "$IDE_WS_3P/subdir/colon:file.txt" 2 "ws_3pane_test"
+            colon_buf="colon:file.txt:2"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                cbname="$(basename "$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                cbline="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                colon_buf="${cbname}:${cbline}"
+            fi
+            mkdir -p "$IDE_WS_3P/dir:v1"
+            printf "m1\nm2\nm3\n" > "$IDE_WS_3P/dir:v1/colon:mod.txt"
+            "$SCRIPT_DIR/bin/ide" --open "$IDE_WS_3P/dir:v1/colon:mod.txt:3" "ws_3pane_test"
+            colon_dir_buf="colon:mod.txt:3"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                cdbname="$(basename "$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                cdbline="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                colon_dir_buf="${cdbname}:${cdbline}"
+            fi
+            if [ "$open_pos_focus" = "$ed_pane" ] && [ "$open_pos_line" = "3" ] && \
+               [ "$open_col_focus" = "$ed_pane" ] && [ "$open_col_line" = "2" ] && \
+               [ "$prev_pos_focus" = "$ai_pane" ] && [ "$prev_pos_line" = "1" ] && \
+               [ "$prev_hash_focus" = "$ai_pane" ] && [ "$prev_hash_line" = "3" ] && \
+               [ "$colon_buf" = "colon:file.txt:2" ] && \
+               [ "$colon_dir_buf" = "colon:mod.txt:3" ]; then
+                echo "PASS:bin/ide --open and --preview support optional [LINE], file:line:col, file#Lline, workspace-relative paths, and literal colon paths/filenames while preserving non-focus preview"
+            else
+                echo "FAIL:bin/ide --open/--preview:Expected ed=$ed_pane ai=$ai_pane lines 3/2/1/3 colon:file.txt:2 colon:mod.txt:3, got open_pos=$open_pos_focus:$open_pos_line open_col=$open_col_focus:$open_col_line prev_pos=$prev_pos_focus:$prev_pos_line prev_hash=$prev_hash_focus:$prev_hash_line colon=$colon_buf colon_dir=$colon_dir_buf"
+            fi
+
             if [ -n "$link_nvim_pid" ]; then
                 kill "$link_nvim_pid" 2>/dev/null || true
                 rm -f "$sock_3p"
@@ -1364,15 +1440,53 @@ else
     fail "bin/update-system --skip-flatpak" "Failed to selectively skip flatpak"
 fi
 
-DEV_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --with-dev --dry-run)"
+TEMP_OMZ_DEV_HOME="$(mktemp -d)"
+mkdir -p "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/tools" \
+         "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/.git" \
+         "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/custom/plugins/gitfile-plugin" \
+         "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/custom/themes/powerlevel10k/.git" \
+         "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/custom/plugins/local-non-git"
+printf 'gitdir: /tmp/mock-gitdir\n' > "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/custom/plugins/gitfile-plugin/.git"
+touch "$TEMP_OMZ_DEV_HOME/.oh-my-zsh/tools/upgrade.sh"
+DEV_OUT="$(env -u ZSH -u ZSH_CUSTOM HOME="$TEMP_OMZ_DEV_HOME" "$SCRIPT_DIR/bin/update-system" --os ubuntu --with-dev --dry-run)"
+rm -rf "$TEMP_OMZ_DEV_HOME"
 if grep -Fq "mise plugins update" <<< "$DEV_OUT" && \
    grep -Fq "mise upgrade" <<< "$DEV_OUT" && \
    grep -Fq "rustup update" <<< "$DEV_OUT" && \
-   grep -Fq "upgrade.sh" <<< "$DEV_OUT"; then
-    pass "bin/update-system --with-dev dispatches Mise, Rustup, and Oh-My-Zsh updates"
+   grep -Fq "upgrade.sh" <<< "$DEV_OUT" && \
+   grep -Fq "zsh-autosuggestions pull --ff-only" <<< "$DEV_OUT" && \
+   grep -Fq "gitfile-plugin pull --ff-only" <<< "$DEV_OUT" && \
+   grep -Fq "powerlevel10k pull --ff-only" <<< "$DEV_OUT" && \
+   ! grep -Fq "local-non-git" <<< "$DEV_OUT"; then
+    pass "bin/update-system --with-dev dispatches Mise, Rustup, Oh-My-Zsh, and custom Git (.git dir and gitfile) plugin/theme updates"
 else
-    fail "bin/update-system --with-dev" "Missing expected developer toolchain commands"
+    fail "bin/update-system --with-dev" "Missing expected developer toolchain or custom Zsh plugin/theme commands: $DEV_OUT"
 fi
+
+TEMP_OMZ_LIVE="$(mktemp -d)"
+mkdir -p "$TEMP_OMZ_LIVE/mock-bin" "$TEMP_OMZ_LIVE/custom/plugins"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$TEMP_OMZ_LIVE/mock-bin/brew"
+chmod +x "$TEMP_OMZ_LIVE/mock-bin/brew"
+git init -q "$TEMP_OMZ_LIVE/origin-repo"
+git -C "$TEMP_OMZ_LIVE/origin-repo" config user.email "test@example.com"
+git -C "$TEMP_OMZ_LIVE/origin-repo" config user.name "Test"
+git -C "$TEMP_OMZ_LIVE/origin-repo" config commit.gpgsign false
+printf 'v1\n' > "$TEMP_OMZ_LIVE/origin-repo/f.txt"
+git -C "$TEMP_OMZ_LIVE/origin-repo" add f.txt
+git -C "$TEMP_OMZ_LIVE/origin-repo" -c commit.gpgsign=false commit -q -m "c1"
+git clone -q "$TEMP_OMZ_LIVE/origin-repo" "$TEMP_OMZ_LIVE/custom/plugins/pinned-plugin"
+git -C "$TEMP_OMZ_LIVE/custom/plugins/pinned-plugin" checkout -q --detach HEAD
+git clone -q "$TEMP_OMZ_LIVE/origin-repo" "$TEMP_OMZ_LIVE/custom/plugins/ff-plugin"
+printf 'v2\n' > "$TEMP_OMZ_LIVE/origin-repo/f.txt"
+git -C "$TEMP_OMZ_LIVE/origin-repo" -c commit.gpgsign=false commit -q -am "c2"
+if LIVE_DEV_OUT="$(env -u ZSH PATH="$TEMP_OMZ_LIVE/mock-bin:/usr/bin:/bin" HOME="$TEMP_OMZ_LIVE" ZSH_CUSTOM="$TEMP_OMZ_LIVE/custom" "$SCRIPT_DIR/bin/update-system" --os macos --system-only --with-dev 2>&1)" && \
+   [ "$(cat "$TEMP_OMZ_LIVE/custom/plugins/ff-plugin/f.txt")" = "v2" ] && \
+   grep -Fq "Skipped fast-forward update for pinned-plugin" <<< "$LIVE_DEV_OUT"; then
+    pass "bin/update-system --with-dev fast-forwards standalone ZSH_CUSTOM repos and warns without aborting on detached-HEAD plugins"
+else
+    fail "bin/update-system --with-dev live custom pull" "Unexpected result: ${LIVE_DEV_OUT:-failed}"
+fi
+rm -rf "$TEMP_OMZ_LIVE"
 
 NO_CLEANUP_OUT="$("$SCRIPT_DIR/bin/update-system" --os ubuntu --no-cleanup --dry-run)"
 if ! grep -Fq "autoremove" <<< "$NO_CLEANUP_OUT" && ! grep -Fq "autoclean" <<< "$NO_CLEANUP_OUT"; then
@@ -2089,6 +2203,32 @@ if command -v nvim >/dev/null 2>&1; then
     rm -f "$LIVE_NVIM_SOCK" "$STANDALONE_NVIM_SOCK"
 fi
 
+# Verify bin/theme generated Ghostty keybindings and live tmux global FZF_DEFAULT_OPTS broadcast
+if grep -Fq 'keybind = ctrl+shift+t=new_tab' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$THEME_TEST_Cfg/ghostty/config"; then
+    pass "bin/theme generates Ghostty config with Ctrl+Shift+T and Alt+Left/Right/Up/Down ESC keybindings"
+else
+    fail "bin/theme Ghostty keybindings" "Missing Ctrl+Shift+T or Alt+Arrow keybindings in generated Ghostty config"
+fi
+
+if command -v tmux >/dev/null 2>&1; then
+    LIVE_TMUX_TMP="$(mktemp -d)"
+    if TMUX="" TMUX_TMPDIR="$LIVE_TMUX_TMP" tmux -f /dev/null new-session -d -s theme_live_tmux "exec sleep 30" >/dev/null 2>&1; then
+        THEME_UPDATE_TERMINAL_PROFILE=0 THEME_LIVE_NVIM=0 TMUX="" TMUX_TMPDIR="$LIVE_TMUX_TMP" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set nord >/dev/null 2>&1
+        tmux_fzf_env="$(TMUX="" TMUX_TMPDIR="$LIVE_TMUX_TMP" tmux show-environment -g FZF_DEFAULT_OPTS 2>/dev/null || true)"
+        TMUX="" TMUX_TMPDIR="$LIVE_TMUX_TMP" tmux kill-session -t "=theme_live_tmux" >/dev/null 2>&1 || true
+        if [[ "$tmux_fzf_env" == "FZF_DEFAULT_OPTS=--color=bg+:#3B4252,bg:#2E3440,"* ]]; then
+            pass "bin/theme broadcasts updated FZF_DEFAULT_OPTS into live tmux global environment"
+        else
+            fail "bin/theme live tmux FZF_DEFAULT_OPTS" "Expected Nord FZF_DEFAULT_OPTS in tmux global env, got '$tmux_fzf_env'"
+        fi
+    fi
+    rm -rf "$LIVE_TMUX_TMP"
+fi
+
 # Verify uniform preview card geometry across ALL 17 built-in themes (standalone 94 cols and narrow fzf 72 cols) and Tmux status-right client_width>=105 holiday guard
 HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set halloween --no-live >/dev/null 2>&1
 if grep -Fq '#{>=:#{client_width},105}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
@@ -2324,14 +2464,23 @@ try:
 
     assert wait_until(
         lambda: "ALPHA_AI_VIEWPORT_LINE" in tmux_out("capture-pane", "-p", "-t", ws_alpha["ai"])
-        and "BETA_EDITOR_VISIBLE_LINE" in tmux_out("capture-pane", "-p", "-t", ws_beta["ed"]),
+        and "BETA_EDITOR_VISIBLE_LINE" in tmux_out("capture-pane", "-p", "-t", ws_beta["ed"])
+        and "GAMMA_SHELL_VIEW" in tmux_out("capture-pane", "-p", "-t", ws_gamma["ai"]),
         timeout=4.0,
     ), "timed out waiting for workspace pane viewports"
 
-    # Make beta-ws strictly newer in #{session_activity} than gamma-ws while testing from alpha-ws
-    time.sleep(1.05)
+    # Wait past gamma-ws's integer timestamp so send-keys bumps beta-ws #{window_activity} deterministically
+    gamma_ts = max(
+        (int(x) for x in tmux_out("display-message", "-p", "-t", "=gamma-ws:", "#{session_activity} #{window_activity}").split() if x.isdigit()),
+        default=int(time.time()),
+    )
+    while int(time.time()) <= gamma_ts:
+        time.sleep(0.05)
     tmux("send-keys", "-t", ws_beta["tm"], "echo activity_bump", "C-m", check=True)
-    assert wait_until(lambda: "activity_bump" in tmux_out("capture-pane", "-p", "-t", ws_beta["tm"]))
+    assert wait_until(
+        lambda: "activity_bump" in tmux_out("capture-pane", "-p", "-t", ws_beta["tm"])
+        and int(tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{window_activity}") or "0") > gamma_ts
+    )
 
     plain_lines = run_cmd([ide_bin, "--list", "--plain"], env=sess_env("alpha-ws"), check=True).stdout.splitlines()
     assert plain_lines == ["alpha-ws", "beta-ws", "gamma-ws"], f"unexpected --list --plain order: {plain_lines}"
@@ -2577,7 +2726,7 @@ try:
             "#!/usr/bin/env python3\n"
             "import os, sys\n"
             f"with open({popup_env_log!r}, 'w', encoding='utf-8') as out:\n"
-            "    out.write(os.environ.get('IDE_CLIENT', '') + '\\t' + ' '.join(sys.argv[1:]))\n"
+            "    out.write(os.environ.get('IDE_CLIENT', '') + '\\t' + os.environ.get('FZF_DEFAULT_OPTS', '') + '\\t' + ' '.join(sys.argv[1:]))\n"
             "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
             "target = os.environ.get('MOCK_FZF_TARGET', '')\n"
             "key = os.environ.get('MOCK_FZF_KEY', '')\n"
@@ -2634,8 +2783,9 @@ try:
     drain_pty_both()
     assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws", "Alt+s on client2 wrongly switched client1!"
     recorded_env = open(popup_env_log, encoding="utf-8").read()
-    rec_client, _ = recorded_env.split("\t", 1)
+    rec_client, rec_default_fzf, _ = recorded_env.split("\t", 2)
     assert rec_client == client2_name and "#{" not in recorded_env, f"unexpanded format or wrong IDE_CLIENT in popup: {recorded_env!r}"
+    assert "spinner:#859900" in rec_default_fzf and "prompt:#B58900" in rec_default_fzf, f"unexpected default FZF_DEFAULT_OPTS palette: {rec_default_fzf!r}"
 
     # Real Alt+s from non-IDE session (plain-non-ide) switches client2 cleanly into gamma-ws
     tmux("switch-client", "-c", client2_name, "-t", "=plain-non-ide", check=True)
@@ -2648,17 +2798,43 @@ try:
     drain_pty_both()
     assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"
 
-    # (7b) Relative invocation (./.local/bin/ide -s) from thome normalizes ide_self for display-popup and fzf callbacks
+    # (7b) Relative invocation (./.local/bin/ide -s) + build_fzf_env single-quoted theme-env.sh overriding stale FZF_DEFAULT_OPTS
+    hs_cfg_dir = os.path.join(thome, ".config", "home-settings")
+    os.makedirs(hs_cfg_dir, exist_ok=True)
+    theme_env_file = os.path.join(hs_cfg_dir, "theme-env.sh")
+    with open(theme_env_file, "w", encoding="utf-8") as tf:
+        tf.write("export FZF_DEFAULT_OPTS='--color=bg+:#313244,bg:#1E1E2E,spinner:#A6E3A1 --prompt='\\''WS> '\\'' --border=rounded'\n")
     tmux("set-environment", "-g", "MOCK_FZF_TARGET", "beta-ws", check=True)
     run_cmd(
         ["./.local/bin/ide", "-s", "gamma-ws"],
-        env={**sess_env("gamma-ws", ws_gamma["ed"]), "IDE_FZF_BIN": mock_fzf, "MOCK_FZF_KEY": "", "MOCK_FZF_TARGET": "beta-ws", "IDE_CLIENT": client2_name},
+        env={
+            **sess_env("gamma-ws", ws_gamma["ed"]),
+            "FZF_DEFAULT_OPTS": "--color=bg+:#000000",
+            "IDE_FZF_BIN": mock_fzf,
+            "MOCK_FZF_KEY": "",
+            "MOCK_FZF_TARGET": "beta-ws",
+            "IDE_CLIENT": client2_name,
+        },
         cwd=thome,
         check=True,
     )
     assert wait_until(lambda: (drain_pty_both() or tmux_out("display-message", "-p", "-t", client2_name, "#{session_name}") == "beta-ws")), "relative ./ide -s popup failed"
-    _, rel_fzf_args = open(popup_env_log, encoding="utf-8").read().split("\t", 1)
+    _, rel_fzf_opts, rel_fzf_args = open(popup_env_log, encoding="utf-8").read().split("\t", 2)
+    os.unlink(theme_env_file)
+    assert "--color=bg+:#313244" in rel_fzf_opts and "--prompt='WS> '" in rel_fzf_opts and "#000000" not in rel_fzf_opts, f"build_fzf_env failed to load single-quoted/escaped theme-env.sh over stale FZF_DEFAULT_OPTS: {rel_fzf_opts!r}"
     assert os.path.abspath(ide_bin) in rel_fzf_args or os.path.realpath(ide_bin) in rel_fzf_args, f"relative path leaked into fzf args: {rel_fzf_args}"
+
+    # Verify session_last_attached promotes recently visited gamma-ws above beta-ws
+    beta_max_ts = max(
+        (int(x) for x in tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{session_activity} #{session_last_attached} #{window_activity}").split() if x.isdigit()),
+        default=int(time.time()),
+    )
+    while int(time.time()) <= beta_max_ts:
+        time.sleep(0.05)
+    tmux("switch-client", "-c", client2_name, "-t", "=gamma-ws", check=True)
+    drain_pty_both()
+    recency_after_switch = run_cmd([ide_bin, "--list", "--plain"], env=sess_env("alpha-ws"), check=True).stdout.splitlines()
+    assert recency_after_switch == ["alpha-ws", "gamma-ws", "beta-ws"], f"session_last_attached did not promote gamma-ws: {recency_after_switch}"
 
     # (7c) Quitting the active session from inside the popup (IDE_IN_POPUP=1, ctrl-x) switches attached client to the most recently active surviving IDE session, and --sessions-lines re-highlights the new session
     ws_killme = make_ws("killme-ws", ai_cmd="sleep 300")

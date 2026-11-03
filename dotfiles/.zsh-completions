@@ -153,8 +153,10 @@ _ide() {
         sessions=(${(f)"$("$ide_bin" --list --plain 2>/dev/null)"})
     fi
 
-    local prev="${words[CURRENT-1]:-}"
-    local prev2="${words[CURRENT-2]:-}"
+    local prev="" prev2="" prev3=""
+    (( CURRENT > 1 )) && prev="${words[CURRENT-1]:-}"
+    (( CURRENT > 2 )) && prev2="${words[CURRENT-2]:-}"
+    (( CURRENT > 3 )) && prev3="${words[CURRENT-3]:-}"
     case "$prev" in
         --ai|--agent)
             _describe -t agents 'AI agent CLI' agents
@@ -234,7 +236,7 @@ _ide() {
         return
     fi
 
-    if [[ "$prev2" == ("--swap"|"--agent-state") && "${words[CURRENT]:-}" != -* ]]; then
+    if [[ ( "$prev2" == ("--swap"|"--agent-state"|"--open"|"--preview") || ( "$prev3" == ("--open"|"--preview") && "$prev" == (\+|)<-> ) ) && "${words[CURRENT]:-}" != -* ]]; then
         if (( ${#sessions} )); then
             _describe -t sessions 'IDE session' sessions
         fi

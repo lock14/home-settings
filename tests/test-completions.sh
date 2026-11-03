@@ -192,6 +192,24 @@ out_qide="$(run_case qide "")"
 out_open="$(run_case ide --open "")"
 [[ "$out_open" == "_FILES_any" ]] || { print -u2 "bad --open: $out_open"; exit 1; }
 
+out_preview="$(run_case ide --preview "")"
+[[ "$out_preview" == "_FILES_any" ]] || { print -u2 "bad --preview: $out_preview"; exit 1; }
+
+out_open_sess="$(run_case ide --open src/app.py "")"
+[[ "$out_open_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open file sess: $out_open_sess"; exit 1; }
+
+out_open_line_sess="$(run_case ide --open src/app.py 42 "")"
+[[ "$out_open_line_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open file line sess: $out_open_line_sess"; exit 1; }
+
+out_open_plus_sess="$(run_case ide --open src/app.py +42 "")"
+[[ "$out_open_plus_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open file +line sess: $out_open_plus_sess"; exit 1; }
+
+out_preview_line_sess="$(run_case ide --preview src/app.py 42 "")"
+[[ "$out_preview_line_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --preview file line sess: $out_preview_line_sess"; exit 1; }
+
+out_preview_plus_sess="$(run_case ide --preview src/app.py +42 "")"
+[[ "$out_preview_plus_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --preview file +line sess: $out_preview_plus_sess"; exit 1; }
+
 out_cd="$(run_case ide --cd "")"
 [[ "$out_cd" == "_FILES_-/" ]] || { print -u2 "bad --cd: $out_cd"; exit 1; }
 
@@ -218,7 +236,7 @@ out_root="$(run_case ide "")"
 EOF
 
 if ide_comp_err="$(HOME="$MOCK_IDE_HOME" zsh "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)"; then
-    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek and completes flags, --ai, --swap, --list --plain, --send subflags, file/dir paths, and live IDE sessions"
+    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek and completes flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, and live IDE sessions"
 else
     fail "_ide Zsh completion" "Unexpected _ide completion behavior: $ide_comp_err"
 fi

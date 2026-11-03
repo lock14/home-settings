@@ -211,12 +211,23 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" if-shell -t "$cfg_pane" -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; send-keys -X copy-pipe-no-clear'
         eval_sright_copy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" send-keys -t "$cfg_pane" -X cancel
+        tmux -L "$TMUX_TEST_SOCK" source-file "$TEMP_HOME/.tmux.conf"
+        tmux -L "$TMUX_TEST_SOCK" source-file "$TEMP_HOME/.tmux.conf"
+        up_env_lines="$(tmux -L "$TMUX_TEST_SOCK" show-options -g update-environment)"
+        up_env_total="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | wc -l | tr -d ' ')"
+        up_env_uniq="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         plain_wcur_base="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur")"
         plain_wcur_run="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_run")"
         plain_wcur_attn="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_attn")"
         plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
+           [ "$up_env_total" -gt 0 ] && [ "$up_env_total" = "$up_env_uniq" ] && \
+           grep -Fq "COLORTERM" <<< "$up_env_lines" && \
+           grep -Fq "TERM_PROGRAM" <<< "$up_env_lines" && \
+           grep -Fq "IDE_AI_CLI" <<< "$up_env_lines" && \
+           grep -Fq "HOME_SETTINGS_THEME" <<< "$up_env_lines" && \
+           grep -Fq "BAT_THEME" <<< "$up_env_lines" && \
            [ "$plain_wcur_base" = "$plain_wcur_run" ] && [ "$plain_wcur_base" = "$plain_wcur_attn" ] && [ "$plain_wcur_base" = "$plain_wcur_done" ] && \
            grep -Fq "fg=#2AA198,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_run" && \
            grep -Fq "fg=#CB4B16,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_attn" && \
@@ -237,9 +248,9 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "󰓦 SYNC" <<< "$eval_sright_sync" && \
            grep -Fq "󰣀" <<< "$eval_sright_ssh" && \
            grep -Fq "󰆏 COPY [" <<< "$eval_sright_copy"; then
-            pass ".tmux.conf loads cleanly into live headless tmux server and evaluates #{E:@ide_is_editor}, fixed status-left, zero-shift @ide_tab_* state tinting (Cyan running, Orange approval, Green done), clickable attn/fleet right-shelf pills, DoubleClick1Pane copy-mode chain, and conditional status-right"
+            pass ".tmux.conf loads cleanly into live headless tmux server with duplicate-free update-environment across repeated source-file reloads and evaluates #{E:@ide_is_editor}, fixed status-left, zero-shift @ide_tab_* state tinting, clickable attn/fleet right-shelf pills, DoubleClick1Pane copy-mode chain, and conditional status-right"
         else
-            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor wcur='$eval_wcur' run='$eval_wcur_run' attn='$eval_wcur_attn' done='$eval_wcur_done' fleet='$eval_sright_fleet' sright_root='$eval_sright_root'"
+            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor up_env=$up_env_total/$up_env_uniq wcur='$eval_wcur' run='$eval_wcur_run' attn='$eval_wcur_attn' done='$eval_wcur_done' fleet='$eval_sright_fleet' sright_root='$eval_sright_root'"
         fi
     else
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
@@ -283,10 +294,15 @@ if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
    grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'clipboard-read = allow' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'clipboard-write = allow' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -q 'macos-option-as-alt = true' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, clipboard-read/write = allow, and macos-option-as-alt = true"
+   grep -q 'macos-option-as-alt = true' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = ctrl+shift+t=new_tab' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, clipboard-read/write = allow, macos-option-as-alt = true, Ctrl+Shift+T, and Alt+Arrow ESC keybinds"
 else
-    fail "Ghostty config verification" "Ghostty config missing expected theme, font, clipboard-read/write, or macos-option-as-alt"
+    fail "Ghostty config verification" "Ghostty config missing expected theme, font, clipboard-read/write, macos-option-as-alt, or Ctrl+Shift+T / Alt+Arrow keybinds"
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then
@@ -2214,5 +2230,25 @@ fi
 if [ "$all_unlinked" = true ]; then
     pass "All managed dotfile symlinks removed by uninstaller while preserving local ~/.config/git/ignore and attributes"
 fi
+
+# Verify modules/10-dotfiles.sh honors SKIP_ZSH, SKIP_BASH, and SKIP_COMPLETIONS selectively
+TEMP_SKIP_HOME=$(mktemp -d)
+SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=true HOME="$TEMP_SKIP_HOME" XDG_CONFIG_HOME="$TEMP_SKIP_HOME/.config" XDG_CACHE_HOME="$TEMP_SKIP_HOME/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+if [ ! -e "$TEMP_SKIP_HOME/.zshrc-addendum" ] && \
+   [ ! -e "$TEMP_SKIP_HOME/.zsh-functions" ] && \
+   [ ! -e "$TEMP_SKIP_HOME/.p10k.zsh" ] && \
+   [ ! -e "$TEMP_SKIP_HOME/.zsh-completions" ] && \
+   [ ! -d "$TEMP_SKIP_HOME/.zsh/completions" ] && \
+   [ ! -e "$TEMP_SKIP_HOME/.bashrc-addendum" ] && \
+   [ -L "$TEMP_SKIP_HOME/.environment-variables" ] && \
+   [ -L "$TEMP_SKIP_HOME/.aliases" ] && \
+   [ -L "$TEMP_SKIP_HOME/.vimrc" ] && \
+   [ -L "$TEMP_SKIP_HOME/.tmux.conf" ] && \
+   [ -L "$TEMP_SKIP_HOME/.config/nvim" ]; then
+    pass "modules/10-dotfiles.sh honors SKIP_ZSH, SKIP_BASH, and SKIP_COMPLETIONS while linking non-shell dotfiles"
+else
+    fail "modules/10-dotfiles.sh SKIP_* flags" "Unexpected files created or missing when SKIP_ZSH/SKIP_BASH/SKIP_COMPLETIONS=true"
+fi
+rm -rf "$TEMP_SKIP_HOME"
 
 test_summary

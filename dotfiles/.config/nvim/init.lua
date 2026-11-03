@@ -1744,40 +1744,46 @@ lazy.setup({
                         install_dir = vim.fn.stdpath("data") .. "/site",
                     })
                 end)
-                local installed = {}
-                for _, p in ipairs(nts.get_installed()) do
-                    installed[p] = true
-                end
-                local function read_parser_rev(lang)
-                    local rev_file = vim.fn.stdpath("data") .. "/site/parser-info/" .. lang .. ".revision"
-                    if vim.fn.filereadable(rev_file) == 1 then
-                        local rev_lines = vim.fn.readfile(rev_file)
-                        if rev_lines and #rev_lines > 0 then
-                            return vim.trim(rev_lines[1])
+                if vim.env.NVIM_TS_SKIP_AUTO_INSTALL ~= "1" then
+                    local ok_inst, inst_list = pcall(nts.get_installed, "parsers")
+                    if not ok_inst or type(inst_list) ~= "table" then
+                        inst_list = nts.get_installed()
+                    end
+                    local installed = {}
+                    for _, p in ipairs(inst_list) do
+                        installed[p] = true
+                    end
+                    local function read_parser_rev(lang)
+                        local rev_file = vim.fn.stdpath("data") .. "/site/parser-info/" .. lang .. ".revision"
+                        if vim.fn.filereadable(rev_file) == 1 then
+                            local rev_lines = vim.fn.readfile(rev_file)
+                            if rev_lines and #rev_lines > 0 then
+                                return vim.trim(rev_lines[1])
+                            end
+                        end
+                        return ""
+                    end
+                    local need_css_install = (not installed["css"]) or (read_parser_rev("css") ~= css_pinned_rev)
+                    local need_lean_install = (not installed["lean"]) or (read_parser_rev("lean") ~= lean_pinned_rev)
+                    local to_install = {}
+                    for _, p in ipairs(parsers) do
+                        if not installed[p] and p ~= "css" and p ~= "lean" then
+                            table.insert(to_install, p)
                         end
                     end
-                    return ""
-                end
-                local need_css_install = (not installed["css"]) or (read_parser_rev("css") ~= css_pinned_rev)
-                local need_lean_install = (not installed["lean"]) or (read_parser_rev("lean") ~= lean_pinned_rev)
-                local to_install = {}
-                for _, p in ipairs(parsers) do
-                    if not installed[p] and p ~= "css" and p ~= "lean" then
-                        table.insert(to_install, p)
+                    if #to_install > 0 then
+                        pcall(function()
+                            nts.install(to_install, { max_jobs = 4 })
+                        end)
                     end
-                end
-                if #to_install > 0 then
-                    pcall(function()
-                        nts.install(to_install)
-                    end)
-                end
-                local pinned_to_install = {}
-                if need_css_install then table.insert(pinned_to_install, "css") end
-                if need_lean_install then table.insert(pinned_to_install, "lean") end
-                if #pinned_to_install > 0 and type(nts.install) == "function" then
-                    pcall(function()
-                        nts.install(pinned_to_install, { force = true }):pwait(60000)
-                    end)
+                    local pinned_to_install = {}
+                    if need_css_install then table.insert(pinned_to_install, "css") end
+                    if need_lean_install then table.insert(pinned_to_install, "lean") end
+                    if #pinned_to_install > 0 and type(nts.install) == "function" then
+                        pcall(function()
+                            nts.install(pinned_to_install, { force = true, max_jobs = 2 }):pwait(60000)
+                        end)
+                    end
                 end
             end
 
