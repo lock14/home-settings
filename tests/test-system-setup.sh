@@ -129,6 +129,28 @@ else
     fail "setup.sh with-mariadb" "Command failed: $output"
 fi
 
+if out_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-postgres --with-mariadb --dry-run 2>&1) && \
+   out_my_pg=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-mariadb --with-postgres --dry-run 2>&1) && \
+   out_db_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db postgresql --with-mariadb --dry-run 2>&1) && \
+   out_dbeq_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db=postgresql --with-mariadb --dry-run 2>&1) && \
+   out_skip_pg=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-db --with-postgres --dry-run 2>&1); then
+    if [[ "$out_pg_my" == *"Database  : Server: all"* ]] && \
+       [[ "$out_pg_my" == *"postgresql postgresql-contrib"* ]] && \
+       [[ "$out_pg_my" == *"mariadb-server mariadb-client"* ]] && \
+       [[ "$out_my_pg" == *"Database  : Server: all"* ]] && \
+       [[ "$out_my_pg" == *"postgresql postgresql-contrib"* ]] && \
+       [[ "$out_my_pg" == *"mariadb-server mariadb-client"* ]] && \
+       [[ "$out_db_pg_my" == *"Database  : Server: all"* ]] && \
+       [[ "$out_dbeq_pg_my" == *"Database  : Server: all"* ]] && \
+       [[ "$out_skip_pg" == *"postgresql postgresql-contrib"* ]]; then
+        pass "setup.sh combines --with-postgres, --db[=]postgresql, and --with-mariadb into DB_CHOICE=all regardless of flag order and re-enables DB after --skip-db"
+    else
+        fail "setup.sh combined --with-postgres --with-mariadb" "Expected both PostgreSQL and MariaDB servers: $out_pg_my / $out_db_pg_my"
+    fi
+else
+    fail "setup.sh combined DB flags" "Command failed"
+fi
+
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-db --dry-run 2>&1); then
     if [[ "$output" != *"postgresql-client"* ]] && [[ "$output" != *"mariadb-client"* ]]; then
         pass "setup.sh --skip-db skips all database clients and servers"
@@ -422,6 +444,29 @@ if [ "$sum_human_out" = "5253120" ]; then
 else
     fail "sum human suffix collision" "Expected 5253120, got $sum_human_out"
 fi
+
+printf '5' > "$TEMP_SUM_DIR/no_nl.txt"
+sum_delim_out=$("$SCRIPT_DIR/bin/sum" -d ',' '1,2,3' '4,5,6')
+sum_col_delim_out=$("$SCRIPT_DIR/bin/sum" -d ':' -k 2 'a:10' 'b:20')
+sum_neg_out=$("$SCRIPT_DIR/bin/sum" -5 10)
+sum_flag_neg_out=$("$SCRIPT_DIR/bin/sum" -a -5 15)
+sum_tdot_out=$("$SCRIPT_DIR/bin/sum" 5. 10)
+sum_tdot_h_out=$("$SCRIPT_DIR/bin/sum" -H 5.K)
+sum_mixed_nonl_out=$("$SCRIPT_DIR/bin/sum" "$TEMP_SUM_DIR/no_nl.txt" 10)
+if [ "$sum_delim_out" = "21" ] && \
+   [ "$sum_col_delim_out" = "30" ] && \
+   [ "$sum_neg_out" = "5" ] && \
+   [ "$sum_flag_neg_out" = "5" ] && \
+   [ "$sum_tdot_out" = "15" ] && \
+   [ "$sum_tdot_h_out" = "5120" ] && \
+   [ "$sum_mixed_nonl_out" = "15" ] && \
+   ! "$SCRIPT_DIR/bin/sum" "$TEMP_SUM_DIR/missing.txt" >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/sum" -d ',' "$TEMP_SUM_DIR/missing.csv" >/dev/null 2>&1 && \
+   ! "$SCRIPT_DIR/bin/sum" -d ':' -k 2 "$TEMP_SUM_DIR/no:such:file" >/dev/null 2>&1; then
+    pass "sum handles -d/-k inline delimited arguments, leading negative numbers, trailing-dot floats/units, no-newline files, and errors on nonexistent files"
+else
+    fail "sum edge cases" "Unexpected results: delim=$sum_delim_out col=$sum_col_delim_out neg=$sum_neg_out/$sum_flag_neg_out tdot=$sum_tdot_out/$sum_tdot_h_out nonl=$sum_mixed_nonl_out"
+fi
 rm -rf "$TEMP_SUM_DIR"
 
 # Test repeat-until-success
@@ -617,6 +662,8 @@ else
        grep -Fq 'option "--undocumented-flag" missing from usage()' <<< "$bad_doc_out" && \
        grep -Fq 'keybinding "Ctrl+Shift+D" (from dotfiles/.config/ghostty/config) missing from README.md prose' <<< "$bad_doc_out" && \
        grep -Fq 'keybinding "Ctrl+Shift+D" (from dotfiles/.config/ghostty/config) missing from README.md reference table' <<< "$bad_doc_out" && \
+       grep -Fq 'Ghostty keybinding "Ctrl+Shift+T" missing config directive "keybind = ctrl+shift+t=new_tab"' <<< "$bad_doc_out" && \
+       grep -Fq 'Ghostty keybinding "Alt+Left/Right/Up/Down" missing config directive' <<< "$bad_doc_out" && \
        grep -Fq 'keybinding "Space zx" (from dotfiles/.config/nvim/init.lua) missing from README.md prose' <<< "$bad_doc_out" && \
        grep -Fq 'sample.md: contains placeholder URL "github.com/example/home-settings"' <<< "$bad_doc_out" && \
        grep -Fq 'sample.md: contains stale path "${XDG_DATA_HOME}/bin"' <<< "$bad_doc_out" && \
@@ -633,7 +680,7 @@ else
        grep -Fq 'broken anchor link "#nonexistent-heading"' <<< "$bad_doc_out" && \
        grep -Fq 'broken anchor link "AGENTS.md#missing-anchor"' <<< "$bad_doc_out" && \
        grep -Fq 'invalid JSON code block' <<< "$bad_doc_out"; then
-        pass "lint_documentation detects personal paths, emojis, stacked formatting, unmatched backticks, underscore italics, prose slashes/ampersands/plus connectors, Latin abbreviations, tight/empty headings, untagged fences, tree comment connectors, CLI/setup.sh/keybinding/sample.md drift, broken links/anchors, and invalid JSON blocks"
+        pass "lint_documentation detects personal paths, emojis, stacked formatting, unmatched backticks, underscore italics, prose slashes/ampersands/plus connectors, Latin abbreviations, tight/empty headings, untagged fences, tree comment connectors, CLI/setup.sh/keybinding/Ghostty/sample.md drift, broken links/anchors, and invalid JSON blocks"
     else
         fail "lint_documentation diagnostics" "Missing expected violation messages in output: $bad_doc_out"
     fi
@@ -691,9 +738,9 @@ else
 fi
 rm -rf "$TEMP_VALID_DOC_DIR"
 
-# Verify embedded Python AST lint passes on repo and catches syntax errors
+# Verify embedded Python AST lint passes on repo and catches syntax errors + Python 3.9 incompatibilities
 if py_ast_out=$(lint_python_embeds "$SCRIPT_DIR" 2>&1); then
-    pass "lint_python_embeds validates all embedded Python AST blocks across repository scripts"
+    pass "lint_python_embeds validates all embedded Python AST blocks across repository scripts for Python 3.9+ compatibility"
 else
     fail "lint_python_embeds repo validation" "$py_ast_out"
 fi
@@ -704,12 +751,101 @@ printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'def broken(:' '    pas
 TEMP_PY_VAR_AST_DIR=$(mktemp -d)
 mkdir -p "$TEMP_PY_VAR_AST_DIR/bin"
 printf '%s\n' '#!/usr/bin/env bash' "IFS= read -r -d '' RESOLVE_THEME_PY <<""'PY' || true" 'def broken_var(:' '    pass' 'PY' > "$TEMP_PY_VAR_AST_DIR/bin/bad-var-py"
-if lint_python_embeds "$TEMP_PY_AST_DIR" >/dev/null 2>&1 || lint_python_embeds "$TEMP_PY_VAR_AST_DIR" >/dev/null 2>&1; then
-    fail "lint_python_embeds error detection" "Expected non-zero exit on invalid embedded Python syntax (both python3 and *_PY heredocs)"
+TEMP_PY39_ANNOT_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY39_ANNOT_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'def bad_union(x: int | None) -> str | None:' '    return None' 'PY' > "$TEMP_PY39_ANNOT_DIR/bin/bad-pep604"
+TEMP_PY39_ISINST_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY39_ISINST_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'from __future__ import annotations' 'isinstance(1, int | str)' 'PY' > "$TEMP_PY39_ISINST_DIR/bin/bad-isinst"
+TEMP_PY39_MATCH_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY39_MATCH_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'match 1:' '    case 1: pass' 'PY' > "$TEMP_PY39_MATCH_DIR/bin/bad-match"
+TEMP_PY39_RTUNION_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY39_RTUNION_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'from __future__ import annotations' 'T = str | None' 'PY' > "$TEMP_PY39_RTUNION_DIR/bin/bad-rt-union"
+TEMP_PY39_ZIP_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY39_ZIP_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'from __future__ import annotations' 'list(zip([1], [2], strict=True))' 'PY' > "$TEMP_PY39_ZIP_DIR/bin/bad-zip"
+TEMP_PY39_OK_DIR=$(mktemp -d)
+mkdir -p "$TEMP_PY39_OK_DIR/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'python3 - <<'"'PY'" 'from __future__ import annotations' 'def ok_union(x: int | None) -> str | None:' '    flags = 1 | 2' '    return str(flags)' 'PY' > "$TEMP_PY39_OK_DIR/bin/ok-pep604"
+if lint_python_embeds "$TEMP_PY_AST_DIR" >/dev/null 2>&1 || \
+   lint_python_embeds "$TEMP_PY_VAR_AST_DIR" >/dev/null 2>&1 || \
+   lint_python_embeds "$TEMP_PY39_ANNOT_DIR" >/dev/null 2>&1 || \
+   lint_python_embeds "$TEMP_PY39_ISINST_DIR" >/dev/null 2>&1 || \
+   lint_python_embeds "$TEMP_PY39_MATCH_DIR" >/dev/null 2>&1 || \
+   lint_python_embeds "$TEMP_PY39_RTUNION_DIR" >/dev/null 2>&1 || \
+   lint_python_embeds "$TEMP_PY39_ZIP_DIR" >/dev/null 2>&1 || \
+   ! lint_python_embeds "$TEMP_PY39_OK_DIR" >/dev/null 2>&1; then
+    fail "lint_python_embeds error & Python 3.9 detection" "Expected failure on syntax/match/un-postponed PEP 604/runtime union/zip(strict) and success with postponed annotations + bitwise OR"
 else
-    pass "lint_python_embeds catches syntax errors in both python3 and *_PY heredoc blocks"
+    pass "lint_python_embeds catches syntax errors, Python 3.10+ match/zip(strict), un-postponed PEP 604 annotations, and runtime type unions while allowing postponed annotations and integer bitwise OR"
 fi
-rm -rf "$TEMP_PY_AST_DIR" "$TEMP_PY_VAR_AST_DIR"
+rm -rf "$TEMP_PY_AST_DIR" "$TEMP_PY_VAR_AST_DIR" "$TEMP_PY39_ANNOT_DIR" "$TEMP_PY39_ISINST_DIR" "$TEMP_PY39_MATCH_DIR" "$TEMP_PY39_RTUNION_DIR" "$TEMP_PY39_ZIP_DIR" "$TEMP_PY39_OK_DIR"
+
+# Verify unlink_path foreign/traversal symlink preservation, dangling relative symlink cleanup, and 99-uninstall.sh ~/.zshrc & ~/.bashrc hook removal + permission preservation
+TEMP_OWN_HOME=$(mktemp -d)
+mkdir -p "$TEMP_OWN_HOME/.config" "$TEMP_OWN_HOME/.local/bin" "$TEMP_OWN_HOME/foreign"
+printf 'foreign-vimrc\n' > "$TEMP_OWN_HOME/foreign/.vimrc"
+mkdir -p "$TEMP_OWN_HOME/foreign/nvim"
+printf 'foreign-sum\n' > "$TEMP_OWN_HOME/foreign/sum"
+ln -s "$SCRIPT_DIR/dotfiles/.tmux.conf" "$TEMP_OWN_HOME/.tmux.conf"
+ln -s "$TEMP_OWN_HOME/foreign/.vimrc" "$TEMP_OWN_HOME/.vimrc"
+ln -s "$SCRIPT_DIR/../../outside_foreign_target_xyz" "$TEMP_OWN_HOME/.aliases"
+rel_to_repo="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$SCRIPT_DIR/dotfiles/deleted_subdir_xyz/.p10k.zsh" "$TEMP_OWN_HOME")"
+ln -s "$rel_to_repo" "$TEMP_OWN_HOME/.p10k.zsh"
+ln -s "$TEMP_OWN_HOME/foreign/nvim" "$TEMP_OWN_HOME/.config/nvim"
+ln -s "$SCRIPT_DIR/bin/ide" "$TEMP_OWN_HOME/.local/bin/ide"
+ln -s "/usr/bin/fdfind" "$TEMP_OWN_HOME/.local/bin/fd"
+ln -s "$TEMP_OWN_HOME/foreign/sum" "$TEMP_OWN_HOME/.local/bin/sum"
+cat > "$TEMP_OWN_HOME/.zshrc" <<'EOF'
+export USER_CUSTOM_BEFORE="1"
+
+# home-settings
+[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum
+
+export USER_CUSTOM_AFTER="1"
+EOF
+cat > "$TEMP_OWN_HOME/.bashrc" <<'EOF'
+export BASH_CUSTOM_BEFORE="1"
+
+# home-settings: Source modular Bash configuration
+[ -f "$HOME/.bashrc-addendum" ] && . "$HOME/.bashrc-addendum"
+
+export BASH_CUSTOM_AFTER="1"
+EOF
+chmod 0644 "$TEMP_OWN_HOME/.zshrc" "$TEMP_OWN_HOME/.bashrc"
+HOME="$TEMP_OWN_HOME" XDG_CONFIG_HOME="$TEMP_OWN_HOME/.config" "$SCRIPT_DIR/setup.sh" --uninstall --dry-run >/dev/null 2>&1
+if [ ! -L "$TEMP_OWN_HOME/.tmux.conf" ] || ! grep -Fq ".zshrc-addendum" "$TEMP_OWN_HOME/.zshrc" || ! grep -Fq ".bashrc-addendum" "$TEMP_OWN_HOME/.bashrc"; then
+    fail "setup.sh --uninstall --dry-run mutation" "Expected --dry-run to leave symlinks and shell rc hooks untouched"
+else
+    HOME="$TEMP_OWN_HOME" XDG_CONFIG_HOME="$TEMP_OWN_HOME/.config" "$SCRIPT_DIR/setup.sh" --uninstall >/dev/null 2>&1
+    zshrc_mode="$(python3 -c 'import os, sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777))' "$TEMP_OWN_HOME/.zshrc")"
+    bashrc_mode="$(python3 -c 'import os, sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777))' "$TEMP_OWN_HOME/.bashrc")"
+    if [ ! -L "$TEMP_OWN_HOME/.tmux.conf" ] && \
+       [ ! -L "$TEMP_OWN_HOME/.p10k.zsh" ] && \
+       [ ! -L "$TEMP_OWN_HOME/.local/bin/ide" ] && \
+       [ ! -L "$TEMP_OWN_HOME/.local/bin/fd" ] && \
+       [ -L "$TEMP_OWN_HOME/.vimrc" ] && \
+       [ -L "$TEMP_OWN_HOME/.aliases" ] && \
+       [ -L "$TEMP_OWN_HOME/.config/nvim" ] && \
+       [ -L "$TEMP_OWN_HOME/.local/bin/sum" ] && \
+       [ "$zshrc_mode" = "0o644" ] && \
+       [ "$bashrc_mode" = "0o644" ] && \
+       ! grep -Fq "home-settings" "$TEMP_OWN_HOME/.zshrc" && \
+       ! grep -Fq ".zshrc-addendum" "$TEMP_OWN_HOME/.zshrc" && \
+       grep -Fq 'USER_CUSTOM_BEFORE="1"' "$TEMP_OWN_HOME/.zshrc" && \
+       grep -Fq 'USER_CUSTOM_AFTER="1"' "$TEMP_OWN_HOME/.zshrc" && \
+       ! grep -Fq "home-settings" "$TEMP_OWN_HOME/.bashrc" && \
+       ! grep -Fq ".bashrc-addendum" "$TEMP_OWN_HOME/.bashrc" && \
+       grep -Fq 'BASH_CUSTOM_BEFORE="1"' "$TEMP_OWN_HOME/.bashrc" && \
+       grep -Fq 'BASH_CUSTOM_AFTER="1"' "$TEMP_OWN_HOME/.bashrc"; then
+        pass "setup.sh --uninstall removes managed/dangling-relative symlinks and # home-settings blocks while preserving foreign/traversal symlinks, user rc lines, and 0644 file permissions"
+    else
+        fail "setup.sh --uninstall ownership & rc cleanup" "Failed ownership/traversal/permission checks: zshrc_mode=$zshrc_mode bashrc_mode=$bashrc_mode"
+    fi
+fi
+rm -rf "$TEMP_OWN_HOME"
 
 # Test setup.sh --theme validation, --theme --dry-run guard, empty/flag injection guards, stage-10 application, and 70-terminal.sh persisted theme fallback
 TEMP_THEME_SETUP_HOME=$(mktemp -d)

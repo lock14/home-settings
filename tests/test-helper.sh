@@ -17,6 +17,7 @@ export MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise
 export MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
 export MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
 export GOTELEMETRY="off"
+export NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}"
 
 # Ethan Schoonover Solarized Dark TrueColor ANSI 24-bit Escape Sequences
 case "${COLORTERM:-}" in
@@ -138,9 +139,9 @@ wait_for_nvim_socket() {
 run_nvim_headless() {
     local timeout_sec="${NVIM_HEADLESS_TIMEOUT:-30}"
     if command -v timeout >/dev/null 2>&1; then
-        timeout "$timeout_sec" nvim --headless "$@" -c "qall!" </dev/null
+        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" timeout "$timeout_sec" nvim --headless "$@" -c "qall!" </dev/null
     else
-        nvim --headless "$@" -c "qall!" </dev/null
+        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" nvim --headless "$@" -c "qall!" </dev/null
     fi
 }
 
@@ -902,9 +903,28 @@ if readme_text:
                 "Ctrl+Shift+Enter",
                 "Ctrl+Shift+H/J/K/L",
                 "Ctrl+Shift+T",
+                "Alt+Left/Right/Up/Down",
             ],
         ),
     ]
+    ghostty_expected_directives = {
+        "Ctrl+Shift+D": ["keybind = ctrl+shift+d=new_split:auto"],
+        "Ctrl+Shift+W": ["keybind = ctrl+shift+w=close_surface"],
+        "Ctrl+Shift+Enter": ["keybind = ctrl+shift+enter=toggle_split_zoom"],
+        "Ctrl+Shift+H/J/K/L": [
+            "keybind = ctrl+shift+h=goto_split:left",
+            "keybind = ctrl+shift+j=goto_split:bottom",
+            "keybind = ctrl+shift+k=goto_split:top",
+            "keybind = ctrl+shift+l=goto_split:right",
+        ],
+        "Ctrl+Shift+T": ["keybind = ctrl+shift+t=new_tab"],
+        "Alt+Left/Right/Up/Down": [
+            r"keybind = alt+left=text:\x1b[1;3D",
+            r"keybind = alt+right=text:\x1b[1;3C",
+            r"keybind = alt+up=text:\x1b[1;3A",
+            r"keybind = alt+down=text:\x1b[1;3B",
+        ],
+    }
     readme_table_lines = "\n".join(
         line
         for line in readme_text.split("\n")
@@ -925,6 +945,29 @@ if readme_text:
                         label = f"Space {leader_suffix}"
                         if label not in all_keys:
                             all_keys.append(label)
+            elif rel_src == os.path.join("dotfiles", ".config", "ghostty", "config"):
+                abs_where = abs_src.replace("\\", "/")
+                with open(abs_src, encoding="utf-8") as gfh:
+                    gtext = gfh.read()
+                g_lines = {ln.strip() for ln in gtext.splitlines() if ln.strip().startswith("keybind")}
+                for key, req_directives in ghostty_expected_directives.items():
+                    for req_dir in req_directives:
+                        if req_dir not in g_lines:
+                            errors.append(
+                                f'{abs_where}: Ghostty keybinding "{key}" missing config directive "{req_dir}"'
+                            )
+                theme_bin_path = os.path.join(root_dir, "bin", "theme")
+                if os.path.isfile(theme_bin_path):
+                    theme_where = theme_bin_path.replace("\\", "/")
+                    with open(theme_bin_path, encoding="utf-8") as tfh:
+                        ttext = tfh.read()
+                    for key, req_directives in ghostty_expected_directives.items():
+                        for req_dir in req_directives:
+                            escaped_dir = req_dir.replace("\\", "\\\\")
+                            if req_dir not in ttext and escaped_dir not in ttext:
+                                errors.append(
+                                    f'{theme_where}: Ghostty keybinding "{key}" missing generator directive "{req_dir}"'
+                                )
             for key in all_keys:
                 escaped_key = key.replace("|", r"\|")
                 if key not in readme_prose_lines:
@@ -965,6 +1008,8 @@ PY
 lint_python_embeds() {
     local root_dir="${1:-.}"
     python3 - "$root_dir" <<'PY'
+from __future__ import annotations
+
 import ast
 import glob
 import os
@@ -992,6 +1037,54 @@ heredoc_re = re.compile(
 parsed_blocks = 0
 errors = []
 
+
+def _has_future_annotations(tree: ast.Module) -> bool:
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if isinstance(stmt, ast.ImportFrom) and stmt.module == "__future__":
+            if any(alias.name == "annotations" for alias in stmt.names):
+                return True
+            continue
+        break
+    return False
+
+
+def _find_bitor_line(node: ast.AST) -> int | None:
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.BitOr):
+            return getattr(sub, "lineno", 1)
+    return None
+
+
+_BUILTIN_TYPE_NAMES = frozenset({
+    "int", "str", "float", "bool", "bytes", "list", "dict", "set",
+    "frozenset", "tuple", "type", "object", "complex", "bytearray",
+    "memoryview", "range", "slice",
+})
+_GENERIC_TYPE_NAMES = frozenset({
+    "list", "dict", "set", "frozenset", "tuple", "type",
+})
+
+
+def _is_type_union_operand(expr: ast.AST) -> bool:
+    if isinstance(expr, ast.Constant) and expr.value is None:
+        return True
+    if isinstance(expr, ast.Name) and expr.id in _BUILTIN_TYPE_NAMES:
+        return True
+    if (
+        isinstance(expr, ast.Subscript)
+        and isinstance(expr.value, ast.Name)
+        and expr.value.id in _GENERIC_TYPE_NAMES
+    ):
+        return True
+    return False
+
+
 for path in files:
     with open(path, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
@@ -1015,10 +1108,89 @@ for path in files:
                 src = "\n".join(block) + "\n"
                 parsed_blocks += 1
                 try:
-                    ast.parse(src, filename=f"{path}:{start_line}")
+                    tree = ast.parse(
+                        src,
+                        filename=f"{path}:{start_line}",
+                        feature_version=(3, 9),
+                    )
                 except SyntaxError as exc:
                     err_line = start_line + (exc.lineno or 1) - 1
-                    errors.append(f"{path}:{err_line}: Python SyntaxError: {exc.msg}")
+                    errors.append(f"{path}:{err_line}: Python 3.9 SyntaxError: {exc.msg}")
+                    idx += 1
+                    continue
+
+                has_future_ann = _has_future_annotations(tree)
+                ann_roots = []
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        if node.returns is not None:
+                            ann_roots.append(node.returns)
+                        all_args = (
+                            list(getattr(node.args, "posonlyargs", []))
+                            + list(node.args.args)
+                            + list(node.args.kwonlyargs)
+                        )
+                        if node.args.vararg:
+                            all_args.append(node.args.vararg)
+                        if node.args.kwarg:
+                            all_args.append(node.args.kwarg)
+                        for a in all_args:
+                            if a.annotation is not None:
+                                ann_roots.append(a.annotation)
+                    elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
+                        ann_roots.append(node.annotation)
+
+                if not has_future_ann:
+                    for ann in ann_roots:
+                        bline = _find_bitor_line(ann)
+                        if bline is not None:
+                            err_line = start_line + bline - 1
+                            errors.append(
+                                f"{path}:{err_line}: un-postponed PEP 604 union annotation (X | Y) without 'from __future__ import annotations' breaks Python 3.9"
+                            )
+
+                postponed_ids = (
+                    {id(sub) for ann in ann_roots for sub in ast.walk(ann)}
+                    if has_future_ann
+                    else {id(sub) for ann in ann_roots for sub in ast.walk(ann)}
+                )
+                isinstance_union_ids: set[int] = set()
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id in ("isinstance", "issubclass")
+                        and len(node.args) >= 2
+                    ):
+                        bline = _find_bitor_line(node.args[1])
+                        if bline is not None:
+                            isinstance_union_ids.update(id(sub) for sub in ast.walk(node.args[1]))
+                            err_line = start_line + bline - 1
+                            errors.append(
+                                f"{path}:{err_line}: PEP 604 union in {node.func.id}() breaks Python 3.9 at runtime"
+                            )
+                    elif (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == "zip"
+                        and any(kw.arg == "strict" for kw in node.keywords)
+                    ):
+                        err_line = start_line + getattr(node, "lineno", 1) - 1
+                        errors.append(
+                            f"{path}:{err_line}: zip(..., strict=...) requires Python 3.10+ and breaks Python 3.9"
+                        )
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, ast.BinOp)
+                        and isinstance(node.op, ast.BitOr)
+                        and id(node) not in postponed_ids
+                        and id(node) not in isinstance_union_ids
+                        and (_is_type_union_operand(node.left) or _is_type_union_operand(node.right))
+                    ):
+                        err_line = start_line + getattr(node, "lineno", 1) - 1
+                        errors.append(
+                            f"{path}:{err_line}: runtime PEP 604 type union (X | Y) breaks Python 3.9"
+                        )
         idx += 1
 
 if parsed_blocks == 0:

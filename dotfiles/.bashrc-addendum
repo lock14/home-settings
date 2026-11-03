@@ -2915,7 +2915,7 @@ EOF
                     _hs_bash_builtin_spec "solarized-dark" && _hs_bash_unpack_spec_to_raw "solarized-dark" "$REPLY"
                 fi
                 _hs_bash_finalize_palette "$current_slug"
-                local fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_CYA},hl:${_HS_C_BLU},fg:${_HS_C_B0},header:${_HS_C_B01},info:${_HS_C_YEL},pointer:${_HS_C_CYA},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_BLU},hl+:${_HS_C_BLU}"
+                local fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01},fg:${_HS_C_B0},header:${_HS_C_B01},info:${_HS_C_YEL},pointer:${_HS_C_GRN},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU}"
                 local -a preview_args=()
                 if [ -n "${_HS_BASHRC_SELF_PATH:-}" ] && [ -r "$_HS_BASHRC_SELF_PATH" ]; then
                     local sq_bash="'${BASH//\'/\'\\\'\'}'"

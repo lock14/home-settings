@@ -46,7 +46,7 @@ After cloning the repository, use the `Makefile` targets to install user-space c
 git clone https://github.com/lock14/home-settings.git
 cd home-settings
 
-# User-space installation (dotfiles, bin, fonts, tools, shell) without sudo (default: make or make all)
+# User-space installation (dotfiles, bin, fonts, tools, shell) without sudo
 make install
 
 # Full machine provisioning with native OS packages (requires sudo; alias: make setup)
@@ -64,10 +64,10 @@ make test
 # Run ShellCheck, shell syntax, and documentation checks
 make lint
 
-# Run both lint and test suites
+# Run both lint and test suites (alias: make all)
 make check
 
-# Display available Makefile targets
+# Display available Makefile targets (default when running bare make)
 make help
 ```
 
@@ -522,7 +522,7 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 | :--- | :--- | :--- |
 | `gen-passwd` | `-u`, `-l`, `-n`, `-s`, `-t`, `-h, --help`, `[length]` | Generate random passwords with configurable length (default `16`) and character sets (uppercase, lowercase, digits, and symbols) |
 | `gnome-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in GNOME Terminal (`dconf`) |
-| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file>`, `--cd [dir\|--reset]`, `-s, --sessions`, `--next-attention`, `--agent-state <state>`, `--send (--stdin \| --ref <path> \| --text <str>) [--no-focus]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--keys`, `-q, --quit`, `-f, --force`, `--detach`, `--kill`, `--list [--plain]`, `-h, --help`, `[dir]` | Launch and manage multi-session Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces, lifecycle states, session switching, and context dispatch |
+| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file> [line]`, `--cd [dir\|--reset]`, `-s, --sessions`, `--next-attention`, `--agent-state <state>`, `--send (--stdin \| --ref <path> \| --text <str>) [--no-focus]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--keys`, `-q, --quit`, `-f, --force`, `--detach`, `--kill`, `--list [--plain]`, `-h, --help`, `[dir]` | Launch and manage multi-session Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces, lifecycle states, session switching, and context dispatch |
 | `macos-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in macOS `Terminal.app` |
 | `repeat-until-success` | `-n <attempts>`, `-s, -d <seconds>`, `-t`, `-h, --help`, `<command> [args...]` | Retry a command up to `N` attempts (default `10`) with a configurable delay in seconds (default `30`) |
 | `sum` | `-d <delim>`, `-k <col>`, `-H`, `-a`, `-s`, `-f <fmt>`, `-t`, `-h, --help`, `[numbers... \| files...]` | Sum numbers from stdin, files, or arguments with support for CSV columns, human byte units, averages, and summary statistics |

@@ -91,9 +91,55 @@ uninstall_dotfiles() {
     fi
 
     if [ "$OS" = "macos" ]; then
-        unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
-        unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/themes"
+        unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/config" "$xdg_config/ghostty"
+        unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/themes" "$xdg_config/ghostty"
     fi
+
+    # Remove # home-settings source blocks added to ~/.zshrc and ~/.bashrc by modules/60-shell.sh
+    local rc_pair rc_file addendum tmp_rc
+    for rc_pair in \
+        "$HOME/.zshrc|.zshrc-addendum" \
+        "$HOME/.bashrc|.bashrc-addendum"; do
+        rc_file="${rc_pair%%|*}"
+        addendum="${rc_pair#*|}"
+        if [ -f "$rc_file" ] && [ ! -L "$rc_file" ] && grep -Fq "$addendum" "$rc_file"; then
+            if [ "$DRY_RUN" = true ]; then
+                echo "  [DryRun] Remove home-settings source block from $rc_file"
+            else
+                tmp_rc="$(mktemp "${rc_file}.tmp.XXXXXX")"
+                cp -p "$rc_file" "$tmp_rc" 2>/dev/null || true
+                awk -v addendum="$addendum" '
+                    function is_comment(s) {
+                        return (s ~ /^#[[:space:]]*home-settings([[:space:]:].*)?$/)
+                    }
+                    function is_hook(s) {
+                        return (index(s, addendum) > 0 &&
+                                s ~ /^\[[[:space:]]+-f[[:space:]]+"?(~|\$HOME)"?\/\.(zsh|bash)rc-addendum"?[[:space:]]+\][[:space:]]+&&[[:space:]]+(source|\.)[[:space:]]+"?(~|\$HOME)"?\/\.(zsh|bash)rc-addendum"?[[:space:]]*$/)
+                    }
+                    { lines[++n] = $0 }
+                    END {
+                        for (i = 1; i <= n; i++) {
+                            if (is_comment(lines[i]) && i < n && is_hook(lines[i + 1])) {
+                                if (out_n > 0 && out[out_n] == "" && (i + 1 == n || out_n == 1 || lines[i + 2] == "")) {
+                                    out_n--
+                                }
+                                i++
+                                continue
+                            }
+                            if (is_hook(lines[i])) {
+                                continue
+                            }
+                            out[++out_n] = lines[i]
+                        }
+                        for (j = 1; j <= out_n; j++) {
+                            print out[j]
+                        }
+                    }
+                ' "$rc_file" > "$tmp_rc"
+                mv -f "$tmp_rc" "$rc_file"
+            fi
+        fi
+    done
 
     # Clean up empty bat directories and generated theme state if they exist
     if [ "$DRY_RUN" = false ]; then
@@ -133,7 +179,7 @@ uninstall_bin() {
                 local shim_target
                 shim_target="$(readlink "$shim" 2>/dev/null || true)"
                 if [[ "$shim_target" == *"fdfind"* ]] || [[ "$shim_target" == *"batcat"* ]]; then
-                    unlink_path "$shim"
+                    unlink_path "$shim" "$shim_target"
                 fi
             fi
         done
@@ -157,10 +203,12 @@ uninstall_fonts() {
         local fc_alias_src="$REPO_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
         local fc_alias_dest="$xdg_config/fontconfig/conf.d/10-meslo-nerd-font.conf"
         if [ -L "$xdg_config/fontconfig" ]; then
-            rm -f "$xdg_config/fontconfig"
+            unlink_path "$xdg_config/fontconfig"
         elif [ -L "$xdg_config/fontconfig/conf.d" ]; then
-            rm -f "$xdg_config/fontconfig/conf.d"
-        elif [ -L "$fc_alias_dest" ] || { [ -e "$fc_alias_dest" ] && ! [ "$fc_alias_dest" -ef "$fc_alias_src" ]; }; then
+            unlink_path "$xdg_config/fontconfig/conf.d"
+        elif [ -L "$fc_alias_dest" ]; then
+            unlink_path "$fc_alias_dest"
+        elif [ -e "$fc_alias_dest" ] && ! [ "$fc_alias_dest" -ef "$fc_alias_src" ]; then
             rm -f "$fc_alias_dest"
         fi
         if command -v fc-cache >/dev/null 2>&1; then

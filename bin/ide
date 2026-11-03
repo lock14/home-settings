@@ -84,6 +84,8 @@ if [ "$#" -eq 1 ] && { [ "$1" = "--keys" ] || [ "$1" = "--help-keys" ]; }; then
 fi
 
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
+from __future__ import annotations
+
 import os
 try:
     os.close(9)
@@ -108,8 +110,8 @@ Options:
   --3pane                  Launch default 3-pane layout (Top-Left 50%x75% AI, Top-Right 50%x75% Editor, Bottom 100%x25% Shell)
   --2pane                  Launch 2-pane layout (Left 50%x100% AI, Right 50%x100% Editor)
   --ai, --agent <CLI>      Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
-  --open <FILE>            Open <FILE> in the Main Editor pane via RPC and focus Editor
-  --preview <FILE>         Preview <FILE> in the Main Editor pane via RPC without changing focus
+  --open <FILE> [LINE]     Open <FILE> in the Main Editor pane via RPC and focus Editor
+  --preview <FILE> [LINE]  Preview <FILE> in the Main Editor pane via RPC without changing focus
   cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
   -s, --sessions [SESSION] Open interactive multi-session IDE workspace switcher (Alt+s / Prefix+s)
   --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in FIFO order (Alt+Shift+S / Prefix+S)
@@ -800,6 +802,13 @@ def record_main_geometry(sess: str, main_win: str, ai_pane: str, editor_pane: st
         set_ide_vars(sess, updates)
 
 
+def _nvim_rpc_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if not env.get("NVIM_LOG_FILE"):
+        env["NVIM_LOG_FILE"] = "/dev/null"
+    return env
+
+
 def nvim_remote_expr(sock: str, expr: str) -> str:
     nvim_bin = resolve_nvim_bin()
     if not sock or not is_socket_path(sock) or not nvim_bin:
@@ -807,6 +816,7 @@ def nvim_remote_expr(sock: str, expr: str) -> str:
     try:
         res = subprocess.run(
             [nvim_bin, "--headless", "--server", sock, "--remote-expr", expr],
+            env=_nvim_rpc_env(),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -825,6 +835,7 @@ def nvim_remote_send(sock: str, keys: str) -> bool:
     try:
         res = subprocess.run(
             [nvim_bin, "--headless", "--server", sock, "--remote-send", keys],
+            env=_nvim_rpc_env(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=5,
@@ -1355,22 +1366,38 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
 
 
 def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") -> int:
-    if filepath.startswith("//") or not os.path.exists(filepath):
-        private_url = resolve_private_link(filepath, os.getcwd(), target_arg)
+    cwd = os.getcwd()
+    if filepath.startswith("~/"):
+        filepath = os.path.expanduser(filepath)
+    exact_ws = "" if filepath.startswith("//") else resolve_workspace_file(filepath, cwd, target_arg)
+    if filepath.startswith("//") or not exact_ws:
+        private_url = resolve_private_link(filepath, cwd, target_arg)
         if private_url and private_url.startswith("file://"):
-            p_path, p_line = parse_file_target(private_url, os.getcwd())
+            p_path, p_line = parse_file_target(private_url, cwd)
+            if p_path:
+                filepath = p_path
+                if not line and p_line:
+                    line = p_line
+        elif filepath.startswith("file://") or not os.path.exists(filepath):
+            p_path, p_line = parse_file_target(filepath, cwd)
             if p_path:
                 filepath = p_path
                 if not line and p_line:
                     line = p_line
     if not filepath.startswith("/"):
-        d = os.path.dirname(filepath) or "."
-        b = os.path.basename(filepath)
-        if os.path.isdir(d):
-            filepath = os.path.join(os.path.realpath(d), b)
+        ws_resolved = resolve_workspace_file(filepath, cwd, target_arg)
+        if ws_resolved:
+            d = os.path.dirname(ws_resolved) or "."
+            b = os.path.basename(ws_resolved)
+            filepath = os.path.join(os.path.realpath(d), b) if os.path.isdir(d) else ws_resolved
         else:
-            rel = filepath[2:] if filepath.startswith("./") else filepath
-            filepath = os.path.join(os.getcwd(), rel)
+            d = os.path.dirname(filepath) or "."
+            b = os.path.basename(filepath)
+            if os.path.isdir(d):
+                filepath = os.path.join(os.path.realpath(d), b)
+            else:
+                rel = filepath[2:] if filepath.startswith("./") else filepath
+                filepath = os.path.join(cwd, rel)
 
     sess = resolve_target_session(target_arg)
     if not session_exists(sess):
@@ -1664,7 +1691,7 @@ def resolve_private_link(link_word: str, link_cwd: str, target_arg: str = "") ->
 _RE_FILE_URI = re.compile(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)")
 _RE_SCHEME = re.compile(r"(?:https?|file)://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+")
 _WRAP_REF_RE = re.compile(r"(?:(?:https?|file):)?//[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+")
-_RE_LINE_COL = re.compile(r"^([^:]+):[Ll]?([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$")
+_RE_LINE_COL = re.compile(r"^(.+?):[Ll]?([0-9]+)(:[0-9]+)?(-[Ll]?[0-9]+(:[0-9]+)?)?$")
 _RE_HASH_LINE = re.compile(r"^(.+)#[Ll]?([0-9]+)(?::[0-9]+)?(?:[-:][Ll]?[0-9]+(?::[0-9]+)?)?$")
 _RE_MD_LABEL = re.compile(r"\[(`[^`\r\n]+`|[^\[\]\r\n]+(?:\[[^\[\]\r\n]*\][^\[\]\r\n]*)*)\]\(")
 _RE_MD_LINK = re.compile(
@@ -2295,28 +2322,39 @@ def load_active_palette() -> tuple[dict[str, str], dict[str, str]]:
 
 def build_fzf_env(hex_map: dict[str, str]) -> dict[str, str]:
     env = os.environ.copy()
+    xdg_cfg = env.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    theme_env_path = os.path.join(xdg_cfg, "home-settings", "theme-env.sh")
+    loaded_opts = ""
+    try:
+        with open(theme_env_path, "r", encoding="utf-8") as fh:
+            for raw_line in fh:
+                stripped = raw_line.strip()
+                if stripped.startswith("export FZF_DEFAULT_OPTS="):
+                    rhs = stripped[len("export FZF_DEFAULT_OPTS="):]
+                    try:
+                        parts = shlex.split(rhs, posix=True)
+                        if len(parts) == 1:
+                            loaded_opts = parts[0]
+                    except ValueError:
+                        pass
+                    if not loaded_opts and len(rhs) >= 2 and rhs[0] == rhs[-1] and rhs[0] in ("'", '"'):
+                        loaded_opts = rhs[1:-1]
+    except OSError:
+        pass
+    if loaded_opts:
+        env["FZF_DEFAULT_OPTS"] = loaded_opts
+    elif env.get("TMUX") and shutil.which("tmux"):
+        tmux_fzf = tmux_out("show-environment", "-g", "FZF_DEFAULT_OPTS")
+        if tmux_fzf.startswith("FZF_DEFAULT_OPTS=") and tmux_fzf[17:]:
+            env["FZF_DEFAULT_OPTS"] = tmux_fzf[17:]
     if not env.get("FZF_DEFAULT_OPTS"):
-        xdg_cfg = env.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-        theme_env_path = os.path.join(xdg_cfg, "home-settings", "theme-env.sh")
-        loaded_opts = ""
-        try:
-            with open(theme_env_path, "r", encoding="utf-8") as fh:
-                text = fh.read()
-            m = re.search(r'export\s+FZF_DEFAULT_OPTS="([^"]+)"', text)
-            if m:
-                loaded_opts = m.group(1)
-        except OSError:
-            pass
-        if loaded_opts:
-            env["FZF_DEFAULT_OPTS"] = loaded_opts
-        else:
-            env["FZF_DEFAULT_OPTS"] = (
-                f"--color=bg+:{hex_map['BASE02']},bg:{hex_map['BASE03']},spinner:{hex_map['CYAN']},"
-                f"hl:{hex_map['BLUE']},fg:{hex_map['BASE0']},header:{hex_map['BASE01']},"
-                f"info:{hex_map['YELLOW']},pointer:{hex_map['CYAN']},marker:{hex_map['GREEN']},"
-                f"fg+:{hex_map['BASE1']},prompt:{hex_map['BLUE']},hl+:{hex_map['BLUE']} "
-                "--border=rounded --no-scrollbar"
-            )
+        env["FZF_DEFAULT_OPTS"] = (
+            f"--color=bg+:{hex_map['BASE02']},bg:{hex_map['BASE03']},spinner:{hex_map['GREEN']},"
+            f"hl:{hex_map['BASE01']},fg:{hex_map['BASE0']},header:{hex_map['BASE01']},"
+            f"info:{hex_map['YELLOW']},pointer:{hex_map['GREEN']},marker:{hex_map['GREEN']},"
+            f"fg+:{hex_map['BASE1']},prompt:{hex_map['YELLOW']},hl+:{hex_map['BLUE']} "
+            "--layout=reverse --border=rounded --info=inline --no-scrollbar"
+        )
     return env
 
 
@@ -2414,7 +2452,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
     res = run_tmux(
         "list-sessions",
         "-F",
-        "#{session_name}\t#{session_activity}\t#{session_attached}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}\t#{@ide_ai_pane}\t#{@ide_ai_cli}\t#{@ide_workdir}\t#{@ide_initial_root}\t#{@ide_ai_state}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}",
+        "#{session_name}\t#{session_activity}\t#{session_last_attached}\t#{session_attached}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}\t#{@ide_ai_pane}\t#{@ide_ai_cli}\t#{@ide_workdir}\t#{@ide_initial_root}\t#{@ide_ai_state}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}",
     )
     if res.returncode != 0:
         return ([], False)
@@ -2422,10 +2460,11 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
         return ([], True)
     items: list[dict[str, str]] = []
     for line in res.stdout.splitlines():
-        cols = (line.split("\t") + [""] * 13)[:13]
+        cols = (line.split("\t") + [""] * 14)[:14]
         (
             sess_name,
             activity,
+            last_attached,
             attached,
             ide_sess,
             ide_sock,
@@ -2443,6 +2482,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
         items.append({
             "sess": sess_name,
             "activity": activity,
+            "last_attached": last_attached,
             "attached": attached,
             "ide_sess": ide_sess,
             "ide_sock": ide_sock,
@@ -2570,14 +2610,14 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{window_name}\t#{pane_id}\t#{pane_pid}\t#{pane_active}\t#{window_active}\t#{@ide_role}\t#{pane_current_path}\t#{pane_current_command}",
+        "#{session_name}\t#{window_id}\t#{window_name}\t#{pane_id}\t#{pane_pid}\t#{pane_active}\t#{window_active}\t#{@ide_role}\t#{pane_current_path}\t#{pane_current_command}\t#{window_activity}",
     )
-    panes_by_sess: dict[str, list[tuple[str, str, str, str, str, str, str, str, str]]] = {}
+    panes_by_sess: dict[str, list[tuple[str, str, str, str, str, str, str, str, str, str]]] = {}
     if panes_res.returncode == 0 and panes_res.stdout:
         for line in panes_res.stdout.splitlines():
-            pcols = (line.split("\t") + [""] * 10)[:10]
+            pcols = (line.split("\t") + [""] * 11)[:11]
             panes_by_sess.setdefault(pcols[0], []).append(
-                (pcols[1], pcols[2], pcols[3], pcols[4], pcols[5], pcols[6], pcols[7], pcols[8], pcols[9])
+                (pcols[1], pcols[2], pcols[3], pcols[4], pcols[5], pcols[6], pcols[7], pcols[8], pcols[9], pcols[10])
             )
 
     preview_pane_by_sess: dict[str, str] = {}
@@ -2585,6 +2625,7 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
     fallback_dir_by_sess: dict[str, str] = {}
     ai_pid_by_sess: dict[str, int] = {}
     ai_cmd_by_sess: dict[str, str] = {}
+    win_act_by_sess: dict[str, int] = {}
 
     for item in raw_sessions:
         sess = item["sess"]
@@ -2597,10 +2638,13 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         first_vis_pane = ""
         act_role = ""
         fb_dir = ""
-        for _, wname, pid, ppid, p_act, w_act, prole, ppath, pcmd in spanes:
+        max_win_act = 0
+        for _, wname, pid, ppid, p_act, w_act, prole, ppath, pcmd, w_act_ts in spanes:
             if rec_ai and pid == rec_ai and not ai_pid_str:
                 ai_pid_str = ppid
                 ai_cmd_str = pcmd
+            if w_act_ts.isdigit():
+                max_win_act = max(max_win_act, int(w_act_ts))
             if wname.startswith("_ide_park_"):
                 continue
             if not first_vis_pane:
@@ -2613,13 +2657,13 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
             if rec_ai and pid == rec_ai:
                 visible_ai = pid
         if not ai_pid_str:
-            for _, _, _, ppid, _, _, prole, _, pcmd in spanes:
+            for _, _, _, ppid, _, _, prole, _, pcmd, _ in spanes:
                 if prole == "ai":
                     ai_pid_str = ppid
                     ai_cmd_str = pcmd
                     break
         if not visible_ai:
-            for _, wname, pid, _, _, _, prole, _, _ in spanes:
+            for _, wname, pid, _, _, _, prole, _, _, _ in spanes:
                 if wname.startswith("_ide_park_"):
                     continue
                 if prole == "ai":
@@ -2628,6 +2672,7 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         preview_pane_by_sess[sess] = visible_ai or active_vis_pane or first_vis_pane
         active_role_by_sess[sess] = act_role or "ai"
         fallback_dir_by_sess[sess] = fb_dir
+        win_act_by_sess[sess] = max_win_act
         if ai_pid_str.strip().isdigit():
             ai_pid_by_sess[sess] = int(ai_pid_str.strip())
             ai_cmd_by_sess[sess] = ai_cmd_str.strip()
@@ -2644,7 +2689,11 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         else:
             git_branch, git_dirty, git_detail = ("-", False, "-")
 
-        act_ts = int(item["activity"]) if item["activity"].isdigit() else 0
+        sess_act = int(item["activity"]) if item["activity"].isdigit() else 0
+        raw_last_att = item.get("last_attached", "")
+        last_att = int(raw_last_att) if raw_last_att.isdigit() else 0
+        win_act = win_act_by_sess.get(sess, 0)
+        act_ts = max(sess_act, last_att, win_act)
         ai_pid = ai_pid_by_sess.get(sess, 0)
         ai_cmd = ai_cmd_by_sess.get(sess, "")
         has_child = bool(ai_pid) and (
@@ -2697,6 +2746,8 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
             "active_role": active_role_by_sess.get(sess, "ai"),
             "attached": item["attached"] not in ("", "0"),
             "activity": act_ts,
+            "last_attached": last_att,
+            "window_activity": win_act,
             "is_current": sess == cur_sess,
         })
 
@@ -2714,12 +2765,14 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         ])
         run_tmux(*stale_cleanup_cmds)
 
-    def _fleet_sort_key(entry: dict[str, object]) -> tuple[int, float, int, int, str]:
+    def _fleet_sort_key(entry: dict[str, object]) -> tuple[int, float, int, int, int, int, str]:
         if bool(entry["needs_attn"]):
-            return (0, float(entry["attn_ts"]), 0, 0, str(entry["sess"]))
+            return (0, float(entry["attn_ts"]), 0, 0, 0, 0, str(entry["sess"]))
         is_cur = 0 if bool(entry["is_current"]) else 1
         neg_act = -int(entry["activity"])
-        return (1, 0.0, is_cur, neg_act, str(entry["sess"]))
+        neg_att = -int(entry.get("last_attached", 0))
+        neg_win = -int(entry.get("window_activity", 0))
+        return (1, 0.0, is_cur, neg_act, neg_att, neg_win, str(entry["sess"]))
 
     fleet.sort(key=_fleet_sort_key)
     return fleet
@@ -3379,6 +3432,7 @@ def main() -> int:
     ai_cli_from_flag = False
     target_arg = ""
     open_file = ""
+    open_line = ""
     cd_target = ""
     swap_dir = ""
     status_click_x = ""
@@ -3423,20 +3477,27 @@ def main() -> int:
             ai_cli = arg.split("=", 1)[1]
             ai_cli_from_flag = True
             i += 1
-        elif arg == "--open":
-            action = "open"
-            if i + 1 >= n:
-                print("Error: '--open' requires a file path.", file=sys.stderr)
-                return 1
-            open_file = argv[i + 1]
-            i += 2
-        elif arg == "--preview":
-            action = "preview"
-            if i + 1 >= n:
-                print("Error: '--preview' requires a file path.", file=sys.stderr)
-                return 1
-            open_file = argv[i + 1]
-            i += 2
+        elif arg in ("--open", "--preview") or arg.startswith(("--open=", "--preview=")):
+            if "=" in arg:
+                opt_flag, open_file = arg.split("=", 1)
+                action = "open" if opt_flag == "--open" else "preview"
+                if not open_file:
+                    print(f"Error: '{opt_flag}' requires a file path.", file=sys.stderr)
+                    return 1
+                next_idx = i + 1
+            else:
+                action = "open" if arg == "--open" else "preview"
+                if i + 1 >= n:
+                    print(f"Error: '{arg}' requires a file path.", file=sys.stderr)
+                    return 1
+                open_file = argv[i + 1]
+                next_idx = i + 2
+            if next_idx < n and re.match(r"^\+?[1-9][0-9]*$", argv[next_idx]):
+                cand_line = argv[next_idx]
+                if cand_line.startswith("+") or next_idx + 1 < n or not session_exists(cand_line):
+                    open_line = cand_line.lstrip("+")
+                    next_idx += 1
+            i = next_idx
         elif arg in ("cd", "--cd"):
             action = "cd"
             if i + 1 < n:
@@ -3711,9 +3772,9 @@ def main() -> int:
     if action == "open-link":
         return open_ide_link(link_href, link_word, link_cwd, target_arg)
     if action == "open":
-        return open_in_editor(open_file, True, target_arg)
+        return open_in_editor(open_file, True, target_arg, open_line)
     if action == "preview":
-        return open_in_editor(open_file, False, target_arg)
+        return open_in_editor(open_file, False, target_arg, open_line)
     if action == "cd":
         return cd_ide_workspace(cd_target, target_arg)
     if action == "toggle":
@@ -3929,9 +3990,11 @@ def main() -> int:
 if __name__ == "__main__":
     sys.exit(main())
 PY
-IDE_PY_BIN="python3"
-if [ -x /usr/bin/python3 ]; then
-    IDE_PY_BIN="/usr/bin/python3"
+if [ -z "${IDE_PY_BIN:-}" ]; then
+    IDE_PY_BIN="python3"
+    if [ -x /usr/bin/python3 ]; then
+        IDE_PY_BIN="/usr/bin/python3"
+    fi
 fi
 if [ -r /dev/fd/9 ] 9<<< "" 2>/dev/null; then
     IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"

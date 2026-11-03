@@ -33,6 +33,17 @@ for src in "$DOTFILES_DIR"/.* "$DOTFILES_DIR"/*; do
     if [ "$name" = ".vimrc" ] && [ "${SKIP_VIM:-false}" = true ]; then
         continue
     fi
+    case "$name" in
+        .zshrc-addendum|.zsh-functions|.p10k.zsh)
+            [ "${SKIP_ZSH:-false}" = true ] && continue
+            ;;
+        .zsh-completions)
+            [ "${SKIP_COMPLETIONS:-false}" = true ] && continue
+            ;;
+        .bashrc-addendum)
+            [ "${SKIP_BASH:-false}" = true ] && continue
+            ;;
+    esac
     if [ -f "$src" ]; then
         link_file "$src" "$HOME/$name"
     fi
@@ -59,7 +70,12 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
         if [ "$target_name" = "git" ] && [ -d "$item" ]; then
             # Keep ~/.config/git as a real directory so user-local files (ignore, attributes) survive theme switches
             if [ -L "$XDG_CONFIG/git" ]; then
-                unlink_path "$XDG_CONFIG/git"
+                if _is_managed_symlink "$XDG_CONFIG/git"; then
+                    unlink_path "$XDG_CONFIG/git"
+                elif [ "$DRY_RUN" = false ]; then
+                    git_bak="${XDG_CONFIG}/git.bak.$(date +%s)"
+                    mv "$XDG_CONFIG/git" "$git_bak"
+                fi
             fi
             [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/git"
             for git_f in "$item"/*; do

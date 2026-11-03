@@ -22,6 +22,8 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
 REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
 
 IFS= read -r -d '' THEME_PY_SRC <<'PY' || true
+from __future__ import annotations
+
 import datetime
 import getpass
 import os
@@ -643,6 +645,11 @@ keybind = ctrl+shift+h=goto_split:left
 keybind = ctrl+shift+j=goto_split:bottom
 keybind = ctrl+shift+k=goto_split:top
 keybind = ctrl+shift+l=goto_split:right
+keybind = ctrl+shift+t=new_tab
+keybind = alt+left=text:\\x1b[1;3D
+keybind = alt+right=text:\\x1b[1;3C
+keybind = alt+up=text:\\x1b[1;3A
+keybind = alt+down=text:\\x1b[1;3B
 """
 
 
@@ -1393,9 +1400,16 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
                 stderr=subprocess.DEVNULL,
                 check=False,
             )
+            fzf_str = (
+                f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},hl:{theme['BASE01']} "
+                f"--color=fg:{theme['BASE0']},header:{theme['BASE01']},info:{theme['YELLOW']},pointer:{theme['GREEN']} "
+                f"--color=marker:{theme['GREEN']},fg+:{theme['BASE1']},prompt:{theme['YELLOW']},hl+:{theme['BLUE']} "
+                f"--layout=reverse --border=rounded --info=inline"
+            )
             for k, v in (
                 ("HOME_SETTINGS_THEME", theme["THEME_ID"]),
                 ("BAT_THEME", theme["BAT_THEME_NAME"]),
+                ("FZF_DEFAULT_OPTS", fzf_str),
             ):
                 subprocess.run(
                     ["tmux", "set-environment", "-g", k, v],
@@ -1453,6 +1467,8 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
                     continue
                 st = sock.stat()
                 if stat.S_ISSOCK(st.st_mode) and st.st_uid == os.getuid():
+                    nvim_rpc_env = os.environ.copy()
+                    nvim_rpc_env.setdefault("NVIM_LOG_FILE", "/dev/null")
                     subprocess.run(
                         [
                             "nvim",
@@ -1462,6 +1478,7 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
                             "--remote-expr",
                             "v:lua.apply_home_settings_theme()",
                         ],
+                        env=nvim_rpc_env,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                         timeout=3,
@@ -1870,10 +1887,10 @@ def run_fzf_picker(themes, current_slug, repo_dir, dry_run=False, no_live=False)
 
     cur = themes[current_slug]
     fzf_colors = (
-        f"--color=bg+:{cur['BASE02']},bg:{cur['BASE03']},spinner:{cur['CYAN']},"
-        f"hl:{cur['BLUE']},fg:{cur['BASE0']},header:{cur['BASE01']},"
-        f"info:{cur['YELLOW']},pointer:{cur['CYAN']},marker:{cur['GREEN']},"
-        f"fg+:{cur['BASE1']},prompt:{cur['BLUE']},hl+:{cur['BLUE']}"
+        f"--color=bg+:{cur['BASE02']},bg:{cur['BASE03']},spinner:{cur['GREEN']},"
+        f"hl:{cur['BASE01']},fg:{cur['BASE0']},header:{cur['BASE01']},"
+        f"info:{cur['YELLOW']},pointer:{cur['GREEN']},marker:{cur['GREEN']},"
+        f"fg+:{cur['BASE1']},prompt:{cur['YELLOW']},hl+:{cur['BLUE']}"
     )
     self_bin = str(repo_dir / "bin" / "theme")
     preview_cmd = f"{shlex.quote(self_bin)} --preview {{1}}"

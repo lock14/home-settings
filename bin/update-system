@@ -443,14 +443,26 @@ if [ "$WITH_DEV" = true ]; then
         log_success "Lean 4 toolchains updated."
     fi
 
-    # Oh-My-Zsh update
+    # Oh-My-Zsh update (framework + custom Git plugins and themes)
     omz_dir="${ZSH:-$HOME/.oh-my-zsh}"
-    if [ -d "$omz_dir" ] || [ "$DRY_RUN" = true ]; then
-        log_step "Updating Oh-My-Zsh framework..."
-        if command -v omz >/dev/null 2>&1; then
-            run_cmd omz update --unattended
-        elif [ -f "$omz_dir/tools/upgrade.sh" ] || [ "$DRY_RUN" = true ]; then
-            run_cmd env ZSH="$omz_dir" sh "$omz_dir/tools/upgrade.sh" --unattended
+    omz_custom_dir="${ZSH_CUSTOM:-$omz_dir/custom}"
+    if [ -d "$omz_dir" ] || [ -d "$omz_custom_dir" ] || [ "$DRY_RUN" = true ]; then
+        if [ -d "$omz_dir" ] || [ "$DRY_RUN" = true ]; then
+            log_step "Updating Oh-My-Zsh framework..."
+            if command -v omz >/dev/null 2>&1; then
+                run_cmd omz update --unattended
+            elif [ -f "$omz_dir/tools/upgrade.sh" ] || [ "$DRY_RUN" = true ]; then
+                run_cmd env ZSH="$omz_dir" sh "$omz_dir/tools/upgrade.sh" --unattended
+            fi
+        fi
+        if [ -d "$omz_custom_dir" ]; then
+            for custom_repo in "$omz_custom_dir"/plugins/* "$omz_custom_dir"/themes/*; do
+                [ -e "$custom_repo/.git" ] || continue
+                log_step "Updating Oh-My-Zsh custom repo $(basename "$custom_repo")..."
+                if ! run_cmd git -C "$custom_repo" pull --ff-only; then
+                    log_warn "Skipped fast-forward update for $(basename "$custom_repo") (local changes, detached HEAD, or diverged branch)."
+                fi
+            done
         fi
         log_success "Oh-My-Zsh updated."
     fi
