@@ -772,7 +772,7 @@ local function open_ide_keys_popup()
             table.insert(cmd, "-t")
             table.insert(cmd, vim.env.TMUX_PANE)
         end
-        vim.list_extend(cmd, { "-E", "-w", "86", "-h", "27", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
+        vim.list_extend(cmd, { "-E", "-w", "90", "-h", "30", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
         vim.fn.jobstart(cmd, { detach = true })
     end
 end

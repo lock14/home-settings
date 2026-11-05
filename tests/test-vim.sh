@@ -2372,7 +2372,7 @@ local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--next-attention|fl
 
 jobs = {}
 vim.fn.maparg("<leader>?", "n", false, true).callback()
-local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|86|-h|27|" .. vim.fn.shellescape(ide_bin) .. " --keys")
+local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|90|-h|30|" .. vim.fn.shellescape(ide_bin) .. " --keys")
 
 vim.fn.jobstart = orig_jobstart
 vim.notify = orig_notify

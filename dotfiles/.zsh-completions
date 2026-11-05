@@ -100,6 +100,8 @@ _ide() {
         '--toggle-ai:Hide or show AI Agent pane'
         '--toggle-term:Hide or show Interactive Shell pane'
         '--swap:Swap active pane with neighbor (left, down, up, or right)'
+        '--monitor:Launch system monitor with btop, htop, and top fallback'
+        '--top:Launch system monitor with btop, htop, and top fallback'
         '--keys:Display IDE keybinding cheatsheet'
         '-q:Safely quit IDE workspace session'
         '--quit:Safely quit IDE workspace session'

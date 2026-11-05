@@ -17,7 +17,9 @@
 # ==============================================================================
 
 set -euo pipefail
-export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
+if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
+    export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
+fi
 
 show_keys_cheatsheet() {
     if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/theme-env.sh" ]; then
@@ -30,30 +32,35 @@ show_keys_cheatsheet() {
     local c_base0="${_HS_ESC_BASE0:-$'\033[38;2;131;148;150m'}"
     local c_base01="${_HS_ESC_BASE01:-$'\033[38;2;88;110;117m'}"
     local c_reset=$'\033[0m'
-    local rule="────────────────────────────────────────────────────────────────────────────────"
+    local rule="────────────────────────────────────────────────────────────────────────────────────"
 
-    printf '\n  %s IDE Workspace & Editor Keybindings%s%18s[q / Esc / Space to close]%s\n' "$c_orange" "$c_base01" "" "$c_reset"
+    printf '\n  %s IDE Workspace & Editor Keybindings%s%23s[q / Esc / Space to close]%s\n' "$c_orange" "$c_base01" "" "$c_reset"
     printf '  %s%s%s\n' "$c_base01" "$rule" "$c_reset"
-    printf '  %s%-42s%sLAYOUT, SWAP & RESIZE%s\n' "$c_blue" "FOCUS & VISIBILITY" "$c_blue" "$c_reset"
-    printf '  %s%-18s%s %-21s  %s%-18s%s %s%s\n' \
-        "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus 2D" "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap pane 2D" "$c_reset" \
-        "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Edit/Shell" "$c_cyan" "Alt+Arrow Keys" "$c_base0" "Resize pane (5 cells)" "$c_reset" \
-        "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide / show Editor" "$c_cyan" "Alt+z" "$c_base0" "Toggle 100% zoom" "$c_reset" \
-        "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide / show Shell" "$c_cyan" "Mouse drag border" "$c_base0" "Resize panes" "$c_reset" \
-        "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send selection to AI" "$c_reset" \
-        "$c_cyan" "Alt+Shift+S" "$c_base0" "Next attention AI" "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane H / V" "$c_reset" \
-        "$c_cyan" "Click top bar" "$c_base0" "Role / Fleet / Help" "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_reset"
-    printf '\n  %s%-42s%sCLIPBOARD, LINKS & WORKSPACE%s\n' "$c_blue" "NEOVIM & MINI.FILES (Space = Leader)" "$c_blue" "$c_reset"
-    printf '  %s%-18s%s %-21s  %s%-18s%s %s%s\n' \
-        "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select & copy" "$c_reset" \
-        "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent / open item" "$c_cyan" "Alt+c / Alt+v" "$c_base0" "Copy & clear / Paste" "$c_reset" \
-        "$c_cyan" "=      (in files)" "$c_base0" "Apply file edits" "$c_cyan" "Ctrl/Alt+Click" "$c_base0" "Open link / jump def" "$c_reset" \
-        "$c_cyan" "g? / q (in files)" "$c_base0" "Help / close tree" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back / forward" "$c_reset" \
-        "$c_cyan" "Space ff / fg / gs" "$c_base0" "Find / Grep / Git" "$c_cyan" "v [+line] <file>" "$c_base0" "Open file in Editor" "$c_reset" \
-        "$c_cyan" "Vis Space a / id" "$c_base0" "Send lines / diags" "$c_cyan" "Space il / Space s" "$c_base0" "Send line / Switch" "$c_reset" \
-        "$c_cyan" "Space m" "$c_base0" "Toggle MD render" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Shift workspace dir" "$c_reset" \
-        "$c_cyan" "H / L  (normal)" "$c_base0" "Prev / next buffer" "$c_cyan" ":Q / Alt+q / Alt+Q" "$c_base0" "Quit / Force-quit IDE" "$c_reset" \
-        "$c_cyan" "Ctrl+h / j / k / l" "$c_base0" "Move Neovim splits" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
+    printf '  %s%-45s%sSESSIONS & WORKSPACE%s\n' "$c_blue" "PANES & LAYOUT" "$c_blue" "$c_reset"
+    printf '  %s%-18s%s %-24s  %s%-18s%s %s%s\n' \
+        "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI, Editor, Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_reset" \
+        "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus between panes" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI" "$c_reset" \
+        "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open system monitor" "$c_reset" \
+        "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane (keys/mouse)" "$c_cyan" "Click top bar" "$c_base0" "Focus pane or Help" "$c_reset" \
+        "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide or show Editor" "$c_cyan" "Right-click bar" "$c_base0" "Open workspace menu" "$c_reset" \
+        "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide or show Shell" "$c_cyan" "v [+line] <file>" "$c_base0" "Open file in Editor" "$c_reset" \
+        "$c_cyan" "Alt+z" "$c_base0" "Toggle 100% pane zoom" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Change workspace dir" "$c_reset" \
+        "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane right / below" "$c_cyan" ":Q / Alt+q / Alt+Q" "$c_base0" "Quit / force-quit IDE" "$c_reset" \
+        "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
+    printf '\n  %s%-45s%sCLIPBOARD & LINKS%s\n' "$c_blue" "EDITOR (Space = Leader)" "$c_blue" "$c_reset"
+    printf '  %s%-18s%s %-24s  %s%-18s%s %s%s\n' \
+        "$c_cyan" "Space ff" "$c_base0" "Find files by name" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select text and copy" "$c_reset" \
+        "$c_cyan" "Space fg" "$c_base0" "Search text (live grep)" "$c_cyan" "Alt+c" "$c_base0" "Copy & clear highlight" "$c_reset" \
+        "$c_cyan" "Space gs" "$c_base0" "Review Git status" "$c_cyan" "Alt+v" "$c_base0" "Paste from clipboard" "$c_reset" \
+        "$c_cyan" "Space m" "$c_base0" "Toggle Markdown preview" "$c_cyan" "Ctrl+Click" "$c_base0" "Open link or file path" "$c_reset" \
+        "$c_cyan" "H / L  (Normal)" "$c_base0" "Prev / next buffer" "$c_cyan" "Alt+Click" "$c_base0" "Jump to LSP definition" "$c_reset" \
+        "$c_cyan" "Ctrl+h / j / k / l" "$c_base0" "Move between splits" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back or forward" "$c_reset"
+    printf '\n  %s%-45s%sSEND TO AI PROMPT%s\n' "$c_blue" "FILE TREE (mini.files)" "$c_blue" "$c_reset"
+    printf '  %s%-18s%s %-24s  %s%-18s%s %s%s\n' \
+        "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files tree" "$c_cyan" "Space a  (Visual)" "$c_base0" "Send selected lines" "$c_reset" \
+        "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent dir / open item" "$c_cyan" "Space il (Normal)" "$c_base0" "Send current line" "$c_reset" \
+        "$c_cyan" "=      (in tree)" "$c_base0" "Apply file edits" "$c_cyan" "Space id (Normal)" "$c_base0" "Send diagnostics" "$c_reset" \
+        "$c_cyan" "g? / q (in tree)" "$c_base0" "Tree help / close tree" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send shell selection" "$c_reset"
 
     if [ -t 0 ] && [ -t 1 ] && [ "${IDE_KEYS_NO_WAIT:-0}" != "1" ]; then
         local saved_tty="" key="" rest=""
@@ -78,9 +85,24 @@ show_keys_cheatsheet() {
     fi
 }
 
+run_system_monitor() {
+    local mon=""
+    for mon in btop htop top; do
+        if command -v "$mon" >/dev/null 2>&1; then
+            exec "$mon"
+        fi
+    done
+    echo "Error: Neither 'btop', 'htop', nor 'top' is installed." >&2
+    exit 1
+}
+
 if [ "$#" -eq 1 ] && { [ "$1" = "--keys" ] || [ "$1" = "--help-keys" ]; }; then
     show_keys_cheatsheet
     exit 0
+fi
+
+if [ "$#" -eq 1 ] && { [ "$1" = "--monitor" ] || [ "$1" = "--top" ] || [ "$1" = "--btop" ]; }; then
+    run_system_monitor
 fi
 
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
@@ -125,6 +147,7 @@ Options:
   --toggle-ai [SESSION]    Hide or reappear the AI Agent pane
   --toggle-term [SESSION]  Hide or reappear the Interactive Shell pane (Alt+Shift+T)
   --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
+  --monitor, --top         Launch interactive system monitor with btop -> htop -> top fallback (Alt+m / Prefix+m)
   --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / Prefix+?)
   quit, -q, --quit [NAME]  Safely quit IDE session NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
@@ -3644,6 +3667,9 @@ def main() -> int:
         elif arg in ("--keys", "--help-keys"):
             action = "keys"
             i += 1
+        elif arg in ("--monitor", "--top", "--btop"):
+            action = "monitor"
+            i += 1
         elif arg == "--status-click":
             action = "status-click"
             status_click_x = argv[i + 1] if i + 1 < n else "0"
@@ -3736,6 +3762,8 @@ def main() -> int:
 
     if action == "keys":
         os.execvp("bash", ["bash", ide_self, "--keys"])
+    if action == "monitor":
+        os.execvp("bash", ["bash", ide_self, "--monitor"])
     if action == "status-click":
         return status_click(status_click_x, target_arg)
     if action == "sessions":

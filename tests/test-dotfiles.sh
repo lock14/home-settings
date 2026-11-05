@@ -132,6 +132,7 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q '@ide_fleet_active' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|fleet' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|help' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi a.*--send --stdin' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -g status-right-length 160' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-s if-shell' "$TEMP_HOME/.tmux.conf" && \
@@ -140,6 +141,8 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind S.*--next-attention' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_CLIENT=#{q:client_name}.*--sessions #{q:session_name}' "$TEMP_HOME/.tmux.conf" && \
    grep -q -- '--sessions' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-m.*--monitor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind m.*--monitor' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-?.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind ?.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusLeft.*--sessions.*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
@@ -237,7 +240,7 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "▸ " <<< "$eval_wcur" && \
            grep -Fq "Editor (Alt+e)" <<< "$eval_wcur" && \
            grep -Fq "Shell [Alt+T]" <<< "$eval_wcur" && \
-           grep -Fq "Help (Alt+?)" <<< "$eval_sright_root" && \
+           grep -Fq "range=user|help]#[fg=#839496,bg=#073642,nobold]󰋖 Help (Alt+?) " <<< "$eval_sright_root" && \
            ! grep -Fq "(Alt+s)" <<< "$eval_sright_root" && \
            grep -Fq "range=user|attn]#[fg=#CB4B16,bg=#073642,nobold]󰂚 alpha-ws +1 " <<< "$eval_sright_fleet" && \
            grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]2 active#[fg=#839496,bg=#073642,nobold] (Alt+s)" <<< "$eval_sright_fleet" && \
