@@ -864,15 +864,29 @@ SH
                 cdbline="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 colon_dir_buf="${cdbname}:${cdbline}"
             fi
+            stale_rpc_healed="ok"
+            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                STALE_RPC_DIR="$TEMP_HOME/stale_rpc_cwd"
+                mkdir -p "$STALE_RPC_DIR"
+                NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "luaeval('(function() vim.fn.chdir(\"$STALE_RPC_DIR\"); vim.env.PWD = \"$IDE_WS_3P\" end)()')" >/dev/null 2>&1 || true
+                rmdir "$STALE_RPC_DIR" 2>/dev/null || true
+                "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/nested.txt:3" "/detached-mount/$(basename "$IDE_WS_3P")" "ws_3pane_test"
+                rpc_healed_cwd="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "luaeval('(vim.uv or vim.loop).cwd() or \"nil\"')" 2>/dev/null | tr -d '\r\n\"' || true)"
+                rpc_healed_line="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                if [ "$rpc_healed_cwd" != "$IDE_WS_3P" ] || [ "$rpc_healed_line" != "3" ]; then
+                    stale_rpc_healed="bad:$rpc_healed_cwd:$rpc_healed_line"
+                fi
+            fi
             if [ "$open_pos_focus" = "$ed_pane" ] && [ "$open_pos_line" = "3" ] && \
                [ "$open_col_focus" = "$ed_pane" ] && [ "$open_col_line" = "2" ] && \
                [ "$prev_pos_focus" = "$ai_pane" ] && [ "$prev_pos_line" = "1" ] && \
                [ "$prev_hash_focus" = "$ai_pane" ] && [ "$prev_hash_line" = "3" ] && \
                [ "$colon_buf" = "colon:file.txt:2" ] && \
-               [ "$colon_dir_buf" = "colon:mod.txt:3" ]; then
-                echo "PASS:bin/ide --open and --preview support optional [LINE], file:line:col, file#Lline, workspace-relative paths, and literal colon paths/filenames while preserving non-focus preview"
+               [ "$colon_dir_buf" = "colon:mod.txt:3" ] && \
+               [ "$stale_rpc_healed" = "ok" ]; then
+                echo "PASS:bin/ide --open and --preview support optional [LINE], file:line:col, file#Lline, workspace-relative paths, literal colon paths/filenames, detached-mount CWD remapping, and RPC stale-CWD healing while preserving non-focus preview"
             else
-                echo "FAIL:bin/ide --open/--preview:Expected ed=$ed_pane ai=$ai_pane lines 3/2/1/3 colon:file.txt:2 colon:mod.txt:3, got open_pos=$open_pos_focus:$open_pos_line open_col=$open_col_focus:$open_col_line prev_pos=$prev_pos_focus:$prev_pos_line prev_hash=$prev_hash_focus:$prev_hash_line colon=$colon_buf colon_dir=$colon_dir_buf"
+                echo "FAIL:bin/ide --open/--preview:Expected ed=$ed_pane ai=$ai_pane lines 3/2/1/3 colon:file.txt:2 colon:mod.txt:3 rpc=ok, got open_pos=$open_pos_focus:$open_pos_line open_col=$open_col_focus:$open_col_line prev_pos=$prev_pos_focus:$prev_pos_line prev_hash=$prev_hash_focus:$prev_hash_line colon=$colon_buf colon_dir=$colon_dir_buf rpc=$stale_rpc_healed"
             fi
 
             if [ -n "$link_nvim_pid" ]; then

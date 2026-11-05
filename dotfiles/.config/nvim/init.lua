@@ -61,8 +61,17 @@ opt.timeoutlen = 300
 opt.autoread = true
 local function recover_stale_cwd()
     local uv = vim.uv or vim.loop
-    local pwd = vim.env.PWD
-    if uv and pwd and pwd ~= "" and vim.fn.isdirectory(pwd) == 1 then
+    if not uv then
+        return
+    end
+    local pwd = nil
+    for _, cand in ipairs({ vim.env.PWD, vim.env.IDE_WORKDIR, vim.env.IDE_INITIAL_ROOT }) do
+        if cand and cand ~= "" and vim.fn.isdirectory(cand) == 1 then
+            pwd = cand
+            break
+        end
+    end
+    if pwd then
         local s_dot = uv.fs_stat(".")
         local s_pwd = uv.fs_stat(pwd)
         if not uv.cwd() or not s_dot or s_dot.nlink == 0 or (vim.fn.haslocaldir() == 0 and vim.fn.haslocaldir(-1, 0) == 0 and s_pwd and (s_dot.dev ~= s_pwd.dev or s_dot.ino ~= s_pwd.ino)) then
@@ -72,6 +81,7 @@ local function recover_stale_cwd()
     end
 end
 do
+    recover_stale_cwd()
     local uv = vim.uv or vim.loop
     if uv then
         local init_cwd = uv.cwd()
@@ -80,6 +90,35 @@ do
         local s_pwd = (cur_pwd and cur_pwd ~= "") and uv.fs_stat(cur_pwd) or nil
         if init_cwd and init_cwd ~= "" and s_dot and s_dot.nlink ~= 0 and (not s_pwd or s_dot.dev ~= s_pwd.dev or s_dot.ino ~= s_pwd.ino) then
             vim.env.PWD = init_cwd
+        end
+    end
+    if vim.fs and type(vim.fs.abspath) == "function" then
+        local orig_abspath = vim.fs.abspath
+        vim.fs.abspath = function(path)
+            local ok, res = pcall(orig_abspath, path)
+            if ok then
+                return res
+            end
+            recover_stale_cwd()
+            ok, res = pcall(orig_abspath, path)
+            if ok then
+                return res
+            end
+            if type(path) ~= "string" then
+                error(res, 2)
+            end
+            local expanded = path:gsub("^~", vim.env.HOME or "~")
+            if vim.startswith(expanded, "/") then
+                return vim.fs.normalize(expanded)
+            end
+            local fb = (vim.env.PWD and vim.env.PWD ~= "" and vim.startswith(vim.env.PWD, "/")) and vim.env.PWD
+                or (vim.env.IDE_WORKDIR and vim.env.IDE_WORKDIR ~= "" and vim.startswith(vim.env.IDE_WORKDIR, "/")) and vim.env.IDE_WORKDIR
+                or (vim.env.IDE_INITIAL_ROOT and vim.env.IDE_INITIAL_ROOT ~= "" and vim.startswith(vim.env.IDE_INITIAL_ROOT, "/")) and vim.env.IDE_INITIAL_ROOT
+                or (vim.env.HOME or "/")
+            if expanded == "." or expanded == "" then
+                return vim.fs.normalize(fb)
+            end
+            return vim.fs.normalize(vim.fs.joinpath(fb, expanded))
         end
     end
 end
@@ -97,6 +136,12 @@ vim.api.nvim_create_autocmd("DirChanged", {
                 vim.env.PWD = ev.file
             end
         end
+    end,
+})
+vim.api.nvim_create_autocmd({ "BufReadPre", "FileType" }, {
+    group = autoread_group,
+    callback = function()
+        recover_stale_cwd()
     end,
 })
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {

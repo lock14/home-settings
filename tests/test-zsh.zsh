@@ -110,16 +110,20 @@ test_functions() {
         if wait_for_nvim_socket "$test_sock" 30; then
             local zsh_ver_out
             zsh_ver_out="$(TMUX="" NVIM_IDE_SOCKET="$test_sock" v --version 2>/dev/null | head -n 1 || true)"
+            local zsh_stale_srv="/tmp/nvim-ide-zsh-stale-srv-$$"
+            mkdir -p "$zsh_stale_srv"
+            timeout 5 nvim --headless --server "$test_sock" --remote-expr "luaeval('(function() vim.fn.chdir(\"$zsh_stale_srv\"); vim.env.PWD = \"$SCRIPT_DIR\" end)()')" </dev/null >/dev/null 2>&1 || true
+            rmdir "$zsh_stale_srv" 2>/dev/null || true
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
             local remote_state
-            remote_state="$(timeout 5 nvim --headless --server "$test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
+            remote_state="$(timeout 5 nvim --headless --server "$test_sock" --remote-expr 'expand("%:p") . "|" . line(".") . "|" . luaeval("(vim.uv or vim.loop).cwd() or \"nil\"")' </dev/null 2>/dev/null || true)"
             kill "$nvim_pid" 2>/dev/null || true
             wait "$nvim_pid" 2>/dev/null || true
             rm -f "$test_sock"
-            if [ "$remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$zsh_ver_out" == NVIM* ]]; then
-                echo "PASS:v() resolves subdirectory relative paths and +line arguments accurately over RPC, and passes --version to local nvim"
+            if [ "$remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2|$SCRIPT_DIR" ] && [[ "$zsh_ver_out" == NVIM* ]]; then
+                echo "PASS:v() heals stale server CWD and resolves subdirectory relative paths and +line arguments accurately over RPC, and passes --version to local nvim"
             else
-                echo "FAIL:v() RPC routing:Expected '$SCRIPT_DIR/modules/00-packages.sh|2' and NVIM version, got state='$remote_state' ver='$zsh_ver_out'"
+                echo "FAIL:v() RPC routing:Expected '$SCRIPT_DIR/modules/00-packages.sh|2|$SCRIPT_DIR' and NVIM version, got state='$remote_state' ver='$zsh_ver_out'"
             fi
         else
             kill "$nvim_pid" 2>/dev/null || true
