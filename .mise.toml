@@ -6,7 +6,7 @@ elan = "github:leanprover/elan"
 
 [tools]
 bat = "latest"
-btop = "latest"
+btop = { version = "latest", os = ["linux"] }
 delta = "latest"
 dust = "latest"
 elan = { version = "latest", rename_exe = "elan", postinstall = "for b in lean lake leanc leanmake leanchecker; do ln -sf elan \"$MISE_TOOL_INSTALL_PATH/$b\"; done && export ELAN_HOME=\"${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}\" && mkdir -p \"$ELAN_HOME/toolchains\" && (\"$MISE_TOOL_INSTALL_PATH/elan\" default stable || true)" }
@@ -35,5 +35,6 @@ zoxide = "latest"
 [settings]
 legacy_version_file = true
 experimental = true
+http_timeout = "120s"
 go.set_gobin = false
 go.set_gopath = false

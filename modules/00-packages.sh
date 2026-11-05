@@ -63,7 +63,7 @@ if [ "$SKIP_PACKAGES" = false ]; then
                     fi
                 fi
             fi
-            pkgs="git curl wget vim neovim tmux zsh fzf fontconfig shellcheck bat fd ripgrep zoxide eza tree"
+            pkgs="git curl wget vim neovim tmux zsh fzf fontconfig shellcheck bat btop fd ripgrep zoxide eza tree"
             if [ "$SKIP_DB" = false ]; then
                 pkgs="$pkgs libpq"
             fi

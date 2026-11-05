@@ -26,7 +26,7 @@ if [ "$SKIP_ZSH" = false ]; then
     else
         ZSH_DIR="${ZSH:-$HOME/.oh-my-zsh}"
         if [ ! -d "$ZSH_DIR" ]; then
-            RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
+            RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
         fi
 
         ZSH_CUSTOM_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
@@ -36,20 +36,27 @@ if [ "$SKIP_ZSH" = false ]; then
             local repo="$1"
             local dest="$2"
             if [ -d "$dest/.git" ]; then
-                git -C "$dest" pull --ff-only || true
+                git -C "$dest" pull --ff-only
             else
                 if [ -d "$dest" ]; then
                     rm -rf "$dest"
                 fi
-                git clone --depth=1 "$repo" "$dest" || true
+                git clone --depth=1 "$repo" "$dest"
             fi
         }
 
+        zsh_pids=()
         clone_zsh "https://github.com/romkatv/powerlevel10k.git" "$ZSH_CUSTOM_DIR/themes/powerlevel10k" &
+        zsh_pids+=("$!")
         clone_zsh "https://github.com/zsh-users/zsh-autosuggestions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions" &
+        zsh_pids+=("$!")
         clone_zsh "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting" &
+        zsh_pids+=("$!")
         clone_zsh "https://github.com/zsh-users/zsh-completions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-completions" &
-        wait
+        zsh_pids+=("$!")
+        for pid in "${zsh_pids[@]}"; do
+            wait "$pid"
+        done
 
         if [ ! -f "$HOME/.zshrc" ]; then
             if [ -f "$ZSH_DIR/templates/zshrc.zsh-template" ]; then
