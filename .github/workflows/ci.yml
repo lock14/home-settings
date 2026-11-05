@@ -185,6 +185,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Zsh prerequisite for dotfiles-only setup
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
+
       - name: Test setup.sh uninstallation and modular flags
         run: |
           chmod +x setup.sh
@@ -246,10 +251,17 @@ jobs:
     name: Setup on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Zsh prerequisite on Ubuntu for dotfiles-only setup
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
 
       - name: Test CLI Validation
         run: |
