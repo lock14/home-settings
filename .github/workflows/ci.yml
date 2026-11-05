@@ -8,6 +8,7 @@ on:
 
 env:
   COLORTERM: truecolor
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +150,13 @@ jobs:
           if #to_force > 0 then
             nts.install(to_force, { force = true, max_jobs = 2 }):pwait(120000)
           end
+          for p, rev in pairs(pinned_revs) do
+            local actual = read_rev(p)
+            if actual ~= rev then
+              io.stderr:write("Pinned Tree-sitter parser revision mismatch for " .. p .. ": expected " .. rev .. ", got " .. tostring(actual) .. "\n")
+              vim.cmd("cquit 1")
+            end
+          end
           local after = installed_parsers()
           local missing = {}
           for _, p in ipairs(required) do
@@ -167,6 +175,8 @@ jobs:
           rm -rf "$boot_cfg" /tmp/ci_nvim_lazy.lua /tmp/ci_nvim_ts.lua
 
       - name: Run unit tests
+        env:
+          GITHUB_TOKEN: ""
         run: make test
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +187,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Zsh prerequisite for dotfiles-only setup
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
 
       - name: Test setup.sh uninstallation and modular flags
         run: |
@@ -239,10 +254,17 @@ jobs:
     name: Setup on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Zsh prerequisite on Ubuntu for dotfiles-only setup
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
 
       - name: Test CLI Validation
         run: |
@@ -273,7 +295,7 @@ jobs:
 
       - name: Install base container prerequisites
         run: |
-          dnf -y install sudo curl wget findutils git
+          dnf -y install sudo curl wget findutils git libatomic tar gzip xz unzip zsh procps-ng util-linux-user
           mkdir -p /usr/local/bin
           echo '#!/bin/bash' > /usr/local/bin/snap
           echo 'echo "Mock snap: $@"' >> /usr/local/bin/snap

@@ -226,6 +226,30 @@ else
 fi
 rm -rf "$FAIL_FONT_HOME" "$FAIL_FONT_CACHE" "$MOCK_CURL_DIR"
 
+# Verify truncated/missing font after archive extraction exits non-zero
+TRUNC_FONT_HOME=$(mktemp -d)
+TRUNC_FONT_CACHE=$(mktemp -d)
+TRUNC_FONT_BIN=$(mktemp -d)
+printf "tiny" > "$TRUNC_FONT_BIN/MesloLGSNerdFontMono-Regular.ttf"
+tar -cf "$TRUNC_FONT_BIN/trunc.tar" -C "$TRUNC_FONT_BIN" "MesloLGSNerdFontMono-Regular.ttf"
+cat << EOF > "$TRUNC_FONT_BIN/curl"
+#!/bin/sh
+for arg in "\$@"; do
+    if [ "\${prev:-}" = "-o" ]; then
+        cp -f "$TRUNC_FONT_BIN/trunc.tar" "\$arg"
+    fi
+    prev="\$arg"
+done
+exit 0
+EOF
+chmod +x "$TRUNC_FONT_BIN/curl"
+if PATH="$TRUNC_FONT_BIN:$PATH" HOME="$TRUNC_FONT_HOME" XDG_DATA_HOME="$TRUNC_FONT_HOME/.local/share" HOME_SETTINGS_FONT_CACHE="$TRUNC_FONT_CACHE" "$SCRIPT_DIR/modules/30-fonts.sh" >/dev/null 2>&1; then
+    fail "modules/30-fonts.sh truncated font check" "Expected non-zero exit when extracted font is smaller than MIN_FONT_BYTES"
+else
+    pass "modules/30-fonts.sh exits non-zero when any font in FONTS is missing or smaller than MIN_FONT_BYTES after extraction"
+fi
+rm -rf "$TRUNC_FONT_HOME" "$TRUNC_FONT_CACHE" "$TRUNC_FONT_BIN"
+
 export HOME="$OLD_HOME"
 
 test_summary

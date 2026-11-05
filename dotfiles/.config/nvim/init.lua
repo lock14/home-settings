@@ -59,9 +59,50 @@ opt.undofile = true
 opt.updatetime = 250
 opt.timeoutlen = 300
 opt.autoread = true
+local function recover_stale_cwd()
+    local uv = vim.uv or vim.loop
+    local pwd = vim.env.PWD
+    if uv and pwd and pwd ~= "" and vim.fn.isdirectory(pwd) == 1 then
+        local s_dot = uv.fs_stat(".")
+        local s_pwd = uv.fs_stat(pwd)
+        if not uv.cwd() or not s_dot or s_dot.nlink == 0 or (vim.fn.haslocaldir() == 0 and vim.fn.haslocaldir(-1, 0) == 0 and s_pwd and (s_dot.dev ~= s_pwd.dev or s_dot.ino ~= s_pwd.ino)) then
+            pcall(vim.fn.chdir, pwd)
+            vim.env.PWD = pwd
+        end
+    end
+end
+do
+    local uv = vim.uv or vim.loop
+    if uv then
+        local init_cwd = uv.cwd()
+        local s_dot = uv.fs_stat(".")
+        local cur_pwd = vim.env.PWD
+        local s_pwd = (cur_pwd and cur_pwd ~= "") and uv.fs_stat(cur_pwd) or nil
+        if init_cwd and init_cwd ~= "" and s_dot and s_dot.nlink ~= 0 and (not s_pwd or s_dot.dev ~= s_pwd.dev or s_dot.ino ~= s_pwd.ino) then
+            vim.env.PWD = init_cwd
+        end
+    end
+end
+local autoread_group = vim.api.nvim_create_augroup("SolarizedAutoRead", { clear = true })
+vim.api.nvim_create_autocmd("DirChanged", {
+    group = autoread_group,
+    pattern = "global",
+    callback = function(ev)
+        if ev.file and ev.file ~= "" then
+            local uv = vim.uv or vim.loop
+            local cur_pwd = vim.env.PWD
+            local s_cur = (uv and cur_pwd and cur_pwd ~= "") and uv.fs_stat(cur_pwd) or nil
+            local s_ev = uv and uv.fs_stat(ev.file) or nil
+            if not (s_cur and s_ev and s_cur.dev == s_ev.dev and s_cur.ino == s_ev.ino) then
+                vim.env.PWD = ev.file
+            end
+        end
+    end,
+})
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
-    group = vim.api.nvim_create_augroup("SolarizedAutoRead", { clear = true }),
+    group = autoread_group,
     callback = function()
+        recover_stale_cwd()
         if vim.fn.getcmdwintype() == "" then
             pcall(vim.cmd, "silent! checktime")
         end
@@ -596,6 +637,7 @@ local function toggle_file_explorer(use_cwd)
                     return
                 end
             end
+            recover_stale_cwd()
             mf.open(uv.cwd(), false)
         end
     else
@@ -772,7 +814,7 @@ local function open_ide_keys_popup()
             table.insert(cmd, "-t")
             table.insert(cmd, vim.env.TMUX_PANE)
         end
-        vim.list_extend(cmd, { "-E", "-w", "86", "-h", "27", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
+        vim.list_extend(cmd, { "-E", "-w", "90", "-h", "30", vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys" })
         vim.fn.jobstart(cmd, { detach = true })
     end
 end
@@ -1275,7 +1317,7 @@ end, {
 -- -------------------------------------------------------------
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
-    vim.fn.system({
+    local out = vim.fn.system({
         "git",
         "clone",
         "--filter=blob:none",
@@ -1283,6 +1325,9 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
         "--branch=stable",
         lazypath,
     })
+    if vim.v.shell_error ~= 0 then
+        error("Failed to clone lazy.nvim:\n" .. tostring(out))
+    end
 end
 vim.opt.rtp:prepend(lazypath)
 

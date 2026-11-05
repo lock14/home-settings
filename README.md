@@ -267,7 +267,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - Inside the picker, `Enter` switches sessions, `Ctrl+a`, `Ctrl+e`, and `Ctrl+t` jump directly into the target session's AI, Editor, or Shell pane, `Ctrl+x` safely quits a session, `Ctrl+r` reloads the list, and `Alt+s` or `Escape` closes the popup. Press `Alt+Shift+S` or `Prefix + S` (`ide --next-attention`) from any session to jump directly to the oldest workspace waiting for AI attention.
     - AI CLIs with lifecycle hooks report deterministic `running`, `approval`, `done`, or `idle` transitions via `ide --agent-state <state>`, queuing both user-approval prompts and background turn completions for attention and clearing them when the AI pane regains focus or if the agent process exits back to a bare shell. Run `ide --list` (`--plain` for raw session names) to inspect active workspaces and lifecycle states from any shell.
   - **Pane parking, swapping, splitting, and resizing**:
-    - Hide and restore the Editor (`Alt+Shift+E`), Shell (`Alt+Shift+T`), or AI Agent (`ide --toggle-ai`) without stopping running processes, toggle the floating AI overlay popup with `Alt+Shift+A` (`ide --run-ai-popup`), or toggle the top Tmux status bar with `Prefix + b` (`set-option status`).
+    - Hide and restore the Editor (`Alt+Shift+E`), Shell (`Alt+Shift+T`), or AI Agent (`ide --toggle-ai`) without stopping running processes, open the floating system monitor modal (`btop`, `htop`, and `top` fallback) with `Alt+m` or `Prefix + m` (`ide --monitor`), toggle the floating AI overlay popup with `Alt+Shift+A` (`ide --run-ai-popup`), or toggle the top Tmux status bar with `Prefix + b` (`set-option status`).
     - Swap panes directionally with `Alt+Shift+H/J/K/L`, split panes horizontally or vertically in the current working directory with `Prefix + |` or `Prefix + -`, resize by dragging borders with the mouse or pressing `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`), and reload `~/.tmux.conf` with `Prefix + r`. Custom pane sizes persist across focus changes, parking, and zoom (`Alt+z`).
   - **Session isolation and quitting**:
     - IDE commands target only the active workspace session so other Tmux sessions are unaffected, and Zsh tab completion dynamically completes active IDE session names across `ide`, `ide2`, `ide3`, `qide`, and `idek`.
@@ -279,13 +279,13 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
   - **Layer 2 (workspace navigation)**: Uses `Alt` shortcuts across the workspace:
     - `Alt+h/j/k/l` move focus across Neovim splits and Tmux panes from any mode.
     - `Alt+a` (or `Space a` in normal mode), `Alt+e`, and `Alt+t` jump directly to the AI Agent, Editor, or Shell pane; pressing the same key again bounces back to the previous pane.
-    - `Alt+s` (or `Space s` and `Prefix + s`) opens the multi-session IDE workspace switcher (`ide --sessions`), `Alt+Shift+S` (or `Prefix + S`) jumps to the oldest workspace waiting for AI attention (`ide --next-attention`), and `Alt+?`, `Space ?`, or `Prefix + ?` opens the interactive keybinding cheatsheet popup (`ide --keys`).
+    - `Alt+s` (or `Space s` and `Prefix + s`) opens the multi-session IDE workspace switcher (`ide --sessions`), `Alt+Shift+S` (or `Prefix + S`) jumps to the oldest workspace waiting for AI attention (`ide --next-attention`), `Alt+m` (or `Prefix + m`) opens the floating system monitor popup (`ide --monitor`), and `Alt+?`, `Space ?`, or `Prefix + ?` opens the interactive keybinding cheatsheet popup (`ide --keys`).
   - **Layer 3 (editor, file explorer, context dispatch, and live reload)**: Uses the `Space` leader key inside Neovim:
     - `Space e` opens the left-anchored `mini.files` column explorer at the current buffer's directory (`Space E` opens at the working directory) with a full-width preview pane on the right. Inside the explorer, navigate with `h/j/k/l` or arrow keys, press `Enter` or double-click to open a file or enter a directory, press `=` to apply file changes to disk, `g?` for help, and `q` to close.
     - In visual mode, `Space a` dispatches a relative `@file#L1-L2` line-range reference (`ide --send --ref`) or selected text for unnamed buffers directly into the AI Agent prompt without submitting. In normal mode, `Space il` sends the current cursor line (`@file#L<N>`) and `Space id` sends formatted buffer LSP diagnostics (`ide --send --text`; pass `--no-focus` on the CLI to keep current pane focus).
     - `Space w` saves the active buffer (`:w`), and `Space h` clears search highlighting (`:nohlsearch`).
     - `Space m` toggles in-buffer Markdown rendering (`render-markdown.nvim`) with word-boundary soft wrapping.
-    - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents.
+    - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents and re-binds the editor working directory if a FUSE or network workspace mount reconnects.
     - `H` and `L` cycle open buffers, `Home` toggles between the first non-blank character on the line and column 1 across normal, visual, and insert modes, and `Space cd` (`:IdeCd` in Neovim, or `icd` in the shell) synchronizes the working directory across panes.
   - **Layer 4 (clickable links, jumplist, and clipboard)**:
     - **Terminal links**: `Ctrl+Click` or `Alt+Click` on URLs or prompt pull and merge request badges in the Shell or AI panes opens them in the browser on a local desktop (or via `$IDE_BROWSER`) or copies them to the local clipboard via OSC 52 over SSH. Clicking file paths, compiler errors (`file:line:col`), Markdown file links, or custom `~/.config/ide/links.sh` matches (overridable via `$IDE_LINK_RULES`) opens the target file and line in the Editor.
@@ -318,6 +318,7 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 | `Alt+Shift+E` | Universal | Hide or restore the Editor pane (`ide --toggle-editor`) |
 | `Alt+Shift+T` | Universal | Hide or restore the Shell pane (`ide --toggle-term`) |
 | `Alt+Shift+A` | Universal | Toggle floating AI overlay popup (`ide --run-ai-popup`) |
+| `Alt+m` or `Prefix + m` | Universal | Open floating system monitor popup (`ide --monitor` / `ide --top` with `btop`, `htop`, and `top` fallback) |
 | `Alt+Shift+H/J/K/L` | Tmux | Swap active pane left, down, up, or right (`ide --swap`) |
 | `Alt+z` | Tmux | Toggle full-window pane zoom |
 | `Alt+Left/Down/Up/Right` or `Prefix + H/J/K/L` | Tmux | Resize active pane by 5 cells (or drag borders with the mouse) |
@@ -351,6 +352,7 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 | `ide --list [--plain]` | Shell | List active IDE workspace sessions with AI agent, lifecycle state, Git branch, and directory (`--plain` prints raw session names) |
 | `ide --send (--stdin \| --ref <path> \| --text <str>) [--no-focus]` | Shell | Dispatch stdin, relative `@file#L1-L2` reference, or text into the AI Agent prompt |
 | `ide --ai <cli>` or `ide --agent <cli>` | Shell | Select AI CLI agent (`agy`, `claude`, or `codex`, overriding `$IDE_AI_CLI`) |
+| `ide --monitor` or `ide --top` | Shell | Launch system monitor with `btop`, `htop`, and `top` fallback |
 | `icd [dir\|--reset]` | Shell | Synchronize working directory across Editor and Shell panes |
 | `v [+line] <file>` | Shell | Open file in the IDE Editor pane at optional line number |
 | `IDE_AI_CLI`, `IDE_BROWSER`, `IDE_LINK_RULES` | Environment | Configure default AI agent CLI, browser executable for URLs, or custom link and session-naming script |
@@ -359,7 +361,7 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 
 Interactive shells are configured for sub-10ms startup times, fast tab completion, and Solarized Dark styling:
 
-- **Zsh engine and completion**: Fast interactive startup with `fpath` tab completions and support for untracked local `*.d/` drop-in directories.
+- **Zsh engine and completion**: Fast interactive startup with `fpath` tab completions, support for untracked local `*.d/` drop-in directories, and automatic working directory recovery across Zsh and Bash when a FUSE or network workspace mount reconnects.
 - **Powerlevel10k and Bash Git prompts**: Configured in `.p10k.zsh` and `.bashrc-addendum`:
   - **Single-line shelf prompt**: Solarized Dark Base02 shelf displaying the OS icon, working directory, Git host icon, branch status, and execution telemetry in both Zsh and Bash.
   - **Daemon-free Git status**: Queries `git status --porcelain=v2` directly without `gitstatusd`, supporting standard, SHA-256, and `reftable` repositories.
@@ -522,7 +524,7 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 | :--- | :--- | :--- |
 | `gen-passwd` | `-u`, `-l`, `-n`, `-s`, `-t`, `-h, --help`, `[length]` | Generate random passwords with configurable length (default `16`) and character sets (uppercase, lowercase, digits, and symbols) |
 | `gnome-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in GNOME Terminal (`dconf`) |
-| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file> [line]`, `--cd [dir\|--reset]`, `-s, --sessions`, `--next-attention`, `--agent-state <state>`, `--send (--stdin \| --ref <path> \| --text <str>) [--no-focus]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--keys`, `-q, --quit`, `-f, --force`, `--detach`, `--kill`, `--list [--plain]`, `-h, --help`, `[dir]` | Launch and manage multi-session Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces, lifecycle states, session switching, and context dispatch |
+| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file> [line]`, `--cd [dir\|--reset]`, `-s, --sessions`, `--next-attention`, `--agent-state <state>`, `--send (--stdin \| --ref <path> \| --text <str>) [--no-focus]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--monitor, --top`, `--keys`, `-q, --quit`, `-f, --force`, `--detach`, `--kill`, `--list [--plain]`, `-h, --help`, `[dir]` | Launch and manage multi-session Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces, lifecycle states, session switching, and context dispatch |
 | `macos-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in macOS `Terminal.app` |
 | `repeat-until-success` | `-n <attempts>`, `-s, -d <seconds>`, `-t`, `-h, --help`, `<command> [args...]` | Retry a command up to `N` attempts (default `10`) with a configurable delay in seconds (default `30`) |
 | `sum` | `-d <delim>`, `-k <col>`, `-H`, `-a`, `-s`, `-f <fmt>`, `-t`, `-h, --help`, `[numbers... \| files...]` | Sum numbers from stdin, files, or arguments with support for CSV columns, human byte units, averages, and summary statistics |

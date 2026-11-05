@@ -105,15 +105,16 @@ test_functions() {
     if command -v nvim >/dev/null 2>&1; then
         local test_sock="/tmp/nvim-ide-zsh-test-$$.sock"
         rm -f "$test_sock"
-        (cd "$SCRIPT_DIR" && nvim --headless --listen "$test_sock" >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && exec nvim --clean --headless --listen "$test_sock" </dev/null >/dev/null 2>&1) &
         local nvim_pid=$!
         if wait_for_nvim_socket "$test_sock" 30; then
             local zsh_ver_out
             zsh_ver_out="$(TMUX="" NVIM_IDE_SOCKET="$test_sock" v --version 2>/dev/null | head -n 1 || true)"
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
             local remote_state
-            remote_state="$(nvim --headless --server "$test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            remote_state="$(timeout 5 nvim --headless --server "$test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
             kill "$nvim_pid" 2>/dev/null || true
+            wait "$nvim_pid" 2>/dev/null || true
             rm -f "$test_sock"
             if [ "$remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$zsh_ver_out" == NVIM* ]]; then
                 echo "PASS:v() resolves subdirectory relative paths and +line arguments accurately over RPC, and passes --version to local nvim"
@@ -122,6 +123,7 @@ test_functions() {
             fi
         else
             kill "$nvim_pid" 2>/dev/null || true
+            wait "$nvim_pid" 2>/dev/null || true
             rm -f "$test_sock"
         fi
 
@@ -143,7 +145,7 @@ test_functions() {
             local multisess_dir
             multisess_dir="$(mktemp -d)"
             local bg_nvim_sock="$multisess_dir/bg-nvim.sock"
-            (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bg_nvim_sock" >/dev/null 2>&1) &
+            (cd "$SCRIPT_DIR" && exec nvim --clean --headless --listen "$bg_nvim_sock" </dev/null >/dev/null 2>&1) &
             local bg_nvim_pid=$!
             wait_for_nvim_socket "$bg_nvim_sock" 30 || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
@@ -158,7 +160,7 @@ test_functions() {
             tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
             (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
             local bg_remote_state
-            bg_remote_state="$(nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            bg_remote_state="$(timeout 5 nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
             local icd_reset_pwd
             icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
             local sid_reset_pwd
@@ -166,6 +168,7 @@ test_functions() {
             local bad_pid_target
             bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
+            wait "$bg_nvim_pid" 2>/dev/null || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
             if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
@@ -1175,6 +1178,43 @@ EOF
             echo "PASS:Zsh startup loads _ide completion and binds ide, ide2, ide3, qide, and idek"
         else
             echo "FAIL:Zsh _ide completion bindings:fn=${+functions[_ide]} ide='${_comps[ide]:-}' ide2='${_comps[ide2]:-}' ide3='${_comps[ide3]:-}' qide='${_comps[qide]:-}' idek='${_comps[idek]:-}'"
+        fi
+    )
+
+    # 10. Verify _hs_recover_stale_cwd is registered at the front of precmd_functions (before _mise_hook_precmd) and preexec_functions, recovers recreated $PWD without firing chpwd, and ignores permanently removed $PWD
+    (
+        local stale_dir="$TEMP_HOME/stale-mount-test"
+        mkdir -p "$stale_dir"
+        source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
+        local precmd_first="${precmd_functions[1]:-}"
+        local preexec_first="${preexec_functions[1]:-}"
+        local mise_idx="${precmd_functions[(I)_mise_hook_precmd]}"
+        local order_ok=1
+        if (( mise_idx > 0 && mise_idx <= ${precmd_functions[(I)_hs_recover_stale_cwd]} )); then
+            order_ok=0
+        fi
+        cd "$stale_dir"
+        rm -rf "$stale_dir"
+        # Permanently missing $PWD must be a safe no-op
+        _hs_recover_stale_cwd
+        local still_missing=0
+        [[ ! . -ef "$PWD" && ! -d "$PWD" ]] && still_missing=1
+        # Recreated $PWD must self-heal via builtin cd -q -- "$PWD"
+        mkdir -p "$stale_dir"
+        echo "ok" > "$stale_dir/marker.txt"
+        _hs_recover_stale_cwd
+        local healed=0
+        [[ -d . && . -ef "$PWD" && -f marker.txt ]] && healed=1
+        cd "$TEMP_HOME"
+        rm -rf "$stale_dir"
+        if [ "$precmd_first" = "_hs_recover_stale_cwd" ] && \
+           [ "$preexec_first" = "_hs_recover_stale_cwd" ] && \
+           [ "$order_ok" -eq 1 ] && \
+           [ "$still_missing" -eq 1 ] && \
+           [ "$healed" -eq 1 ]; then
+            echo "PASS:_hs_recover_stale_cwd runs first in precmd_functions (before _mise_hook_precmd) and preexec_functions, heals recreated \$PWD, and safely ignores unmounted/deleted paths"
+        else
+            echo "FAIL:_hs_recover_stale_cwd:precmd_first='$precmd_first' preexec_first='$preexec_first' order_ok='$order_ok' still_missing='$still_missing' healed='$healed'"
         fi
     )
 }

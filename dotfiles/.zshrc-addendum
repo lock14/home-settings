@@ -123,6 +123,28 @@ if command -v mise >/dev/null 2>&1; then
     eval "$(mise activate zsh)"
 fi
 
+# Self-healing recovery when the current working directory descriptor (.) becomes
+# stale or disconnected (such as after a FUSE or network workspace mount restarts)
+# while the logical path $PWD is accessible again. Placed in preexec_functions
+# (so the first command typed after an idle remount succeeds) and at the front
+# of precmd_functions (before mise and prompt hooks run).
+_hs_recover_stale_cwd() {
+    if [[ ( ! -d . || ! . -ef "${PWD:-}" ) && "${PWD:-}" == /* && -d "$PWD" ]]; then
+        setopt localoptions noautopushd nochaselinks nochasedots noposixcd nocdablevars
+        local _hs_has_oldpwd="${OLDPWD+1}" _hs_oldpwd="${OLDPWD:-}"
+        if builtin cd -q -- "$PWD"; then
+            if [[ -n "$_hs_has_oldpwd" ]]; then
+                OLDPWD="$_hs_oldpwd"
+            else
+                unset OLDPWD
+            fi
+        fi
+    fi
+}
+typeset -ga precmd_functions preexec_functions
+precmd_functions=(_hs_recover_stale_cwd ${precmd_functions:#_hs_recover_stale_cwd})
+preexec_functions=(_hs_recover_stale_cwd ${preexec_functions:#_hs_recover_stale_cwd})
+
 # FZF fuzzy finder integration (Ctrl+R history, Ctrl+T files, Alt+C cd)
 if [[ -o interactive ]] && command -v fzf >/dev/null 2>&1; then
     if fzf --zsh >/dev/null 2>&1; then

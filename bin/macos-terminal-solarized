@@ -241,8 +241,8 @@ if mode_arg == "osascript":
         set startup settings to settings set "{esc_name}"
     end try
 end tell'''
-    subprocess.run(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-    sys.exit(0)
+    res = subprocess.run(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    sys.exit(0 if res.returncode == 0 else 1)
 
 try:
     with open(template_path, "rb") as f:

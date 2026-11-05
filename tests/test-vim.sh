@@ -514,7 +514,7 @@ if [ -f "$NVIM_CONFIG" ]; then
     fi
 
     if command -v nvim >/dev/null 2>&1; then
-        if nvim --headless -u NONE -c "lua local f, err = loadfile('$NVIM_CONFIG'); if not f then error(err) end" +qall >/dev/null 2>&1; then
+        if nvim --headless -u NONE -c "lua local f, err = loadfile('$NVIM_CONFIG'); if not f then io.stderr:write(tostring(err) .. '\n'); vim.cmd('cquit 1') end" +qall >/dev/null 2>&1; then
             pass "Neovim verified init.lua syntax cleanly"
         else
             fail "Neovim init.lua syntax" "Neovim reported errors when parsing init.lua"
@@ -1846,7 +1846,12 @@ assert_suite("Neovim highlights Editor UI & Framing Architecture with Converged 
     { "difftext", hl_info("DiffText"), "268bd2/0b4764/true" },
 })
 EOF
-        NVIM_RESULTS="$(XDG_CONFIG_HOME="$TEMP_NVIM_XDG_CONFIG" run_nvim_headless -u "$NVIM_CONFIG" -c "edit $SCRIPT_DIR/sample-code/sample.c" -c "luafile $TEMP_NVIM_XDG_CONFIG/inspect.lua" 2>/dev/null || true)"
+        NVIM_RESULTS=""
+        if NVIM_RESULTS="$(XDG_CONFIG_HOME="$TEMP_NVIM_XDG_CONFIG" run_nvim_headless -u "$NVIM_CONFIG" -c "edit $SCRIPT_DIR/sample-code/sample.c" -c "luafile $TEMP_NVIM_XDG_CONFIG/inspect.lua" 2>/dev/null)"; then
+            :
+        else
+            fail "Neovim headless syntax & highlight inspection" "run_nvim_headless exited with non-zero status"
+        fi
         rm -rf "$TEMP_NVIM_XDG_CONFIG" 2>/dev/null || { sleep 0.2; rm -rf "$TEMP_NVIM_XDG_CONFIG" || true; }
         parse_subshell_results <<< "$NVIM_RESULTS"
     fi
@@ -1974,16 +1979,53 @@ if ok_rm and rm and rm.get then
 end
 local x2_rhs = vim.fn.maparg("<X2Mouse>", "n"):upper()
 local mouse_ok = (vim.fn.maparg("<X1Mouse>", "n"):upper() == "<C-O>" and (x2_rhs == "<C-I>" or x2_rhs == "<TAB>"))
-io.write("DISP=" .. (vim.env.DISPLAY or "") .. "|GCLIP=" .. tostring(vim.g.clipboard) .. "|CB=" .. vim.o.clipboard .. "|AR=" .. tostring(vim.o.autoread) .. "|AC=" .. tostring(#ac >= 1) .. "|MF=" .. mf_ok .. "|MFL=" .. mf_layout_ok .. "|MDW=" .. tostring(md_wrap) .. "|RMHL=" .. tostring(rm_hl_ok) .. "|RMT=" .. tostring(rm_tog_ok) .. "|XM=" .. tostring(mouse_ok))
+local orig_cwd = vim.fn.getcwd()
+local stale_ws = vim.fn.tempname()
+local stale_ws2 = stale_ws .. "-2"
+local stale_sym = stale_ws .. "-sym"
+local lcd_dir = stale_ws .. "-lcd"
+vim.fn.mkdir(stale_ws, "p")
+vim.fn.mkdir(stale_ws2, "p")
+vim.fn.mkdir(lcd_dir, "p")
+local uv = vim.uv or vim.loop
+uv.fs_symlink(stale_ws, stale_sym)
+vim.env.PWD = stale_sym
+vim.cmd("cd " .. vim.fn.fnameescape(stale_sym))
+local pwd_synced = (vim.env.PWD == stale_sym)
+vim.fn.delete(stale_ws, "rf")
+local cwd_when_deleted = uv.cwd()
+pcall(vim.cmd, "doautocmd FocusGained")
+local cwd_still_deleted = uv.cwd()
+vim.fn.mkdir(stale_ws, "p")
+vim.fn.writefile({ "recovered" }, stale_ws .. "/probe.txt")
+local cwd_before_focus = uv.cwd()
+vim.cmd("doautocmd FocusGained")
+local cwd_after_focus = uv.cwd()
+local sym_preserved_1 = (vim.env.PWD == stale_sym)
+local probe_readable = (vim.fn.filereadable("probe.txt") == 1)
+vim.fn.delete(stale_sym)
+uv.fs_symlink(stale_ws2, stale_sym)
+vim.cmd("doautocmd FocusGained")
+local cwd_retargeted = (uv.cwd() == stale_ws2 and vim.env.PWD == stale_sym)
+vim.cmd("lcd " .. vim.fn.fnameescape(lcd_dir))
+vim.cmd("doautocmd FocusGained")
+local lcd_preserved = (uv.cwd() == lcd_dir and vim.fn.haslocaldir() == 1)
+vim.cmd("cd " .. vim.fn.fnameescape(orig_cwd))
+vim.fn.delete(stale_sym, "rf")
+vim.fn.delete(stale_ws, "rf")
+vim.fn.delete(stale_ws2, "rf")
+vim.fn.delete(lcd_dir, "rf")
+local stale_cwd_ok = (pwd_synced and cwd_when_deleted == nil and cwd_still_deleted == nil and cwd_before_focus == nil and cwd_after_focus == stale_ws and sym_preserved_1 and probe_readable and cwd_retargeted and lcd_preserved)
+io.write("DISP=" .. (vim.env.DISPLAY or "") .. "|GCLIP=" .. tostring(vim.g.clipboard) .. "|CB=" .. vim.o.clipboard .. "|AR=" .. tostring(vim.o.autoread) .. "|AC=" .. tostring(#ac >= 1) .. "|CWD=" .. tostring(stale_cwd_ok) .. "|MF=" .. mf_ok .. "|MFL=" .. mf_layout_ok .. "|MDW=" .. tostring(md_wrap) .. "|RMHL=" .. tostring(rm_hl_ok) .. "|RMT=" .. tostring(rm_tog_ok) .. "|XM=" .. tostring(mouse_ok))
 EOF
         SSH_NVIM_OUT="$( (cd "$SCRIPT_DIR" && unset DISPLAY WAYLAND_DISPLAY NVIM_IDE_SOCKET NVIM_IDE_PANE IDE_SESSION IDE_INITIAL_ROOT IDE_AI_CLI && \
             SSH_CONNECTION="10.0.0.1 1234 10.0.0.2 22" \
             run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $SSH_NVIM_SCRIPT") 2>/dev/null || true)"
         rm -f "$SSH_NVIM_SCRIPT"
-        if [ "$SSH_NVIM_OUT" = "DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|MF=true|MFL=true|MDW=true|RMHL=true|RMT=true|XM=true" ]; then
-            pass "Neovim init.lua preserves SSH DISPLAY/clipboard guards, registers SolarizedAutoRead & <X1Mouse>/<X2Mouse> jumplist Back/Forward, pins mini.files focused directory at col=0 (width=35) with full-width right preview (across VimResized and unsaved paths), enables Markdown word-boundary soft-wrapping, and renders Markdown in-buffer (<leader>m) with Solarized Dark Semantic Architecture (zero Yellow, bold=false)"
+        if [ "$SSH_NVIM_OUT" = "DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|CWD=true|MF=true|MFL=true|MDW=true|RMHL=true|RMT=true|XM=true" ]; then
+            pass "Neovim init.lua preserves SSH DISPLAY/clipboard guards, registers SolarizedAutoRead (with stale working directory self-healing) & <X1Mouse>/<X2Mouse> jumplist Back/Forward, pins mini.files focused directory at col=0 (width=35) with full-width right preview (across VimResized and unsaved paths), enables Markdown word-boundary soft-wrapping, and renders Markdown in-buffer (<leader>m) with Solarized Dark Semantic Architecture (zero Yellow, bold=false)"
         else
-            fail "Neovim SSH DISPLAY guard, autoread/clipboard, left-anchored mini.files & render-markdown" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|MF=true|MFL=true|MDW=true|RMHL=true|RMT=true|XM=true', got '$SSH_NVIM_OUT'"
+            fail "Neovim SSH DISPLAY guard, autoread/clipboard, stale cwd recovery, left-anchored mini.files & render-markdown" "Expected 'DISP=|GCLIP=nil|CB=unnamedplus|AR=true|AC=true|CWD=true|MF=true|MFL=true|MDW=true|RMHL=true|RMT=true|XM=true', got '$SSH_NVIM_OUT'"
         fi
 
         MD_LINK_RULES="$(mktemp)"
@@ -2239,9 +2281,9 @@ return table.concat({
 EOF
         PEER_SOCK="$NVIM_SOCK_DIR/nvim-peer.sock"
         SELF_SOCK="$NVIM_SOCK_DIR/nvim-self.sock"
-        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-peer" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-peer" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-peer.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$PEER_SOCK" </dev/null >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && exec env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-peer" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-peer" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-peer.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$PEER_SOCK" </dev/null >/dev/null 2>&1) &
         PEER_PID=$!
-        (cd "$SCRIPT_DIR" && env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-self" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-self" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-self.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$SELF_SOCK" </dev/null >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && exec env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-self" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-self" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-self.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$SELF_SOCK" </dev/null >/dev/null 2>&1) &
         SELF_PID=$!
         if wait_for_nvim_socket "$PEER_SOCK" 60 1 && wait_for_nvim_socket "$SELF_SOCK" 60 1; then
             SELF_CMD_OUT="$(timeout 20 nvim --headless --server "$SELF_SOCK" --remote-expr "luaeval('dofile(\"$NVIM_CMD_SCRIPT\")')" </dev/null 2>/dev/null || true)"
@@ -2372,7 +2414,7 @@ local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--next-attention|fl
 
 jobs = {}
 vim.fn.maparg("<leader>?", "n", false, true).callback()
-local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|86|-h|27|" .. vim.fn.shellescape(ide_bin) .. " --keys")
+local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|90|-h|30|" .. vim.fn.shellescape(ide_bin) .. " --keys")
 
 vim.fn.jobstart = orig_jobstart
 vim.notify = orig_notify
@@ -2398,6 +2440,44 @@ EOF
             pass "Neovim init.lua preserves Normal <leader>a 0ms toggle, dispatches Visual <leader>a, <leader>il, and <leader>id context to AI, and wires <leader>s/<M-s> session switcher and <M-S> next-attention across n/i/v/t modes"
         else
             fail "Neovim IDE session switcher & context dispatch keymaps" "Expected '$EXPECTED_NVIM_FLEET', got '$NVIM_FLEET_OUT'"
+        fi
+
+        NVIM_ERR_TMP="$(mktemp -d)"
+        cat << 'EOF' > "$NVIM_ERR_TMP/fail_script.lua"
+io.write("PASS:before crash\n")
+error("simulated luafile failure")
+EOF
+        if run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_ERR_TMP/fail_script.lua" >/dev/null 2>&1; then
+            fail "run_nvim_headless luafile error propagation" "Expected non-zero exit when luafile throws an unhandled Lua error"
+        else
+            pass "run_nvim_headless exits non-zero when a -c luafile script throws a Lua error"
+        fi
+
+        cat << 'EOF' > "$NVIM_ERR_TMP/clone_fail.lua"
+local tmp = vim.env.NVIM_ERR_TMP
+vim.fn.stdpath = function(what)
+    if what == "data" then return tmp .. "/empty_data" end
+    if what == "config" then return tmp .. "/empty_cfg" end
+    if what == "state" then return tmp .. "/empty_state" end
+    return tmp
+end
+local orig_system = vim.fn.system
+vim.fn.system = function(cmd)
+    if type(cmd) == "table" and cmd[1] == "git" and cmd[2] == "clone" then
+        vim.fn.system("false")
+        return "fatal: simulated git clone failure"
+    end
+    return orig_system(cmd)
+end
+local ok, err = pcall(dofile, vim.env.NVIM_CONFIG_PATH)
+io.write("OK=" .. tostring(ok) .. "|ERR=" .. tostring(err))
+EOF
+        NVIM_CLONE_FAIL_OUT="$(export NVIM_ERR_TMP NVIM_CONFIG_PATH="$NVIM_CONFIG"; run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_ERR_TMP/clone_fail.lua" 2>/dev/null || true)"
+        rm -rf "$NVIM_ERR_TMP"
+        if [[ "$NVIM_CLONE_FAIL_OUT" == *"OK=false"* ]] && [[ "$NVIM_CLONE_FAIL_OUT" == *"Failed to clone lazy.nvim:"* ]] && [[ "$NVIM_CLONE_FAIL_OUT" == *"fatal: simulated git clone failure"* ]]; then
+            pass "Neovim init.lua checks vim.v.shell_error after git clone of lazy.nvim and raises an error with the git output on failure"
+        else
+            fail "Neovim init.lua lazy.nvim clone failure check" "Expected OK=false with Failed to clone lazy.nvim error, got '$NVIM_CLONE_FAIL_OUT'"
         fi
     fi
 else

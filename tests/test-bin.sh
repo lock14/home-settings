@@ -143,6 +143,7 @@ if grep -q -- '--3pane' <<< "$IDE_HELP" && \
    grep -q -- '--sessions' <<< "$IDE_HELP" && \
    grep -q -- '--send' <<< "$IDE_HELP" && \
    grep -q -- '--plain' <<< "$IDE_HELP" && \
+   grep -q -- '--monitor' <<< "$IDE_HELP" && \
    grep -q -- '--keys' <<< "$IDE_HELP" && \
    grep -q -- '--next-attention' <<< "$IDE_HELP" && \
    grep -q -- '--agent-state' <<< "$IDE_HELP" && \
@@ -209,18 +210,20 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+s / Prefix+s" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+S" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+m / Prefix+m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Click top bar" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+E" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+T" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Vis Space a / id" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Space il / Space s" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space a  (Visual)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space il (Normal)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space id (Normal)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "a   (copy-mode)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
-   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 22 ] && \
+   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 28 ] && \
    [ "$(grep -c 'show_keys_cheatsheet()' "$SCRIPT_DIR/bin/ide")" -eq 1 ] && \
    [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
     pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including session switcher, Alt+Shift+S attention jump, focus, swap, resize, context dispatch, mini.files, Space m, jumplist, clipboard, and quit shortcuts) within popup height and drains multi-byte escape sequences on PTY"
@@ -238,6 +241,29 @@ if ! "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1 && \
 else
     fail "bin/ide flag validation" "Expected non-zero on unknown/--on-bell/invalid state and exit-0 outside tmux for --agent-state/--next-attention"
 fi
+
+MON_TEST_DIR="$(mktemp -d)"
+ln -sf "$(command -v bash)" "$MON_TEST_DIR/bash"
+for m_cmd in btop htop top; do
+    printf '#!/bin/sh\necho "MONITOR:%s"\n' "$m_cmd" > "$MON_TEST_DIR/$m_cmd"
+    chmod +x "$MON_TEST_DIR/$m_cmd"
+done
+MON_PY_BIN="$(command -v python3)"
+mon_out_1="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
+mon_out_1c="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --2pane --top)"
+rm -f "$MON_TEST_DIR/btop"
+mon_out_2="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
+rm -f "$MON_TEST_DIR/htop"
+mon_out_3="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
+rm -f "$MON_TEST_DIR/top"
+if [ "$mon_out_1" = "MONITOR:btop" ] && [ "$mon_out_1c" = "MONITOR:btop" ] && \
+   [ "$mon_out_2" = "MONITOR:htop" ] && [ "$mon_out_3" = "MONITOR:top" ] && \
+   ! IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor >/dev/null 2>&1; then
+    pass "bin/ide --monitor / --top resolves system monitor in strict btop -> htop -> top fallback order and fails cleanly when none are installed"
+else
+    fail "bin/ide --monitor fallback" "Expected btop -> htop -> top fallback, got 1='$mon_out_1' 1c='$mon_out_1c' 2='$mon_out_2' 3='$mon_out_3'"
+fi
+rm -rf "$MON_TEST_DIR"
 
 if "$SCRIPT_DIR/bin/ide" --swap diagonal >/dev/null 2>&1; then
     fail "bin/ide invalid --swap direction" "Expected non-zero exit status on invalid --swap direction"
@@ -601,8 +627,8 @@ PY
             sock_3p="$(tmux show-options -qv -t "ws_3pane_test" @ide_socket 2>/dev/null || true)"
             link_nvim_pid=""
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ]; then
-                if ! wait_for_nvim_socket "$sock_3p" 10 1; then
-                    nvim --headless --listen "$sock_3p" >/dev/null 2>&1 &
+                if ! wait_for_nvim_socket "$sock_3p" 60 1; then
+                    nvim --clean --headless --listen "$sock_3p" </dev/null >/dev/null 2>&1 &
                     link_nvim_pid=$!
                     wait_for_nvim_socket "$sock_3p" 30 1 || true
                 fi
@@ -1037,8 +1063,8 @@ PYTEST
             printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$QUIT_LOG" > "$QUIT_HOME/.local/bin/ide"
             chmod +x "$QUIT_HOME/.local/bin/ide"
             : > "$QUIT_LOG"
-            tmux new-session -d -s "quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" \
-                "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$QUIT_SOCK' -c \"lua vim.env.HOME = '$QUIT_HOME'\""
+            tmux new-session -d -s "quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" -e "NVIM_TS_SKIP_AUTO_INSTALL=1" \
+                "nvim --headless -i NONE -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$QUIT_SOCK' -c \"lua vim.env.HOME = '$QUIT_HOME'\""
             tmux set-option -t "=quit-editor:" @ide_socket "$QUIT_SOCK"
 
             SELF_HOME="$TEMP_HOME/quit_self_home"
@@ -1048,8 +1074,8 @@ PYTEST
             printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\nexec %q "$@"\n' "$SELF_LOG" "$SCRIPT_DIR/bin/ide" > "$SELF_HOME/.local/bin/ide"
             chmod +x "$SELF_HOME/.local/bin/ide"
             : > "$SELF_LOG"
-            tmux new-session -d -s "quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=quit-self" \
-                "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
+            tmux new-session -d -s "quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=quit-self" -e "NVIM_TS_SKIP_AUTO_INSTALL=1" \
+                "nvim --headless -i NONE -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
             tmux split-window -d -t "quit-self:" "sleep 600"
             tmux set-option -t "=quit-self:" @ide_socket "$SELF_SOCK"
 
@@ -1105,7 +1131,7 @@ LUA
             fi
 
             wait_for_nvim_socket "$SELF_SOCK" 200 1 || true
-            nvim --headless --server "$SELF_SOCK" --remote-send "<C-\\><C-n>:Q<CR>" >/dev/null 2>&1 || true
+            timeout 10 nvim --headless --server "$SELF_SOCK" --remote-send "<C-\\><C-n>:Q<CR>" </dev/null >/dev/null 2>&1 || true
             for _ in $(seq 1 60); do
                 session_alive "quit-self" || break
                 sleep 0.05
@@ -1127,7 +1153,7 @@ LUA
             args_log="$(LC_ALL=C sort "$ARGS_LOG")"
             args_expected="$(printf '%s\n' "--cd $ARGS_DIR args-sess" "--quit" "--quit" "--quit --force args-sess" "--quit args-sess" "--swap left args-sess" "--toggle args-sess" "--toggle-editor args-sess" | LC_ALL=C sort)"
             popup_cmd="$(cat "$TEMP_HOME/popup_cmd.log" 2>/dev/null || true)"
-            popup_expected="tmux|display-popup|-t|%42|-E|-w|86|-h|27|'$ARGS_HOME/space home/.local/bin/ide' --keys"
+            popup_expected="tmux|display-popup|-t|%42|-E|-w|90|-h|30|'$ARGS_HOME/space home/.local/bin/ide' --keys"
             if [ "$args_log" = "$args_expected" ] && [ "$popup_cmd" = "$popup_expected" ]; then
                 echo "PASS:The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME, --toggle-editor NAME, --swap DIR NAME), passes -t \$TMUX_PANE and shell-escaped path in open_ide_keys_popup, and omits session when \$IDE_SESSION is empty"
             else
@@ -1323,7 +1349,15 @@ PY
     ) > "$MOUSE_WS_OUT" &
     PID_MOUSE_WS=$!
 
-    wait "$PID_MAIN_WS" "$PID_QUIT_WS" "$PID_MOUSE_WS" 2>/dev/null || true
+    if ! wait "$PID_MAIN_WS"; then
+        fail "bin/ide main workspace subshell" "Main workspace test subshell exited with non-zero status"
+    fi
+    if ! wait "$PID_QUIT_WS"; then
+        fail "bin/ide quit workspace subshell" "Quit workspace test subshell exited with non-zero status"
+    fi
+    if ! wait "$PID_MOUSE_WS"; then
+        fail "bin/ide mouse workspace subshell" "Mouse workspace test subshell exited with non-zero status"
+    fi
     parse_subshell_results < "$MAIN_WS_OUT"
     parse_subshell_results < "$QUIT_WS_OUT"
     parse_subshell_results < "$MOUSE_WS_OUT"
@@ -2183,14 +2217,14 @@ if command -v nvim >/dev/null 2>&1; then
     STANDALONE_NVIM_SOCK="$LIVE_NVIM_SOCK_DIR/standalone-sub/nvim.42424.0"
     ORIG_XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
     rm -f "$LIVE_NVIM_SOCK" "$STANDALONE_NVIM_SOCK"
-    (cd "$SCRIPT_DIR" && XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$LIVE_NVIM_SOCK" >/dev/null 2>&1) &
+    (cd "$SCRIPT_DIR" && exec env NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -i NONE -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$LIVE_NVIM_SOCK" </dev/null >/dev/null 2>&1) &
     LIVE_NVIM_PID=$!
-    (cd "$SCRIPT_DIR" && XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$STANDALONE_NVIM_SOCK" >/dev/null 2>&1) &
+    (cd "$SCRIPT_DIR" && exec env NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -i NONE -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$STANDALONE_NVIM_SOCK" </dev/null >/dev/null 2>&1) &
     STANDALONE_NVIM_PID=$!
     if wait_for_nvim_socket "$LIVE_NVIM_SOCK" 60 1 && wait_for_nvim_socket "$STANDALONE_NVIM_SOCK" 60 1; then
         THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" THEME_NVIM_SOCKET_DIR="$LIVE_NVIM_SOCK_DIR" NVIM_IDE_SOCKET="" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set catppuccin-mocha >/dev/null 2>&1
-        NVIM_LIVE_STATE="$(nvim --headless --server "$LIVE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" 2>/dev/null || true)"
-        NVIM_STANDALONE_STATE="$(nvim --headless --server "$STANDALONE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" 2>/dev/null || true)"
+        NVIM_LIVE_STATE="$(timeout 10 nvim --headless --server "$LIVE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" </dev/null 2>/dev/null || true)"
+        NVIM_STANDALONE_STATE="$(timeout 10 nvim --headless --server "$STANDALONE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" </dev/null 2>/dev/null || true)"
         if [ "$NVIM_LIVE_STATE" = "catppuccin-mocha:#1E1E2E:#CDD6F4" ] && [ "$NVIM_STANDALONE_STATE" = "catppuccin-mocha:#1E1E2E:#CDD6F4" ]; then
             pass "bin/theme hot-reloads both IDE and standalone (*/nvim.*.0) live Neovim servers over RPC (g:home_settings_theme=catppuccin-mocha, Normal=#CDD6F4 on #1E1E2E)"
         else
@@ -2200,6 +2234,7 @@ if command -v nvim >/dev/null 2>&1; then
         fail "bin/theme live Neovim socket" "Timed out waiting for headless Neovim servers"
     fi
     kill "$LIVE_NVIM_PID" "$STANDALONE_NVIM_PID" 2>/dev/null || true
+    wait "$LIVE_NVIM_PID" "$STANDALONE_NVIM_PID" 2>/dev/null || true
     rm -f "$LIVE_NVIM_SOCK" "$STANDALONE_NVIM_SOCK"
 fi
 
@@ -3136,6 +3171,7 @@ try:
 
     tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
     tmux("select-pane", "-t", ws_alpha["ed"], check=True)
+    tmux("set-environment", "-t", "=alpha-ws", "SSH_CONNECTION", "10.0.0.1 12345 10.0.0.2 22", check=True)
     tmux("refresh-client", "-t", client_name, "-S", check=True)
     _read_pty_chunk(0.35)
 
@@ -3150,13 +3186,21 @@ try:
         pos = sr_vis.index(label)
         return c_width - _cell_w(sr_vis[pos:]) + 1
 
-    # Click 1: Help (Alt+?) while BOTH attn and fleet pills are rendered to its left
+    # Click 0: Non-interactive SSH host segment ("󰣀") in status-right must NOT open the Help popup
+    ssh_x = _sr_col("󰣀")
+    os.write(client_mfd, f"\x1b[<0;{ssh_x};1M\x1b[<0;{ssh_x};1m".encode())
+    ssh_out = _ansi_strip_re.sub("", _read_pty_chunk(0.5).decode("utf-8", "replace"))
+    assert "IDE Workspace & Editor Keybindings" not in ssh_out, f"SSH segment click unexpectedly opened Help popup: {ssh_out[-250:]!r}"
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"
+
+    # Click 1: Help (Alt+?) (#[range=user|help]) while SSH, attn, and fleet segments are rendered to its left
     help_x = _sr_col("Help")
     os.write(client_mfd, f"\x1b[<0;{help_x};1M\x1b[<0;{help_x};1m".encode())
     help_out = _ansi_strip_re.sub("", _read_pty_chunk(0.8).decode("utf-8", "replace"))
     assert "IDE Workspace & Editor Keybindings" in help_out, f"Help SGR click failed: {help_out[-250:]!r}"
     os.write(client_mfd, b"q")
     _read_pty_chunk(0.4)
+    tmux("set-environment", "-u", "-t", "=alpha-ws", "SSH_CONNECTION", check=True)
 
     # Click 2: Urgent #[range=user|attn] pill ("beta-ws") jumps client to beta-ws and auto-acks
     attn_x = _sr_col("beta-ws")

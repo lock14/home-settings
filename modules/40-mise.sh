@@ -31,15 +31,15 @@ else
         mkdir -p "$mise_config_dir"
         if [ -f "$REPO_DIR/.mise.toml" ]; then
             link_file "$REPO_DIR/.mise.toml" "$mise_config_dir/config.toml"
-            "$MISE_BIN" trust "$REPO_DIR/.mise.toml" >/dev/null 2>&1 || true
-            "$MISE_BIN" trust "$mise_config_dir/config.toml" >/dev/null 2>&1 || true
+            "$MISE_BIN" trust "$REPO_DIR/.mise.toml" >/dev/null
+            "$MISE_BIN" trust "$mise_config_dir/config.toml" >/dev/null
         fi
 
         # Install runtimes
         echo "  Installing Mise toolchains from .mise.toml..."
         export ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}"
         mkdir -p "$ELAN_HOME/toolchains"
-        "$MISE_BIN" install -y || true
+        "$MISE_BIN" install -y || "$MISE_BIN" install -y
         if [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" ]; then
             export PATH="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims:$PATH"
         fi
@@ -47,11 +47,11 @@ else
         # Ensure Lean 4 stable toolchain is initialized when elan is installed
         if "$MISE_BIN" which elan >/dev/null 2>&1; then
             if ! "$MISE_BIN" exec -- elan show 2>/dev/null | grep -Fq "(default)"; then
-                "$MISE_BIN" exec -- elan default stable || true
+                "$MISE_BIN" exec -- elan default stable || "$MISE_BIN" exec -- elan default stable
             fi
         elif command -v elan >/dev/null 2>&1; then
             if ! elan show 2>/dev/null | grep -Fq "(default)"; then
-                elan default stable || true
+                elan default stable || elan default stable
             fi
         fi
 
@@ -62,5 +62,8 @@ else
                 rm -f "$HOME/.local/bin/bat"
             fi
         fi
+    else
+        echo "Error: mise binary not found or not executable at $MISE_BIN" >&2
+        exit 1
     fi
 fi

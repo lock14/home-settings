@@ -123,7 +123,7 @@ wait_for_nvim_socket() {
     local tries=0
     while [ "$tries" -lt "$max_tries" ]; do
         if [ -S "$sock" ]; then
-            if [ "$check_rpc" != "1" ] || [ "$(nvim --headless --server "$sock" --remote-expr "v:vim_did_enter" 2>/dev/null || true)" = "1" ]; then
+            if [ "$check_rpc" != "1" ] || [ "$(timeout 5 nvim --headless --server "$sock" --remote-expr "v:vim_did_enter" </dev/null 2>/dev/null || true)" = "1" ]; then
                 return 0
             fi
         fi
@@ -135,28 +135,53 @@ wait_for_nvim_socket() {
 
 # Run headless Neovim safely with stdin closed (</dev/null), a separate
 # trailing -c "qall!" (so Ex/Lua errors in earlier -c commands never leave
-# Neovim hanging in its event loop), and a bounded timeout.
+# Neovim hanging in its event loop), non-zero exit propagation (`cquit 1`)
+# when a `-c "luafile <script>"` command throws an unhandled Lua error,
+# and a bounded timeout.
 run_nvim_headless() {
     local timeout_sec="${NVIM_HEADLESS_TIMEOUT:-30}"
+    local args=()
+    local prev_is_c=0
+    local arg script_path escaped_path
+    for arg in "$@"; do
+        if [ "$prev_is_c" -eq 1 ]; then
+            prev_is_c=0
+            if [[ "$arg" == "luafile "* ]]; then
+                script_path="${arg#luafile }"
+                escaped_path="${script_path//\\/\\\\}"
+                escaped_path="${escaped_path//\"/\\\"}"
+                args+=("lua local ok, err = pcall(dofile, \"${escaped_path}\"); if not ok then io.stderr:write(tostring(err) .. \"\\n\"); vim.cmd(\"cquit 1\") end")
+                continue
+            fi
+        elif [ "$arg" = "-c" ]; then
+            prev_is_c=1
+        fi
+        args+=("$arg")
+    done
     if command -v timeout >/dev/null 2>&1; then
-        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" timeout "$timeout_sec" nvim --headless "$@" -c "qall!" </dev/null
+        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" timeout "$timeout_sec" nvim --headless "${args[@]}" -c "qall!" </dev/null
     else
-        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" nvim --headless "$@" -c "qall!" </dev/null
+        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" nvim --headless "${args[@]}" -c "qall!" </dev/null
     fi
 }
 
 parse_subshell_results() {
     local pass_prefix="${1:-}"
     local fail_prefix="${2:-}"
-    local line rest
+    local line rest parsed=0
     while IFS= read -r line; do
         if [[ "$line" == PASS:* ]]; then
             pass "${pass_prefix}${line#PASS:}"
+            parsed=$((parsed + 1))
         elif [[ "$line" == FAIL:* ]]; then
             rest="${line#FAIL:}"
             fail "${fail_prefix}${rest%%:*}" "${rest#*:}"
+            parsed=$((parsed + 1))
         fi
     done
+    if [ "$parsed" -eq 0 ]; then
+        fail "${fail_prefix}subshell results" "Expected at least one PASS:/FAIL: line from subshell, got 0"
+    fi
 }
 
 lint_documentation() {
