@@ -243,20 +243,22 @@ else
 fi
 
 MON_TEST_DIR="$(mktemp -d)"
+ln -sf "$(command -v bash)" "$MON_TEST_DIR/bash"
 for m_cmd in btop htop top; do
     printf '#!/bin/sh\necho "MONITOR:%s"\n' "$m_cmd" > "$MON_TEST_DIR/$m_cmd"
     chmod +x "$MON_TEST_DIR/$m_cmd"
 done
-mon_out_1="$(IDE_STRICT_PATH=1 PATH="$MON_TEST_DIR:/bin" "$SCRIPT_DIR/bin/ide" --monitor)"
-mon_out_1c="$(IDE_STRICT_PATH=1 PATH="$MON_TEST_DIR:/bin" "$SCRIPT_DIR/bin/ide" --2pane --top)"
+MON_PY_BIN="$(command -v python3)"
+mon_out_1="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
+mon_out_1c="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --2pane --top)"
 rm -f "$MON_TEST_DIR/btop"
-mon_out_2="$(IDE_STRICT_PATH=1 PATH="$MON_TEST_DIR:/bin" "$SCRIPT_DIR/bin/ide" --monitor)"
+mon_out_2="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
 rm -f "$MON_TEST_DIR/htop"
-mon_out_3="$(IDE_STRICT_PATH=1 PATH="$MON_TEST_DIR:/bin" "$SCRIPT_DIR/bin/ide" --monitor)"
+mon_out_3="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
 rm -f "$MON_TEST_DIR/top"
 if [ "$mon_out_1" = "MONITOR:btop" ] && [ "$mon_out_1c" = "MONITOR:btop" ] && \
    [ "$mon_out_2" = "MONITOR:htop" ] && [ "$mon_out_3" = "MONITOR:top" ] && \
-   ! IDE_STRICT_PATH=1 PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor >/dev/null 2>&1; then
+   ! IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor >/dev/null 2>&1; then
     pass "bin/ide --monitor / --top resolves system monitor in strict btop -> htop -> top fallback order and fails cleanly when none are installed"
 else
     fail "bin/ide --monitor fallback" "Expected btop -> htop -> top fallback, got 1='$mon_out_1' 1c='$mon_out_1c' 2='$mon_out_2' 3='$mon_out_3'"

@@ -3443,8 +3443,9 @@ def main() -> int:
     if not shutil.which("tmux"):
         if "--list" in argv and "--plain" in argv:
             return 0
-        print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
-        return 1
+        if not any(a in ("-h", "--help", "--keys", "--help-keys", "--monitor", "--top", "--btop") for a in argv):
+            print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
+            return 1
 
     layout_mode = "3pane"
     action = "launch"
