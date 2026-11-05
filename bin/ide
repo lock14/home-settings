@@ -17,6 +17,9 @@
 # ==============================================================================
 
 set -euo pipefail
+if { [ ! -d . ] || [ ! . -ef "${PWD:-}" ]; } && [[ "${PWD:-}" == /* ]] && [ -d "$PWD" ]; then
+    builtin cd -- "$PWD" || true
+fi
 if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
     export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
 fi
@@ -200,6 +203,36 @@ def is_socket_path(path: str | Path) -> bool:
         return stat.S_ISSOCK(st.st_mode)
     except OSError:
         return False
+
+
+def safe_getcwd() -> str:
+    pwd = os.environ.get("PWD") or ""
+    try:
+        cwd = os.getcwd()
+        st_dot = os.stat(".")
+        if pwd.startswith("/") and os.path.isdir(pwd):
+            st_pwd = os.stat(pwd)
+            if st_dot.st_dev != st_pwd.st_dev or st_dot.st_ino != st_pwd.st_ino:
+                os.chdir(pwd)
+                return pwd
+        if st_dot.st_nlink > 0:
+            return cwd
+    except OSError:
+        pass
+    for cand in (
+        pwd,
+        os.environ.get("IDE_WORKDIR") or "",
+        os.environ.get("IDE_INITIAL_ROOT") or "",
+        os.path.expanduser("~"),
+        "/",
+    ):
+        if cand and cand.startswith("/") and os.path.isdir(cand):
+            try:
+                os.chdir(cand)
+            except OSError:
+                pass
+            return cand
+    return "/"
 
 
 def is_ssh_session(target_arg: str = "") -> bool:
@@ -489,7 +522,7 @@ def resolve_target_session(arg: str = "") -> str:
         return sanitize_name_token(arg)
     if os.environ.get("TMUX"):
         return current_ide_session()
-    return sanitize_session_name(os.getcwd())
+    return sanitize_session_name(safe_getcwd())
 
 
 def get_ide_var(sess: str, opt_name: str, env_name: str) -> str:
@@ -500,6 +533,36 @@ def get_ide_var(sess: str, opt_name: str, env_name: str) -> str:
         if env_line.startswith(prefix):
             val = env_line[len(prefix):]
     return val
+
+
+def normalize_pane_cwd(raw_cwd: str, sess: str = "", target_arg: str = "") -> str:
+    if raw_cwd and os.path.isdir(raw_cwd):
+        return raw_cwd
+    if not sess and (os.environ.get("TMUX") or target_arg):
+        sess = resolve_target_session(target_arg)
+    workdir = ""
+    init_root = ""
+    if sess and session_exists(sess):
+        workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+        init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+    workdir = workdir or os.environ.get("IDE_WORKDIR") or ""
+    init_root = init_root or os.environ.get("IDE_INITIAL_ROOT") or ""
+    anchors = [a.rstrip("/") for a in (workdir, init_root, os.environ.get("PWD") or "") if a and os.path.isdir(a)]
+    clean_raw = raw_cwd.rstrip("/") if raw_cwd else ""
+    if clean_raw.startswith("/"):
+        for anc in anchors:
+            if anc.endswith(clean_raw):
+                return anc
+            cur = os.path.dirname(clean_raw)
+            while cur and cur != "/":
+                if anc.endswith(cur):
+                    cand = anc + clean_raw[len(cur):]
+                    if os.path.isdir(cand):
+                        return cand
+                cur = os.path.dirname(cur)
+    for anc in anchors:
+        return anc
+    return safe_getcwd()
 
 
 def set_ide_var(sess: str, opt_name: str, env_name: str, val: str) -> None:
@@ -869,8 +932,38 @@ def nvim_remote_send(sock: str, keys: str) -> bool:
         return False
 
 
-def nvim_remote_file(sock: str, filepath: str, line: str = "") -> None:
+def _nvim_recover_cwd_ex(fallback_dir: str = "") -> str:
+    fb_esc = (
+        fallback_dir.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("'", "''")
+    )
+    return (
+        '"if exists(\\"*luaeval\\") | silent! call luaeval(\'(function() '
+        "local u=vim.uv or vim.loop; if u then "
+        "local p=nil; "
+        f'for _,c in ipairs({{vim.env.PWD,vim.env.IDE_WORKDIR,vim.env.IDE_INITIAL_ROOT,\\"{fb_esc}\\"}}) do '
+        'if c and c~=\\"\\" and vim.fn.isdirectory(c)==1 then p=c; break end end; '
+        'if p then local d,s=u.fs_stat(\\".\\"),u.fs_stat(p); '
+        "if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then "
+        "pcall(vim.fn.chdir,p); vim.env.PWD=p end end end end)()') | endif\""
+    )
+
+
+def nvim_recover_and_checktime(sock: str, fallback_dir: str = "", extra_ex: str = "") -> None:
+    steps = [_nvim_recover_cwd_ex(fallback_dir), '"silent! checktime"']
+    if extra_ex:
+        steps.append(f'"{extra_ex}"')
+    nvim_remote_expr(sock, f"execute([{', '.join(steps)}])")
+
+
+def nvim_remote_file(sock: str, filepath: str, line: str = "", fallback_dir: str = "") -> None:
     escaped = filepath.replace("'", "''")
+    fb_dir = fallback_dir
+    if not fb_dir and filepath.startswith("/"):
+        cand_dir = os.path.dirname(filepath)
+        if os.path.isdir(cand_dir):
+            fb_dir = cand_dir
     line_num = int(line) if line.isdigit() and int(line) > 0 else 0
     line_step = (
         f", 'keepjumps silent! call cursor({line_num}, 1) | silent! normal! zz'"
@@ -880,6 +973,7 @@ def nvim_remote_file(sock: str, filepath: str, line: str = "") -> None:
     nvim_remote_expr(
         sock,
         'execute(['
+        f"{_nvim_recover_cwd_ex(fb_dir)}, "
         '"if exists(\\"*luaeval\\") | silent! call luaeval(\'package.loaded[\\"mini.files\\"] and require(\\"mini.files\\").close()\') | endif", '
         '"if &filetype ==# \'netrw\' && winnr(\'\\$\') > 1 | wincmd p | endif", '
         '"stopinsert", '
@@ -971,7 +1065,7 @@ def unpark_role_pane(
         set_ide_var(sess, park_opt, park_env, "0")
 
     if role == "editor":
-        nvim_remote_expr(sock, "execute('checktime') . execute('normal! zz')")
+        nvim_recover_and_checktime(sock, get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"), "silent! normal! zz")
 
 
 def heal_split_for_role(
@@ -1066,7 +1160,7 @@ def park_role_pane(
     if fallback_pane and pane_in_win(fallback_pane, main_win):
         run_tmux("select-window", "-t", main_win, ";", "select-pane", "-t", fallback_pane)
         if fallback_pane == editor_pane:
-            nvim_remote_expr(sock, "execute('checktime')")
+            nvim_recover_and_checktime(sock, get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"))
 
 
 def swap_ide_pane(raw_dir: str, target_arg: str) -> int:
@@ -1230,11 +1324,11 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
                     set_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE", term_pane)
                     break
 
-    cur_dir = (
+    raw_cur_dir = (
         (panes_by_id[editor_pane][5] if editor_pane in panes_by_id else "")
         or (panes_by_id[ai_pane][5] if ai_pane in panes_by_id else "")
-        or os.getcwd()
     )
+    cur_dir = normalize_pane_cwd(raw_cur_dir, sess=sess)
     if not init_root:
         init_root = cur_dir
 
@@ -1304,7 +1398,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
                 unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
             if pane_in_win(editor_pane, main_win):
                 if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
-                    nvim_remote_expr(sock, "execute('checktime')")
+                    nvim_recover_and_checktime(sock, cur_dir)
                 focus_pane_preserving_zoom(main_win, editor_pane)
             elif pane_in_win(term_pane, main_win):
                 focus_pane_preserving_zoom(main_win, term_pane)
@@ -1334,23 +1428,23 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
         else:
             unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
             if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
-                nvim_remote_expr(sock, "execute('checktime')")
+                nvim_recover_and_checktime(sock, cur_dir)
             focus_pane_preserving_zoom(main_win, editor_pane)
     elif mode == "focus-editor":
         unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, "" if skip_checktime else sock)
         if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
-            nvim_remote_expr(sock, "execute('checktime')")
+            nvim_recover_and_checktime(sock, cur_dir)
         focus_pane_preserving_zoom(main_win, editor_pane)
     elif mode == "term":
         if active_pane == term_pane or active_role == "term":
             if last_pane and last_pane != term_pane and pane_in_win(last_pane, main_win):
                 if last_pane == editor_pane:
                     if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
-                        nvim_remote_expr(sock, "execute('checktime')")
+                        nvim_recover_and_checktime(sock, cur_dir)
                 focus_pane_preserving_zoom(main_win, last_pane)
             elif pane_in_win(editor_pane, main_win):
                 if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
-                    nvim_remote_expr(sock, "execute('checktime')")
+                    nvim_recover_and_checktime(sock, cur_dir)
                 focus_pane_preserving_zoom(main_win, editor_pane)
             elif pane_in_win(ai_pane, main_win):
                 focus_pane_preserving_zoom(main_win, ai_pane)
@@ -1389,7 +1483,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
 
 
 def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") -> int:
-    cwd = os.getcwd()
+    cwd = normalize_pane_cwd(safe_getcwd(), target_arg=target_arg)
     if filepath.startswith("~/"):
         filepath = os.path.expanduser(filepath)
     exact_ws = "" if filepath.startswith("//") else resolve_workspace_file(filepath, cwd, target_arg)
@@ -1447,7 +1541,8 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
     if not sock:
         sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     if sock and is_socket_path(sock) and resolve_nvim_bin():
-        nvim_remote_file(sock, filepath, line)
+        ws_dir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT") or cwd
+        nvim_remote_file(sock, filepath, line, fallback_dir=ws_dir)
     if not focus and pane_exists(prev_pane):
         run_tmux("select-pane", "-t", prev_pane)
     return 0
@@ -1538,7 +1633,7 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
         return 1
 
     init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
-    cur_workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or init_root or os.getcwd()
+    cur_workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or init_root or safe_getcwd()
 
     if raw_target in ("--reset", "~", "-"):
         target_dir = init_root if (init_root and os.path.isdir(init_root)) else cur_workdir
@@ -1552,7 +1647,7 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
         elif cand2 and os.path.isdir(cand2):
             target_dir = cand2
         else:
-            target_dir = os.path.join(os.getcwd(), raw_target)
+            target_dir = os.path.join(safe_getcwd(), raw_target)
 
     if not os.path.isdir(target_dir):
         print(f"Error: Directory '{target_dir}' does not exist.", file=sys.stderr)
@@ -1699,7 +1794,8 @@ def paste_from_system_clipboard(target_pane: str) -> None:
 
 
 def resolve_private_link(link_word: str, link_cwd: str, target_arg: str = "") -> str:
-    if not os.environ.get("IDE_WORKDIR") or not os.environ.get("IDE_INITIAL_ROOT"):
+    sess = ""
+    if not os.environ.get("IDE_WORKDIR") or not os.environ.get("IDE_INITIAL_ROOT") or (link_cwd and not os.path.isdir(link_cwd)):
         sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
         if sess and session_exists(sess):
             wdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
@@ -1708,6 +1804,7 @@ def resolve_private_link(link_word: str, link_cwd: str, target_arg: str = "") ->
                 os.environ["IDE_WORKDIR"] = wdir
             if init_root and not os.environ.get("IDE_INITIAL_ROOT"):
                 os.environ["IDE_INITIAL_ROOT"] = init_root
+    link_cwd = normalize_pane_cwd(link_cwd, sess=sess, target_arg=target_arg)
     return _call_ide_hook("ide_resolve_link", link_word, link_cwd)
 
 
@@ -2172,7 +2269,7 @@ def _normalize_clicked_word(word: str) -> str:
 
 
 def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
-    cwd = cwd or os.getcwd()
+    cwd = normalize_pane_cwd(cwd, target_arg=target_arg)
     run_tmux("set-option", "-gq", "word-separators", _TMUX_WORD_SEPS)
 
     if not href and word:
@@ -3279,7 +3376,8 @@ _SEND_REF_SPEC_RE = re.compile(r"^(.*?)(?:[:#][Ll]?([0-9]+)(?:-[Ll]?([0-9]+))?)?
 
 def _format_ai_ref(raw_ref: str, sess: str, ai_pane: str) -> str:
     stripped = raw_ref.strip()
-    ai_cwd = tmux_out("display-message", "-p", "-t", ai_pane, "#{pane_current_path}").strip()
+    raw_ai_cwd = tmux_out("display-message", "-p", "-t", ai_pane, "#{pane_current_path}").strip()
+    ai_cwd = normalize_pane_cwd(raw_ai_cwd, sess=sess)
     workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
     init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
     cand_roots = [r for r in (ai_cwd, workdir, init_root) if r]
@@ -3528,7 +3626,7 @@ def main() -> int:
                 cd_target = argv[i + 1]
                 i += 2
             else:
-                cd_target = os.getcwd()
+                cd_target = safe_getcwd()
                 i += 1
         elif arg in ("-s", "--sessions"):
             action = "sessions"
@@ -3830,7 +3928,7 @@ def main() -> int:
     if action == "kill":
         return quit_ide(target_arg, True, True)
 
-    target_dir = target_arg or os.getcwd()
+    target_dir = target_arg or safe_getcwd()
     if not os.path.isdir(target_dir):
         print(f"Error: Directory '{target_dir}' does not exist.", file=sys.stderr)
         return 1
