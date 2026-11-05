@@ -39,7 +39,7 @@ else
         echo "  Installing Mise toolchains from .mise.toml..."
         export ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}"
         mkdir -p "$ELAN_HOME/toolchains"
-        "$MISE_BIN" install -y || true
+        "$MISE_BIN" install -y || "$MISE_BIN" install -y
         if [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" ]; then
             export PATH="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims:$PATH"
         fi

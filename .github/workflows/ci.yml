@@ -273,7 +273,7 @@ jobs:
 
       - name: Install base container prerequisites
         run: |
-          dnf -y install sudo curl wget findutils git
+          dnf -y install sudo curl wget findutils git libatomic tar gzip xz unzip zsh procps-ng util-linux-user
           mkdir -p /usr/local/bin
           echo '#!/bin/bash' > /usr/local/bin/snap
           echo 'echo "Mock snap: $@"' >> /usr/local/bin/snap
