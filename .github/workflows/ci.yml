@@ -8,6 +8,7 @@ on:
 
 env:
   COLORTERM: truecolor
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
