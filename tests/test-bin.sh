@@ -627,8 +627,8 @@ PY
             sock_3p="$(tmux show-options -qv -t "ws_3pane_test" @ide_socket 2>/dev/null || true)"
             link_nvim_pid=""
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ]; then
-                if ! wait_for_nvim_socket "$sock_3p" 10 1; then
-                    nvim --headless --listen "$sock_3p" >/dev/null 2>&1 &
+                if ! wait_for_nvim_socket "$sock_3p" 60 1; then
+                    nvim --clean --headless --listen "$sock_3p" </dev/null >/dev/null 2>&1 &
                     link_nvim_pid=$!
                     wait_for_nvim_socket "$sock_3p" 30 1 || true
                 fi
@@ -1063,8 +1063,8 @@ PYTEST
             printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\n' "$QUIT_LOG" > "$QUIT_HOME/.local/bin/ide"
             chmod +x "$QUIT_HOME/.local/bin/ide"
             : > "$QUIT_LOG"
-            tmux new-session -d -s "quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" \
-                "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$QUIT_SOCK' -c \"lua vim.env.HOME = '$QUIT_HOME'\""
+            tmux new-session -d -s "quit-editor" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$QUIT_SOCK" -e "NVIM_TS_SKIP_AUTO_INSTALL=1" \
+                "nvim --headless -i NONE -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$QUIT_SOCK' -c \"lua vim.env.HOME = '$QUIT_HOME'\""
             tmux set-option -t "=quit-editor:" @ide_socket "$QUIT_SOCK"
 
             SELF_HOME="$TEMP_HOME/quit_self_home"
@@ -1074,8 +1074,8 @@ PYTEST
             printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\nexec %q "$@"\n' "$SELF_LOG" "$SCRIPT_DIR/bin/ide" > "$SELF_HOME/.local/bin/ide"
             chmod +x "$SELF_HOME/.local/bin/ide"
             : > "$SELF_LOG"
-            tmux new-session -d -s "quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=quit-self" \
-                "nvim -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
+            tmux new-session -d -s "quit-self" -x 120 -y 40 -e "NVIM_IDE_SOCKET=$SELF_SOCK" -e "IDE_SESSION=quit-self" -e "NVIM_TS_SKIP_AUTO_INSTALL=1" \
+                "nvim --headless -i NONE -u '$SCRIPT_DIR/dotfiles/.config/nvim/init.lua' --listen '$SELF_SOCK' -c \"lua vim.env.HOME = '$SELF_HOME'\""
             tmux split-window -d -t "quit-self:" "sleep 600"
             tmux set-option -t "=quit-self:" @ide_socket "$SELF_SOCK"
 
@@ -1131,7 +1131,7 @@ LUA
             fi
 
             wait_for_nvim_socket "$SELF_SOCK" 200 1 || true
-            nvim --headless --server "$SELF_SOCK" --remote-send "<C-\\><C-n>:Q<CR>" >/dev/null 2>&1 || true
+            timeout 10 nvim --headless --server "$SELF_SOCK" --remote-send "<C-\\><C-n>:Q<CR>" </dev/null >/dev/null 2>&1 || true
             for _ in $(seq 1 60); do
                 session_alive "quit-self" || break
                 sleep 0.05
@@ -2217,14 +2217,14 @@ if command -v nvim >/dev/null 2>&1; then
     STANDALONE_NVIM_SOCK="$LIVE_NVIM_SOCK_DIR/standalone-sub/nvim.42424.0"
     ORIG_XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
     rm -f "$LIVE_NVIM_SOCK" "$STANDALONE_NVIM_SOCK"
-    (cd "$SCRIPT_DIR" && XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$LIVE_NVIM_SOCK" >/dev/null 2>&1) &
+    (cd "$SCRIPT_DIR" && exec env NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -i NONE -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$LIVE_NVIM_SOCK" </dev/null >/dev/null 2>&1) &
     LIVE_NVIM_PID=$!
-    (cd "$SCRIPT_DIR" && XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$STANDALONE_NVIM_SOCK" >/dev/null 2>&1) &
+    (cd "$SCRIPT_DIR" && exec env NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" nvim --headless -i NONE -u "$SCRIPT_DIR/dotfiles/.config/nvim/init.lua" --listen "$STANDALONE_NVIM_SOCK" </dev/null >/dev/null 2>&1) &
     STANDALONE_NVIM_PID=$!
     if wait_for_nvim_socket "$LIVE_NVIM_SOCK" 60 1 && wait_for_nvim_socket "$STANDALONE_NVIM_SOCK" 60 1; then
         THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" THEME_NVIM_SOCKET_DIR="$LIVE_NVIM_SOCK_DIR" NVIM_IDE_SOCKET="" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set catppuccin-mocha >/dev/null 2>&1
-        NVIM_LIVE_STATE="$(nvim --headless --server "$LIVE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" 2>/dev/null || true)"
-        NVIM_STANDALONE_STATE="$(nvim --headless --server "$STANDALONE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" 2>/dev/null || true)"
+        NVIM_LIVE_STATE="$(timeout 10 nvim --headless --server "$LIVE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" </dev/null 2>/dev/null || true)"
+        NVIM_STANDALONE_STATE="$(timeout 10 nvim --headless --server "$STANDALONE_NVIM_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . toupper(synIDattr(hlID('Normal'), 'fg#', 'gui'))" </dev/null 2>/dev/null || true)"
         if [ "$NVIM_LIVE_STATE" = "catppuccin-mocha:#1E1E2E:#CDD6F4" ] && [ "$NVIM_STANDALONE_STATE" = "catppuccin-mocha:#1E1E2E:#CDD6F4" ]; then
             pass "bin/theme hot-reloads both IDE and standalone (*/nvim.*.0) live Neovim servers over RPC (g:home_settings_theme=catppuccin-mocha, Normal=#CDD6F4 on #1E1E2E)"
         else
@@ -2234,6 +2234,7 @@ if command -v nvim >/dev/null 2>&1; then
         fail "bin/theme live Neovim socket" "Timed out waiting for headless Neovim servers"
     fi
     kill "$LIVE_NVIM_PID" "$STANDALONE_NVIM_PID" 2>/dev/null || true
+    wait "$LIVE_NVIM_PID" "$STANDALONE_NVIM_PID" 2>/dev/null || true
     rm -f "$LIVE_NVIM_SOCK" "$STANDALONE_NVIM_SOCK"
 fi
 

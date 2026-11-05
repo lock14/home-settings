@@ -271,13 +271,14 @@ STANDALONE_HOME=$(mktemp -d)
     if command -v nvim >/dev/null 2>&1; then
         bash_test_sock="/tmp/nvim-ide-bash-test-$$.sock"
         rm -f "$bash_test_sock"
-        (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bash_test_sock" >/dev/null 2>&1) &
+        (cd "$SCRIPT_DIR" && exec nvim --clean --headless --listen "$bash_test_sock" </dev/null >/dev/null 2>&1) &
         bash_nvim_pid=$!
         if wait_for_nvim_socket "$bash_test_sock" 30; then
             ver_out="$(TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v --version 2>/dev/null | head -n 1 || true)"
             (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
-            bash_remote_state="$(nvim --headless --server "$bash_test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            bash_remote_state="$(timeout 5 nvim --headless --server "$bash_test_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
             kill "$bash_nvim_pid" 2>/dev/null || true
+            wait "$bash_nvim_pid" 2>/dev/null || true
             rm -f "$bash_test_sock"
             if [ "$bash_remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2" ] && [[ "$ver_out" == NVIM* ]]; then
                 echo "PASS:Standalone .bashrc-addendum v() resolves relative paths and +line arguments over RPC, and passes --version to local nvim"
@@ -286,13 +287,14 @@ STANDALONE_HOME=$(mktemp -d)
             fi
         else
             kill "$bash_nvim_pid" 2>/dev/null || true
+            wait "$bash_nvim_pid" 2>/dev/null || true
             rm -f "$bash_test_sock"
         fi
 
         if command -v tmux >/dev/null 2>&1; then
             multisess_dir="$(mktemp -d)"
             bg_nvim_sock="$multisess_dir/bg-nvim.sock"
-            (cd "$SCRIPT_DIR" && nvim --clean --headless --listen "$bg_nvim_sock" >/dev/null 2>&1) &
+            (cd "$SCRIPT_DIR" && exec nvim --clean --headless --listen "$bg_nvim_sock" </dev/null >/dev/null 2>&1) &
             bg_nvim_pid=$!
             wait_for_nvim_socket "$bg_nvim_sock" 30 || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
@@ -304,11 +306,12 @@ STANDALONE_HOME=$(mktemp -d)
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_initial_root "/tmp"
             tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
             (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
-            bg_remote_state="$(nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' 2>/dev/null || true)"
+            bg_remote_state="$(timeout 5 nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
             icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
             sid_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%,0},\$0" TMUX_PANE="" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
             bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
+            wait "$bg_nvim_pid" 2>/dev/null || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
             if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then

@@ -175,6 +175,8 @@ jobs:
           rm -rf "$boot_cfg" /tmp/ci_nvim_lazy.lua /tmp/ci_nvim_ts.lua
 
       - name: Run unit tests
+        env:
+          GITHUB_TOKEN: ""
         run: make test
 
   # ─────────────────────────────────────────────────────────────────────────────

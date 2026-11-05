@@ -123,7 +123,7 @@ wait_for_nvim_socket() {
     local tries=0
     while [ "$tries" -lt "$max_tries" ]; do
         if [ -S "$sock" ]; then
-            if [ "$check_rpc" != "1" ] || [ "$(nvim --headless --server "$sock" --remote-expr "v:vim_did_enter" 2>/dev/null || true)" = "1" ]; then
+            if [ "$check_rpc" != "1" ] || [ "$(timeout 5 nvim --headless --server "$sock" --remote-expr "v:vim_did_enter" </dev/null 2>/dev/null || true)" = "1" ]; then
                 return 0
             fi
         fi
