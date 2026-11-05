@@ -484,7 +484,7 @@ if [ -n "$BAT_BIN" ]; then
     bat_render() {
         HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" BAT_THEME="Solarized-Dark-TrueColor" "$BAT_BIN" --color=always --style=plain --paging=never "$@"
     }
-    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n#### Header 4\n**bold text**\n" | bat_render -l md - 2>/dev/null || true)"
+    MD_OUT="$(printf "# Header 1\n## Header 2\n### Header 3\n#### Header 4\n**bold text**\n" | bat_render -l md -)"
     BASE1_BOLD="$(printf "\033[1;38;2;147;161;161m")"
     if grep -Fq "${SOL_BASE01}#" <<< "$MD_OUT" && \
        grep -Fq "${SOL_ORANGE}Header 1" <<< "$MD_OUT" && \
@@ -501,49 +501,49 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat Markdown rendering" "Expected H1 Orange, H2 Blue, H3 Violet, H4 Base1, Base01 markers, no Yellow, and Base1 bold in bat output"
     fi
 
-    C_OUT="$(echo -e "#include <stdio.h>" | bat_render -l c - 2>/dev/null || true)"
+    C_OUT="$(echo -e "#include <stdio.h>" | bat_render -l c -)"
     if grep -Fq "$SOL_ORANGE" <<< "$C_OUT"; then
         pass "bat renders C/C++ preprocessor directives in Solarized Orange"
     else
         fail "bat C preprocessor rendering" "Expected Orange preprocessor directive in bat output"
     fi
 
-    DIFF_OUT="$(echo -e "--- a\n+++ b\n-old\n+new" | bat_render -l diff - 2>/dev/null || true)"
+    DIFF_OUT="$(echo -e "--- a\n+++ b\n-old\n+new" | bat_render -l diff -)"
     if grep -Fq "$SOL_GREEN" <<< "$DIFF_OUT" && grep -Fq "$SOL_RED" <<< "$DIFF_OUT"; then
         pass "bat renders Unified Diffs with Solarized Green additions and Red deletions"
     else
         fail "bat Diff rendering" "Expected Green additions and Red deletions in bat diff output"
     fi
 
-    QUOTE_OUT="$(printf "> quote text\n" | bat_render -l md - 2>/dev/null || true)"
+    QUOTE_OUT="$(printf "> quote text\n" | bat_render -l md -)"
     if grep -Fq "$SOL_BASE0" <<< "$QUOTE_OUT" && grep -Fq "$SOL_BASE01" <<< "$QUOTE_OUT"; then
         pass "bat renders Markdown blockquotes in Solarized Base0 with Base01 marker"
     else
         fail "bat blockquote rendering" "Expected Base0 text and Base01 marker in bat blockquote output"
     fi
 
-    GO_OUT="$(printf "type MyStruct struct {}\n" | bat_render -l go - 2>/dev/null || true)"
+    GO_OUT="$(printf "type MyStruct struct {}\n" | bat_render -l go -)"
     if grep -Fq "$SOL_BASE0" <<< "$GO_OUT"; then
         pass "bat renders custom struct types in calm Base0"
     else
         fail "bat custom type rendering" "Expected Base0 struct type in bat output"
     fi
 
-    C_TYPE_OUT="$(printf "int x = 42;\n" | bat_render -l c - 2>/dev/null || true)"
+    C_TYPE_OUT="$(printf "int x = 42;\n" | bat_render -l c -)"
     if grep -Fq "$SOL_GREEN" <<< "$C_TYPE_OUT"; then
         pass "bat renders primitive C types (int, char, etc.) in Solarized Green"
     else
         fail "bat primitive type rendering" "Expected Green primitive type in bat output"
     fi
 
-    C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | bat_render -l c - 2>/dev/null || true)"
+    C_STR_OUT="$(printf 'printf("Hello %%s\\n");\n' | bat_render -l c -)"
     if grep -Fq "$SOL_CYAN" <<< "$C_STR_OUT"; then
         pass "bat renders string format specifiers and escapes in Solarized Cyan"
     else
         fail "bat string escape rendering" "Expected Cyan string escape in bat output"
     fi
 
-    C_DECL_OUT="$(printf "typedef struct {\n    int x;\n} Node;\n" | bat_render -l c - 2>/dev/null || true)"
+    C_DECL_OUT="$(printf "typedef struct {\n    int x;\n} Node;\n" | bat_render -l c -)"
     if grep -Fq "${SOL_GREEN}typedef" <<< "$C_DECL_OUT" && grep -Fq "${SOL_GREEN}struct" <<< "$C_DECL_OUT"; then
         pass "bat renders C declaration keywords (typedef, struct) in Solarized Green"
     else
@@ -551,7 +551,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     ESC_ITALIC="$(printf "\033[3;")"
-    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_OPTS="--italic-text=always" bat_render -l c - 2>/dev/null || true)"
+    C_MACRO_OUT="$(printf '#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (x))\n' | BAT_OPTS="--italic-text=always" bat_render -l c -)"
     if grep -Fq "${SOL_ORANGE}#define" <<< "$C_MACRO_OUT" && \
        grep -Fq "${SOL_BASE0}x" <<< "$C_MACRO_OUT" && \
        ! grep -Fq "$ESC_ITALIC" <<< "$C_MACRO_OUT"; then
@@ -560,14 +560,14 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat macro parameter rendering" "Expected upright Base0 grey parameters and body expressions in macro"
     fi
 
-    C_COMMENT_OUT="$(printf '/* sample comment */\n' | BAT_OPTS="--italic-text=always" bat_render -l c - 2>/dev/null || true)"
+    C_COMMENT_OUT="$(printf '/* sample comment */\n' | BAT_OPTS="--italic-text=always" bat_render -l c -)"
     if grep -Fq "$SOL_BASE01" <<< "$C_COMMENT_OUT" && ! grep -Fq "$ESC_ITALIC" <<< "$C_COMMENT_OUT"; then
         pass "bat renders C comments in upright Solarized Base01 without italics"
     else
         fail "bat comment rendering" "Expected upright Base01 comment without italics in bat output"
     fi
 
-    MD_ITALIC_OUT="$(printf '*explicit italic*\n' | BAT_OPTS="--italic-text=always" bat_render -l md - 2>/dev/null || true)"
+    MD_ITALIC_OUT="$(printf '*explicit italic*\n' | BAT_OPTS="--italic-text=always" bat_render -l md -)"
     if grep -Fq "$ESC_ITALIC" <<< "$MD_ITALIC_OUT"; then
         pass "bat renders explicitly tagged Markdown *italic* with true italics"
     else
@@ -575,7 +575,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.2 C Syntax Verification ---
-    C_PREPROC_OUT="$(printf '#ifndef LOG_LEVEL\n#define LOG_LEVEL 2\n#endif\n#ifdef __linux__\n#undef LOG_LEVEL\n' | bat_render -l c - 2>/dev/null || true)"
+    C_PREPROC_OUT="$(printf '#ifndef LOG_LEVEL\n#define LOG_LEVEL 2\n#endif\n#ifdef __linux__\n#undef LOG_LEVEL\n' | bat_render -l c -)"
     if grep -Fq "${SOL_ORANGE}#ifndef" <<< "$C_PREPROC_OUT" && \
        grep -Fq "${SOL_ORANGE}LOG_LEVEL" <<< "$C_PREPROC_OUT" && \
        grep -Fq "${SOL_ORANGE}#ifdef" <<< "$C_PREPROC_OUT" && \
@@ -586,35 +586,35 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat preprocessor conditional macro rendering" "Expected Solarized Orange macro identifiers in preprocessor conditionals"
     fi
 
-    C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | bat_render -l c - 2>/dev/null || true)"
+    C_CONST_OUT="$(printf 'int res = EXIT_FAILURE;\n' | bat_render -l c -)"
     if grep -Fq "${SOL_MAGENTA}EXIT_FAILURE" <<< "$C_CONST_OUT"; then
         pass "bat renders named uppercase constants (EXIT_FAILURE, etc.) in Solarized Magenta"
     else
         fail "bat constant rendering" "Expected Magenta named constants in bat output"
     fi
 
-    C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | bat_render -l c - 2>/dev/null || true)"
+    C_CUSTOM_TYPE_OUT="$(printf 'WorkerNode *node = malloc(sizeof(WorkerNode));\n' | bat_render -l c -)"
     if grep -Fq "${SOL_BASE0}WorkerNode" <<< "$C_CUSTOM_TYPE_OUT"; then
         pass "bat renders custom PascalCase types (WorkerNode, etc.) in calm Solarized Base0"
     else
         fail "bat custom type rendering" "Expected Base0 custom PascalCase type in bat output"
     fi
 
-    C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | bat_render -l c - 2>/dev/null || true)"
+    C_WORD_OP_OUT="$(printf 'sizeof(int);\n' | bat_render -l c -)"
     if grep -Fq "${SOL_GREEN}sizeof" <<< "$C_WORD_OP_OUT"; then
         pass "bat renders word operators (sizeof, etc.) in Solarized Green matching Neovim"
     else
         fail "bat word operator rendering" "Expected Green sizeof in bat output"
     fi
 
-    C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | bat_render -l c - 2>/dev/null || true)"
+    C_FUNC_CALL_OUT="$(printf 'emit_log(0, "test");\n' | bat_render -l c -)"
     if grep -Fq "${SOL_BASE0}emit_log" <<< "$C_FUNC_CALL_OUT"; then
         pass "bat renders user function calls (emit_log, etc.) in calm Solarized Base0 matching Neovim"
     else
         fail "bat function call rendering" "Expected Base0 emit_log call in bat output"
     fi
 
-    C_SAMPLE_OUT="$(bat_render -l c "$SCRIPT_DIR/sample-code/sample.c" 2>/dev/null || true)"
+    C_SAMPLE_OUT="$(bat_render -l c "$SCRIPT_DIR/sample-code/sample.c")"
     if grep -Fq "${SOL_YELLOW}if" <<< "$C_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}return" <<< "$C_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}switch" <<< "$C_SAMPLE_OUT" && \
@@ -635,7 +635,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.3 C++ Syntax Verification ---
-    CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_TEMPLATE_OUT="$(printf 'template <Printable T>\nclass Node {\nstd::vector<T> items;\n};\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_BASE0}T" <<< "$CPP_TEMPLATE_OUT"; then
         pass "bat renders C++ template type parameters (T in template <... T> and vector<T>) in calm Solarized Base0 matching Neovim"
     else
@@ -654,7 +654,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat STL container rendering" "Expected Base0 STL container type in bat output"
     fi
 
-    CPP_DECL_NS_OUT="$(printf 'namespace core::telemetry {\n}\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_DECL_NS_OUT="$(printf 'namespace core::telemetry {\n}\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_GREEN}namespace" <<< "$CPP_DECL_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}core" <<< "$CPP_DECL_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$CPP_DECL_NS_OUT"; then
@@ -663,7 +663,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat namespace definition rendering" "Expected Green namespace keyword and Violet core::telemetry identifiers in bat output"
     fi
 
-    CPP_NS_OUT="$(printf 'using namespace core::telemetry;\nstd::string s;\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_NS_OUT="$(printf 'using namespace core::telemetry;\nstd::string s;\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_GREEN}using" <<< "$CPP_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}core" <<< "$CPP_NS_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$CPP_NS_OUT" && \
@@ -673,7 +673,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat using namespace rendering" "Expected Green using keyword, Violet namespace targets, and Base0 qualifiers in bat output"
     fi
 
-    CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_CONST_OUT="$(printf 'NodeState state_{NodeState::Initializing};\nreturn std::nullopt;\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_MAGENTA}Initializing" <<< "$CPP_CONST_OUT" && \
        grep -Fq "${SOL_MAGENTA}nullopt" <<< "$CPP_CONST_OUT"; then
         pass "bat renders scoped enum constants (NodeState::Initializing) and sentinels (std::nullopt) in Solarized Magenta matching Neovim"
@@ -687,14 +687,14 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat uniform initialization rendering" "Expected Base0 grey variable in uniform initialization"
     fi
 
-    CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_CONCEPT_OUT="$(printf '{ std::cout << t } -> std::same_as<std::ostream&>;\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_BASE0}same_as" <<< "$CPP_CONCEPT_OUT"; then
         pass "bat renders standard C++20 concepts (same_as) in calm Solarized Base0 matching Neovim"
     else
         fail "bat C++20 concept rendering" "Expected Base0 same_as concept in bat output"
     fi
 
-    CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_ENUM_OUT="$(printf 'enum class NodeState : uint8_t {\n};\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_BASE0}NodeState" <<< "$CPP_ENUM_OUT" && \
        grep -Fq "${SOL_GREEN}uint8_t" <<< "$CPP_ENUM_OUT"; then
         pass "bat renders enum class types in calm Solarized Base0 and underlying primitive types (uint8_t) in Solarized Green matching Neovim"
@@ -702,7 +702,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat enum type rendering" "Expected Base0 enum name and Green underlying type in bat output"
     fi
 
-    CPP_QUAL_FUNC_OUT="$(printf 'void test() {\n    std::move(metric);\n    std::for_each(items.begin(), items.end());\n}\n' | bat_render -l cpp - 2>/dev/null || true)"
+    CPP_QUAL_FUNC_OUT="$(printf 'void test() {\n    std::move(metric);\n    std::for_each(items.begin(), items.end());\n}\n' | bat_render -l cpp -)"
     if grep -Fq "${SOL_BASE0}std" <<< "$CPP_QUAL_FUNC_OUT" && \
        grep -Fq "${SOL_BASE0}move" <<< "$CPP_QUAL_FUNC_OUT" && \
        grep -Fq "${SOL_BASE0}for_each" <<< "$CPP_QUAL_FUNC_OUT"; then
@@ -711,7 +711,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat qualified function rendering" "Expected Base0 Grey std and Base0 move/for_each in bat output"
     fi
 
-    CPP_SAMPLE_OUT="$(bat_render -l cpp "$SCRIPT_DIR/sample-code/sample.cpp" 2>/dev/null || true)"
+    CPP_SAMPLE_OUT="$(bat_render -l cpp "$SCRIPT_DIR/sample-code/sample.cpp")"
     if grep -Fq "${SOL_VIOLET}[[" <<< "$CPP_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}nodiscard" <<< "$CPP_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}]]" <<< "$CPP_SAMPLE_OUT" && \
@@ -727,7 +727,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.4 Diff Syntax Verification ---
-    DIFF_SAMPLE_OUT="$(bat_render -l diff "$SCRIPT_DIR/sample-code/sample.diff" 2>/dev/null || true)"
+    DIFF_SAMPLE_OUT="$(bat_render -l diff "$SCRIPT_DIR/sample-code/sample.diff")"
     if grep -Fq "${SOL_BLUE}diff" <<< "$DIFF_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" <<< "$DIFF_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}4b825dc" <<< "$DIFF_SAMPLE_OUT" && \
@@ -746,7 +746,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.5 Go Syntax Verification ---
-    GO_SAMPLE_OUT="$(bat_render -l go "$SCRIPT_DIR/sample-code/sample.go" 2>/dev/null || true)"
+    GO_SAMPLE_OUT="$(bat_render -l go "$SCRIPT_DIR/sample-code/sample.go")"
     if grep -Fq "${SOL_GREEN}package" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}main" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}import" <<< "$GO_SAMPLE_OUT" && \
@@ -781,7 +781,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.6 Java Syntax Verification ---
-    JAVA_SAMPLE_OUT="$(bat_render -l java "$SCRIPT_DIR/sample-code/sample.java" 2>/dev/null || true)"
+    JAVA_SAMPLE_OUT="$(bat_render -l java "$SCRIPT_DIR/sample-code/sample.java")"
     if grep -Fq "${SOL_VIOLET}import" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}java" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}Instant" <<< "$JAVA_SAMPLE_OUT" && \
@@ -813,7 +813,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.7 Python Syntax Verification ---
-    PYTHON_SAMPLE_OUT="$(bat_render -l py "$SCRIPT_DIR/sample-code/sample.py" 2>/dev/null || true)"
+    PYTHON_SAMPLE_OUT="$(bat_render -l py "$SCRIPT_DIR/sample-code/sample.py")"
     if grep -Fq "${SOL_VIOLET}from" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}asyncio" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}typing" <<< "$PYTHON_SAMPLE_OUT" && \
@@ -858,7 +858,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.8 Rust Syntax Verification ---
-    RUST_SAMPLE_OUT="$(bat_render -l rs "$SCRIPT_DIR/sample-code/sample.rs" 2>/dev/null || true)"
+    RUST_SAMPLE_OUT="$(bat_render -l rs "$SCRIPT_DIR/sample-code/sample.rs")"
     if grep -Fq "${SOL_VIOLET}use" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}std" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}collections" <<< "$RUST_SAMPLE_OUT" && \
@@ -904,7 +904,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.9 Bash Syntax Verification ---
-    SH_SAMPLE_OUT="$(bat_render -l sh "$SCRIPT_DIR/sample-code/sample.sh" 2>/dev/null || true)"
+    SH_SAMPLE_OUT="$(bat_render -l sh "$SCRIPT_DIR/sample-code/sample.sh")"
     if grep -Fq "${SOL_ORANGE}#!/bin/bash" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}set" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}SCRIPT_NAME" <<< "$SH_SAMPLE_OUT" && \
@@ -960,7 +960,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.10 SQL Syntax Verification ---
-    SQL_SAMPLE_OUT="$(bat_render -l sql "$SCRIPT_DIR/sample-code/sample.sql" 2>/dev/null || true)"
+    SQL_SAMPLE_OUT="$(bat_render -l sql "$SCRIPT_DIR/sample-code/sample.sql")"
     if       grep -Fq "${SOL_GREEN}CREATE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}TABLE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}customer_accounts" <<< "$SQL_SAMPLE_OUT" && \
@@ -1018,7 +1018,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.11 Terraform / HCL Syntax Verification ---
-    TF_SAMPLE_OUT="$(bat_render -l tf "$SCRIPT_DIR/sample-code/sample.tf" 2>/dev/null || true)"
+    TF_SAMPLE_OUT="$(bat_render -l tf "$SCRIPT_DIR/sample-code/sample.tf")"
     if       grep -Fq "${SOL_GREEN}terraform" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}required_providers" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}variable" <<< "$TF_SAMPLE_OUT" && \
@@ -1062,7 +1062,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.12 Markdown Syntax Verification ---
-    MD_SAMPLE_OUT="$(bat_render -l md "$SCRIPT_DIR/sample-code/sample.md" 2>/dev/null || true)"
+    MD_SAMPLE_OUT="$(bat_render -l md "$SCRIPT_DIR/sample-code/sample.md")"
     if grep -Fq "${SOL_ORANGE}Workstation Architecture" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}1. Executive Summary" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}2.1 File System Topology" <<< "$MD_SAMPLE_OUT" && \
@@ -1104,7 +1104,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.13 TypeScript & JavaScript Syntax Verification ---
-    TS_SAMPLE_OUT="$(bat_render -l ts "$SCRIPT_DIR/sample-code/sample.ts" 2>/dev/null || true)"
+    TS_SAMPLE_OUT="$(bat_render -l ts "$SCRIPT_DIR/sample-code/sample.ts")"
     if grep -Fq "${SOL_VIOLET}export" <<< "$TS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}enum" <<< "$TS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}type" <<< "$TS_SAMPLE_OUT" && \
@@ -1148,7 +1148,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat TypeScript rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.ts output"
     fi
 
-    JS_SAMPLE_OUT="$(bat_render -l js "$SCRIPT_DIR/sample-code/sample.js" 2>/dev/null || true)"
+    JS_SAMPLE_OUT="$(bat_render -l js "$SCRIPT_DIR/sample-code/sample.js")"
     if grep -Fq "${SOL_VIOLET}import" <<< "$JS_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}export" <<< "$JS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}class" <<< "$JS_SAMPLE_OUT" && \
@@ -1178,7 +1178,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.14 XML Syntax Verification ---
-    XML_SAMPLE_OUT="$(bat_render -l xml "$SCRIPT_DIR/sample-code/sample.xml" 2>/dev/null || true)"
+    XML_SAMPLE_OUT="$(bat_render -l xml "$SCRIPT_DIR/sample-code/sample.xml")"
     if grep -Fq "${SOL_ORANGE}xml" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}xml-stylesheet" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}deployment" <<< "$XML_SAMPLE_OUT" && \
@@ -1199,7 +1199,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.15 HTML Syntax Verification ---
-    HTML_SAMPLE_OUT="$(bat_render -l html "$SCRIPT_DIR/sample-code/sample.html" 2>/dev/null || true)"
+    HTML_SAMPLE_OUT="$(bat_render -l html "$SCRIPT_DIR/sample-code/sample.html")"
     if grep -Fq "${SOL_ORANGE}DOCTYPE" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}html" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}header" <<< "$HTML_SAMPLE_OUT" && \
@@ -1223,7 +1223,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.16 JSON Syntax Verification ---
-    JSON_SAMPLE_OUT="$(bat_render -l json "$SCRIPT_DIR/sample-code/sample.json" 2>/dev/null || true)"
+    JSON_SAMPLE_OUT="$(bat_render -l json "$SCRIPT_DIR/sample-code/sample.json")"
     if grep -Fq "${SOL_GREEN}\$schema" <<< "$JSON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}apiVersion" <<< "$JSON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}metadata" <<< "$JSON_SAMPLE_OUT" && \
@@ -1241,7 +1241,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.17 YAML Syntax Verification ---
-    YAML_SAMPLE_OUT="$(bat_render -l yaml "$SCRIPT_DIR/sample-code/sample.yaml" 2>/dev/null || true)"
+    YAML_SAMPLE_OUT="$(bat_render -l yaml "$SCRIPT_DIR/sample-code/sample.yaml")"
     if grep -Fq "${SOL_GREEN}apiVersion" <<< "$YAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}kind" <<< "$YAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}metadata" <<< "$YAML_SAMPLE_OUT" && \
@@ -1265,7 +1265,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.18 TOML Syntax Verification ---
-    TOML_SAMPLE_OUT="$(bat_render -l toml "$SCRIPT_DIR/sample-code/sample.toml" 2>/dev/null || true)"
+    TOML_SAMPLE_OUT="$(bat_render -l toml "$SCRIPT_DIR/sample-code/sample.toml")"
     if grep -Fq "${SOL_BLUE}package" <<< "$TOML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}server" <<< "$TOML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}rate_limits" <<< "$TOML_SAMPLE_OUT" && \
@@ -1291,7 +1291,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.19 CSS Syntax Verification ---
-    CSS_SAMPLE_OUT="$(bat_render -l css "$SCRIPT_DIR/sample-code/sample.css" 2>/dev/null || true)"
+    CSS_SAMPLE_OUT="$(bat_render -l css "$SCRIPT_DIR/sample-code/sample.css")"
     if grep -Fq "${SOL_ORANGE}@layer" <<< "$CSS_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}@font-face" <<< "$CSS_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}@keyframes" <<< "$CSS_SAMPLE_OUT" && \
@@ -1328,7 +1328,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.20 Java Properties Syntax Verification ---
-    PROPERTIES_SAMPLE_OUT="$(bat_render -l properties "$SCRIPT_DIR/sample-code/sample.properties" 2>/dev/null || true)"
+    PROPERTIES_SAMPLE_OUT="$(bat_render -l properties "$SCRIPT_DIR/sample-code/sample.properties")"
     if grep -Fq "${SOL_GREEN}spring.application.name" <<< "$PROPERTIES_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}server.port" <<< "$PROPERTIES_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}8080" <<< "$PROPERTIES_SAMPLE_OUT" && \
@@ -1347,7 +1347,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.21 Protocol Buffers (.proto) Syntax Verification ---
-    PROTO_SAMPLE_OUT="$(bat_render -l proto "$SCRIPT_DIR/sample-code/sample.proto" 2>/dev/null || true)"
+    PROTO_SAMPLE_OUT="$(bat_render -l proto "$SCRIPT_DIR/sample-code/sample.proto")"
     if grep -Fq "${SOL_ORANGE}syntax" <<< "$PROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}proto3" <<< "$PROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}package" <<< "$PROTO_SAMPLE_OUT" && \
@@ -1379,7 +1379,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.22 Protocol Buffers Text Format (.textproto) Syntax Verification ---
-    TEXTPROTO_SAMPLE_OUT="$(bat_render -l textproto "$SCRIPT_DIR/sample-code/sample.textproto" 2>/dev/null || true)"
+    TEXTPROTO_SAMPLE_OUT="$(bat_render -l textproto "$SCRIPT_DIR/sample-code/sample.textproto")"
     if grep -Fq "${SOL_BLUE}recorded_at" <<< "$TEXTPROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}route_quotas" <<< "$TEXTPROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}metrics" <<< "$TEXTPROTO_SAMPLE_OUT" && \
@@ -1405,7 +1405,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.23 Kotlin (.kt) Syntax Verification ---
-    KOTLIN_SAMPLE_OUT="$(bat_render -l kt "$SCRIPT_DIR/sample-code/sample.kt" 2>/dev/null || true)"
+    KOTLIN_SAMPLE_OUT="$(bat_render -l kt "$SCRIPT_DIR/sample-code/sample.kt")"
     if grep -Fq "${SOL_VIOLET}@file:JvmName" <<< "$KOTLIN_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}@JvmInline" <<< "$KOTLIN_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}package" <<< "$KOTLIN_SAMPLE_OUT" && \
@@ -1449,7 +1449,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.24 Swift (.swift) Syntax Verification ---
-    SWIFT_SAMPLE_OUT="$(bat_render -l swift "$SCRIPT_DIR/sample-code/sample.swift" 2>/dev/null || true)"
+    SWIFT_SAMPLE_OUT="$(bat_render -l swift "$SCRIPT_DIR/sample-code/sample.swift")"
     if grep -Fq "${SOL_ORANGE}#if" <<< "$SWIFT_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}canImport" <<< "$SWIFT_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}#else" <<< "$SWIFT_SAMPLE_OUT" && \
@@ -1494,7 +1494,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.25 Zig (.zig) Syntax Verification ---
-    ZIG_SAMPLE_OUT="$(bat_render -l zig "$SCRIPT_DIR/sample-code/sample.zig" 2>/dev/null || true)"
+    ZIG_SAMPLE_OUT="$(bat_render -l zig "$SCRIPT_DIR/sample-code/sample.zig")"
     if grep -Fq "${SOL_VIOLET}std" <<< "$ZIG_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}@import" <<< "$ZIG_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}pub" <<< "$ZIG_SAMPLE_OUT" && \
@@ -1539,7 +1539,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.26 C# (.cs) Syntax Verification ---
-    CS_SAMPLE_OUT="$(bat_render -l cs "$SCRIPT_DIR/sample-code/sample.cs" 2>/dev/null || true)"
+    CS_SAMPLE_OUT="$(bat_render -l cs "$SCRIPT_DIR/sample-code/sample.cs")"
     if grep -Fq "${SOL_VIOLET}using" <<< "$CS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}namespace" <<< "$CS_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Core" <<< "$CS_SAMPLE_OUT" && \
@@ -1580,7 +1580,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.27 Scala 3 (.scala) Syntax Verification ---
-    SCALA_SAMPLE_OUT="$(bat_render -l scala "$SCRIPT_DIR/sample-code/sample.scala" 2>/dev/null || true)"
+    SCALA_SAMPLE_OUT="$(bat_render -l scala "$SCRIPT_DIR/sample-code/sample.scala")"
     if grep -Fq "${SOL_GREEN}package" <<< "$SCALA_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}core" <<< "$SCALA_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$SCALA_SAMPLE_OUT" && \
@@ -1619,7 +1619,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.28 Ruby (.rb) Syntax Verification ---
-    RUBY_SAMPLE_OUT="$(bat_render -l rb "$SCRIPT_DIR/sample-code/sample.rb" 2>/dev/null || true)"
+    RUBY_SAMPLE_OUT="$(bat_render -l rb "$SCRIPT_DIR/sample-code/sample.rb")"
     if grep -Fq "${SOL_VIOLET}require" <<< "$RUBY_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}module" <<< "$RUBY_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Telemetry" <<< "$RUBY_SAMPLE_OUT" && \
@@ -1657,7 +1657,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.29 GraphQL (.graphql) Syntax Verification ---
-    GRAPHQL_SAMPLE_OUT="$(bat_render -l graphql "$SCRIPT_DIR/sample-code/sample.graphql" 2>/dev/null || true)"
+    GRAPHQL_SAMPLE_OUT="$(bat_render -l graphql "$SCRIPT_DIR/sample-code/sample.graphql")"
     if grep -Fq "${SOL_GREEN}schema" <<< "$GRAPHQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}scalar" <<< "$GRAPHQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}directive" <<< "$GRAPHQL_SAMPLE_OUT" && \
@@ -1696,8 +1696,8 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.30 Open-Source Bazel / Starlark (.bzl & BUILD.bazel) Syntax Verification ---
-    BZL_SAMPLE_OUT="$(bat_render -l bzl "$SCRIPT_DIR/sample-code/sample.bzl" 2>/dev/null || true)"
-    BUILD_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/BUILD.bazel" 2>/dev/null || true)"
+    BZL_SAMPLE_OUT="$(bat_render -l bzl "$SCRIPT_DIR/sample-code/sample.bzl")"
+    BUILD_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/BUILD.bazel")"
     if grep -Fq "${SOL_VIOLET}load" <<< "$BZL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}Open-source Bazel Starlark rules and macros for telemetry schema codegen." <<< "$BZL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}Rule implementation generating C++ headers from telemetry schemas." <<< "$BZL_SAMPLE_OUT" && \
@@ -1735,7 +1735,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.31 Open Policy Agent Rego (.rego) Syntax Verification ---
-    REGO_SAMPLE_OUT="$(bat_render -l rego "$SCRIPT_DIR/sample-code/sample.rego" 2>/dev/null || true)"
+    REGO_SAMPLE_OUT="$(bat_render -l rego "$SCRIPT_DIR/sample-code/sample.rego")"
     if grep -Fq "${SOL_GREEN}package" <<< "$REGO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$REGO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}authz" <<< "$REGO_SAMPLE_OUT" && \
@@ -1769,7 +1769,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.32 Lua (.lua) Converged Ergonomic Solarized Verification
-    LUA_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lua" 2>/dev/null || true)"
+    LUA_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lua")"
     if grep -Fq "${SOL_ORANGE}#!/usr/bin/env lua" <<< "$LUA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}local" <<< "$LUA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}function" <<< "$LUA_SAMPLE_OUT" && \
@@ -1806,7 +1806,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.33 Dockerfile (sample.Dockerfile) Converged Ergonomic Solarized Verification
-    DOCKER_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.Dockerfile" 2>/dev/null || true)"
+    DOCKER_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.Dockerfile")"
     if grep -Fq "${SOL_ORANGE}# syntax=docker/dockerfile:1" <<< "$DOCKER_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}FROM" <<< "$DOCKER_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}AS" <<< "$DOCKER_SAMPLE_OUT" && \
@@ -1835,7 +1835,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.34 Makefile (sample.mk) Converged Ergonomic Solarized Verification
-    MAKE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.mk" 2>/dev/null || true)"
+    MAKE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.mk")"
     if grep -Fq "${SOL_VIOLET}-include" <<< "$MAKE_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}.PHONY" <<< "$MAKE_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}export" <<< "$MAKE_SAMPLE_OUT" && \
@@ -1859,7 +1859,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.35 Elixir (.ex) Converged Ergonomic Solarized Verification
-    ELIXIR_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.ex" 2>/dev/null || true)"
+    ELIXIR_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.ex")"
     if grep -Fq "${SOL_GREEN}defmodule" <<< "$ELIXIR_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Core.Telemetry.Collector" <<< "$ELIXIR_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}use" <<< "$ELIXIR_SAMPLE_OUT" && \
@@ -1904,7 +1904,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.36 Haskell (.hs) Converged Ergonomic Solarized Verification
-    HASKELL_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.hs" 2>/dev/null || true)"
+    HASKELL_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.hs")"
     if grep -Fq "${SOL_ORANGE}{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}" <<< "$HASKELL_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}module" <<< "$HASKELL_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Core.Telemetry" <<< "$HASKELL_SAMPLE_OUT" && \
@@ -1945,7 +1945,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.37 OCaml (.ml) Converged Ergonomic Solarized Verification
-    OCAML_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.ml" 2>/dev/null || true)"
+    OCAML_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.ml")"
     if grep -Fq "${SOL_VIOLET}open" <<< "$OCAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Printf" <<< "$OCAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}TELEMETRY" <<< "$OCAML_SAMPLE_OUT" && \
@@ -1987,7 +1987,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.38 Clojure (.clj) Converged Ergonomic Solarized Verification
-    CLOJURE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.clj" 2>/dev/null || true)"
+    CLOJURE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.clj")"
     if grep -Fq "${SOL_VIOLET}ns" <<< "$CLOJURE_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}core.telemetry.collector" <<< "$CLOJURE_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}:require" <<< "$CLOJURE_SAMPLE_OUT" && \
@@ -2025,7 +2025,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.39 Lean 4 (.lean) Converged Ergonomic Solarized Verification
-    LEAN_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lean" 2>/dev/null || true)"
+    LEAN_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lean")"
     if grep -Fq "${SOL_ORANGE}#check" <<< "$LEAN_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}#eval" <<< "$LEAN_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}import" <<< "$LEAN_SAMPLE_OUT" && \
@@ -2154,6 +2154,66 @@ else
     fail "Empty drop-in directories" "Sourcing .environment-variables, .aliases, or .zsh-functions failed when drop-in directories are empty"
 fi
 rm -rf "$TEMP_EMPTY_DROPIN_HOME"
+
+# Verify stale working directory self-healing in .zshrc-addendum (preexec and precmd_functions[1]) and .bashrc-addendum (_solarized_bash_prompt) without blind stderr suppression, OLDPWD clobbering, dirstack pollution, or symlink canonicalization
+TEMP_STALE_CWD_ROOT=$(mktemp -d)
+zsh_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" zsh -c '
+    mkdir -p "$HOME" "'"$TEMP_STALE_CWD_ROOT"'/prev" "'"$TEMP_STALE_CWD_ROOT"'/ws"
+    ln -s "'"$TEMP_STALE_CWD_ROOT"'/ws" "'"$TEMP_STALE_CWD_ROOT"'/ws-sym"
+    source "'"$SCRIPT_DIR"'/dotfiles/.zshrc-addendum"
+    source "'"$SCRIPT_DIR"'/dotfiles/.zshrc-addendum"
+    setopt auto_pushd
+    chpwd_hits=0
+    _test_chpwd_spy() { (( ++chpwd_hits )); }
+    chpwd_functions+=(_test_chpwd_spy)
+    cd "'"$TEMP_STALE_CWD_ROOT"'/prev"
+    cd "'"$TEMP_STALE_CWD_ROOT"'/ws-sym"
+    setopt chase_links
+    dirstack_before="${#dirstack[@]}"
+    chpwd_hits=0
+    rm -rf "'"$TEMP_STALE_CWD_ROOT"'/ws"
+    mkdir -p "'"$TEMP_STALE_CWD_ROOT"'/ws"
+    touch "'"$TEMP_STALE_CWD_ROOT"'/ws/recovered.txt"
+    [[ ( ! -d . || ! . -ef "$PWD" ) && -d "$PWD" ]] && stale_before=1 || stale_before=0
+    "${preexec_functions[1]}"
+    [[ -d . && . -ef "$PWD" && -f recovered.txt && "$PWD" == "'"$TEMP_STALE_CWD_ROOT"'/ws-sym" && "$OLDPWD" == "'"$TEMP_STALE_CWD_ROOT"'/prev" && "${#dirstack[@]}" -eq "$dirstack_before" ]] && preexec_ok=1 || preexec_ok=0
+    rm -rf "'"$TEMP_STALE_CWD_ROOT"'/ws"
+    mkdir -p "'"$TEMP_STALE_CWD_ROOT"'/ws"
+    "${precmd_functions[1]}"
+    [[ -d . && . -ef "$PWD" && "$PWD" == "'"$TEMP_STALE_CWD_ROOT"'/ws-sym" && "$OLDPWD" == "'"$TEMP_STALE_CWD_ROOT"'/prev" && "${#dirstack[@]}" -eq "$dirstack_before" ]] && precmd_ok=1 || precmd_ok=0
+    fn_def="$(functions _hs_recover_stale_cwd)"
+    [[ "$fn_def" != *"/dev/null"* ]] && no_devnull=1 || no_devnull=0
+    printf "PRE1=%s|EXEC1=%s|CNT=%d/%d|STALE=%d|PREEXEC=%d|PRECMD=%d|CHPWD=%d|NODEVNULL=%d\n" \
+        "${precmd_functions[1]:-}" "${preexec_functions[1]:-}" \
+        "${precmd_functions[(I)_hs_recover_stale_cwd]}" "${preexec_functions[(I)_hs_recover_stale_cwd]}" \
+        "$stale_before" "$preexec_ok" "$precmd_ok" "$chpwd_hits" "$no_devnull"
+')
+bash_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" bash --norc -i -c '
+    mkdir -p "$HOME" "'"$TEMP_STALE_CWD_ROOT"'/bprev" "'"$TEMP_STALE_CWD_ROOT"'/bws"
+    ln -s "'"$TEMP_STALE_CWD_ROOT"'/bws" "'"$TEMP_STALE_CWD_ROOT"'/bws-sym"
+    PROMPT_COMMAND="custom_hook; _solarized_bash_prompt"
+    source "'"$SCRIPT_DIR"'/dotfiles/.bashrc-addendum"
+    cd "'"$TEMP_STALE_CWD_ROOT"'/bprev"
+    cd "'"$TEMP_STALE_CWD_ROOT"'/bws-sym"
+    set -P
+    rm -rf "'"$TEMP_STALE_CWD_ROOT"'/bws"
+    mkdir -p "'"$TEMP_STALE_CWD_ROOT"'/bws"
+    touch "'"$TEMP_STALE_CWD_ROOT"'/bws/recovered.txt"
+    { [ ! -d . ] || [ ! . -ef "$PWD" ]; } && [ -d "$PWD" ] && stale_before=1 || stale_before=0
+    false
+    _solarized_bash_prompt
+    [ -d . ] && [ . -ef "$PWD" ] && [ -f recovered.txt ] && [ "$PWD" = "'"$TEMP_STALE_CWD_ROOT"'/bws-sym" ] && [ "$OLDPWD" = "'"$TEMP_STALE_CWD_ROOT"'/bprev" ] && prompt_ok=1 || prompt_ok=0
+    [[ "$PS1" == *"220;50;47m"* ]] && exit_preserved=1 || exit_preserved=0
+    [[ "${PROMPT_COMMAND[*]}" != *"_solarized_bash_prompt"*"_solarized_bash_prompt"* ]] && dedup_ok=1 || dedup_ok=0
+    printf "PC=%s|DEDUP=%d|STALE=%d|OK=%d|EXIT=%d\n" "${PROMPT_COMMAND[*]}" "$dedup_ok" "$stale_before" "$prompt_ok" "$exit_preserved"
+' 2>/dev/null)
+rm -rf "$TEMP_STALE_CWD_ROOT"
+if [[ "$zsh_stale_out" == "PRE1=_hs_recover_stale_cwd|EXEC1=_hs_recover_stale_cwd|CNT=1/1|STALE=1|PREEXEC=1|PRECMD=1|CHPWD=0|NODEVNULL=1" ]] && \
+   [[ "$bash_stale_out" == PC=_solarized_bash_prompt*"|DEDUP=1|STALE=1|OK=1|EXIT=1" ]]; then
+    pass ".zshrc-addendum (preexec and precmd_functions[1]) and .bashrc-addendum (_solarized_bash_prompt) self-heal stale working directory descriptors via builtin cd while preserving OLDPWD, dirstack, symlinked PWD, and command exit status"
+else
+    fail "Stale working directory self-healing" "zsh='$zsh_stale_out' bash='$bash_stale_out'"
+fi
 
 # Verify all 17 managed themes have .tmTheme, btop, and Ghostty theme assets linked and valid
 managed_tmthemes=(

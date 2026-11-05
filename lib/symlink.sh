@@ -128,12 +128,12 @@ unlink_path() {
 rebuild_bat_cache() {
     local mise_bin="${1:-}"
     if [ -n "$mise_bin" ] && "$mise_bin" which bat >/dev/null 2>&1; then
-        "$mise_bin" exec -- bat cache --build >/dev/null 2>&1 || true
+        "$mise_bin" exec -- bat cache --build >/dev/null
     elif command -v bat >/dev/null 2>&1; then
-        bat cache --build >/dev/null 2>&1 || true
+        bat cache --build >/dev/null
     elif command -v batcat >/dev/null 2>&1; then
-        batcat cache --build >/dev/null 2>&1 || true
+        batcat cache --build >/dev/null
     elif command -v mise >/dev/null 2>&1 && mise which bat >/dev/null 2>&1; then
-        mise exec -- bat cache --build >/dev/null 2>&1 || true
+        mise exec -- bat cache --build >/dev/null
     fi
 }

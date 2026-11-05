@@ -68,9 +68,9 @@ if [ "$SKIP_ZSH" = false ]; then
 
         sed_i=(-i)
         [ "$OS" = "macos" ] && sed_i=(-i '')
-        sed "${sed_i[@]}" 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc" 2>/dev/null || true
-        sed "${sed_i[@]}" 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc" 2>/dev/null || true
-        sed "${sed_i[@]}" -E 's/[[:space:]]*fzf-zsh-plugin//g' "$HOME/.zshrc" 2>/dev/null || true
+        sed "${sed_i[@]}" 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
+        sed "${sed_i[@]}" 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc"
+        sed "${sed_i[@]}" -E 's/[[:space:]]*fzf-zsh-plugin//g' "$HOME/.zshrc"
         grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" || \
             printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"
     fi
@@ -96,10 +96,21 @@ if [ "$SKIP_COMPLETIONS" = false ]; then
         echo "  [DryRun] Generating CLI tab completions in $COMPLETIONS_DIR"
     else
         mkdir -p "$COMPLETIONS_DIR"
-        if command -v gh &>/dev/null; then gh completion -s zsh > "$COMPLETIONS_DIR/_gh" || true; fi
-        if command -v kubectl &>/dev/null; then kubectl completion zsh > "$COMPLETIONS_DIR/_kubectl" || true; fi
-        if command -v helm &>/dev/null; then helm completion zsh > "$COMPLETIONS_DIR/_helm" || true; fi
-        if command -v elan &>/dev/null; then elan completions zsh > "$COMPLETIONS_DIR/_elan" || true; fi
+        gen_zsh_completion() {
+            local target="$1"
+            shift
+            local tmp_comp="${target}.tmp.$$"
+            if "$@" > "$tmp_comp" && [ -s "$tmp_comp" ]; then
+                mv -f "$tmp_comp" "$target"
+            else
+                rm -f "$tmp_comp"
+                return 1
+            fi
+        }
+        if command -v gh &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_gh" gh completion -s zsh; fi
+        if command -v kubectl &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_kubectl" kubectl completion zsh; fi
+        if command -v helm &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_helm" helm completion zsh; fi
+        if command -v elan &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_elan" elan completions zsh; fi
     fi
 fi
 

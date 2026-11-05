@@ -1349,7 +1349,15 @@ PY
     ) > "$MOUSE_WS_OUT" &
     PID_MOUSE_WS=$!
 
-    wait "$PID_MAIN_WS" "$PID_QUIT_WS" "$PID_MOUSE_WS" 2>/dev/null || true
+    if ! wait "$PID_MAIN_WS"; then
+        fail "bin/ide main workspace subshell" "Main workspace test subshell exited with non-zero status"
+    fi
+    if ! wait "$PID_QUIT_WS"; then
+        fail "bin/ide quit workspace subshell" "Quit workspace test subshell exited with non-zero status"
+    fi
+    if ! wait "$PID_MOUSE_WS"; then
+        fail "bin/ide mouse workspace subshell" "Mouse workspace test subshell exited with non-zero status"
+    fi
     parse_subshell_results < "$MAIN_WS_OUT"
     parse_subshell_results < "$QUIT_WS_OUT"
     parse_subshell_results < "$MOUSE_WS_OUT"

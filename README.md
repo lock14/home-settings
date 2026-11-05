@@ -285,7 +285,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - In visual mode, `Space a` dispatches a relative `@file#L1-L2` line-range reference (`ide --send --ref`) or selected text for unnamed buffers directly into the AI Agent prompt without submitting. In normal mode, `Space il` sends the current cursor line (`@file#L<N>`) and `Space id` sends formatted buffer LSP diagnostics (`ide --send --text`; pass `--no-focus` on the CLI to keep current pane focus).
     - `Space w` saves the active buffer (`:w`), and `Space h` clears search highlighting (`:nohlsearch`).
     - `Space m` toggles in-buffer Markdown rendering (`render-markdown.nvim`) with word-boundary soft wrapping.
-    - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents.
+    - `Space gs` opens Telescope `git_status` to review modified files, while `autoread` automatically reloads buffers edited on disk by AI agents and re-binds the editor working directory if a FUSE or network workspace mount reconnects.
     - `H` and `L` cycle open buffers, `Home` toggles between the first non-blank character on the line and column 1 across normal, visual, and insert modes, and `Space cd` (`:IdeCd` in Neovim, or `icd` in the shell) synchronizes the working directory across panes.
   - **Layer 4 (clickable links, jumplist, and clipboard)**:
     - **Terminal links**: `Ctrl+Click` or `Alt+Click` on URLs or prompt pull and merge request badges in the Shell or AI panes opens them in the browser on a local desktop (or via `$IDE_BROWSER`) or copies them to the local clipboard via OSC 52 over SSH. Clicking file paths, compiler errors (`file:line:col`), Markdown file links, or custom `~/.config/ide/links.sh` matches (overridable via `$IDE_LINK_RULES`) opens the target file and line in the Editor.
@@ -361,7 +361,7 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 
 Interactive shells are configured for sub-10ms startup times, fast tab completion, and Solarized Dark styling:
 
-- **Zsh engine and completion**: Fast interactive startup with `fpath` tab completions and support for untracked local `*.d/` drop-in directories.
+- **Zsh engine and completion**: Fast interactive startup with `fpath` tab completions, support for untracked local `*.d/` drop-in directories, and automatic working directory recovery across Zsh and Bash when a FUSE or network workspace mount reconnects.
 - **Powerlevel10k and Bash Git prompts**: Configured in `.p10k.zsh` and `.bashrc-addendum`:
   - **Single-line shelf prompt**: Solarized Dark Base02 shelf displaying the OS icon, working directory, Git host icon, branch status, and execution telemetry in both Zsh and Bash.
   - **Daemon-free Git status**: Queries `git status --porcelain=v2` directly without `gitstatusd`, supporting standard, SHA-256, and `reftable` repositories.

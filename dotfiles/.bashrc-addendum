@@ -1860,6 +1860,16 @@ _solarized_detect_os_icon() {
 # 4. Zero-Dependency Solarized Dark Single-Line Shelf Prompt Builder
 _solarized_bash_prompt() {
     local exit_code=$?
+    if { [ ! -d . ] || [ ! . -ef "${PWD:-}" ]; } && [[ "${PWD:-}" == /* ]] && [ -d "$PWD" ]; then
+        local _hs_has_oldpwd="${OLDPWD+1}" _hs_oldpwd="${OLDPWD:-}"
+        if builtin cd -L -- "$PWD"; then
+            if [ -n "$_hs_has_oldpwd" ]; then
+                OLDPWD="$_hs_oldpwd"
+            else
+                unset OLDPWD
+            fi
+        fi
+    fi
     if [[ "$-" == *i* ]] && [ -n "${_HS_POST_SOURCE_SYNC:-}" ] && [ -n "${HISTFILE:-}" ]; then
         local _hs_hist_dir="${HISTFILE%/*}"
         [ "$_hs_hist_dir" = "$HISTFILE" ] && _hs_hist_dir="."
@@ -3957,15 +3967,6 @@ if [[ "$-" == *i* ]]; then
         done
         unset _hs_km
     fi
-
-    # shellcheck disable=SC2128,SC2178
-    if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-        if [[ " ${PROMPT_COMMAND[*]:-} " != *" _solarized_bash_prompt "* ]]; then
-            PROMPT_COMMAND=("_solarized_bash_prompt" ${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"})
-        fi
-    elif [[ ";${PROMPT_COMMAND:-};" != *";_solarized_bash_prompt;"* ]]; then
-        PROMPT_COMMAND="_solarized_bash_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-    fi
 fi
 
 if command -v zoxide >/dev/null 2>&1; then
@@ -3977,6 +3978,37 @@ if command -v mise >/dev/null 2>&1; then
 fi
 
 if [[ "$-" == *i* ]]; then
+    # shellcheck disable=SC2128,SC2178
+    if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+        _hs_pc=("_solarized_bash_prompt")
+        for _hs_pc_item in ${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"}; do
+            if [ -n "$_hs_pc_item" ] && [ "$_hs_pc_item" != "_solarized_bash_prompt" ]; then
+                _hs_pc+=("$_hs_pc_item")
+            fi
+        done
+        PROMPT_COMMAND=("${_hs_pc[@]}")
+        unset _hs_pc _hs_pc_item
+    else
+        _hs_pc_rest=""
+        _hs_pc_raw="${PROMPT_COMMAND:-}"
+        while [ -n "$_hs_pc_raw" ]; do
+            if [[ "$_hs_pc_raw" == *";"* ]]; then
+                _hs_pc_item="${_hs_pc_raw%%;*}"
+                _hs_pc_raw="${_hs_pc_raw#*;}"
+            else
+                _hs_pc_item="$_hs_pc_raw"
+                _hs_pc_raw=""
+            fi
+            _hs_pc_trim="${_hs_pc_item#"${_hs_pc_item%%[![:space:]]*}"}"
+            _hs_pc_trim="${_hs_pc_trim%"${_hs_pc_trim##*[![:space:]]}"}"
+            if [ -n "$_hs_pc_trim" ] && [ "$_hs_pc_trim" != "_solarized_bash_prompt" ]; then
+                _hs_pc_rest="${_hs_pc_rest:+$_hs_pc_rest;}$_hs_pc_trim"
+            fi
+        done
+        PROMPT_COMMAND="_solarized_bash_prompt${_hs_pc_rest:+;$_hs_pc_rest}"
+        unset _hs_pc_rest _hs_pc_raw _hs_pc_item _hs_pc_trim
+    fi
+
     _hs_fzf_bound=0
     if command -v fzf >/dev/null 2>&1; then
         if fzf --bash >/dev/null 2>&1; then

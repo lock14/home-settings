@@ -98,6 +98,39 @@ else
     fail "setup.sh idempotency" "Second run failed: $output"
 fi
 
+# Atomic completion failure check: failing or empty-output CLI completion must exit non-zero, clean up .tmp file, and preserve existing _gh
+cat << 'EOF' > "$MOCK_BIN/gh"
+#!/bin/sh
+exit 1
+EOF
+chmod +x "$MOCK_BIN/gh"
+if PATH="$MOCK_BIN:$PATH" SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=false "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1; then
+    fail "modules/60-shell.sh failing CLI completion" "Expected non-zero exit when gh completion fails"
+else
+    tmp_comp_left=("$TEMP_HOME/.zsh/completions"/_gh.tmp.*)
+    if [ ! -e "${tmp_comp_left[0]}" ] && [ -s "$TEMP_HOME/.zsh/completions/_gh" ] && grep -q "mock gh completion" "$TEMP_HOME/.zsh/completions/_gh"; then
+        pass "modules/60-shell.sh propagates CLI completion failure, removes temporary files, and preserves prior _gh completion"
+    else
+        fail "modules/60-shell.sh atomic completion cleanup" "Temporary file leaked or prior _gh completion was clobbered"
+    fi
+fi
+
+cat << 'EOF' > "$MOCK_BIN/gh"
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$MOCK_BIN/gh"
+if PATH="$MOCK_BIN:$PATH" SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=false "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1; then
+    fail "modules/60-shell.sh zero-byte CLI completion" "Expected non-zero exit when gh completion outputs 0 bytes"
+else
+    tmp_comp_left=("$TEMP_HOME/.zsh/completions"/_gh.tmp.*)
+    if [ ! -e "${tmp_comp_left[0]}" ] && [ -s "$TEMP_HOME/.zsh/completions/_gh" ] && grep -q "mock gh completion" "$TEMP_HOME/.zsh/completions/_gh"; then
+        pass "modules/60-shell.sh rejects 0-byte CLI completion output, removes temporary files, and preserves prior _gh completion"
+    else
+        fail "modules/60-shell.sh zero-byte completion cleanup" "Temporary file leaked or prior _gh completion was clobbered by 0-byte output"
+    fi
+fi
+
 if grep -Fq "'--plain:" "$SCRIPT_DIR/dotfiles/.zsh-completions" && \
    grep -Fq "'--holiday:" "$SCRIPT_DIR/dotfiles/.zsh-completions"; then
     pass "dotfiles/.zsh-completions registers --plain and --holiday in _theme"

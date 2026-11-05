@@ -149,6 +149,13 @@ jobs:
           if #to_force > 0 then
             nts.install(to_force, { force = true, max_jobs = 2 }):pwait(120000)
           end
+          for p, rev in pairs(pinned_revs) do
+            local actual = read_rev(p)
+            if actual ~= rev then
+              io.stderr:write("Pinned Tree-sitter parser revision mismatch for " .. p .. ": expected " .. rev .. ", got " .. tostring(actual) .. "\n")
+              vim.cmd("cquit 1")
+            end
+          end
           local after = installed_parsers()
           local missing = {}
           for _, p in ipairs(required) do

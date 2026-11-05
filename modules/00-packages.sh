@@ -124,15 +124,19 @@ if [ "$INSTALL_CHROME" = true ]; then
             fi
             ;;
         fedora)
-            if [ "$DRY_RUN" = true ]; then
-                echo "  [DryRun] sudo dnf -y install fedora-workstation-repositories"
-                echo "  [DryRun] sudo dnf config-manager enable google-chrome"
-                echo "  [DryRun] sudo dnf -y install google-chrome-stable"
+            if [ "$ARCH" = "amd64" ]; then
+                if [ "$DRY_RUN" = true ]; then
+                    echo "  [DryRun] sudo dnf -y install fedora-workstation-repositories"
+                    echo "  [DryRun] sudo dnf config-manager enable google-chrome"
+                    echo "  [DryRun] sudo dnf -y install google-chrome-stable"
+                else
+                    sudo dnf -y install fedora-workstation-repositories
+                    sudo dnf config-manager setopt google-chrome.enabled=1 || \
+                    sudo dnf config-manager --enable google-chrome
+                    sudo dnf -y install google-chrome-stable
+                fi
             else
-                sudo dnf -y install fedora-workstation-repositories || true
-                sudo dnf config-manager setopt google-chrome.enabled=1 || \
-                sudo dnf config-manager --enable google-chrome || true
-                sudo dnf -y install google-chrome-stable || true
+                echo "  Notice: Google Chrome official rpm is amd64 only (current: $ARCH). Skipping."
             fi
             ;;
         macos)
@@ -185,8 +189,8 @@ if [ "${INSTALL_GHOSTTY:-false}" = true ]; then
                 echo "  [DryRun] sudo dnf -y copr enable scottames/ghostty"
                 echo "  [DryRun] sudo dnf -y install ghostty"
             else
-                sudo dnf -y copr enable scottames/ghostty || true
-                sudo dnf -y install ghostty || true
+                sudo dnf -y copr enable scottames/ghostty
+                sudo dnf -y install ghostty
             fi
             ;;
     esac

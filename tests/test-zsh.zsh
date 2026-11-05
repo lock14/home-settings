@@ -1177,6 +1177,43 @@ EOF
             echo "FAIL:Zsh _ide completion bindings:fn=${+functions[_ide]} ide='${_comps[ide]:-}' ide2='${_comps[ide2]:-}' ide3='${_comps[ide3]:-}' qide='${_comps[qide]:-}' idek='${_comps[idek]:-}'"
         fi
     )
+
+    # 10. Verify _hs_recover_stale_cwd is registered at the front of precmd_functions (before _mise_hook_precmd) and preexec_functions, recovers recreated $PWD without firing chpwd, and ignores permanently removed $PWD
+    (
+        local stale_dir="$TEMP_HOME/stale-mount-test"
+        mkdir -p "$stale_dir"
+        source "$SCRIPT_DIR/dotfiles/.zshrc-addendum"
+        local precmd_first="${precmd_functions[1]:-}"
+        local preexec_first="${preexec_functions[1]:-}"
+        local mise_idx="${precmd_functions[(I)_mise_hook_precmd]}"
+        local order_ok=1
+        if (( mise_idx > 0 && mise_idx <= ${precmd_functions[(I)_hs_recover_stale_cwd]} )); then
+            order_ok=0
+        fi
+        cd "$stale_dir"
+        rm -rf "$stale_dir"
+        # Permanently missing $PWD must be a safe no-op
+        _hs_recover_stale_cwd
+        local still_missing=0
+        [[ ! . -ef "$PWD" && ! -d "$PWD" ]] && still_missing=1
+        # Recreated $PWD must self-heal via builtin cd -q -- "$PWD"
+        mkdir -p "$stale_dir"
+        echo "ok" > "$stale_dir/marker.txt"
+        _hs_recover_stale_cwd
+        local healed=0
+        [[ -d . && . -ef "$PWD" && -f marker.txt ]] && healed=1
+        cd "$TEMP_HOME"
+        rm -rf "$stale_dir"
+        if [ "$precmd_first" = "_hs_recover_stale_cwd" ] && \
+           [ "$preexec_first" = "_hs_recover_stale_cwd" ] && \
+           [ "$order_ok" -eq 1 ] && \
+           [ "$still_missing" -eq 1 ] && \
+           [ "$healed" -eq 1 ]; then
+            echo "PASS:_hs_recover_stale_cwd runs first in precmd_functions (before _mise_hook_precmd) and preexec_functions, heals recreated \$PWD, and safely ignores unmounted/deleted paths"
+        else
+            echo "FAIL:_hs_recover_stale_cwd:precmd_first='$precmd_first' preexec_first='$preexec_first' order_ok='$order_ok' still_missing='$still_missing' healed='$healed'"
+        fi
+    )
 }
 
 run_zsh_subtest test_addendum

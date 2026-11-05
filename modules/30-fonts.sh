@@ -127,6 +127,11 @@ else
                 fonts_changed=1
             fi
         fi
+
+        if [ ! -s "$target" ] || [ "$(wc -c < "$target" | tr -d ' ')" -lt "$MIN_FONT_BYTES" ]; then
+            echo "Error: Font installation failed or incomplete for $font at $target" >&2
+            exit 1
+        fi
     done
 
     # Clean up legacy unpatched romkatv fonts and symbols fallback font once v3 is safely in place
@@ -142,7 +147,7 @@ else
         # Ensure the macOS font server is awake (never kill fontd while terminal apps are running)
         atsutil server -ping >/dev/null 2>&1 || true
     elif [ "$OS" != "macos" ] && [ "$fonts_changed" -eq 1 ] && command -v fc-cache &>/dev/null; then
-        fc-cache "$FONT_DIR" >/dev/null 2>&1 || true
+        fc-cache "$FONT_DIR" >/dev/null
     fi
 
 fi

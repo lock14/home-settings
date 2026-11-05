@@ -737,16 +737,35 @@ EOF
     )
     cd "$MOCK_REPO"
 
-    # Test interactive Bash PROMPT_COMMAND coexistence with zoxide/mise and exit status propagation
-    interactive_out=$(HOME="$STANDALONE_HOME" bash --norc -i -c "source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'; false; eval \"\$PROMPT_COMMAND\"; p_err=\"\$PS1\"; true; eval \"\$PROMPT_COMMAND\"; p_ok=\"\$PS1\"; printf 'PC=%s\nERR=%s\nOK=%s\n' \"\${PROMPT_COMMAND[*]}\" \"\$p_err\" \"\$p_ok\"" 2>/dev/null)
-    if grep -Fq "_solarized_bash_prompt" <<< "$interactive_out" && \
+    # Test interactive Bash PROMPT_COMMAND coexistence with zoxide/mise, exit status propagation, and stale working directory self-healing
+    interactive_out=$(HOME="$STANDALONE_HOME" bash --norc -i -c "
+        source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'
+        mkdir -p '$MOCK_REPO/stale-bws'
+        cd '$MOCK_REPO/stale-bws'
+        rm -rf '$MOCK_REPO/stale-bws'
+        mkdir -p '$MOCK_REPO/stale-bws'
+        touch '$MOCK_REPO/stale-bws/healed.txt'
+        false
+        eval \"\$PROMPT_COMMAND\"
+        p_err=\"\$PS1\"
+        [ -d . ] && [ . -ef \"\$PWD\" ] && [ -f healed.txt ] && healed=1 || healed=0
+        rm -f '$MOCK_REPO/stale-bws/healed.txt'
+        true
+        eval \"\$PROMPT_COMMAND\"
+        p_ok=\"\$PS1\"
+        cd '$MOCK_REPO'
+        rm -rf '$MOCK_REPO/stale-bws'
+        printf 'PC=%s|HEALED=%d|ERR=%s|OK=%s\n' \"\${PROMPT_COMMAND[*]}\" \"\$healed\" \"\$p_err\" \"\$p_ok\"
+    " 2>/dev/null)
+    if grep -Fq "PC=_solarized_bash_prompt" <<< "$interactive_out" && \
+       grep -Fq "HEALED=1" <<< "$interactive_out" && \
        grep -Fq "220;50;47m" <<< "$interactive_out" && \
        grep -Fq "133;153;0m" <<< "$interactive_out" && \
        { ! command -v zoxide >/dev/null 2>&1 || grep -Fq "__zoxide_hook" <<< "$interactive_out"; } && \
        { ! command -v mise >/dev/null 2>&1 || grep -Fq "_mise_hook" <<< "$interactive_out"; }; then
-        echo "PASS:Interactive .bashrc-addendum preserves zoxide/mise PROMPT_COMMAND hooks and propagates command exit status"
+        echo "PASS:Interactive .bashrc-addendum places _solarized_bash_prompt ahead of zoxide/mise PROMPT_COMMAND hooks, self-heals stale working directories, and propagates command exit status"
     else
-        echo "FAIL:Interactive PROMPT_COMMAND:Missing hooks or exit status propagation ($interactive_out)"
+        echo "FAIL:Interactive PROMPT_COMMAND:Missing hooks, stale cwd recovery, or exit status propagation ($interactive_out)"
     fi
 
     # Test minimal server vi-only fallback (neither nvim nor vim installed)

@@ -887,6 +887,47 @@ if grep -Fq "Configure 'Nord' in Terminal.app Window Settings" <<< "$term_persis
 else
     fail "modules/70-terminal.sh persisted theme" "Expected Nord profile in dry-run output: macos='$term_persisted_macos' linux='$term_persisted_linux'"
 fi
+
+# Verify parse_subshell_results fails when 0 PASS:/FAIL: lines are parsed, Fedora --with-chrome gates on amd64, and modules/40-mise.sh fails if mise binary is not executable
+if (
+    TESTS_FAILED=0
+    parse_subshell_results <<< "" >/dev/null 2>&1
+    [ "$TESTS_FAILED" -eq 1 ]
+) && (
+    TESTS_FAILED=0
+    parse_subshell_results <<< "unrelated noise line" >/dev/null 2>&1
+    [ "$TESTS_FAILED" -eq 1 ]
+); then
+    pass "parse_subshell_results fails when 0 PASS:/FAIL: lines are parsed from subshell output"
+else
+    fail "parse_subshell_results empty guard" "Expected parse_subshell_results to record a failure on 0 parsed lines"
+fi
+
+fed_amd64_out="$(OS=fedora ARCH=amd64 INSTALL_CHROME=true SKIP_PACKAGES=true SKIP_DB=true DRY_RUN=true "$SCRIPT_DIR/modules/00-packages.sh" 2>&1)"
+fed_arm64_out="$(OS=fedora ARCH=arm64 INSTALL_CHROME=true SKIP_PACKAGES=true SKIP_DB=true DRY_RUN=true "$SCRIPT_DIR/modules/00-packages.sh" 2>&1)"
+if [[ "$fed_amd64_out" == *"google-chrome-stable"* ]] && \
+   [[ "$fed_arm64_out" == *"Notice: Google Chrome official rpm is amd64 only (current: arm64). Skipping."* ]] && \
+   [[ "$fed_arm64_out" != *"google-chrome-stable"* ]]; then
+    pass "modules/00-packages.sh gates Fedora Google Chrome installation on amd64 and logs notice on non-amd64"
+else
+    fail "modules/00-packages.sh Fedora Chrome arch gate" "Unexpected output: amd64='$fed_amd64_out' arm64='$fed_arm64_out'"
+fi
+
+MISE_FAIL_BIN="$TEMP_THEME_SETUP_HOME/mise-fail-bin"
+mkdir -p "$MISE_FAIL_BIN"
+for util in bash sh dirname basename mkdir rm ln cp mv cat grep tr wc readlink date; do
+    if command -v "$util" >/dev/null 2>&1; then
+        ln -sf "$(command -v "$util")" "$MISE_FAIL_BIN/$util"
+    fi
+done
+printf '#!/bin/sh\nexit 0\n' > "$MISE_FAIL_BIN/curl"
+chmod +x "$MISE_FAIL_BIN/curl"
+if PATH="$MISE_FAIL_BIN" HOME="$TEMP_THEME_SETUP_HOME" DRY_RUN=false "$SCRIPT_DIR/modules/40-mise.sh" >/dev/null 2>&1; then
+    fail "modules/40-mise.sh missing binary guard" "Expected non-zero exit when mise binary is not executable"
+else
+    pass "modules/40-mise.sh exits non-zero when mise binary is not executable"
+fi
+
 rm -rf "$TEMP_THEME_SETUP_HOME"
 
 test_summary
