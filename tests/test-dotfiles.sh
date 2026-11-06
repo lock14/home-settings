@@ -194,6 +194,9 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" set-option -u -t "=cfg_test:" @ide_ai_attn
         tmux -L "$TMUX_TEST_SOCK" set-option -u -t "=cfg_test:" @ide_ai_state
         eval_sright_root="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 1
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 0
+        eval_sright_idle_fleet="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_attn_summary "alpha-ws +1"
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 3
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 2
@@ -242,6 +245,7 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "Shell [Alt+T]" <<< "$eval_wcur" && \
            grep -Fq "range=user|help]#[fg=#839496,bg=#073642,nobold]󰋖 Help (Alt+?) " <<< "$eval_sright_root" && \
            ! grep -Fq "(Alt+s)" <<< "$eval_sright_root" && \
+           grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 1 · 0 active (Alt+s)" <<< "$eval_sright_idle_fleet" && \
            grep -Fq "range=user|attn]#[fg=#CB4B16,bg=#073642,nobold]󰂚 alpha-ws +1 " <<< "$eval_sright_fleet" && \
            grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]2 active#[fg=#839496,bg=#073642,nobold] (Alt+s)" <<< "$eval_sright_fleet" && \
            ! grep -Fq "subdir" <<< "$eval_sright_root" && \

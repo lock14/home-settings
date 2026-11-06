@@ -106,7 +106,7 @@ v() {
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
         if nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
             if [ "$local_only" = "0" ]; then
-                nvim --headless --server "$sock" --remote-expr 'luaeval("(function() local u=vim.uv or vim.loop; if u then local p=nil; for _,c in ipairs({vim.env.PWD,vim.env.IDE_WORKDIR,vim.env.IDE_INITIAL_ROOT}) do if c and c~=\"\" and vim.fn.isdirectory(c)==1 then p=c; break end end; if p then local d,s=u.fs_stat(\".\"),u.fs_stat(p); if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then pcall(vim.fn.chdir,p); vim.env.PWD=p end end end end)()")' >/dev/null 2>&1 || true
+                nvim --headless --server "$sock" --remote-expr 'luaeval("(function() local u=vim.uv or vim.loop; if u then local p=nil; for _,c in ipairs({vim.env.PWD or \"\",vim.env.IDE_WORKDIR or \"\",vim.env.IDE_INITIAL_ROOT or \"\"}) do if c and c~=\"\" and vim.fn.isdirectory(c)==1 then p=c; break end end; if p then local d,s=u.fs_stat(\".\"),u.fs_stat(p); if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then pcall(vim.fn.chdir,p); vim.env.PWD=p end end end end)()")' >/dev/null 2>&1 || true
                 if [ "${#abs_args[@]}" -gt 0 ]; then
                     nvim --server "$sock" --remote "${abs_args[@]}"
                 fi
