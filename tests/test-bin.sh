@@ -2407,6 +2407,10 @@ try:
     assert r_list0.returncode == 0 and "No active IDE sessions." in r_list0.stdout, f"list0={r_list0.stdout}"
     r_sess0 = run_cmd([ide_bin, "--sessions"], env={**base_env, "TMUX": ""}, check=False)
     assert r_sess0.returncode == 0 and "No active IDE sessions." in r_sess0.stdout, f"sess0={r_sess0.stdout}"
+    r_ref0 = run_cmd([ide_bin, "--refresh"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_ref0.returncode == 0 and "No active IDE sessions." in r_ref0.stdout, f"ref0={r_ref0.stdout}"
+    r_ref_missing0 = run_cmd([ide_bin, "--refresh", "missing-sess"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_ref_missing0.returncode != 0, "expected non-zero when --refresh targets missing session with server down"
     r_send_missing_mode = run_cmd([ide_bin, "--send"], env={**base_env, "TMUX": ""}, check=False)
     assert r_send_missing_mode.returncode != 0, "expected non-zero when --send has no payload flag"
     r_send_missing_sess = run_cmd([ide_bin, "--send", "--text", "hi", "missing-sess"], env={**base_env, "TMUX": ""}, check=False)
@@ -2961,6 +2965,8 @@ try:
     assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""
     assert tmux_out("show-options", "-gqv", "@ide_fleet_count") == "3"
     assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0"
+    sright_idle = tmux_out("display-message", "-p", "-t", ws_alpha["ed"], "#{E:status-right}")
+    assert "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · 0 active (Alt+s)" in sright_idle, f"bad idle fleet pill: {sright_idle!r}"
 
     # (8b) Unfocused @ide_tab_ai character width invariance across all 4 states:
     # neutral -> running (Cyan) -> unacknowledged done (Green) -> approval (Orange), both visible and parked!
@@ -3342,6 +3348,43 @@ try:
     assert tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{@ide_role}") == "editor"
     assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "", "bouncing out of crashed running AI via --toggle left stale @ide_ai_state!"
     assert tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0", "bouncing out of crashed running AI via --toggle left stale @ide_fleet_active!"
+
+    # (8j) ide --refresh / ide refresh heals stale Editor CWDs + wraps vim.fs.abspath over RPC, reloads idle Shell panes, and refreshes top bar
+    r_ref_bad = run_cmd([ide_bin, "--refresh", "no-such-ws"], env=sess_env("alpha-ws", ws_alpha["ed"]), check=False)
+    assert r_ref_bad.returncode != 0, "expected non-zero when --refresh targets nonexistent session"
+    sh_marker = os.path.join(root, "sh_refreshed.txt")
+    with open(os.path.join(thome, ".bashrc-addendum"), "w", encoding="utf-8") as bf:
+        bf.write(
+            f"_hs_recover_stale_cwd() {{ echo refreshed > {shlex.quote(sh_marker)}; }}\n"
+        )
+    tmux("respawn-pane", "-k", "-t", ws_alpha["tm"], "-c", ws_alpha["dir"], "exec bash --norc --noprofile -i", check=True)
+    assert wait_until(lambda: tmux_out("display-message", "-p", "-t", ws_alpha["tm"], "#{pane_current_command}") == "bash")
+    time.sleep(0.15)
+    alpha_sock = tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_socket")
+    if shutil.which("nvim"):
+        stale_ed_sub = os.path.join(ws_alpha["dir"], "stale_ed")
+        os.makedirs(stale_ed_sub, exist_ok=True)
+        tmux(
+            "respawn-pane", "-k", "-t", ws_alpha["ed"], "-c", stale_ed_sub,
+            f"exec nvim --headless -u NONE -i NONE --listen {shlex.quote(alpha_sock)}",
+            check=True,
+        )
+        assert wait_until(lambda: os.path.exists(alpha_sock)), "alpha-ws nvim socket did not appear for --refresh test"
+        shutil.rmtree(stale_ed_sub)
+    r_ref_all = run_cmd([ide_bin, "--refresh"], env=sess_env("alpha-ws", ws_alpha["ai"]), check=True)
+    assert "Refreshed 3 IDE session(s)" in r_ref_all.stdout, f"unexpected --refresh output: {r_ref_all.stdout!r}"
+    assert wait_until(lambda: os.path.isfile(sh_marker), timeout=3.0), "ide --refresh did not reload idle bash shell pane"
+    if shutil.which("nvim"):
+        ed_cwd_after = subprocess.run(
+            ["nvim", "--server", alpha_sock, "--remote-expr", "luaeval('(vim.uv or vim.loop).cwd() or \"\"')"],
+            env=base_env, text=True, capture_output=True, timeout=3, check=True,
+        ).stdout.strip()
+        ed_wrapped = subprocess.run(
+            ["nvim", "--server", alpha_sock, "--remote-expr", "luaeval('tostring(vim.fs and vim.fs._hs_abspath_wrapped == true)')"],
+            env=base_env, text=True, capture_output=True, timeout=3, check=True,
+        ).stdout.strip()
+        assert os.path.realpath(ed_cwd_after) in (os.path.realpath(ws_alpha["dir"]), os.path.realpath(sub_dir)), f"ide --refresh did not heal nvim CWD: {ed_cwd_after!r}"
+        assert ed_wrapped == "true", f"ide --refresh did not install vim.fs.abspath wrapper: {ed_wrapped!r}"
 
     print("ALL_FLEET_OK")
 finally:

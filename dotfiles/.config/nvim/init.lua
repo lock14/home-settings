@@ -65,7 +65,7 @@ local function recover_stale_cwd()
         return
     end
     local pwd = nil
-    for _, cand in ipairs({ vim.env.PWD, vim.env.IDE_WORKDIR, vim.env.IDE_INITIAL_ROOT }) do
+    for _, cand in ipairs({ vim.env.PWD or "", vim.env.IDE_WORKDIR or "", vim.env.IDE_INITIAL_ROOT or "" }) do
         if cand and cand ~= "" and vim.fn.isdirectory(cand) == 1 then
             pwd = cand
             break
@@ -92,8 +92,9 @@ do
             vim.env.PWD = init_cwd
         end
     end
-    if vim.fs and type(vim.fs.abspath) == "function" then
+    if vim.fs and type(vim.fs.abspath) == "function" and not vim.fs._hs_abspath_wrapped then
         local orig_abspath = vim.fs.abspath
+        vim.fs._hs_abspath_wrapped = true
         vim.fs.abspath = function(path)
             local ok, res = pcall(orig_abspath, path)
             if ok then

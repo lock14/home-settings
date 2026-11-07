@@ -152,6 +152,7 @@ Options:
   --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
   --monitor, --top         Launch interactive system monitor with btop -> htop -> top fallback (Alt+m / Prefix+m)
   --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / Prefix+?)
+  refresh, -r, --refresh [NAME] Refresh tmux top bar, Editor CWDs, and idle Shell panes across all (or target) IDE sessions (Prefix+r)
   quit, -q, --quit [NAME]  Safely quit IDE session NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
@@ -940,13 +941,25 @@ def _nvim_recover_cwd_ex(fallback_dir: str = "") -> str:
     )
     return (
         '"if exists(\\"*luaeval\\") | silent! call luaeval(\'(function() '
-        "local u=vim.uv or vim.loop; if u then "
-        "local p=nil; "
-        f'for _,c in ipairs({{vim.env.PWD,vim.env.IDE_WORKDIR,vim.env.IDE_INITIAL_ROOT,\\"{fb_esc}\\"}}) do '
-        'if c and c~=\\"\\" and vim.fn.isdirectory(c)==1 then p=c; break end end; '
-        'if p then local d,s=u.fs_stat(\\".\\"),u.fs_stat(p); '
+        "local u=vim.uv or vim.loop; if not u then return end; "
+        "local function rec() "
+        f'for _,c in ipairs({{vim.env.PWD or \\"\\",vim.env.IDE_WORKDIR or \\"\\",vim.env.IDE_INITIAL_ROOT or \\"\\",\\"{fb_esc}\\",vim.env.HOME or \\"\\"}}) do '
+        'if c and c~=\\"\\" and vim.fn.isdirectory(c)==1 then '
+        'local d,s=u.fs_stat(\\".\\"),u.fs_stat(c); '
         "if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then "
-        "pcall(vim.fn.chdir,p); vim.env.PWD=p end end end end)()') | endif\""
+        "pcall(vim.fn.chdir,c); vim.env.PWD=c end; return c end end; return nil end; "
+        "rec(); "
+        'if vim.fs and type(vim.fs.abspath)==\\"function\\" and not vim.fs._hs_abspath_wrapped then '
+        "local orig=vim.fs.abspath; vim.fs._hs_abspath_wrapped=true; "
+        "vim.fs.abspath=function(p) "
+        "if not u.cwd() then rec() end; "
+        "local ok,r=pcall(orig,p); if ok then return r end; "
+        'local fb=rec() or vim.env.HOME or \\"/\\"; '
+        'if type(p)==\\"string\\" then '
+        'if p:sub(1,1)==\\"~\\" then p=vim.fs.normalize(p) end; '
+        'if p:sub(1,1)==\\"/\\" then return vim.fs.normalize(p) end; '
+        'return vim.fs.normalize(fb:gsub(\\"/+$\\",\\"\\")..\\"/\\"..p) end; '
+        "return orig(p) end end end)()') | endif\""
     )
 
 
@@ -2919,6 +2932,132 @@ def refresh_fleet_topbar() -> int:
     return 0
 
 
+def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
+    raw_sessions, server_up = _list_ide_sessions_with_server_status()
+    if target_arg:
+        if not server_up:
+            print(f"Error: {missing_session_msg(target_arg)}", file=sys.stderr)
+            return 1
+        sess = resolve_target_session(target_arg)
+        if not sess or not session_exists(sess) or not check_is_ide_session(sess):
+            print(f"Error: {missing_session_msg(sess or target_arg)}", file=sys.stderr)
+            return 1
+        target_items = [item for item in raw_sessions if item["sess"] == sess]
+    else:
+        if not server_up or not raw_sessions:
+            print("No active IDE sessions.")
+            return 0
+        target_items = raw_sessions
+
+    tmux_conf = os.path.expanduser("~/.tmux.conf")
+    if os.path.isfile(tmux_conf):
+        run_tmux("source-file", tmux_conf)
+
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    active_theme_file = os.path.join(xdg_cfg, "home-settings", "active-theme.theme")
+    tmux_theme_conf = os.path.join(xdg_cfg, "home-settings", "tmux-theme.conf")
+    if os.path.isfile(active_theme_file):
+        theme_id = ""
+        try:
+            with open(active_theme_file, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    s = line.strip()
+                    if s.startswith("THEME_ID="):
+                        theme_id = s.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        except OSError:
+            pass
+        if theme_id:
+            sib_theme = os.path.join(os.path.dirname(os.path.abspath(ide_self)), "theme") if ide_self else ""
+            theme_bin = (
+                sib_theme
+                if (sib_theme and os.path.isfile(sib_theme) and os.access(sib_theme, os.X_OK))
+                else (shutil.which("theme") or "")
+            )
+            if theme_bin:
+                try:
+                    subprocess.run(
+                        [theme_bin, "--set", theme_id, "--no-live"],
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=5,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    pass
+    if os.path.isfile(tmux_theme_conf):
+        run_tmux("source-file", tmux_theme_conf)
+
+    panes_res = run_tmux(
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{pane_id}\t#{pane_pid}\t#{pane_in_mode}\t#{@ide_role}\t#{pane_current_command}",
+    )
+    panes_by_sess: dict[str, list[tuple[str, str, str, str, str]]] = {}
+    cand_shell_pids: set[int] = set()
+    if panes_res.returncode == 0 and panes_res.stdout:
+        for line in panes_res.stdout.splitlines():
+            pcols = (line.split("\t") + [""] * 6)[:6]
+            s_name, p_id, p_pid, p_mode, p_role, p_cmd = pcols
+            panes_by_sess.setdefault(s_name, []).append((p_id, p_pid, p_mode, p_role, p_cmd))
+            if p_pid.strip().isdigit():
+                cand_shell_pids.add(int(p_pid.strip()))
+
+    busy_pids = _pids_with_children(cand_shell_pids)
+    has_nvim = bool(resolve_nvim_bin())
+    home_dir = os.path.expanduser("~")
+    editors_refreshed = 0
+    shells_refreshed = 0
+
+    for item in target_items:
+        sess = item["sess"]
+        fb_dir = ""
+        for cand_d in (
+            item.get("workdir", ""),
+            item.get("init_root", ""),
+            get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR"),
+            get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"),
+            home_dir,
+        ):
+            if cand_d and os.path.isdir(cand_d):
+                fb_dir = cand_d
+                break
+
+        sock = item.get("ide_sock", "") or get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        if sock and is_socket_path(sock) and has_nvim:
+            nvim_recover_and_checktime(sock, fb_dir)
+            editors_refreshed += 1
+
+        rec_term = get_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE")
+        for p_id, p_pid, p_mode, p_role, p_cmd in panes_by_sess.get(sess, []):
+            if p_role != "term" and p_id != rec_term:
+                continue
+            if p_mode.strip() == "1":
+                continue
+            cmd_name = os.path.basename(p_cmd.strip()).lstrip("-").lower()
+            p_pid_int = int(p_pid.strip()) if p_pid.strip().isdigit() else 0
+            if cmd_name in ("zsh", "bash") and p_pid_int > 0 and p_pid_int not in busy_pids:
+                if cmd_name == "zsh":
+                    reload_cmd = " [ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum; typeset -f _hs_recover_stale_cwd >/dev/null 2>&1 && _hs_recover_stale_cwd"
+                else:
+                    reload_cmd = " [ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum; declare -F _hs_recover_stale_cwd >/dev/null 2>&1 && _hs_recover_stale_cwd"
+                run_tmux("send-keys", "-t", p_id, "C-u", reload_cmd, "C-m")
+                shells_refreshed += 1
+
+    refresh_fleet_topbar()
+    msg = f"Refreshed {len(target_items)} IDE session(s) ({editors_refreshed} editor(s), {shells_refreshed} shell(s))"
+    if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+        msg_sess = target_items[0]["sess"] if len(target_items) == 1 else current_ide_session()
+        if msg_sess and session_exists(msg_sess):
+            run_tmux("display-message", "-d", "2500", "-t", f"={msg_sess}:", msg)
+        else:
+            run_tmux("display-message", "-d", "2500", msg)
+    print(msg)
+    return 0
+
+
 def set_agent_state(raw_state: str, target_arg: str) -> int:
     state = raw_state.strip().lower()
     if state not in ("running", "approval", "done", "idle"):
@@ -3734,6 +3873,13 @@ def main() -> int:
                 i += 2
             else:
                 i += 1
+        elif arg in ("refresh", "-r", "--refresh", "--reload"):
+            action = "refresh"
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                target_arg = argv[i + 1]
+                i += 2
+            else:
+                i += 1
         elif arg in ("quit", "-q", "--quit"):
             action = "quit"
             if i + 1 < n and not argv[i + 1].startswith("-"):
@@ -3881,6 +4027,8 @@ def main() -> int:
         return next_attention(target_arg)
     if action == "refresh-attn":
         return refresh_fleet_topbar()
+    if action == "refresh":
+        return refresh_ide_sessions(target_arg, ide_self)
     if action == "send":
         return send_to_ai(send_mode, send_payload, send_no_focus, target_arg)
 
