@@ -42,7 +42,7 @@ test_aliases() {
     setopt aliases
     source "$SCRIPT_DIR/dotfiles/.aliases"
 
-    local expected_aliases=(gcommit gamend gpush gpushf gpull gup gprune gpurge guser-branch tf ide2 ide3 idek qide ds update vi ls ll la l)
+    local expected_aliases=(gcommit gamend gpush gpushf gpull gup gprune gpurge guser-branch tf ide2 ide3 idek qide quit ds update vi ls ll la l)
     if command -v eza >/dev/null 2>&1; then
         expected_aliases+=(e el elm et elt elx)
     fi

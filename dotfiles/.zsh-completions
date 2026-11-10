@@ -129,7 +129,8 @@ _ide() {
     subcmds=(
         'cd:Dive into directory across Editor and Shell'
         'refresh:Refresh tmux top bar, Editor CWDs, and idle Shell panes across IDE sessions'
-        'quit:Safely quit IDE workspace session'
+        'quit:Safely quit IDE workspace session(s)'
+        'kill:Force-quit IDE workspace session(s) without unsaved-buffer check'
     )
     agents=(
         'agy:Default AI CLI agent'
@@ -191,7 +192,7 @@ _ide() {
             _files -/
             return
             ;;
-        quit|-q|--quit|--kill|refresh|-r|--refresh|--reload|-s|--sessions|--next-attention|--ack-ai|--toggle|--show-editor|--show-ai|--show-term|--focus-editor|--focus-ai|--focus-term|--toggle-editor|--toggle-ai|--toggle-term)
+        refresh|-r|--refresh|--reload|-s|--sessions|--next-attention|--ack-ai|--toggle|--show-editor|--show-ai|--show-term|--focus-editor|--focus-ai|--focus-term|--toggle-editor|--toggle-ai|--toggle-term)
             if [[ "${words[CURRENT]:-}" == -* ]]; then
                 _describe -t options 'ide option' opts
             elif (( ${#sessions} )); then
@@ -201,10 +202,17 @@ _ide() {
             ;;
     esac
 
-    local in_send=0 has_send_payload=0 idx=2 w=""
+    local in_send=0 has_send_payload=0 in_quit_kill=0 idx=2 w=""
+    [[ "${words[1]:-}" == (qide|idek|quit) ]] && in_quit_kill=1
     while (( idx < CURRENT )); do
         w="${words[idx]:-}"
         case "$w" in
+            -q|--quit|--kill)
+                in_quit_kill=1
+                ;;
+            quit|kill)
+                (( idx == 2 )) && in_quit_kill=1
+                ;;
             --send)
                 in_send=1
                 ;;
@@ -242,14 +250,32 @@ _ide() {
         return
     fi
 
-    if [[ ( "$prev2" == ("--swap"|"--agent-state"|"--open"|"--preview") || ( "$prev3" == ("--open"|"--preview") && "$prev" == (\+|)<-> ) ) && "${words[CURRENT]:-}" != -* ]]; then
-        if (( ${#sessions} )); then
-            _describe -t sessions 'IDE session' sessions
+    if (( in_quit_kill )); then
+        if [[ "${words[CURRENT]:-}" == -* ]]; then
+            _describe -t options 'ide option' opts
+        elif (( ${#sessions} )); then
+            local -a rem_sessions=()
+            local s_cand used_idx is_used
+            for s_cand in "${sessions[@]}"; do
+                is_used=0
+                for (( used_idx = 2; used_idx < CURRENT; used_idx++ )); do
+                    if [[ "${words[used_idx]:-}" == "$s_cand" ]]; then
+                        is_used=1
+                        break
+                    fi
+                done
+                (( ! is_used )) && rem_sessions+=("$s_cand")
+            done
+            if (( ${#rem_sessions} )); then
+                _describe -t sessions 'IDE session' rem_sessions
+            else
+                _describe -t sessions 'IDE session' sessions
+            fi
         fi
         return
     fi
 
-    if [[ "${words[1]:-}" == (qide|idek) && "${words[CURRENT]:-}" != -* ]]; then
+    if [[ ( "$prev2" == ("--swap"|"--agent-state"|"--open"|"--preview") || ( "$prev3" == ("--open"|"--preview") && "$prev" == (\+|)<-> ) ) && "${words[CURRENT]:-}" != -* ]]; then
         if (( ${#sessions} )); then
             _describe -t sessions 'IDE session' sessions
         fi
@@ -269,5 +295,5 @@ _ide() {
     fi
 }
 if (( $+functions[compdef] )); then
-    compdef _ide ide ide2 ide3 qide idek 2>/dev/null || true
+    compdef _ide ide ide2 ide3 qide idek quit 2>/dev/null || true
 fi

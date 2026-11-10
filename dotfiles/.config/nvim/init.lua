@@ -888,30 +888,70 @@ local function count_real_modified_buffers()
     return cnt
 end
 
-local function quit_ide_or_nvim(force)
+local function quit_ide_or_nvim(force, target_sessions)
+    local targets = target_sessions or {}
     if vim.env.TMUX and vim.env.NVIM_IDE_SOCKET and vim.env.NVIM_IDE_SOCKET ~= "" then
-        if not force then
+        local cur_sess = vim.env.IDE_SESSION or ""
+        local checks_local = (#targets == 0)
+        if not checks_local and cur_sess ~= "" then
+            for _, t in ipairs(targets) do
+                if t == cur_sess then
+                    checks_local = true
+                    break
+                end
+            end
+        end
+        if not force and checks_local then
             local modified = count_real_modified_buffers()
             if modified > 0 then
                 vim.api.nvim_echo({ { "E37: No write since last change in " .. modified .. " buffer(s) (save with :wa or press Alt+Shift+Q / :Q! to force)", "ErrorMsg" } }, true, {})
                 return
             end
         end
-        if force then
-            ide_job("--quit", "--force")
+        if #targets == 0 then
+            if force then
+                ide_job("--quit", "--force")
+            else
+                ide_job("--quit")
+            end
         else
-            ide_job("--quit")
+            local cmd = { vim.fn.expand("$HOME/.local/bin/ide"), "--quit" }
+            if force then
+                table.insert(cmd, "--force")
+            end
+            for _, t in ipairs(targets) do
+                table.insert(cmd, t)
+            end
+            vim.fn.jobstart(cmd, { detach = true })
         end
     else
         vim.cmd(force and "qa!" or "confirm qa")
     end
 end
 
+local function complete_ide_sessions(arg_lead)
+    local ide_bin = vim.fn.expand("$HOME/.local/bin/ide")
+    if vim.fn.executable(ide_bin) ~= 1 then
+        return {}
+    end
+    local lines = vim.fn.systemlist({ ide_bin, "--list", "--plain" })
+    if vim.v.shell_error ~= 0 then
+        return {}
+    end
+    local matches = {}
+    for _, s in ipairs(lines) do
+        if s ~= "" and s:find(arg_lead, 1, true) == 1 then
+            table.insert(matches, s)
+        end
+    end
+    return matches
+end
+
 map("n", "<leader>q", function() quit_ide_or_nvim(false) end, { desc = "Quit Entire IDE Workspace" })
 map({ "n", "i", "v", "t" }, "<M-q>", function() quit_ide_or_nvim(false) end, { desc = "Quit Entire IDE Workspace" })
 map({ "n", "i", "v", "t" }, "<M-Q>", function() quit_ide_or_nvim(true) end, { desc = "Force-Quit Entire IDE Workspace" })
-vim.api.nvim_create_user_command("Q", function(opts) quit_ide_or_nvim(opts.bang) end, { bang = true, desc = "Quit Entire IDE Workspace" })
-vim.api.nvim_create_user_command("Quit", function(opts) quit_ide_or_nvim(opts.bang) end, { bang = true, desc = "Quit Entire IDE Workspace" })
+vim.api.nvim_create_user_command("Q", function(opts) quit_ide_or_nvim(opts.bang, opts.fargs) end, { bang = true, nargs = "*", complete = complete_ide_sessions, desc = "Quit Entire IDE Workspace" })
+vim.api.nvim_create_user_command("Quit", function(opts) quit_ide_or_nvim(opts.bang, opts.fargs) end, { bang = true, nargs = "*", complete = complete_ide_sessions, desc = "Quit Entire IDE Workspace" })
 
 vim.api.nvim_create_user_command("IdeCd", function(opts)
     local target = vim.trim(opts.args or "")
