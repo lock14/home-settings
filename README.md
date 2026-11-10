@@ -264,15 +264,15 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - **Right contextual hints and status**: Shows inline key hints during Tmux prefix (`Ctrl+b`) and copy modes. In normal mode, it displays clickable urgent AI attention (`ide --next-attention`) and multi-session fleet (`ide --sessions`) badges alongside conditional indicators for synchronized panes (`SYNC`), remote SSH hosts, active subdirectories, and the `Help` cheatsheet button (`Alt+?`).
   - **Multi-session workspace switcher and lifecycle state**:
     - Press `Alt+s`, `Space s`, or `Prefix + s` (or run `ide -s` or `ide --sessions`) to open the `fzf` workspace switcher popup across active IDE sessions, sorting workspaces waiting for AI attention first in first-in, first-out order and displaying the session name, AI agent CLI, lifecycle state, Git branch and dirty state, workspace path, and a live ANSI pane preview.
-    - Inside the picker, `Enter` switches sessions, `Ctrl+a`, `Ctrl+e`, and `Ctrl+t` jump directly into the target session's AI, Editor, or Shell pane, `Ctrl+x` safely quits a session, `Ctrl+r` reloads the list, and `Alt+s` or `Escape` closes the popup. Press `Alt+Shift+S` or `Prefix + S` (`ide --next-attention`) from any session to jump directly to the oldest workspace waiting for AI attention.
+    - Inside the picker, `Enter` switches sessions, `Ctrl+a`, `Ctrl+e`, and `Ctrl+t` jump directly into the target session's AI, Editor, or Shell pane, `Tab` selects multiple sessions, `Ctrl+x` safely quits the highlighted or selected sessions, `Ctrl+r` reloads the list, and `Alt+s` or `Escape` closes the popup. Press `Alt+Shift+S` or `Prefix + S` (`ide --next-attention`) from any session to jump directly to the oldest workspace waiting for AI attention.
     - AI CLIs with lifecycle hooks report deterministic `running`, `approval`, `done`, or `idle` transitions via `ide --agent-state <state>`, queuing both user-approval prompts and background turn completions for attention and clearing them when the AI pane regains focus or if the agent process exits back to a bare shell. Run `ide --list` (`--plain` for raw session names) to inspect active workspaces and lifecycle states from any shell.
   - **Pane parking, swapping, splitting, and resizing**:
     - Hide and restore the Editor (`Alt+Shift+E`), Shell (`Alt+Shift+T`), or AI Agent (`ide --toggle-ai`) without stopping running processes, open the floating system monitor modal (`btop`, `htop`, and `top` fallback) with `Alt+m` or `Prefix + m` (`ide --monitor`), toggle the floating AI overlay popup with `Alt+Shift+A` (`ide --run-ai-popup`), or toggle the top Tmux status bar with `Prefix + b` (`set-option status`).
     - Swap panes directionally with `Alt+Shift+H/J/K/L`, split panes horizontally or vertically in the current working directory with `Prefix + |` or `Prefix + -`, resize by dragging borders with the mouse or pressing `Alt+Left/Down/Up/Right` (`Prefix + H/J/K/L`), and refresh all active IDE sessions (reloading `~/.tmux.conf` and `tmux-theme.conf`, healing stale Editor CWDs over RPC, and reloading idle Shell panes) with `Prefix + r` (`ide --refresh`). Custom pane sizes persist across focus changes, parking, and zoom (`Alt+z`).
   - **Session isolation and quitting**:
-    - IDE commands target only the active workspace session so other Tmux sessions are unaffected, and Zsh tab completion dynamically completes active IDE session names across `ide`, `ide2`, `ide3`, `qide`, and `idek`.
+    - IDE commands target only the active workspace session (or explicit session names) so other Tmux sessions are unaffected, and Zsh tab completion dynamically completes active IDE session names across `ide`, `ide2`, `ide3`, `quit`, `qide`, and `idek`.
     - Standard Neovim quit commands (`:q`, `:wq`, `:qa`, `:wqa`) close only editor buffers and splits.
-    - Workspace quit commands (`:Q`, `:Quit`, `Space q`, `Alt+q`, or `qide`) close the entire IDE session after checking for unsaved changes, while `:Q!`, `Alt+Shift+Q`, and `idek` force-quit immediately.
+    - Workspace quit commands (`:Q`, `:Quit`, `Space q`, `Alt+q`, `quit`, `qide`, or `ide quit`) close the current IDE session—or one or more named sessions (`quit <name> [name...]`, `:Q [name...]`)—after checking each session for unsaved changes, while `:Q!`, `Alt+Shift+Q`, `idek`, and `ide kill` force-quit immediately.
 
 - **4-layer keybinding architecture**:
   - **Layer 1 (app-local)**: Uses `Ctrl` shortcuts inside individual applications. Tmux never binds root `Ctrl+h/j/k/l`, keeping standard terminal shortcuts (clear screen, newline, kill line, and backspace) intact in shells and AI CLIs. Inside Neovim, `Ctrl+h/j/k/l` navigate editor splits and `Ctrl+j/k` move through Telescope results.
@@ -345,7 +345,9 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 | `H` or `L` | Neovim normal | Cycle previous or next buffer |
 | `Home` | Neovim and Vim (`n/v/i`) | Smart-home: jump to first non-blank character on the line, or toggle to column 1 if already there |
 | `:q`, `:wq`, `:qa`, or `:wqa` | Neovim command | Close Neovim window, buffer, or editor normally |
-| `:Q` or `:Q!` | Neovim command | Quit entire IDE workspace session (`:Quit`; `!` forces quit) |
+| `:Q [name...]` or `:Q! [name...]` | Neovim command | Quit current or named IDE workspace sessions (`:Quit`; `!` forces quit) |
+| `quit [name...]`, `qide [name...]`, or `ide quit [name...]` | Shell | Safely quit current or named IDE workspace sessions (`-f` or `--force` discards unsaved buffers) |
+| `idek [name...]` or `ide kill [name...]` | Shell | Force-kill current or named IDE workspace sessions without checking unsaved buffers |
 | `ide -s` or `ide --sessions [name]` | Shell | Open interactive `fzf` workspace switcher across active IDE sessions |
 | `ide --next-attention [name]` | Shell | Jump to the oldest IDE workspace session waiting for AI attention |
 | `ide --agent-state <state> [name]` | Shell | Record deterministic AI lifecycle state (`running`, `approval`, `done`, or `idle`) for an IDE session |
@@ -486,8 +488,8 @@ Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` 
 | `vi`, `vim`, or `v` | Launch Neovim (inside `ide`, `v [+line] <file>` opens in the main Editor pane) |
 | `ide` or `ide3` | Launch or attach to a 3-pane IDE workspace (`ide --3pane`) |
 | `ide2` | Launch or attach to a 2-pane IDE workspace (`ide --2pane`) |
-| `qide` | Gracefully quit the active IDE workspace session (`ide --quit`) |
-| `idek` | Force-kill the active IDE workspace session (`ide --kill`) |
+| `quit [name...]` or `qide [name...]` | Gracefully quit the active or named IDE workspace sessions (`ide --quit`) |
+| `idek [name...]` | Force-kill the active or named IDE workspace sessions (`ide --kill`) |
 | `icd [dir\|--reset]` | Synchronize the working directory across IDE Editor and Shell panes |
 | `theme [name]` | Switch active color scheme across all tools or open interactive `fzf` theme picker |
 | `ds` | Graphical disk space analyzer via `dust` |
@@ -524,7 +526,7 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 | :--- | :--- | :--- |
 | `gen-passwd` | `-u`, `-l`, `-n`, `-s`, `-t`, `-h, --help`, `[length]` | Generate random passwords with configurable length (default `16`) and character sets (uppercase, lowercase, digits, and symbols) |
 | `gnome-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in GNOME Terminal (`dconf`) |
-| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file> [line]`, `--cd [dir\|--reset]`, `-s, --sessions`, `--next-attention`, `--agent-state <state>`, `--send (--stdin \| --ref <path> \| --text <str>) [--no-focus]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--monitor, --top`, `--keys`, `-r, --refresh [name]`, `-q, --quit`, `-f, --force`, `--detach`, `--kill`, `--list [--plain]`, `-h, --help`, `[dir]` | Launch and manage multi-session Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces, lifecycle states, session switching, and context dispatch |
+| `ide` | `--3pane`, `--2pane`, `--ai, --agent <cli>`, `--open <file> [line]`, `--preview <file> [line]`, `--cd [dir\|--reset]`, `-s, --sessions`, `--next-attention`, `--agent-state <state>`, `--send (--stdin \| --ref <path> \| --text <str>) [--no-focus]`, `--toggle`, `--show-editor`, `--show-ai`, `--show-term`, `--toggle-editor`, `--toggle-ai`, `--toggle-term`, `--swap <dir>`, `--monitor, --top`, `--keys`, `-r, --refresh [name]`, `quit, -q, --quit [name...]`, `-f, --force`, `--detach`, `kill, --kill [name...]`, `--list [--plain]`, `-h, --help`, `[dir]` | Launch and manage multi-session Tmux, Neovim, and AI Agent (`agy`, `claude`, `codex`) IDE workspaces, lifecycle states, session switching, and context dispatch |
 | `macos-terminal-solarized` | `--theme <name>`, `--dry-run`, `-h, --help` | Provision or preview the active TrueColor theme profile in macOS `Terminal.app` |
 | `repeat-until-success` | `-n <attempts>`, `-s, -d <seconds>`, `-t`, `-h, --help`, `<command> [args...]` | Retry a command up to `N` attempts (default `10`) with a configurable delay in seconds (default `30`) |
 | `sum` | `-d <delim>`, `-k <col>`, `-H`, `-a`, `-s`, `-f <fmt>`, `-t`, `-h, --help`, `[numbers... \| files...]` | Sum numbers from stdin, files, or arguments with support for CSV columns, human byte units, averages, and summary statistics |

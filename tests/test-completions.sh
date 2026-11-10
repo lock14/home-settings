@@ -180,7 +180,7 @@ _files() {
 
 source "$1"
 
-for c in ide ide2 ide3 qide idek; do
+for c in ide ide2 ide3 qide idek quit; do
     [[ "${COMP_MAP[$c]:-}" == "_ide" ]] || { print -u2 "missing compdef for $c"; exit 1; }
 done
 
@@ -219,8 +219,26 @@ out_agent_state_sess="$(run_case ide --agent-state running "")"
 out_quit="$(run_case ide --quit "")"
 [[ "$out_quit" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --quit: $out_quit"; exit 1; }
 
+out_quit_multi="$(run_case ide --quit alpha-ws "")"
+[[ "$out_quit_multi" == "beta-ws" ]] || { print -u2 "bad --quit multi: $out_quit_multi"; exit 1; }
+
+out_sub_quit_multi="$(run_case ide quit alpha-ws "")"
+[[ "$out_sub_quit_multi" == "beta-ws" ]] || { print -u2 "bad ide quit multi: $out_sub_quit_multi"; exit 1; }
+
+out_sub_kill_multi="$(run_case ide kill alpha-ws "")"
+[[ "$out_sub_kill_multi" == "beta-ws" ]] || { print -u2 "bad ide kill multi: $out_sub_kill_multi"; exit 1; }
+
 out_qide="$(run_case qide "")"
 [[ "$out_qide" == "alpha-ws,beta-ws" ]] || { print -u2 "bad qide: $out_qide"; exit 1; }
+
+out_quit_alias="$(run_case quit "")"
+[[ "$out_quit_alias" == "alpha-ws,beta-ws" ]] || { print -u2 "bad quit alias: $out_quit_alias"; exit 1; }
+
+out_quit_alias_multi="$(run_case quit alpha-ws "")"
+[[ "$out_quit_alias_multi" == "beta-ws" ]] || { print -u2 "bad quit alias multi: $out_quit_alias_multi"; exit 1; }
+
+out_idek_multi="$(run_case idek alpha-ws "")"
+[[ "$out_idek_multi" == "beta-ws" ]] || { print -u2 "bad idek multi: $out_idek_multi"; exit 1; }
 
 out_open="$(run_case ide --open "")"
 [[ "$out_open" == "_FILES_any" ]] || { print -u2 "bad --open: $out_open"; exit 1; }
@@ -265,11 +283,11 @@ out_send_text_sess="$(run_case ide --send --text "hello" "")"
 [[ "$out_send_text_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --text sess: $out_send_text_sess"; exit 1; }
 
 out_root="$(run_case ide "")"
-[[ ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
+[[ ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",kill,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
 EOF
 
 if ide_comp_err="$(HOME="$MOCK_IDE_HOME" zsh "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)"; then
-    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek and completes flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, and live IDE sessions"
+    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek/quit and completes flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, and single/multi-target live IDE sessions"
 else
     fail "_ide Zsh completion" "Unexpected _ide completion behavior: $ide_comp_err"
 fi

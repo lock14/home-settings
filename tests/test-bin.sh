@@ -1105,6 +1105,8 @@ vim.env.HOME = [[$ARGS_HOME]]
 local function as(sess, fn) vim.env.IDE_SESSION = sess; pcall(fn) end
 as("args-sess", function() vim.cmd("Q") end)
 as("args-sess", function() vim.cmd("Q!") end)
+as("args-sess", function() vim.cmd("Q target-a target-b") end)
+as("args-sess", function() vim.cmd("Q! target-a target-b") end)
 as("args-sess", function() vim.cmd("IdeCd $ARGS_DIR") end)
 as("args-sess", function() vim.fn.maparg("<leader>a", "n", false, true).callback() end)
 as("args-sess", function() vim.fn.maparg("<M-E>", "n", false, true).callback() end)
@@ -1161,11 +1163,11 @@ LUA
 
             wait "$PID_ARGS_NVIM" 2>/dev/null || true
             for _ in $(seq 1 50); do
-                [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 8 ] && break
+                [ "$(wc -l < "$ARGS_LOG" | tr -d ' ')" -ge 10 ] && break
                 sleep 0.05
             done
             args_log="$(LC_ALL=C sort "$ARGS_LOG")"
-            args_expected="$(printf '%s\n' "--cd $ARGS_DIR args-sess" "--quit" "--quit" "--quit --force args-sess" "--quit args-sess" "--swap left args-sess" "--toggle args-sess" "--toggle-editor args-sess" | LC_ALL=C sort)"
+            args_expected="$(printf '%s\n' "--cd $ARGS_DIR args-sess" "--quit" "--quit" "--quit --force args-sess" "--quit --force target-a target-b" "--quit args-sess" "--quit target-a target-b" "--swap left args-sess" "--toggle args-sess" "--toggle-editor args-sess" | LC_ALL=C sort)"
             popup_cmd="$(cat "$TEMP_HOME/popup_cmd.log" 2>/dev/null || true)"
             popup_expected="tmux|display-popup|-t|%42|-E|-w|90|-h|30|'$ARGS_HOME/space home/.local/bin/ide' --keys"
             if [ "$args_log" = "$args_expected" ] && [ "$popup_cmd" = "$popup_expected" ]; then
@@ -1221,6 +1223,25 @@ LUA
             echo "FAIL:bin/ide exact session names:Expected foo gone and foobar (1 pane), ai-foobar, api, api-gateway (1 pane) alive; got foobar_panes=$foobar_panes gateway_panes=$gateway_panes sessions: $(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
         fi
         "$SCRIPT_DIR/bin/ide" --kill "api" >/dev/null 2>&1 || true
+
+        # Multi-session quit & kill (1 or more session names, including self + sibling ordering)
+        for s in multi-a multi-b multi-c multi-self; do
+            tmux new-session -d -s "$s" -x 120 -y 40
+            tmux set-option -t "=$s:" @ide_session "$s"
+        done
+        "$SCRIPT_DIR/bin/ide" quit "multi-a" "multi-b" >/dev/null 2>&1 || true
+        multi_quit_ok=0
+        if ! session_alive "multi-a" && ! session_alive "multi-b" && all_alive "multi-c" "multi-self"; then
+            multi_quit_ok=1
+        fi
+        multi_kill_out="$(env TMUX="$(tmux_env_of multi-self)" TMUX_PANE="$(pane_of multi-self)" "$SCRIPT_DIR/bin/ide" kill "multi-self" "multi-c" "multi-self" 2>&1 || true)"
+        if [ "$multi_quit_ok" = "1" ] && ! session_alive "multi-self" && ! session_alive "multi-c" && \
+           grep -Fq "Terminated IDE session: multi-self" <<< "$multi_kill_out" && \
+           grep -Fq "Terminated IDE session: multi-c" <<< "$multi_kill_out"; then
+            echo "PASS:bin/ide quit and kill accept 1 or more session names, deduplicate targets, and terminate sibling sessions before the caller's own session"
+        else
+            echo "FAIL:bin/ide multi-session quit/kill:Expected multi-a/multi-b/multi-c/multi-self terminated cleanly (quit_ok=$multi_quit_ok), got out='$multi_kill_out' sessions='$(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')'"
+        fi
         tmux kill-server >/dev/null 2>&1 || true
     ) > "$QUIT_WS_OUT" &
     PID_QUIT_WS=$!
@@ -2876,6 +2897,7 @@ try:
     os.unlink(theme_env_file)
     assert "--color=bg+:#313244" in rel_fzf_opts and "--prompt='WS> '" in rel_fzf_opts and "#000000" not in rel_fzf_opts, f"build_fzf_env failed to load single-quoted/escaped theme-env.sh over stale FZF_DEFAULT_OPTS: {rel_fzf_opts!r}"
     assert os.path.abspath(ide_bin) in rel_fzf_args or os.path.realpath(ide_bin) in rel_fzf_args, f"relative path leaked into fzf args: {rel_fzf_args}"
+    assert "--multi" in rel_fzf_args and "--quit {+1}" in rel_fzf_args, f"expected --multi and --quit {{+1}} in fzf args: {rel_fzf_args}"
 
     # Verify session_last_attached promotes recently visited gamma-ws above beta-ws
     beta_max_ts = max(
@@ -2920,9 +2942,10 @@ try:
     clean_edge = open(recv_edge, encoding="utf-8").read().replace("\x1b[200~", "").replace("\x1b[201~", "")
     assert clean_edge == "@sub/mod.py#L4 @sub/issue#12 - leading-dash --literal-end", f"unexpected edge --send stream: {clean_edge!r}"
 
-    # (7e) ide --quit refuses to close workspace when Neovim server has unsaved changes; --quit --force closes it
+    # (7e) ide --quit refuses to close workspace when Neovim server has unsaved changes (while closing clean sibling sessions); --quit --force closes it
     if shutil.which("nvim"):
         ws_dirty = make_ws("dirty-ws", ai_cmd="sleep 300")
+        ws_clean_sib = make_ws("clean-sib-ws", ai_cmd="sleep 300")
         dirty_sock = tmux_out("show-options", "-qv", "-t", "=dirty-ws:", "@ide_socket")
         dirty_file = os.path.join(ws_dirty["dir"], "unsaved.txt")
         tmux(
@@ -2932,9 +2955,10 @@ try:
         )
         assert wait_until(lambda: os.path.exists(dirty_sock)), "dirty-ws nvim socket did not appear"
         time.sleep(0.15)
-        r_dirty_quit = run_cmd([ide_bin, "--quit", "dirty-ws"], env={**base_env, "TMUX": ""}, check=False)
+        r_dirty_quit = run_cmd([ide_bin, "--quit", "dirty-ws", "clean-sib-ws"], env={**base_env, "TMUX": ""}, check=False)
         assert r_dirty_quit.returncode != 0, f"expected ide --quit to refuse dirty buffer, got {r_dirty_quit}"
         assert tmux("has-session", "-t", "=dirty-ws", check=False).returncode == 0, "dirty-ws was killed despite unsaved buffer!"
+        assert tmux("has-session", "-t", "=clean-sib-ws", check=False).returncode != 0, "clean-sib-ws should have been closed alongside dirty-ws check!"
         run_cmd([ide_bin, "--quit", "--force", "dirty-ws"], env={**base_env, "TMUX": ""}, check=True)
         assert tmux("has-session", "-t", "=dirty-ws", check=False).returncode != 0, "dirty-ws survived --quit --force"
 

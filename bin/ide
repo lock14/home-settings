@@ -120,6 +120,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -153,10 +154,10 @@ Options:
   --monitor, --top         Launch interactive system monitor with btop -> htop -> top fallback (Alt+m / Prefix+m)
   --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / Prefix+?)
   refresh, -r, --refresh [NAME] Refresh tmux top bar, Editor CWDs, and idle Shell panes across all (or target) IDE sessions (Prefix+r)
-  quit, -q, --quit [NAME]  Safely quit IDE session NAME (checks for unsaved Neovim buffers first)
+  quit, -q, --quit [NAME...] Safely quit IDE session(s) NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
-  --kill [NAME]            Force-quit IDE session NAME without the unsaved-buffer check
+  kill, --kill [NAME...]   Force-quit IDE session(s) NAME without the unsaved-buffer check
   --list [--plain]         List active IDE workspace sessions with agent CLI, state, Git branch, and directory
   -h, --help               Show this help message and exit
 
@@ -1572,71 +1573,118 @@ def run_ai_popup(target_arg: str) -> None:
     os.execvp(shell, [shell, "-l"])
 
 
-def quit_ide(target_arg: str, force_quit: bool, is_kill: bool) -> int:
-    sess = resolve_target_session(target_arg)
-    if not session_exists(sess):
-        print(missing_session_msg(sess))
-        return 0
+def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> int:
+    if isinstance(target_args, str):
+        raw_targets = [target_args] if target_args else [""]
+    else:
+        raw_targets = list(target_args) if target_args else [""]
 
-    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
-    if not force_quit and sock and is_socket_path(sock) and resolve_nvim_bin():
-        mod_expr = (
-            'len(filter(getbufinfo({"bufmodified": 1}), '
-            '"getbufvar(v:val.bufnr, \\"&buftype\\") ==# \\"\\" && '
-            '(!empty(v:val.name) || join(getbufline(v:val.bufnr, 1, \\"$\\"), \\"\\") !~# \\"^\\\\\\\\s*$\\")"))'
-        )
-        raw_mod = re.sub(r"[^0-9]", "", nvim_remote_expr(sock, mod_expr))
-        modified = int(raw_mod) if raw_mod else 0
-        if modified > 0:
-            toggle_main_pane("focus-editor", target_arg)
-            nvim_remote_send(
-                sock,
-                f'<C-\\><C-n>:redraw! | echohl ErrorMsg | echo "Unsaved changes in {modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q (:Q!) to force-quit" | echohl None<CR>',
-            )
-            run_tmux(
-                "display-message", "-d", "4000", "-t", f"={sess}:",
-                f"Unsaved changes in {modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q to force-quit",
-            )
-            print(
-                "Aborted quit: unsaved changes in Neovim buffer(s). Save first or use 'ide quit --force' (Alt+Shift+Q).",
-                file=sys.stderr,
-            )
-            return 1
+    try:
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    except (OSError, ValueError):
+        pass
 
-    if sock and is_socket_path(sock) and resolve_nvim_bin():
-        if nvim_remote_send(sock, "<C-\\><C-n><Cmd>qall!<CR>"):
-            for _ in range(30):
-                if not is_socket_path(sock):
-                    break
-                time.sleep(0.1)
+    cur_sess = current_ide_session()
+    resolved_targets: list[tuple[str, str]] = []
+    seen_sess: set[str] = set()
+    for raw in raw_targets:
+        sess = resolve_target_session(raw)
+        dedup_key = sess or f"__empty_{raw}"
+        if dedup_key in seen_sess:
+            continue
+        seen_sess.add(dedup_key)
+        resolved_targets.append((raw, sess))
+
+    rc = 0
+    to_kill: list[tuple[str, str]] = []
+    for raw, sess in resolved_targets:
+        if not sess or not session_exists(sess):
+            print(missing_session_msg(sess))
+            continue
+
+        sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        if not force_quit and sock and is_socket_path(sock) and resolve_nvim_bin():
+            mod_expr = (
+                'len(filter(getbufinfo({"bufmodified": 1}), '
+                '"getbufvar(v:val.bufnr, \\"&buftype\\") ==# \\"\\" && '
+                '(!empty(v:val.name) || join(getbufline(v:val.bufnr, 1, \\"$\\"), \\"\\") !~# \\"^\\\\\\\\s*$\\")"))'
+            )
+            raw_mod = re.sub(r"[^0-9]", "", nvim_remote_expr(sock, mod_expr))
+            modified = int(raw_mod) if raw_mod else 0
+            if modified > 0:
+                toggle_main_pane("focus-editor", raw or sess)
+                nvim_remote_send(
+                    sock,
+                    f'<C-\\><C-n>:redraw! | echohl ErrorMsg | echo "Unsaved changes in {modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q (:Q!) to force-quit" | echohl None<CR>',
+                )
+                run_tmux(
+                    "display-message", "-d", "4000", "-t", f"={sess}:",
+                    f"Unsaved changes in {modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q to force-quit",
+                )
+                print(
+                    "Aborted quit: unsaved changes in Neovim buffer(s). Save first or use 'ide quit --force' (Alt+Shift+Q).",
+                    file=sys.stderr,
+                )
+                rc = 1
+                continue
+
+        to_kill.append((sess, sock))
+
+    if not to_kill:
+        return rc
 
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    for p in (
-        sock,
-        f"{runtime_dir}/nvim-{sess}.sock",
-        f"{runtime_dir}/nvim-ide-{sess}.sock",
-    ):
-        if p:
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
+    for sess, sock in to_kill:
+        if sock and is_socket_path(sock) and resolve_nvim_bin():
+            if nvim_remote_send(sock, "<C-\\><C-n><Cmd>qall!<CR>"):
+                for _ in range(30):
+                    if not is_socket_path(sock):
+                        break
+                    time.sleep(0.1)
 
+        for p in (
+            sock,
+            f"{runtime_dir}/nvim-{sess}.sock",
+            f"{runtime_dir}/nvim-ide-{sess}.sock",
+        ):
+            if p:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
+    killing_set = {sess for sess, _ in to_kill}
     if os.environ.get("IDE_IN_POPUP") == "1":
-        other_ide = [e for e in classify_ide_fleet(include_git=False, cur_sess="") if str(e["sess"]) != sess]
+        other_ide = [
+            e for e in classify_ide_fleet(include_git=False, cur_sess="")
+            if str(e["sess"]) not in killing_set
+        ]
         if other_ide:
             next_sess = str(other_ide[0]["sess"])
-            for cl in tmux_out("list-clients", "-t", f"={sess}", "-F", "#{client_name}").splitlines():
-                cl_s = cl.strip()
-                if cl_s:
-                    run_tmux("switch-client", "-c", cl_s, "-t", f"={next_sess}")
+            for sess, _ in to_kill:
+                for cl in tmux_out("list-clients", "-t", f"={sess}", "-F", "#{client_name}").splitlines():
+                    cl_s = cl.strip()
+                    if cl_s:
+                        run_tmux("switch-client", "-c", cl_s, "-t", f"={next_sess}")
 
-    for target_sess in (f"=ai-{sess}", f"=agy-{sess}", f"={sess}"):
-        run_tmux("kill-session", "-t", target_sess)
-    refresh_fleet_topbar()
     if is_kill:
-        print(f"Terminated IDE session: {sess}")
-    return 0
+        for sess, _ in to_kill:
+            print(f"Terminated IDE session: {sess}")
+        try:
+            sys.stdout.flush()
+        except OSError:
+            pass
+
+    kill_order = [sess for sess, _ in to_kill if sess != cur_sess]
+    if cur_sess and cur_sess in killing_set:
+        kill_order.append(cur_sess)
+
+    for sess in kill_order:
+        for target_sess in (f"=ai-{sess}", f"=agy-{sess}", f"={sess}"):
+            run_tmux("kill-session", "-t", target_sess)
+
+    refresh_fleet_topbar()
+    return rc
 
 
 def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
@@ -3456,14 +3504,14 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
     env = build_fzf_env(hex_map)
     self_q = shlex.quote(ide_self)
     reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
-    quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{1}})+reload({reload_cmd})"
+    quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{+1}})+reload({reload_cmd})"
     preview_cmd = f"{self_q} --session-preview {{1}}"
     fzf_args = [
         fzf_bin,
         "--ansi",
         "--delimiter=\t",
         "--with-nth=2..",
-        "--no-multi",
+        "--multi",
         "--layout=reverse",
         "--info=inline-right",
         "--prompt=IDE > ",
@@ -3692,6 +3740,7 @@ def main() -> int:
     ai_cli = os.environ.get("IDE_AI_CLI") or "agy"
     ai_cli_from_flag = False
     target_arg = ""
+    target_args: list[str] = []
     open_file = ""
     open_line = ""
     cd_target = ""
@@ -3717,6 +3766,7 @@ def main() -> int:
                 send_payload = arg
             else:
                 target_arg = arg
+                target_args.append(arg)
             i += 1
         elif arg == "--":
             end_of_opts = True
@@ -3759,7 +3809,7 @@ def main() -> int:
                     open_line = cand_line.lstrip("+")
                     next_idx += 1
             i = next_idx
-        elif arg in ("cd", "--cd"):
+        elif arg == "--cd" or (arg == "cd" and action == "launch"):
             action = "cd"
             if i + 1 < n:
                 cd_target = argv[i + 1]
@@ -3865,28 +3915,28 @@ def main() -> int:
             "--refresh-attn",
             "--run-ai-popup",
             "--paste",
-            "--kill",
         ):
             action = arg[2:]
             if i + 1 < n and not argv[i + 1].startswith("-"):
                 target_arg = argv[i + 1]
+                target_args.append(argv[i + 1])
                 i += 2
             else:
                 i += 1
-        elif arg in ("refresh", "-r", "--refresh", "--reload"):
+        elif arg in ("-r", "--refresh", "--reload") or (arg == "refresh" and action == "launch"):
             action = "refresh"
             if i + 1 < n and not argv[i + 1].startswith("-"):
                 target_arg = argv[i + 1]
+                target_args.append(argv[i + 1])
                 i += 2
             else:
                 i += 1
-        elif arg in ("quit", "-q", "--quit"):
+        elif arg == "--kill" or (arg == "kill" and action == "launch"):
+            action = "kill"
+            i += 1
+        elif arg in ("-q", "--quit") or (arg == "quit" and action == "launch"):
             action = "quit"
-            if i + 1 < n and not argv[i + 1].startswith("-"):
-                target_arg = argv[i + 1]
-                i += 2
-            else:
-                i += 1
+            i += 1
         elif arg == "--swap":
             action = "swap"
             if i + 1 >= n or argv[i + 1].startswith("-"):
@@ -3990,6 +4040,7 @@ def main() -> int:
                 send_payload = arg
             else:
                 target_arg = arg
+                target_args.append(arg)
             i += 1
 
     if ai_cli in ("agy", "claude", "codex"):
@@ -4070,11 +4121,11 @@ def main() -> int:
         run_ai_popup(target_arg)
         return 0
     if action == "quit":
-        return quit_ide(target_arg, force_quit, False)
+        return quit_ide(target_args, force_quit, False)
     if action == "list":
         return list_ide_fleet(plain=plain_list)
     if action == "kill":
-        return quit_ide(target_arg, True, True)
+        return quit_ide(target_args, True, True)
 
     target_dir = target_arg or safe_getcwd()
     if not os.path.isdir(target_dir):
