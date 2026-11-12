@@ -156,6 +156,10 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'set-hook -g session-closed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g session-renamed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'IDE_NOTIFY' "$TEMP_HOME/.tmux.conf" && \
+   grep -q ':focus:title' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g set-titles on' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g set-titles-string.*\[!\] #{@ide_attn_summary}' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'scroll_position' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'history_size' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'pane_synchronized' "$TEMP_HOME/.tmux.conf" && \
@@ -187,6 +191,11 @@ if command -v tmux >/dev/null 2>&1; then
         eval_wcur="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_state "running"
         eval_wcur_run="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_state "quota"
+        eval_wcur_quota="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_parked 1
+        eval_wcur_quota_parked="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_parked 0
         tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_attn "1"
         eval_wcur_attn="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:window-status-current-format}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -t "=cfg_test:" @ide_ai_state "done"
@@ -194,6 +203,7 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" set-option -u -t "=cfg_test:" @ide_ai_attn
         tmux -L "$TMUX_TEST_SOCK" set-option -u -t "=cfg_test:" @ide_ai_state
         eval_sright_root="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        eval_title_idle="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:set-titles-string}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 1
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 0
         eval_sright_idle_fleet="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
@@ -201,6 +211,7 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 3
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 2
         eval_sright_fleet="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        eval_title_attn="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:set-titles-string}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -gu @ide_attn_summary
         tmux -L "$TMUX_TEST_SOCK" set-option -gu @ide_fleet_count
         tmux -L "$TMUX_TEST_SOCK" set-option -gu @ide_fleet_active
@@ -213,6 +224,7 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" setw -t "=cfg_test:" synchronize-panes off
         tmux -L "$TMUX_TEST_SOCK" set-environment -t "=cfg_test" SSH_CONNECTION "10.0.0.1 12345 10.0.0.2 22"
         eval_sright_ssh="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        eval_title_ssh="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:set-titles-string}')"
         tmux -L "$TMUX_TEST_SOCK" set-environment -u -t "=cfg_test" SSH_CONNECTION
         tmux -L "$TMUX_TEST_SOCK" if-shell -t "$cfg_pane" -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; send-keys -X copy-pipe-no-clear'
         eval_sright_copy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
@@ -225,6 +237,7 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         plain_wcur_base="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur")"
         plain_wcur_run="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_run")"
+        plain_wcur_quota="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_quota")"
         plain_wcur_attn="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_attn")"
         plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
@@ -232,10 +245,16 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "COLORTERM" <<< "$up_env_lines" && \
            grep -Fq "TERM_PROGRAM" <<< "$up_env_lines" && \
            grep -Fq "IDE_AI_CLI" <<< "$up_env_lines" && \
+           grep -Fq "IDE_NOTIFY" <<< "$up_env_lines" && \
            grep -Fq "HOME_SETTINGS_THEME" <<< "$up_env_lines" && \
            grep -Fq "BAT_THEME" <<< "$up_env_lines" && \
-           [ "$plain_wcur_base" = "$plain_wcur_run" ] && [ "$plain_wcur_base" = "$plain_wcur_attn" ] && [ "$plain_wcur_base" = "$plain_wcur_done" ] && \
+           [ "$eval_title_idle" = "cfg_test" ] && \
+           [ "$eval_title_attn" = "[!] alpha-ws +1 · cfg_test" ] && \
+           grep -Fq "cfg_test (@" <<< "$eval_title_ssh" && \
+           [ "$plain_wcur_base" = "$plain_wcur_run" ] && [ "$plain_wcur_base" = "$plain_wcur_quota" ] && [ "$plain_wcur_base" = "$plain_wcur_attn" ] && [ "$plain_wcur_base" = "$plain_wcur_done" ] && \
            grep -Fq "fg=#2AA198,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_run" && \
+           grep -Fq "fg=#B58900,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_quota" && \
+           grep -Fq "fg=#B58900,bg=#073642,nobold]󰚩 agy [Alt+a]" <<< "$eval_wcur_quota_parked" && \
            grep -Fq "fg=#CB4B16,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_attn" && \
            grep -Fq "fg=#859900,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_done" && \
            grep -Fq "cfg_test" <<< "$eval_sleft" && \

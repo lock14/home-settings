@@ -2431,6 +2431,58 @@ jobs = {}
 vim.fn.maparg("<leader>?", "n", false, true).callback()
 local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|90|-h|30|" .. vim.fn.shellescape(ide_bin) .. " --keys")
 
+-- 7. Cross-session :IdeSend[!] [session] command (named buffer, range, bang --switch, default session, unnamed --stdin, and tab completion)
+local chan_sent = {}
+local chan_closed = {}
+local orig_chansend = vim.fn.chansend
+local orig_chanclose = vim.fn.chanclose
+vim.fn.chansend = function(id, data)
+    table.insert(chan_sent, tostring(id) .. ":" .. tostring(data))
+    return #tostring(data)
+end
+vim.fn.chanclose = function(id, stream)
+    table.insert(chan_closed, tostring(id) .. ":" .. tostring(stream))
+    return 0
+end
+
+vim.fn.mkdir(ide_home .. "/.local/bin", "p")
+vim.fn.writefile({ "#!/bin/sh", "printf 'alpha-ws\\nbeta-ws\\n'" }, ide_bin)
+vim.fn.setfperm(ide_bin, "rwxr-xr-x")
+local comp_list = vim.fn.getcompletion("IdeSend b", "cmdline")
+local idesend_comp_ok = (#comp_list == 1 and comp_list[1] == "beta-ws")
+
+vim.cmd("edit " .. vim.fn.fnameescape(file_path))
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+jobs = {}
+vim.cmd("IdeSend beta-ws")
+local idesend_norm_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":3|--no-focus|beta-ws")
+
+jobs = {}
+vim.cmd("2,4IdeSend! beta-ws")
+local idesend_bang_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":2-4|--switch|beta-ws")
+
+jobs = {}
+vim.cmd("IdeSend")
+local idesend_def_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":3|--no-focus|fleet-sess")
+
+vim.cmd("enew!")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "scratch one", "scratch two", "scratch three" })
+jobs = {}
+chan_sent = {}
+chan_closed = {}
+vim.cmd("1,2IdeSend beta-ws")
+local idesend_stdin_ok = (
+    #jobs == 1
+    and jobs[1] == ide_bin .. "|--send|--stdin|--no-focus|beta-ws"
+    and #chan_sent == 1
+    and chan_sent[1] == "1:scratch one\nscratch two"
+    and #chan_closed == 1
+    and chan_closed[1] == "1:stdin"
+)
+local idesend_ok = idesend_comp_ok and idesend_norm_ok and idesend_bang_ok and idesend_def_ok and idesend_stdin_ok
+
+vim.fn.chansend = orig_chansend
+vim.fn.chanclose = orig_chanclose
 vim.fn.jobstart = orig_jobstart
 vim.notify = orig_notify
 
@@ -2446,11 +2498,12 @@ io.write(table.concat({
     "POP=" .. tostring(sess_popup_ok),
     "ATTN=" .. tostring(next_attn_ok),
     "KEYS=" .. tostring(keys_popup_ok),
+    "ISEND=" .. tostring(idesend_ok),
 }, "|"))
 EOF
         NVIM_FLEET_OUT="$( (cd "$NVIM_FLEET_DIR" && NVIM_FLEET_DIR="$NVIM_FLEET_DIR" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_FLEET_SCRIPT") 2>/dev/null || true)"
         rm -rf "$NVIM_FLEET_DIR" 2>/dev/null || { sleep 0.2; rm -rf "$NVIM_FLEET_DIR" || true; }
-        EXPECTED_NVIM_FLEET="MODES=true|NORMA=true|VISF=true|VISR=true|IL=true|ID0=true|ID1=true|SCR=true|POP=true|ATTN=true|KEYS=true"
+        EXPECTED_NVIM_FLEET="MODES=true|NORMA=true|VISF=true|VISR=true|IL=true|ID0=true|ID1=true|SCR=true|POP=true|ATTN=true|KEYS=true|ISEND=true"
         if [ "$NVIM_FLEET_OUT" = "$EXPECTED_NVIM_FLEET" ]; then
             pass "Neovim init.lua preserves Normal <leader>a 0ms toggle, dispatches Visual <leader>a, <leader>il, and <leader>id context to AI, and wires <leader>s/<M-s> session switcher and <M-S> next-attention across n/i/v/t modes"
         else

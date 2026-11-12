@@ -193,7 +193,7 @@ run_case() {
 }
 
 out_opts="$(run_case ide --)"
-[[ ",$out_opts," == *",--sessions,"* && ",$out_opts," == *",--send,"* && ",$out_opts," == *",--list,"* && ",$out_opts," == *",--next-attention,"* && ",$out_opts," == *",--agent-state,"* && ",$out_opts," != *",--on-bell,"* ]] || { print -u2 "bad opts: $out_opts"; exit 1; }
+[[ ",$out_opts," == *",--sessions,"* && ",$out_opts," == *",--send,"* && ",$out_opts," == *",--list,"* && ",$out_opts," == *",--next-attention,"* && ",$out_opts," == *",--agent-state,"* && ",$out_opts," == *",--message,"* && ",$out_opts," == *",--ack-ai,"* && ",$out_opts," == *",--open-pr,"* && ",$out_opts," == *",--switch,"* && ",$out_opts," != *",--on-bell,"* ]] || { print -u2 "bad opts: $out_opts"; exit 1; }
 
 out_ai="$(run_case ide --ai "")"
 [[ "$out_ai" == "agy,claude,codex" ]] || { print -u2 "bad --ai: $out_ai"; exit 1; }
@@ -211,10 +211,28 @@ out_next_attn="$(run_case ide --next-attention "")"
 [[ "$out_next_attn" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --next-attention: $out_next_attn"; exit 1; }
 
 out_agent_state="$(run_case ide --agent-state "")"
-[[ "$out_agent_state" == "running,approval,done,idle" ]] || { print -u2 "bad --agent-state: $out_agent_state"; exit 1; }
+[[ "$out_agent_state" == "running,approval,quota,done,idle" ]] || { print -u2 "bad --agent-state: $out_agent_state"; exit 1; }
 
-out_agent_state_sess="$(run_case ide --agent-state running "")"
+out_agent_state_eq="$(run_case ide --agent-state=)"
+[[ "$out_agent_state_eq" == "running,approval,quota,done,idle" ]] || { print -u2 "bad --agent-state=: $out_agent_state_eq"; exit 1; }
+
+out_agent_state_sess="$(run_case ide --agent-state quota "")"
 [[ "$out_agent_state_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --agent-state sess: $out_agent_state_sess"; exit 1; }
+
+out_agent_msg_val="$(run_case ide --agent-state done --message "")"
+[[ "$out_agent_msg_val" == "" ]] || { print -u2 "bad --agent-state --message val: $out_agent_msg_val"; exit 1; }
+
+out_agent_msg_sess="$(run_case ide --agent-state done --message "all green" "")"
+[[ "$out_agent_msg_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --agent-state --message sess: $out_agent_msg_sess"; exit 1; }
+
+out_ack_ai="$(run_case ide --ack-ai "")"
+[[ "$out_ack_ai" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --ack-ai: $out_ack_ai"; exit 1; }
+
+out_ack_ai_multi="$(run_case ide --ack-ai alpha-ws "")"
+[[ "$out_ack_ai_multi" == "beta-ws" ]] || { print -u2 "bad --ack-ai multi: $out_ack_ai_multi"; exit 1; }
+
+out_open_pr="$(run_case ide --open-pr "")"
+[[ "$out_open_pr" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open-pr: $out_open_pr"; exit 1; }
 
 out_quit="$(run_case ide --quit "")"
 [[ "$out_quit" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --quit: $out_quit"; exit 1; }
@@ -265,7 +283,10 @@ out_cd="$(run_case ide --cd "")"
 [[ "$out_cd" == "_FILES_-/" ]] || { print -u2 "bad --cd: $out_cd"; exit 1; }
 
 out_send_sub="$(run_case ide --send "")"
-[[ "$out_send_sub" == "--stdin,--ref,--text,--no-focus" ]] || { print -u2 "bad --send subflags: $out_send_sub"; exit 1; }
+[[ "$out_send_sub" == "--stdin,--ref,--text,--no-focus,--switch" ]] || { print -u2 "bad --send subflags: $out_send_sub"; exit 1; }
+
+out_send_switch_sess="$(run_case ide --send --switch --ref src/app.py "")"
+[[ "$out_send_switch_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --switch --ref sess: $out_send_switch_sess"; exit 1; }
 
 out_send_stdin="$(run_case ide --send --stdin "")"
 [[ "$out_send_stdin" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --stdin: $out_send_stdin"; exit 1; }

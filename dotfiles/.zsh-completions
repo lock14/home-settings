@@ -86,12 +86,16 @@ _ide() {
         '-s:Open interactive multi-session IDE workspace switcher'
         '--sessions:Open interactive multi-session IDE workspace switcher'
         '--next-attention:Jump to oldest IDE session waiting for AI attention'
-        '--agent-state:Record deterministic AI lifecycle state (running, approval, done, or idle)'
+        '--agent-state:Record deterministic AI lifecycle state (running, approval, quota, done, or idle)'
+        '--message:Optional notification message text (with --agent-state)'
+        '--ack-ai:Acknowledge AI attention across one or more IDE sessions'
+        '--open-pr:Open cached pull or merge request URL for an IDE session'
         '--send:Dispatch context (--stdin, --ref, --text) to AI Agent'
         '--stdin:Read context payload from standard input (with --send)'
         '--ref:Format file and line reference relative to AI CWD (with --send)'
         '--text:Send literal text payload to AI Agent (with --send)'
         '--no-focus:Keep current pane focus when dispatching with --send'
+        '--switch:Focus AI pane and switch client to target session (with --send)'
         '--toggle:Toggle focus between AI Agent and Text Editor'
         '--show-editor:Focus Text Editor pane or bounce back'
         '--show-ai:Focus AI Agent pane or bounce back'
@@ -122,6 +126,7 @@ _ide() {
         '--ref:Format file and line reference relative to AI CWD'
         '--text:Send literal text payload to AI Agent'
         '--no-focus:Keep current pane focus when dispatching'
+        '--switch:Focus AI pane and switch client to target session'
     )
     list_opts=(
         '--plain:Print session names only (one per line)'
@@ -140,6 +145,7 @@ _ide() {
     agent_states=(
         'running:AI agent is actively executing a turn'
         'approval:AI agent is waiting for user approval or input'
+        'quota:AI agent is waiting for model quota reset'
         'done:AI agent completed its turn'
         'idle:AI agent is idle at prompt'
     )
@@ -164,6 +170,38 @@ _ide() {
     (( CURRENT > 1 )) && prev="${words[CURRENT-1]:-}"
     (( CURRENT > 2 )) && prev2="${words[CURRENT-2]:-}"
     (( CURRENT > 3 )) && prev3="${words[CURRENT-3]:-}"
+    case "${words[CURRENT]:-}" in
+        --ai=*|--agent=*)
+            (( $+builtins[compset] )) && compset -P '*=' || true
+            _describe -t agents 'AI agent CLI' agents
+            return
+            ;;
+        --agent-state=*)
+            (( $+builtins[compset] )) && compset -P '*=' || true
+            _describe -t states 'AI lifecycle state' agent_states
+            return
+            ;;
+        --swap=*)
+            (( $+builtins[compset] )) && compset -P '*=' || true
+            _describe -t directions 'swap direction' swap_dirs
+            return
+            ;;
+        --open=*|--preview=*|--ref=*)
+            (( $+builtins[compset] )) && compset -P '*=' || true
+            _files
+            return
+            ;;
+        --open-pr=*)
+            (( $+builtins[compset] )) && compset -P '*=' || true
+            if (( ${#sessions} )); then
+                _describe -t sessions 'IDE session' sessions
+            fi
+            return
+            ;;
+        --text=*|--message=*)
+            return
+            ;;
+    esac
     case "$prev" in
         --ai|--agent)
             _describe -t agents 'AI agent CLI' agents
@@ -185,14 +223,14 @@ _ide() {
             _files
             return
             ;;
-        --text)
+        --text|--message)
             return
             ;;
         cd|--cd)
             _files -/
             return
             ;;
-        refresh|-r|--refresh|--reload|-s|--sessions|--next-attention|--ack-ai|--toggle|--show-editor|--show-ai|--show-term|--focus-editor|--focus-ai|--focus-term|--toggle-editor|--toggle-ai|--toggle-term)
+        refresh|-r|--refresh|--reload|-s|--sessions|--next-attention|--open-pr|--toggle|--show-editor|--show-ai|--show-term|--focus-editor|--focus-ai|--focus-term|--toggle-editor|--toggle-ai|--toggle-term)
             if [[ "${words[CURRENT]:-}" == -* ]]; then
                 _describe -t options 'ide option' opts
             elif (( ${#sessions} )); then
@@ -202,7 +240,7 @@ _ide() {
             ;;
     esac
 
-    local in_send=0 has_send_payload=0 in_quit_kill=0 idx=2 w=""
+    local in_send=0 has_send_payload=0 in_quit_kill=0 in_ack_ai=0 in_agent_state=0 idx=2 w=""
     [[ "${words[1]:-}" == (qide|idek|quit) ]] && in_quit_kill=1
     while (( idx < CURRENT )); do
         w="${words[idx]:-}"
@@ -210,10 +248,13 @@ _ide() {
             -q|--quit|--kill)
                 in_quit_kill=1
                 ;;
+            --ack-ai)
+                in_ack_ai=1
+                ;;
             quit|kill)
                 (( idx == 2 )) && in_quit_kill=1
                 ;;
-            --send)
+            --send|--switch|--no-focus)
                 in_send=1
                 ;;
             --stdin|--ref=*|--text=*)
@@ -227,7 +268,14 @@ _ide() {
                     (( idx++ ))
                 fi
                 ;;
-            --ai|--agent|--agent-state)
+            --agent-state=*)
+                in_agent_state=1
+                ;;
+            --agent-state)
+                in_agent_state=1
+                (( idx++ ))
+                ;;
+            --ai|--agent|--message)
                 (( idx++ ))
                 ;;
             -*)
@@ -250,7 +298,7 @@ _ide() {
         return
     fi
 
-    if (( in_quit_kill )); then
+    if (( in_quit_kill || in_ack_ai )); then
         if [[ "${words[CURRENT]:-}" == -* ]]; then
             _describe -t options 'ide option' opts
         elif (( ${#sessions} )); then
@@ -271,6 +319,15 @@ _ide() {
             else
                 _describe -t sessions 'IDE session' sessions
             fi
+        fi
+        return
+    fi
+
+    if (( in_agent_state )); then
+        if [[ "${words[CURRENT]:-}" == -* ]]; then
+            _describe -t options 'ide option' opts
+        elif (( ${#sessions} )); then
+            _describe -t sessions 'IDE session' sessions
         fi
         return
     fi

@@ -983,6 +983,46 @@ end, { nargs = "?", complete = "dir", desc = "Dive IDE Workspace (Editor & Shell
 
 map("n", "<leader>cd", "<cmd>IdeCd<CR>", { desc = "Dive IDE Workspace to Current Buffer Directory" })
 
+vim.api.nvim_create_user_command("IdeSend", function(opts)
+    if not vim.env.TMUX then
+        return
+    end
+    local target = vim.trim(opts.args or "")
+    if target == "" then
+        target = vim.env.IDE_SESSION or ""
+    end
+    local mode_flag = opts.bang and "--switch" or "--no-focus"
+    local ide_bin = vim.fn.expand("$HOME/.local/bin/ide")
+    local l1 = math.min(opts.line1 or vim.fn.line("."), opts.line2 or vim.fn.line("."))
+    local l2 = math.max(opts.line1 or vim.fn.line("."), opts.line2 or vim.fn.line("."))
+    local has_range = (opts.range or 0) > 0
+    local buf_name = vim.api.nvim_buf_get_name(0)
+    if vim.bo.buftype == "" and buf_name ~= "" then
+        local buf_path = vim.fn.fnamemodify(buf_name, ":p")
+        local ref = has_range and string.format("%s:%d-%d", buf_path, l1, l2) or string.format("%s:%d", buf_path, l1)
+        local cmd = { ide_bin, "--send", "--ref", ref, mode_flag }
+        if target ~= "" then
+            table.insert(cmd, target)
+        end
+        vim.fn.jobstart(cmd, { detach = true })
+    else
+        local lines = vim.api.nvim_buf_get_lines(0, math.max(0, l1 - 1), l2, false)
+        local text = table.concat(lines, "\n")
+        if text == "" then
+            return
+        end
+        local cmd = { ide_bin, "--send", "--stdin", mode_flag }
+        if target ~= "" then
+            table.insert(cmd, target)
+        end
+        local jid = vim.fn.jobstart(cmd, { detach = true })
+        if type(jid) == "number" and jid > 0 then
+            pcall(vim.fn.chansend, jid, text)
+            pcall(vim.fn.chanclose, jid, "stdin")
+        end
+    end
+end, { bang = true, range = true, nargs = "?", complete = complete_ide_sessions, desc = "Stage line or visual range into target IDE session AI prompt" })
+
 -- Active Color Theme Palette Resolution and Live RPC Hot-Reload (managed by bin/theme)
 local nvim_init_source = debug.getinfo(1, "S").source
 local nvim_init_path = (nvim_init_source and nvim_init_source:sub(1, 1) == "@")

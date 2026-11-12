@@ -42,10 +42,10 @@ show_keys_cheatsheet() {
     printf '  %s%-45s%sSESSIONS & WORKSPACE%s\n' "$c_blue" "PANES & LAYOUT" "$c_blue" "$c_reset"
     printf '  %s%-18s%s %-24s  %s%-18s%s %s%s\n' \
         "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI, Editor, Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_reset" \
-        "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus between panes" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI" "$c_reset" \
-        "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open system monitor" "$c_reset" \
-        "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane (keys/mouse)" "$c_cyan" "Click top bar" "$c_base0" "Focus pane or Help" "$c_reset" \
-        "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide or show Editor" "$c_cyan" "Right-click bar" "$c_base0" "Open workspace menu" "$c_reset" \
+        "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus between panes" "$c_cyan" "C-y/o/M-n (Alt+s)" "$c_base0" "Ack, open PR, new WS" "$c_reset" \
+        "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI" "$c_reset" \
+        "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane (keys/mouse)" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open system monitor" "$c_reset" \
+        "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide or show Editor" "$c_cyan" "Click top bar" "$c_base0" "Focus, Help, or menu" "$c_reset" \
         "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide or show Shell" "$c_cyan" "v [+line] <file>" "$c_base0" "Open file in Editor" "$c_reset" \
         "$c_cyan" "Alt+z" "$c_base0" "Toggle 100% pane zoom" "$c_cyan" "icd [dir|--reset]" "$c_base0" "Change workspace dir" "$c_reset" \
         "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane right / below" "$c_cyan" ":Q / Alt+q / Alt+Q" "$c_base0" "Quit / force-quit IDE" "$c_reset" \
@@ -62,7 +62,8 @@ show_keys_cheatsheet() {
     printf '  %s%-18s%s %-24s  %s%-18s%s %s%s\n' \
         "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files tree" "$c_cyan" "Space a  (Visual)" "$c_base0" "Send selected lines" "$c_reset" \
         "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent dir / open item" "$c_cyan" "Space il (Normal)" "$c_base0" "Send current line" "$c_reset" \
-        "$c_cyan" "=      (in tree)" "$c_base0" "Apply file edits" "$c_cyan" "Space id (Normal)" "$c_base0" "Send diagnostics" "$c_reset" \
+        "$c_cyan" "Enter  (in tree)" "$c_base0" "Open file or enter dir" "$c_cyan" "Space id (Normal)" "$c_base0" "Send diagnostics" "$c_reset" \
+        "$c_cyan" "=      (in tree)" "$c_base0" "Apply file edits" "$c_cyan" ":IdeSend[!] [ws]" "$c_base0" "Stage to other WS" "$c_reset" \
         "$c_cyan" "g? / q (in tree)" "$c_base0" "Tree help / close tree" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send shell selection" "$c_reset"
 
     if [ -t 0 ] && [ -t 1 ] && [ "${IDE_KEYS_NO_WAIT:-0}" != "1" ]; then
@@ -111,6 +112,8 @@ fi
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
 from __future__ import annotations
 
+import html
+import json
 import os
 try:
     os.close(9)
@@ -118,6 +121,7 @@ except OSError:
     pass
 from pathlib import Path
 import re
+import select
 import shlex
 import shutil
 import signal
@@ -126,6 +130,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import urllib.parse
 
 USAGE_TEXT = """Usage: ide [OPTIONS] [DIRECTORY]
@@ -140,9 +145,11 @@ Options:
   --preview <FILE> [LINE]  Preview <FILE> in the Main Editor pane via RPC without changing focus
   cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
   -s, --sessions [SESSION] Open interactive multi-session IDE workspace switcher (Alt+s / Prefix+s)
-  --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in FIFO order (Alt+Shift+S / Prefix+S)
-  --agent-state <STATE> [SESSION] Record deterministic AI lifecycle state: running, approval, done, or idle
-  --send <PAYLOAD> [SESSION] Dispatch context (--stdin, --ref <PATH>[:L1[-L2]], --text <TEXT>, --no-focus) to AI Agent
+  --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in urgency and FIFO order (Alt+Shift+S / Prefix+S)
+  --agent-state <STATE> [--message <TEXT>] [SESSION] Record deterministic AI lifecycle state: running, approval, quota, done, or idle
+  --ack-ai [SESSION...]    Acknowledge AI attention across one or more IDE sessions
+  --open-pr [SESSION]      Open cached pull or merge request URL for an IDE session
+  --send <PAYLOAD> [SESSION] Dispatch context (--stdin, --ref <PATH>[:L1[-L2]], --text <TEXT>, --no-focus, --switch) to AI Agent
   --toggle [SESSION]       Toggle focus between the AI Agent and the Text Editor (unparking if hidden)
   --show-editor [SESSION]  Focus the Text Editor pane (unparking if hidden), or bounce back if already focused
   --show-ai [SESSION]      Focus the AI Agent pane (unparking if hidden), or bounce back if already focused
@@ -167,8 +174,9 @@ Without NAME / SESSION, session commands act only on the ide session of the call
 Environment Variables:
   IDE_AI_CLI               AI CLI tool for the AI Agent pane: agy (default), claude, or codex
   IDE_BROWSER              Optional browser executable for opening http(s):// links
-  IDE_LINK_RULES           Untracked Ctrl+click link and session-naming rules (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
-                           defining `ide_resolve_link WORD CWD` and/or `ide_session_name DIR`"""
+  IDE_NOTIFY               Local desktop banner policy: 0 (default), 1 / unfocused, or always
+  IDE_LINK_RULES           Untracked Ctrl+click link, session-naming, notification, and VCS hooks (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
+                           defining `ide_resolve_link`, `ide_session_name`, `ide_notify`, or `ide_vcs_summary`"""
 
 
 def usage(file=sys.stdout) -> None:
@@ -294,7 +302,7 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
         env_lines.extend(tmux_out("show-environment", "-g").splitlines())
         seen_vars: set[str] = set()
         for line in env_lines:
-            for var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
+            for var in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"):
                 if var in seen_vars or os.environ.get(var):
                     continue
                 prefix = f"{var}="
@@ -314,6 +322,8 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
         if run_dir.is_dir():
             if not os.environ.get("WAYLAND_DISPLAY") and is_socket_path(run_dir / "wayland-0"):
                 os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+            if not os.environ.get("DBUS_SESSION_BUS_ADDRESS") and is_socket_path(run_dir / "bus"):
+                os.environ["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={run_dir / 'bus'}"
             if not os.environ.get("XAUTHORITY"):
                 for auth_cand in sorted(run_dir.glob(".mutter-Xwaylandauth.*")):
                     if auth_cand.is_file():
@@ -1381,6 +1391,7 @@ def toggle_main_pane(mode: str, target_arg: str, skip_checktime: bool = False) -
                 set_ide_vars(sess, [
                     ("@ide_ai_pane", "IDE_AI_PANE", ai_pane),
                     ("@ide_ai_parked", "IDE_AI_PARKED", "0"),
+                    ("@ide_ai_state_ts", "IDE_AI_STATE_TS", str(int(time.time()))),
                 ])
                 ai_run_cmd = resolve_ai_cmd(ai_cli)
                 if ai_run_cmd:
@@ -2633,7 +2644,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
     res = run_tmux(
         "list-sessions",
         "-F",
-        "#{session_name}\t#{session_activity}\t#{session_last_attached}\t#{session_attached}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}\t#{@ide_ai_pane}\t#{@ide_ai_cli}\t#{@ide_workdir}\t#{@ide_initial_root}\t#{@ide_ai_state}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}",
+        "#{session_name}\t#{session_activity}\t#{session_last_attached}\t#{session_attached}\t#{@ide_session}\t#{@ide_socket}\t#{@ide_main_win}\t#{@ide_ai_pane}\t#{@ide_ai_cli}\t#{@ide_workdir}\t#{@ide_initial_root}\t#{@ide_ai_state}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}\t#{@ide_ai_state_ts}",
     )
     if res.returncode != 0:
         return ([], False)
@@ -2641,7 +2652,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
         return ([], True)
     items: list[dict[str, str]] = []
     for line in res.stdout.splitlines():
-        cols = (line.split("\t") + [""] * 14)[:14]
+        cols = (line.split("\t") + [""] * 15)[:15]
         (
             sess_name,
             activity,
@@ -2657,6 +2668,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
             ai_state,
             ai_attn,
             ai_attn_ts,
+            ai_state_ts,
         ) = cols
         if not is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
             continue
@@ -2675,6 +2687,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
             "ai_state": ai_state,
             "ai_attn": ai_attn,
             "ai_attn_ts": ai_attn_ts,
+            "ai_state_ts": ai_state_ts,
         })
     return (items, True)
 
@@ -2695,9 +2708,658 @@ def _parse_attn_ts(raw_ts: str, fallback: float) -> float:
         return fallback
 
 
-def _git_summary(workdir: str) -> tuple[str, bool, str]:
-    if not workdir or not os.path.isdir(workdir) or not shutil.which("git"):
-        return ("-", False, "not a git repository")
+def _format_elapsed_age(state_ts: float, now: float | None = None) -> str:
+    if state_ts <= 0:
+        return ""
+    cur = time.time() if now is None else now
+    delta = max(0, int(cur - state_ts))
+    if delta < 60:
+        return f"{delta}s"
+    if delta < 3600:
+        return f"{delta // 60}m"
+    if delta < 86400:
+        return f"{delta // 3600}h"
+    return f"{delta // 86400}d"
+
+
+def _char_cell_width(ch: str) -> int:
+    cp = ord(ch)
+    if 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0x10FFFF:
+        return 1
+    if unicodedata.combining(ch):
+        return 0
+    if cp >= 0x1F300 or unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 2
+    return 1
+
+
+def _visible_width(text: str) -> int:
+    clean = _SGR_RE.sub("", text)
+    return sum(_char_cell_width(ch) for ch in clean)
+
+
+def _pad_visible(text: str, width: int) -> str:
+    pad = max(0, width - _visible_width(text))
+    return text + (" " * pad)
+
+
+def _trunc_visible(text: str, max_w: int, suffix: str = "…") -> str:
+    if _visible_width(text) <= max_w:
+        return text
+    sfx_w = _visible_width(suffix)
+    budget = max(0, max_w - sfx_w)
+    out: list[str] = []
+    used = 0
+    for ch in text:
+        cw = _char_cell_width(ch)
+        if used + cw > budget:
+            break
+        out.append(ch)
+        used += cw
+    return "".join(out) + suffix
+
+
+def _locate_git_dirs(workdir: str) -> tuple[str, str, str]:
+    if not workdir:
+        return ("", "", "")
+    cur = os.path.abspath(workdir)
+    try:
+        start_dev = os.stat(cur).st_dev
+    except OSError:
+        return ("", "", "")
+
+    worktree_root = ""
+    gitdir = ""
+    while True:
+        dot_git = os.path.join(cur, ".git")
+        try:
+            st = os.stat(dot_git)
+        except OSError:
+            st = None
+        if st is not None:
+            if stat.S_ISDIR(st.st_mode):
+                worktree_root = cur
+                gitdir = dot_git
+                break
+            if stat.S_ISREG(st.st_mode):
+                try:
+                    with open(dot_git, "r", encoding="utf-8", errors="replace") as fh:
+                        first_line = fh.readline().strip()
+                except OSError:
+                    first_line = ""
+                if first_line.lower().startswith("gitdir:"):
+                    gd_raw = first_line.split(":", 1)[1].strip()
+                    if gd_raw:
+                        gitdir = gd_raw if os.path.isabs(gd_raw) else os.path.normpath(os.path.join(cur, gd_raw))
+                        worktree_root = cur
+                        break
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        try:
+            if os.stat(parent).st_dev != start_dev:
+                break
+        except OSError:
+            break
+        cur = parent
+
+    if not gitdir:
+        return ("", "", "")
+
+    commondir = gitdir
+    commondir_file = os.path.join(gitdir, "commondir")
+    if os.path.isfile(commondir_file):
+        try:
+            with open(commondir_file, "r", encoding="utf-8", errors="replace") as fh:
+                common_rel = fh.readline().strip().rstrip("/")
+        except OSError:
+            common_rel = ""
+        if common_rel and common_rel != ".":
+            commondir = (
+                common_rel
+                if os.path.isabs(common_rel)
+                else os.path.normpath(os.path.join(gitdir, common_rel))
+            )
+    return (worktree_root, gitdir, commondir)
+
+
+def _build_forge_pr_url(raw_url: str, pr_num: str, forge_hint: str = "") -> str:
+    if not raw_url or not pr_num.isdigit() or int(pr_num) <= 0:
+        return ""
+    scheme = "https"
+    rest = raw_url.strip()
+    has_scheme = False
+    is_http = False
+    if rest.startswith("http://"):
+        scheme = "http"
+        rest = rest[len("http://"):]
+        has_scheme = True
+        is_http = True
+    elif rest.startswith("https://"):
+        scheme = "https"
+        rest = rest[len("https://"):]
+        has_scheme = True
+        is_http = True
+    elif rest.startswith(("ssh://", "git://", "git+ssh://")):
+        rest = rest.split("://", 1)[1]
+        has_scheme = True
+    elif rest.startswith("file://"):
+        rest = "localhost/" + rest[len("file://"):]
+        has_scheme = True
+    elif rest.startswith("/"):
+        rest = "localhost" + rest
+        has_scheme = True
+
+    host = ""
+    repo_path = ""
+    if has_scheme:
+        if "/" not in rest:
+            return ""
+        host, repo_path = rest.split("/", 1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[1]
+        if not is_http and ":" in host and not host.endswith("]"):
+            host = host.rsplit(":", 1)[0]
+    elif ":" in rest and ("/" not in rest or "/" not in rest.split(":", 1)[0]):
+        host, repo_path = rest.split(":", 1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[1]
+    elif "/" in rest:
+        host, repo_path = rest.split("/", 1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[1]
+    else:
+        return ""
+
+    repo_path = repo_path.strip("/")
+    if repo_path.endswith(".git"):
+        repo_path = repo_path[:-4].rstrip("/")
+    if not host or not repo_path:
+        return ""
+
+    host_l = host.lower()
+    forge = forge_hint.strip().lower()
+    if not forge:
+        if "github" in host_l:
+            forge = "github"
+        elif "gitlab" in host_l:
+            forge = "gitlab"
+        elif host_l == "bitbucket.org":
+            forge = "bitbucket-cloud"
+        elif "bitbucket" in host_l or "stash" in host_l:
+            forge = "bitbucket-server"
+        elif any(k in host_l for k in ("codeberg", "gitea", "forgejo")):
+            forge = "gitea"
+        else:
+            forge = "github"
+
+    if forge == "gitlab":
+        return f"{scheme}://{host}/{repo_path}/-/merge_requests/{pr_num}"
+    if forge in ("bitbucket-cloud", "bitbucket_cloud"):
+        return f"https://bitbucket.org/{repo_path}/pull-requests/{pr_num}"
+    if forge in ("bitbucket-server", "bitbucket_server", "bitbucket-dc", "stash"):
+        bb_path = repo_path[4:] if repo_path.startswith("scm/") else repo_path
+        if "/scm/" in bb_path:
+            bb_path = bb_path.split("/scm/", 1)[1]
+        if "/" in bb_path:
+            rem_part, repo = bb_path.rsplit("/", 1)
+            proj = rem_part.rsplit("/", 1)[-1]
+        else:
+            proj = bb_path
+            repo = bb_path
+        if proj.startswith("~"):
+            return f"{scheme}://{host}/users/{proj[1:]}/repos/{repo}/pull-requests/{pr_num}"
+        return f"{scheme}://{host}/projects/{proj.upper()}/repos/{repo}/pull-requests/{pr_num}"
+    if forge in ("gitea", "forgejo", "codeberg"):
+        return f"{scheme}://{host}/{repo_path}/pulls/{pr_num}"
+    return f"{scheme}://{host}/{repo_path}/pull/{pr_num}"
+
+
+_RE_PULL_MERGE_REF = re.compile(
+    r"^refs/(?:(pull)/([1-9][0-9]*)/head|(merge-requests)/([1-9][0-9]*)/head|(pull-requests)/([1-9][0-9]*)/(?:from|head))$"
+)
+_SAFE_HTTP_URL_RE = re.compile(r"^https?://[^\s\x00-\x1f\x7f]+$", re.IGNORECASE)
+
+
+def _sanitize_http_url(raw_url: str) -> str:
+    cand = raw_url.strip()
+    return cand if (cand and _SAFE_HTTP_URL_RE.match(cand)) else ""
+
+
+def _unescape_git_cfg_str(raw: str) -> str:
+    out: list[str] = []
+    i = 0
+    n = len(raw)
+    while i < n:
+        ch = raw[i]
+        if ch == "\\" and i + 1 < n:
+            nxt = raw[i + 1]
+            out.append({"n": "\n", "t": "\t", "b": "\b"}.get(nxt, nxt))
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+def _parse_git_section_header(s: str) -> tuple[str, str] | None:
+    if not s.startswith("["):
+        return None
+    in_quote = False
+    close_idx = -1
+    i = 1
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if in_quote:
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == '"':
+                in_quote = False
+        else:
+            if ch == '"':
+                in_quote = True
+            elif ch == "]":
+                close_idx = i
+                break
+        i += 1
+    if close_idx < 0:
+        return None
+    rem = s[close_idx + 1:].strip()
+    if rem and rem[0] not in ("#", ";"):
+        return None
+    hdr = s[1:close_idx].strip()
+    if '"' in hdr:
+        q_start = hdr.index('"')
+        q_end = hdr.rfind('"')
+        if q_end <= q_start:
+            return None
+        sec_type = hdr[:q_start].strip().lower()
+        sec_name = _unescape_git_cfg_str(hdr[q_start + 1:q_end])
+        return (sec_type, sec_name)
+    if "." in hdr:
+        sec_type, sec_name = hdr.split(".", 1)
+        return (sec_type.strip().lower(), sec_name.strip())
+    return (hdr.lower(), "")
+
+
+def _parse_git_cfg_value(v_raw: str) -> str:
+    s = v_raw.lstrip()
+    in_quote = False
+    out: list[str] = []
+    last_keep = 0
+    i = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if in_quote:
+            if ch == "\\" and i + 1 < n:
+                nxt = s[i + 1]
+                out.append({"n": "\n", "t": "\t", "b": "\b"}.get(nxt, nxt))
+                last_keep = len(out)
+                i += 2
+                continue
+            if ch == '"':
+                in_quote = False
+                last_keep = len(out)
+                i += 1
+                continue
+            out.append(ch)
+            last_keep = len(out)
+        else:
+            if ch in ("#", ";"):
+                break
+            if ch == '"':
+                in_quote = True
+                i += 1
+                continue
+            if ch == "\\" and i + 1 < n:
+                nxt = s[i + 1]
+                out.append({"n": "\n", "t": "\t", "b": "\b"}.get(nxt, nxt))
+                last_keep = len(out)
+                i += 2
+                continue
+            out.append(ch)
+            if not ch.isspace():
+                last_keep = len(out)
+        i += 1
+    return "".join(out[:last_keep])
+
+
+def _git_glob_match(pat: str, text: str, icase: bool = False) -> bool:
+    parts: list[str] = ["^"]
+    i = 0
+    n = len(pat)
+    while i < n:
+        if i == 0 and pat.startswith("**/"):
+            parts.append("(?:.*/)?")
+            i += 3
+        elif pat.startswith("/**/", i):
+            parts.append("(?:/|/.+/)")
+            i += 4
+        elif pat.startswith("**", i):
+            parts.append(".*")
+            i += 2
+        elif pat[i] == "*":
+            parts.append("[^/]*")
+            i += 1
+        elif pat[i] == "?":
+            parts.append("[^/]")
+            i += 1
+        else:
+            parts.append(re.escape(pat[i]))
+            i += 1
+    parts.append("$")
+    return bool(re.match("".join(parts), text, re.IGNORECASE if icase else 0))
+
+
+def _resolve_git_pr_badge(
+    branch: str,
+    upstream: str,
+    gitdir: str,
+    commondir: str,
+    worktree_root: str = "",
+) -> tuple[str, str]:
+    if not branch or branch in ("-", "HEAD", "(detached)") or branch.startswith("@") or not gitdir:
+        return ("", "")
+
+    remote_urls: dict[str, str] = {}
+    remote_forges: dict[str, str] = {}
+    instead_of: dict[str, str] = {}
+    seen_cfgs: set[str] = set()
+    first_remote_name = ""
+    branch_remote = ""
+    branch_pr = ""
+    branch_pr_url = ""
+    merge_forge_hint = ""
+
+    gitdir_cands: list[str] = []
+    for raw_gd in (
+        gitdir,
+        os.path.realpath(gitdir),
+        os.path.join(worktree_root, ".git") if worktree_root else "",
+        os.path.join(os.path.realpath(worktree_root), ".git") if worktree_root else "",
+    ):
+        if raw_gd:
+            norm_gd = raw_gd.rstrip("/") + "/"
+            if norm_gd not in gitdir_cands:
+                gitdir_cands.append(norm_gd)
+
+    def _eval_include_if(cond: str, cfg_dir: str) -> bool:
+        if cond.startswith("onbranch:"):
+            b_pat = cond[len("onbranch:"):]
+            if not b_pat:
+                return False
+            if b_pat.endswith("/"):
+                b_pat += "**"
+            return _git_glob_match(b_pat, branch, icase=False)
+        icase = False
+        if cond.startswith("gitdir/i:"):
+            g_pat = cond[len("gitdir/i:"):]
+            icase = True
+        elif cond.startswith("gitdir:"):
+            g_pat = cond[len("gitdir:"):]
+        else:
+            return False
+        if not g_pat:
+            return False
+        if g_pat.startswith("~/"):
+            g_pat = os.path.expanduser("~").rstrip("/") + "/" + g_pat[2:]
+        elif g_pat.startswith("./"):
+            g_pat = cfg_dir.rstrip("/") + "/" + g_pat[2:]
+        elif not g_pat.startswith("/"):
+            g_pat = "**/" + g_pat
+        if g_pat.endswith("/"):
+            g_pat += "**"
+        return any(_git_glob_match(g_pat, cand, icase=icase) for cand in gitdir_cands)
+
+    def parse_cfg(cfg_path: str, is_repo_cfg: bool, depth: int = 0) -> None:
+        nonlocal first_remote_name, branch_remote, branch_pr, branch_pr_url, merge_forge_hint
+        if depth > 4 or not cfg_path or cfg_path in seen_cfgs or not os.path.isfile(cfg_path):
+            return
+        seen_cfgs.add(cfg_path)
+        try:
+            with open(cfg_path, "r", encoding="utf-8", errors="replace") as fh:
+                raw_lines = fh.readlines()
+        except OSError:
+            return
+
+        logical_lines: list[str] = []
+        idx = 0
+        while idx < len(raw_lines):
+            cur_l = raw_lines[idx].rstrip("\r\n")
+            while cur_l.endswith("\\") and not cur_l.endswith("\\\\") and idx + 1 < len(raw_lines):
+                idx += 1
+                cur_l = cur_l[:-1] + raw_lines[idx].rstrip("\r\n").lstrip()
+            logical_lines.append(cur_l)
+            idx += 1
+
+        cfg_dir = os.path.dirname(os.path.abspath(cfg_path))
+        sec_type = ""
+        sec_name = ""
+        seen_url_in_sec = False
+        for raw_l in logical_lines:
+            s = raw_l.lstrip()
+            if not s or s[0] in ("#", ";"):
+                continue
+            if s.startswith("["):
+                seen_url_in_sec = False
+                parsed_hdr = _parse_git_section_header(s)
+                if parsed_hdr is None:
+                    sec_type = ""
+                    sec_name = ""
+                    continue
+                sec_type, sec_name = parsed_hdr
+                if sec_type == "includeif":
+                    sec_type = "include" if _eval_include_if(sec_name, cfg_dir) else ""
+                    sec_name = ""
+                elif sec_type not in ("remote", "branch", "url", "include"):
+                    sec_type = ""
+                    sec_name = ""
+                continue
+            if not sec_type or "=" not in s:
+                continue
+            k_raw, v_raw = s.split("=", 1)
+            key = k_raw.strip().lower()
+            val = _parse_git_cfg_value(v_raw)
+            if not val:
+                continue
+
+            if sec_type == "remote":
+                if key == "url" and not seen_url_in_sec:
+                    remote_urls[sec_name] = val
+                    seen_url_in_sec = True
+                    if is_repo_cfg and not first_remote_name:
+                        first_remote_name = sec_name
+                elif key == "forge":
+                    remote_forges[sec_name] = val.lower()
+            elif sec_type == "branch" and sec_name == branch:
+                if key == "remote":
+                    branch_remote = val
+                elif key == "pr" and val.isdigit() and int(val) > 0:
+                    branch_pr = val
+                elif key == "prurl":
+                    safe_u = _sanitize_http_url(val)
+                    if safe_u:
+                        branch_pr_url = safe_u
+                elif key == "merge":
+                    m_ref = _RE_PULL_MERGE_REF.match(val)
+                    if m_ref:
+                        if m_ref.group(1):
+                            if not branch_pr:
+                                branch_pr = m_ref.group(2)
+                            merge_forge_hint = "github"
+                        elif m_ref.group(3):
+                            if not branch_pr:
+                                branch_pr = m_ref.group(4)
+                            merge_forge_hint = "gitlab"
+                        elif m_ref.group(5):
+                            if not branch_pr:
+                                branch_pr = m_ref.group(6)
+                            merge_forge_hint = "bitbucket-server"
+            elif sec_type == "url" and key == "insteadof":
+                instead_of[val] = sec_name
+            elif sec_type == "include" and key == "path":
+                inc = os.path.expanduser(val) if val.startswith("~/") else val
+                if not os.path.isabs(inc):
+                    inc = os.path.join(cfg_dir, inc)
+                parse_cfg(inc, is_repo_cfg, depth + 1)
+
+    global_cfg = os.environ.get("GIT_CONFIG_GLOBAL", "").strip()
+    if global_cfg:
+        parse_cfg(global_cfg, False)
+    else:
+        xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        parse_cfg(os.path.join(xdg_cfg, "git", "config"), False)
+        parse_cfg(os.path.expanduser("~/.gitconfig"), False)
+
+    eff_common = commondir or gitdir
+    if eff_common and os.path.realpath(eff_common) != os.path.realpath(gitdir):
+        parse_cfg(os.path.join(eff_common, "config"), True)
+    parse_cfg(os.path.join(gitdir, "config"), True)
+    parse_cfg(os.path.join(gitdir, "config.worktree"), True)
+
+    if branch_remote and branch_remote != "." and branch_remote in remote_urls:
+        remote_name = branch_remote
+    elif "/" in upstream and upstream.split("/", 1)[0] in remote_urls:
+        remote_name = upstream.split("/", 1)[0]
+    elif branch_remote and branch_remote != ".":
+        remote_name = branch_remote
+    elif "/" in upstream:
+        remote_name = upstream.split("/", 1)[0]
+    else:
+        remote_name = "origin"
+
+    first_remote_url = remote_urls.get(first_remote_name, "") if first_remote_name else ""
+    remote_url = remote_urls.get(remote_name) or remote_urls.get("origin") or first_remote_url
+    if remote_url and instead_of:
+        best_pfx = ""
+        for pfx in instead_of:
+            if remote_url.startswith(pfx) and len(pfx) > len(best_pfx):
+                best_pfx = pfx
+        if best_pfx:
+            remote_url = instead_of[best_pfx] + remote_url[len(best_pfx):]
+
+    first_remote_forge = remote_forges.get(first_remote_name, "") if first_remote_name else ""
+    forge_hint = (
+        remote_forges.get(remote_name)
+        or remote_forges.get("origin")
+        or first_remote_forge
+        or merge_forge_hint
+    )
+
+    if branch_pr and branch_pr.isdigit() and int(branch_pr) > 0:
+        pr_url = _sanitize_http_url(
+            branch_pr_url or (_build_forge_pr_url(remote_url, branch_pr, forge_hint) if remote_url else "")
+        )
+        return (branch_pr, pr_url)
+
+    if branch in ("main", "master", "trunk", "develop") or not eff_common:
+        return ("", "")
+
+    cache_dir = (
+        os.environ.get("GIT_PR_CACHE_DIR")
+        or os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "git-pr-prompt")
+    )
+    cand_common_paths: list[str] = []
+    for cp in (os.path.realpath(eff_common), os.path.abspath(eff_common)):
+        if cp and cp not in cand_common_paths:
+            cand_common_paths.append(cp)
+
+    best_ts = -1
+    best_num = ""
+    best_url = ""
+    for cp in cand_common_paths:
+        repo_key = re.sub(r"[^A-Za-z0-9._-]", "_", cp)
+        state_file = os.path.join(cache_dir, f"{repo_key}.state")
+        if not os.path.isfile(state_file):
+            continue
+        try:
+            with open(state_file, "r", encoding="utf-8", errors="replace") as fh:
+                for raw_l in fh:
+                    parts = raw_l.rstrip("\r\n").split("|")
+                    if len(parts) < 2 or parts[0] != branch:
+                        continue
+                    c_num = parts[1].strip()
+                    c_url = _sanitize_http_url(parts[2]) if len(parts) > 2 else ""
+                    c_ts_s = parts[3].strip() if len(parts) > 3 else ""
+                    c_ts = int(c_ts_s) if c_ts_s.isdigit() else 0
+                    if c_ts >= best_ts:
+                        best_ts = c_ts
+                        if c_num != "NONE" and c_num.isdigit() and int(c_num) > 0:
+                            best_num = c_num
+                            best_url = c_url
+                        else:
+                            best_num = ""
+                            best_url = ""
+                    break
+        except OSError:
+            continue
+
+    if best_num:
+        resolved_url = _sanitize_http_url(
+            best_url or (_build_forge_pr_url(remote_url, best_num, forge_hint) if remote_url else "")
+        )
+        return (best_num, resolved_url)
+    return ("", "")
+
+
+def _call_vcs_summary_hook(workdir: str) -> tuple[str, bool, str, str] | None:
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    rules = os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
+    try:
+        with open(rules, "r", encoding="utf-8") as fh:
+            if "ide_vcs_summary" not in fh.read():
+                return None
+    except OSError:
+        return None
+    try:
+        res = subprocess.run(
+            [
+                "bash",
+                "-c",
+                '. "$1" && declare -F ide_vcs_summary >/dev/null && ide_vcs_summary "$2"',
+                "ide",
+                rules,
+                workdir,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=0.4,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if res.returncode != 0 or not res.stdout:
+        return None
+    first_line = next((ln.strip() for ln in res.stdout.splitlines() if ln.strip()), "")
+    if not first_line or "|" not in first_line:
+        return None
+    parts = first_line.split("|", 3)
+    branch = parts[0].strip() or "-"
+    dirty = (parts[1].strip().lower() in ("1", "true", "yes", "dirty", "*")) if len(parts) > 1 else False
+    detail = (parts[2].strip() if len(parts) > 2 else "") or (
+        f"{branch} (modified)" if dirty else f"{branch} (clean)"
+    )
+    url = _sanitize_http_url(parts[3]) if len(parts) > 3 else ""
+    return (branch, dirty, detail, url)
+
+
+def _git_summary(workdir: str) -> tuple[str, bool, str, str, str]:
+    if not workdir or not os.path.isdir(workdir):
+        return ("-", False, "not a git repository", "", "")
+    custom_vcs = _call_vcs_summary_hook(workdir)
+    worktree_root, gitdir, commondir = _locate_git_dirs(workdir)
+    if custom_vcs is not None:
+        return (custom_vcs[0], custom_vcs[1], custom_vcs[2], custom_vcs[3], worktree_root)
+    env_git_dir = os.environ.get("GIT_DIR", "").strip()
+    eff_gitdir = gitdir or (os.path.abspath(env_git_dir) if env_git_dir else "")
+    eff_commondir = commondir or eff_gitdir
+    if not shutil.which("git") or not eff_gitdir:
+        return ("-", False, "not a git repository", "", "")
     try:
         res = subprocess.run(
             ["git", "-C", workdir, "--no-optional-locks", "status", "--porcelain=v2", "--branch"],
@@ -2709,11 +3371,12 @@ def _git_summary(workdir: str) -> tuple[str, bool, str]:
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return ("-", False, "unavailable")
+        return ("-", False, "unavailable", "", "")
     if res.returncode != 0 or not res.stdout:
-        return ("-", False, "not a git repository")
+        return ("-", False, "not a git repository", "", "")
     branch = ""
     oid = ""
+    upstream = ""
     staged = 0
     modified = 0
     untracked = 0
@@ -2722,6 +3385,8 @@ def _git_summary(workdir: str) -> tuple[str, bool, str]:
             branch = line[len("# branch.head "):].strip()
         elif line.startswith("# branch.oid "):
             oid = line[len("# branch.oid "):].strip()
+        elif line.startswith("# branch.upstream "):
+            upstream = line[len("# branch.upstream "):].strip()
         elif line.startswith("? "):
             untracked += 1
         elif line.startswith(("1 ", "2 ", "u ")):
@@ -2734,9 +3399,11 @@ def _git_summary(workdir: str) -> tuple[str, bool, str]:
                     modified += 1
     if branch in ("", "(detached)"):
         branch = f"@{oid[:7]}" if oid and oid != "(initial)" else "HEAD"
+    pr_num, pr_url = _resolve_git_pr_badge(branch, upstream, eff_gitdir, eff_commondir, worktree_root)
+    branch_badge = f"{branch}@{pr_num}" if pr_num else branch
     dirty = (staged + modified + untracked) > 0
     if not dirty:
-        detail = f"{branch} (clean)"
+        detail = f"{branch_badge} (clean)"
     else:
         counts = []
         if staged:
@@ -2745,8 +3412,8 @@ def _git_summary(workdir: str) -> tuple[str, bool, str]:
             counts.append(f"~{modified} modified")
         if untracked:
             counts.append(f"?{untracked} untracked")
-        detail = f"{branch} ({', '.join(counts)})"
-    return (branch, dirty, detail)
+        detail = f"{branch_badge} ({', '.join(counts)})"
+    return (branch_badge, dirty, detail, pr_url, worktree_root)
 
 
 def _shorten_home(path: str) -> str:
@@ -2761,6 +3428,8 @@ def _shorten_home(path: str) -> str:
 def _state_color(state: str, esc: dict[str, str]) -> str:
     if state == "ATTN":
         return esc["ORANGE"]
+    if state == "QUOTA":
+        return esc["YELLOW"]
     if state == "WORKING":
         return esc["CYAN"]
     if state == "DONE":
@@ -2772,17 +3441,25 @@ def _state_color(state: str, esc: dict[str, str]) -> str:
 
 def _format_attn_summary(fleet: list[dict[str, object]]) -> str:
     attn_items = sorted(
-        ((float(e["attn_ts"]), str(e["sess"])) for e in fleet if bool(e["needs_attn"])),
-        key=lambda x: (x[0], x[1]),
+        (
+            (0 if str(e["state"]) == "ATTN" else 1, float(e["attn_ts"]), str(e["sess"]))
+            for e in fleet
+            if bool(e["needs_attn"])
+        ),
+        key=lambda x: (x[0], x[1], x[2]),
     )
     if not attn_items:
         return ""
     if len(attn_items) == 1:
-        return attn_items[0][1]
-    return f"{attn_items[0][1]} +{len(attn_items) - 1}"
+        return attn_items[0][2]
+    return f"{attn_items[0][2]} +{len(attn_items) - 1}"
 
 
-def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dict[str, object]]:
+def classify_ide_fleet(
+    include_git: bool = True,
+    cur_sess: str = "",
+    git_only_sess: str = "",
+) -> list[dict[str, object]]:
     raw_sessions = list_ide_sessions_raw()
     if not raw_sessions:
         return []
@@ -2860,15 +3537,20 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
 
     alive_child_pids = _pids_with_children(set(ai_pid_by_sess.values()))
     stale_cleanup_cmds: list[str] = []
+    now_ts = time.time()
 
     fleet: list[dict[str, object]] = []
     for item in raw_sessions:
         sess = item["sess"]
         workdir = item["workdir"] or fallback_dir_by_sess.get(sess, "")
         if include_git:
-            git_branch, git_dirty, git_detail = _git_summary(workdir)
+            if not git_only_sess or sess == git_only_sess:
+                git_branch, git_dirty, git_detail, git_pr_url, worktree_root = _git_summary(workdir)
+            else:
+                worktree_root, _, _ = _locate_git_dirs(workdir)
+                git_branch, git_dirty, git_detail, git_pr_url = ("-", False, "-", "")
         else:
-            git_branch, git_dirty, git_detail = ("-", False, "-")
+            git_branch, git_dirty, git_detail, git_pr_url, worktree_root = ("-", False, "-", "", "")
 
         sess_act = int(item["activity"]) if item["activity"].isdigit() else 0
         raw_last_att = item.get("last_attached", "")
@@ -2883,12 +3565,15 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         raw_state = item["ai_state"].strip().lower()
         raw_attn = item["ai_attn"].strip()
         raw_attn_ts = item["ai_attn_ts"].strip()
+        raw_state_ts = item.get("ai_state_ts", "").strip()
         needs_attn = False
+        state_ts = 0.0
 
         if not has_child:
             state = "SHELL"
             attn_ts = 0.0
-            if raw_state or raw_attn not in ("", "0") or raw_attn_ts:
+            state_label = "SHELL"
+            if raw_state or raw_attn not in ("", "0") or raw_attn_ts or raw_state_ts:
                 if stale_cleanup_cmds:
                     stale_cleanup_cmds.append(";")
                 stale_cleanup_cmds.extend([
@@ -2897,12 +3582,16 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
                     "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
                     ";",
                     "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
+                    ";",
+                    "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state_ts", "",
                 ])
         else:
-            needs_attn = bool(raw_attn == "1" or raw_state == "approval")
-            attn_ts = _parse_attn_ts(raw_attn_ts, float(act_ts or time.time())) if needs_attn else 0.0
+            needs_attn = bool(raw_attn == "1")
+            attn_ts = _parse_attn_ts(raw_attn_ts, float(act_ts or now_ts)) if needs_attn else 0.0
             if raw_state == "approval" or (raw_attn == "1" and raw_state != "done"):
                 state = "ATTN"
+            elif raw_state == "quota":
+                state = "QUOTA"
             elif raw_state == "running":
                 state = "WORKING"
             elif raw_state == "done":
@@ -2911,11 +3600,20 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
                 state = "IDLE"
             else:
                 state = "-"
+            state_ts = _parse_attn_ts(raw_state_ts, 0.0)
+            if state_ts <= 0 and state in ("ATTN", "DONE") and raw_attn_ts:
+                state_ts = _parse_attn_ts(raw_attn_ts, 0.0)
+            if state in ("ATTN", "QUOTA", "WORKING", "DONE", "IDLE") and state_ts > 0:
+                state_label = f"{state} {_format_elapsed_age(state_ts, now_ts)}"
+            else:
+                state_label = state
 
         fleet.append({
             "sess": sess,
             "ai_cli": item["ai_cli"] or "agy",
             "state": state,
+            "state_label": state_label,
+            "state_ts": state_ts,
             "needs_attn": needs_attn,
             "attn_ts": attn_ts,
             "workdir": workdir,
@@ -2923,6 +3621,9 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
             "git_branch": git_branch,
             "git_dirty": git_dirty,
             "git_detail": git_detail,
+            "git_pr_url": git_pr_url,
+            "worktree_root": os.path.realpath(worktree_root) if worktree_root else "",
+            "worktree_peers": [],
             "preview_pane": preview_pane_by_sess.get(sess, ""),
             "active_role": active_role_by_sess.get(sess, "ai"),
             "attached": item["attached"] not in ("", "0"),
@@ -2931,6 +3632,41 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
             "window_activity": win_act,
             "is_current": sess == cur_sess,
         })
+
+    def _fleet_sort_key(entry: dict[str, object]) -> tuple[int, int, float, int, int, int, int, str]:
+        st = str(entry["state"])
+        needs_attn_flag = bool(entry["needs_attn"])
+        sess_name = str(entry["sess"])
+        if st == "ATTN":
+            sub = 0 if needs_attn_flag else 1
+            ts = float(entry["attn_ts"]) if needs_attn_flag else (float(entry.get("state_ts") or 0.0) or float(entry["activity"]))
+            return (0, sub, ts, 0, 0, 0, 0, sess_name)
+        if st == "DONE" and needs_attn_flag:
+            return (1, 0, float(entry["attn_ts"]), 0, 0, 0, 0, sess_name)
+        is_cur = 0 if bool(entry["is_current"]) else 1
+        neg_act = -int(entry["activity"])
+        neg_att = -int(entry.get("last_attached", 0))
+        neg_win = -int(entry.get("window_activity", 0))
+        if st == "WORKING":
+            return (2, 0, 0.0, is_cur, neg_act, neg_att, neg_win, sess_name)
+        if st == "QUOTA":
+            return (2, 1, 0.0, is_cur, neg_act, neg_att, neg_win, sess_name)
+        if st == "SHELL":
+            return (4, 0, 0.0, is_cur, neg_act, neg_att, neg_win, sess_name)
+        return (3, 0, 0.0, is_cur, neg_act, neg_att, neg_win, sess_name)
+
+    fleet.sort(key=_fleet_sort_key)
+
+    if include_git:
+        by_worktree: dict[str, list[dict[str, object]]] = {}
+        for entry in fleet:
+            wt = str(entry.get("worktree_root") or "")
+            if wt:
+                by_worktree.setdefault(wt, []).append(entry)
+        for peers in by_worktree.values():
+            if len(peers) >= 2 and any(str(p["state"]) == "WORKING" for p in peers):
+                for entry in peers:
+                    entry["worktree_peers"] = [str(p["sess"]) for p in peers if p is not entry]
 
     if stale_cleanup_cmds:
         active_cnt = sum(1 for e in fleet if e["state"] == "WORKING")
@@ -2946,16 +3682,6 @@ def classify_ide_fleet(include_git: bool = True, cur_sess: str = "") -> list[dic
         ])
         run_tmux(*stale_cleanup_cmds)
 
-    def _fleet_sort_key(entry: dict[str, object]) -> tuple[int, float, int, int, int, int, str]:
-        if bool(entry["needs_attn"]):
-            return (0, float(entry["attn_ts"]), 0, 0, 0, 0, str(entry["sess"]))
-        is_cur = 0 if bool(entry["is_current"]) else 1
-        neg_act = -int(entry["activity"])
-        neg_att = -int(entry.get("last_attached", 0))
-        neg_win = -int(entry.get("window_activity", 0))
-        return (1, 0.0, is_cur, neg_act, neg_att, neg_win, str(entry["sess"]))
-
-    fleet.sort(key=_fleet_sort_key)
     return fleet
 
 
@@ -3106,14 +3832,372 @@ def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
     return 0
 
 
-def set_agent_state(raw_state: str, target_arg: str) -> int:
+def _session_has_focused_client(sess: str) -> bool:
+    if not sess:
+        return False
+    out = tmux_out("list-clients", "-t", f"={sess}", "-F", "#{client_flags}")
+    if not out:
+        return False
+    for line in out.splitlines():
+        flags = {tok.strip() for tok in line.split(",") if tok.strip()}
+        if "focused" in flags:
+            return True
+    return False
+
+
+def _inspect_session_ai_view(sess: str) -> dict[str, object]:
+    raw = tmux_out(
+        "display-message",
+        "-p",
+        "-t",
+        f"={sess}:",
+        "#{window_id}\t#{window_name}\t#{window_zoomed_flag}\t#{@ide_role}\t#{@ide_main_win}\t#{@ide_ai_parked}\t#{@ide_ai_state}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}\t#{@ide_ai_state_ts}\t#{@ide_ai_cli}\t#{@ide_workdir}\t#{@ide_initial_root}",
+    )
+    parts = (raw.split("\t") + [""] * 13)[:13]
+    (
+        win_id,
+        wname,
+        zoomed,
+        prole,
+        main_win,
+        ai_parked,
+        ai_state,
+        ai_attn,
+        ai_attn_ts,
+        ai_state_ts,
+        ai_cli,
+        workdir,
+        init_root,
+    ) = (p.strip() for p in parts)
+    has_focus = _session_has_focused_client(sess)
+    ai_visible = (
+        has_focus
+        and not wname.startswith("_ide_park_")
+        and (not main_win or win_id == main_win)
+        and ai_parked != "1"
+        and not (zoomed == "1" and prole != "ai")
+    )
+    ai_focused = ai_visible and prole == "ai"
+    return {
+        "ai_visible": ai_visible,
+        "ai_focused": ai_focused,
+        "ai_state": ai_state.lower(),
+        "ai_attn": ai_attn,
+        "ai_attn_ts": ai_attn_ts,
+        "ai_state_ts": ai_state_ts,
+        "ai_cli": ai_cli or "agy",
+        "workdir": workdir or init_root,
+    }
+
+
+_HOOK_NOTIF_TYPE_RE = re.compile(r'"(?:notification_type|type)"\s*:\s*"([^"\\]+)"')
+
+
+def _drain_hook_stdin(max_keep_bytes: int = 1048576, max_drain_bytes: int = 16777216) -> str:
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return ""
+        fd = sys.stdin.fileno()
+    except (OSError, ValueError, AttributeError):
+        return ""
+    chunks: list[bytes] = []
+    kept = 0
+    drained = 0
+    started_json = False
+    ended_json = False
+    timeout = 0.02
+    while drained < max_drain_bytes:
+        try:
+            ready, _, _ = select.select([fd], [], [], timeout)
+        except (OSError, ValueError):
+            break
+        if not ready:
+            break
+        try:
+            data = os.read(fd, min(65536, max_drain_bytes - drained))
+        except OSError:
+            break
+        if not data:
+            break
+        if drained == 0:
+            s_lead = data.lstrip()
+            started_json = s_lead.startswith(b"{")
+        drained += len(data)
+        s_tail = data.rstrip()
+        if s_tail:
+            ended_json = s_tail.endswith(b"}")
+        if kept < max_keep_bytes:
+            take = data[: max_keep_bytes - kept]
+            chunks.append(take)
+            kept += len(take)
+        timeout = 0.05 if (started_json and not ended_json) else 0.005
+    return b"".join(chunks).decode("utf-8", errors="replace") if chunks else ""
+
+
+def _parse_hook_metadata(stdin_raw: str, json_args: list[str]) -> tuple[str, str]:
+    notif_type = ""
+    msg = ""
+    candidates: list[str] = list(json_args)
+    if stdin_raw.strip():
+        candidates.append(stdin_raw.strip())
+    for raw in candidates:
+        s = raw.strip()
+        if not s.startswith("{"):
+            continue
+        obj = None
+        if s.endswith("}"):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, dict):
+                    obj = parsed
+            except ValueError:
+                obj = None
+        if obj is not None:
+            if not notif_type:
+                nt = obj.get("notification_type") or obj.get("type") or ""
+                if isinstance(nt, str) and nt.strip():
+                    notif_type = nt.strip().lower()
+            if not msg:
+                for k in ("message", "last-assistant-message", "last_assistant_message", "summary", "title"):
+                    val = obj.get(k)
+                    if isinstance(val, str) and val.strip():
+                        cleaned = " ".join(val.split())
+                        msg = (cleaned[:199] + "…") if len(cleaned) > 200 else cleaned
+                        break
+        elif not notif_type:
+            m_nt = _HOOK_NOTIF_TYPE_RE.search(s)
+            if m_nt and m_nt.group(1).strip():
+                notif_type = m_nt.group(1).strip().lower()
+    return (notif_type, msg)
+
+
+def _resolve_ide_notify_policy(sess: str) -> str:
+    raw = ""
+    if "IDE_NOTIFY" in os.environ and os.environ["IDE_NOTIFY"].strip() != "":
+        raw = os.environ["IDE_NOTIFY"]
+    elif "IDE_NOTIFY" in os.environ and not os.environ.get("TMUX"):
+        raw = os.environ["IDE_NOTIFY"]
+    else:
+        seen_in_sess = False
+        if sess:
+            sess_line = tmux_out("show-environment", "-t", f"={sess}", "IDE_NOTIFY").strip()
+            if sess_line == "-IDE_NOTIFY":
+                seen_in_sess = True
+                raw = ""
+            elif sess_line.startswith("IDE_NOTIFY="):
+                seen_in_sess = True
+                raw = sess_line[len("IDE_NOTIFY="):]
+        if not seen_in_sess:
+            glob_line = tmux_out("show-environment", "-g", "IDE_NOTIFY").strip()
+            if glob_line.startswith("IDE_NOTIFY="):
+                raw = glob_line[len("IDE_NOTIFY="):]
+    norm = raw.strip().lower()
+    if norm in ("1", "true", "on", "yes", "unfocused"):
+        return "unfocused"
+    if norm == "always":
+        return "always"
+    return "off"
+
+
+def _spawn_detached(cmd: list[str], env: dict[str, str] | None = None) -> bool:
+    try:
+        subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+            env=env,
+        )
+        return True
+    except OSError:
+        return False
+
+
+def _escape_terminal_notifier(text: str) -> str:
+    if text and text[0] in '[({<"\\':
+        return "\\" + text
+    return text
+
+
+def _dispatch_agent_notification(
+    state: str,
+    sess: str,
+    message: str,
+    ai_visible: bool,
+    ai_cli: str = "",
+    workdir: str = "",
+) -> None:
+    eff_cli = ai_cli or get_ide_var(sess, "@ide_ai_cli", "IDE_AI_CLI") or "agy"
+    eff_workdir = (
+        workdir
+        or get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+        or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+        or ""
+    )
+    title = f"IDE [{sess}] · Approval needed" if state == "approval" else f"IDE [{sess}] · Turn complete"
+    clean_msg = " ".join(message.split()) if message else ""
+    if len(clean_msg) > 200:
+        clean_msg = clean_msg[:199] + "…"
+    body = clean_msg or (
+        f"{eff_cli} is waiting for input in {sess}"
+        if state == "approval"
+        else f"{eff_cli} finished turn in {sess}"
+    )
+
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    rules = os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
+    has_notify_hook = False
+    try:
+        with open(rules, "r", encoding="utf-8") as fh:
+            has_notify_hook = "ide_notify" in fh.read()
+    except OSError:
+        has_notify_hook = False
+    if has_notify_hook:
+        _spawn_detached([
+            "bash",
+            "-c",
+            '. "$1" && declare -F ide_notify >/dev/null && ide_notify "$2" "$3" "$4" "$5" "$6" "$7"',
+            "ide",
+            rules,
+            state,
+            sess,
+            eff_cli,
+            eff_workdir,
+            title,
+            body,
+        ])
+
+    policy = _resolve_ide_notify_policy(sess)
+    if policy == "off" or is_ssh_session(sess):
+        return
+    if policy == "unfocused" and ai_visible:
+        return
+
+    sync_id = f"ide-{sess}"
+    if sys.platform == "darwin":
+        tn_bin = shutil.which("terminal-notifier")
+        osa_bin = shutil.which("osascript")
+        tn_title = _escape_terminal_notifier(title)
+        tn_body = _escape_terminal_notifier(body)
+        osa_script = "on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run"
+        if tn_bin and osa_bin:
+            _spawn_detached([
+                "sh",
+                "-c",
+                '"$1" -title "$2" -message "$3" -group "$4" || "$5" -e "$6" -- "$7" "$8"',
+                "ide-notify",
+                tn_bin,
+                tn_title,
+                tn_body,
+                sync_id,
+                osa_bin,
+                osa_script,
+                title,
+                body,
+            ])
+        elif tn_bin:
+            _spawn_detached([tn_bin, "-title", tn_title, "-message", tn_body, "-group", sync_id])
+        elif osa_bin:
+            _spawn_detached([osa_bin, "-e", osa_script, "--", title, body])
+        return
+
+    discover_display_env(sess)
+    if not (
+        os.environ.get("DBUS_SESSION_BUS_ADDRESS")
+        or os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+    ):
+        return
+    esc_body = html.escape(body, quote=False)
+    busctl_bin = shutil.which("busctl")
+    nsend_bin = shutil.which("notify-send")
+    env_copy = os.environ.copy()
+    if busctl_bin and nsend_bin:
+        _spawn_detached(
+            [
+                "sh",
+                "-c",
+                '"$1" --user --auto-start=no -- call org.freedesktop.Notifications /org/freedesktop/Notifications '
+                'org.freedesktop.Notifications Notify \'susssasa{sv}i\' ide 0 "" "$2" "$3" 0 2 urgency y 1 '
+                'x-canonical-private-synchronous s "$4" -1 || '
+                '"$5" -a ide -u normal -h "string:x-canonical-private-synchronous:$4" -- "$2" "$3"',
+                "ide-notify",
+                busctl_bin,
+                title,
+                esc_body,
+                sync_id,
+                nsend_bin,
+            ],
+            env=env_copy,
+        )
+    elif busctl_bin:
+        _spawn_detached(
+            [
+                busctl_bin,
+                "--user",
+                "--auto-start=no",
+                "--",
+                "call",
+                "org.freedesktop.Notifications",
+                "/org/freedesktop/Notifications",
+                "org.freedesktop.Notifications",
+                "Notify",
+                "susssasa{sv}i",
+                "ide",
+                "0",
+                "",
+                title,
+                esc_body,
+                "0",
+                "2",
+                "urgency",
+                "y",
+                "1",
+                "x-canonical-private-synchronous",
+                "s",
+                sync_id,
+                "-1",
+            ],
+            env=env_copy,
+        )
+    elif nsend_bin:
+        _spawn_detached(
+            [
+                nsend_bin,
+                "-a",
+                "ide",
+                "-u",
+                "normal",
+                "-h",
+                f"string:x-canonical-private-synchronous:{sync_id}",
+                "--",
+                title,
+                esc_body,
+            ],
+            env=env_copy,
+        )
+
+
+def set_agent_state(
+    raw_state: str,
+    target_arg: str,
+    message: str = "",
+    json_args: list[str] | None = None,
+) -> int:
+    stdin_raw = _drain_hook_stdin()
     state = raw_state.strip().lower()
-    if state not in ("running", "approval", "done", "idle"):
+    if state not in ("running", "approval", "quota", "done", "idle"):
         print(
-            f"Error: Invalid '--agent-state' value '{raw_state}'. Expected: running, approval, done, or idle.",
+            f"Error: Invalid '--agent-state' value '{raw_state}'. Expected: running, approval, quota, done, or idle.",
             file=sys.stderr,
         )
         return 1
+
+    notif_type, meta_msg = _parse_hook_metadata(stdin_raw, json_args or [])
+    if notif_type == "idle_prompt":
+        return 0
 
     if target_arg:
         sess = resolve_target_session(target_arg)
@@ -3127,96 +4211,154 @@ def set_agent_state(raw_state: str, target_arg: str) -> int:
         if not sess or not session_exists(sess):
             return 0
 
+    view = _inspect_session_ai_view(sess)
+    prev_state = str(view["ai_state"])
+    prev_attn = "1" if str(view["ai_attn"]) == "1" else "0"
+    cur_ts = str(view["ai_attn_ts"])
+    cur_state_ts = str(view["ai_state_ts"])
+    ai_visible = bool(view["ai_visible"])
+    ai_focused = bool(view["ai_focused"])
+    now = time.time()
+    state_ts_val = cur_state_ts if (prev_state == state and cur_state_ts) else str(int(now))
+
     if state == "approval":
-        cur_meta = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{@ide_ai_attn}\t#{@ide_ai_attn_ts}")
-        cur_attn, cur_ts = (cur_meta.split("\t", 1) + [""])[:2]
-        ts_val = cur_ts.strip() if (cur_attn.strip() == "1" and cur_ts.strip()) else f"{time.time():.6f}"
-        run_tmux(
-            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "approval",
-            ";",
-            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "1",
-            ";",
-            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", ts_val,
-        )
+        next_attn = "1"
+        attn_ts_val = cur_ts if (prev_attn == "1" and cur_ts) else f"{now:.6f}"
     elif state == "done":
-        cur_meta = tmux_out(
-            "display-message",
-            "-p",
-            "-t",
-            f"={sess}:",
-            "#{session_attached}\t#{window_name}\t#{@ide_role}\t#{@ide_ai_attn}\t#{@ide_ai_attn_ts}",
+        if ai_focused:
+            next_attn = "0"
+            attn_ts_val = ""
+        else:
+            next_attn = "1"
+            attn_ts_val = cur_ts if (prev_attn == "1" and cur_ts) else f"{now:.6f}"
+    else:
+        next_attn = "0"
+        attn_ts_val = ""
+
+    run_tmux(
+        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", state,
+        ";",
+        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", next_attn,
+        ";",
+        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", attn_ts_val,
+        ";",
+        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state_ts", state_ts_val,
+    )
+
+    refresh_fleet_topbar()
+    if next_attn == "1" and state in ("approval", "done") and (prev_state != state or prev_attn != "1"):
+        _dispatch_agent_notification(
+            state,
+            sess,
+            message.strip() or meta_msg,
+            ai_visible,
+            ai_cli=str(view["ai_cli"]),
+            workdir=str(view["workdir"]),
         )
-        parts = (cur_meta.split("\t") + [""] * 5)[:5]
-        attached, wname, prole, cur_attn, cur_ts = (p.strip() for p in parts)
-        if attached not in ("", "0") and not wname.startswith("_ide_park_") and prole == "ai":
-            run_tmux(
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "done",
+    return 0
+
+
+def ack_ai_session(
+    targets: list[str] | str,
+    from_hook: bool = False,
+    refresh_always: bool = True,
+    entering_ai: bool = False,
+) -> int:
+    raw_list = [targets] if isinstance(targets, str) else list(targets)
+    cleaned_targets = [t for t in raw_list if t]
+    resolved_sessions: list[str] = []
+    if cleaned_targets:
+        for t_arg in cleaned_targets:
+            cand = resolve_target_session(t_arg)
+            if cand and cand not in resolved_sessions:
+                resolved_sessions.append(cand)
+    elif os.environ.get("TMUX"):
+        cur = current_ide_session()
+        if cur:
+            resolved_sessions.append(cur)
+
+    should_refresh = refresh_always
+    batch_cmds: list[str] = []
+    now_s = str(int(time.time()))
+
+    for sess in resolved_sessions:
+        if not (sess and session_exists(sess) and check_is_ide_session(sess)):
+            continue
+        view = _inspect_session_ai_view(sess)
+        ai_focused = bool(view["ai_focused"])
+        ai_state = str(view["ai_state"])
+        ai_attn = str(view["ai_attn"])
+        cur_state_ts = str(view["ai_state_ts"])
+        can_ack = ai_focused if from_hook else True
+        direct_ai = ai_focused or entering_ai
+        if can_ack and (
+            ai_attn not in ("", "0")
+            or ai_state == "done"
+            or (ai_state == "approval" and direct_ai)
+        ):
+            if ai_state == "done":
+                next_state = "idle"
+            elif ai_state == "approval":
+                next_state = "idle" if direct_ai else "approval"
+            else:
+                next_state = ai_state
+            next_state_ts = (
+                cur_state_ts
+                if (next_state == ai_state and cur_state_ts)
+                else (now_s if next_state else "")
+            )
+            if batch_cmds:
+                batch_cmds.append(";")
+            batch_cmds.extend([
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", next_state,
                 ";",
                 "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
                 ";",
                 "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
-            )
-        else:
-            ts_val = cur_ts if (cur_attn == "1" and cur_ts) else f"{time.time():.6f}"
-            run_tmux(
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", "done",
                 ";",
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "1",
-                ";",
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", ts_val,
-            )
-    else:
-        run_tmux(
-            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", state,
-            ";",
-            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
-            ";",
-            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
-        )
+                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state_ts", next_state_ts,
+            ])
+            should_refresh = True
+        elif ai_state in ("running", "quota", "approval", "done") or ai_attn not in ("", "0"):
+            should_refresh = True
 
-    refresh_fleet_topbar()
+    if batch_cmds:
+        run_tmux(*batch_cmds)
+    if should_refresh:
+        refresh_fleet_topbar()
     return 0
 
 
-def ack_ai_session(target_arg: str, from_hook: bool = False, refresh_always: bool = True) -> int:
+def open_session_pr(target_arg: str) -> int:
     if target_arg:
         sess = resolve_target_session(target_arg)
     elif os.environ.get("TMUX"):
         sess = current_ide_session()
     else:
         sess = ""
-
-    if sess and session_exists(sess) and check_is_ide_session(sess):
-        meta = tmux_out(
-            "display-message",
-            "-p",
-            "-t",
-            f"={sess}:",
-            "#{session_attached}\t#{window_name}\t#{@ide_role}\t#{@ide_ai_state}\t#{@ide_ai_attn}",
-        )
-        parts = (meta.split("\t") + [""] * 5)[:5]
-        attached, wname, prole, ai_state, ai_attn = (p.strip() for p in parts)
-        can_ack = (
-            (attached not in ("", "0") and not wname.startswith("_ide_park_") and prole == "ai")
-            if from_hook
-            else True
-        )
-        if can_ack and (ai_attn not in ("", "0") or ai_state in ("approval", "done")):
-            next_state = "idle" if ai_state in ("approval", "done") else ai_state
-            run_tmux(
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", next_state,
-                ";",
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", "0",
-                ";",
-                "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", "",
-            )
-            refresh_always = True
-        elif ai_state in ("running", "approval", "done") or ai_attn not in ("", "0"):
-            refresh_always = True
-
-    if refresh_always:
-        refresh_fleet_topbar()
-    return 0
+    if not sess or not session_exists(sess) or not check_is_ide_session(sess):
+        print(f"Error: {missing_session_msg(sess or target_arg)}", file=sys.stderr)
+        return 1
+    workdir = (
+        get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+        or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+        or tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_current_path}").strip()
+    )
+    _, _, _, raw_pr_url, _ = _git_summary(workdir)
+    pr_url = _sanitize_http_url(raw_pr_url)
+    if not pr_url:
+        msg = f"No cached PR/MR URL for session '{sess}'."
+        if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+            ide_client = _resolve_active_client()
+            if ide_client:
+                run_tmux("display-message", "-c", ide_client, "-d", "2500", msg)
+            else:
+                run_tmux("display-message", "-d", "2500", "-t", f"={sess}:", msg)
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    discover_display_env(sess)
+    return 0 if open_browser_url(pr_url, sess) else 1
 
 
 def next_attention(target_arg: str) -> int:
@@ -3234,7 +4376,7 @@ def next_attention(target_arg: str) -> int:
 
     oldest = str(attn_entries[0]["sess"])
     toggle_main_pane("focus-ai", oldest)
-    ack_ai_session(oldest, from_hook=False, refresh_always=True)
+    ack_ai_session([oldest], from_hook=False, refresh_always=True, entering_ai=True)
     return switch_or_attach_session(oldest, origin_sess)
 
 
@@ -3253,14 +4395,15 @@ def list_ide_fleet(plain: bool = False) -> int:
 
     use_color = sys.stdout.isatty() and not bool(os.environ.get("NO_COLOR"))
     _, esc = load_active_palette()
-    sess_w = max(7, min(28, max(len(str(e["sess"])) for e in fleet)))
-    cli_w = max(5, min(12, max(len(str(e["ai_cli"])) for e in fleet)))
-    state_w = 7
+    state_labels = [str(e.get("state_label") or e["state"]) for e in fleet]
+    sess_w = max(7, min(28, max(_visible_width(str(e["sess"])) for e in fleet)))
+    cli_w = max(5, min(12, max(_visible_width(str(e["ai_cli"])) for e in fleet)))
+    state_w = max(5, min(16, max(_visible_width(lbl) for lbl in state_labels)))
     git_labels = [
         f"{e['git_branch']}{'*' if e['git_dirty'] else ''}" if e["git_branch"] != "-" else "-"
         for e in fleet
     ]
-    git_w = max(6, min(24, max(len(g) for g in git_labels)))
+    git_w = max(6, min(28, max(_visible_width(g) for g in git_labels)))
 
     if use_color:
         c_hdr = esc["BASE01"]
@@ -3271,16 +4414,18 @@ def list_ide_fleet(plain: bool = False) -> int:
     else:
         print(f"  {'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  WORKSPACE")
 
-    for entry, git_lbl in zip(fleet, git_labels):
+    for entry, st_lbl, git_lbl in zip(fleet, state_labels, git_labels):
         sess = str(entry["sess"])
         ai_cli = str(entry["ai_cli"])
         state = str(entry["state"])
         short_path = str(entry["short_path"])
         is_cur = bool(entry["is_current"])
         needs_attn = bool(entry["needs_attn"])
-        s_trunc = sess if len(sess) <= sess_w else (sess[: sess_w - 1] + "…")
-        c_trunc = ai_cli if len(ai_cli) <= cli_w else (ai_cli[: cli_w - 1] + "…")
-        g_trunc = git_lbl if len(git_lbl) <= git_w else (git_lbl[: git_w - 1] + "…")
+        has_wt_warn = bool(entry.get("worktree_peers"))
+        s_pad = _pad_visible(_trunc_visible(sess, sess_w), sess_w)
+        c_pad = _pad_visible(_trunc_visible(ai_cli, cli_w), cli_w)
+        st_pad = _pad_visible(_trunc_visible(st_lbl, state_w), state_w)
+        g_pad = _pad_visible(_trunc_visible(git_lbl, git_w), git_w)
         if use_color:
             attn_c = esc["GREEN"] if state == "DONE" else esc["ORANGE"]
             if is_cur:
@@ -3292,16 +4437,18 @@ def list_ide_fleet(plain: bool = False) -> int:
             c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
             c_state = _state_color(state, esc)
             c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_lbl != "-" else esc["BASE01"])
+            wt_sfx = f" {esc['YELLOW']}!{esc['RESET']}" if has_wt_warn else ""
             print(
-                f"{marker} {c_sess}{s_trunc:<{sess_w}}{esc['RESET']}  "
-                f"{esc['BASE0']}{c_trunc:<{cli_w}}{esc['RESET']}  "
-                f"{c_state}{state:<{state_w}}{esc['RESET']}  "
-                f"{c_git}{g_trunc:<{git_w}}{esc['RESET']}  "
-                f"{esc['BASE0']}{short_path}{esc['RESET']}"
+                f"{marker} {c_sess}{s_pad}{esc['RESET']}  "
+                f"{esc['BASE0']}{c_pad}{esc['RESET']}  "
+                f"{c_state}{st_pad}{esc['RESET']}  "
+                f"{c_git}{g_pad}{esc['RESET']}  "
+                f"{esc['BASE0']}{short_path}{esc['RESET']}{wt_sfx}"
             )
         else:
             marker = "*" if is_cur else ("!" if needs_attn else " ")
-            print(f"{marker} {s_trunc:<{sess_w}}  {c_trunc:<{cli_w}}  {state:<{state_w}}  {g_trunc:<{git_w}}  {short_path}")
+            wt_sfx = " !" if has_wt_warn else ""
+            print(f"{marker} {s_pad}  {c_pad}  {st_pad}  {g_pad}  {short_path}{wt_sfx}")
     return 0
 
 
@@ -3320,26 +4467,29 @@ def build_sessions_lines(cur_sess: str = "") -> list[str]:
     if not fleet:
         return []
     _, esc = load_active_palette()
-    sess_w = max(8, min(24, max(len(str(e["sess"])) for e in fleet)))
-    cli_w = max(5, min(10, max(len(str(e["ai_cli"])) for e in fleet)))
-    state_w = 7
+    state_labels = [str(e.get("state_label") or e["state"]) for e in fleet]
+    sess_w = max(8, min(24, max(_visible_width(str(e["sess"])) for e in fleet)))
+    cli_w = max(5, min(10, max(_visible_width(str(e["ai_cli"])) for e in fleet)))
+    state_w = max(5, min(16, max(_visible_width(lbl) for lbl in state_labels)))
     git_labels = [
         f"{e['git_branch']}{'*' if e['git_dirty'] else ''}" if e["git_branch"] != "-" else "-"
         for e in fleet
     ]
-    git_w = max(6, min(20, max(len(g) for g in git_labels)))
+    git_w = max(6, min(24, max(_visible_width(g) for g in git_labels)))
     rows: list[str] = []
-    for entry, git_lbl in zip(fleet, git_labels):
+    for entry, st_lbl, git_lbl in zip(fleet, state_labels, git_labels):
         sess = str(entry["sess"])
         ai_cli = str(entry["ai_cli"])
         state = str(entry["state"])
         short_path = str(entry["short_path"])
         is_cur = bool(entry["is_current"])
         needs_attn = bool(entry["needs_attn"])
+        has_wt_warn = bool(entry.get("worktree_peers"))
         attn_c = esc["GREEN"] if state == "DONE" else esc["ORANGE"]
-        s_trunc = sess if len(sess) <= sess_w else (sess[: sess_w - 1] + "…")
-        c_trunc = ai_cli if len(ai_cli) <= cli_w else (ai_cli[: cli_w - 1] + "…")
-        g_trunc = git_lbl if len(git_lbl) <= git_w else (git_lbl[: git_w - 1] + "…")
+        s_pad = _pad_visible(_trunc_visible(sess, sess_w), sess_w)
+        c_pad = _pad_visible(_trunc_visible(ai_cli, cli_w), cli_w)
+        st_pad = _pad_visible(_trunc_visible(st_lbl, state_w), state_w)
+        g_pad = _pad_visible(_trunc_visible(git_lbl, git_w), git_w)
         if is_cur:
             marker = f"{esc['CYAN']}▸{esc['RESET']}"
         elif needs_attn:
@@ -3349,12 +4499,13 @@ def build_sessions_lines(cur_sess: str = "") -> list[str]:
         c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
         c_state = _state_color(state, esc)
         c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_lbl != "-" else esc["BASE01"])
+        wt_sfx = f" {esc['YELLOW']}!{esc['RESET']}" if has_wt_warn else ""
         display = (
-            f"{marker} {c_sess}{s_trunc:<{sess_w}}{esc['RESET']}  "
-            f"{esc['BASE0']}{c_trunc:<{cli_w}}{esc['RESET']}  "
-            f"{c_state}{state:<{state_w}}{esc['RESET']}  "
-            f"{c_git}{g_trunc:<{git_w}}{esc['RESET']}  "
-            f"{esc['BASE01']}{short_path}{esc['RESET']}"
+            f"{marker} {c_sess}{s_pad}{esc['RESET']}  "
+            f"{esc['BASE0']}{c_pad}{esc['RESET']}  "
+            f"{c_state}{st_pad}{esc['RESET']}  "
+            f"{c_git}{g_pad}{esc['RESET']}  "
+            f"{esc['BASE01']}{short_path}{esc['RESET']}{wt_sfx}"
         )
         rows.append(f"{sess}\t{display}")
     return rows
@@ -3365,7 +4516,7 @@ def render_session_preview(target_arg: str) -> int:
     if not sess or not session_exists(sess):
         print("Session is no longer active.")
         return 0
-    fleet = classify_ide_fleet(include_git=True, cur_sess=current_ide_session())
+    fleet = classify_ide_fleet(include_git=True, cur_sess=current_ide_session(), git_only_sess=sess)
     entry = next((e for e in fleet if str(e["sess"]) == sess), None)
     _, esc = load_active_palette()
     c_rst = esc["RESET"]
@@ -3375,19 +4526,23 @@ def render_session_preview(target_arg: str) -> int:
 
     ai_cli = str(entry["ai_cli"])
     state = str(entry["state"])
+    state_label = str(entry.get("state_label") or state)
     short_path = str(entry["short_path"])
     git_branch = str(entry["git_branch"])
     git_detail = str(entry["git_detail"])
     preview_pane = str(entry["preview_pane"])
     active_role = str(entry["active_role"])
+    peers = [str(p) for p in (entry.get("worktree_peers") or [])]
     c_state = _state_color(state, esc)
     c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_branch != "-" else esc["BASE01"])
     rule = "─" * 56
 
     print(f"{esc['BLUE']} {sess}{c_rst}  {esc['BASE01']}(focused: {active_role}){c_rst}")
-    print(f"{esc['BASE01']}Agent    :{c_rst} {esc['CYAN']}{ai_cli}{c_rst}  {esc['BASE01']}State:{c_rst} {c_state}{state}{c_rst}")
+    print(f"{esc['BASE01']}Agent    :{c_rst} {esc['CYAN']}{ai_cli}{c_rst}  {esc['BASE01']}State:{c_rst} {c_state}{state_label}{c_rst}")
     print(f"{esc['BASE01']}Workspace:{c_rst} {esc['BASE0']}{short_path}{c_rst}")
     print(f"{esc['BASE01']}Git      :{c_rst} {c_git}{git_detail}{c_rst}")
+    if peers:
+        print(f"{esc['BASE01']}Warning  :{c_rst} {esc['YELLOW']}Shared worktree with {', '.join(peers)}{c_rst}")
     print(f"{esc['BASE01']}{rule}{c_rst}")
 
     if preview_pane and pane_exists(preview_pane):
@@ -3461,6 +4616,82 @@ def switch_or_attach_session(target_sess: str, origin_sess: str = "") -> int:
     return 0
 
 
+def _collect_launcher_dirs() -> list[str]:
+    dirs: list[str] = []
+    seen: set[str] = set()
+    zoxide_bin = os.environ.get("IDE_ZOXIDE_BIN") or shutil.which("zoxide")
+    if zoxide_bin:
+        try:
+            res = subprocess.run(
+                [zoxide_bin, "query", "-l"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=2.0,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout:
+                for raw in res.stdout.splitlines():
+                    cand = raw.strip()
+                    if cand and os.path.isdir(cand):
+                        norm = os.path.abspath(cand)
+                        if norm not in seen:
+                            seen.add(norm)
+                            dirs.append(norm)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    if not dirs:
+        home = os.path.expanduser("~")
+        if os.path.isdir(home):
+            try:
+                for entry in sorted(os.listdir(home)):
+                    if entry.startswith("."):
+                        continue
+                    cand = os.path.join(home, entry)
+                    if os.path.isdir(cand):
+                        norm = os.path.abspath(cand)
+                        if norm not in seen:
+                            seen.add(norm)
+                            dirs.append(norm)
+            except OSError:
+                pass
+            if not dirs:
+                dirs.append(os.path.abspath(home))
+    return dirs
+
+
+def _pick_workspace_directory(fzf_bin: str, env: dict[str, str]) -> str:
+    dirs = _collect_launcher_dirs()
+    if not dirs:
+        return ""
+    _, esc = load_active_palette()
+    rows = [f"{d}\t{esc['BLUE']}{_shorten_home(d)}{esc['RESET']}" for d in dirs]
+    dir_args = [
+        fzf_bin,
+        "--ansi",
+        "--delimiter=\t",
+        "--with-nth=2..",
+        "--layout=reverse",
+        "--info=inline-right",
+        "--prompt=New IDE > ",
+        "--header=Enter: launch workspace  Esc: back to sessions",
+    ]
+    proc = subprocess.run(
+        dir_args,
+        input="\n".join(rows) + "\n",
+        stdout=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=False,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return ""
+    first = proc.stdout.splitlines()[0].split("\t", 1)[0].strip()
+    return first if (first and os.path.isdir(first)) else ""
+
+
 def run_sessions_picker(target_arg: str, ide_self: str) -> int:
     resolved_arg = resolve_target_session(target_arg) if target_arg else ""
     origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
@@ -3488,16 +4719,15 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
             if pop_res.returncode == 0 or not sys.stdin.isatty():
                 return 0 if pop_res.returncode in (0, 130) else pop_res.returncode
 
-    rows = build_sessions_lines(cur_sess)
-    if not rows:
-        if os.environ.get("TMUX"):
-            run_tmux("display-message", "No active IDE sessions.")
-        else:
-            print("No active IDE sessions.")
-        return 0
-
     fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
     if not fzf_bin:
+        rows_plain = build_sessions_lines(cur_sess)
+        if not rows_plain:
+            if os.environ.get("TMUX"):
+                run_tmux("display-message", "No active IDE sessions.")
+            else:
+                print("No active IDE sessions.")
+            return 0
         return list_ide_fleet(plain=False)
 
     hex_map, _ = load_active_palette()
@@ -3505,6 +4735,8 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
     self_q = shlex.quote(ide_self)
     reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
     quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{+1}})+reload({reload_cmd})"
+    ack_bind = f"ctrl-y:execute-silent({self_q} --ack-ai {{+1}})+reload({reload_cmd})"
+    open_pr_bind = f"ctrl-o:execute-silent({self_q} --open-pr {{1}})"
     preview_cmd = f"{self_q} --session-preview {{1}}"
     fzf_args = [
         fzf_bin,
@@ -3515,47 +4747,77 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
         "--layout=reverse",
         "--info=inline-right",
         "--prompt=IDE > ",
-        "--header=Enter: switch  C-a: AI  C-e: Editor  C-t: Shell  C-x: quit  C-r: reload  Alt+s: close",
-        "--expect=ctrl-a,ctrl-e,ctrl-t",
+        "--header=Enter: switch  C-a/e/t: pane  C-y: ack  C-o: PR  M-n: new  C-x: quit  C-r: reload  Alt+s: close",
+        "--expect=ctrl-a,ctrl-e,ctrl-t,alt-n",
         "--bind=alt-s:abort",
         f"--bind=ctrl-r:reload({reload_cmd})",
+        f"--bind={ack_bind}",
+        f"--bind={open_pr_bind}",
         f"--bind={quit_bind}",
         f"--preview={preview_cmd}",
         "--preview-window=right:56%:wrap",
     ]
-    proc = subprocess.run(
-        fzf_args,
-        input="\n".join(rows) + "\n",
-        stdout=subprocess.PIPE,
-        text=True,
-        env=env,
-        check=False,
-    )
-    if proc.returncode != 0 or not proc.stdout:
-        return 0
-    out_lines = proc.stdout.splitlines()
-    if not out_lines:
-        return 0
-    if out_lines[0] in ("", "enter", "ctrl-a", "ctrl-e", "ctrl-t"):
-        pressed = out_lines[0]
-        selected_line = out_lines[1] if len(out_lines) > 1 else ""
-    else:
-        pressed = ""
-        selected_line = out_lines[0]
-    chosen_sess = selected_line.split("\t", 1)[0].strip()
-    if not chosen_sess or not session_exists(chosen_sess):
-        return 0
 
-    if pressed == "ctrl-a":
-        toggle_main_pane("focus-ai", chosen_sess)
-    elif pressed == "ctrl-e":
-        toggle_main_pane("focus-editor", chosen_sess)
-    elif pressed == "ctrl-t":
-        toggle_main_pane("focus-term", chosen_sess)
+    while True:
+        rows = build_sessions_lines(cur_sess)
+        if not rows:
+            if os.environ.get("TMUX"):
+                run_tmux("display-message", "No active IDE sessions.")
+            else:
+                print("No active IDE sessions.")
+            return 0
 
-    rc = switch_or_attach_session(chosen_sess, origin_sess or cur_sess)
-    ack_ai_session(chosen_sess, from_hook=True, refresh_always=False)
-    return rc
+        proc = subprocess.run(
+            fzf_args,
+            input="\n".join(rows) + "\n",
+            stdout=subprocess.PIPE,
+            text=True,
+            env=env,
+            check=False,
+        )
+        out_lines = proc.stdout.splitlines() if proc.stdout else []
+        first_key = out_lines[0].strip() if out_lines else ""
+        if proc.returncode not in (0, 1) or (proc.returncode == 1 and first_key != "alt-n") or not out_lines:
+            return 0
+        if first_key in ("", "enter", "ctrl-a", "ctrl-e", "ctrl-t", "alt-n"):
+            pressed = first_key
+            selected_line = out_lines[1] if len(out_lines) > 1 else ""
+        else:
+            pressed = ""
+            selected_line = out_lines[0]
+
+        if pressed == "alt-n":
+            chosen_dir = _pick_workspace_directory(fzf_bin, env)
+            if not chosen_dir:
+                continue
+            target_sess = sanitize_session_name(os.path.abspath(chosen_dir))
+            launch_res = subprocess.run(
+                [ide_self, "--detach", chosen_dir],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if session_exists(target_sess):
+                rc = switch_or_attach_session(target_sess, origin_sess or cur_sess)
+                ack_ai_session([target_sess], from_hook=True, refresh_always=False)
+                return rc
+            return launch_res.returncode
+
+        chosen_sess = selected_line.split("\t", 1)[0].strip()
+        if not chosen_sess or not session_exists(chosen_sess):
+            return 0
+
+        if pressed == "ctrl-a":
+            toggle_main_pane("focus-ai", chosen_sess)
+        elif pressed == "ctrl-e":
+            toggle_main_pane("focus-editor", chosen_sess)
+        elif pressed == "ctrl-t":
+            toggle_main_pane("focus-term", chosen_sess)
+
+        rc = switch_or_attach_session(chosen_sess, origin_sess or cur_sess)
+        ack_ai_session([chosen_sess], from_hook=True, refresh_always=False)
+        return rc
 
 
 _SEND_REF_SPEC_RE = re.compile(r"^(.*?)(?:[:#][Ll]?([0-9]+)(?:-[Ll]?([0-9]+))?)?$")
@@ -3645,11 +4907,18 @@ def _format_ai_ref(raw_ref: str, sess: str, ai_pane: str) -> str:
     return f"@{display_path}{suffix} "
 
 
-def send_to_ai(send_mode: str, send_payload: str, no_focus: bool, target_arg: str) -> int:
+def send_to_ai(
+    send_mode: str,
+    send_payload: str,
+    no_focus: bool,
+    switch_session: bool,
+    target_arg: str,
+) -> int:
     if not send_mode:
         print("Error: '--send' requires '--stdin', '--ref <PATH>', or '--text <TEXT>'.", file=sys.stderr)
         return 1
 
+    origin_sess = current_ide_session() if os.environ.get("TMUX") else ""
     sess = resolve_target_session(target_arg)
     if not sess or not session_exists(sess):
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
@@ -3666,8 +4935,9 @@ def send_to_ai(send_mode: str, send_payload: str, no_focus: bool, target_arg: st
     elif not send_payload:
         return 0
 
-    prev_pane = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}") if no_focus else ""
-    if not no_focus:
+    eff_no_focus = False if switch_session else no_focus
+    prev_pane = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}") if eff_no_focus else ""
+    if not eff_no_focus:
         toggle_main_pane("focus-ai", sess)
         ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
     else:
@@ -3717,7 +4987,16 @@ def send_to_ai(send_mode: str, send_payload: str, no_focus: bool, target_arg: st
         except OSError:
             pass
 
+    if switch_session:
+        rc = switch_or_attach_session(sess, origin_sess)
+        ack_ai_session([sess], from_hook=True, refresh_always=False)
+        return rc
     return 0
+
+
+def _looks_like_json_obj(raw: str) -> bool:
+    s = raw.strip()
+    return len(s) >= 2 and s.startswith("{") and s.endswith("}")
 
 
 def main() -> int:
@@ -3752,7 +5031,10 @@ def main() -> int:
     send_mode = ""
     send_payload = ""
     send_no_focus = False
+    send_switch = False
     agent_state_val = ""
+    agent_message = ""
+    agent_json_args: list[str] = []
     ack_from_hook = False
     end_of_opts = False
 
@@ -3764,6 +5046,8 @@ def main() -> int:
             if action == "send" and not send_mode:
                 send_mode = "text"
                 send_payload = arg
+            elif action == "agent-state" and _looks_like_json_obj(arg):
+                agent_json_args.append(arg)
             else:
                 target_arg = arg
                 target_args.append(arg)
@@ -3841,11 +5125,16 @@ def main() -> int:
         elif arg == "--agent-state":
             action = "agent-state"
             if i + 1 >= n or argv[i + 1].startswith("-"):
-                print("Error: '--agent-state' requires a state (running, approval, done, or idle).", file=sys.stderr)
+                print("Error: '--agent-state' requires a state (running, approval, quota, done, or idle).", file=sys.stderr)
                 return 1
             agent_state_val = argv[i + 1]
             if i + 2 < n and not argv[i + 2].startswith("-"):
-                target_arg = argv[i + 2]
+                cand = argv[i + 2]
+                if _looks_like_json_obj(cand):
+                    agent_json_args.append(cand)
+                else:
+                    target_arg = cand
+                    target_args.append(cand)
                 i += 3
             else:
                 i += 2
@@ -3853,15 +5142,46 @@ def main() -> int:
             action = "agent-state"
             agent_state_val = arg.split("=", 1)[1]
             if not agent_state_val:
-                print("Error: '--agent-state' requires a state (running, approval, done, or idle).", file=sys.stderr)
+                print("Error: '--agent-state' requires a state (running, approval, quota, done, or idle).", file=sys.stderr)
                 return 1
             if i + 1 < n and not argv[i + 1].startswith("-"):
-                target_arg = argv[i + 1]
+                cand = argv[i + 1]
+                if _looks_like_json_obj(cand):
+                    agent_json_args.append(cand)
+                else:
+                    target_arg = cand
+                    target_args.append(cand)
                 i += 2
             else:
                 i += 1
+        elif arg == "--message":
+            if i + 1 >= n:
+                print("Error: '--message' requires a text string.", file=sys.stderr)
+                return 1
+            agent_message = argv[i + 1]
+            i += 2
+        elif arg.startswith("--message="):
+            agent_message = arg.split("=", 1)[1]
+            i += 1
         elif arg == "--hook":
             ack_from_hook = True
+            i += 1
+        elif arg == "--ack-ai":
+            action = "ack-ai"
+            i += 1
+        elif arg == "--open-pr":
+            action = "open-pr"
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                target_arg = argv[i + 1]
+                target_args.append(argv[i + 1])
+                i += 2
+            else:
+                i += 1
+        elif arg.startswith("--open-pr="):
+            action = "open-pr"
+            target_arg = arg.split("=", 1)[1]
+            if target_arg:
+                target_args.append(target_arg)
             i += 1
         elif arg == "--send":
             action = "send"
@@ -3898,6 +5218,11 @@ def main() -> int:
             i += 1
         elif arg == "--no-focus":
             send_no_focus = True
+            send_switch = False
+            i += 1
+        elif arg == "--switch":
+            send_switch = True
+            send_no_focus = False
             i += 1
         elif arg in (
             "--toggle",
@@ -3911,7 +5236,6 @@ def main() -> int:
             "--toggle-ai",
             "--toggle-term",
             "--next-attention",
-            "--ack-ai",
             "--refresh-attn",
             "--run-ai-popup",
             "--paste",
@@ -4038,6 +5362,8 @@ def main() -> int:
             if action == "send" and not send_mode:
                 send_mode = "text"
                 send_payload = arg
+            elif action == "agent-state" and _looks_like_json_obj(arg):
+                agent_json_args.append(arg)
             else:
                 target_arg = arg
                 target_args.append(arg)
@@ -4071,9 +5397,11 @@ def main() -> int:
     if action == "session-preview":
         return render_session_preview(target_arg)
     if action == "agent-state":
-        return set_agent_state(agent_state_val, target_arg)
+        return set_agent_state(agent_state_val, target_arg, message=agent_message, json_args=agent_json_args)
     if action == "ack-ai":
-        return ack_ai_session(target_arg, from_hook=ack_from_hook, refresh_always=True)
+        return ack_ai_session(target_args or target_arg, from_hook=ack_from_hook, refresh_always=True)
+    if action == "open-pr":
+        return open_session_pr(target_arg)
     if action == "next-attention":
         return next_attention(target_arg)
     if action == "refresh-attn":
@@ -4081,7 +5409,7 @@ def main() -> int:
     if action == "refresh":
         return refresh_ide_sessions(target_arg, ide_self)
     if action == "send":
-        return send_to_ai(send_mode, send_payload, send_no_focus, target_arg)
+        return send_to_ai(send_mode, send_payload, send_no_focus, send_switch, target_arg)
 
     # Populate DISPLAY / WAYLAND_DISPLAY / XAUTHORITY before dispatching --copy, --paste, --open-link, or launch
     if action in ("copy", "paste", "open-link"):
@@ -4137,6 +5465,7 @@ def main() -> int:
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
     nvim_socket = f"{runtime_dir}/nvim-ide-{session}.sock"
     ide_ai_cli = os.environ["IDE_AI_CLI"]
+    ide_notify_env = os.environ.get("IDE_NOTIFY", "")
 
     if not session_exists(session):
         try:
@@ -4155,6 +5484,8 @@ def main() -> int:
             "-e", f"IDE_INITIAL_ROOT={target_dir}",
             "-e", "FORCE_HYPERLINK=1",
         ]
+        if ide_notify_env:
+            base_env_args.extend(["-e", f"IDE_NOTIFY={ide_notify_env}"])
         init_info = tmux_out(
             "new-session", "-d", "-P", "-F", "#{pane_id}\t#{window_id}",
             "-s", session, "-n", "ide", "-c", target_dir, "-x", str(cols), "-y", str(lines),
@@ -4183,6 +5514,7 @@ def main() -> int:
             ("@ide_ai_state", "IDE_AI_STATE", ""),
             ("@ide_ai_attn", "IDE_AI_ATTN", "0"),
             ("@ide_ai_attn_ts", "IDE_AI_ATTN_TS", ""),
+            ("@ide_ai_state_ts", "IDE_AI_STATE_TS", str(int(time.time()))),
             ("@ide_force_hyperlink", "FORCE_HYPERLINK", "1"),
         ]
 
@@ -4231,6 +5563,7 @@ def main() -> int:
                         ("@ide_ai_state", "IDE_AI_STATE", ""),
                         ("@ide_ai_attn", "IDE_AI_ATTN", "0"),
                         ("@ide_ai_attn_ts", "IDE_AI_ATTN_TS", ""),
+                        ("@ide_ai_state_ts", "IDE_AI_STATE_TS", str(int(time.time()))),
                     ],
                 )
                 run_tmux("kill-session", "-t", f"=ai-{session}")
@@ -4238,22 +5571,28 @@ def main() -> int:
                 ed_pane_id = ed_pane_existing
                 init_root_val = get_ide_var(session, "@ide_initial_root", "IDE_INITIAL_ROOT") or target_dir
                 if pane_exists(ai_pane_id):
-                    res = run_tmux(
-                        "respawn-pane", "-k", "-t", ai_pane_id, "-c", target_dir,
+                    respawn_env_args = [
                         "-e", f"IDE_SESSION={session}",
                         "-e", f"IDE_AI_CLI={ide_ai_cli}",
                         "-e", f"NVIM_IDE_SOCKET={nvim_socket}",
                         "-e", f"NVIM_IDE_PANE={ed_pane_id}",
                         "-e", f"IDE_INITIAL_ROOT={init_root_val}",
                         "-e", "FORCE_HYPERLINK=1",
+                    ]
+                    if ide_notify_env:
+                        respawn_env_args.extend(["-e", f"IDE_NOTIFY={ide_notify_env}"])
+                    res = run_tmux(
+                        "respawn-pane", "-k", "-t", ai_pane_id, "-c", target_dir,
+                        *respawn_env_args,
                     )
                     if res.returncode != 0:
                         shell = os.environ.get("SHELL") or "/bin/zsh"
+                        notify_kv = f"IDE_NOTIFY={shlex.quote(ide_notify_env)} " if ide_notify_env else ""
                         run_tmux(
                             "respawn-pane", "-k", "-t", ai_pane_id, "-c", target_dir,
                             f"env IDE_SESSION={shlex.quote(session)} IDE_AI_CLI={shlex.quote(ide_ai_cli)} "
                             f"NVIM_IDE_SOCKET={shlex.quote(nvim_socket)} NVIM_IDE_PANE={shlex.quote(ed_pane_id)} "
-                            f"IDE_INITIAL_ROOT={shlex.quote(init_root_val)} FORCE_HYPERLINK=1 {shlex.quote(shell)} -l",
+                            f"IDE_INITIAL_ROOT={shlex.quote(init_root_val)} {notify_kv}FORCE_HYPERLINK=1 {shlex.quote(shell)} -l",
                         )
                     ai_run_cmd = resolve_ai_cmd(ide_ai_cli)
                     if ai_run_cmd:
@@ -4267,6 +5606,15 @@ def main() -> int:
         ";",
         "set-environment", "-t", f"={session}", "FORCE_HYPERLINK", "1",
     ]
+    if "IDE_NOTIFY" in os.environ:
+        if ide_notify_env:
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", "IDE_NOTIFY", ide_notify_env])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", "IDE_NOTIFY", ide_notify_env])
+        else:
+            env_cmds.extend([";", "set-environment", "-t", f"={session}", "-u", "IDE_NOTIFY"])
+            if not os.environ.get("TMUX"):
+                env_cmds.extend([";", "set-environment", "-g", "-u", "IDE_NOTIFY"])
     for ssh_var in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"):
         ssh_val = os.environ.get(ssh_var)
         if caller_is_ssh and ssh_val:
