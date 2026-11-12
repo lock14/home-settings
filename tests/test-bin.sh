@@ -2909,6 +2909,13 @@ try:
     assert "--color=bg+:#313244" in rel_fzf_opts and "--prompt='WS> '" in rel_fzf_opts and "#000000" not in rel_fzf_opts, f"build_fzf_env failed to load single-quoted/escaped theme-env.sh over stale FZF_DEFAULT_OPTS: {rel_fzf_opts!r}"
     assert os.path.abspath(ide_bin) in rel_fzf_args or os.path.realpath(ide_bin) in rel_fzf_args, f"relative path leaked into fzf args: {rel_fzf_args}"
     assert "--multi" in rel_fzf_args and "--quit {+1}" in rel_fzf_args, f"expected --multi and --quit {{+1}} in fzf args: {rel_fzf_args}"
+    assert (
+        "--border=rounded" in rel_fzf_args
+        and "--border-label-pos=bottom" in rel_fzf_args
+        and "--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close " in rel_fzf_args
+        and "--color=label:#586E75" in rel_fzf_args
+        and "--header=" not in rel_fzf_args
+    ), f"expected bottom border-label in fzf args: {rel_fzf_args}"
 
     # Verify session_last_attached promotes recently visited gamma-ws above beta-ws
     beta_max_ts = max(
@@ -3812,15 +3819,17 @@ try:
             "args = ' '.join(sys.argv[1:])\n"
             "if step == 0:\n"
             "    assert 'ctrl-y:execute-silent' in args and 'ctrl-o:execute-silent' in args and 'alt-n' in args, f'missing triage/launcher binds: {args}'\n"
+            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
             "    print('alt-n')\n"
             "    print(lines[0])\n"
             "elif step == 1:\n"
-            "    assert '--prompt=New IDE > ' in args, f'expected New IDE prompt on step 1: {args}'\n"
+            "    assert '--prompt=New IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args and '--color=label:#586E75' in args and '--header=' not in args, f'expected New IDE prompt and bottom border-label on step 1: {args}'\n"
             "    sys.exit(130)\n"
             "elif step == 2:\n"
-            "    assert '--prompt=IDE > ' in args, f'Esc from Alt+n did not return to session list: {args}'\n"
+            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ' in args, f'Esc from Alt+n did not return to session list: {args}'\n"
             "    print('alt-n')\n"
             "elif step == 3:\n"
+            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args, f'expected bottom border-label on step 3: {args}'\n"
             "    picked = next(l for l in lines if 'spawned-ws' in l)\n"
             "    print(picked)\n"
         )

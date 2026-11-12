@@ -2543,6 +2543,7 @@ def build_fzf_env(hex_map: dict[str, str]) -> dict[str, str]:
         env["FZF_DEFAULT_OPTS"] = (
             f"--color=bg+:{hex_map['BASE02']},bg:{hex_map['BASE03']},spinner:{hex_map['GREEN']},"
             f"hl:{hex_map['BASE01']},fg:{hex_map['BASE0']},header:{hex_map['BASE01']},"
+            f"label:{hex_map['BASE01']},"
             f"info:{hex_map['YELLOW']},pointer:{hex_map['GREEN']},marker:{hex_map['GREEN']},"
             f"fg+:{hex_map['BASE1']},prompt:{hex_map['YELLOW']},hl+:{hex_map['BLUE']} "
             "--layout=reverse --border=rounded --info=inline --no-scrollbar"
@@ -4666,7 +4667,7 @@ def _pick_workspace_directory(fzf_bin: str, env: dict[str, str]) -> str:
     dirs = _collect_launcher_dirs()
     if not dirs:
         return ""
-    _, esc = load_active_palette()
+    hex_map, esc = load_active_palette()
     rows = [f"{d}\t{esc['BLUE']}{_shorten_home(d)}{esc['RESET']}" for d in dirs]
     dir_args = [
         fzf_bin,
@@ -4676,7 +4677,10 @@ def _pick_workspace_directory(fzf_bin: str, env: dict[str, str]) -> str:
         "--layout=reverse",
         "--info=inline-right",
         "--prompt=New IDE > ",
-        "--header=Enter: launch workspace  Esc: back to sessions",
+        "--border=rounded",
+        "--border-label= Enter: launch workspace · Esc: back to sessions ",
+        "--border-label-pos=bottom",
+        f"--color=label:{hex_map['BASE01']}",
     ]
     proc = subprocess.run(
         dir_args,
@@ -4747,7 +4751,10 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
         "--layout=reverse",
         "--info=inline-right",
         "--prompt=IDE > ",
-        "--header=Enter: switch  C-a/e/t: pane  C-y: ack  C-o: PR  M-n: new  C-x: quit  C-r: reload  Alt+s: close",
+        "--border=rounded",
+        "--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ",
+        "--border-label-pos=bottom",
+        f"--color=label:{hex_map['BASE01']}",
         "--expect=ctrl-a,ctrl-e,ctrl-t,alt-n",
         "--bind=alt-s:abort",
         f"--bind=ctrl-r:reload({reload_cmd})",
