@@ -1000,11 +1000,30 @@
       local section_type='' section_name='' seen_url_in_section=0 cfg_line='' next_line='' pre_bracket='' hdr='' key='' val=''
       while IFS= read -r cfg_line || [[ -n $cfg_line ]]; do
         cfg_line=${cfg_line%$'\r'}
+        local lead_trim=${cfg_line##[[:space:]]#}
+        [[ -z $lead_trim || $lead_trim == [#\;]* ]] && continue
         while [[ $cfg_line == *\\ ]]; do
+          integer ci=1 cn=${#cfg_line} cin_q=0 cesc=0
+          local cch=''
+          while (( ci <= cn )); do
+            cch=${cfg_line[ci]}
+            if (( cesc )); then
+              cesc=0
+            elif [[ $cch == '\' ]]; then
+              cesc=1
+            elif [[ $cch == '"' ]]; then
+              cin_q=$(( 1 - cin_q ))
+            elif (( ! cin_q )) && [[ $cch == '#' || $cch == ';' ]]; then
+              cesc=0
+              break
+            fi
+            (( ci++ ))
+          done
+          (( ! cesc )) && break
           next_line=''
           IFS= read -r next_line || break
           next_line=${next_line%$'\r'}
-          cfg_line="${cfg_line%\\}${next_line##[[:space:]]#}"
+          cfg_line="${cfg_line%\\}${next_line}"
         done
         cfg_line=${cfg_line##[[:space:]]#}
         [[ -z $cfg_line || $cfg_line == [#\;]* ]] && continue
@@ -1012,10 +1031,34 @@
           seen_url_in_section=0
           pre_bracket=${${cfg_line#\[}%%\]*}
           if [[ $pre_bracket == *\"* ]]; then
-            hdr=${${cfg_line#\[}%%\"\]*}
-            hdr=${hdr##[[:space:]]#}
-            section_type=${(L)hdr%%[[:space:]\"]*}
-            section_name=${${hdr#*\"}%\"}
+            local h_rest=${${cfg_line#\[}##[[:space:]]#}
+            section_type=${(L)h_rest%%[[:space:]\"]*}
+            local q_body=${h_rest#*\"}
+            section_name=''
+            if [[ $q_body != *\\* && $q_body == *\"\]* ]]; then
+              section_name=${q_body%%\"\]*}
+            else
+              integer qi=1 qn=${#q_body}
+              local qch='' qnx=''
+              while (( qi <= qn )); do
+                qch=${q_body[qi]}
+                if [[ $qch == '\' ]] && (( qi < qn )); then
+                  qnx=${q_body[qi+1]}
+                  case $qnx in
+                    n) section_name+=$'\n' ;;
+                    t) section_name+=$'\t' ;;
+                    b) section_name+=$'\b' ;;
+                    *) section_name+=$qnx ;;
+                  esac
+                  (( qi += 2 ))
+                  continue
+                elif [[ $qch == '"' ]]; then
+                  break
+                fi
+                section_name+=$qch
+                (( qi++ ))
+              done
+            fi
           else
             hdr=${pre_bracket##[[:space:]]#}
             hdr=${hdr%%[[:space:]]#}
@@ -1062,12 +1105,59 @@
         [[ -z $section_type || $cfg_line != *=* ]] && continue
         key=${(L)${cfg_line%%=*}%%[[:space:]]#}
         val=${${cfg_line#*=}##[[:space:]]#}
-        if [[ $val == \"* ]]; then
-          val=${val#\"}
-          val=${val%%\"*}
-        else
+        if [[ $val != *\"* && $val != *\\* ]]; then
           val=${val%%[#\;]*}
           val=${val%%[[:space:]]#}
+        else
+          integer vi=1 vn=${#val} vin_q=0
+          local vparsed='' vlast='' vch='' vnx=''
+          while (( vi <= vn )); do
+            vch=${val[vi]}
+            if (( vin_q )); then
+              if [[ $vch == '\' ]] && (( vi < vn )); then
+                vnx=${val[vi+1]}
+                case $vnx in
+                  n) vparsed+=$'\n' ;;
+                  t) vparsed+=$'\t' ;;
+                  b) vparsed+=$'\b' ;;
+                  *) vparsed+=$vnx ;;
+                esac
+                vlast=$vparsed
+                (( vi += 2 ))
+                continue
+              elif [[ $vch == '"' ]]; then
+                vin_q=0
+                vlast=$vparsed
+                (( vi++ ))
+                continue
+              fi
+              vparsed+=$vch
+              vlast=$vparsed
+            else
+              if [[ $vch == '#' || $vch == ';' ]]; then
+                break
+              elif [[ $vch == '"' ]]; then
+                vin_q=1
+                (( vi++ ))
+                continue
+              elif [[ $vch == '\' ]] && (( vi < vn )); then
+                vnx=${val[vi+1]}
+                case $vnx in
+                  n) vparsed+=$'\n' ;;
+                  t) vparsed+=$'\t' ;;
+                  b) vparsed+=$'\b' ;;
+                  *) vparsed+=$vnx ;;
+                esac
+                vlast=$vparsed
+                (( vi += 2 ))
+                continue
+              fi
+              vparsed+=$vch
+              [[ $vch != [[:space:]] ]] && vlast=$vparsed
+            fi
+            (( vi++ ))
+          done
+          val=$vlast
         fi
         [[ -z $val ]] && continue
         if [[ $section_type == 'remote' && $key == 'url' ]]; then

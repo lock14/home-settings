@@ -963,11 +963,9 @@ v() {
             elif [ "$arg" = "-c" ] || [ "$arg" = "--cmd" ]; then
                 expect_cmd=1
                 continue
-            elif [[ "$arg" =~ ^(-v|--version|-h|--help|-d|-u|--clean|--headless|-es|-Es|--startuptime)$ ]]; then
+            elif [[ "$arg" == -* ]]; then
                 local_only=1
                 break
-            elif [[ "$arg" == -* ]]; then
-                continue
             fi
         fi
         if [[ "$arg" == /* ]]; then
@@ -982,6 +980,7 @@ v() {
             fi
         fi
     done
+    [ "$expect_cmd" = "1" ] && local_only=1
 
     local tmux_target=""
     if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ]; then
@@ -1138,11 +1137,28 @@ _solarized_parse_git_config() {
     local section_type="" section_name="" seen_url_in_section=0 cfg_line="" next_line="" pre_bracket="" hdr="" key="" val=""
     while IFS= read -r cfg_line || [ -n "$cfg_line" ]; do
         cfg_line="${cfg_line%$'\r'}"
+        local lead_trim="${cfg_line#"${cfg_line%%[![:space:]]*}"}"
+        [[ -z "$lead_trim" || "$lead_trim" == [#\;]* ]] && continue
         while [[ "$cfg_line" == *\\ ]]; do
+            local ci=0 cn="${#cfg_line}" cin_q=0 cesc=0 cch=""
+            while [ "$ci" -lt "$cn" ]; do
+                cch="${cfg_line:$ci:1}"
+                if [ "$cesc" = "1" ]; then
+                    cesc=0
+                elif [ "$cch" = "\\" ]; then
+                    cesc=1
+                elif [ "$cch" = "\"" ]; then
+                    cin_q=$((1 - cin_q))
+                elif [ "$cin_q" = "0" ] && { [ "$cch" = "#" ] || [ "$cch" = ";" ]; }; then
+                    cesc=0
+                    break
+                fi
+                ci=$((ci + 1))
+            done
+            [ "$cesc" = "1" ] || break
             next_line=""
             IFS= read -r next_line || break
             next_line="${next_line%$'\r'}"
-            next_line="${next_line#"${next_line%%[![:space:]]*}"}"
             cfg_line="${cfg_line%\\}${next_line}"
         done
         cfg_line="${cfg_line#"${cfg_line%%[![:space:]]*}"}"
@@ -1153,12 +1169,34 @@ _solarized_parse_git_config() {
             pre_bracket="${cfg_line#\[}"
             pre_bracket="${pre_bracket%%\]*}"
             if [[ "$pre_bracket" == *\"* ]]; then
-                hdr="${cfg_line#\[}"
-                hdr="${hdr%%\"\]*}"
-                hdr="${hdr#"${hdr%%[![:space:]]*}"}"
-                section_type="${hdr%%[[:space:]\"]*}"
-                section_name="${hdr#*\"}"
-                section_name="${section_name%\"*}"
+                local h_rest="${cfg_line#\[}"
+                h_rest="${h_rest#"${h_rest%%[![:space:]]*}"}"
+                section_type="${h_rest%%[[:space:]\"]*}"
+                local q_body="${h_rest#*\"}"
+                section_name=""
+                if [[ "$q_body" != *\\* && "$q_body" == *\"\]* ]]; then
+                    section_name="${q_body%%\"\]*}"
+                else
+                    local qi=0 qn="${#q_body}" qch="" qnx=""
+                    while [ "$qi" -lt "$qn" ]; do
+                        qch="${q_body:$qi:1}"
+                        if [ "$qch" = "\\" ] && [ $((qi + 1)) -lt "$qn" ]; then
+                            qnx="${q_body:$((qi + 1)):1}"
+                            case "$qnx" in
+                                n) section_name="${section_name}"$'\n' ;;
+                                t) section_name="${section_name}"$'\t' ;;
+                                b) section_name="${section_name}"$'\b' ;;
+                                *) section_name="${section_name}${qnx}" ;;
+                            esac
+                            qi=$((qi + 2))
+                            continue
+                        elif [ "$qch" = "\"" ]; then
+                            break
+                        fi
+                        section_name="${section_name}${qch}"
+                        qi=$((qi + 1))
+                    done
+                fi
             else
                 hdr="$pre_bracket"
                 hdr="${hdr#"${hdr%%[![:space:]]*}"}"
@@ -1234,12 +1272,61 @@ _solarized_parse_git_config() {
         esac
         val="${cfg_line#*=}"
         val="${val#"${val%%[![:space:]]*}"}"
-        if [[ "$val" == \"* ]]; then
-            val="${val#\"}"
-            val="${val%%\"*}"
-        else
+        if [[ "$val" != *\"* && "$val" != *\\* ]]; then
             val="${val%%[#\;]*}"
             val="${val%"${val##*[![:space:]]}"}"
+        else
+            local vi=0 vn="${#val}" vin_q=0 vparsed="" vlast="" vch="" vnx=""
+            while [ "$vi" -lt "$vn" ]; do
+                vch="${val:$vi:1}"
+                if [ "$vin_q" = "1" ]; then
+                    if [ "$vch" = "\\" ] && [ $((vi + 1)) -lt "$vn" ]; then
+                        vnx="${val:$((vi + 1)):1}"
+                        case "$vnx" in
+                            n) vparsed="${vparsed}"$'\n' ;;
+                            t) vparsed="${vparsed}"$'\t' ;;
+                            b) vparsed="${vparsed}"$'\b' ;;
+                            *) vparsed="${vparsed}${vnx}" ;;
+                        esac
+                        vlast="$vparsed"
+                        vi=$((vi + 2))
+                        continue
+                    elif [ "$vch" = "\"" ]; then
+                        vin_q=0
+                        vlast="$vparsed"
+                        vi=$((vi + 1))
+                        continue
+                    fi
+                    vparsed="${vparsed}${vch}"
+                    vlast="$vparsed"
+                else
+                    if [ "$vch" = "#" ] || [ "$vch" = ";" ]; then
+                        break
+                    elif [ "$vch" = "\"" ]; then
+                        vin_q=1
+                        vi=$((vi + 1))
+                        continue
+                    elif [ "$vch" = "\\" ] && [ $((vi + 1)) -lt "$vn" ]; then
+                        vnx="${val:$((vi + 1)):1}"
+                        case "$vnx" in
+                            n) vparsed="${vparsed}"$'\n' ;;
+                            t) vparsed="${vparsed}"$'\t' ;;
+                            b) vparsed="${vparsed}"$'\b' ;;
+                            *) vparsed="${vparsed}${vnx}" ;;
+                        esac
+                        vlast="$vparsed"
+                        vi=$((vi + 2))
+                        continue
+                    fi
+                    vparsed="${vparsed}${vch}"
+                    case "$vch" in
+                        [[:space:]]) ;;
+                        *) vlast="$vparsed" ;;
+                    esac
+                fi
+                vi=$((vi + 1))
+            done
+            val="$vlast"
         fi
         [ -z "$val" ] && continue
 

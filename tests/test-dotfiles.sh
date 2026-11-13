@@ -146,7 +146,13 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-?.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind ?.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusLeft.*--sessions.*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n MouseDown1Status.*--status-click' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|tab_ai' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|tab_editor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|tab_term' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'range=user|tab_zoom' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n DoubleClick1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n TripleClick1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusRight.*mouse_status_range},attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'mouse_status_range},fleet.*--sessions.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown3Status display-menu' "$TEMP_HOME/.tmux.conf" && \
@@ -229,8 +235,15 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" if-shell -t "$cfg_pane" -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; send-keys -X copy-pipe-no-clear'
         eval_sright_copy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" send-keys -t "$cfg_pane" -X cancel
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_attn_summary "persist-attn"
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count "4"
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active "2"
         tmux -L "$TMUX_TEST_SOCK" source-file "$TEMP_HOME/.tmux.conf"
         tmux -L "$TMUX_TEST_SOCK" source-file "$TEMP_HOME/.tmux.conf"
+        resrc_attn="$(tmux -L "$TMUX_TEST_SOCK" show-options -gqv @ide_attn_summary)"
+        resrc_cnt="$(tmux -L "$TMUX_TEST_SOCK" show-options -gqv @ide_fleet_count)"
+        resrc_act="$(tmux -L "$TMUX_TEST_SOCK" show-options -gqv @ide_fleet_active)"
+        resrc_loaded="$(tmux -L "$TMUX_TEST_SOCK" show-options -gqv @ide_tmux_conf_loaded)"
         up_env_lines="$(tmux -L "$TMUX_TEST_SOCK" show-options -g update-environment)"
         up_env_total="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | wc -l | tr -d ' ')"
         up_env_uniq="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
@@ -241,6 +254,7 @@ if command -v tmux >/dev/null 2>&1; then
         plain_wcur_attn="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_attn")"
         plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
+           [ "$resrc_attn" = "persist-attn" ] && [ "$resrc_cnt" = "4" ] && [ "$resrc_act" = "2" ] && [ "$resrc_loaded" = "1" ] && \
            [ "$up_env_total" -gt 0 ] && [ "$up_env_total" = "$up_env_uniq" ] && \
            grep -Fq "COLORTERM" <<< "$up_env_lines" && \
            grep -Fq "TERM_PROGRAM" <<< "$up_env_lines" && \

@@ -1301,7 +1301,7 @@ set -g @ide_tab_ed '#{{?#{{==:#{{@ide_role}},editor}},#[fg={blue}#,bg={b02}#,nob
 set -g @ide_tab_term '#{{?#{{==:#{{@ide_role}},term}},#[fg={green}#,bg={b02}#,nobold]▸  #[fg={b1}#,bg={b02}#,nobold]Shell (Alt+t) ,#{{?#{{==:#{{@ide_term_parked}},1}},#[fg={b01}#,bg={b02}#,nobold] Shell [Alt+T] ,#[fg={b0}#,bg={b02}#,nobold] Shell (Alt+t) }}}}'
 
 setw -g window-status-format "#{{?#{{m/r:^_ide_park_,#W}},,#[fg={b01}#,bg={b02}#,nobold] #I:#W }}"
-setw -g window-status-current-format "#{{?#{{==:#W,ide}},#{{E:@ide_tab_ai}}#[fg={b01}#,bg={b02}#,nobold] · #{{E:@ide_tab_ed}}#[fg={b01}#,bg={b02}#,nobold] · #{{E:@ide_tab_term}}#{{?window_zoomed_flag,#[fg={b00}#,bg={b02}#,nobold] #[fg={orange}#,bg={b02}#,nobold]󰁌 ZOOM (Alt+z) ,}},#[fg={b1}#,bg={b02}#,nobold] #I:#W#{{?window_zoomed_flag, #[fg={orange}]󰁌 ZOOM,}} }}"
+setw -g window-status-current-format "#{{?#{{==:#W,ide}},#[range=user|tab_ai]#{{E:@ide_tab_ai}}#[norange]#[fg={b01}#,bg={b02}#,nobold] · #[range=user|tab_editor]#{{E:@ide_tab_ed}}#[norange]#[fg={b01}#,bg={b02}#,nobold] · #[range=user|tab_term]#{{E:@ide_tab_term}}#[norange]#{{?window_zoomed_flag,#[fg={b00}#,bg={b02}#,nobold] #[range=user|tab_zoom]#[fg={orange}#,bg={b02}#,nobold]󰁌 ZOOM (Alt+z) #[norange],}},#[fg={b1}#,bg={b02}#,nobold] #I:#W#{{?window_zoomed_flag, #[fg={orange}]󰁌 ZOOM,}} }}"
 setw -g window-status-separator ""
 
 set -g status-right "#{{?client_prefix,#[fg={b00}#,bg={b02}#,nobold] #[fg={orange}#,bg={b02}#,nobold]󰘳 PREFIX #[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]#{{?#{{>=:#{{client_width}},120}},HJKL resize · |/- split · b bar · ? keys ,? keys }},#{{?pane_in_mode,#[fg={b00}#,bg={b02}#,nobold] #[fg={magenta}#,bg={b02}#,nobold]󰆏 COPY#{{?#{{!=:#{{scroll_position}},}}, [#{{scroll_position}}/#{{history_size}}],}} #[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]#{{?#{{>=:#{{client_width}},120}},Alt+c copy · Alt+v paste · Esc clear ,Alt+c · Esc }},#{{?pane_synchronized,#[fg={b00}#,bg={b02}#,nobold] #[fg={red}#,bg={b02}#,nobold]󰓦 SYNC ,}}#{{?#{{||:#{{!=:#{{SSH_CONNECTION}},}},#{{!=:#{{SSH_TTY}},}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={violet}#,bg={b02}#,nobold]󰣀 #h ,}}#{{?#{{&&:#{{!=:#{{@ide_workdir}},}},#{{!=:#{{@ide_workdir}},#{{@ide_initial_root}}}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={blue}#,bg={b02}#,nobold]󰉋 #{{b:@ide_workdir}} ,}}{attn_right_segment}{fleet_right_segment}{holiday_right_segment}#[fg={b00}#,bg={b02}#,nobold] #[range=user|help]#[fg={b0}#,bg={b02}#,nobold]󰋖 Help (Alt+?) #[range=right]}}}}"
@@ -1440,9 +1440,10 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
                     sockets.append(p)
             xdg_rt = os.environ.get("XDG_RUNTIME_DIR", "").strip()
             if xdg_rt and Path(xdg_rt).is_dir():
-                for p in Path(xdg_rt).glob("nvim.*.0"):
-                    if p not in sockets:
-                        sockets.append(p)
+                for pat in ("nvim-ide-*.sock", "nvim.*.0", "*/nvim.*.0"):
+                    for p in Path(xdg_rt).glob(pat):
+                        if p not in sockets:
+                            sockets.append(p)
             try:
                 nvim_user = os.environ.get("USER", "").strip() or getpass.getuser()
             except Exception:
