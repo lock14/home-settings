@@ -1596,6 +1596,82 @@ PY
             echo "FAIL:Bash Layer 1 + Layer 2 Ctrl+r suite:${CTRLR_SUITE_OUT//$'\n'/ | }"
         fi
     fi
+
+    # Test F-12 (v() unrecognized -* flags run locally while +line, -c, and -- route to remote IDE) and F-13 (_solarized_parse_git_config even \\ and escaped \" parsing)
+    (
+        V_TEST_DIR="$STANDALONE_HOME/v_wrap_test"
+        mkdir -p "$V_TEST_DIR/bin" "$V_TEST_DIR/repo"
+        V_LOG="$V_TEST_DIR/nvim_calls.log"
+        V_SOCK="$V_TEST_DIR/mock-ide.sock"
+        python3 -c 'import socket, sys; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.bind(sys.argv[1])' "$V_SOCK"
+        cat > "$V_TEST_DIR/bin/nvim" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$V_LOG"
+if [[ "\$*" == *"--remote-expr 1"* ]]; then
+    echo "1"
+fi
+EOF
+        chmod +x "$V_TEST_DIR/bin/nvim"
+        (
+            export PATH="$V_TEST_DIR/bin:$PATH"
+            export NVIM_IDE_SOCKET="$V_SOCK"
+            unset TMUX TMUX_PANE NVIM_IDE_PANE
+            source "$TWOFILE_DIR/.bashrc-addendum"
+            cd "$V_TEST_DIR/repo"
+            touch alpha.txt beta.txt -- -dash.txt
+            v -R alpha.txt
+            v -O alpha.txt beta.txt
+            v -p alpha.txt beta.txt
+            v -c
+            v +12 -c "set number" -- -dash.txt
+        )
+        v_calls="$(cat "$V_LOG" 2>/dev/null || true)"
+        rm -f "$V_SOCK"
+
+        cd "$V_TEST_DIR/repo"
+        git init -q -b "feat/esc"
+        git config user.email "t@example.com"
+        git config user.name "Test"
+        git config commit.gpgsign false
+        echo "x" > alpha.txt
+        git add alpha.txt && git commit -q -m "init"
+        cat >> .git/config <<'GITCFG'
+# Windows comment ending in backslash C:\
+[url "https://github.com/wrong/"]
+	insteadOf = corp\\\\
+[url "https://gitlab.com/acme/"]
+	insteadOf = "corp\"bs\\\
+  sp:"
+# Comment before remote \
+[remote "orig\"in\\1"]
+	url = "corp\"bs\\  sp:repo.git" # trailing comment \
+[branch "feat/esc"]
+	pr = \
+		88 # inline comment \
+	remote = "orig\"in\\1"
+GITCFG
+        source "$TWOFILE_DIR/.bashrc-addendum"
+        true
+        COLORTERM="truecolor" _solarized_bash_prompt
+        ps1_esc_cfg="$PS1"
+
+        v_remote_calls="$(grep -- '--remote' "$V_LOG" || true)"
+        if grep -Fxq -- "-R alpha.txt" "$V_LOG" && \
+           grep -Fxq -- "-O alpha.txt beta.txt" "$V_LOG" && \
+           grep -Fxq -- "-p alpha.txt beta.txt" "$V_LOG" && \
+           grep -Fxq -- "-c" "$V_LOG" && \
+           ! grep -Fq -- "alpha.txt" <<< "$v_remote_calls" && \
+           grep -Fq -- "--server $V_SOCK --remote $V_TEST_DIR/repo/-dash.txt" "$V_LOG" && \
+           grep -Fq -- 'execute("12")' "$V_LOG" && \
+           grep -Fq -- 'execute("set number")' "$V_LOG" && \
+           [[ "$ps1_esc_cfg" == *""* ]] && \
+           [[ "$ps1_esc_cfg" == *'\[\e]8;;https://gitlab.com/acme/repo/-/merge_requests/88\a\]'* ]] && \
+           [[ "$ps1_esc_cfg" == *'@'*'88\[\e]8;;\a\]'* ]]; then
+            echo "PASS:Bash v() runs unrecognized -* flags (-R, -O, -p) locally while routing +line/-c/-- to remote IDE Editor, and _solarized_parse_git_config handles even trailing backslashes and escaped quotes"
+        else
+            echo "FAIL:Bash v() flag routing or .git/config escaping:v_calls='${v_calls//$'\n'/ | }' ps1='$ps1_esc_cfg'"
+        fi
+    )
 ) > "$STANDALONE_HOME/results.txt"
 
 parse_subshell_results < "$STANDALONE_HOME/results.txt"

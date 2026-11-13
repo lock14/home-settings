@@ -928,6 +928,26 @@ else
     pass "modules/40-mise.sh exits non-zero when mise binary is not executable"
 fi
 
+# Verify modules/99-uninstall.sh preserves user-authored custom themes in ~/.config/home-settings/themes/ while removing generated theme state
+mkdir -p "$TEMP_THEME_SETUP_HOME/.config/home-settings/themes" "$TEMP_THEME_SETUP_HOME/.config/home-settings/active/ghostty"
+printf 'THEME_LABEL="User Custom"\n' > "$TEMP_THEME_SETUP_HOME/.config/home-settings/themes/my-custom.theme"
+HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" DRY_RUN=false "$SCRIPT_DIR/setup.sh" --uninstall >/dev/null 2>&1 || true
+if [ -f "$TEMP_THEME_SETUP_HOME/.config/home-settings/themes/my-custom.theme" ] && \
+   [ ! -e "$TEMP_THEME_SETUP_HOME/.config/home-settings/active-theme.theme" ] && \
+   [ ! -e "$TEMP_THEME_SETUP_HOME/.config/home-settings/theme-env.sh" ] && \
+   [ ! -e "$TEMP_THEME_SETUP_HOME/.config/home-settings/tmux-theme.conf" ] && \
+   [ ! -d "$TEMP_THEME_SETUP_HOME/.config/home-settings/active" ]; then
+    rm -f "$TEMP_THEME_SETUP_HOME/.config/home-settings/themes/my-custom.theme"
+    HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" DRY_RUN=false "$SCRIPT_DIR/setup.sh" --uninstall >/dev/null 2>&1 || true
+    if [ ! -d "$TEMP_THEME_SETUP_HOME/.config/home-settings" ]; then
+        pass "modules/99-uninstall.sh preserves user custom themes in ~/.config/home-settings/themes/ while removing generated theme artifacts and cleaning empty directories"
+    else
+        fail "modules/99-uninstall.sh empty dir cleanup" "Expected ~/.config/home-settings to be removed when no custom themes remain"
+    fi
+else
+    fail "modules/99-uninstall.sh custom theme preservation" "Custom theme was deleted or generated state remained after --uninstall"
+fi
+
 rm -rf "$TEMP_THEME_SETUP_HOME"
 
 test_summary

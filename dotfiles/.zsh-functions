@@ -63,11 +63,9 @@ v() {
             elif [ "$arg" = "-c" ] || [ "$arg" = "--cmd" ]; then
                 expect_cmd=1
                 continue
-            elif [[ "$arg" =~ ^(-v|--version|-h|--help|-d|-u|--clean|--headless|-es|-Es|--startuptime)$ ]]; then
+            elif [[ "$arg" == -* ]]; then
                 local_only=1
                 break
-            elif [[ "$arg" == -* ]]; then
-                continue
             fi
         fi
         if [[ "$arg" == /* ]]; then
@@ -76,6 +74,7 @@ v() {
             abs_args+=("${arg:A}")
         fi
     done
+    [ "$expect_cmd" = "1" ] && local_only=1
 
     local tmux_target=""
     if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ]; then

@@ -107,9 +107,9 @@ _ide() {
         '--monitor:Launch system monitor with btop, htop, and top fallback'
         '--top:Launch system monitor with btop, htop, and top fallback'
         '--keys:Display IDE keybinding cheatsheet'
-        '-r:Refresh tmux top bar, Editor CWDs, and idle Shell panes across IDE sessions'
-        '--refresh:Refresh tmux top bar, Editor CWDs, and idle Shell panes across IDE sessions'
-        '--reload:Refresh tmux top bar, Editor CWDs, and idle Shell panes across IDE sessions'
+        '-r:Refresh tmux top bar and Editor themes and CWDs across IDE sessions'
+        '--refresh:Refresh tmux top bar and Editor themes and CWDs across IDE sessions'
+        '--reload:Refresh tmux top bar and Editor themes and CWDs across IDE sessions'
         '-q:Safely quit IDE workspace session'
         '--quit:Safely quit IDE workspace session'
         '-f:Force-quit when used with --quit'
@@ -133,7 +133,7 @@ _ide() {
     )
     subcmds=(
         'cd:Dive into directory across Editor and Shell'
-        'refresh:Refresh tmux top bar, Editor CWDs, and idle Shell panes across IDE sessions'
+        'refresh:Refresh tmux top bar and Editor themes and CWDs across IDE sessions'
         'quit:Safely quit IDE workspace session(s)'
         'kill:Force-quit IDE workspace session(s) without unsaved-buffer check'
     )

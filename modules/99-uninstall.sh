@@ -146,7 +146,17 @@ uninstall_dotfiles() {
         rmdir "$xdg_config/bat/syntaxes" 2>/dev/null || true
         rmdir "$xdg_config/bat/themes" 2>/dev/null || true
         rmdir "$xdg_config/bat" 2>/dev/null || true
-        rm -rf "$xdg_config/home-settings" 2>/dev/null || true
+        rm -f \
+            "$xdg_config/home-settings/theme" \
+            "$xdg_config/home-settings/active-theme.theme" \
+            "$xdg_config/home-settings/theme-env.sh" \
+            "$xdg_config/home-settings/zsh-theme.zsh" \
+            "$xdg_config/home-settings/p10k-theme.zsh" \
+            "$xdg_config/home-settings/tmux-theme.conf" \
+            "$xdg_config/home-settings/delta-theme.gitconfig" 2>/dev/null || true
+        rm -rf "$xdg_config/home-settings/active" 2>/dev/null || true
+        rmdir "$xdg_config/home-settings/themes" 2>/dev/null || true
+        rmdir "$xdg_config/home-settings" 2>/dev/null || true
     fi
 
     # Rebuild bat cache to purge uninstalled syntaxes and themes

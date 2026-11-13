@@ -1221,6 +1221,84 @@ EOF
             echo "FAIL:_hs_recover_stale_cwd:precmd_first='$precmd_first' preexec_first='$preexec_first' order_ok='$order_ok' still_missing='$still_missing' healed='$healed'"
         fi
     )
+
+    # 11. Verify Zsh v() runs unrecognized -* flags (-R, -O, -p) locally while routing +line/-c/-- to remote IDE Editor, and _p9k_vcs_parse_cfg handles even trailing backslashes and escaped quotes
+    (
+        local v_test_dir="$TEMP_HOME/zsh_v_wrap"
+        mkdir -p "$v_test_dir/bin" "$v_test_dir/repo"
+        local v_log="$v_test_dir/nvim_calls.log"
+        local v_sock="$v_test_dir/mock-ide.sock"
+        python3 -c 'import socket, sys; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.bind(sys.argv[1])' "$v_sock"
+        cat > "$v_test_dir/bin/nvim" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$v_log"
+if [[ "\$*" == *"--remote-expr 1"* ]]; then
+    echo "1"
+fi
+EOF
+        chmod +x "$v_test_dir/bin/nvim"
+        (
+            export PATH="$v_test_dir/bin:$PATH"
+            export NVIM_IDE_SOCKET="$v_sock"
+            unset TMUX TMUX_PANE NVIM_IDE_PANE
+            source "$SCRIPT_DIR/dotfiles/.zsh-functions"
+            cd "$v_test_dir/repo"
+            touch alpha.txt beta.txt -- -dash.txt
+            v -R alpha.txt
+            v -O alpha.txt beta.txt
+            v -p alpha.txt beta.txt
+            v -c
+            v +12 -c "set number" -- -dash.txt
+        )
+        local v_calls="$(<"$v_log")"
+        local v_remote_calls="$(grep -- '--remote ' "$v_log" || true)"
+        rm -f "$v_sock"
+
+        cd "$v_test_dir/repo"
+        git init -q -b "feat/esc"
+        git config user.email "t@example.com"
+        git config user.name "Test"
+        git config commit.gpgsign false
+        echo "x" > alpha.txt
+        git add alpha.txt && git commit -q -m "init"
+        cat >> .git/config <<'GITCFG'
+# Windows comment ending in backslash C:\
+[url "https://github.com/wrong/"]
+	insteadOf = corp\\\\
+[url "https://gitlab.com/acme/"]
+	insteadOf = "corp\"bs\\\
+  sp:"
+# Comment before remote \
+[remote "orig\"in\\1"]
+	url = "corp\"bs\\  sp:repo.git" # trailing comment \
+[branch "feat/esc"]
+	pr = \
+		88 # inline comment \
+	remote = "orig\"in\\1"
+GITCFG
+        P10K_SEG_ICON="" P10K_SEG_TEXT=""
+        prompt_vcs
+        local zsh_esc_icon="$P10K_SEG_ICON"
+        local zsh_esc_seg="$P10K_SEG_TEXT"
+        cd "$TEMP_HOME"
+        rm -rf "$v_test_dir"
+
+        if [[ $'\n'"$v_calls"$'\n' == *$'\n'"-R alpha.txt"$'\n'* ]] && \
+           [[ $'\n'"$v_calls"$'\n' == *$'\n'"-O alpha.txt beta.txt"$'\n'* ]] && \
+           [[ $'\n'"$v_calls"$'\n' == *$'\n'"-p alpha.txt beta.txt"$'\n'* ]] && \
+           [[ $'\n'"$v_calls"$'\n' == *$'\n'"-c"$'\n'* ]] && \
+           [[ "$v_remote_calls" != *"alpha.txt"* ]] && \
+           [[ "$v_remote_calls" == *"--server $v_sock --remote $v_test_dir/repo/-dash.txt"* ]] && \
+           [[ "$v_calls" == *'execute("12")'* ]] && \
+           [[ "$v_calls" == *'execute("set number")'* ]] && \
+           [[ "$zsh_esc_icon" == *""* ]] && \
+           [[ "$zsh_esc_seg" == *"https://gitlab.com/acme/repo/-/merge_requests/88"* ]] && \
+           [[ "$zsh_esc_seg" == *"@%F{"*"88"* ]]; then
+            echo "PASS:Zsh v() runs unrecognized -* flags (-R, -O, -p) locally while routing +line/-c/-- to remote IDE Editor, and _p9k_vcs_parse_cfg handles even trailing backslashes and escaped quotes"
+        else
+            echo "FAIL:Zsh v() flag routing or .git/config escaping:v_calls='${v_calls//$'\n'/ | }' icon='$zsh_esc_icon' seg='${(V)zsh_esc_seg}'"
+        fi
+    )
 }
 
 run_zsh_subtest test_addendum
