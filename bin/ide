@@ -207,6 +207,9 @@ def tmux_out(*args: str) -> str:
     return (res.stdout or "").rstrip("\r\n") if isinstance(res.stdout, str) else ""
 
 
+_TMUX_SEP = "\t__IDE_SEP__\t"
+
+
 def is_socket_path(path: str | Path) -> bool:
     try:
         st = os.stat(path)
@@ -249,11 +252,11 @@ _ALLOW_TMUX_ENV_FALLBACK = False
 
 
 def _infer_env_session() -> str:
-    lines = tmux_out("list-clients", "-F", "#{client_activity}\x1f#{session_name}").splitlines()
+    lines = tmux_out("list-clients", "-F", _TMUX_SEP.join(["#{client_activity}", "#{session_name}"])).splitlines()
     best_act = -1
     best_sess = ""
     for line in lines:
-        parts = line.split("\x1f", 1)
+        parts = line.split(_TMUX_SEP, 1)
         if len(parts) == 2 and parts[1].strip():
             cand = parts[1].strip()
             if not re.match(r"^(ai|agy)-", cand):
@@ -266,11 +269,18 @@ def _infer_env_session() -> str:
     s_lines = tmux_out(
         "list-sessions",
         "-F",
-        "#{session_last_attached}\x1f#{session_activity}\x1f#{session_name}\x1f#{@ide_session}\x1f#{@ide_socket}\x1f#{@ide_main_win}",
+        _TMUX_SEP.join([
+            "#{session_last_attached}",
+            "#{session_activity}",
+            "#{session_name}",
+            "#{@ide_session}",
+            "#{@ide_socket}",
+            "#{@ide_main_win}",
+        ]),
     ).splitlines()
     best_ts = -1
     for line in s_lines:
-        cols = (line.split("\x1f") + [""] * 6)[:6]
+        cols = (line.split(_TMUX_SEP) + [""] * 6)[:6]
         if is_ide_session_meta(cols[2], cols[3], cols[4], cols[5]):
             la = int(cols[0]) if cols[0].strip().isdigit() else 0
             sa = int(cols[1]) if cols[1].strip().isdigit() else 0
@@ -538,11 +548,11 @@ def check_is_ide_session(sess: str) -> bool:
         return False
     info = tmux_out(
         "display-message", "-p", "-t", f"={sess}:",
-        "#{session_name}\x1f#{@ide_session}\x1f#{@ide_socket}\x1f#{@ide_main_win}",
+        _TMUX_SEP.join(["#{session_name}", "#{@ide_session}", "#{@ide_socket}", "#{@ide_main_win}"]),
     )
-    if not info or "\x1f" not in info:
+    if not info or _TMUX_SEP not in info:
         return False
-    parts = (info.split("\x1f") + ["", "", "", ""])[:4]
+    parts = (info.split(_TMUX_SEP) + ["", "", "", ""])[:4]
     return is_ide_session_meta(parts[0], parts[1], parts[2], parts[3])
 
 
@@ -561,11 +571,11 @@ def current_ide_session() -> str:
         return ""
     found = tmux_out(
         "display-message", "-p", "-t", target,
-        "#{pid}\x1f#{session_name}\x1f#{@ide_session}\x1f#{@ide_socket}\x1f#{@ide_main_win}",
+        _TMUX_SEP.join(["#{pid}", "#{session_name}", "#{@ide_session}", "#{@ide_socket}", "#{@ide_main_win}"]),
     )
-    if not found or "\x1f" not in found:
+    if not found or _TMUX_SEP not in found:
         return ""
-    fparts = (found.split("\x1f") + ["", "", "", "", ""])[:5]
+    fparts = (found.split(_TMUX_SEP) + ["", "", "", "", ""])[:5]
     pid, sess_name, ide_sess, ide_sock, ide_win = fparts[0], fparts[1], fparts[2], fparts[3], fparts[4]
     if pid != server_pid:
         return ""
@@ -1299,9 +1309,9 @@ def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> 
         use_bare = os.path.basename(nvim_bin) == "nvim" and "/mise/" not in nvim_bin and nvim_bin == path_nvim
         cmd_name = "nvim" if use_bare else shlex.quote(nvim_bin)
         if initial_file:
-            run_tmux("send-keys", "-t", pane_id, f" {cmd_name} --listen '{sock}' {shlex.quote(initial_file)}", "C-m")
+            run_tmux("send-keys", "-t", pane_id, f" {cmd_name} --listen {shlex.quote(sock)} {shlex.quote(initial_file)}", "C-m")
         else:
-            run_tmux("send-keys", "-t", pane_id, f" {cmd_name} --listen '{sock}'", "C-m")
+            run_tmux("send-keys", "-t", pane_id, f" {cmd_name} --listen {shlex.quote(sock)}", "C-m")
     elif shutil.which("vim"):
         run_tmux("set-option", "-p", "-t", pane_id, "@ide_nvim_launch_ts", str(int(time.time())))
         run_tmux("send-keys", "-t", pane_id, " vim", "C-m")
@@ -1314,8 +1324,11 @@ def ensure_editor_nvim_running(editor_pane: str, sock: str, initial_file: str = 
         return False
     if not resolve_nvim_bin():
         return False
-    info = tmux_out("display-message", "-p", "-t", editor_pane, "#{pane_current_command}\t#{@ide_nvim_launch_ts}")
-    parts = (info.split("\t") + ["", ""])[:2]
+    info = tmux_out(
+        "display-message", "-p", "-t", editor_pane,
+        _TMUX_SEP.join(["#{pane_current_command}", "#{@ide_nvim_launch_ts}"]),
+    )
+    parts = (info.split(_TMUX_SEP) + ["", ""])[:2]
     cmd, launch_ts = parts[0].strip(), parts[1].strip()
     if not cmd or "nvim" in cmd or cmd in ("vim", "vi"):
         return False
@@ -1338,10 +1351,32 @@ def toggle_main_pane(
 
     snap = run_tmux(
         "display-message", "-p", "-t", f"={sess}:",
-        "OPTS\x1f#{@ide_editor_pane}\x1f#{@ide_ai_pane}\x1f#{@ide_term_pane}\x1f#{@ide_main_win}\x1f#{@ide_layout_mode}\x1f#{@ide_socket}\x1f#{@ide_ai_cli}\x1f#{@ide_initial_root}\x1f#{@ide_last_pane_id}\x1f#{@ide_last_non_ai}\x1f#{@ide_quit_err}",
+        _TMUX_SEP.join([
+            "OPTS",
+            "#{@ide_editor_pane}",
+            "#{@ide_ai_pane}",
+            "#{@ide_term_pane}",
+            "#{@ide_main_win}",
+            "#{@ide_layout_mode}",
+            "#{@ide_socket}",
+            "#{@ide_ai_cli}",
+            "#{@ide_initial_root}",
+            "#{@ide_last_pane_id}",
+            "#{@ide_last_non_ai}",
+            "#{@ide_quit_err}",
+        ]),
         ";",
         "list-panes", "-s", "-t", f"={sess}:", "-F",
-        "PANE\x1f#{pane_id}\x1f#{window_id}\x1f#{window_name}\x1f#{@ide_role}\x1f#{pane_left}\x1f#{pane_top}\x1f#{pane_current_path}",
+        _TMUX_SEP.join([
+            "PANE",
+            "#{pane_id}",
+            "#{window_id}",
+            "#{window_name}",
+            "#{@ide_role}",
+            "#{pane_left}",
+            "#{pane_top}",
+            "#{pane_current_path}",
+        ]),
     )
     if snap.returncode != 0 or not snap.stdout:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
@@ -1349,9 +1384,11 @@ def toggle_main_pane(
 
     editor_pane = ai_pane = term_pane = main_win = layout_mode = sock = ai_cli = init_root = last_pane_id = last_non_ai = quit_err_cur = ""
     panes_by_id: dict[str, tuple[str, str, str, int, int, str]] = {}
+    opts_pfx = f"OPTS{_TMUX_SEP}"
+    pane_pfx = f"PANE{_TMUX_SEP}"
     for line in snap.stdout.splitlines():
-        if line.startswith("OPTS\x1f"):
-            op = (line.split("\x1f")[1:] + [""] * 11)[:11]
+        if line.startswith(opts_pfx):
+            op = (line.split(_TMUX_SEP)[1:] + [""] * 11)[:11]
             (
                 editor_pane,
                 ai_pane,
@@ -1365,8 +1402,8 @@ def toggle_main_pane(
                 last_non_ai,
                 quit_err_cur,
             ) = op
-        elif line.startswith("PANE\x1f"):
-            pp = line.split("\x1f", 7)
+        elif line.startswith(pane_pfx):
+            pp = line.split(_TMUX_SEP, 7)
             if len(pp) >= 8:
                 try:
                     panes_by_id[pp[1]] = (pp[2], pp[3], pp[4], int(pp[5]), int(pp[6]), pp[7])
@@ -1502,8 +1539,11 @@ def toggle_main_pane(
         if was_zoomed_before_heal == "1" and tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") == "0":
             run_tmux("resize-pane", "-Z", "-t", main_win)
 
-    win_state = tmux_out("display-message", "-p", "-t", main_win, "#{pane_id}\x1f#{@ide_role}\x1f#{@ide_last_pane}")
-    wparts = (win_state.split("\x1f") + ["", "", ""])[:3]
+    win_state = tmux_out(
+        "display-message", "-p", "-t", main_win,
+        _TMUX_SEP.join(["#{pane_id}", "#{@ide_role}", "#{@ide_last_pane}"]),
+    )
+    wparts = (win_state.split(_TMUX_SEP) + ["", "", ""])[:3]
     active_pane, active_role, last_pane = wparts[0], wparts[1], wparts[2]
     started_in_ai = bool(active_pane == ai_pane or active_role == "ai")
 
@@ -1844,6 +1884,24 @@ def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> i
         for target_sess in (f"=ai-{sess}", f"=agy-{sess}", f"={sess}"):
             run_tmux("kill-session", "-t", target_sess)
 
+    for sess, sock in to_kill:
+        for p in (
+            sock,
+            f"{runtime_dir}/nvim-{sess}.sock",
+            f"{runtime_dir}/nvim-ide-{sess}.sock",
+        ):
+            if p and is_socket_path(p) and resolve_nvim_bin():
+                nvim_remote_send(p, "<C-\\><C-n><Cmd>qall!<CR>")
+                for _ in range(10):
+                    if not is_socket_path(p):
+                        break
+                    time.sleep(0.05)
+            if p:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
     refresh_fleet_topbar()
     return rc
 
@@ -1893,9 +1951,12 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
         )
 
     if os.environ.get("IDE_CD_SKIP_SHELL", "0") != "1" and pane_exists(term_pane):
-        info = tmux_out("display-message", "-p", "-t", term_pane, "#{pane_current_command}\t#{pane_current_path}")
-        if "\t" in info:
-            term_cmd, term_path = info.split("\t", 1)
+        info = tmux_out(
+            "display-message", "-p", "-t", term_pane,
+            _TMUX_SEP.join(["#{pane_current_command}", "#{pane_current_path}"]),
+        )
+        if _TMUX_SEP in info:
+            term_cmd, term_path = info.split(_TMUX_SEP, 1)
             if term_cmd.startswith(("zsh", "bash", "sh")) and term_path != target_dir:
                 run_tmux("send-keys", "-t", term_pane, "C-u", f" builtin cd -- {shlex.quote(target_dir)}", "C-m")
 
@@ -2583,9 +2644,9 @@ def status_click(x_str: str, target_arg: str) -> int:
 
     info = tmux_out(
         "display-message", "-p", "-t", f"={sess}:",
-        "#{@ide_role}\x1f#{@ide_ai_cli}\x1f#{window_zoomed_flag}\x1f#{status-left}\x1f#{window_name}",
+        _TMUX_SEP.join(["#{@ide_role}", "#{@ide_ai_cli}", "#{window_zoomed_flag}", "#{status-left}", "#{window_name}"]),
     )
-    parts = (info.split("\x1f") + ["", "", "", "", ""])[:5]
+    parts = (info.split(_TMUX_SEP) + ["", "", "", "", ""])[:5]
     role = parts[0]
     ai_cli = parts[1] or "AI"
     zoomed = parts[2] == "1"
@@ -2760,14 +2821,15 @@ def _pids_with_children(pids: set[int]) -> set[int]:
         except OSError:
             pass
 
+    ps_bin = shutil.which("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
     try:
         res = subprocess.run(
-            ["ps", "-eo", "ppid="],
+            [ps_bin, "-eo", "ppid="],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
-            timeout=0.5,
+            timeout=2.0,
             check=False,
         )
         if res.returncode == 0 and res.stdout:
@@ -2808,7 +2870,26 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
     res = run_tmux(
         "list-sessions",
         "-F",
-        "#{session_name}\x1f#{session_activity}\x1f#{session_last_attached}\x1f#{session_attached}\x1f#{@ide_session}\x1f#{@ide_socket}\x1f#{@ide_main_win}\x1f#{@ide_ai_pane}\x1f#{@ide_ai_cli}\x1f#{@ide_workdir}\x1f#{@ide_initial_root}\x1f#{@ide_ai_state}\x1f#{@ide_ai_attn}\x1f#{@ide_ai_attn_ts}\x1f#{@ide_ai_state_ts}\x1f#{@ide_ai_parked}\x1f#{@ide_ai_msg}\x1f#{@ide_quit_err}",
+        _TMUX_SEP.join([
+            "#{session_name}",
+            "#{session_activity}",
+            "#{session_last_attached}",
+            "#{session_attached}",
+            "#{@ide_session}",
+            "#{@ide_socket}",
+            "#{@ide_main_win}",
+            "#{@ide_ai_pane}",
+            "#{@ide_ai_cli}",
+            "#{@ide_workdir}",
+            "#{@ide_initial_root}",
+            "#{@ide_ai_state}",
+            "#{@ide_ai_attn}",
+            "#{@ide_ai_attn_ts}",
+            "#{@ide_ai_state_ts}",
+            "#{@ide_ai_parked}",
+            "#{@ide_ai_msg}",
+            "#{@ide_quit_err}",
+        ]),
     )
     if res.returncode != 0:
         return ([], False)
@@ -2816,7 +2897,7 @@ def _list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]
         return ([], True)
     items: list[dict[str, str]] = []
     for line in res.stdout.splitlines():
-        cols = (line.split("\x1f") + [""] * 18)[:18]
+        cols = (line.split(_TMUX_SEP) + [""] * 18)[:18]
         (
             sess_name,
             activity,
@@ -3652,12 +3733,25 @@ def classify_ide_fleet(
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\x1f#{window_id}\x1f#{window_name}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pane_active}\x1f#{window_active}\x1f#{window_zoomed_flag}\x1f#{@ide_role}\x1f#{pane_current_path}\x1f#{pane_current_command}\x1f#{window_activity}",
+        _TMUX_SEP.join([
+            "#{session_name}",
+            "#{window_id}",
+            "#{window_name}",
+            "#{pane_id}",
+            "#{pane_pid}",
+            "#{pane_active}",
+            "#{window_active}",
+            "#{window_zoomed_flag}",
+            "#{@ide_role}",
+            "#{pane_current_path}",
+            "#{pane_current_command}",
+            "#{window_activity}",
+        ]),
     )
     panes_by_sess: dict[str, list[tuple[str, str, str, str, str, str, str, str, str, str, str]]] = {}
     if panes_res.returncode == 0 and panes_res.stdout:
         for line in panes_res.stdout.splitlines():
-            pcols = (line.split("\x1f") + [""] * 12)[:12]
+            pcols = (line.split(_TMUX_SEP) + [""] * 12)[:12]
             panes_by_sess.setdefault(pcols[0], []).append(
                 (
                     pcols[1],
@@ -4066,9 +4160,27 @@ def _inspect_session_ai_view(sess: str) -> dict[str, object]:
         "-p",
         "-t",
         f"={sess}:",
-        "#{window_id}\x1f#{window_name}\x1f#{window_active}\x1f#{window_zoomed_flag}\x1f#{pane_active}\x1f#{@ide_role}\x1f#{@ide_main_win}\x1f#{@ide_ai_pane}\x1f#{@ide_ai_parked}\x1f#{@ide_ai_state}\x1f#{@ide_ai_attn}\x1f#{@ide_ai_attn_ts}\x1f#{@ide_ai_state_ts}\x1f#{@ide_ai_cli}\x1f#{@ide_workdir}\x1f#{@ide_initial_root}\x1f#{@ide_ai_msg}",
+        _TMUX_SEP.join([
+            "#{window_id}",
+            "#{window_name}",
+            "#{window_active}",
+            "#{window_zoomed_flag}",
+            "#{pane_active}",
+            "#{@ide_role}",
+            "#{@ide_main_win}",
+            "#{@ide_ai_pane}",
+            "#{@ide_ai_parked}",
+            "#{@ide_ai_state}",
+            "#{@ide_ai_attn}",
+            "#{@ide_ai_attn_ts}",
+            "#{@ide_ai_state_ts}",
+            "#{@ide_ai_cli}",
+            "#{@ide_workdir}",
+            "#{@ide_initial_root}",
+            "#{@ide_ai_msg}",
+        ]),
     )
-    parts = (raw.split("\x1f") + [""] * 17)[:17]
+    parts = (raw.split(_TMUX_SEP) + [""] * 17)[:17]
     (
         win_id,
         wname,
@@ -4084,10 +4196,27 @@ def _inspect_session_ai_view(sess: str) -> dict[str, object]:
         ai_attn_ts,
         ai_state_ts,
         ai_cli,
-        workdir,
-        init_root,
+        raw_workdir,
+        raw_init_root,
         ai_msg,
-    ) = (p.strip() for p in parts)
+    ) = parts
+    win_id = win_id.strip()
+    wname = wname.strip()
+    win_active = win_active.strip()
+    zoomed = zoomed.strip()
+    pane_active = pane_active.strip()
+    prole = prole.strip()
+    main_win = main_win.strip()
+    ai_pane = ai_pane.strip()
+    ai_parked = ai_parked.strip()
+    ai_state = ai_state.strip()
+    ai_attn = ai_attn.strip()
+    ai_attn_ts = ai_attn_ts.strip()
+    ai_state_ts = ai_state_ts.strip()
+    ai_cli = ai_cli.strip()
+    workdir = raw_workdir.rstrip("\r\n")
+    init_root = raw_init_root.rstrip("\r\n")
+    ai_msg = ai_msg.strip()
     has_focus = _session_has_focused_client(sess)
     ai_visible = (
         has_focus
@@ -4539,8 +4668,11 @@ def ack_ai_session(
         if ai_state or ai_attn not in ("", "0") or prev_msg:
             ai_alive = False
             if ai_pane_id and pane_exists(ai_pane_id):
-                p_info = tmux_out("display-message", "-p", "-t", ai_pane_id, "#{pane_pid}\x1f#{pane_current_command}")
-                p_pid, p_cmd = (p_info.split("\x1f", 1) + [""])[:2]
+                p_info = tmux_out(
+                    "display-message", "-p", "-t", ai_pane_id,
+                    _TMUX_SEP.join(["#{pane_pid}", "#{pane_current_command}"]),
+                )
+                p_pid, p_cmd = (p_info.split(_TMUX_SEP, 1) + [""])[:2]
                 ai_alive = pane_has_child_procs(p_pid, p_cmd)
             if not ai_alive:
                 if batch_cmds:
@@ -5238,8 +5370,11 @@ def send_to_ai(
         run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", err_msg)
         print(f"Error: {err_msg}", file=sys.stderr)
         return 1
-    ai_info = tmux_out("display-message", "-p", "-t", ai_pane, "#{pane_pid}\x1f#{pane_current_command}")
-    ai_pid, ai_cmd = (ai_info.split("\x1f", 1) + [""])[:2]
+    ai_info = tmux_out(
+        "display-message", "-p", "-t", ai_pane,
+        _TMUX_SEP.join(["#{pane_pid}", "#{pane_current_command}"]),
+    )
+    ai_pid, ai_cmd = (ai_info.split(_TMUX_SEP, 1) + [""])[:2]
     if not pane_has_child_procs(ai_pid, ai_cmd):
         err_msg = f"Refused to send to '{sess}': AI pane is at an idle shell prompt (launch an AI CLI first)."
         run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", err_msg)

@@ -1655,11 +1655,12 @@ GITCFG
         COLORTERM="truecolor" _solarized_bash_prompt
         ps1_esc_cfg="$PS1"
 
+        v_remote_calls="$(grep -- '--remote' "$V_LOG" || true)"
         if grep -Fxq -- "-R alpha.txt" "$V_LOG" && \
            grep -Fxq -- "-O alpha.txt beta.txt" "$V_LOG" && \
            grep -Fxq -- "-p alpha.txt beta.txt" "$V_LOG" && \
            grep -Fxq -- "-c" "$V_LOG" && \
-           ! grep -Fq -- "alpha.txt" < <(grep -- "--remote" "$V_LOG" || true) && \
+           ! grep -Fq -- "alpha.txt" <<< "$v_remote_calls" && \
            grep -Fq -- "--server $V_SOCK --remote $V_TEST_DIR/repo/-dash.txt" "$V_LOG" && \
            grep -Fq -- 'execute("12")' "$V_LOG" && \
            grep -Fq -- 'execute("set number")' "$V_LOG" && \

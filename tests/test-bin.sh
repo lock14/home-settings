@@ -2459,6 +2459,22 @@ def wait_until(pred, timeout=3.0, step=0.03):
         time.sleep(step)
     return pred()
 
+def nvim_expr_eq(sock, expr, expected):
+    if not os.path.exists(sock):
+        return False
+    try:
+        r = subprocess.run(
+            ["nvim", "--headless", "--server", sock, "--remote-expr", expr],
+            env=base_env,
+            text=True,
+            capture_output=True,
+            timeout=2,
+            check=False,
+        )
+        return r.returncode == 0 and r.stdout.strip() == expected
+    except Exception:
+        return False
+
 try:
     thome = os.path.join(root, "home")
     tmux_tmp = os.path.join(root, "tmux_tmp")
@@ -2474,6 +2490,12 @@ try:
     os.symlink(tmux_conf_src, os.path.join(thome, ".tmux.conf"))
 
     clean_path = f"{bin_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}"
+    _raw_lang = os.environ.get("LANG", "")
+    _utf8_lang = (
+        _raw_lang
+        if ("UTF-8" in _raw_lang.upper() or "UTF8" in _raw_lang.upper())
+        else ("en_US.UTF-8" if sys.platform == "darwin" else "C.UTF-8")
+    )
     base_env = {
         "HOME": thome,
         "PATH": clean_path,
@@ -2482,7 +2504,7 @@ try:
         "XDG_CACHE_HOME": xdg_cache,
         "XDG_RUNTIME_DIR": xdg_run,
         "TERM": "xterm-256color",
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "LANG": _utf8_lang,
         "NO_COLOR": "1",
     }
 
@@ -3025,8 +3047,7 @@ try:
             f"nvim --headless -u NONE -i NONE --listen {shlex.quote(dirty_sock)} -c {shlex.quote('edit ' + dirty_file)} -c \"call setline(1, 'dirty')\"",
             check=True,
         )
-        assert wait_until(lambda: os.path.exists(dirty_sock)), "dirty-ws nvim socket did not appear"
-        time.sleep(0.15)
+        assert wait_until(lambda: nvim_expr_eq(dirty_sock, "&modified", "1")), "dirty-ws nvim buffer did not become modified"
         r_dirty_quit = run_cmd([ide_bin, "--quit", "dirty-ws", "clean-sib-ws"], env={**base_env, "TMUX": ""}, check=False)
         assert r_dirty_quit.returncode != 0, f"expected ide --quit to refuse dirty buffer, got {r_dirty_quit}"
         assert tmux("has-session", "-t", "=dirty-ws", check=False).returncode == 0, "dirty-ws was killed despite unsaved buffer!"
@@ -3294,6 +3315,25 @@ try:
                     break
         return b"".join(buf)
 
+    def _pump_pty(sec=0.05):
+        _read_pty_chunk(sec)
+        return False
+
+    def _wait_pty_text(needle, timeout=3.0):
+        end_t = time.monotonic() + timeout
+        acc = bytearray()
+        while time.monotonic() < end_t:
+            rdy, _, _ = select.select([client_mfd], [], [], min(0.05, max(0.005, end_t - time.monotonic())))
+            if rdy:
+                try:
+                    acc.extend(os.read(client_mfd, 65536))
+                except OSError:
+                    break
+                txt = _ansi_strip_re.sub("", acc.decode("utf-8", "replace"))
+                if needle in txt:
+                    return txt
+        return _ansi_strip_re.sub("", acc.decode("utf-8", "replace"))
+
     tmux("switch-client", "-c", client_name, "-t", "=alpha-ws", check=True)
     tmux("select-pane", "-t", ws_alpha["ed"], check=True)
     tmux("set-environment", "-t", "=alpha-ws", "SSH_CONNECTION", "10.0.0.1 12345 10.0.0.2 22", check=True)
@@ -3338,32 +3378,32 @@ try:
     wc_zoom_vis = re.sub(r"#\[[^\]]*\]", "", subprocess.run(["tmux", "-u", "display-message", "-t", "=alpha-ws:", "-p", "#{T:window-status-current-format}"], env=base_env, text=True, capture_output=True, check=True).stdout.rstrip("\n"))
     zoom_tab_x = _cell_w(sl_vis) + _cell_w(wc_zoom_vis[:wc_zoom_vis.index("ZOOM")]) + 1
     os.write(client_mfd, f"\x1b[<0;{zoom_tab_x};1M\x1b[<0;{zoom_tab_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.03) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{window_zoomed_flag}") == "0")), "tab_zoom SGR click did not unzoom"
+    assert wait_until(lambda: (_pump_pty(0.03) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{window_zoomed_flag}") == "0")), "tab_zoom SGR click did not unzoom"
     tmux("resize-pane", "-Z", "-t", ws_alpha["ed"], check=True)
     tmux("refresh-client", "-t", client_name, "-S", check=True)
-    _read_pty_chunk(0.04)
+    assert "ZOOM" in _wait_pty_text("ZOOM", timeout=2.0), "status bar did not redraw ZOOM badge after re-zoom"
     os.write(client_mfd, f"\x1b[<0;{zoom_tab_x};1M\x1b[<0;{zoom_tab_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.03) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{window_zoomed_flag}") == "0")), "rapid DoubleClick1Status on tab_zoom was dropped!"
+    assert wait_until(lambda: (_pump_pty(0.03) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{window_zoomed_flag}") == "0")), "rapid DoubleClick1Status on tab_zoom was dropped!"
     tmux("refresh-client", "-t", client_name, "-S", check=True)
     _read_pty_chunk(0.35)
 
     term_tab_x = _cell_w(sl_vis) + _cell_w(wc_vis[:wc_vis.index("Shell")]) + 1
     os.write(client_mfd, f"\x1b[<0;{term_tab_x};1M\x1b[<0;{term_tab_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term")), "tab_term SGR click did not focus Shell"
+    assert wait_until(lambda: (_pump_pty(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term")), "tab_term SGR click did not focus Shell"
     tmux("refresh-client", "-t", client_name, "-S", check=True)
     _read_pty_chunk(0.35)
 
     wc_term_vis = re.sub(r"#\[[^\]]*\]", "", subprocess.run(["tmux", "-u", "display-message", "-t", "=alpha-ws:", "-p", "#{T:window-status-current-format}"], env=base_env, text=True, capture_output=True, check=True).stdout.rstrip("\n"))
     ai_tab_x = _cell_w(sl_vis) + 3
     os.write(client_mfd, f"\x1b[<0;{ai_tab_x};1M\x1b[<0;{ai_tab_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "ai")), "tab_ai SGR click did not focus AI"
+    assert wait_until(lambda: (_pump_pty(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "ai")), "tab_ai SGR click did not focus AI"
     tmux("refresh-client", "-t", client_name, "-S", check=True)
     _read_pty_chunk(0.35)
 
     wc_ai_vis = re.sub(r"#\[[^\]]*\]", "", subprocess.run(["tmux", "-u", "display-message", "-t", "=alpha-ws:", "-p", "#{T:window-status-current-format}"], env=base_env, text=True, capture_output=True, check=True).stdout.rstrip("\n"))
     ed_tab_x = _cell_w(sl_vis) + _cell_w(wc_ai_vis[:wc_ai_vis.index("Editor")]) + 1
     os.write(client_mfd, f"\x1b[<0;{ed_tab_x};1M\x1b[<0;{ed_tab_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor")), "tab_editor SGR click did not focus Editor"
+    assert wait_until(lambda: (_pump_pty(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor")), "tab_editor SGR click did not focus Editor"
     tmux("refresh-client", "-t", client_name, "-S", check=True)
     _read_pty_chunk(0.35)
     _ = wc_term_vis
@@ -3371,7 +3411,7 @@ try:
     # Click 1: Help (Alt+?) (#[range=user|help]) while SSH, attn, and fleet segments are rendered to its left
     help_x = _sr_col("Help")
     os.write(client_mfd, f"\x1b[<0;{help_x};1M\x1b[<0;{help_x};1m".encode())
-    help_out = _ansi_strip_re.sub("", _read_pty_chunk(0.8).decode("utf-8", "replace"))
+    help_out = _wait_pty_text("IDE Workspace & Editor Keybindings", timeout=4.0)
     assert "IDE Workspace & Editor Keybindings" in help_out, f"Help SGR click failed: {help_out[-250:]!r}"
     os.write(client_mfd, b"q")
     _read_pty_chunk(0.4)
@@ -3380,13 +3420,15 @@ try:
     # Click 2: Urgent #[range=user|attn] pill ("beta-ws") jumps client to beta-ws and auto-acks
     attn_x = _sr_col("beta-ws")
     os.write(client_mfd, f"\x1b[<0;{attn_x};1M\x1b[<0;{attn_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.08) or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "beta-ws")), "attn pill SGR click did not jump to beta-ws"
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("show-options", "-gqv", "@ide_attn_summary") == "")), "attn pill SGR click did not clear @ide_attn_summary"
+    assert wait_until(lambda: (_pump_pty(0.08) or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "beta-ws")), "attn pill SGR click did not jump to beta-ws"
+    assert wait_until(lambda: (_pump_pty(0.05) or tmux_out("show-options", "-gqv", "@ide_attn_summary") == "")), "attn pill SGR click did not clear @ide_attn_summary"
 
     # Click 3: #[range=user|fleet] pill ("(Alt+s)") opens --sessions popup and switches back to alpha-ws
     tmux("set-environment", "-g", "MOCK_FZF_KEY", "", check=True)
     tmux("set-environment", "-g", "MOCK_FZF_TARGET", "alpha-ws", check=True)
-    _read_pty_chunk(0.35)
+    tmux("refresh-client", "-t", client_name, "-S", check=True)
+    _wait_pty_text("(Alt+s)", timeout=2.0)
+    _read_pty_chunk(0.15)
     sr_raw2 = subprocess.run(
         ["tmux", "-u", "display-message", "-t", "=beta-ws:", "-p", "#{T:status-right}"],
         env=base_env, text=True, capture_output=True, check=True,
@@ -3394,7 +3436,7 @@ try:
     sr_vis2 = re.sub(r"#\[[^\]]*\]", "", sr_raw2)
     fleet_x = c_width - _cell_w(sr_vis2[sr_vis2.index("(Alt+s)"):]) + 1
     os.write(client_mfd, f"\x1b[<0;{fleet_x};1M\x1b[<0;{fleet_x};1m".encode())
-    assert wait_until(lambda: (_read_pty_chunk(0.1) or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"), timeout=4.0), "fleet pill SGR click did not switch to alpha-ws"
+    assert wait_until(lambda: (_pump_pty(0.1) or tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "alpha-ws"), timeout=4.0), "fleet pill SGR click did not switch to alpha-ws"
     _read_pty_chunk(0.2)
 
     # (8i) Zero-fork pure-C if-shell -F guard on pane-focus-in & client-session-changed:
@@ -3427,9 +3469,9 @@ try:
     tmux("select-pane", "-t", ws_alpha["tm"], check=True)
     tmux("select-pane", "-t", ws_alpha["ed"], check=True)
     os.write(client_mfd, b"\x1bt")
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term")), "Alt+t did not focus Shell"
+    assert wait_until(lambda: (_pump_pty(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "term")), "Alt+t did not focus Shell"
     os.write(client_mfd, b"\x1bk")
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor")), "Alt+k from Shell did not focus Editor"
+    assert wait_until(lambda: (_pump_pty(0.05) or tmux_out("display-message", "-p", "-t", "=alpha-ws:", "#{@ide_role}") == "editor")), "Alt+k from Shell did not focus Editor"
     tmux("select-pane", "-t", ws_alpha["ai"], check=True)
     tmux("select-pane", "-t", ws_alpha["ed"], check=True)
     tmux("set-option", "-q", "-u", "-t", "=alpha-ws:", "@ide_ai_state", check=True)
@@ -3450,8 +3492,8 @@ try:
 
     # Focusing AI pane while @ide_ai_attn == 1 (background done) immediately triggers --ack-ai --hook and clears!
     tmux("select-pane", "-t", ws_alpha["ai"], check=True)
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook alpha-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on background-done AI did not invoke --ack-ai --hook"
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "pane-focus-in did not clear @ide_ai_attn/@ide_attn_summary on done"
+    assert wait_until(lambda: (_pump_pty(0.05) or "--ack-ai --hook alpha-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on background-done AI did not invoke --ack-ai --hook"
+    assert wait_until(lambda: (_pump_pty(0.05) or (tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "pane-focus-in did not clear @ide_ai_attn/@ide_attn_summary on done"
     assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_state") == "idle"
 
     # Focusing AI pane while @ide_ai_attn == 1 (approval) immediately triggers --ack-ai --hook, clears @ide_ai_attn/@ide_attn_summary, AND preserves @ide_ai_state == "approval"!
@@ -3462,8 +3504,8 @@ try:
     assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") == "1"
     assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "alpha-ws"
     tmux("select-pane", "-t", ws_alpha["ai"], check=True)
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook alpha-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on approval AI did not invoke --ack-ai --hook"
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "pane-focus-in did not clear @ide_ai_attn/@ide_attn_summary on approval"
+    assert wait_until(lambda: (_pump_pty(0.05) or "--ack-ai --hook alpha-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on approval AI did not invoke --ack-ai --hook"
+    assert wait_until(lambda: (_pump_pty(0.05) or (tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "pane-focus-in did not clear @ide_ai_attn/@ide_attn_summary on approval"
     assert tmux_out("show-options", "-qv", "-t", "=alpha-ws:", "@ide_ai_state") == "approval", "focusing AI wiped unanswered approval state to idle!"
     # Switching back to Editor to inspect code keeps approval state (Orange AI tab & ATTN in --list) without re-triggering @ide_attn_summary!
     tmux("select-pane", "-t", ws_alpha["ed"], check=True)
@@ -3517,8 +3559,8 @@ try:
     assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") == "1"
     assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "beta-ws"
     tmux("switch-client", "-c", client_name, "-t", "=beta-ws", check=True)
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook beta-ws" in open(ack_hook_log, encoding="utf-8").read())), "client-session-changed did not invoke --ack-ai --hook beta-ws"
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "client-session-changed did not clear @ide_ai_attn/@ide_attn_summary"
+    assert wait_until(lambda: (_pump_pty(0.05) or "--ack-ai --hook beta-ws" in open(ack_hook_log, encoding="utf-8").read())), "client-session-changed did not invoke --ack-ai --hook beta-ws"
+    assert wait_until(lambda: (_pump_pty(0.05) or (tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == ""))), "client-session-changed did not clear @ide_ai_attn/@ide_attn_summary"
     assert tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "approval"
 
     # Crashed 'running' AI CLI (exited to bare /bin/sh without Stop hook):
@@ -3531,8 +3573,8 @@ try:
     tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec /bin/sh", check=True)
     assert wait_until(lambda: tmux_out("display-message", "-p", "-t", ws_beta["ai"], "#{pane_current_command}") == "sh")
     tmux("select-pane", "-t", ws_beta["ai"], check=True)
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or "--ack-ai --hook beta-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on crashed running AI did not invoke --ack-ai --hook"
-    assert wait_until(lambda: (_read_pty_chunk(0.05) or (tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "" and tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0"))), "pane-focus-in did not clear stale running state after AI exit"
+    assert wait_until(lambda: (_pump_pty(0.05) or "--ack-ai --hook beta-ws" in open(ack_hook_log, encoding="utf-8").read())), "pane-focus-in on crashed running AI did not invoke --ack-ai --hook"
+    assert wait_until(lambda: (_pump_pty(0.05) or (tmux_out("show-options", "-qv", "-t", "=beta-ws:", "@ide_ai_state") == "" and tmux_out("show-options", "-gqv", "@ide_fleet_active") == "0"))), "pane-focus-in did not clear stale running state after AI exit"
 
     # 2) If AI crashes while running AND user is already in AI pane, bouncing out via Alt+a (--toggle) clears stale running & @ide_fleet_active!
     tmux("respawn-pane", "-k", "-t", ws_beta["ai"], "-c", ws_beta["dir"], "exec sleep 300", check=True)
@@ -3563,7 +3605,7 @@ try:
             f"exec nvim --headless -u NONE -i NONE --listen {shlex.quote(alpha_sock)} -c \"lua _G.apply_home_settings_theme = function() vim.g.hs_theme_reloaded = (vim.g.hs_theme_reloaded or 0) + 1 end\"",
             check=True,
         )
-        assert wait_until(lambda: os.path.exists(alpha_sock)), "alpha-ws nvim socket did not appear for --refresh test"
+        assert wait_until(lambda: nvim_expr_eq(alpha_sock, "exists('*v:lua.apply_home_settings_theme')", "1")), "alpha-ws nvim callback did not initialize for --refresh test"
         shutil.rmtree(stale_ed_sub)
     r_ref_all = run_cmd([ide_bin, "--refresh"], env=sess_env("alpha-ws", ws_alpha["ai"]), check=True)
     assert "Refreshed 3 IDE session(s)" in r_ref_all.stdout and "shell" not in r_ref_all.stdout, f"unexpected --refresh output: {r_ref_all.stdout!r}"
@@ -4141,8 +4183,7 @@ try:
             f"nvim --headless -u NONE -i NONE --listen {shlex.quote(pop_sock)} -c {shlex.quote('edit ' + pop_file)} -c \"call setline(1, 'unsaved')\"",
             check=True,
         )
-        assert wait_until(lambda: os.path.exists(pop_sock)), "pop-dirty-ws nvim socket did not appear"
-        time.sleep(0.15)
+        assert wait_until(lambda: nvim_expr_eq(pop_sock, "&modified", "1")), "pop-dirty-ws nvim buffer did not become modified"
         tmux("switch-client", "-c", client_name, "-t", "=gamma-ws", check=True)
         drain_pty()
         r_pop_q = run_cmd(
@@ -4161,7 +4202,7 @@ try:
         assert "Warning  : Unsaved changes in 1 buffer(s)" in pop_prev, f"missing Warning in --session-preview: {pop_prev}"
         # Saving buffer in Neovim auto-clears @ide_quit_err on next preview!
         subprocess.run(["nvim", "--headless", "--server", pop_sock, "--remote-send", "<C-\\><C-n>:write!<CR>"], env=base_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        time.sleep(0.1)
+        assert wait_until(lambda: nvim_expr_eq(pop_sock, "&modified", "0")), "pop-dirty-ws nvim buffer did not become clean after :write!"
         pop_prev_clean = _ansi_strip_re.sub("", run_cmd([ide_bin, "--session-preview", "pop-dirty-ws"], env=sess_env("gamma-ws", ws_gamma["ed"]), check=True).stdout)
         assert "Unsaved changes" not in pop_prev_clean and tmux_out("show-options", "-qv", "-t", "=pop-dirty-ws:", "@ide_quit_err") == ""
         run_cmd([ide_bin, "--quit", "pop-dirty-ws"], env=sess_env("gamma-ws", ws_gamma["ed"]), check=True)
@@ -4229,7 +4270,7 @@ try:
     os.makedirs(f09_fb_dir, exist_ok=True)
     mock_claude_dir = os.path.join(root, "mock_claude_bin")
     os.makedirs(mock_claude_dir, exist_ok=True)
-    for sys_tool in ("tmux", "bash", "sh", "zsh", "python3", "env", "sleep"):
+    for sys_tool in ("tmux", "bash", "sh", "zsh", "python3", "env", "sleep", "mktemp", "rm", "ps"):
         real_t = shutil.which(sys_tool)
         if real_t and not os.path.exists(os.path.join(mock_claude_dir, sys_tool)):
             os.symlink(real_t, os.path.join(mock_claude_dir, sys_tool))
@@ -4324,6 +4365,68 @@ try:
         f"even trailing backslash in .git/config corrupted remote URL: {open(browser_log, encoding='utf-8').read()!r}"
     )
 
+    # (10i) tmux <= 3.4 utf8_stravis C0-octal escaping regression guard:
+    # Older tmux releases (e.g. Ubuntu 22.04/24.04 tmux 3.2a/3.4) escape non-tab/newline C0 control
+    # characters (< 0x20 except \t and \n) in display-message / list-* format strings as octal \037.
+    # Ensure bin/ide uses printable/tab-based _TMUX_SEP and survives C0-octal-escaped tmux format output
+    # even when @ide_workdir contains literal tab characters.
+    ide_full_src = open(real_ide_path, encoding="utf-8").read()
+    assert '_TMUX_SEP = "\\t__IDE_SEP__\\t"' in ide_full_src, "missing printable/tab _TMUX_SEP delimiter in bin/ide"
+    real_tmux_bin = shutil.which("tmux")
+    assert real_tmux_bin, "tmux binary not found on PATH"
+    tmux34_dir = os.path.join(root, "tmux34_compat_bin")
+    os.makedirs(tmux34_dir, exist_ok=True)
+    tmux34_hits = os.path.join(root, "tmux34_hits.log")
+    tmux34_wrap = os.path.join(tmux34_dir, "tmux")
+    with open(tmux34_wrap, "w", encoding="utf-8") as twf:
+        twf.write(
+            "#!/usr/bin/env python3\n"
+            "import subprocess, sys\n"
+            f"REAL_TMUX = {real_tmux_bin!r}\n"
+            f"HIT_LOG = {tmux34_hits!r}\n"
+            "FMT_CMDS = {'display-message', 'display', 'list-sessions', 'ls', 'list-panes', 'lsp', 'list-clients', 'lsc', 'list-windows', 'lsw'}\n"
+            "r = subprocess.run([REAL_TMUX, *sys.argv[1:]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)\n"
+            "out = r.stdout\n"
+            "if any(a in FMT_CMDS for a in sys.argv[1:]):\n"
+            "    with open(HIT_LOG, 'a', encoding='utf-8') as hf:\n"
+            "        hf.write('1\\n')\n"
+            "    escaped = bytearray()\n"
+            "    for b in out:\n"
+            "        if b < 0x20 and b not in (0x09, 0x0a):\n"
+            "            escaped.extend(f'\\\\{b:03o}'.encode('ascii'))\n"
+            "        else:\n"
+            "            escaped.append(b)\n"
+            "    out = bytes(escaped)\n"
+            "sys.stdout.buffer.write(out)\n"
+            "sys.stderr.buffer.write(r.stderr)\n"
+            "sys.exit(r.returncode)\n"
+        )
+    os.chmod(tmux34_wrap, 0o755)
+    t34_path = f"{tmux34_dir}:{base_env['PATH']}"
+    env_t34_ed = {**sess_env("beta-ws", ws_beta["ed"]), "PATH": t34_path}
+    t34_plain = run_cmd([ide_bin, "--list", "--plain"], env=env_t34_ed, check=True).stdout.splitlines()
+    assert t34_plain and t34_plain[0] == "beta-ws" and {"alpha-ws", "beta-ws", "gamma-ws"}.issubset(set(t34_plain)), (
+        f"tmux 3.4 C0-octal escaping broke current_ide_session / --list --plain: {t34_plain!r}"
+    )
+    t34_list = run_cmd([ide_bin, "--list"], env=env_t34_ed, check=True).stdout
+    assert "feat/tab-bs@91" in t34_list and "beta-ws" in t34_list, f"tmux 3.4 C0-octal escaping broke --list with tab path: {t34_list!r}"
+    panes_before_t34 = tmux_out("list-panes", "-t", "=beta-ws:", "-F", "#{pane_id}").splitlines()
+    tmux("select-pane", "-t", ws_beta["ed"], check=True)
+    run_cmd([ide_bin, "--toggle", "beta-ws"], env=env_t34_ed, check=True)
+    assert tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{@ide_role}") == "ai", "tmux 3.4 C0-octal escaping broke --toggle -> ai"
+    run_cmd([ide_bin, "--toggle", "beta-ws"], env={**sess_env("beta-ws", ws_beta["ai"]), "PATH": t34_path}, check=True)
+    assert tmux_out("display-message", "-p", "-t", "=beta-ws:", "#{@ide_role}") == "editor", "tmux 3.4 C0-octal escaping broke --toggle -> editor"
+    panes_after_t34 = tmux_out("list-panes", "-t", "=beta-ws:", "-F", "#{pane_id}").splitlines()
+    assert panes_after_t34 == panes_before_t34, f"tmux 3.4 C0-octal escaping spawned extra panes during --toggle: {panes_before_t34} -> {panes_after_t34}"
+    assert os.path.isfile(tmux34_hits) and len(open(tmux34_hits, encoding="utf-8").read().splitlines()) >= 4, "tmux34_wrap shim did not intercept tmux format commands!"
+
+    # Also verify dotfiles/.tmux.conf preserves status-bar click fallback when #{mouse_status_range} is empty (tmux < 3.4, e.g. 3.2a/3.3a)
+    tmux_conf_txt = open(tmux_conf_src, encoding="utf-8").read()
+    for status_ev in ("MouseDown1Status", "DoubleClick1Status", "TripleClick1Status"):
+        assert re.search(rf"bind -n {status_ev}\b.*mouse_status_range\}},.*--status-click", tmux_conf_txt), (
+            f"missing tmux < 3.4 empty mouse_status_range --status-click fallback on {status_ev}"
+        )
+
     print("ALL_FLEET_OK")
 finally:
     for mfd in (client2_mfd, client_mfd):
@@ -4342,6 +4445,21 @@ finally:
                     cproc.kill()
                 except Exception:
                     pass
+    try:
+        if xdg_run and os.path.isdir(xdg_run) and shutil.which("nvim"):
+            for fn in os.listdir(xdg_run):
+                if fn.endswith(".sock"):
+                    sp = os.path.join(xdg_run, fn)
+                    subprocess.run(
+                        ["nvim", "--headless", "--server", sp, "--remote-send", "<C-\\><C-n><Cmd>qall!<CR>"],
+                        env=base_env,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=2,
+                        check=False,
+                    )
+    except Exception:
+        pass
     try:
         subprocess.run(
             ["tmux", "kill-server"],
