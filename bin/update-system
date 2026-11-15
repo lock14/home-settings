@@ -417,6 +417,22 @@ fi
 if [ "$WITH_DEV" = true ]; then
     log_header "Developer Toolchains & Runtimes"
 
+    _prepend_existing_dev_paths() {
+        local _elan_bin="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}/bin"
+        local _mise_shims="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims"
+        local _upd_dir=""
+        for _upd_dir in "$HOME/.local/bin" "$_mise_shims" "$_elan_bin"; do
+            if [ -d "$_upd_dir" ]; then
+                case ":$PATH:" in
+                    *":$_upd_dir:"*) ;;
+                    *) PATH="$_upd_dir:$PATH" ;;
+                esac
+            fi
+        done
+        export PATH
+    }
+    _prepend_existing_dev_paths
+
     # Mise polyglot toolchains
     if command -v mise >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
         log_step "Updating Mise plugins and toolchain runtimes..."
@@ -426,6 +442,7 @@ if [ "$WITH_DEV" = true ]; then
             log_step "Pruning old Mise toolchain versions..."
             run_cmd mise prune -y
         fi
+        _prepend_existing_dev_paths
         log_success "Mise toolchains updated."
     fi
 
@@ -465,6 +482,50 @@ if [ "$WITH_DEV" = true ]; then
             done
         fi
         log_success "Oh-My-Zsh updated."
+    fi
+
+    # Refresh Zsh CLI completions if managed completions directory is present
+    completions_dir="$HOME/.zsh/completions"
+    if [ -d "$completions_dir" ]; then
+        log_step "Refreshing CLI tab completions in $completions_dir..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "  [DryRun] Refresh CLI tab completions in $completions_dir"
+        else
+            refresh_zsh_completion() {
+                local target="$1"
+                shift
+                local tmp_comp="${target}.tmp.$$" first_line=""
+                if MISE_NOT_FOUND_AUTO_INSTALL=false "$@" > "$tmp_comp" 2>/dev/null && [ -s "$tmp_comp" ] && IFS= read -r first_line < "$tmp_comp" && [[ "$first_line" == \#* ]]; then
+                    mv -f "$tmp_comp" "$target"
+                else
+                    rm -f "$tmp_comp"
+                fi
+            }
+            if command -v gh >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_gh" gh completion -s zsh; fi
+            if command -v kubectl >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_kubectl" kubectl completion zsh; fi
+            if command -v helm >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_helm" helm completion zsh; fi
+            if command -v elan >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_elan" elan completions zsh; fi
+            if command -v mise >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_mise" mise completion zsh; fi
+            if command -v delta >/dev/null 2>&1; then BAT_THEME="" refresh_zsh_completion "$completions_dir/_delta" delta --generate-completion zsh; fi
+            if command -v bat >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_bat" bat --completion zsh; fi
+            if command -v yq >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_yq" yq shell-completion zsh; fi
+            if command -v glow >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_glow" glow completion zsh; fi
+            if command -v rustup >/dev/null 2>&1; then
+                refresh_zsh_completion "$completions_dir/_rustup" rustup completions zsh
+                if command -v cargo >/dev/null 2>&1; then
+                    refresh_zsh_completion "$completions_dir/_cargo" rustup completions zsh cargo
+                fi
+            elif command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
+                _rustc_sysroot="$(MISE_NOT_FOUND_AUTO_INSTALL=false rustc --print sysroot 2>/dev/null || true)"
+                if [ -n "$_rustc_sysroot" ] && [ -s "$_rustc_sysroot/share/zsh/site-functions/_cargo" ]; then
+                    cp -f "$_rustc_sysroot/share/zsh/site-functions/_cargo" "$completions_dir/_cargo.tmp.$$"
+                    mv -f "$completions_dir/_cargo.tmp.$$" "$completions_dir/_cargo"
+                fi
+                unset _rustc_sysroot
+            fi
+            if command -v tree-sitter >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_tree-sitter" tree-sitter complete --shell zsh; fi
+        fi
+        log_success "CLI tab completions refreshed."
     fi
 fi
 

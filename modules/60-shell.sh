@@ -14,6 +14,7 @@ REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
 
 OS="${OS:-$(detect_os)}"
 DRY_RUN="${DRY_RUN:-false}"
+SKIP_TOOLS="${SKIP_TOOLS:-false}"
 SKIP_ZSH="${SKIP_ZSH:-false}"
 SKIP_BASH="${SKIP_BASH:-false}"
 SKIP_COMPLETIONS="${SKIP_COMPLETIONS:-false}"
@@ -89,7 +90,7 @@ if [ "$SKIP_BASH" = false ]; then
     fi
 fi
 
-# CLI Completions (gh, kubectl, helm, elan)
+# CLI Completions (gh, kubectl, helm, elan, mise, delta, bat, yq, glow, rustup, cargo, tree-sitter)
 if [ "$SKIP_COMPLETIONS" = false ]; then
     COMPLETIONS_DIR="$HOME/.zsh/completions"
     if [ "$DRY_RUN" = true ]; then
@@ -99,18 +100,46 @@ if [ "$SKIP_COMPLETIONS" = false ]; then
         gen_zsh_completion() {
             local target="$1"
             shift
-            local tmp_comp="${target}.tmp.$$"
-            if "$@" > "$tmp_comp" && [ -s "$tmp_comp" ]; then
+            local tmp_comp="${target}.tmp.$$" first_line=""
+            if "$@" > "$tmp_comp" && [ -s "$tmp_comp" ] && IFS= read -r first_line < "$tmp_comp" && [[ "$first_line" == \#* ]]; then
                 mv -f "$tmp_comp" "$target"
             else
                 rm -f "$tmp_comp"
                 return 1
             fi
         }
-        if command -v gh &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_gh" gh completion -s zsh; fi
-        if command -v kubectl &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_kubectl" kubectl completion zsh; fi
-        if command -v helm &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_helm" helm completion zsh; fi
-        if command -v elan &>/dev/null; then gen_zsh_completion "$COMPLETIONS_DIR/_elan" elan completions zsh; fi
+        gen_tool_zsh_completion() {
+            if [ "$SKIP_TOOLS" = true ]; then
+                MISE_TRUSTED_CONFIG_PATHS="$REPO_DIR/.mise.toml${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}" \
+                MISE_NOT_FOUND_AUTO_INSTALL=false \
+                    gen_zsh_completion "$@" 2>/dev/null || true
+            else
+                gen_zsh_completion "$@"
+            fi
+        }
+        if command -v gh &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_gh" gh completion -s zsh; fi
+        if command -v kubectl &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_kubectl" kubectl completion zsh; fi
+        if command -v helm &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_helm" helm completion zsh; fi
+        if command -v elan &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_elan" elan completions zsh; fi
+        if command -v mise &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_mise" mise completion zsh; fi
+        if command -v delta &>/dev/null; then BAT_THEME="" gen_tool_zsh_completion "$COMPLETIONS_DIR/_delta" delta --generate-completion zsh; fi
+        if command -v bat &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_bat" bat --completion zsh; fi
+        if command -v yq &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_yq" yq shell-completion zsh; fi
+        if command -v glow &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_glow" glow completion zsh; fi
+        if command -v rustup &>/dev/null; then
+            gen_tool_zsh_completion "$COMPLETIONS_DIR/_rustup" rustup completions zsh
+            if command -v cargo &>/dev/null; then
+                gen_tool_zsh_completion "$COMPLETIONS_DIR/_cargo" rustup completions zsh cargo
+            fi
+        elif command -v cargo &>/dev/null && command -v rustc &>/dev/null; then
+            _rustc_sysroot="$(MISE_TRUSTED_CONFIG_PATHS="$REPO_DIR/.mise.toml${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}" MISE_NOT_FOUND_AUTO_INSTALL=false rustc --print sysroot 2>/dev/null || true)"
+            if [ -n "$_rustc_sysroot" ] && [ -s "$_rustc_sysroot/share/zsh/site-functions/_cargo" ]; then
+                cp -f "$_rustc_sysroot/share/zsh/site-functions/_cargo" "$COMPLETIONS_DIR/_cargo.tmp.$$"
+                mv -f "$COMPLETIONS_DIR/_cargo.tmp.$$" "$COMPLETIONS_DIR/_cargo"
+            fi
+            unset _rustc_sysroot
+        fi
+        if command -v tree-sitter &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_tree-sitter" tree-sitter complete --shell zsh; fi
     fi
 fi
 

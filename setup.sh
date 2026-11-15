@@ -422,7 +422,12 @@ if [ "$DRY_RUN" = true ]; then
     echo "Mode      : DRY RUN (preview only, no modifications)"
 fi
 echo "====================================================="
-export PATH="$HOME/.local/bin:$PATH"
+export ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}"
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. System Provisioning (OS packages, Database, Chrome, Apps)
@@ -457,6 +462,16 @@ if [ "$SKIP_USER" = false ]; then
     if [ "$SKIP_TOOLS" = false ]; then
         "$SCRIPT_DIR/modules/40-mise.sh"
     fi
+
+    # Expose Mise shims and Elan toolchain binaries on PATH for shell completion generation
+    for _setup_path_dir in "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" "$ELAN_HOME/bin"; do
+        case ":$PATH:" in
+            *":$_setup_path_dir:"*) ;;
+            *) PATH="$_setup_path_dir:$PATH" ;;
+        esac
+    done
+    unset _setup_path_dir
+    export PATH
 
     # Shell environment (Zsh, Bash, Completions)
     "$SCRIPT_DIR/modules/60-shell.sh"

@@ -23,12 +23,17 @@ fi
 
 if command -v vim.tiny >/dev/null 2>&1; then
     TINY_ERR="$(mktemp)"
-    if vim.tiny -Nu "$SCRIPT_DIR/dotfiles/.vimrc" -i NONE -es -c "qall!" </dev/null >/dev/null 2>"$TINY_ERR" && [ ! -s "$TINY_ERR" ]; then
-        pass "dotfiles/.vimrc loads cleanly on minimal server vim.tiny (-eval) with zero E319 errors"
+    TINY_SAVE="$(mktemp)"
+    printf '    tiny line\n' > "$TINY_SAVE"
+    if vim.tiny -Nu "$SCRIPT_DIR/dotfiles/.vimrc" -es -V1 -c "q" </dev/null >/dev/null 2>"$TINY_ERR" && \
+       [ ! -s "$TINY_ERR" ] && \
+       vim.tiny -Nu "$SCRIPT_DIR/dotfiles/.vimrc" -i NONE -es -c "normal \$a!" -c "normal \$ w" -c "normal \$ h" -c "qall!" "$TINY_SAVE" </dev/null >/dev/null 2>&1 && \
+       grep -qxF "    tiny line!" "$TINY_SAVE"; then
+        pass "dotfiles/.vimrc loads cleanly on minimal server vim.tiny (-eval) with zero E319 errors and working <Home>, <Space>w, and <Space>h"
     else
         fail "dotfiles/.vimrc vim.tiny (-eval)" "vim.tiny failed or emitted errors: $(tr '\n' ' ' < "$TINY_ERR")"
     fi
-    rm -f "$TINY_ERR"
+    rm -f "$TINY_ERR" "$TINY_SAVE"
 fi
 
 if ! grep -E '^highlight Diff[A-Za-z]+.*[ \t]+$' "$SCRIPT_DIR/dotfiles/.vimrc" >/dev/null 2>&1; then
@@ -399,13 +404,164 @@ else
 fi
 rm -rf "$VIM_STANDALONE_TMP"
 
-# Test 4: Verify Home key mapping, Netrw project tree sidebar, and TmuxNavigate in .vimrc
+# Test 4: Verify Smart-Home toggle, <leader>w / <leader>h, Netrw project tree sidebar, and TmuxNavigate in .vimrc
 echo -e "\n[4/6] Testing key mappings and hybrid IDE navigation..."
-check_option "maparg('<Home>', 'n') == '^'" "Normal mode <Home> mapped to ^"
-check_option "maparg('<Home>', 'i') == '<Esc>^i'" "Insert mode <Home> mapped to <Esc>^i"
+check_option "maparg('<Home>', 'n') =~# 'SmartHomeExpr' && maparg('<Home>', 'v') =~# 'SmartHomeExpr' && maparg('<Home>', 'x') =~# 'SmartHomeExpr' && maparg('<Home>', 's') =~# 'SmartHomeExpr' && maparg('<Home>', 'o') =~# 'SmartHomeExpr'" "Normal, visual, select, and operator-pending <Home> mapped to s:SmartHomeExpr()"
+check_option "maparg('<Home>', 'i') =~# 'SmartHomeInsert'" "Insert mode <Home> mapped to s:SmartHomeInsert()"
+check_option "maparg('<Space>w', 'n') ==# ':w<CR>' && maparg('<Space>h', 'n') ==# ':nohlsearch<CR>'" "Vim normal mode <leader>w (:w) and <leader>h (:nohlsearch) mapped with 1:1 Neovim parity"
 check_option "&mouse == 'a' && !empty(maparg('<M-c>', 'x')) && !empty(maparg('<M-v>', 'n')) && !empty(maparg('<M-v>', 'i')) && !empty(maparg('<M-v>', 'x'))" "Vim enables mouse=a and maps <M-c> (visual copy) and <M-v> (normal/insert/visual paste)"
 check_option "get(g:, 'netrw_banner', -1) == 0 && get(g:, 'netrw_liststyle', -1) == 3 && get(g:, 'netrw_browse_split', -1) == 4 && get(g:, 'netrw_winsize', -1) == 20" "Vim Netrw configured as tree sidebar (netrw_liststyle=3, browse_split=4, winsize=20)"
 check_option "maparg('<Space>e', 'n') =~# 'Lexplore' && maparg('<C-h>', 'n') ==? '<C-w>h' && maparg('<M-h>', 'n') =~# 'TmuxNavigate' && maparg('<M-h>', 'v') =~# 'TmuxNavigate' && maparg('<M-h>', 'i') =~# 'TmuxNavigate' && maparg('<X1Mouse>', 'n') ==? '<C-O>' && (maparg('<X2Mouse>', 'n') ==? '<C-I>' || maparg('<X2Mouse>', 'n') ==? '<Tab>') && maparg('<X1Mouse>', 'i') =~? '<C-O><C-O>' && (maparg('<X2Mouse>', 'i') =~? '<C-O><C-I>' || maparg('<X2Mouse>', 'i') =~? '<C-O><Tab>')" "Vim <leader>e mapped to :Lexplore, <C-h/j/k/l> kept internal to Vim splits (<C-w>h/j/k/l), <M-h/j/k/l> mapped to s:TmuxNavigate, and <X1Mouse>/<X2Mouse> mapped to jumplist Back/Forward"
+
+VIM_KEYMAP_TMP="$(mktemp -d)"
+cat > "$VIM_KEYMAP_TMP/verify_keymaps.vim" <<'EOF'
+function! s:VerifyKeymaps() abort
+    let l:errs = []
+
+    " 1. <leader>w saves buffer and <leader>h clears search highlight
+    let l:save_path = expand('$VIM_KEYMAP_TMP/saved.txt')
+    execute 'edit ' . fnameescape(l:save_path)
+    call setline(1, '    hello world')
+    call feedkeys(" \<Esc>", 'tx')
+    call feedkeys(" w", 'tx')
+    if &modified || !filereadable(l:save_path) || readfile(l:save_path) !=# ['    hello world']
+        call add(l:errs, 'leader-w-failed:' . &modified)
+    endif
+    set hlsearch
+    let @/ = 'hello'
+    call feedkeys("/hello\<CR>", 'tx')
+    if !v:hlsearch
+        call add(l:errs, 'hlsearch-not-active')
+    endif
+    call feedkeys(" h", 'tx')
+    if v:hlsearch
+        call add(l:errs, 'leader-h-did-not-clear-hlsearch')
+    endif
+
+    " 2. Normal mode Smart-Home toggle (indented, unindented, whitespace-only, empty, UTF-8)
+    enew!
+    call setline(1, ['    hello world', 'hello', '    ', '', '    λ = 1'])
+    call cursor(1, 11)
+    call feedkeys("\<Home>", 'tx')
+    let l:n1 = col('.')
+    call feedkeys("\<Home>", 'tx')
+    let l:n2 = col('.')
+    call feedkeys("\<Home>", 'tx')
+    let l:n3 = col('.')
+    if [l:n1, l:n2, l:n3] != [5, 1, 5]
+        call add(l:errs, 'normal-indented:' . string([l:n1, l:n2, l:n3]))
+    endif
+
+    call cursor(2, 4)
+    call feedkeys("\<Home>", 'tx')
+    let l:u1 = col('.')
+    call feedkeys("\<Home>", 'tx')
+    let l:u2 = col('.')
+    if [l:u1, l:u2] != [1, 1]
+        call add(l:errs, 'normal-unindented:' . string([l:u1, l:u2]))
+    endif
+
+    call cursor(3, 1)
+    call feedkeys("\<Home>", 'tx')
+    let l:ws1 = col('.')
+    call feedkeys("\<Home>", 'tx')
+    let l:ws2 = col('.')
+    if [l:ws1, l:ws2] != [4, 1]
+        call add(l:errs, 'normal-wsonly:' . string([l:ws1, l:ws2]))
+    endif
+
+    call cursor(4, 1)
+    call feedkeys("\<Home>", 'tx')
+    if col('.') != 1 || line('.') != 4
+        call add(l:errs, 'normal-empty:' . line('.') . ':' . col('.'))
+    endif
+
+    call cursor(5, 9)
+    call feedkeys("\<Home>", 'tx')
+    let l:utf1 = col('.')
+    call feedkeys("\<Home>", 'tx')
+    let l:utf2 = col('.')
+    call feedkeys("\<Home>", 'tx')
+    let l:utf3 = col('.')
+    if [l:utf1, l:utf2, l:utf3] != [5, 1, 5]
+        call add(l:errs, 'normal-utf8:' . string([l:utf1, l:utf2, l:utf3]))
+    endif
+
+    " 3. Visual, Select (gh), and Operator-pending (d<Home>) modes
+    enew!
+    call setline(1, '    hello world')
+    call cursor(1, 11)
+    call feedkeys("v\<Home>d", 'tx')
+    if getline(1) !=# '    orld'
+        call add(l:errs, 'visual-1:' . getline(1))
+    endif
+    call setline(1, '    hello world')
+    call cursor(1, 11)
+    call feedkeys("v\<Home>\<Home>d", 'tx')
+    if getline(1) !=# 'orld'
+        call add(l:errs, 'visual-2:' . getline(1))
+    endif
+    call setline(1, '    hello world')
+    call cursor(1, 11)
+    call feedkeys("v\<Home>\<Home>\<Home>d", 'tx')
+    if getline(1) !=# '    orld'
+        call add(l:errs, 'visual-3:' . getline(1))
+    endif
+
+    call setline(1, '    hello world')
+    call cursor(1, 11)
+    call feedkeys("gh\<Home>\<Esc>", 'tx')
+    if getline(1) !=# '    hello world' || col('.') != 5
+        call add(l:errs, 'select-mode:' . getline(1) . '@' . col('.'))
+    endif
+
+    call setline(1, '    hello world')
+    call cursor(1, 11)
+    call feedkeys("d\<Home>", 'tx')
+    let l:op1 = getline(1)
+    call cursor(1, 5)
+    call feedkeys("d\<Home>", 'tx')
+    let l:op2 = getline(1)
+    if l:op1 !=# '    world' || l:op2 !=# 'world'
+        call add(l:errs, 'op-pending:' . l:op1 . '|' . l:op2)
+    endif
+
+    " 4. Insert mode Smart-Home toggle (indented, whitespace-only, empty)
+    enew!
+    call setline(1, ['    hello', '    ', ''])
+    call cursor(1, 9)
+    call feedkeys("A\<Home>X\<Home>Y\<Home>\<Home>Z\<Esc>", 'tx')
+    if getline(1) !=# 'Z    YXhello'
+        call add(l:errs, 'insert-indented:' . getline(1))
+    endif
+    call cursor(2, 4)
+    call feedkeys("A\<Home>A\<Esc>", 'tx')
+    if getline(2) !=# 'A    '
+        call add(l:errs, 'insert-ws-to-col1:' . getline(2))
+    endif
+    call setline(2, '    ')
+    call cursor(2, 1)
+    call feedkeys("i\<Home>B\<Esc>", 'tx')
+    if getline(2) !=# '    B'
+        call add(l:errs, 'insert-ws-to-end:' . getline(2))
+    endif
+    call cursor(3, 1)
+    call feedkeys("i\<Home>C\<Esc>", 'tx')
+    if getline(3) !=# 'C'
+        call add(l:errs, 'insert-empty:' . getline(3))
+    endif
+
+    call writefile(l:errs, expand('$VIM_KEYMAP_TMP/errs.out'))
+endfunction
+call s:VerifyKeymaps()
+qall!
+EOF
+if env VIM_KEYMAP_TMP="$VIM_KEYMAP_TMP" vim -Nu "$SCRIPT_DIR/dotfiles/.vimrc" -i NONE -es -S "$VIM_KEYMAP_TMP/verify_keymaps.vim" </dev/null >/dev/null 2>&1 && [ -f "$VIM_KEYMAP_TMP/errs.out" ] && [ ! -s "$VIM_KEYMAP_TMP/errs.out" ]; then
+    pass "Vim .vimrc executes <leader>w, <leader>h, and Smart-Home toggle across normal, visual, select, operator-pending, and insert modes (indented, unindented, whitespace-only, empty, and UTF-8 lines)"
+else
+    fail "Vim .vimrc <leader>w, <leader>h, and Smart-Home execution" "Errors: $(tr '\n' ' ' < "$VIM_KEYMAP_TMP/errs.out" 2>/dev/null || echo 'vim failed to write output')"
+fi
+rm -rf "$VIM_KEYMAP_TMP"
 
 # Test 5: Verify fallback Vim zero-external-dependency architecture
 echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."
@@ -434,8 +590,8 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'map("n", "<C-h>", internal_split_nav("h")' "$NVIM_CONFIG" && \
        ! grep -q 'map({ "n", "t" }, "<C-h>"' "$NVIM_CONFIG" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "$NVIM_CONFIG" && \
-       grep -q 'map({ "n", "v", "o" }, "<Home>", "^"' "$NVIM_CONFIG" && \
-       grep -q 'map("i", "<Home>", "<Esc>^i"' "$NVIM_CONFIG" && \
+       grep -Fq 'map({ "n", "v", "o" }, "<Home>", smart_home_expr' "$NVIM_CONFIG" && \
+       grep -Fq 'map("i", "<Home>", function()' "$NVIM_CONFIG" && \
        grep -Fq 'map({ "n", "v" }, "<X1Mouse>", "<C-o>"' "$NVIM_CONFIG" && \
        grep -Fq 'map("i", "<X1Mouse>", "<C-\\><C-o><C-o>"' "$NVIM_CONFIG" && \
        grep -Fq 'map({ "n", "v" }, "<X2Mouse>", "<C-i>"' "$NVIM_CONFIG" && \
@@ -775,13 +931,15 @@ if [ -f "$NVIM_CONFIG" ]; then
 
     if grep -q '"clangd"' "$NVIM_CONFIG" && \
        grep -q '"rust_analyzer"' "$NVIM_CONFIG" && \
+       grep -q '"ts_ls"' "$NVIM_CONFIG" && \
+       grep -q '"typescript-language-server"' "$NVIM_CONFIG" && \
        grep -q '"lua_ls"' "$NVIM_CONFIG" && \
        grep -q '"bashls"' "$NVIM_CONFIG" && \
        grep -q '"jdtls"' "$NVIM_CONFIG" && \
        grep -q 'nvim-jdtls' "$NVIM_CONFIG"; then
-        pass "Neovim configures Polyglot LSPs (clangd, rust_analyzer, gopls, pyright, lua_ls, bashls, jdtls) in init.lua"
+        pass "Neovim configures Polyglot LSPs (clangd, rust_analyzer, gopls, pyright, ts_ls, lua_ls, bashls, jdtls) in init.lua"
     else
-        fail "Neovim polyglot LSPs" "Missing expected polyglot LSPs in dotfiles/.config/nvim/init.lua"
+        fail "Neovim polyglot LSPs" "Missing expected polyglot LSPs (including ts_ls) in dotfiles/.config/nvim/init.lua"
     fi
 
     LAZY_LOCK="$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json"
@@ -2508,6 +2666,352 @@ EOF
             pass "Neovim init.lua preserves Normal <leader>a 0ms toggle, dispatches Visual <leader>a, <leader>il, and <leader>id context to AI, and wires <leader>s/<M-s> session switcher and <M-S> next-attention across n/i/v/t modes"
         else
             fail "Neovim IDE session switcher & context dispatch keymaps" "Expected '$EXPECTED_NVIM_FLEET', got '$NVIM_FLEET_OUT'"
+        fi
+
+        # Verify Neovim Smart-Home toggle (n/v/s/o/i, soft-wrap, visual-block tabs) and live JSON-RPC ts_ls LspAttach
+        NVIM_PARITY_DIR="$(mktemp -d)"
+        mkdir -p "$NVIM_PARITY_DIR/bin" "$NVIM_PARITY_DIR/proj"
+        printf '{"compilerOptions":{"strict":true}}\n' > "$NVIM_PARITY_DIR/proj/tsconfig.json"
+        printf 'export const App = (): string => "hello";\n' > "$NVIM_PARITY_DIR/proj/app.tsx"
+        if command -v python3 >/dev/null 2>&1; then
+            cat > "$NVIM_PARITY_DIR/bin/typescript-language-server" << 'EOF'
+#!/usr/bin/env python3
+import json, sys
+
+def read_msg():
+    headers = {}
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line in (b"\r\n", b"\n"):
+            break
+        k, v = line.decode("ascii", "replace").split(":", 1)
+        headers[k.strip().lower()] = v.strip()
+    n = int(headers.get("content-length", "0"))
+    body = sys.stdin.buffer.read(n)
+    return json.loads(body.decode("utf-8"))
+
+def send_msg(obj):
+    raw = json.dumps(obj).encode("utf-8")
+    sys.stdout.buffer.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii") + raw)
+    sys.stdout.buffer.flush()
+
+while True:
+    msg = read_msg()
+    if msg is None:
+        break
+    method = msg.get("method")
+    if method == "initialize":
+        send_msg({
+            "jsonrpc": "2.0",
+            "id": msg["id"],
+            "result": {
+                "capabilities": {
+                    "textDocumentSync": 1,
+                    "definitionProvider": True,
+                    "referencesProvider": True,
+                    "hoverProvider": True,
+                    "semanticTokensProvider": {"legend": {"tokenTypes": [], "tokenModifiers": []}, "full": True},
+                    "documentLinkProvider": {"resolveProvider": False},
+                }
+            },
+        })
+    elif method == "shutdown":
+        send_msg({"jsonrpc": "2.0", "id": msg["id"], "result": None})
+    elif method == "exit":
+        break
+EOF
+        else
+            printf '#!/bin/sh\nexit 0\n' > "$NVIM_PARITY_DIR/bin/typescript-language-server"
+        fi
+        chmod +x "$NVIM_PARITY_DIR/bin/typescript-language-server"
+        cat > "$NVIM_PARITY_DIR/parity_check.lua" << 'EOF'
+local function feed(keys)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "tx", false)
+end
+
+-- 1. ts_ls LSP registration, auto-enablement, and live LspAttach capability scrubbing
+local ts_cfg = vim.lsp and vim.lsp.config and vim.lsp.config.ts_ls or nil
+local fts = (ts_cfg and ts_cfg.filetypes) or {}
+local ts_ft_ok = vim.tbl_contains(fts, "typescript")
+    and vim.tbl_contains(fts, "javascript")
+    and vim.tbl_contains(fts, "typescriptreact")
+    and vim.tbl_contains(fts, "javascriptreact")
+local ts_en_ok = (vim.lsp and vim.lsp.is_enabled) and vim.lsp.is_enabled("ts_ls") or (ts_cfg ~= nil)
+local ts_attach_ok = true
+if vim.fn.executable("python3") == 1 and vim.lsp and vim.lsp.get_clients then
+    vim.cmd("edit " .. vim.fn.fnameescape(vim.env.NVIM_PARITY_DIR .. "/proj/app.tsx"))
+    local attached = vim.wait(3000, function()
+        local cl = vim.lsp.get_clients({ bufnr = 0, name = "ts_ls" })
+        return #cl > 0 and cl[1].initialized
+    end, 20)
+    local cl = vim.lsp.get_clients({ bufnr = 0, name = "ts_ls" })
+    local c = cl[1]
+    local caps_ok = (c ~= nil and c.server_capabilities.semanticTokensProvider == nil and c.server_capabilities.documentLinkProvider == nil)
+    local maps_ok = true
+    for _, k in ipairs({ "gd", "gr", "K", "<Space>rn", "<Space>ca", "<Space>d" }) do
+        if vim.fn.maparg(k, "n", false, true).buffer ~= 1 then
+            maps_ok = false
+        end
+    end
+    ts_attach_ok = attached and caps_ok and maps_ok
+end
+
+-- 2. Normal mode Smart-Home toggle (indented, unindented, whitespace-only, empty, UTF-8, soft-wrap)
+vim.cmd("enew!")
+vim.wo.wrap = true
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello world", "hello", "    ", "", "    λ = 1", "    " .. string.rep("word ", 30) })
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+feed("<Home>")
+local n1 = vim.fn.col(".")
+feed("<Home>")
+local n2 = vim.fn.col(".")
+feed("<Home>")
+local n3 = vim.fn.col(".")
+
+vim.api.nvim_win_set_cursor(0, { 2, 3 })
+feed("<Home>")
+local u1 = vim.fn.col(".")
+feed("<Home>")
+local u2 = vim.fn.col(".")
+
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+feed("<Home>")
+local ws1 = vim.fn.col(".")
+feed("<Home>")
+local ws2 = vim.fn.col(".")
+
+vim.api.nvim_win_set_cursor(0, { 4, 0 })
+feed("<Home>")
+local emp_ok = (vim.fn.line(".") == 4 and vim.fn.col(".") == 1)
+
+vim.api.nvim_win_set_cursor(0, { 5, 8 })
+feed("<Home>")
+local utf1 = vim.fn.col(".")
+feed("<Home>")
+local utf2 = vim.fn.col(".")
+feed("<Home>")
+local utf3 = vim.fn.col(".")
+
+vim.api.nvim_win_set_cursor(0, { 6, 120 })
+feed("<Home>")
+local wrap1 = vim.fn.col(".")
+feed("<Home>")
+local wrap2 = vim.fn.col(".")
+
+local norm_ok = (n1 == 5 and n2 == 1 and n3 == 5)
+    and (u1 == 1 and u2 == 1)
+    and (ws1 == 4 and ws2 == 1)
+    and emp_ok
+    and (utf1 == 5 and utf2 == 1 and utf3 == 5)
+    and (wrap1 == 5 and wrap2 == 1)
+
+-- 3. Visual, Visual-block (<C-v> with tabs), Select (gh), and Operator-pending (d<Home>) modes
+vim.cmd("enew!")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello world" })
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+feed("v<Home>d")
+local v1 = vim.api.nvim_get_current_line()
+
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello world" })
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+feed("v<Home><Home>d")
+local v2 = vim.api.nvim_get_current_line()
+
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello world" })
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+feed("v<Home><Home><Home>d")
+local v3 = vim.api.nvim_get_current_line()
+
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "\thello", "\tworld" })
+vim.api.nvim_win_set_cursor(0, { 1, 4 })
+feed("<C-v>j<Home>d")
+local vb_ok = (vim.fn.getline(1) == "\to" and vim.fn.getline(2) == "\td")
+
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello world" })
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+feed("gh<Home><Esc>")
+local sel_ok = (vim.api.nvim_get_current_line() == "    hello world" and vim.fn.col(".") == 5)
+
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello world" })
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+feed("d<Home>")
+local op1 = vim.api.nvim_get_current_line()
+vim.api.nvim_win_set_cursor(0, { 1, 4 })
+feed("d<Home>")
+local op2 = vim.api.nvim_get_current_line()
+
+local vis_op_ok = (v1 == "    orld" and v2 == "orld" and v3 == "    orld" and vb_ok and sel_ok and op1 == "    world" and op2 == "world")
+
+-- 4. Insert mode Smart-Home toggle
+vim.cmd("enew!")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    hello", "    ", "" })
+vim.api.nvim_win_set_cursor(0, { 1, 8 })
+feed("A<Home>X<Home>Y<Home><Home>Z<Esc>")
+local ins1 = vim.api.nvim_get_current_line()
+
+vim.api.nvim_win_set_cursor(0, { 2, 3 })
+feed("A<Home>A<Esc>")
+local ins2 = vim.api.nvim_get_current_line()
+
+vim.api.nvim_buf_set_lines(0, 1, 2, false, { "    " })
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+feed("i<Home>B<Esc>")
+local ins3 = vim.api.nvim_get_current_line()
+
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+feed("i<Home>C<Esc>")
+local ins4 = vim.api.nvim_get_current_line()
+
+local ins_ok = (ins1 == "Z    YXhello" and ins2 == "A    " and ins3 == "    B" and ins4 == "C")
+
+io.write(table.concat({
+    "TSFT=" .. tostring(ts_ft_ok),
+    "TSEN=" .. tostring(ts_en_ok),
+    "TSAT=" .. tostring(ts_attach_ok),
+    "NORM=" .. tostring(norm_ok),
+    "VISOP=" .. tostring(vis_op_ok),
+    "INS=" .. tostring(ins_ok),
+}, "|"))
+EOF
+        NVIM_PARITY_OUT="$(export NVIM_PARITY_DIR; PATH="$NVIM_PARITY_DIR/bin:$PATH" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_PARITY_DIR/parity_check.lua" 2>/dev/null || true)"
+        rm -rf "$NVIM_PARITY_DIR"
+        if [ "$NVIM_PARITY_OUT" = "TSFT=true|TSEN=true|TSAT=true|NORM=true|VISOP=true|INS=true" ]; then
+            pass "Neovim init.lua registers, auto-enables, and attaches ts_ls (scrubbing semanticTokensProvider and documentLinkProvider) and executes Smart-Home toggle across normal, soft-wrap, visual, visual-block, select, operator-pending, and insert modes"
+        else
+            fail "Neovim ts_ls LSP & Smart-Home toggle" "Expected 'TSFT=true|TSEN=true|TSAT=true|NORM=true|VISOP=true|INS=true', got '$NVIM_PARITY_OUT'"
+        fi
+
+        if command -v python3 >/dev/null 2>&1; then
+            MASON_UI_OUT="$(NVIM_CONFIG_PATH="$NVIM_CONFIG" python3 - <<'PY'
+import fcntl
+import os
+import pty
+import shutil
+import struct
+import subprocess
+import tempfile
+import termios
+import time
+
+cfg_path = os.environ["NVIM_CONFIG_PATH"]
+mfd, sfd = pty.openpty()
+fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 20, 50, 0, 0))
+tmp_dir = tempfile.mkdtemp()
+proc = None
+try:
+    bin_dir = os.path.join(tmp_dir, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    npm_mock = os.path.join(bin_dir, "npm")
+    with open(npm_mock, "w", encoding="utf-8") as fh:
+        fh.write('#!/bin/sh\nif [ "$1" = "view" ] && [ "$3" = "dist-tags.latest" ]; then\n    printf "5.1.3\\n"\n    exit 0\nfi\nexit 1\n')
+    os.chmod(npm_mock, 0o755)
+    probe_lua = os.path.join(tmp_dir, "mason_ui_probe.lua")
+    with open(probe_lua, "w", encoding="utf-8") as fh:
+        fh.write("""
+_G.hs_mason_retried_ver = "none"
+local ok_n, notify = pcall(require, "mason-lspconfig.notify")
+if ok_n and type(notify) == "function" then
+    for i = 1, 6 do
+        notify("[mason-lspconfig.nvim] failed to install ts_ls_" .. i .. ". Installation logs are available in :Mason and :MasonLog", vim.log.levels.ERROR)
+    end
+end
+local ok_r, registry = pcall(require, "mason-registry")
+if ok_r and registry and registry.emit then
+    local uv = vim.uv or vim.loop
+    local t = uv.new_timer()
+    t:start(10, 0, function()
+        t:stop()
+        t:close()
+        pcall(function()
+            registry:emit("package:install:failed", {
+                name = "mock-fast-event-lsp",
+                install = function(_, opts)
+                    _G.hs_mason_retried_ver = tostring(opts and opts.version or "")
+                end,
+            })
+        end)
+    end)
+else
+    _G.hs_mason_retried_ver = "no-registry"
+end
+""")
+    sock = os.path.join(tmp_dir, "nvim-ui.sock")
+    env = dict(os.environ)
+    env["PATH"] = bin_dir + ":" + env.get("PATH", "")
+    env["NVIM_LOG_FILE"] = "/dev/null"
+    proc = subprocess.Popen(
+        ["nvim", "-i", "NONE", "-u", cfg_path, "--listen", sock],
+        stdin=sfd,
+        stdout=sfd,
+        stderr=sfd,
+        env=env,
+    )
+    ready = False
+    for _ in range(80):
+        if os.path.exists(sock):
+            r0 = subprocess.run(
+                ["nvim", "--headless", "--server", sock, "--remote-expr", "v:vim_did_enter"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=3,
+            )
+            if r0.returncode == 0 and r0.stdout.strip() == "1":
+                ready = True
+                break
+        time.sleep(0.05)
+    if not ready:
+        print("NOT_READY")
+    else:
+        subprocess.run(
+            ["nvim", "--headless", "--server", sock, "--remote-expr", f"execute('luafile {probe_lua}')"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=5,
+        )
+        deadline = time.monotonic() + 4.0
+        state = ""
+        while time.monotonic() < deadline:
+            r1 = subprocess.run(
+                ["nvim", "--headless", "--server", sock, "--remote-expr", "mode(1) . '|' . luaeval('tostring(_G.hs_mason_retried_ver)') . '|' . v:errmsg"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=3,
+            )
+            if r1.returncode == 0:
+                state = r1.stdout.strip()
+                if state.startswith("n|5.1.3|") or state.startswith("n|no-registry|"):
+                    break
+            time.sleep(0.1)
+        print(state)
+finally:
+    if proc is not None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            proc.kill()
+    os.close(mfd)
+    os.close(sfd)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+PY
+)"
+            if [[ "$MASON_UI_OUT" == "n|5.1.3|"* ]] || [[ "$MASON_UI_OUT" == "n|no-registry|"* ]]; then
+                if [[ "$MASON_UI_OUT" != *"E5560"* ]]; then
+                    pass "Neovim init.lua keeps narrow-PTY UI Mason error notifications non-blocking (zero hit-enter freeze) and retries failed npm installs asynchronously without fast-event E5560 errors"
+                else
+                    fail "Neovim Mason UI fast-event safety" "Unexpected E5560 error in '$MASON_UI_OUT'"
+                fi
+            else
+                fail "Neovim Mason UI non-blocking notify & retry" "Expected 'n|5.1.3|' (or 'n|no-registry|'), got '$MASON_UI_OUT'"
+            fi
         fi
 
         NVIM_ERR_TMP="$(mktemp -d)"

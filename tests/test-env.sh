@@ -257,15 +257,171 @@ STANDALONE_HOME=$(mktemp -d)
        alias gup >/dev/null 2>&1 && ! alias gfetch >/dev/null 2>&1 && \
        alias gprune >/dev/null 2>&1 && alias gpurge >/dev/null 2>&1 && \
        alias guser-branch >/dev/null 2>&1 && alias ll >/dev/null 2>&1 && \
-       alias ds >/dev/null 2>&1 && ! alias tealdeer >/dev/null 2>&1 && \
+       alias ds >/dev/null 2>&1 && alias tf >/dev/null 2>&1 && ! alias tealdeer >/dev/null 2>&1 && \
        alias ide2 >/dev/null 2>&1 && alias ide3 >/dev/null 2>&1 && \
        alias idek >/dev/null 2>&1 && alias qide >/dev/null 2>&1 && \
        alias update >/dev/null 2>&1 && alias grep >/dev/null 2>&1 && \
        declare -F gsync >/dev/null 2>&1 && declare -F v >/dev/null 2>&1 && \
-       declare -F icd >/dev/null 2>&1; then
-        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gup, gprune, gpurge, guser-branch), ds/IDE/update shortcuts, ls/grep aliases, gsync, icd(), and RPC-aware v() function"
+       declare -F icd >/dev/null 2>&1 && declare -F _terraform_bash_complete >/dev/null 2>&1; then
+        echo "PASS:Standalone .bashrc-addendum defines Git workflow aliases (gcommit, gamend, gup, gprune, gpurge, guser-branch), ds/tf/IDE/update shortcuts, ls/grep aliases, gsync, icd(), RPC-aware v(), and _terraform_bash_complete"
     else
-        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases, gsync, icd(), or v() function"
+        echo "FAIL:Standalone aliases/gsync:Missing expected standalone aliases (including tf), gsync, icd(), v(), or _terraform_bash_complete"
+    fi
+
+    # Test Bash terraform and tf tab completion (dynamic COMP_LINE/COMP_POINT, PTY space/slash/colon escaping, custom COMP_WORDBREAKS, Bash 3.2 fallback, and broken-shim/binary-absent fallback)
+    TF_COMP_DIR="$STANDALONE_HOME/tf_comp_test"
+    mkdir -p "$TF_COMP_DIR/bin" "$TF_COMP_DIR/broken_bin" "$TF_COMP_DIR/envs/prod/vars_sub" "$TF_COMP_DIR/my dir/sub" "$TF_COMP_DIR/a:b/sub" "$TF_COMP_DIR/dir=1"
+    touch "$TF_COMP_DIR/vars.tfvars" "$TF_COMP_DIR/prod vars.tfvars" "$TF_COMP_DIR/snap:1.tfplan" "$TF_COMP_DIR/envs/prod/sub vars.tfvars"
+    cat > "$TF_COMP_DIR/bin/terraform" <<'TFMOCK'
+#!/bin/sh
+case "${COMP_LINE:-}" in
+    "terraform pl") printf "plan\n" ;;
+    "terraform -chdir=envs pl") printf "plan\n" ;;
+    "terraform state ") printf "list\nmv\nrm\nshow\n" ;;
+    "terraform init -") printf "%s\n" "-upgrade" "-reconfigure" ;;
+esac
+TFMOCK
+    cat > "$TF_COMP_DIR/broken_bin/terraform" <<'TFBROKEN'
+#!/bin/sh
+[ "${MISE_NOT_FOUND_AUTO_INSTALL:-}" = "false" ] || exit 99
+exit 1
+TFBROKEN
+    chmod +x "$TF_COMP_DIR/bin/terraform" "$TF_COMP_DIR/broken_bin/terraform"
+    tf_reg="$(complete -p terraform tf 2>/dev/null || true)"
+    tf_c1="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; COMP_LINE="tf pl"; COMP_POINT=5; COMP_WORDS=(tf pl); COMP_CWORD=1; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c2="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf state ""); COMP_CWORD=2; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c2b="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf -chdir "=" envs pl); COMP_CWORD=4; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c3="$(cd "$TF_COMP_DIR" && PATH="/usr/bin:/bin" && COMP_WORDS=(tf -chdir "=" "envs/"); COMP_CWORD=3; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c4="$(cd "$TF_COMP_DIR" && PATH="/usr/bin:/bin" && COMP_WORDS=(terraform plan -var-file "=" "vars."); COMP_CWORD=4; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c5="$(PATH="/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf pl); COMP_CWORD=1; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c6="$(PATH="$TF_COMP_DIR/broken_bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf pl); COMP_CWORD=1; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c7="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf plan -o); COMP_CWORD=2; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c8="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf -chdir "=" envs plan -o); COMP_CWORD=5; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c9="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf apply -auto); COMP_CWORD=2; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c10="$(PATH="$TF_COMP_DIR/bin:/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf plan -- -o); COMP_CWORD=3; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]:-}")"
+    tf_c11="$(PATH="/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf apply -auto); COMP_CWORD=2; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c12="$(PATH="/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf providers mirror -lock-file "=" f); COMP_CWORD=5; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c13="$(PATH="/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf providers schema -var-); COMP_CWORD=3; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_c14="$(PATH="/usr/bin:/bin"; unset COMP_LINE COMP_POINT; COMP_WORDS=(tf providers envs/prod -t); COMP_CWORD=3; _terraform_bash_complete; printf '%s' "${COMPREPLY[*]}")"
+    tf_pty_ok="ok"
+    if command -v python3 >/dev/null 2>&1; then
+        tf_pty_ok="$(TF_COMP_DIR="$TF_COMP_DIR" BASHRC_ADD="$SCRIPT_DIR/dotfiles/.bashrc-addendum" python3 - <<'PY'
+import os, pty, select, subprocess, time
+
+wdir = os.environ["TF_COMP_DIR"]
+brc = os.environ["BASHRC_ADD"]
+rc_file = os.path.join(wdir, "rc.bash")
+with open(rc_file, "w", encoding="utf-8") as fh:
+    fh.write(f"source {brc!r}\nPS1='READY> '\nPROMPT_COMMAND=''\nbind 'set enable-bracketed-paste off'\n")
+
+def read_until(fd, marker, timeout=3.0):
+    buf = ""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        r, _, _ = select.select([fd], [], [], 0.03)
+        if r:
+            chunk = os.read(fd, 8192).decode("utf-8", "replace")
+            if not chunk:
+                break
+            buf += chunk
+            if marker in buf:
+                break
+    return buf
+
+def run_pty_group(extra_env, cases, init_cmd=""):
+    mfd, sfd = pty.openpty()
+    proc = subprocess.Popen(
+        ["bash", "--rcfile", rc_file, "-i"],
+        stdin=sfd,
+        stdout=sfd,
+        stderr=sfd,
+        cwd=wdir,
+        env={"HOME": wdir, "PATH": f"{wdir}/bin:/usr/bin:/bin", "TERM": "xterm-256color", **extra_env},
+    )
+    os.close(sfd)
+    errs = []
+    try:
+        read_until(mfd, "READY> ")
+        if init_cmd:
+            os.write(mfd, init_cmd.encode() + b"\n")
+            read_until(mfd, "\r\nREADY> ")
+        for typed, expected in cases:
+            os.write(mfd, typed.encode() + b"<<<END\x15\n")
+            out = read_until(mfd, "\r\nREADY> ")
+            if expected not in out:
+                errs.append(f"{expected!r} not in {out!r}")
+        os.write(mfd, b"exit\n")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+        os.close(mfd)
+    return errs
+
+bad = []
+bad.extend(run_pty_group({}, [
+    ("tf -chdir=en\t", "tf -chdir=envs/<<<END"),
+    ("tf -chdir=my\t", "tf -chdir=my\\ dir/<<<END"),
+    ("tf -chdir=a:\t", "tf -chdir=a:b/<<<END"),
+    ("tf -chdir=a:b/\t", "tf -chdir=a:b/sub/<<<END"),
+    ("tf plan -out=snap:\t", "tf plan -out=snap:1.tfplan <<<END"),
+    ("tf plan -var-file=prod\t", "tf plan -var-file=prod\\ vars.tfvars <<<END"),
+    ("tf -chdir=envs/prod plan -var-file=sub\t", "tf -chdir=envs/prod plan -var-file=sub\\ vars.tfvars <<<END"),
+    ("tf -chdir=envs/prod plan -var-file=vars\t", "tf -chdir=envs/prod plan -var-file=vars_sub/<<<END"),
+    ("tf plan -o\t", "tf plan -out=<<<END"),
+    ("tf -chdir=envs/prod plan -o\t", "tf -chdir=envs/prod plan -out=<<<END"),
+    ("tf -chdir=a:b plan -o\t", "tf -chdir=a:b plan -out=<<<END"),
+    ("tf -chdir=dir=1 plan -o\t", "tf -chdir=dir=1 plan -out=<<<END"),
+    ("tf plan -var=foo=-- -o\t", "tf plan -var=foo=-- -out=<<<END"),
+    ("tf apply -auto\t", "tf apply -auto-approve <<<END"),
+    ("tf destroy -auto\t", "tf destroy -auto-approve <<<END"),
+    ("tf fmt -r\t", "tf fmt -recursive <<<END"),
+    ("tf validate -no-t\t", "tf validate -no-tests <<<END"),
+    ("tf plan -lock=f\t", "tf plan -lock=false <<<END"),
+    ("tf providers mirror -lock-file=f\t", "tf providers mirror -lock-file=false <<<END"),
+]))
+bad.extend(run_pty_group(
+    {},
+    [
+        ("tf -chdir=my\t", "tf -chdir=my\\ dir/<<<END"),
+        ("tf plan -out=en\t", "tf plan -out=envs/<<<END"),
+        ("tf plan -lock=f\t", "tf plan -lock=false <<<END"),
+    ],
+    init_cmd="COMP_WORDBREAKS=${COMP_WORDBREAKS//=}",
+))
+bad.extend(run_pty_group({"_HS_TF_FORCE_BASH32": "1"}, [
+    ("tf -chdir=my\t", "tf -chdir=my\\ dir/ <<<END"),
+    ("tf plan -var-file=prod\t", "tf plan -var-file=prod\\ vars.tfvars <<<END"),
+    ("tf apply -auto\t", "tf apply -auto-approve <<<END"),
+]))
+print("ok" if not bad else "; ".join(bad))
+PY
+)"
+    fi
+    rm -rf "$TF_COMP_DIR"
+    if [[ "$tf_reg" == *"_terraform_bash_complete terraform"* ]] && \
+       [[ "$tf_reg" == *"_terraform_bash_complete tf"* ]] && \
+       [ "$tf_c1" = "plan" ] && \
+       [ "$tf_c2" = "list mv rm show" ] && \
+       [ "$tf_c2b" = "plan" ] && \
+       [ "$tf_c3" = "envs/prod" ] && \
+       [ "$tf_c4" = "vars.tfvars" ] && \
+       [ "$tf_c5" = "plan" ] && \
+       [ "$tf_c6" = "plan" ] && \
+       [ "$tf_c7" = "-out=" ] && \
+       [ "$tf_c8" = "-out=" ] && \
+       [ "$tf_c9" = "-auto-approve" ] && \
+       [ -z "$tf_c10" ] && \
+       [ "$tf_c11" = "-auto-approve" ] && \
+       [ "$tf_c12" = "false" ] && \
+       [ "$tf_c13" = "-var-file=" ] && \
+       [ "$tf_c14" = "-test-directory=" ] && \
+       [ "$tf_pty_ok" = "ok" ]; then
+        echo "PASS:Bash _terraform_bash_complete registers terraform and tf and completes subcommands, plan/apply/destroy/fmt/validate/providers flags, -lock=false/-lock-file=false values, PTY space/colon-escaped -chdir=/-var-file= paths (including custom COMP_WORDBREAKS and Bash 3.2 fallback), and broken-shim/binary-absent fallback"
+    else
+        echo "FAIL:Bash _terraform_bash_complete:reg='${tf_reg//$'\n'/ | }' c1='$tf_c1' c2='$tf_c2' c2b='$tf_c2b' c3='$tf_c3' c4='$tf_c4' c5='$tf_c5' c6='$tf_c6' c7='$tf_c7' c8='$tf_c8' c9='$tf_c9' c10='$tf_c10' c11='$tf_c11' c12='$tf_c12' c13='$tf_c13' c14='$tf_c14' pty='$tf_pty_ok'"
     fi
 
     if command -v nvim >/dev/null 2>&1; then

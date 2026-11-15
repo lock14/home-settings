@@ -636,6 +636,9 @@ PY
             mkdir -p "$IDE_WS_3P/app/(auth)"
             printf "auth1\nauth2\nauth3\n" > "$IDE_WS_3P/app/(auth)/route.ts"
             sock_3p="$(tmux show-options -qv -t "ws_3pane_test" @ide_socket 2>/dev/null || true)"
+            nvim_rpc_3p() {
+                NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$sock_3p" "$@" </dev/null
+            }
             link_nvim_pid=""
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ]; then
                 if ! wait_for_nvim_socket "$sock_3p" 60 1; then
@@ -648,91 +651,91 @@ PY
             if "$SCRIPT_DIR/bin/ide" --open-link "file://$IDE_WS_3P/subdir/nested.txt#L2" "" "$IDE_WS_3P" "ws_3pane_test"; then
                 line_after_href="2"
                 if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                    line_after_href="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                    line_after_href="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 fi
                 if "$SCRIPT_DIR/bin/ide" --open-link "" "(subdir/nested.txt:3:1):" "$IDE_WS_3P" "ws_3pane_test"; then
                     line_after_word="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_word="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_word="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "" "[nested.txt](file://$IDE_WS_3P/subdir/nested.txt#L1-L3)" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_md="1"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_md="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_md="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "" "[\`nested.txt:3\`](file://$IDE_WS_3P/subdir/truncated_wrap" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_wrap="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_wrap="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_wrap="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --toggle-editor "ws_3pane_test"
                     "$SCRIPT_DIR/bin/ide" --open-link "" "nested.txt#L2-L3" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_base="2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_base="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_base="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     mkdir -p "$IDE_WS_3P/ws_3pane_test"
                     (cd "$IDE_WS_3P" && "$SCRIPT_DIR/bin/ide" --open-link "nested.txt:3" "$IDE_WS_3P" "ws_3pane_test")
                     rmdir "$IDE_WS_3P/ws_3pane_test"
                     line_after_collapsed="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_collapsed="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_collapsed="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "" "Read($IDE_WS_3P/subdir/nested.txt:1)" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_tool="1"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_tool="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_tool="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "" "[route.ts](file://$IDE_WS_3P/app/(auth)/route.ts#L2)" "$IDE_WS_3P" "ws_3pane_test"
                     buf_after_paren_file="route.ts:2"
                     buf_after_jump_back="nested.txt:1"
                     buf_after_jump_fwd="route.ts:2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        bname="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                        bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        bname="$(basename "$(nvim_rpc_3p --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                        bline="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                         buf_after_paren_file="${bname}:${bline}"
-                        nvim --headless --server "$sock_3p" --remote-send "<C-\\><C-n><C-o>" >/dev/null 2>&1 || true
-                        bname_back="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                        bline_back="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        nvim_rpc_3p --remote-send "<C-\\><C-n><C-o>" >/dev/null 2>&1 || true
+                        bname_back="$(basename "$(nvim_rpc_3p --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                        bline_back="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                         buf_after_jump_back="${bname_back}:${bline_back}"
-                        nvim --headless --server "$sock_3p" --remote-send "<C-\\><C-n><C-i>" >/dev/null 2>&1 || true
-                        bname_fwd="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                        bline_fwd="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        nvim_rpc_3p --remote-send "<C-\\><C-n><C-i>" >/dev/null 2>&1 || true
+                        bname_fwd="$(basename "$(nvim_rpc_3p --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                        bline_fwd="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                         buf_after_jump_fwd="${bname_fwd}:${bline_fwd}"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "file://myhost.local$IDE_WS_3P/subdir/nested.txt#L2:1-L3:5" "" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_host_col_hash="2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_host_col_hash="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_host_col_hash="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/nested.txt:L3" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_colon_l="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_colon_l="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_colon_l="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "file://$IDE_WS_3P/subdir/nested.txt#section:1" "\`nested.txt:2-3\`" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_href_word_line="2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_href_word_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_href_word_line="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     printf "h1\nh2\nh3\n" > "$IDE_WS_3P/subdir/foo#bar.txt"
                     "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/foo#bar.txt:3" "$IDE_WS_3P" "ws_3pane_test"
                     buf_after_hash_file="foo#bar.txt:3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        bname="$(basename "$(nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                        bline="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        bname="$(basename "$(nvim_rpc_3p --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                        bline="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                         buf_after_hash_file="${bname}:${bline}"
                     fi
                     printf "# Intro\n\n### Linux & macOS\n" > "$IDE_WS_3P/subdir/doc.md"
                     "$SCRIPT_DIR/bin/ide" --open-link "subdir/doc.md#linux--macos" "" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_md_file_anchor="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_md_file_anchor="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_md_file_anchor="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     "$SCRIPT_DIR/bin/ide" --open-link "#intro" "" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_md_anchor="1"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_md_anchor="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_md_anchor="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     OSC8_RULES_FILE="$TEMP_HOME/osc8_file_rules.sh"
                     cat > "$OSC8_RULES_FILE" <<SH
@@ -755,17 +758,17 @@ SH
                     IDE_LINK_RULES="$OSC8_RULES_FILE" "$SCRIPT_DIR/bin/ide" --open-link "https://code.example.test/view/subdir/nested.txt?l=2" "nested.txt" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_osc8_rule="2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_osc8_rule="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_osc8_rule="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     IDE_LINK_RULES="$OSC8_RULES_FILE" "$SCRIPT_DIR/bin/ide" --open-link "" "\`//pkg/subdir/nested.txt:3\`" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_root_ref="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_root_ref="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_root_ref="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     IDE_LINK_RULES="$OSC8_RULES_FILE" "$SCRIPT_DIR/bin/ide" --open-link "" "(//pkg/subdir/...)." "$IDE_WS_3P" "ws_3pane_test"
                     line_after_root_wildcard="1"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_root_wildcard="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_root_wildcard="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     rm -f "$OSC8_RULES_FILE"
                     # Verify line-wrapped URLs in an unfocused tmux pane (e.g. broken after 'home-' onto an indented next line in $term_pane while $ed_pane is active)
@@ -796,25 +799,25 @@ SH
                     "$SCRIPT_DIR/bin/ide" --open-link "" "parse_file_target" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_split_osc8="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_split_osc8="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_split_osc8="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     tmux select-pane -t "$term_pane"
                     "$SCRIPT_DIR/bin/ide" --open-link "" "Class.method" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_split_sgr="1"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_split_sgr="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_split_sgr="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     tmux select-pane -t "$term_pane"
                     "$SCRIPT_DIR/bin/ide" --open-link "" "mouse_hyperlink" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_split_sep="2"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_split_sep="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_split_sep="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     tmux select-pane -t "$term_pane"
                     "$SCRIPT_DIR/bin/ide" --open-link "" "continuation" "$IDE_WS_3P" "ws_3pane_test"
                     line_after_split_wrap="3"
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                        line_after_split_wrap="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                        line_after_split_wrap="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
                     tmux select-pane -t "$ed_pane"
                     active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
@@ -837,33 +840,33 @@ SH
             open_pos_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
             open_pos_line="3"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                open_pos_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                open_pos_line="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
             fi
             tmux select-pane -t "$ai_pane"
             (cd /tmp && "$SCRIPT_DIR/bin/ide" --open "subdir/nested.txt:2:1" "ws_3pane_test")
             open_col_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
             open_col_line="2"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                open_col_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                open_col_line="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
             fi
             tmux select-pane -t "$ai_pane"
             "$SCRIPT_DIR/bin/ide" --preview "$IDE_WS_3P/subdir/nested.txt" 1 "ws_3pane_test"
             prev_pos_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
             prev_pos_line="1"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                prev_pos_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                prev_pos_line="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
             fi
             (cd /tmp && "$SCRIPT_DIR/bin/ide" --preview "subdir/nested.txt#L3" "ws_3pane_test")
             prev_hash_focus="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
             prev_hash_line="3"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                prev_hash_line="$(nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                prev_hash_line="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
             fi
             "$SCRIPT_DIR/bin/ide" --open "$IDE_WS_3P/subdir/colon:file.txt" 2 "ws_3pane_test"
             colon_buf="colon:file.txt:2"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                cbname="$(basename "$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                cbline="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                cbname="$(basename "$(nvim_rpc_3p --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                cbline="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 colon_buf="${cbname}:${cbline}"
             fi
             mkdir -p "$IDE_WS_3P/dir:v1"
@@ -871,19 +874,19 @@ SH
             "$SCRIPT_DIR/bin/ide" --open "$IDE_WS_3P/dir:v1/colon:mod.txt:3" "ws_3pane_test"
             colon_dir_buf="colon:mod.txt:3"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
-                cdbname="$(basename "$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
-                cdbline="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                cdbname="$(basename "$(nvim_rpc_3p --remote-expr "expand('%:p')" 2>/dev/null | tr -d '\r\n\"' || true)")"
+                cdbline="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 colon_dir_buf="${cdbname}:${cdbline}"
             fi
             stale_rpc_healed="ok"
             if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                 STALE_RPC_DIR="$TEMP_HOME/stale_rpc_cwd"
                 mkdir -p "$STALE_RPC_DIR"
-                NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "luaeval('(function() vim.fn.chdir(\"$STALE_RPC_DIR\"); vim.env.PWD = \"$IDE_WS_3P\" end)()')" >/dev/null 2>&1 || true
+                nvim_rpc_3p --remote-expr "luaeval('(function() vim.fn.chdir(\"$STALE_RPC_DIR\"); vim.env.PWD = \"$IDE_WS_3P\" end)()')" >/dev/null 2>&1 || true
                 rmdir "$STALE_RPC_DIR" 2>/dev/null || true
                 "$SCRIPT_DIR/bin/ide" --open-link "" "subdir/nested.txt:3" "/detached-mount/$(basename "$IDE_WS_3P")" "ws_3pane_test"
-                rpc_healed_cwd="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "luaeval('(vim.uv or vim.loop).cwd() or \"nil\"')" 2>/dev/null | tr -d '\r\n\"' || true)"
-                rpc_healed_line="$(NVIM_LOG_FILE=/dev/null nvim --headless --server "$sock_3p" --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                rpc_healed_cwd="$(nvim_rpc_3p --remote-expr "luaeval('(vim.uv or vim.loop).cwd() or \"nil\"')" 2>/dev/null | tr -d '\r\n\"' || true)"
+                rpc_healed_line="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                 if [ "$rpc_healed_cwd" != "$IDE_WS_3P" ] || [ "$rpc_healed_line" != "3" ]; then
                     stale_rpc_healed="bad:$rpc_healed_cwd:$rpc_healed_line"
                 fi
@@ -1581,6 +1584,52 @@ if LIVE_DEV_OUT="$(env -u ZSH PATH="$TEMP_OMZ_LIVE/mock-bin:/usr/bin:/bin" HOME=
     pass "bin/update-system --with-dev fast-forwards standalone ZSH_CUSTOM repos and warns without aborting on detached-HEAD plugins"
 else
     fail "bin/update-system --with-dev live custom pull" "Unexpected result: ${LIVE_DEV_OUT:-failed}"
+fi
+mkdir -p "$TEMP_OMZ_LIVE/.zsh/completions" \
+         "$TEMP_OMZ_LIVE/.local/bin" \
+         "$TEMP_OMZ_LIVE/.local/share/mise/shims" \
+         "$TEMP_OMZ_LIVE/.local/share/elan/bin" \
+         "$TEMP_OMZ_LIVE/sysroot/share/zsh/site-functions"
+printf '#compdef cargo\n# refreshed sysroot cargo\n' > "$TEMP_OMZ_LIVE/sysroot/share/zsh/site-functions/_cargo"
+cat << 'EOF' > "$TEMP_OMZ_LIVE/.local/share/mise/shims/delta"
+#!/usr/bin/env bash
+[ "${1:-}" = "--generate-completion" ] && [ "${2:-}" = "zsh" ] && printf '#compdef delta\n# refreshed delta\n'
+EOF
+cat << 'EOF' > "$TEMP_OMZ_LIVE/.local/bin/mise"
+#!/usr/bin/env bash
+if [ "${1:-}" = "completion" ] && [ "${2:-}" = "zsh" ]; then
+    printf '#compdef mise\n# refreshed mise\n'
+fi
+exit 0
+EOF
+cat << 'EOF' > "$TEMP_OMZ_LIVE/.local/share/elan/bin/elan"
+#!/usr/bin/env bash
+if [ "${1:-}" = "completions" ] && [ "${2:-}" = "zsh" ]; then
+    printf '#compdef elan\n# refreshed elan\n'
+fi
+exit 0
+EOF
+cat << 'EOF' > "$TEMP_OMZ_LIVE/.local/share/mise/shims/cargo"
+#!/usr/bin/env bash
+exit 0
+EOF
+cat << EOF > "$TEMP_OMZ_LIVE/.local/share/mise/shims/rustc"
+#!/usr/bin/env bash
+[ "\${1:-}" = "--print" ] && [ "\${2:-}" = "sysroot" ] && printf '%s\n' "$TEMP_OMZ_LIVE/sysroot"
+EOF
+chmod +x "$TEMP_OMZ_LIVE/.local/share/mise/shims/delta" \
+         "$TEMP_OMZ_LIVE/.local/bin/mise" \
+         "$TEMP_OMZ_LIVE/.local/share/elan/bin/elan" \
+         "$TEMP_OMZ_LIVE/.local/share/mise/shims/cargo" \
+         "$TEMP_OMZ_LIVE/.local/share/mise/shims/rustc"
+if COMP_REFRESH_OUT="$(env -u ZSH -u ELAN_HOME PATH="$TEMP_OMZ_LIVE/mock-bin:/usr/bin:/bin" HOME="$TEMP_OMZ_LIVE" XDG_DATA_HOME="$TEMP_OMZ_LIVE/.local/share" ZSH_CUSTOM="$TEMP_OMZ_LIVE/none" "$SCRIPT_DIR/bin/update-system" --os macos --system-only --with-dev 2>&1)" && \
+   grep -Fq "refreshed delta" "$TEMP_OMZ_LIVE/.zsh/completions/_delta" && \
+   grep -Fq "refreshed mise" "$TEMP_OMZ_LIVE/.zsh/completions/_mise" && \
+   grep -Fq "refreshed elan" "$TEMP_OMZ_LIVE/.zsh/completions/_elan" && \
+   grep -Fq "refreshed sysroot cargo" "$TEMP_OMZ_LIVE/.zsh/completions/_cargo"; then
+    pass "bin/update-system --with-dev discovers ~/.local/bin, mise/shims, and elan/bin and refreshes CLI tab completions (including rustc sysroot _cargo) in ~/.zsh/completions"
+else
+    fail "bin/update-system --with-dev completion refresh" "Expected refreshed _delta, _mise, _elan, and _cargo in ~/.zsh/completions: ${COMP_REFRESH_OUT:-failed}"
 fi
 rm -rf "$TEMP_OMZ_LIVE"
 
@@ -4201,7 +4250,7 @@ try:
         pop_prev = _ansi_strip_re.sub("", run_cmd([ide_bin, "--session-preview", "pop-dirty-ws"], env=sess_env("gamma-ws", ws_gamma["ed"]), check=True).stdout)
         assert "Warning  : Unsaved changes in 1 buffer(s)" in pop_prev, f"missing Warning in --session-preview: {pop_prev}"
         # Saving buffer in Neovim auto-clears @ide_quit_err on next preview!
-        subprocess.run(["nvim", "--headless", "--server", pop_sock, "--remote-send", "<C-\\><C-n>:write!<CR>"], env=base_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(["nvim", "--headless", "--server", pop_sock, "--remote-send", "<C-\\><C-n>:write!<CR>"], env=base_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=True)
         assert wait_until(lambda: nvim_expr_eq(pop_sock, "&modified", "0")), "pop-dirty-ws nvim buffer did not become clean after :write!"
         pop_prev_clean = _ansi_strip_re.sub("", run_cmd([ide_bin, "--session-preview", "pop-dirty-ws"], env=sess_env("gamma-ws", ws_gamma["ed"]), check=True).stdout)
         assert "Unsaved changes" not in pop_prev_clean and tmux_out("show-options", "-qv", "-t", "=pop-dirty-ws:", "@ide_quit_err") == ""

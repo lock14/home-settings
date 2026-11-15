@@ -5,8 +5,10 @@ set shiftwidth=4
 set expandtab
 set background=dark
 set t_RB=
-map <Home> ^
-imap <Home> <Esc>^i
+nnoremap <silent> <Space>h :silent! nohlsearch<CR>
+nnoremap <silent> <Space>w :w<CR>
+noremap <Home> ^
+inoremap <Home> <Esc>^i
 
 if 1
 filetype plugin indent on
@@ -711,6 +713,42 @@ call s:ApplySolarizedDark()
 
 " Navigation & Hybrid Tmux Split Integration
 let mapleader = " "
+
+" Clear search highlight & Fast Save (1:1 parity with Neovim init.lua)
+nnoremap <silent> <leader>h :nohlsearch<CR>
+nnoremap <silent> <leader>w :w<CR>
+
+" Smart Home: jump to first non-blank character of line, or toggle to column 1 if already there
+function! s:SmartHomeExpr() abort
+    let l:line = getline('.')
+    let l:col = col('.')
+    let l:first_nb = match(l:line, '[^ \t]') + 1
+    let l:target = l:first_nb > 0 ? (l:col == l:first_nb ? '0' : '^') : ((empty(l:line) || l:col == len(l:line)) ? '0' : '^')
+    let l:m = mode()
+    if l:m ==# 's' || l:m ==# 'S' || l:m ==# "\<C-s>"
+        return l:target ==# '0' ? "\<C-o>0" : "\<C-o>^"
+    endif
+    return l:target
+endfunction
+
+function! s:SmartHomeInsert() abort
+    let l:line = getline('.')
+    let l:col = col('.')
+    let l:first_nb = match(l:line, '[^ \t]') + 1
+    if l:first_nb > 0
+        let l:target = (l:col == l:first_nb) ? 1 : l:first_nb
+    else
+        let l:end_col = len(l:line) + 1
+        let l:target = (l:col == l:end_col) ? 1 : l:end_col
+    endif
+    call cursor(line('.'), l:target)
+    return ''
+endfunction
+
+nnoremap <expr> <silent> <Home> <SID>SmartHomeExpr()
+vnoremap <expr> <silent> <Home> <SID>SmartHomeExpr()
+onoremap <expr> <silent> <Home> <SID>SmartHomeExpr()
+inoremap <silent> <Home> <C-r>=<SID>SmartHomeInsert()<CR>
 
 " Built-in Netrw Project Tree Sidebar Configuration
 let g:netrw_banner = 0
