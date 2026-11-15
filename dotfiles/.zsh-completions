@@ -46,6 +46,12 @@ _theme() {
         '-h:Show help message'
         '--help:Show help message'
     )
+    if [[ "${words[CURRENT-1]:-}" != (-s|--set|-p|--preview|--env|--from|-n|--dry-run) ]] && \
+       [[ "${words[CURRENT]:-}" != (--set=*|--preview=*|--env=*|--from=*|--dry-run=*) ]] && \
+       [[ "${words[CURRENT]:-}" == -* ]]; then
+        _describe -t options 'theme option' opts
+        return
+    fi
     local theme_bin=""
     if [ -x "$HOME/.local/bin/theme" ]; then
         theme_bin="$HOME/.local/bin/theme"
@@ -57,24 +63,38 @@ _theme() {
     else
         themes=(solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark new-years valentines st-patricks easter independence-day halloween thanksgiving christmas)
     fi
+    if [[ "${words[CURRENT]:-}" == (--set=*|--preview=*|--env=*|--from=*|--dry-run=*) ]]; then
+        (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
+        _describe -t themes 'color theme' themes
+        return
+    fi
     if [[ "${words[CURRENT-1]:-}" == (-s|--set|-p|--preview|--env|--from|-n|--dry-run) ]]; then
         _describe -t themes 'color theme' themes
         return
     fi
-    if [[ "${words[CURRENT]:-}" == -* ]]; then
-        _describe -t options 'theme option' opts
-    else
-        _describe -t themes 'color theme' themes
-        _describe -t options 'theme option' opts
-    fi
+    _describe -t themes 'color theme' themes
+    _describe -t options 'theme option' opts
 }
 if (( $+functions[compdef] )); then
     compdef _theme theme 2>/dev/null || true
 fi
 
 # Completion for `ide` workspace launcher, session switcher, and session aliases
+_ide_load_sessions() {
+    reply=()
+    local ide_bin=""
+    if [ -x "$HOME/.local/bin/ide" ]; then
+        ide_bin="$HOME/.local/bin/ide"
+    elif whence -p ide >/dev/null 2>&1; then
+        ide_bin="$(whence -p ide)"
+    fi
+    if [ -n "$ide_bin" ]; then
+        reply=(${(f)"$("$ide_bin" --list --plain 2>/dev/null)"})
+    fi
+}
+
 _ide() {
-    local -a opts send_opts list_opts subcmds agents agent_states swap_dirs sessions
+    local -a opts send_opts list_opts subcmds agents agent_states swap_dirs sessions reply
     opts=(
         '--3pane:Launch default 3-pane layout (AI, Editor, and Shell)'
         '--2pane:Launch 2-pane layout (AI and Editor)'
@@ -156,16 +176,6 @@ _ide() {
         'right:Swap active pane right'
     )
 
-    local ide_bin=""
-    if [ -x "$HOME/.local/bin/ide" ]; then
-        ide_bin="$HOME/.local/bin/ide"
-    elif whence -p ide >/dev/null 2>&1; then
-        ide_bin="$(whence -p ide)"
-    fi
-    if [ -n "$ide_bin" ]; then
-        sessions=(${(f)"$("$ide_bin" --list --plain 2>/dev/null)"})
-    fi
-
     local prev="" prev2="" prev3=""
     (( CURRENT > 1 )) && prev="${words[CURRENT-1]:-}"
     (( CURRENT > 2 )) && prev2="${words[CURRENT-2]:-}"
@@ -193,6 +203,7 @@ _ide() {
             ;;
         --open-pr=*)
             (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
+            _ide_load_sessions; sessions=("${reply[@]}")
             if (( ${#sessions} )); then
                 _describe -t sessions 'IDE session' sessions
             fi
@@ -233,8 +244,11 @@ _ide() {
         refresh|-r|--refresh|--reload|-s|--sessions|--next-attention|--open-pr|--toggle|--show-editor|--show-ai|--show-term|--focus-editor|--focus-ai|--focus-term|--toggle-editor|--toggle-ai|--toggle-term)
             if [[ "${words[CURRENT]:-}" == -* ]]; then
                 _describe -t options 'ide option' opts
-            elif (( ${#sessions} )); then
-                _describe -t sessions 'IDE session' sessions
+            else
+                _ide_load_sessions; sessions=("${reply[@]}")
+                if (( ${#sessions} )); then
+                    _describe -t sessions 'IDE session' sessions
+                fi
             fi
             return
             ;;
@@ -292,8 +306,11 @@ _ide() {
     if (( in_send )); then
         if (( ! has_send_payload )) || [[ "${words[CURRENT]:-}" == -* ]]; then
             _describe -t options 'ide send option' send_opts
-        elif (( ${#sessions} )); then
-            _describe -t sessions 'IDE session' sessions
+        else
+            _ide_load_sessions; sessions=("${reply[@]}")
+            if (( ${#sessions} )); then
+                _describe -t sessions 'IDE session' sessions
+            fi
         fi
         return
     fi
@@ -301,23 +318,26 @@ _ide() {
     if (( in_quit_kill || in_ack_ai )); then
         if [[ "${words[CURRENT]:-}" == -* ]]; then
             _describe -t options 'ide option' opts
-        elif (( ${#sessions} )); then
-            local -a rem_sessions=()
-            local s_cand used_idx is_used
-            for s_cand in "${sessions[@]}"; do
-                is_used=0
-                for (( used_idx = 2; used_idx < CURRENT; used_idx++ )); do
-                    if [[ "${words[used_idx]:-}" == "$s_cand" ]]; then
-                        is_used=1
-                        break
-                    fi
+        else
+            _ide_load_sessions; sessions=("${reply[@]}")
+            if (( ${#sessions} )); then
+                local -a rem_sessions=()
+                local s_cand used_idx is_used
+                for s_cand in "${sessions[@]}"; do
+                    is_used=0
+                    for (( used_idx = 2; used_idx < CURRENT; used_idx++ )); do
+                        if [[ "${words[used_idx]:-}" == "$s_cand" ]]; then
+                            is_used=1
+                            break
+                        fi
+                    done
+                    (( ! is_used )) && rem_sessions+=("$s_cand")
                 done
-                (( ! is_used )) && rem_sessions+=("$s_cand")
-            done
-            if (( ${#rem_sessions} )); then
-                _describe -t sessions 'IDE session' rem_sessions
-            else
-                _describe -t sessions 'IDE session' sessions
+                if (( ${#rem_sessions} )); then
+                    _describe -t sessions 'IDE session' rem_sessions
+                else
+                    _describe -t sessions 'IDE session' sessions
+                fi
             fi
         fi
         return
@@ -326,13 +346,17 @@ _ide() {
     if (( in_agent_state )); then
         if [[ "${words[CURRENT]:-}" == -* ]]; then
             _describe -t options 'ide option' opts
-        elif (( ${#sessions} )); then
-            _describe -t sessions 'IDE session' sessions
+        else
+            _ide_load_sessions; sessions=("${reply[@]}")
+            if (( ${#sessions} )); then
+                _describe -t sessions 'IDE session' sessions
+            fi
         fi
         return
     fi
 
     if [[ ( "$prev2" == ("--swap"|"--agent-state"|"--open"|"--preview") || ( "$prev3" == ("--open"|"--preview") && "$prev" == (\+|)<-> ) ) && "${words[CURRENT]:-}" != -* ]]; then
+        _ide_load_sessions; sessions=("${reply[@]}")
         if (( ${#sessions} )); then
             _describe -t sessions 'IDE session' sessions
         fi
@@ -345,6 +369,7 @@ _ide() {
         if (( CURRENT == 2 )) && [[ "${words[1]:-}" == ide ]]; then
             _describe -t subcommands 'ide subcommand' subcmds
         fi
+        _ide_load_sessions; sessions=("${reply[@]}")
         if (( ${#sessions} )); then
             _describe -t sessions 'IDE session' sessions
         fi

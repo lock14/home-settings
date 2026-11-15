@@ -2072,7 +2072,7 @@ lazy.setup({
     -- Mason & Language Server Protocol (LSP)
     {
         "williamboman/mason.nvim",
-        opts = {},
+        opts = { PATH = "skip" },
     },
     {
         "mfussenegger/nvim-jdtls",
@@ -2086,85 +2086,13 @@ lazy.setup({
                 "clangd",
                 "rust_analyzer",
                 "gopls",
-                "pyright",
-                "ts_ls",
                 "lua_ls",
-                "bashls",
                 "terraformls",
-                "yamlls",
-                "jsonls",
                 "jdtls",
             },
             automatic_enable = false,
         },
         config = function(_, opts)
-            if #vim.api.nvim_list_uis() > 0 then
-                -- Keep background Mason status/error echoes within cmdheight=1 echospace so failed offline/mirror
-                -- installs never trigger a modal "Press ENTER" prompt that freezes the Editor pane and RPC server.
-                package.loaded["mason-lspconfig.notify"] = function(msg, level)
-                    vim.schedule(function()
-                        local m = vim.api.nvim_get_mode()
-                        if m.blocking or (m.mode ~= "n" and m.mode ~= "i") then
-                            return
-                        end
-                        local hl = (level == vim.log.levels.ERROR) and "DiagnosticError"
-                            or ((level == vim.log.levels.WARN) and "DiagnosticWarn" or "Comment")
-                        local line = tostring(msg or ""):gsub("[\r\n]+", " ")
-                        local max_w = math.max(1, (vim.v.echospace or (vim.o.columns - 12)) - 2)
-                        if vim.fn.strdisplaywidth(line) > max_w then
-                            local nchars = math.max(1, max_w - 1)
-                            local prefix = vim.fn.strcharpart(line, 0, nchars)
-                            while nchars > 1 and vim.fn.strdisplaywidth(prefix) + 1 > max_w do
-                                nchars = nchars - 1
-                                prefix = vim.fn.strcharpart(line, 0, nchars)
-                            end
-                            line = prefix .. "…"
-                        end
-                        vim.cmd("silent! redraw")
-                        pcall(vim.api.nvim_echo, { { line, hl } }, false, {})
-                    end)
-                end
-                local ok_reg, registry = pcall(require, "mason-registry")
-                if ok_reg then
-                    local retried = {}
-                    registry:on("package:install:failed", function(pkg)
-                        if not pkg or not pkg.name or retried[pkg.name] then
-                            return
-                        end
-                        local npm_pkg = pkg.name
-                        local src_id = pkg.spec and pkg.spec.source and pkg.spec.source.id
-                        if type(src_id) == "string" and src_id ~= "" then
-                            if src_id:sub(1, 8) ~= "pkg:npm/" then
-                                return
-                            end
-                            npm_pkg = src_id:sub(9):gsub("[?#].*$", ""):gsub("@[^@/]*$", ""):gsub("%%40", "@")
-                            if npm_pkg == "" then
-                                return
-                            end
-                        end
-                        retried[pkg.name] = true
-                        vim.schedule(function()
-                            if vim.fn.executable("npm") ~= 1 or not vim.system then
-                                return
-                            end
-                            vim.system(
-                                { "npm", "view", npm_pkg, "dist-tags.latest" },
-                                { text = true },
-                                vim.schedule_wrap(function(res)
-                                    local npm_ver = (res and res.code == 0 and res.stdout or ""):gsub("%s+$", "")
-                                    if npm_ver ~= "" then
-                                        pcall(function()
-                                            pkg:install({ version = npm_ver })
-                                        end)
-                                    end
-                                end)
-                            )
-                        end)
-                    end)
-                end
-                require("mason-lspconfig").setup(opts)
-            end
-
             -- Keybindings and Semantic Token cleanup on LSP attach
             vim.api.nvim_create_autocmd("LspAttach", {
                 group = vim.api.nvim_create_augroup("UserLspConfig", { clear = true }),
@@ -2188,6 +2116,115 @@ lazy.setup({
                     bufmap("<leader>d", vim.diagnostic.open_float, "Line Diagnostics")
                 end,
             })
+
+            local uv = vim.uv or vim.loop
+            local function nonempty_env(name)
+                local v = vim.env[name]
+                return (v and v ~= "") and v:gsub("/+$", "") or nil
+            end
+            local home_dir = nonempty_env("HOME") or vim.fn.expand("~"):gsub("/+$", "")
+            local mise_data_dir = nonempty_env("MISE_DATA_DIR")
+                or ((nonempty_env("XDG_DATA_HOME") or (home_dir .. "/.local/share")) .. "/mise")
+            local mason_bin_dir = (vim.fn.stdpath("data"):gsub("/+$", "")) .. "/mason/bin"
+            local mise_shims_dir = mise_data_dir .. "/shims"
+            do
+                local entries, had_shims, last_mise_idx = {}, false, 0
+                for p in (vim.env.PATH or ""):gmatch("[^:]+") do
+                    local clean_p = (p ~= "/") and p:gsub("/+$", "") or p
+                    if clean_p == mise_shims_dir then
+                        had_shims = true
+                    elseif clean_p ~= mason_bin_dir then
+                        entries[#entries + 1] = p
+                        if clean_p:find("/mise/installs/", 1, true) then
+                            last_mise_idx = #entries
+                        end
+                    end
+                end
+                local sys_dirs = {
+                    ["/opt/homebrew/bin"] = true,
+                    ["/opt/homebrew/sbin"] = true,
+                    ["/usr/local/sbin"] = true,
+                    ["/usr/local/bin"] = true,
+                    ["/usr/sbin"] = true,
+                    ["/usr/bin"] = true,
+                    ["/sbin"] = true,
+                    ["/bin"] = true,
+                }
+                local insert_idx = #entries + 1
+                for i = last_mise_idx + 1, #entries do
+                    local clean_p = (entries[i] ~= "/") and entries[i]:gsub("/+$", "") or entries[i]
+                    if sys_dirs[clean_p] then
+                        insert_idx = i
+                        break
+                    end
+                end
+                local shims_st = uv.fs_stat(mise_shims_dir)
+                if had_shims or (shims_st and shims_st.type == "directory") then
+                    table.insert(entries, insert_idx, mise_shims_dir)
+                    insert_idx = insert_idx + 1
+                end
+                table.insert(entries, insert_idx, mason_bin_dir)
+                vim.env.PATH = table.concat(entries, ":")
+            end
+
+            local tsserver_fallback = (function()
+                local npm_ts_dir = mise_data_dir .. "/installs/npm-typescript"
+                local rels = { "/node_modules/typescript/lib/tsserver.js", "/lib/node_modules/typescript/lib/tsserver.js" }
+                local function probe_dir(base)
+                    for _, rel in ipairs(rels) do
+                        local st = uv.fs_stat(base .. rel)
+                        if st and st.type == "file" then
+                            return base .. rel
+                        end
+                    end
+                    return nil
+                end
+                for _, slot in ipairs({ "6", "5", "latest" }) do
+                    local found = probe_dir(npm_ts_dir .. "/" .. slot)
+                    if found then
+                        return found
+                    end
+                end
+                local scan = uv.fs_scandir(npm_ts_dir)
+                if scan then
+                    local vers = {}
+                    while true do
+                        local name = uv.fs_scandir_next(scan)
+                        if not name then
+                            break
+                        end
+                        if name:match("^%d") then
+                            vers[#vers + 1] = name
+                        end
+                    end
+                    table.sort(vers, function(a, b)
+                        local pa, pb = vim.split(a, ".", { plain = true }), vim.split(b, ".", { plain = true })
+                        for i = 1, math.max(#pa, #pb) do
+                            local na, nb = tonumber(pa[i]) or -1, tonumber(pb[i]) or -1
+                            if na ~= nb then
+                                return na > nb
+                            end
+                        end
+                        return a > b
+                    end)
+                    for _, v in ipairs(vers) do
+                        local found = probe_dir(npm_ts_dir .. "/" .. v)
+                        if found then
+                            return found
+                        end
+                    end
+                end
+                local ts_bin = vim.fn.exepath("tsserver")
+                if ts_bin ~= "" then
+                    local real_bin = uv.fs_realpath(ts_bin) or ts_bin
+                    local cand = vim.fn.fnamemodify(real_bin, ":h:h") .. "/lib/tsserver.js"
+                    local st = uv.fs_stat(cand)
+                    if st and st.type == "file" then
+                        return cand
+                    end
+                end
+                return nil
+            end)()
 
             -- Server-specific configuration overrides
             local server_configs = {
@@ -2226,7 +2263,12 @@ lazy.setup({
                 },
                 gopls = {},
                 pyright = {},
-                ts_ls = {},
+                ts_ls = {
+                    init_options = {
+                        hostInfo = "neovim",
+                        tsserver = tsserver_fallback and { fallbackPath = tsserver_fallback } or nil,
+                    },
+                },
                 bashls = {},
                 terraformls = {},
                 yamlls = {
@@ -2266,10 +2308,6 @@ lazy.setup({
                 jsonls = "vscode-json-language-server",
                 leanls = "lake",
             }
-            local mason_bin_dir = vim.fn.stdpath("data") .. "/mason/bin"
-            if not (vim.env.PATH or ""):find(mason_bin_dir, 1, true) then
-                vim.env.PATH = mason_bin_dir .. ":" .. (vim.env.PATH or "")
-            end
             if vim.lsp.config and vim.lsp.enable then
                 for _, s in ipairs(servers) do
                     vim.lsp.config[s] = server_configs[s] or {}
@@ -2299,11 +2337,35 @@ lazy.setup({
                 end
             end
             enable_installed_servers()
+
             if #vim.api.nvim_list_uis() > 0 then
+                -- Keep background Mason status/error echoes within cmdheight=1 echospace so failed offline/mirror
+                -- installs never trigger a modal "Press ENTER" prompt that freezes the Editor pane and RPC server.
+                package.loaded["mason-lspconfig.notify"] = function(msg, level)
+                    vim.schedule(function()
+                        local m = vim.api.nvim_get_mode()
+                        if m.blocking or (m.mode ~= "n" and m.mode ~= "i") then
+                            return
+                        end
+                        local hl = (level == vim.log.levels.ERROR) and "DiagnosticError"
+                            or ((level == vim.log.levels.WARN) and "DiagnosticWarn" or "Comment")
+                        local line = tostring(msg or ""):gsub("[\r\n]+", " ")
+                        local max_w = math.max(1, (vim.v.echospace or (vim.o.columns - 12)) - 2)
+                        if vim.fn.strdisplaywidth(line) > max_w then
+                            local n = max_w - 1
+                            while n > 0 and vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, n)) >= max_w do
+                                n = n - 1
+                            end
+                            line = vim.fn.strcharpart(line, 0, n) .. "…"
+                        end
+                        vim.cmd("silent! redraw")
+                        pcall(vim.api.nvim_echo, { { line, hl } }, false, {})
+                    end)
+                end
                 pcall(function()
-                    local registry = require("mason-registry")
-                    registry:on("package:install:success", vim.schedule_wrap(enable_installed_servers))
+                    require("mason-registry"):on("package:install:success", vim.schedule_wrap(enable_installed_servers))
                 end)
+                require("mason-lspconfig").setup(opts)
             end
         end,
     },

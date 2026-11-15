@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: setup bootstrap install system uninstall test test-system-setup test-dotfiles test-bin test-env test-zsh test-completions test-vim test-fonts lint check all help
+.PHONY: setup bootstrap install system uninstall test test-system-setup test-dotfiles test-bin test-theme test-ide-fleet test-env test-zsh test-completions test-vim test-fonts lint check all help
 
 # Force 24-bit TrueColor and isolate tests from any caller tmux session
 unexport TMUX TMUX_PANE
@@ -31,7 +31,7 @@ uninstall:
 test:
 	@tmpdir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmpdir"' EXIT INT TERM; \
-	suites="system-setup:bash:tests/test-system-setup.sh dotfiles:bash:tests/test-dotfiles.sh bin:bash:tests/test-bin.sh env:bash:tests/test-env.sh zsh:zsh:tests/test-zsh.zsh completions:bash:tests/test-completions.sh vim:bash:tests/test-vim.sh fonts:bash:tests/test-fonts.sh"; \
+	suites="system-setup:bash:tests/test-system-setup.sh dotfiles:bash:tests/test-dotfiles.sh bin:bash:tests/test-bin.sh theme:bash:tests/test-theme.sh ide-fleet:bash:tests/test-ide-fleet.sh env:bash:tests/test-env.sh zsh:zsh:tests/test-zsh.zsh completions:bash:tests/test-completions.sh vim:bash:tests/test-vim.sh fonts:bash:tests/test-fonts.sh"; \
 	pids=""; \
 	for spec in $$suites; do \
 		name="$${spec%%:*}"; rest="$${spec#*:}"; runner="$${rest%%:*}"; script="$${rest#*:}"; \
@@ -58,6 +58,12 @@ test-dotfiles:
 test-bin:
 	@bash tests/test-bin.sh
 
+test-theme:
+	@bash tests/test-theme.sh
+
+test-ide-fleet:
+	@bash tests/test-ide-fleet.sh
+
 test-env:
 	@bash tests/test-env.sh
 
@@ -81,7 +87,11 @@ lint:
 	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
-		shellcheck --severity=warning -e SC2148,SC2154 dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh; \
+		jobs=$$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+		case "$$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac; \
+		[ "$$jobs" -gt 8 ] && jobs=8; \
+		printf '%s\0' dotfiles/.bashrc-addendum tests/*.sh bin/* setup.sh modules/*.sh lib/*.sh dotfiles/.aliases dotfiles/.environment-variables \
+			| xargs -0 -n 1 -P "$$jobs" shellcheck --severity=warning -e SC2148,SC2154; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi

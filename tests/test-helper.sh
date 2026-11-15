@@ -775,7 +775,7 @@ if readme_text:
                     in_tools = s == "[tools]"
                     continue
                 if in_tools and "=" in s and not s.startswith("#"):
-                    tool_key = s.split("=", 1)[0].strip()
+                    tool_key = s.split("=", 1)[0].strip().strip('"').strip("'")
                     if f"| `{tool_key}` |" not in readme_text:
                         errors.append(
                             f'{readme_where}: missing .mise.toml tool "{tool_key}" in Developer toolchains table'

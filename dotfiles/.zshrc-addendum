@@ -113,14 +113,14 @@ if { [ -z "${_HS_LOADED_THEME:-}" ] || [ -z "${LS_COLORS:-}" ]; } && command -v 
     eval "$(dircolors "$HOME/.dir-colors/dircolors")"
 fi
 
+# Mise runtime manager hook (activated ahead of zoxide so zoxide resolves directly without shim overhead)
+if command -v mise >/dev/null 2>&1; then
+    eval "$(mise activate zsh)"
+fi
+
 # Zoxide smart directory jumping (z)
 if command -v zoxide >/dev/null 2>&1; then
     eval "$(zoxide init zsh)"
-fi
-
-# Mise runtime manager hook
-if command -v mise >/dev/null 2>&1; then
-    eval "$(mise activate zsh)"
 fi
 
 # Self-healing recovery when the current working directory descriptor (.) becomes

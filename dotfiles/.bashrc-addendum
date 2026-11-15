@@ -342,9 +342,11 @@ _hs_bash_find_user_theme_file() {
     local slug="$1"
     [[ "$slug" == [a-z0-9]* && "$slug" != */* && "$slug" != *..* ]] || return 1
     _hs_bash_user_theme_dirs
-    local udir cand stem cid d_idx
+    local udir cand stem cid d_idx has_dir=0
     for ((d_idx = 0; d_idx < ${#_HS_USER_DIRS[@]}; d_idx++)); do
         udir="${_HS_USER_DIRS[$d_idx]}"
+        [ -d "$udir" ] || continue
+        has_dir=1
         for cand in "$udir/$slug.theme" "$udir/$slug.conf"; do
             if [ -r "$cand" ]; then
                 _hs_bash_parse_file "$cand" || continue
@@ -356,6 +358,7 @@ _hs_bash_find_user_theme_file() {
             fi
         done
     done
+    (( has_dir == 0 )) && return 1
     local -a cands=()
     local had_fg=0 had_ng=0
     shopt -q failglob && had_fg=1
@@ -913,6 +916,10 @@ fi
 # Hybrid IDE RPC-aware editor launcher (`v [files...]`)
 unalias v 2>/dev/null || true
 _ide_tmux_target() {
+    local with_meta=0
+    if [ "${1:-}" = "-m" ]; then
+        with_meta=1
+    fi
     [[ "${TMUX:-}" == *,*,* ]] && command -v tmux >/dev/null 2>&1 || return 1
     local tmux_rest="${TMUX%,*}"
     local tmux_pid="${tmux_rest##*,}"
@@ -923,9 +930,18 @@ _ide_tmux_target() {
         tmux_target="\$$tmux_sid"
     fi
     [ -n "$tmux_target" ] || return 1
-    local srv_info fmt='#{pid}:#{session_id}'
-    [[ "$tmux_target" == %* ]] && fmt='#{pid}:#{pane_id}'
-    srv_info="$(tmux display-message -p -t "$tmux_target" "$fmt" 2>/dev/null || true)"
+    local id_fmt='#{session_id}'
+    [[ "$tmux_target" == %* ]] && id_fmt='#{pane_id}'
+    if [ "$with_meta" = "1" ]; then
+        local srv_info srv_prefix
+        srv_info="$(tmux display-message -p -t "$tmux_target" "#{pid}:${id_fmt}"$'\t'"#{@ide_socket}"$'\t'"#{@ide_editor_pane}" 2>/dev/null || true)"
+        srv_prefix="${srv_info%%$'\t'*}"
+        [ "$srv_prefix" = "$tmux_pid:$tmux_target" ] || return 1
+        printf '%s' "${tmux_target}"$'\t'"${srv_info#*$'\t'}"
+        return 0
+    fi
+    local srv_info
+    srv_info="$(tmux display-message -p -t "$tmux_target" "#{pid}:${id_fmt}" 2>/dev/null || true)"
     [ "$srv_info" = "$tmux_pid:$tmux_target" ] || return 1
     printf '%s' "$tmux_target"
 }
@@ -983,12 +999,15 @@ v() {
     done
     [ "$expect_cmd" = "1" ] && local_only=1
 
-    local tmux_target=""
+    local tmux_target="" tmux_meta="" tmux_meta_rest="" tmux_ed_pane=""
     if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ]; then
-        tmux_target="$(_ide_tmux_target || true)"
+        tmux_meta="$(_ide_tmux_target -m || true)"
     fi
-    if [ -n "$tmux_target" ]; then
-        tmux_sock="$(tmux show-options -qv -t "$tmux_target" @ide_socket 2>/dev/null || true)"
+    if [ -n "$tmux_meta" ]; then
+        tmux_target="${tmux_meta%%$'\t'*}"
+        tmux_meta_rest="${tmux_meta#*$'\t'}"
+        tmux_sock="${tmux_meta_rest%%$'\t'*}"
+        tmux_ed_pane="${tmux_meta_rest#*$'\t'}"
         if [ -z "$tmux_sock" ]; then
             local env_sock
             env_sock="$(tmux show-environment -t "$tmux_target" NVIM_IDE_SOCKET 2>/dev/null || true)"
@@ -998,7 +1017,7 @@ v() {
         fi
         [ -z "$sock" ] && sock="$tmux_sock"
         if [ -z "$pane" ]; then
-            pane="$(tmux show-options -qv -t "$tmux_target" @ide_editor_pane 2>/dev/null || true)"
+            pane="$tmux_ed_pane"
             if [ -z "$pane" ]; then
                 local env_pane
                 env_pane="$(tmux show-environment -t "$tmux_target" NVIM_IDE_PANE 2>/dev/null || true)"
@@ -1010,9 +1029,8 @@ v() {
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
-        if nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
-            if [ "$local_only" = "0" ]; then
-                nvim --headless --server "$sock" --remote-expr 'luaeval("(function() local u=vim.uv or vim.loop; if u then local p=nil; for _,c in ipairs({vim.env.PWD or \"\",vim.env.IDE_WORKDIR or \"\",vim.env.IDE_INITIAL_ROOT or \"\"}) do if c and c~=\"\" and vim.fn.isdirectory(c)==1 then p=c; break end end; if p then local d,s=u.fs_stat(\".\"),u.fs_stat(p); if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then pcall(vim.fn.chdir,p); vim.env.PWD=p end end end end)()")' >/dev/null 2>&1 || true
+        if [ "$local_only" = "0" ]; then
+            if nvim --headless --server "$sock" --remote-expr 'exists("*luaeval") ? luaeval("(function() local u=vim.uv or vim.loop; if u then local p=nil; for _,c in ipairs({vim.env.PWD or \"\",vim.env.IDE_WORKDIR or \"\",vim.env.IDE_INITIAL_ROOT or \"\"}) do if c and c~=\"\" and vim.fn.isdirectory(c)==1 then p=c; break end end; if p then local d,s=u.fs_stat(\".\"),u.fs_stat(p); if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then pcall(vim.fn.chdir,p); vim.env.PWD=p end end end; pcall(vim.cmd,\"silent! checktime\"); return 1 end)()") : len(execute("silent! checktime"))+1' >/dev/null 2>&1; then
                 if [ "${#abs_args[@]}" -gt 0 ]; then
                     nvim --server "$sock" --remote "${abs_args[@]}"
                 fi
@@ -1025,9 +1043,9 @@ v() {
                     local cur_pane="${TMUX_PANE:-}"
                     if [ -z "$pane" ] || [ "$cur_pane" != "$pane" ]; then
                         if [ -x "$HOME/.local/bin/ide" ]; then
-                            "$HOME/.local/bin/ide" --focus-editor >/dev/null 2>&1 || true
+                            IDE_SKIP_CHECKTIME=1 "$HOME/.local/bin/ide" --focus-editor >/dev/null 2>&1 || true
                         elif command -v ide >/dev/null 2>&1; then
-                            ide --focus-editor >/dev/null 2>&1 || true
+                            IDE_SKIP_CHECKTIME=1 ide --focus-editor >/dev/null 2>&1 || true
                         elif [ -n "$pane" ]; then
                             tmux select-window -t "$pane" 2>/dev/null || true
                             tmux select-pane -t "$pane" 2>/dev/null || true
@@ -1035,8 +1053,10 @@ v() {
                     fi
                 fi
                 return 0
+            else
+                rm -f "$sock" 2>/dev/null || true
             fi
-        else
+        elif ! nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
             rm -f "$sock" 2>/dev/null || true
         fi
     fi
@@ -3188,7 +3208,23 @@ theme() {
 _theme_bash_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]:-}"
     local prev="${COMP_WORDS[COMP_CWORD-1]:-}"
+    local prev2=""
+    (( COMP_CWORD >= 2 )) && prev2="${COMP_WORDS[COMP_CWORD-2]:-}"
     local opts="-l --list --plain -c --current -s --set --holiday -p --preview --env --create --from -f --force --path --no-live -n --dry-run -h --help"
+    local is_val_opt=0
+    case "$prev" in
+        -s|--set|-p|--preview|--env|--from|-n|--dry-run) is_val_opt=1 ;;
+        =)
+            case "$prev2" in
+                -s|--set|-p|--preview|--env|--from|-n|--dry-run) is_val_opt=1 ;;
+            esac
+            ;;
+    esac
+    if (( ! is_val_opt )) && [[ "$cur" == -* ]] && [[ "$cur" != --set=* && "$cur" != --preview=* && "$cur" != --env=* && "$cur" != --from=* && "$cur" != --dry-run=* ]]; then
+        # shellcheck disable=SC2207
+        COMPREPLY=($(compgen -W "$opts" -- "$cur"))
+        return 0
+    fi
     local themes=""
     local theme_bin=""
     if [ -x "$HOME/.local/bin/theme" ]; then
@@ -3203,20 +3239,29 @@ _theme_bash_complete() {
         _hs_bash_collect_all_slugs
         themes="${_HS_ALL_SLUGS[*]}"
     fi
-    case "$prev" in
-        -s|--set|-p|--preview|--env|--from|-n|--dry-run)
+    case "$cur" in
+        --set=*|--preview=*|--env=*|--from=*|--dry-run=*)
+            local val_cur="${cur#*=}"
             # shellcheck disable=SC2207
-            COMPREPLY=($(compgen -W "$themes" -- "$cur"))
+            COMPREPLY=($(compgen -W "$themes" -- "$val_cur"))
+            if [[ "${COMP_WORDBREAKS:-}" != *"="* ]]; then
+                local opt_pfx="${cur%%=*}=" i
+                for ((i = 0; i < ${#COMPREPLY[@]}; i++)); do
+                    COMPREPLY[$i]="${opt_pfx}${COMPREPLY[$i]}"
+                done
+            fi
             return 0
             ;;
     esac
-    if [[ "$cur" == -* ]]; then
+    if (( is_val_opt )); then
+        local val_cur="$cur"
+        [ "$val_cur" = "=" ] && val_cur=""
         # shellcheck disable=SC2207
-        COMPREPLY=($(compgen -W "$opts" -- "$cur"))
-    else
-        # shellcheck disable=SC2207
-        COMPREPLY=($(compgen -W "$themes $opts" -- "$cur"))
+        COMPREPLY=($(compgen -W "$themes" -- "$val_cur"))
+        return 0
     fi
+    # shellcheck disable=SC2207
+    COMPREPLY=($(compgen -W "$themes $opts" -- "$cur"))
 }
 complete -F _theme_bash_complete theme 2>/dev/null || true
 
@@ -4600,12 +4645,12 @@ if [[ "$-" == *i* ]]; then
     fi
 fi
 
-if command -v zoxide >/dev/null 2>&1; then
-    eval "$(zoxide init bash)"
-fi
-
 if command -v mise >/dev/null 2>&1; then
     eval "$(mise activate bash)"
+fi
+
+if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init bash)"
 fi
 
 if [[ "$-" == *i* ]]; then

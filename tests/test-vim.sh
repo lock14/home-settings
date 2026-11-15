@@ -2668,9 +2668,16 @@ EOF
             fail "Neovim IDE session switcher & context dispatch keymaps" "Expected '$EXPECTED_NVIM_FLEET', got '$NVIM_FLEET_OUT'"
         fi
 
-        # Verify Neovim Smart-Home toggle (n/v/s/o/i, soft-wrap, visual-block tabs) and live JSON-RPC ts_ls LspAttach
+        # Verify Neovim Smart-Home toggle (n/v/s/o/i, soft-wrap, visual-block tabs), declarative LSP split, PATH ordering, and live JSON-RPC ts_ls LspAttach
         NVIM_PARITY_DIR="$(mktemp -d)"
-        mkdir -p "$NVIM_PARITY_DIR/bin" "$NVIM_PARITY_DIR/proj"
+        PARITY_ORIG_DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+        mkdir -p "$NVIM_PARITY_DIR/bin" "$NVIM_PARITY_DIR/proj" "$NVIM_PARITY_DIR/xdg_data/nvim" "$NVIM_PARITY_DIR/xdg_data/mise/shims" "$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-typescript/6.0.3/node_modules/typescript/lib" "$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-pyright/latest/bin"
+        for _p_sub in lazy site; do
+            if [ -e "$PARITY_ORIG_DATA/nvim/$_p_sub" ]; then
+                ln -s "$PARITY_ORIG_DATA/nvim/$_p_sub" "$NVIM_PARITY_DIR/xdg_data/nvim/$_p_sub"
+            fi
+        done
+        printf '// mock tsserver\n' > "$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-typescript/6.0.3/node_modules/typescript/lib/tsserver.js"
         printf '{"compilerOptions":{"strict":true}}\n' > "$NVIM_PARITY_DIR/proj/tsconfig.json"
         printf 'export const App = (): string => "hello";\n' > "$NVIM_PARITY_DIR/proj/app.tsx"
         if command -v python3 >/dev/null 2>&1; then
@@ -2866,8 +2873,34 @@ local ins4 = vim.api.nvim_get_current_line()
 
 local ins_ok = (ins1 == "Z    YXhello" and ins2 == "A    " and ins3 == "    B" and ins4 == "C")
 
+local expected_fb = vim.env.NVIM_PARITY_DIR .. "/xdg_data/mise/installs/npm-typescript/6.0.3/node_modules/typescript/lib/tsserver.js"
+local ts_fb_ok = (ts_cfg ~= nil and ts_cfg.init_options ~= nil and ts_cfg.init_options.tsserver ~= nil and ts_cfg.init_options.tsserver.fallbackPath == expected_fb)
+local cur_path = vim.env.PATH or ""
+local idx_inst = cur_path:find(vim.env.NVIM_PARITY_DIR .. "/xdg_data/mise/installs/npm-pyright/latest/bin", 1, true)
+local idx_shims = cur_path:find(vim.env.NVIM_PARITY_DIR .. "/xdg_data/mise/shims", 1, true)
+local idx_mason = cur_path:find(vim.env.NVIM_PARITY_DIR .. "/xdg_data/nvim/mason/bin", 1, true)
+local idx_usr = cur_path:find("/usr/bin", 1, true)
+local path_ord_ok = (idx_inst ~= nil and idx_shims ~= nil and idx_mason ~= nil and idx_usr ~= nil and idx_inst < idx_shims and idx_shims < idx_mason and idx_mason < idx_usr)
+local ok_lc, lc = pcall(require, "lazy.core.config")
+local mlsp_ens = (ok_lc and lc.plugins and lc.plugins["mason-lspconfig.nvim"] and lc.plugins["mason-lspconfig.nvim"].opts and lc.plugins["mason-lspconfig.nvim"].opts.ensure_installed) or {}
+local ens_ok = (#mlsp_ens == 6)
+    and vim.tbl_contains(mlsp_ens, "clangd")
+    and vim.tbl_contains(mlsp_ens, "rust_analyzer")
+    and vim.tbl_contains(mlsp_ens, "gopls")
+    and vim.tbl_contains(mlsp_ens, "lua_ls")
+    and vim.tbl_contains(mlsp_ens, "terraformls")
+    and vim.tbl_contains(mlsp_ens, "jdtls")
+    and not vim.tbl_contains(mlsp_ens, "ts_ls")
+    and not vim.tbl_contains(mlsp_ens, "pyright")
+local all11_ok = true
+for _, s in ipairs({ "clangd", "rust_analyzer", "gopls", "pyright", "ts_ls", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls", "leanls" }) do
+    if not (vim.lsp and vim.lsp.config and vim.lsp.config[s] ~= nil) then
+        all11_ok = false
+    end
+end
+
 io.write(table.concat({
-    "TSFT=" .. tostring(ts_ft_ok),
+    "TSFT=" .. tostring(ts_ft_ok and ts_fb_ok and path_ord_ok and ens_ok and all11_ok),
     "TSEN=" .. tostring(ts_en_ok),
     "TSAT=" .. tostring(ts_attach_ok),
     "NORM=" .. tostring(norm_ok),
@@ -2875,10 +2908,10 @@ io.write(table.concat({
     "INS=" .. tostring(ins_ok),
 }, "|"))
 EOF
-        NVIM_PARITY_OUT="$(export NVIM_PARITY_DIR; PATH="$NVIM_PARITY_DIR/bin:$PATH" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_PARITY_DIR/parity_check.lua" 2>/dev/null || true)"
+        NVIM_PARITY_OUT="$(export NVIM_PARITY_DIR; NVIM_TS_SKIP_AUTO_INSTALL=1 MISE_DATA_DIR="" XDG_DATA_HOME="$NVIM_PARITY_DIR/xdg_data/" XDG_STATE_HOME="$NVIM_PARITY_DIR/xdg_state" PATH="$NVIM_PARITY_DIR/bin:/opt/homebrew/bin:$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-pyright/latest/bin:/usr/bin:/bin:$NVIM_PARITY_DIR/xdg_data/mise/shims" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_PARITY_DIR/parity_check.lua" 2>/dev/null || true)"
         rm -rf "$NVIM_PARITY_DIR"
         if [ "$NVIM_PARITY_OUT" = "TSFT=true|TSEN=true|TSAT=true|NORM=true|VISOP=true|INS=true" ]; then
-            pass "Neovim init.lua registers, auto-enables, and attaches ts_ls (scrubbing semanticTokensProvider and documentLinkProvider) and executes Smart-Home toggle across normal, soft-wrap, visual, visual-block, select, operator-pending, and insert modes"
+            pass "Neovim init.lua registers all 11 LSPs, restricts Mason ensure_installed to 6 binary servers, orders mise/installs < mise/shims < mason/bin < /usr/bin, resolves Mise tsserver.js fallbackPath (with empty MISE_DATA_DIR guard), attaches ts_ls, and executes Smart-Home toggle across all modes"
         else
             fail "Neovim ts_ls LSP & Smart-Home toggle" "Expected 'TSFT=true|TSEN=true|TSAT=true|NORM=true|VISOP=true|INS=true', got '$NVIM_PARITY_OUT'"
         fi
@@ -2886,6 +2919,8 @@ EOF
         if command -v python3 >/dev/null 2>&1; then
             MASON_UI_OUT="$(NVIM_CONFIG_PATH="$NVIM_CONFIG" python3 - <<'PY'
 import fcntl
+import hashlib
+import json
 import os
 import pty
 import shutil
@@ -2903,188 +2938,180 @@ tmp_dir = tempfile.mkdtemp()
 proc = None
 sfd_open = True
 
+
 def _drain_pty(fd):
     while True:
         try:
             data = os.read(fd, 8192)
             if not data:
                 break
+            if b"\x1b[6n" in data:
+                os.write(fd, b"\x1b[1;1R")
+            if b"\x1b[5n" in data:
+                os.write(fd, b"\x1b[0n")
         except OSError:
             break
+
 
 drain_thread = threading.Thread(target=_drain_pty, args=(mfd,), daemon=True)
 drain_thread.start()
 
+
+def _remote_expr(sock_path, expr, env, timeout=3):
+    try:
+        return subprocess.run(
+            ["nvim", "--headless", "--server", sock_path, "--remote-expr", expr],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+
+
 try:
     orig_data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    orig_cache = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    orig_state = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
     iso_data = os.path.join(tmp_dir, "data")
+    iso_state = os.path.join(tmp_dir, "state")
+    iso_cache = os.path.join(tmp_dir, "cache")
     iso_nvim_data = os.path.join(iso_data, "nvim")
     os.makedirs(iso_nvim_data, exist_ok=True)
     for sub in ("lazy", "site"):
         src_sub = os.path.join(orig_data, "nvim", sub)
         if os.path.exists(src_sub):
             os.symlink(src_sub, os.path.join(iso_nvim_data, sub))
-    for mason_pkg in (
-        "clangd",
-        "rust-analyzer",
-        "gopls",
-        "pyright",
-        "typescript-language-server",
-        "lua-language-server",
-        "bash-language-server",
-        "terraform-ls",
-        "yaml-language-server",
-        "json-lsp",
-        "jdtls",
-    ):
-        os.makedirs(os.path.join(iso_nvim_data, "mason", "packages", mason_pkg), exist_ok=True)
 
-    bin_dir = os.path.join(tmp_dir, "bin")
-    os.makedirs(bin_dir, exist_ok=True)
-    npm_log = os.path.join(tmp_dir, "npm_calls.log")
-    npm_mock = os.path.join(bin_dir, "npm")
-    with open(npm_mock, "w", encoding="utf-8") as fh:
-        fh.write(
-            f'#!/bin/sh\nprintf "%s\\n" "$*" >> {npm_log!r}\n'
-            'if [ "$1" = "view" ] && [ "$3" = "dist-tags.latest" ]; then\n'
-            '    case "$2" in\n'
-            '        mock-fast-event-lsp) printf "5.1.3\\n"; exit 0 ;;\n'
-            '        vscode-langservers-extracted) printf "4.10.0\\n"; exit 0 ;;\n'
-            '    esac\n'
-            'fi\nexit 1\n'
+    has_mason = os.path.isdir(os.path.join(iso_nvim_data, "lazy", "mason.nvim")) and os.path.isdir(
+        os.path.join(iso_nvim_data, "lazy", "mason-lspconfig.nvim")
+    )
+    if not has_mason:
+        print("n|false|true|")
+    else:
+        os.makedirs(os.path.join(iso_nvim_data, "mason", "bin"), exist_ok=True)
+        reg_dir = os.path.join(iso_nvim_data, "mason", "registries", "github", "mason-org", "mason-registry")
+        os.makedirs(reg_dir, exist_ok=True)
+        now_ts = int(time.time())
+        mock_specs = [
+            {
+                "name": pkg_name,
+                "description": pkg_name,
+                "homepage": "https://example.invalid",
+                "licenses": ["MIT"],
+                "languages": [],
+                "categories": ["LSP"],
+                "source": {"id": f"pkg:generic/{pkg_name}@1.0.0"},
+                "neovim": {"lspconfig": lsp_name},
+            }
+            for pkg_name, lsp_name in (
+                ("clangd", "clangd"),
+                ("rust-analyzer", "rust_analyzer"),
+                ("gopls", "gopls"),
+                ("lua-language-server", "lua_ls"),
+                ("terraform-ls", "terraformls"),
+                ("jdtls", "jdtls"),
+            )
+        ]
+        with open(os.path.join(reg_dir, "registry.json"), "w", encoding="utf-8") as rjf:
+            json.dump(mock_specs, rjf)
+        with open(os.path.join(reg_dir, "info.json"), "w", encoding="utf-8") as ijf:
+            json.dump({"checksums": {}, "download_timestamp": now_ts, "version": "hermetic"}, ijf)
+        os.makedirs(os.path.join(iso_cache, "nvim"), exist_ok=True)
+        reg_hash = hashlib.sha256(b"mason-org/mason-registry").hexdigest()
+        with open(os.path.join(iso_cache, "nvim", "mason-registry-update"), "w", encoding="utf-8") as rfh:
+            rfh.write(f"{reg_hash}\n{now_ts}")
+        for mason_pkg in ("clangd", "rust-analyzer", "gopls", "lua-language-server", "terraform-ls", "jdtls"):
+            os.makedirs(os.path.join(iso_nvim_data, "mason", "packages", mason_pkg), exist_ok=True)
+
+        env = dict(os.environ)
+        env.setdefault("MISE_DATA_DIR", os.path.join(orig_data, "mise"))
+        env.setdefault("MISE_CACHE_DIR", os.path.join(orig_cache, "mise"))
+        env.setdefault("MISE_STATE_DIR", os.path.join(orig_state, "mise"))
+        env["XDG_DATA_HOME"] = iso_data
+        env["XDG_STATE_HOME"] = iso_state
+        env["XDG_CACHE_HOME"] = iso_cache
+        env["NVIM_TS_SKIP_AUTO_INSTALL"] = "1"
+        env["NVIM_LOG_FILE"] = "/dev/null"
+        env["HTTPS_PROXY"] = "http://127.0.0.1:1"
+        env["https_proxy"] = "http://127.0.0.1:1"
+
+        def _attach_ctty():
+            os.setsid()
+            try:
+                fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+            except OSError:
+                try:
+                    fcntl.ioctl(0, termios.TIOCSCTTY, 1)
+                except OSError:
+                    pass
+
+        sock = os.path.join(tmp_dir, "nvim-ui.sock")
+        proc = subprocess.Popen(
+            ["nvim", "-i", "NONE", "-u", cfg_path, "--listen", sock],
+            stdin=sfd,
+            stdout=sfd,
+            stderr=sfd,
+            env=env,
+            preexec_fn=_attach_ctty,
+            close_fds=True,
         )
-    os.chmod(npm_mock, 0o755)
-    probe_lua = os.path.join(tmp_dir, "mason_ui_probe.lua")
-    with open(probe_lua, "w", encoding="utf-8") as fh:
-        fh.write("""
-_G.hs_mason_retried_ver = "none"
-_G.hs_mason_purl_ver = "none"
-_G.hs_mason_gh_called = "no"
-local ok_n, notify = pcall(require, "mason-lspconfig.notify")
-if ok_n and type(notify) == "function" then
-    for i = 1, 6 do
-        notify("[mason-lspconfig.nvim] failed to install ts_ls_" .. i .. ". Installation logs are available in :Mason and :MasonLog", vim.log.levels.ERROR)
+        os.close(sfd)
+        sfd_open = False
+
+        ready = False
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            if os.path.exists(sock):
+                r = _remote_expr(sock, "v:vim_did_enter", env)
+                if r is not None and r.returncode == 0 and r.stdout.strip() == "1":
+                    ready = True
+                    break
+            time.sleep(0.05)
+
+        if not ready:
+            print("NOT_READY")
+        else:
+            probe_lua = os.path.join(tmp_dir, "mason_ui_probe.lua")
+            with open(probe_lua, "w", encoding="utf-8") as fh:
+                fh.write("""
+_G.hs_mason_echo_done = false
+local notify = package.loaded["mason-lspconfig.notify"] or require("mason-lspconfig.notify")
+if type(notify) == "function" then
+    for i = 1, 5 do
+        notify("[mason-lspconfig.nvim] failed to install clangd_" .. i .. "\\r\\nInstallation logs are available in :Mason and :MasonLog (日本語テスト)", vim.log.levels.ERROR)
     end
-end
-local ok_r, registry = pcall(require, "mason-registry")
-if ok_r and registry and registry.emit then
     local uv = vim.uv or vim.loop
     local t = uv.new_timer()
     t:start(10, 0, function()
         t:stop()
         t:close()
-        pcall(function()
-            registry:emit("package:install:failed", {
-                name = "clangd",
-                spec = { source = { id = "pkg:github/clangd/clangd@23.1.0" } },
-                install = function()
-                    _G.hs_mason_gh_called = "yes"
-                end,
-            })
-            registry:emit("package:install:failed", {
-                name = "json-lsp",
-                spec = { source = { id = "pkg:npm/vscode-langservers-extracted@4.9.0" } },
-                install = function(_, opts)
-                    _G.hs_mason_purl_ver = tostring(opts and opts.version or "")
-                end,
-            })
-            registry:emit("package:install:failed", {
-                name = "mock-fast-event-lsp",
-                install = function(_, opts)
-                    _G.hs_mason_retried_ver = tostring(opts and opts.version or "")
-                end,
-            })
+        notify("[mason-lspconfig.nvim] fast-event echo truncation check with wide glyphs 日本語テスト and extra detail that exceeds 50 columns", vim.log.levels.WARN)
+        vim.schedule(function()
+            _G.hs_mason_echo_done = true
         end)
     end)
-else
-    _G.hs_mason_retried_ver = "no-registry"
-    _G.hs_mason_purl_ver = "no-registry"
 end
 """)
-    sock = os.path.join(tmp_dir, "nvim-ui.sock")
-    env = dict(os.environ)
-    env["PATH"] = bin_dir + ":" + env.get("PATH", "")
-    env["XDG_DATA_HOME"] = iso_data
-    env["XDG_STATE_HOME"] = os.path.join(tmp_dir, "state")
-    env["XDG_CACHE_HOME"] = os.path.join(tmp_dir, "cache")
-    env["NVIM_TS_SKIP_AUTO_INSTALL"] = "1"
-    env["NVIM_LOG_FILE"] = "/dev/null"
-
-    def _attach_ctty():
-        os.setsid()
-        try:
-            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
-        except OSError:
-            try:
-                fcntl.ioctl(0, termios.TIOCSCTTY, 1)
-            except OSError:
-                pass
-
-    proc = subprocess.Popen(
-        ["nvim", "-i", "NONE", "-u", cfg_path, "--listen", sock],
-        stdin=sfd,
-        stdout=sfd,
-        stderr=sfd,
-        env=env,
-        preexec_fn=_attach_ctty,
-        close_fds=True,
-    )
-    os.close(sfd)
-    sfd_open = False
-    ready = False
-    ready_deadline = time.monotonic() + 15.0
-    while time.monotonic() < ready_deadline:
-        if os.path.exists(sock):
-            r0 = subprocess.run(
-                ["nvim", "--headless", "--server", sock, "--remote-expr", "v:vim_did_enter"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=3,
+            _remote_expr(sock, f"execute('luafile {probe_lua}')", env, timeout=5)
+            expr = (
+                "mode(1)"
+                " . '|' . luaeval('tostring(vim.api.nvim_get_mode().blocking)')"
+                " . '|' . luaeval('(function() if not _G.hs_mason_echo_done then return \"pending\" end local row = vim.o.lines; local cells = {}; for c = 1, vim.o.columns do cells[#cells + 1] = vim.fn.nr2char(vim.fn.screenchar(row, c)) end; local s = vim.trim(table.concat(cells)); return tostring(s:find(\"fast%-event\") ~= nil and s:sub(-3) == \"…\" and vim.fn.strdisplaywidth(s) <= vim.o.columns) end)()')"
+                " . '|' . v:errmsg"
             )
-            if r0.returncode == 0 and r0.stdout.strip() == "1":
-                ready = True
-                break
-        time.sleep(0.05)
-    if not ready:
-        print("NOT_READY")
-    else:
-        subprocess.run(
-            ["nvim", "--headless", "--server", sock, "--remote-expr", f"execute('luafile {probe_lua}')"],
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=5,
-        )
-        deadline = time.monotonic() + 5.0
-        state = ""
-        while time.monotonic() < deadline:
-            r1 = subprocess.run(
-                [
-                    "nvim",
-                    "--headless",
-                    "--server",
-                    sock,
-                    "--remote-expr",
-                    "mode(1) . '|' . luaeval('tostring(_G.hs_mason_retried_ver)') . '|' . luaeval('tostring(_G.hs_mason_purl_ver)') . '|' . luaeval('tostring(_G.hs_mason_gh_called)') . '|' . v:errmsg",
-                ],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=3,
-            )
-            if r1.returncode == 0:
-                state = r1.stdout.strip()
-                if state.startswith("n|5.1.3|4.10.0|no|") or state.startswith("n|no-registry|no-registry|no|"):
-                    break
-            time.sleep(0.1)
-        npm_logged = open(npm_log, encoding="utf-8").read() if os.path.exists(npm_log) else ""
-        if "clangd" in npm_logged or "json-lsp" in npm_logged:
-            state = "BAD_NPM_CALLS:" + npm_logged.replace("\n", ";")
-        print(state)
+            state = ""
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline:
+                rp = _remote_expr(sock, expr, env)
+                if rp is not None and rp.returncode == 0:
+                    state = rp.stdout.strip()
+                    if state.startswith("n|false|true|"):
+                        break
+                time.sleep(0.05)
+            print(state)
 finally:
     if proc is not None:
         proc.terminate()
@@ -3100,14 +3127,10 @@ finally:
     shutil.rmtree(tmp_dir, ignore_errors=True)
 PY
 )"
-            if [[ "$MASON_UI_OUT" == "n|5.1.3|4.10.0|no|"* ]] || [[ "$MASON_UI_OUT" == "n|no-registry|no-registry|no|"* ]]; then
-                if [[ "$MASON_UI_OUT" != *"E5560"* ]]; then
-                    pass "Neovim init.lua keeps narrow-PTY UI Mason error notifications non-blocking (zero hit-enter freeze) and retries failed npm installs asynchronously without fast-event E5560 errors"
-                else
-                    fail "Neovim Mason UI fast-event safety" "Unexpected E5560 error in '$MASON_UI_OUT'"
-                fi
+            if [[ "$MASON_UI_OUT" == "n|false|true|"* ]] && [[ "$MASON_UI_OUT" != *"E5560"* ]]; then
+                pass "Neovim init.lua truncates mason-lspconfig.notify messages to single-line echospace in narrow PTY UIs without hit-enter freezes or E5560 fast-event errors"
             else
-                fail "Neovim Mason UI non-blocking notify & retry" "Expected 'n|5.1.3|' (or 'n|no-registry|'), got '$MASON_UI_OUT'"
+                fail "Neovim Mason UI non-blocking echospace truncation" "Expected 'n|false|true|' without E5560, got '$MASON_UI_OUT'"
             fi
         fi
 

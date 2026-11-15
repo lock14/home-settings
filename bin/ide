@@ -21,7 +21,47 @@ if { [ ! -d . ] || [ ! . -ef "${PWD:-}" ]; } && [[ "${PWD:-}" == /* ]] && [ -d "
     builtin cd -- "$PWD" || true
 fi
 if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
-    export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
+    _ide_shims="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims"
+    case ":$PATH:" in
+        */mise/installs/*)
+            _ide_rem="${PATH}:"
+            _ide_new_path=""
+            _ide_last_mise=0
+            _ide_idx=0
+            while [ -n "$_ide_rem" ]; do
+                _ide_p="${_ide_rem%%:*}"
+                _ide_rem="${_ide_rem#*:}"
+                [ -z "$_ide_p" ] || [ "$_ide_p" = "$_ide_shims" ] && continue
+                _ide_idx=$((_ide_idx + 1))
+                case "$_ide_p" in */mise/installs/*) _ide_last_mise="$_ide_idx" ;; esac
+            done
+            _ide_rem="${PATH}:"
+            _ide_idx=0
+            _ide_shims_added=0
+            while [ -n "$_ide_rem" ]; do
+                _ide_p="${_ide_rem%%:*}"
+                _ide_rem="${_ide_rem#*:}"
+                [ -z "$_ide_p" ] || [ "$_ide_p" = "$_ide_shims" ] && continue
+                _ide_idx=$((_ide_idx + 1))
+                if [ "$_ide_shims_added" -eq 0 ] && [ "$_ide_idx" -gt "$_ide_last_mise" ]; then
+                    case "$_ide_p" in
+                        /opt/homebrew/bin|/opt/homebrew/sbin|/usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin)
+                            _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
+                            _ide_shims_added=1
+                            ;;
+                    esac
+                fi
+                _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_p"
+            done
+            [ "$_ide_shims_added" -eq 0 ] && _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
+            export PATH="$HOME/.local/bin:$_ide_new_path:/usr/local/bin:/usr/bin:/bin"
+            unset _ide_rem _ide_new_path _ide_last_mise _ide_idx _ide_shims_added _ide_p
+            ;;
+        *)
+            export PATH="$_ide_shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
+            ;;
+    esac
+    unset _ide_shims
 fi
 
 show_keys_cheatsheet() {
@@ -112,14 +152,15 @@ fi
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
 from __future__ import annotations
 
-import html
-import json
+import sys
+if sys.version_info < (3, 11) and sys.path:
+    sys.path.pop(0)
 import os
-try:
-    os.close(9)
-except OSError:
-    pass
-from pathlib import Path
+if os.environ.pop("IDE_CLOSE_FD9", "") == "1":
+    try:
+        os.close(9)
+    except OSError:
+        pass
 import re
 import select
 import shlex
@@ -127,11 +168,7 @@ import shutil
 import signal
 import stat
 import subprocess
-import sys
-import tempfile
 import time
-import unicodedata
-import urllib.parse
 
 USAGE_TEXT = """Usage: ide [OPTIONS] [DIRECTORY]
 
@@ -372,6 +409,7 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
     except AttributeError:
         uid = None
     if uid is not None:
+        from pathlib import Path
         run_dir = Path(f"/run/user/{uid}")
         if run_dir.is_dir():
             if not os.environ.get("WAYLAND_DISPLAY") and is_socket_path(run_dir / "wayland-0"):
@@ -410,6 +448,7 @@ def resolve_nvim_bin() -> str | None:
             real = cand
         norm_cand = cand.replace("\\", "/")
         if "/mise/shims/" in norm_cand or os.path.basename(real) == "mise":
+            from pathlib import Path
             mise_root = Path(cand).parent.parent
             installs_dir = mise_root / "installs" / "neovim"
             if installs_dir.is_dir():
@@ -588,9 +627,12 @@ def resolve_target_session(arg: str = "") -> str:
     if arg.startswith("#{") and arg.endswith("}"):
         arg = ""
     if arg:
+        is_dir = os.path.isdir(arg)
+        if not is_dir and sanitize_name_token(arg) == arg:
+            return arg
         if session_exists(arg):
             return arg
-        if os.path.isdir(arg):
+        if is_dir:
             return sanitize_session_name(os.path.abspath(arg))
         return sanitize_name_token(arg)
     if os.environ.get("TMUX"):
@@ -608,16 +650,24 @@ def get_ide_var(sess: str, opt_name: str, env_name: str) -> str:
     return val
 
 
-def normalize_pane_cwd(raw_cwd: str, sess: str = "", target_arg: str = "") -> str:
+def normalize_pane_cwd(
+    raw_cwd: str,
+    sess: str = "",
+    target_arg: str = "",
+    workdir_hint: str = "",
+    init_root_hint: str = "",
+) -> str:
     if raw_cwd and os.path.isdir(raw_cwd):
         return raw_cwd
     if not sess and (os.environ.get("TMUX") or target_arg):
         sess = resolve_target_session(target_arg)
-    workdir = ""
-    init_root = ""
-    if sess and session_exists(sess):
-        workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
-        init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+    workdir = workdir_hint
+    init_root = init_root_hint
+    if sess and (not workdir or not init_root) and session_exists(sess):
+        if not workdir:
+            workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+        if not init_root:
+            init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
     workdir = workdir or os.environ.get("IDE_WORKDIR") or ""
     init_root = init_root or os.environ.get("IDE_INITIAL_ROOT") or ""
     anchors = [a.rstrip("/") for a in (workdir, init_root, os.environ.get("PWD") or "") if a and os.path.isdir(a)]
@@ -727,10 +777,21 @@ def resolve_role_pane(sess: str, role: str, opt_name: str, env_name: str) -> str
     return pane
 
 
-def focus_pane_preserving_zoom(win: str, target_pane: str) -> None:
-    info = tmux_out("display-message", "-p", "-t", win, "#{pane_id}\t#{window_zoomed_flag}")
-    cur_pane, was_zoomed = (info.split("\t", 1) + ["0"])[:2] if "\t" in info else (info, "0")
-    cmd: list[str] = []
+def focus_pane_preserving_zoom(
+    win: str,
+    target_pane: str,
+    cur_pane_hint: str | None = None,
+    was_zoomed_hint: str | None = None,
+    pre_cmds: list[str] | None = None,
+) -> None:
+    if cur_pane_hint is not None and was_zoomed_hint is not None:
+        cur_pane, was_zoomed = cur_pane_hint, was_zoomed_hint
+    else:
+        info = tmux_out("display-message", "-p", "-t", win, "#{pane_id}\t#{window_zoomed_flag}")
+        cur_pane, was_zoomed = (info.split("\t", 1) + ["0"])[:2] if "\t" in info else (info, "0")
+    cmd: list[str] = list(pre_cmds) if pre_cmds else []
+    if cmd:
+        cmd.append(";")
     if cur_pane and cur_pane != target_pane:
         cmd.extend(["set-option", "-w", "-t", win, "@ide_last_pane", cur_pane, ";"])
     cmd.extend(["select-window", "-t", win, ";", "select-pane", "-t", target_pane])
@@ -803,11 +864,23 @@ def resolve_layout_roles(sess: str) -> tuple[str, str, str, str]:
     return bar_role, bar_before, left_role, right_role
 
 
-def record_main_geometry(sess: str, main_win: str, ai_pane: str, editor_pane: str, term_pane: str) -> None:
+def record_main_geometry(
+    sess: str,
+    main_win: str,
+    ai_pane: str,
+    editor_pane: str,
+    term_pane: str,
+    pane_lines: list[str] | None = None,
+) -> None:
     coords: dict[str, tuple[int, int, int, int]] = {}
-    for line in tmux_out(
-        "list-panes", "-t", main_win, "-F", "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}"
-    ).splitlines():
+    src_lines = (
+        pane_lines
+        if pane_lines is not None
+        else tmux_out(
+            "list-panes", "-t", main_win, "-F", "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}"
+        ).splitlines()
+    )
+    for line in src_lines:
         parts = line.split("\t")
         if len(parts) == 5:
             try:
@@ -1274,30 +1347,112 @@ def swap_ide_pane(raw_dir: str, target_arg: str) -> int:
         return 1
 
     sess = resolve_target_session(target_arg)
-    if not session_exists(sess):
+    if not sess:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    editor_pane = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
-    ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
-    term_pane = resolve_role_pane(sess, "term", "@ide_term_pane", "IDE_TERM_PANE")
-    main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
+    snap = run_tmux(
+        "display-message", "-p", "-t", f"={sess}:",
+        _TMUX_SEP.join([
+            "OPTS",
+            "#{@ide_editor_pane}",
+            "#{@ide_ai_pane}",
+            "#{@ide_term_pane}",
+            "#{@ide_main_win}",
+            "#{@ide_layout_mode}",
+        ]),
+        ";",
+        "list-panes", "-s", "-t", f"={sess}:", "-F",
+        _TMUX_SEP.join([
+            "PANE",
+            "#{pane_id}",
+            "#{window_id}",
+            "#{window_name}",
+            "#{@ide_role}",
+            "#{pane_active}",
+            "#{window_zoomed_flag}",
+        ]),
+    )
+    if snap.returncode != 0 or not snap.stdout:
+        print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
+        return 1
+
+    editor_pane = ai_pane = term_pane = main_win = layout_mode = ""
+    panes_by_id: dict[str, tuple[str, str, str, str, str]] = {}
+    opts_pfx = f"OPTS{_TMUX_SEP}"
+    pane_pfx = f"PANE{_TMUX_SEP}"
+    for line in snap.stdout.splitlines():
+        if line.startswith(opts_pfx):
+            op = (line.split(_TMUX_SEP)[1:] + [""] * 5)[:5]
+            editor_pane, ai_pane, term_pane, main_win, layout_mode = op
+        elif line.startswith(pane_pfx):
+            pp = line.split(_TMUX_SEP, 6)
+            if len(pp) >= 7:
+                panes_by_id[pp[1]] = (pp[2], pp[3], pp[4], pp[5], pp[6])
+
+    def _resolve_swap_role(cur_p: str, role: str, opt_name: str, env_name: str, check_env: bool = True) -> str:
+        if cur_p and cur_p in panes_by_id:
+            return cur_p
+        for pid, (_, _, prole, _, _) in panes_by_id.items():
+            if prole == role:
+                set_ide_var(sess, opt_name, env_name, pid)
+                return pid
+        if check_env:
+            env_line = tmux_out("show-environment", "-t", f"={sess}", env_name)
+            prefix = f"{env_name}="
+            if env_line.startswith(prefix):
+                fb = env_line[len(prefix):]
+                if fb and fb in panes_by_id:
+                    return fb
+        return ""
+
+    editor_pane = _resolve_swap_role(editor_pane, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
+    ai_pane = _resolve_swap_role(ai_pane, "ai", "@ide_ai_pane", "IDE_AI_PANE")
+    term_pane = _resolve_swap_role(
+        term_pane,
+        "term",
+        "@ide_term_pane",
+        "IDE_TERM_PANE",
+        check_env=(layout_mode or "3pane") != "2pane",
+    )
+
+    if not main_win or not any(wid == main_win and not wname.startswith("_ide_park_") for wid, wname, _, _, _ in panes_by_id.values()):
+        main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
     if not main_win:
         return 1
 
-    if tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") == "1":
-        run_tmux("resize-pane", "-Z", "-t", main_win)
-
-    src_pane = tmux_out("display-message", "-p", "-t", main_win, "#{pane_id}")
+    src_pane = ""
+    was_zoomed = False
+    for pid, (wid, _, _, p_act, w_zoom) in panes_by_id.items():
+        if wid == main_win:
+            if w_zoom == "1":
+                was_zoomed = True
+            if p_act == "1" and not src_pane:
+                src_pane = pid
+    if not src_pane:
+        src_pane = tmux_out("display-message", "-p", "-t", main_win, "#{pane_id}")
     if not src_pane:
         return 0
 
-    run_tmux("select-pane", "-t", src_pane, dir_flag)
-    dst_pane = tmux_out("display-message", "-p", "-t", main_win, "#{pane_id}")
+    probe_cmd: list[str] = []
+    if was_zoomed:
+        probe_cmd.extend(["resize-pane", "-Z", "-t", main_win, ";"])
+    probe_cmd.extend([
+        "select-pane", "-t", src_pane, dir_flag,
+        ";",
+        "display-message", "-p", "-t", main_win, "#{pane_id}",
+    ])
+    dst_pane = tmux_out(*probe_cmd).strip()
 
     if dst_pane and dst_pane != src_pane:
-        run_tmux("swap-pane", "-s", src_pane, "-t", dst_pane, ";", "select-pane", "-t", src_pane)
-        record_main_geometry(sess, main_win, ai_pane, editor_pane, term_pane)
+        geom_lines = tmux_out(
+            "swap-pane", "-s", src_pane, "-t", dst_pane,
+            ";",
+            "select-pane", "-t", src_pane,
+            ";",
+            "list-panes", "-t", main_win, "-F", "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}",
+        ).splitlines()
+        record_main_geometry(sess, main_win, ai_pane, editor_pane, term_pane, pane_lines=geom_lines)
     return 0
 
 
@@ -1317,19 +1472,27 @@ def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> 
         run_tmux("send-keys", "-t", pane_id, " vim", "C-m")
 
 
-def ensure_editor_nvim_running(editor_pane: str, sock: str, initial_file: str = "") -> bool:
+def ensure_editor_nvim_running(
+    editor_pane: str,
+    sock: str,
+    initial_file: str = "",
+    cached_cmd_ts: tuple[str, str] | None = None,
+) -> bool:
     if not editor_pane or not sock:
         return False
     if is_socket_path(sock):
         return False
     if not resolve_nvim_bin():
         return False
-    info = tmux_out(
-        "display-message", "-p", "-t", editor_pane,
-        _TMUX_SEP.join(["#{pane_current_command}", "#{@ide_nvim_launch_ts}"]),
-    )
-    parts = (info.split(_TMUX_SEP) + ["", ""])[:2]
-    cmd, launch_ts = parts[0].strip(), parts[1].strip()
+    if cached_cmd_ts is not None:
+        cmd, launch_ts = cached_cmd_ts[0].strip(), cached_cmd_ts[1].strip()
+    else:
+        info = tmux_out(
+            "display-message", "-p", "-t", editor_pane,
+            _TMUX_SEP.join(["#{pane_current_command}", "#{@ide_nvim_launch_ts}"]),
+        )
+        parts = (info.split(_TMUX_SEP) + ["", ""])[:2]
+        cmd, launch_ts = parts[0].strip(), parts[1].strip()
     if not cmd or "nvim" in cmd or cmd in ("vim", "vi"):
         return False
     if launch_ts.isdigit() and (int(time.time()) - int(launch_ts)) < 5:
@@ -1361,9 +1524,13 @@ def toggle_main_pane(
             "#{@ide_socket}",
             "#{@ide_ai_cli}",
             "#{@ide_initial_root}",
+            "#{@ide_workdir}",
             "#{@ide_last_pane_id}",
             "#{@ide_last_non_ai}",
             "#{@ide_quit_err}",
+            "#{@ide_ai_state}",
+            "#{@ide_ai_attn}",
+            "#{@ide_ai_msg}",
         ]),
         ";",
         "list-panes", "-s", "-t", f"={sess}:", "-F",
@@ -1375,6 +1542,12 @@ def toggle_main_pane(
             "#{@ide_role}",
             "#{pane_left}",
             "#{pane_top}",
+            "#{pane_active}",
+            "#{window_zoomed_flag}",
+            "#{@ide_last_pane}",
+            "#{pane_pid}",
+            "#{pane_current_command}",
+            "#{@ide_nvim_launch_ts}",
             "#{pane_current_path}",
         ]),
     )
@@ -1382,13 +1555,29 @@ def toggle_main_pane(
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    editor_pane = ai_pane = term_pane = main_win = layout_mode = sock = ai_cli = init_root = last_pane_id = last_non_ai = quit_err_cur = ""
-    panes_by_id: dict[str, tuple[str, str, str, int, int, str]] = {}
+    (
+        editor_pane,
+        ai_pane,
+        term_pane,
+        main_win,
+        layout_mode,
+        sock,
+        ai_cli,
+        init_root,
+        workdir_opt,
+        last_pane_id,
+        last_non_ai,
+        quit_err_cur,
+        snap_ai_state,
+        snap_ai_attn,
+        snap_ai_msg,
+    ) = ("",) * 15
+    panes_by_id: dict[str, tuple[str, str, str, int, int, str, str, str, str, str, str, str]] = {}
     opts_pfx = f"OPTS{_TMUX_SEP}"
     pane_pfx = f"PANE{_TMUX_SEP}"
     for line in snap.stdout.splitlines():
         if line.startswith(opts_pfx):
-            op = (line.split(_TMUX_SEP)[1:] + [""] * 11)[:11]
+            op = (line.split(_TMUX_SEP)[1:] + [""] * 15)[:15]
             (
                 editor_pane,
                 ai_pane,
@@ -1398,38 +1587,68 @@ def toggle_main_pane(
                 sock,
                 ai_cli,
                 init_root,
+                workdir_opt,
                 last_pane_id,
                 last_non_ai,
                 quit_err_cur,
+                snap_ai_state,
+                snap_ai_attn,
+                snap_ai_msg,
             ) = op
         elif line.startswith(pane_pfx):
-            pp = line.split(_TMUX_SEP, 7)
-            if len(pp) >= 8:
+            pp = line.split(_TMUX_SEP, 13)
+            if len(pp) >= 14:
                 try:
-                    panes_by_id[pp[1]] = (pp[2], pp[3], pp[4], int(pp[5]), int(pp[6]), pp[7])
+                    panes_by_id[pp[1]] = (
+                        pp[2],
+                        pp[3],
+                        pp[4],
+                        int(pp[5]),
+                        int(pp[6]),
+                        pp[7],
+                        pp[8],
+                        pp[9],
+                        pp[10],
+                        pp[11],
+                        pp[12],
+                        pp[13],
+                    )
                 except ValueError:
                     pass
 
-    if clear_quit_err and quit_err_cur:
-        run_tmux("set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err")
+    snap_ai_state = snap_ai_state.strip().lower()
+    snap_ai_attn = snap_ai_attn.strip()
+    snap_ai_msg = snap_ai_msg.strip()
 
-    def resolve_cached_role(cur_p: str, role: str, opt_name: str, env_name: str) -> str:
+    pending_cmds: list[str] = []
+    if clear_quit_err and quit_err_cur:
+        pending_cmds.extend(["set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err"])
+
+    need_term = (layout_mode or "3pane") != "2pane" or mode in ("term", "focus-term", "toggle-term")
+
+    def resolve_cached_role(cur_p: str, role: str, opt_name: str, env_name: str, check_env: bool = True) -> str:
         if cur_p and cur_p in panes_by_id:
             return cur_p
-        fallback_p = get_ide_var(sess, opt_name, env_name)
-        if fallback_p and fallback_p in panes_by_id:
-            return fallback_p
-        for pid, (_, _, prole, _, _, _) in panes_by_id.items():
-            if prole == role:
+        for pid, pval in panes_by_id.items():
+            if pval[2] == role:
                 set_ide_var(sess, opt_name, env_name, pid)
                 return pid
+        if check_env:
+            env_line = tmux_out("show-environment", "-t", f"={sess}", env_name)
+            prefix = f"{env_name}="
+            if env_line.startswith(prefix):
+                fallback_p = env_line[len(prefix):]
+                if fallback_p and fallback_p in panes_by_id:
+                    return fallback_p
         return ""
 
     editor_pane = resolve_cached_role(editor_pane, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
     ai_pane = resolve_cached_role(ai_pane, "ai", "@ide_ai_pane", "IDE_AI_PANE")
-    term_pane = resolve_cached_role(term_pane, "term", "@ide_term_pane", "IDE_TERM_PANE")
+    term_pane = resolve_cached_role(term_pane, "term", "@ide_term_pane", "IDE_TERM_PANE", check_env=need_term)
 
-    if not main_win or not any(wid == main_win and not wname.startswith("_ide_park_") for wid, wname, _, _, _, _ in panes_by_id.values()):
+    if not main_win or not any(
+        pval[0] == main_win and not pval[1].startswith("_ide_park_") for pval in panes_by_id.values()
+    ):
         main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
 
     if not sock:
@@ -1440,19 +1659,19 @@ def toggle_main_pane(
     if not ai_cli:
         ai_cli = os.environ.get("IDE_AI_CLI") or "agy"
 
-    need_term = (layout_mode or "3pane") != "2pane" or mode in ("term", "focus-term", "toggle-term")
-
     if not ai_pane or not editor_pane or (not term_pane and need_term):
         rows = [
-            (left, top, pid, prole)
-            for pid, (wid, _, prole, left, top, _) in panes_by_id.items()
-            if wid == main_win
+            (pval[3], pval[4], pid, pval[2])
+            for pid, pval in panes_by_id.items()
+            if pval[0] == main_win
         ]
         rows.sort(key=lambda r: (r[0], r[1]))
         if not ai_pane:
             for l, t, pid, prole in rows:
                 if l == 0 and t == 0 and prole in ("", "ai"):
                     ai_pane = pid
+                    old_v = panes_by_id[pid]
+                    panes_by_id[pid] = (old_v[0], old_v[1], "ai", *old_v[3:])
                     run_tmux("set-option", "-p", "-t", ai_pane, "@ide_role", "ai")
                     set_ide_var(sess, "@ide_ai_pane", "IDE_AI_PANE", ai_pane)
                     break
@@ -1460,6 +1679,8 @@ def toggle_main_pane(
             for l, t, pid, prole in rows:
                 if l > 0 and prole in ("", "editor"):
                     editor_pane = pid
+                    old_v = panes_by_id[pid]
+                    panes_by_id[pid] = (old_v[0], old_v[1], "editor", *old_v[3:])
                     run_tmux("set-option", "-p", "-t", editor_pane, "@ide_role", "editor")
                     set_ide_var(sess, "@ide_editor_pane", "NVIM_IDE_PANE", editor_pane)
                     break
@@ -1467,23 +1688,32 @@ def toggle_main_pane(
             for l, t, pid, prole in rows:
                 if l == 0 and t > 0 and prole in ("", "term"):
                     term_pane = pid
+                    old_v = panes_by_id[pid]
+                    panes_by_id[pid] = (old_v[0], old_v[1], "term", *old_v[3:])
                     run_tmux("set-option", "-p", "-t", term_pane, "@ide_role", "term")
                     set_ide_var(sess, "@ide_term_pane", "IDE_TERM_PANE", term_pane)
                     break
 
     raw_cur_dir = (
-        (panes_by_id[editor_pane][5] if editor_pane in panes_by_id else "")
-        or (panes_by_id[ai_pane][5] if ai_pane in panes_by_id else "")
+        (panes_by_id[editor_pane][11] if editor_pane in panes_by_id else "")
+        or (panes_by_id[ai_pane][11] if ai_pane in panes_by_id else "")
     )
-    cur_dir = normalize_pane_cwd(raw_cur_dir, sess=sess)
+    cur_dir = normalize_pane_cwd(
+        raw_cur_dir,
+        sess=sess,
+        workdir_hint=workdir_opt,
+        init_root_hint=init_root,
+    )
     if not init_root:
         init_root = cur_dir
 
     ed_just_healed = False
     ai_just_healed = False
     term_just_healed = False
+    layout_mutated = False
 
     if not editor_pane or not ai_pane or (not term_pane and need_term):
+        layout_mutated = True
         was_zoomed_before_heal = tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") or "0"
         if was_zoomed_before_heal == "1":
             run_tmux("resize-pane", "-Z", "-t", main_win)
@@ -1519,6 +1749,9 @@ def toggle_main_pane(
                     ("@ide_ai_state_ts", "IDE_AI_STATE_TS", str(int(time.time()))),
                     ("@ide_ai_msg", "IDE_AI_MSG", ""),
                 ])
+                snap_ai_state = ""
+                snap_ai_attn = "0"
+                snap_ai_msg = ""
                 ai_run_cmd = resolve_ai_cmd(ai_cli)
                 if ai_run_cmd:
                     run_tmux("send-keys", "-t", ai_pane, f" {ai_run_cmd}", "C-m")
@@ -1539,145 +1772,224 @@ def toggle_main_pane(
         if was_zoomed_before_heal == "1" and tmux_out("display-message", "-p", "-t", main_win, "#{window_zoomed_flag}") == "0":
             run_tmux("resize-pane", "-Z", "-t", main_win)
 
-    win_state = tmux_out(
-        "display-message", "-p", "-t", main_win,
-        _TMUX_SEP.join(["#{pane_id}", "#{@ide_role}", "#{@ide_last_pane}"]),
-    )
-    wparts = (win_state.split(_TMUX_SEP) + ["", "", ""])[:3]
-    active_pane, active_role, last_pane = wparts[0], wparts[1], wparts[2]
+    active_pane = active_role = last_pane = ""
+    main_win_zoomed = "0"
+    if not layout_mutated and main_win:
+        for pid, pval in panes_by_id.items():
+            if pval[0] == main_win:
+                if pval[6] == "1":
+                    main_win_zoomed = "1"
+                if pval[5] == "1" and not active_pane:
+                    active_pane = pid
+                    active_role = pval[2]
+                    last_pane = pval[7]
+    if not active_pane:
+        win_state = tmux_out(
+            "display-message", "-p", "-t", main_win,
+            _TMUX_SEP.join(["#{pane_id}", "#{@ide_role}", "#{@ide_last_pane}", "#{window_zoomed_flag}"]),
+        )
+        wparts = (win_state.split(_TMUX_SEP) + ["", "", "", "0"])[:4]
+        active_pane, active_role, last_pane, main_win_zoomed = wparts[0], wparts[1], wparts[2], wparts[3] or "0"
     started_in_ai = bool(active_pane == ai_pane or active_role == "ai")
 
+    def _in_win(pane_id: str) -> bool:
+        if not pane_id or not main_win:
+            return False
+        if not layout_mutated:
+            p_entry = panes_by_id.get(pane_id)
+            return p_entry is not None and p_entry[0] == main_win
+        return pane_in_win(pane_id, main_win)
+
+    def _is_parked(pane_id: str) -> bool:
+        if not pane_id or not main_win:
+            return False
+        if not layout_mutated:
+            p_entry = panes_by_id.get(pane_id)
+            return p_entry is not None and p_entry[0] != main_win
+        return pane_is_parked(pane_id, main_win)
+
+    def _unpark(role: str, sock_arg: str = "") -> None:
+        nonlocal layout_mutated
+        target_p = pane_for_role(role, ai_pane, editor_pane, term_pane)
+        if not layout_mutated and not _is_parked(target_p):
+            return
+        unpark_role_pane(sess, role, main_win, ai_pane, editor_pane, term_pane, sock_arg)
+        layout_mutated = True
+
+    def _ensure_ed_nvim() -> bool:
+        ed_hint: tuple[str, str] | None = None
+        if not layout_mutated and editor_pane in panes_by_id:
+            ed_v = panes_by_id[editor_pane]
+            ed_hint = (ed_v[9], ed_v[10])
+        return ensure_editor_nvim_running(editor_pane, sock, cached_cmd_ts=ed_hint)
+
+    def _flush_pending() -> None:
+        if pending_cmds:
+            run_tmux(*pending_cmds)
+            pending_cmds.clear()
+
+    def _focus_win_pane(target_p: str) -> None:
+        pre = list(pending_cmds) if pending_cmds else None
+        pending_cmds.clear()
+        if not layout_mutated and active_pane:
+            focus_pane_preserving_zoom(
+                main_win,
+                target_p,
+                cur_pane_hint=active_pane,
+                was_zoomed_hint=main_win_zoomed,
+                pre_cmds=pre,
+            )
+        else:
+            focus_pane_preserving_zoom(main_win, target_p, pre_cmds=pre)
+
     def _record_non_ai_origin() -> None:
-        if active_pane and not started_in_ai and pane_in_win(active_pane, main_win):
-            run_tmux(
+        if active_pane and not started_in_ai and _in_win(active_pane):
+            if pending_cmds:
+                pending_cmds.append(";")
+            pending_cmds.extend([
                 "set-option", "-q", "-t", f"={sess}:", "@ide_last_pane_id", active_pane,
                 ";",
                 "set-option", "-q", "-t", f"={sess}:", "@ide_last_non_ai", active_role or "",
-            )
+            ])
+
+    def _needs_ai_ack_or_cleanup() -> bool:
+        if snap_ai_attn not in ("", "0") or snap_ai_state == "done":
+            return True
+        if not snap_ai_state and not snap_ai_msg:
+            return False
+        if layout_mutated or not ai_pane or ai_pane not in panes_by_id:
+            return True
+        ai_v = panes_by_id[ai_pane]
+        return not pane_has_child_procs(ai_v[8], ai_v[9])
 
     def _focus_ai_with_ack() -> None:
-        ack_ai_session(sess, from_hook=False, refresh_always=False, entering_ai=True)
-        focus_pane_preserving_zoom(main_win, ai_pane)
+        if _needs_ai_ack_or_cleanup():
+            ack_ai_session(sess, from_hook=False, refresh_always=False, entering_ai=True)
+        _focus_win_pane(ai_pane)
 
     entered_ai = False
     if mode in ("toggle", "ai"):
         if started_in_ai:
-            if last_pane_id and last_pane_id != ai_pane and pane_in_win(last_pane_id, main_win):
+            if last_pane_id and last_pane_id != ai_pane and _in_win(last_pane_id):
                 if last_pane_id == editor_pane:
-                    if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
+                    if not _ensure_ed_nvim() and not skip_checktime:
                         nvim_recover_and_checktime(sock, cur_dir)
-                focus_pane_preserving_zoom(main_win, last_pane_id)
-            elif last_non_ai == "term" and pane_in_win(term_pane, main_win):
-                focus_pane_preserving_zoom(main_win, term_pane)
+                _focus_win_pane(last_pane_id)
+            elif last_non_ai == "term" and _in_win(term_pane):
+                _focus_win_pane(term_pane)
             else:
-                if pane_is_parked(editor_pane, main_win) and not pane_in_win(term_pane, main_win):
-                    unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-                if pane_in_win(editor_pane, main_win):
-                    if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
+                if _is_parked(editor_pane) and not _in_win(term_pane):
+                    _unpark("editor", sock)
+                if _in_win(editor_pane):
+                    if not _ensure_ed_nvim() and not skip_checktime:
                         nvim_recover_and_checktime(sock, cur_dir)
-                    focus_pane_preserving_zoom(main_win, editor_pane)
-                elif pane_in_win(term_pane, main_win):
-                    focus_pane_preserving_zoom(main_win, term_pane)
+                    _focus_win_pane(editor_pane)
+                elif _in_win(term_pane):
+                    _focus_win_pane(term_pane)
                 else:
-                    unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-                    ensure_editor_nvim_running(editor_pane, sock)
-                    focus_pane_preserving_zoom(main_win, editor_pane)
+                    _unpark("editor", sock)
+                    _ensure_ed_nvim()
+                    _focus_win_pane(editor_pane)
         else:
             _record_non_ai_origin()
-            unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
+            _unpark("ai", sock)
             _focus_ai_with_ack()
             entered_ai = True
     elif mode == "focus-ai":
         _record_non_ai_origin()
-        unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
+        _unpark("ai", sock)
         _focus_ai_with_ack()
         entered_ai = True
     elif mode == "editor":
         if active_pane == editor_pane or active_role == "editor":
-            if ed_just_healed or ensure_editor_nvim_running(editor_pane, sock):
-                focus_pane_preserving_zoom(main_win, editor_pane)
-            elif last_pane and last_pane != editor_pane and pane_in_win(last_pane, main_win):
+            if ed_just_healed or _ensure_ed_nvim():
+                _focus_win_pane(editor_pane)
+            elif last_pane and last_pane != editor_pane and _in_win(last_pane):
                 if last_pane == ai_pane:
                     _record_non_ai_origin()
                     _focus_ai_with_ack()
                     entered_ai = True
                 else:
-                    focus_pane_preserving_zoom(main_win, last_pane)
-            elif pane_in_win(ai_pane, main_win):
+                    _focus_win_pane(last_pane)
+            elif _in_win(ai_pane):
                 _record_non_ai_origin()
                 _focus_ai_with_ack()
                 entered_ai = True
-            elif pane_in_win(term_pane, main_win):
-                focus_pane_preserving_zoom(main_win, term_pane)
+            elif _in_win(term_pane):
+                _focus_win_pane(term_pane)
             else:
                 _record_non_ai_origin()
-                unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
+                _unpark("ai", sock)
                 _focus_ai_with_ack()
                 entered_ai = True
         else:
-            unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-            if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
+            _unpark("editor", sock)
+            if not _ensure_ed_nvim() and not skip_checktime:
                 nvim_recover_and_checktime(sock, cur_dir)
-            focus_pane_preserving_zoom(main_win, editor_pane)
+            _focus_win_pane(editor_pane)
     elif mode == "focus-editor":
-        unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, "" if skip_checktime else sock)
-        if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
+        _unpark("editor", "" if skip_checktime else sock)
+        if not _ensure_ed_nvim() and not skip_checktime:
             nvim_recover_and_checktime(sock, cur_dir)
-        focus_pane_preserving_zoom(main_win, editor_pane)
+        _focus_win_pane(editor_pane)
     elif mode == "term":
         if active_pane == term_pane or active_role == "term":
-            if last_pane and last_pane != term_pane and pane_in_win(last_pane, main_win):
+            if last_pane and last_pane != term_pane and _in_win(last_pane):
                 if last_pane == editor_pane:
-                    if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
+                    if not _ensure_ed_nvim() and not skip_checktime:
                         nvim_recover_and_checktime(sock, cur_dir)
-                    focus_pane_preserving_zoom(main_win, last_pane)
+                    _focus_win_pane(last_pane)
                 elif last_pane == ai_pane:
                     _record_non_ai_origin()
                     _focus_ai_with_ack()
                     entered_ai = True
                 else:
-                    focus_pane_preserving_zoom(main_win, last_pane)
-            elif pane_in_win(editor_pane, main_win):
-                if not ensure_editor_nvim_running(editor_pane, sock) and not skip_checktime:
+                    _focus_win_pane(last_pane)
+            elif _in_win(editor_pane):
+                if not _ensure_ed_nvim() and not skip_checktime:
                     nvim_recover_and_checktime(sock, cur_dir)
-                focus_pane_preserving_zoom(main_win, editor_pane)
-            elif pane_in_win(ai_pane, main_win):
+                _focus_win_pane(editor_pane)
+            elif _in_win(ai_pane):
                 _record_non_ai_origin()
                 _focus_ai_with_ack()
                 entered_ai = True
             else:
-                unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-                ensure_editor_nvim_running(editor_pane, sock)
-                focus_pane_preserving_zoom(main_win, editor_pane)
+                _unpark("editor", sock)
+                _ensure_ed_nvim()
+                _focus_win_pane(editor_pane)
         else:
-            unpark_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
-            focus_pane_preserving_zoom(main_win, term_pane)
+            _unpark("term", sock)
+            _focus_win_pane(term_pane)
     elif mode == "focus-term":
-        unpark_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
-        focus_pane_preserving_zoom(main_win, term_pane)
+        _unpark("term", sock)
+        _focus_win_pane(term_pane)
     elif mode == "toggle-editor":
-        if ed_just_healed or pane_is_parked(editor_pane, main_win):
-            unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
-            ensure_editor_nvim_running(editor_pane, sock)
-            focus_pane_preserving_zoom(main_win, editor_pane)
+        if ed_just_healed or _is_parked(editor_pane):
+            _unpark("editor", sock)
+            _ensure_ed_nvim()
+            _focus_win_pane(editor_pane)
         else:
+            _flush_pending()
             park_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, sock)
     elif mode == "toggle-ai":
-        if ai_just_healed or pane_is_parked(ai_pane, main_win):
+        if ai_just_healed or _is_parked(ai_pane):
             _record_non_ai_origin()
-            unpark_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
+            _unpark("ai", sock)
             _focus_ai_with_ack()
             entered_ai = True
         else:
+            _flush_pending()
             park_role_pane(sess, "ai", main_win, ai_pane, editor_pane, term_pane, sock)
     elif mode == "toggle-term":
-        if term_just_healed or pane_is_parked(term_pane, main_win):
-            unpark_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
-            focus_pane_preserving_zoom(main_win, term_pane)
+        if term_just_healed or _is_parked(term_pane):
+            _unpark("term", sock)
+            _focus_win_pane(term_pane)
         else:
+            _flush_pending()
             park_role_pane(sess, "term", main_win, ai_pane, editor_pane, term_pane, sock)
 
-    if started_in_ai and not entered_ai:
+    _flush_pending()
+    if started_in_ai and not entered_ai and _needs_ai_ack_or_cleanup():
         ack_ai_session(sess, from_hook=True, refresh_always=False)
     return 0
 
@@ -1965,6 +2277,8 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
 
 
 def copy_to_system_clipboard(target_arg: str = "") -> None:
+    import tempfile
+
     data = sys.stdin.buffer.read()
     with tempfile.NamedTemporaryFile(prefix="ide-clip.", delete=False) as tf:
         tf.write(data)
@@ -2107,6 +2421,8 @@ _RE_FRAG_ID = re.compile(r"^[A-Za-z0-9_.:-]+$")
 
 
 def parse_file_target(raw: str, cwd: str = "") -> tuple[str, str]:
+    import urllib.parse
+
     def _exists(p: str) -> bool:
         if not p:
             return False
@@ -2242,6 +2558,7 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
     for base_dir in (init_root, workdir, cwd):
         if not base_dir or not os.path.isdir(base_dir):
             continue
+        from pathlib import Path
         base_path = Path(base_dir)
         glob_matches: list[str] = []
         for pat in (f"*/{cand}", f"*/*/{cand}", f"*/*/*/{cand}"):
@@ -2478,6 +2795,8 @@ def recover_split_osc8_href(word: str, target_arg: str = "") -> str:
 
 
 def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True) -> bool:
+    import urllib.parse
+
     slug = urllib.parse.unquote(anchor.lstrip("#").strip()).lower()
     if not slug:
         return False
@@ -2975,8 +3294,12 @@ def _format_elapsed_age(state_ts: float, now: float | None = None) -> str:
 
 def _char_cell_width(ch: str) -> int:
     cp = ord(ch)
+    if 0x20 <= cp < 0x7F:
+        return 1
     if 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0x10FFFF:
         return 1
+    import unicodedata
+
     if unicodedata.combining(ch):
         return 0
     if cp >= 0x1F300 or unicodedata.east_asian_width(ch) in ("W", "F"):
@@ -3724,8 +4047,10 @@ def classify_ide_fleet(
     include_git: bool = True,
     cur_sess: str = "",
     git_only_sess: str = "",
+    raw_sessions: list[dict[str, str]] | None = None,
 ) -> list[dict[str, object]]:
-    raw_sessions = list_ide_sessions_raw()
+    if raw_sessions is None:
+        raw_sessions = list_ide_sessions_raw()
     if not raw_sessions:
         return []
 
@@ -4031,7 +4356,7 @@ def refresh_fleet_topbar() -> int:
     raw_sessions, server_up = _list_ide_sessions_with_server_status()
     if not server_up:
         return 0
-    fleet = classify_ide_fleet(include_git=False, cur_sess="") if raw_sessions else []
+    fleet = classify_ide_fleet(include_git=False, cur_sess="", raw_sessions=raw_sessions) if raw_sessions else []
     fleet_count = len(fleet)
     active_count = sum(1 for e in fleet if e["state"] == "WORKING")
     attn_summary = _format_attn_summary(fleet)
@@ -4154,13 +4479,32 @@ def _session_has_focused_client(sess: str) -> bool:
     return False
 
 
-def _inspect_session_ai_view(sess: str) -> dict[str, object]:
-    raw = tmux_out(
+def _inspect_session_ai_view(sess: str, need_focus: bool = True) -> dict[str, object]:
+    if not sess:
+        return {
+            "exists": False,
+            "is_ide": False,
+            "ai_visible": False,
+            "ai_focused": False,
+            "ai_pane": "",
+            "ai_state": "",
+            "ai_attn": "",
+            "ai_attn_ts": "",
+            "ai_state_ts": "",
+            "ai_cli": "agy",
+            "workdir": "",
+            "ai_msg": "",
+        }
+    res = run_tmux(
         "display-message",
         "-p",
         "-t",
         f"={sess}:",
         _TMUX_SEP.join([
+            "#{session_name}",
+            "#{session_attached}",
+            "#{@ide_session}",
+            "#{@ide_socket}",
             "#{window_id}",
             "#{window_name}",
             "#{window_active}",
@@ -4180,8 +4524,28 @@ def _inspect_session_ai_view(sess: str) -> dict[str, object]:
             "#{@ide_ai_msg}",
         ]),
     )
-    parts = (raw.split(_TMUX_SEP) + [""] * 17)[:17]
+    raw = (res.stdout or "").rstrip("\r\n") if res.returncode == 0 and isinstance(res.stdout, str) else ""
+    if not raw or _TMUX_SEP not in raw:
+        return {
+            "exists": False,
+            "is_ide": False,
+            "ai_visible": False,
+            "ai_focused": False,
+            "ai_pane": "",
+            "ai_state": "",
+            "ai_attn": "",
+            "ai_attn_ts": "",
+            "ai_state_ts": "",
+            "ai_cli": "agy",
+            "workdir": "",
+            "ai_msg": "",
+        }
+    parts = (raw.split(_TMUX_SEP) + [""] * 21)[:21]
     (
+        sess_name,
+        sess_attached,
+        ide_sess,
+        ide_sock,
         win_id,
         wname,
         win_active,
@@ -4200,6 +4564,10 @@ def _inspect_session_ai_view(sess: str) -> dict[str, object]:
         raw_init_root,
         ai_msg,
     ) = parts
+    sess_name = sess_name.strip()
+    sess_attached = sess_attached.strip()
+    ide_sess = ide_sess.strip()
+    ide_sock = ide_sock.strip()
     win_id = win_id.strip()
     wname = wname.strip()
     win_active = win_active.strip()
@@ -4217,17 +4585,23 @@ def _inspect_session_ai_view(sess: str) -> dict[str, object]:
     workdir = raw_workdir.rstrip("\r\n")
     init_root = raw_init_root.rstrip("\r\n")
     ai_msg = ai_msg.strip()
-    has_focus = _session_has_focused_client(sess)
-    ai_visible = (
-        has_focus
+    sess_exists = sess_name == sess
+    is_ide = sess_exists and is_ide_session_meta(sess_name, ide_sess, ide_sock, main_win)
+    geom_visible = (
+        is_ide
+        and sess_attached not in ("", "0")
         and win_active == "1"
         and not wname.startswith("_ide_park_")
         and (not main_win or win_id == main_win)
         and ai_parked != "1"
         and not (zoomed == "1" and prole != "ai")
     )
+    has_focus = _session_has_focused_client(sess) if (need_focus and geom_visible) else False
+    ai_visible = has_focus and geom_visible
     ai_focused = ai_visible and pane_active == "1" and prole == "ai"
     return {
+        "exists": sess_exists,
+        "is_ide": is_ide,
         "ai_visible": ai_visible,
         "ai_focused": ai_focused,
         "ai_pane": ai_pane,
@@ -4297,6 +4671,8 @@ def _parse_hook_metadata(stdin_raw: str, json_args: list[str]) -> tuple[str, str
             continue
         obj = None
         if s.endswith("}"):
+            import json
+
             try:
                 parsed = json.loads(s)
                 if isinstance(parsed, dict):
@@ -4459,6 +4835,8 @@ def _dispatch_agent_notification(
         or os.environ.get("WAYLAND_DISPLAY")
     ):
         return
+    import html
+
     esc_body = html.escape(body, quote=False)
     busctl_bin = shutil.which("busctl")
     nsend_bin = shutil.which("notify-send")
@@ -4567,19 +4945,25 @@ def set_agent_state(
 
     if target_arg:
         sess = resolve_target_session(target_arg)
-        if not sess or not session_exists(sess) or not check_is_ide_session(sess):
+        if not sess:
             print(f"Error: {missing_session_msg(sess or target_arg)}", file=sys.stderr)
             return 1
     else:
         if not os.environ.get("TMUX"):
             return 0
         sess = current_ide_session()
-        if not sess or not session_exists(sess):
+        if not sess:
             return 0
 
-    view = _inspect_session_ai_view(sess)
+    view = _inspect_session_ai_view(sess, need_focus=(state in ("approval", "done")))
+    if not view["exists"] or not view["is_ide"]:
+        if target_arg:
+            print(f"Error: {missing_session_msg(sess or target_arg)}", file=sys.stderr)
+            return 1
+        return 0
     prev_state = str(view["ai_state"])
-    prev_attn = "1" if str(view["ai_attn"]) == "1" else "0"
+    raw_prev_attn = str(view["ai_attn"])
+    prev_attn = "1" if raw_prev_attn == "1" else "0"
     cur_ts = str(view["ai_attn_ts"])
     cur_state_ts = str(view["ai_state_ts"])
     prev_msg = str(view.get("ai_msg") or "")
@@ -4606,17 +4990,24 @@ def set_agent_state(
         next_attn = "0"
         attn_ts_val = ""
 
-    run_tmux(
-        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", state,
-        ";",
-        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", next_attn,
-        ";",
-        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", attn_ts_val,
-        ";",
-        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state_ts", state_ts_val,
-        ";",
-        "set-option", "-q", "-t", f"={sess}:", "@ide_ai_msg", msg_val,
-    )
+    if not (
+        prev_state == state
+        and raw_prev_attn == next_attn
+        and cur_ts == attn_ts_val
+        and cur_state_ts == state_ts_val
+        and prev_msg == msg_val
+    ):
+        run_tmux(
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state", state,
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn", next_attn,
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_attn_ts", attn_ts_val,
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_state_ts", state_ts_val,
+            ";",
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_msg", msg_val,
+        )
 
     refresh_fleet_topbar()
     if next_attn == "1" and state in ("approval", "done") and (prev_state != state or prev_attn != "1"):
@@ -4653,11 +5044,14 @@ def ack_ai_session(
     should_refresh = refresh_always
     batch_cmds: list[str] = []
     now_s = str(int(time.time()))
+    need_focus = bool(from_hook and not entering_ai)
 
     for sess in resolved_sessions:
-        if not (sess and session_exists(sess) and check_is_ide_session(sess)):
+        if not sess:
             continue
-        view = _inspect_session_ai_view(sess)
+        view = _inspect_session_ai_view(sess, need_focus=need_focus)
+        if not view["exists"] or not view["is_ide"]:
+            continue
         ai_focused = bool(view["ai_focused"])
         ai_state = str(view["ai_state"])
         ai_attn = str(view["ai_attn"])
@@ -4667,13 +5061,15 @@ def ack_ai_session(
 
         if ai_state or ai_attn not in ("", "0") or prev_msg:
             ai_alive = False
-            if ai_pane_id and pane_exists(ai_pane_id):
+            if ai_pane_id:
                 p_info = tmux_out(
                     "display-message", "-p", "-t", ai_pane_id,
-                    _TMUX_SEP.join(["#{pane_pid}", "#{pane_current_command}"]),
+                    _TMUX_SEP.join(["#{pane_id}", "#{pane_pid}", "#{pane_current_command}"]),
                 )
-                p_pid, p_cmd = (p_info.split(_TMUX_SEP, 1) + [""])[:2]
-                ai_alive = pane_has_child_procs(p_pid, p_cmd)
+                if p_info and _TMUX_SEP in p_info:
+                    got_id, p_pid, p_cmd = (p_info.split(_TMUX_SEP, 2) + ["", "", ""])[:3]
+                    if got_id == ai_pane_id:
+                        ai_alive = pane_has_child_procs(p_pid, p_cmd)
             if not ai_alive:
                 if batch_cmds:
                     batch_cmds.append(";")
@@ -5410,6 +5806,8 @@ def send_to_ai(
     if not payload:
         return 0
 
+    import tempfile
+
     buf_name = f"_ide_send_{os.getpid()}"
     with tempfile.NamedTemporaryFile(prefix="ide-send.", delete=False) as tf:
         tf.write(payload.encode("utf-8"))
@@ -5889,7 +6287,7 @@ def main() -> int:
     if action == "show-editor":
         return toggle_main_pane("editor", target_arg)
     if action in ("focus-editor", "focus-ai", "focus-term"):
-        return toggle_main_pane(action, target_arg)
+        return toggle_main_pane(action, target_arg, skip_checktime=(os.environ.get("IDE_SKIP_CHECKTIME") == "1"))
     if action == "show-ai":
         return toggle_main_pane("ai", target_arg)
     if action == "show-term":
@@ -6117,11 +6515,11 @@ if [ -z "${IDE_PY_BIN:-}" ]; then
     fi
 fi
 if [ -r /dev/fd/9 ] 9<<< "" 2>/dev/null; then
-    IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"
+    IDE_CLOSE_FD9=1 PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"
 else
-    IDE_TMP_PY="$(mktemp "${TMPDIR:-/tmp}/ide-py.XXXXXX")"
-    trap 'rm -f "$IDE_TMP_PY"' EXIT INT TERM
-    printf '%s\n' "$IDE_PY_SRC" > "$IDE_TMP_PY"
-    IDE_SELF="${BASH_SOURCE[0]}" "$IDE_PY_BIN" -B "$IDE_TMP_PY" "$@"
+    IDE_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ide-py.XXXXXX")"
+    trap 'rm -rf "$IDE_TMP_DIR"' EXIT INT TERM
+    printf '%s\n' "$IDE_PY_SRC" > "$IDE_TMP_DIR/ide.py"
+    PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" "$IDE_PY_BIN" -B "$IDE_TMP_DIR/ide.py" "$@"
     exit $?
 fi
