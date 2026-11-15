@@ -550,9 +550,12 @@ test_addendum() {
     printf 'export _HS_LEGACY_FZF_KEYS_LOADED=1\n' > "$TEMP_HOME/.fzf/shell/key-bindings.zsh"
     printf 'export _HS_LEGACY_FZF_COMP_LOADED=1\n' > "$TEMP_HOME/.fzf/shell/completion.zsh"
     local legacy_fzf_out=""
+    local legacy_zsh_bin
+    legacy_zsh_bin="$(_hs_find_bin zsh)"
+    [ -z "$legacy_zsh_bin" ] && legacy_zsh_bin="zsh"
     legacy_fzf_out="$(
         HOME="$TEMP_HOME" ZDOTDIR="$TEMP_HOME" PATH="$mock_legacy_fzf_dir:/usr/bin:/bin" \
-            zsh -f -i -c 'unset _HS_LEGACY_FZF_KEYS_LOADED _HS_LEGACY_FZF_COMP_LOADED; source "$1"; printf "%s:%s" "${_HS_LEGACY_FZF_KEYS_LOADED:-0}" "${_HS_LEGACY_FZF_COMP_LOADED:-0}"' \
+            "$legacy_zsh_bin" -f -i -c 'unset _HS_LEGACY_FZF_KEYS_LOADED _HS_LEGACY_FZF_COMP_LOADED; source "$1"; printf "%s:%s" "${_HS_LEGACY_FZF_KEYS_LOADED:-0}" "${_HS_LEGACY_FZF_COMP_LOADED:-0}"' \
             _ "$SCRIPT_DIR/dotfiles/.zshrc-addendum" </dev/null 2>/dev/null
     )"
     rm -rf "$mock_legacy_fzf_dir" "$TEMP_HOME/.fzf"

@@ -2680,7 +2680,9 @@ EOF
         printf '// mock tsserver\n' > "$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-typescript/6.0.3/node_modules/typescript/lib/tsserver.js"
         printf '{"compilerOptions":{"strict":true}}\n' > "$NVIM_PARITY_DIR/proj/tsconfig.json"
         printf 'export const App = (): string => "hello";\n' > "$NVIM_PARITY_DIR/proj/app.tsx"
-        if command -v python3 >/dev/null 2>&1; then
+        PARITY_PY3="$(_hs_find_bin python3)"
+        if [ -n "$PARITY_PY3" ]; then
+            ln -sf "$PARITY_PY3" "$NVIM_PARITY_DIR/bin/python3"
             cat > "$NVIM_PARITY_DIR/bin/typescript-language-server" << 'EOF'
 #!/usr/bin/env python3
 import json, sys
@@ -2879,8 +2881,9 @@ local cur_path = vim.env.PATH or ""
 local idx_inst = cur_path:find(vim.env.NVIM_PARITY_DIR .. "/xdg_data/mise/installs/npm-pyright/latest/bin", 1, true)
 local idx_shims = cur_path:find(vim.env.NVIM_PARITY_DIR .. "/xdg_data/mise/shims", 1, true)
 local idx_mason = cur_path:find(vim.env.NVIM_PARITY_DIR .. "/xdg_data/nvim/mason/bin", 1, true)
+local idx_local = cur_path:find("/usr/local/bin", 1, true)
 local idx_usr = cur_path:find("/usr/bin", 1, true)
-local path_ord_ok = (idx_inst ~= nil and idx_shims ~= nil and idx_mason ~= nil and idx_usr ~= nil and idx_inst < idx_shims and idx_shims < idx_mason and idx_mason < idx_usr)
+local path_ord_ok = (idx_inst ~= nil and idx_shims ~= nil and idx_mason ~= nil and idx_local ~= nil and idx_usr ~= nil and idx_inst < idx_shims and idx_shims < idx_mason and idx_mason < idx_local and idx_local < idx_usr)
 local ok_lc, lc = pcall(require, "lazy.core.config")
 local mlsp_ens = (ok_lc and lc.plugins and lc.plugins["mason-lspconfig.nvim"] and lc.plugins["mason-lspconfig.nvim"].opts and lc.plugins["mason-lspconfig.nvim"].opts.ensure_installed) or {}
 local ens_ok = (#mlsp_ens == 6)
@@ -2908,7 +2911,7 @@ io.write(table.concat({
     "INS=" .. tostring(ins_ok),
 }, "|"))
 EOF
-        NVIM_PARITY_OUT="$(export NVIM_PARITY_DIR; NVIM_TS_SKIP_AUTO_INSTALL=1 MISE_DATA_DIR="" XDG_DATA_HOME="$NVIM_PARITY_DIR/xdg_data/" XDG_STATE_HOME="$NVIM_PARITY_DIR/xdg_state" PATH="$NVIM_PARITY_DIR/bin:/opt/homebrew/bin:$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-pyright/latest/bin:/usr/bin:/bin:$NVIM_PARITY_DIR/xdg_data/mise/shims" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_PARITY_DIR/parity_check.lua" 2>/dev/null || true)"
+        NVIM_PARITY_OUT="$(export NVIM_PARITY_DIR; NVIM_TS_SKIP_AUTO_INSTALL=1 MISE_DATA_DIR="" XDG_DATA_HOME="$NVIM_PARITY_DIR/xdg_data/" XDG_STATE_HOME="$NVIM_PARITY_DIR/xdg_state" PATH="$NVIM_PARITY_DIR/bin:/opt/homebrew/bin:$NVIM_PARITY_DIR/xdg_data/mise/installs/npm-pyright/latest/bin:/usr/local/bin:/usr/bin:/bin:$NVIM_PARITY_DIR/xdg_data/mise/shims" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $NVIM_PARITY_DIR/parity_check.lua" 2>/dev/null || true)"
         rm -rf "$NVIM_PARITY_DIR"
         if [ "$NVIM_PARITY_OUT" = "TSFT=true|TSEN=true|TSAT=true|NORM=true|VISOP=true|INS=true" ]; then
             pass "Neovim init.lua registers all 11 LSPs, restricts Mason ensure_installed to 6 binary servers, orders mise/installs < mise/shims < mason/bin < /usr/bin, resolves Mise tsserver.js fallbackPath (with empty MISE_DATA_DIR guard), attaches ts_ls, and executes Smart-Home toggle across all modes"
@@ -2917,7 +2920,7 @@ EOF
         fi
 
         if command -v python3 >/dev/null 2>&1; then
-            MASON_UI_OUT="$(NVIM_CONFIG_PATH="$NVIM_CONFIG" python3 - <<'PY'
+            MASON_UI_OUT="$(NVIM_CONFIG_PATH="$NVIM_CONFIG" NVIM_BIN="${NVIM_BIN:-${_HS_NVIM_BIN:-nvim}}" python3 - <<'PY'
 import fcntl
 import hashlib
 import json
@@ -2932,6 +2935,7 @@ import threading
 import time
 
 cfg_path = os.environ["NVIM_CONFIG_PATH"]
+nvim_bin = os.environ.get("NVIM_BIN") or "nvim"
 mfd, sfd = pty.openpty()
 fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 20, 50, 0, 0))
 tmp_dir = tempfile.mkdtemp()
@@ -2960,7 +2964,7 @@ drain_thread.start()
 def _remote_expr(sock_path, expr, env, timeout=3):
     try:
         return subprocess.run(
-            ["nvim", "--headless", "--server", sock_path, "--remote-expr", expr],
+            [nvim_bin, "--headless", "--server", sock_path, "--remote-expr", expr],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -3050,7 +3054,7 @@ try:
 
         sock = os.path.join(tmp_dir, "nvim-ui.sock")
         proc = subprocess.Popen(
-            ["nvim", "-i", "NONE", "-u", cfg_path, "--listen", sock],
+            [nvim_bin, "-i", "NONE", "-u", cfg_path, "--listen", sock],
             stdin=sfd,
             stdout=sfd,
             stderr=sfd,
@@ -3139,10 +3143,15 @@ PY
 io.write("PASS:before crash\n")
 error("simulated luafile failure")
 EOF
+        mkdir -p "$NVIM_ERR_TMP/nvim"
         if run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_ERR_TMP/fail_script.lua" >/dev/null 2>&1; then
             fail "run_nvim_headless luafile error propagation" "Expected non-zero exit when luafile throws an unhandled Lua error"
+        elif NVIM_BIN="$NVIM_ERR_TMP/no-such-nvim" run_nvim_headless -i NONE -u NONE >/dev/null 2>&1; then
+            fail "run_nvim_headless NVIM_BIN override propagation" "Expected non-zero exit when NVIM_BIN points to a missing binary"
+        elif [ "$(cd "$NVIM_ERR_TMP" && nvim() { :; } && . "$SCRIPT_DIR/tests/test-helper.sh" && PATH="/nonexistent" run_nvim_headless -i NONE -u NONE -c 'lua io.write("PINNED_OK")' 2>/dev/null || true)" != "PINNED_OK" ]; then
+            fail "run_nvim_headless synthetic PATH & shell-function resilience" "Expected run_nvim_headless to resolve pinned nvim binary when PATH=/nonexistent despite nvim() function and ./nvim dir"
         else
-            pass "run_nvim_headless exits non-zero when a -c luafile script throws a Lua error"
+            pass "run_nvim_headless exits non-zero when a -c luafile script throws a Lua error, honors NVIM_BIN overrides, and preserves pinned nvim binary across synthetic PATH overrides and shell functions"
         fi
 
         cat << 'EOF' > "$NVIM_ERR_TMP/clone_fail.lua"

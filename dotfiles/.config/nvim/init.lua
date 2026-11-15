@@ -2127,6 +2127,7 @@ lazy.setup({
                 or ((nonempty_env("XDG_DATA_HOME") or (home_dir .. "/.local/share")) .. "/mise")
             local mason_bin_dir = (vim.fn.stdpath("data"):gsub("/+$", "")) .. "/mason/bin"
             local mise_shims_dir = mise_data_dir .. "/shims"
+            local mise_installs_pfx = mise_data_dir .. "/installs/"
             do
                 local entries, had_shims, last_mise_idx = {}, false, 0
                 for p in (vim.env.PATH or ""):gmatch("[^:]+") do
@@ -2135,7 +2136,7 @@ lazy.setup({
                         had_shims = true
                     elseif clean_p ~= mason_bin_dir then
                         entries[#entries + 1] = p
-                        if clean_p:find("/mise/installs/", 1, true) then
+                        if clean_p:find("/mise/installs/", 1, true) or clean_p:find(mise_installs_pfx, 1, true) then
                             last_mise_idx = #entries
                         end
                     end

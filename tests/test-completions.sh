@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/tests/test-helper.sh"
 
+ZSH_BIN="$(_hs_find_bin zsh)"
+[ -z "$ZSH_BIN" ] && ZSH_BIN="zsh"
+
 echo "========================================"
 echo "Running Completions Setup Tests"
 echo "========================================"
@@ -599,7 +602,7 @@ EOF
 
 tf_zsh_pty="ok"
 if command -v python3 >/dev/null 2>&1; then
-    tf_zsh_pty="$(MOCK_TF_HOME="$MOCK_TF_HOME" ZSH_COMP_FILE="$SCRIPT_DIR/dotfiles/.zsh-completions" python3 - <<'PY'
+    tf_zsh_pty="$(MOCK_TF_HOME="$MOCK_TF_HOME" ZSH_BIN="$ZSH_BIN" ZSH_COMP_FILE="$SCRIPT_DIR/dotfiles/.zsh-completions" python3 - <<'PY'
 import fcntl, os, pty, re, select, struct, subprocess, termios, time
 
 home = os.environ["MOCK_TF_HOME"]
@@ -719,7 +722,7 @@ def _attach_ctty():
 mfd, sfd = pty.openpty()
 fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 200, 0, 0))
 proc = subprocess.Popen(
-    ["zsh", "-d", "-i"],
+    [os.environ.get("ZSH_BIN") or "zsh", "-d", "-i"],
     stdin=sfd,
     stdout=sfd,
     stderr=sfd,
@@ -763,7 +766,7 @@ PY
 )"
 fi
 
-if tf_comp_err="$(HOME="$MOCK_TF_HOME" PATH="$MOCK_TF_HOME/bin:/usr/bin:/bin" zsh -f "$MOCK_TF_HOME/test-tf-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$tf_comp_err" ] && [ "$tf_zsh_pty" = "ok" ]; then
+if tf_comp_err="$(HOME="$MOCK_TF_HOME" PATH="$MOCK_TF_HOME/bin:/usr/bin:/bin" "$ZSH_BIN" -f "$MOCK_TF_HOME/test-tf-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$tf_comp_err" ] && [ "$tf_zsh_pty" = "ok" ]; then
     pass "_terraform Zsh completion registers terraform and tf and completes subcommands, plan/apply/destroy/fmt/validate flags, -backend=false/-lock=false values, space-escaped -chdir=/-var-file= paths, and broken-shim/binary-absent fallback"
 else
     fail "_terraform Zsh completion" "Unexpected _terraform completion behavior: err='${tf_comp_err:-}' pty='$tf_zsh_pty'"
@@ -817,10 +820,10 @@ run_comp _theme theme --set=
 EOF
 
 rm -f "$IDE_LAZY_LOG" "$THEME_LAZY_LOG"
-lazy_zsh_err="$(HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin:/bin" zsh -f "$LAZY_COMP_HOME/check-lazy.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$IDE_LAZY_LOG" "$THEME_LAZY_LOG" 2>&1 || true)"
+lazy_zsh_err="$(HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin:/bin" "$ZSH_BIN" -f "$LAZY_COMP_HOME/check-lazy.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$IDE_LAZY_LOG" "$THEME_LAZY_LOG" 2>&1 || true)"
 
 rm -f "$THEME_LAZY_LOG"
-lazy_bash_ok="$(HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin:/bin" THEME_LOG="$THEME_LAZY_LOG" bash --noprofile --norc -i -c '
+lazy_bash_ok="$({ HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin:/bin" THEME_LOG="$THEME_LAZY_LOG" "$BASH" --noprofile --norc -i -c '
     source "'"$SCRIPT_DIR"'/dotfiles/.bashrc-addendum"
     rm -f "$THEME_LOG"
     COMP_WORDS=(theme --)
@@ -843,9 +846,9 @@ lazy_bash_ok="$(HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin
     COMP_CWORD=1
     _theme_bash_complete
     [[ " ${COMPREPLY[*]} " == *" nord "* || " ${COMPREPLY[*]} " == *" --set=nord "* ]] && echo "ok"
-' 2>/dev/null | tail -n 1)"
+' 2>/dev/null || true; } | tail -n 1)"
 
-order_ok="$(python3 - "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" <<'PY'
+order_ok="$(python3 - "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" <<'PY' 2>&1 || true
 import sys
 for path in sys.argv[1:]:
     txt = open(path, encoding="utf-8").read()

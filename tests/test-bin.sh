@@ -1051,7 +1051,9 @@ SH
             printf '#!/usr/bin/env bash\nexit 0\n' > "$MISE_SORT_DIR/mise/installs/neovim/0.9.5/bin/nvim"
             printf '#!/usr/bin/env bash\nexit 0\n' > "$MISE_SORT_DIR/mise/installs/neovim/0.11.0/bin/nvim"
             chmod +x "$MISE_SORT_DIR/mise/shims/nvim" "$MISE_SORT_DIR/mise/installs/neovim/0.9.5/bin/nvim" "$MISE_SORT_DIR/mise/installs/neovim/0.11.0/bin/nvim"
-            resolved_ver="$(PATH="$MISE_SORT_DIR/mise/shims:/usr/bin:/bin" python3 - "$SCRIPT_DIR/bin/ide" <<'PYTEST'
+            PY3_SORT_BIN="$(_hs_find_bin python3)"
+            [ -z "$PY3_SORT_BIN" ] && PY3_SORT_BIN="python3"
+            resolved_ver="$(PATH="$MISE_SORT_DIR/mise/shims:/usr/bin:/bin" "$PY3_SORT_BIN" - "$SCRIPT_DIR/bin/ide" <<'PYTEST'
 import sys, types
 with open(sys.argv[1], "r", encoding="utf-8") as f:
     lines = f.read().splitlines()
@@ -1758,9 +1760,9 @@ else
 fi
 
 
-# Verify bin/ide PATH ordering keeps activated /mise/installs/ ahead of mise/shims while keeping mise/shims ahead of /usr/bin in both activated and unactivated shells
+# Verify bin/ide PATH ordering keeps activated /mise/installs/ ahead of mise/shims while keeping mise/shims ahead of /usr/bin in both activated and unactivated shells (including trailing XDG_DATA_HOME slashes and custom MISE_DATA_DIR)
 PATH_CAL_DIR="$TEMP_HOME/path-cal"
-mkdir -p "$PATH_CAL_DIR/home" "$PATH_CAL_DIR/mise/installs/btop/1.0/bin" "$PATH_CAL_DIR/mise/installs/dummy/1.0/bin" "$PATH_CAL_DIR/xdg-data/mise/shims"
+mkdir -p "$PATH_CAL_DIR/home" "$PATH_CAL_DIR/mise/installs/btop/1.0/bin" "$PATH_CAL_DIR/mise/installs/dummy/1.0/bin" "$PATH_CAL_DIR/xdg-data/mise/shims" "$PATH_CAL_DIR/ci-mise-data/shims" "$PATH_CAL_DIR/ci-mise-data/installs/btop/1.0/bin"
 cat > "$PATH_CAL_DIR/mise/installs/btop/1.0/bin/btop" <<'SH'
 #!/usr/bin/env bash
 echo "DIRECT_INSTALL_BTOP"
@@ -1769,14 +1771,23 @@ cat > "$PATH_CAL_DIR/xdg-data/mise/shims/btop" <<'SH'
 #!/usr/bin/env bash
 echo "SHIM_BTOP"
 SH
-chmod +x "$PATH_CAL_DIR/mise/installs/btop/1.0/bin/btop" "$PATH_CAL_DIR/xdg-data/mise/shims/btop"
-act_btop_out="$(HOME="$PATH_CAL_DIR/home" XDG_DATA_HOME="$PATH_CAL_DIR/xdg-data" PATH="$PATH_CAL_DIR/mise/installs/btop/1.0/bin:/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
-act_shim_before_sys_out="$(HOME="$PATH_CAL_DIR/home" XDG_DATA_HOME="$PATH_CAL_DIR/xdg-data" PATH="$PATH_CAL_DIR/mise/installs/dummy/1.0/bin:/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
-unact_btop_out="$(HOME="$PATH_CAL_DIR/home" XDG_DATA_HOME="$PATH_CAL_DIR/xdg-data" PATH="/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
-if [ "$act_btop_out" = "DIRECT_INSTALL_BTOP" ] && [ "$act_shim_before_sys_out" = "SHIM_BTOP" ] && [ "$unact_btop_out" = "SHIM_BTOP" ]; then
-    pass "bin/ide keeps activated mise/installs ahead of mise/shims while keeping XDG_DATA_HOME/mise/shims ahead of /usr/bin in both activated and unactivated shells"
+cat > "$PATH_CAL_DIR/ci-mise-data/installs/btop/1.0/bin/btop" <<'SH'
+#!/usr/bin/env bash
+echo "CI_DIRECT_BTOP"
+SH
+cat > "$PATH_CAL_DIR/ci-mise-data/shims/btop" <<'SH'
+#!/usr/bin/env bash
+echo "CI_SHIM_BTOP"
+SH
+chmod +x "$PATH_CAL_DIR/mise/installs/btop/1.0/bin/btop" "$PATH_CAL_DIR/xdg-data/mise/shims/btop" "$PATH_CAL_DIR/ci-mise-data/installs/btop/1.0/bin/btop" "$PATH_CAL_DIR/ci-mise-data/shims/btop"
+act_btop_out="$(MISE_DATA_DIR="" HOME="$PATH_CAL_DIR/home" XDG_DATA_HOME="$PATH_CAL_DIR/xdg-data/" PATH="$PATH_CAL_DIR/xdg-data/mise/shims:$PATH_CAL_DIR/mise/installs/btop/1.0/bin:/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
+act_shim_before_sys_out="$(MISE_DATA_DIR="" HOME="$PATH_CAL_DIR/home" XDG_DATA_HOME="$PATH_CAL_DIR/xdg-data" PATH="$PATH_CAL_DIR/mise/installs/dummy/1.0/bin:/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
+unact_btop_out="$(MISE_DATA_DIR="" HOME="$PATH_CAL_DIR/home" XDG_DATA_HOME="$PATH_CAL_DIR/xdg-data" PATH="/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
+ci_data_btop_out="$(MISE_DATA_DIR="$PATH_CAL_DIR/ci-mise-data" HOME="$PATH_CAL_DIR/home" PATH="$PATH_CAL_DIR/ci-mise-data/shims:$PATH_CAL_DIR/ci-mise-data/installs/btop/1.0/bin:/usr/bin:/bin" "$SCRIPT_DIR/bin/ide" --monitor 2>&1)"
+if [ "$act_btop_out" = "DIRECT_INSTALL_BTOP" ] && [ "$act_shim_before_sys_out" = "SHIM_BTOP" ] && [ "$unact_btop_out" = "SHIM_BTOP" ] && [ "$ci_data_btop_out" = "CI_DIRECT_BTOP" ]; then
+    pass "bin/ide keeps activated mise/installs ahead of mise/shims (across trailing XDG_DATA_HOME slashes and custom MISE_DATA_DIR) while keeping mise/shims ahead of /usr/bin in both activated and unactivated shells"
 else
-    fail "bin/ide PATH calibration" "Expected DIRECT_INSTALL_BTOP, SHIM_BTOP, and SHIM_BTOP, got '$act_btop_out', '$act_shim_before_sys_out', and '$unact_btop_out'"
+    fail "bin/ide PATH calibration" "Expected DIRECT_INSTALL_BTOP, SHIM_BTOP, SHIM_BTOP, and CI_DIRECT_BTOP, got '$act_btop_out', '$act_shim_before_sys_out', '$unact_btop_out', and '$ci_data_btop_out'"
 fi
 rm -rf "$PATH_CAL_DIR"
 

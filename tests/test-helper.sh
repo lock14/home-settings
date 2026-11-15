@@ -116,14 +116,38 @@ assert_symlink() {
     fi
 }
 
+_hs_find_bin() {
+    local p=""
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        p="$(whence -p "$1" 2>/dev/null || true)"
+    else
+        p="$(type -P "$1" 2>/dev/null || true)"
+    fi
+    if [ -n "$p" ] && [ -f "$p" ] && [ -x "$p" ]; then
+        printf '%s' "$p"
+    fi
+}
+
+_HS_NVIM_BIN="$(_hs_find_bin nvim)"
+_HS_TIMEOUT_BIN="$(_hs_find_bin timeout)"
+
 wait_for_nvim_socket() {
     local sock="$1"
     local max_tries="${2:-30}"
     local check_rpc="${3:-0}"
     local tries=0
+    local nvim_bin="${NVIM_BIN:-${_HS_NVIM_BIN:-}}"
+    [ -z "$nvim_bin" ] && nvim_bin="$(_hs_find_bin nvim)"
+    [ -z "$nvim_bin" ] && nvim_bin="nvim"
+    local timeout_bin="${_HS_TIMEOUT_BIN:-}"
+    [ -z "$timeout_bin" ] && timeout_bin="$(_hs_find_bin timeout)"
     while [ "$tries" -lt "$max_tries" ]; do
         if [ -S "$sock" ]; then
-            if [ "$check_rpc" != "1" ] || [ "$(timeout 5 nvim --headless --server "$sock" --remote-expr "v:vim_did_enter" </dev/null 2>/dev/null || true)" = "1" ]; then
+            if [ "$check_rpc" != "1" ]; then
+                return 0
+            elif [ -n "$timeout_bin" ] && [ "$("$timeout_bin" 5 "$nvim_bin" --headless --server "$sock" --remote-expr "v:vim_did_enter" </dev/null 2>/dev/null || true)" = "1" ]; then
+                return 0
+            elif [ -z "$timeout_bin" ] && [ "$("$nvim_bin" --headless --server "$sock" --remote-expr "v:vim_did_enter" </dev/null 2>/dev/null || true)" = "1" ]; then
                 return 0
             fi
         fi
@@ -140,6 +164,11 @@ wait_for_nvim_socket() {
 # and a bounded timeout.
 run_nvim_headless() {
     local timeout_sec="${NVIM_HEADLESS_TIMEOUT:-30}"
+    local nvim_bin="${NVIM_BIN:-${_HS_NVIM_BIN:-}}"
+    [ -z "$nvim_bin" ] && nvim_bin="$(_hs_find_bin nvim)"
+    [ -z "$nvim_bin" ] && nvim_bin="nvim"
+    local timeout_bin="${_HS_TIMEOUT_BIN:-}"
+    [ -z "$timeout_bin" ] && timeout_bin="$(_hs_find_bin timeout)"
     local args=()
     local prev_is_c=0
     local arg script_path escaped_path
@@ -158,10 +187,10 @@ run_nvim_headless() {
         fi
         args+=("$arg")
     done
-    if command -v timeout >/dev/null 2>&1; then
-        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" timeout "$timeout_sec" nvim --headless "${args[@]}" -c "qall!" </dev/null
+    if [ -n "$timeout_bin" ]; then
+        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" "$timeout_bin" "$timeout_sec" "$nvim_bin" --headless "${args[@]}" -c "qall!" </dev/null
     else
-        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" nvim --headless "${args[@]}" -c "qall!" </dev/null
+        NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" "$nvim_bin" --headless "${args[@]}" -c "qall!" </dev/null
     fi
 }
 

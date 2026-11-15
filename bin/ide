@@ -21,9 +21,20 @@ if { [ ! -d . ] || [ ! . -ef "${PWD:-}" ]; } && [[ "${PWD:-}" == /* ]] && [ -d "
     builtin cd -- "$PWD" || true
 fi
 if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
-    _ide_shims="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims"
+    if [ -n "${MISE_DATA_DIR:-}" ]; then
+        _ide_mise_dir="$MISE_DATA_DIR"
+    elif [ -n "${XDG_DATA_HOME:-}" ]; then
+        _ide_mise_dir="${XDG_DATA_HOME%/}/mise"
+    else
+        _ide_mise_dir="${HOME%/}/.local/share/mise"
+    fi
+    while [ "$_ide_mise_dir" != "/" ] && [ "${_ide_mise_dir%/}" != "$_ide_mise_dir" ]; do
+        _ide_mise_dir="${_ide_mise_dir%/}"
+    done
+    _ide_shims="$_ide_mise_dir/shims"
+    _ide_inst_pfx="$_ide_mise_dir/installs/"
     case ":$PATH:" in
-        */mise/installs/*)
+        */mise/installs/*|*"$_ide_inst_pfx"*)
             _ide_rem="${PATH}:"
             _ide_new_path=""
             _ide_last_mise=0
@@ -31,9 +42,15 @@ if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
             while [ -n "$_ide_rem" ]; do
                 _ide_p="${_ide_rem%%:*}"
                 _ide_rem="${_ide_rem#*:}"
-                [ -z "$_ide_p" ] || [ "$_ide_p" = "$_ide_shims" ] && continue
+                _ide_cp="$_ide_p"
+                while [ "$_ide_cp" != "/" ] && [ "${_ide_cp%/}" != "$_ide_cp" ]; do
+                    _ide_cp="${_ide_cp%/}"
+                done
+                [ -z "$_ide_cp" ] || [ "$_ide_cp" = "$_ide_shims" ] && continue
                 _ide_idx=$((_ide_idx + 1))
-                case "$_ide_p" in */mise/installs/*) _ide_last_mise="$_ide_idx" ;; esac
+                case "$_ide_cp/" in
+                    */mise/installs/*|"$_ide_inst_pfx"*) _ide_last_mise="$_ide_idx" ;;
+                esac
             done
             _ide_rem="${PATH}:"
             _ide_idx=0
@@ -41,10 +58,14 @@ if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
             while [ -n "$_ide_rem" ]; do
                 _ide_p="${_ide_rem%%:*}"
                 _ide_rem="${_ide_rem#*:}"
-                [ -z "$_ide_p" ] || [ "$_ide_p" = "$_ide_shims" ] && continue
+                _ide_cp="$_ide_p"
+                while [ "$_ide_cp" != "/" ] && [ "${_ide_cp%/}" != "$_ide_cp" ]; do
+                    _ide_cp="${_ide_cp%/}"
+                done
+                [ -z "$_ide_cp" ] || [ "$_ide_cp" = "$_ide_shims" ] && continue
                 _ide_idx=$((_ide_idx + 1))
                 if [ "$_ide_shims_added" -eq 0 ] && [ "$_ide_idx" -gt "$_ide_last_mise" ]; then
-                    case "$_ide_p" in
+                    case "$_ide_cp" in
                         /opt/homebrew/bin|/opt/homebrew/sbin|/usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin)
                             _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
                             _ide_shims_added=1
@@ -54,14 +75,14 @@ if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
                 _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_p"
             done
             [ "$_ide_shims_added" -eq 0 ] && _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
-            export PATH="$HOME/.local/bin:$_ide_new_path:/usr/local/bin:/usr/bin:/bin"
-            unset _ide_rem _ide_new_path _ide_last_mise _ide_idx _ide_shims_added _ide_p
+            export PATH="${HOME%/}/.local/bin:$_ide_new_path:/usr/local/bin:/usr/bin:/bin"
+            unset _ide_rem _ide_new_path _ide_last_mise _ide_idx _ide_shims_added _ide_p _ide_cp
             ;;
         *)
-            export PATH="$_ide_shims:$HOME/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
+            export PATH="$_ide_shims:${HOME%/}/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
             ;;
     esac
-    unset _ide_shims
+    unset _ide_mise_dir _ide_shims _ide_inst_pfx
 fi
 
 show_keys_cheatsheet() {
