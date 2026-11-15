@@ -282,9 +282,33 @@ map("n", "<leader>h", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" }
 -- Fast Save
 map("n", "<leader>w", "<cmd>w<CR>", { desc = "Save file" })
 
--- Smart Home: jump to first non-blank character of line (matching .vimrc)
-map({ "n", "v", "o" }, "<Home>", "^", { desc = "Move to first non-blank character of line" })
-map("i", "<Home>", "<Esc>^i", { desc = "Move to first non-blank character of line" })
+-- Smart Home: jump to first non-blank character of line, or toggle to column 1 if already there
+local function smart_home_expr()
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local first_nb = line:find("[^ \t]")
+    local target = first_nb and ((col == first_nb) and "0" or "^") or ((#line == 0 or col == #line) and "0" or "^")
+    local m = vim.fn.mode()
+    if m == "s" or m == "S" or m == "\19" then
+        return (target == "0") and "<C-o>0" or "<C-o>^"
+    end
+    return target
+end
+map({ "n", "v", "o" }, "<Home>", smart_home_expr, { expr = true, replace_keycodes = true, silent = true, desc = "Smart Home: toggle first non-blank character and column 1" })
+map("i", "<Home>", function()
+    local line = vim.api.nvim_get_current_line()
+    local pos = vim.api.nvim_win_get_cursor(0)
+    local row, col = pos[1], pos[2]
+    local first_nb = line:find("[^ \t]")
+    local target = 0
+    if first_nb then
+        local nb0 = first_nb - 1
+        target = (col == nb0) and 0 or nb0
+    else
+        target = (col == #line) and 0 or #line
+    end
+    vim.api.nvim_win_set_cursor(0, { row, target })
+end, { silent = true, desc = "Smart Home: toggle first non-blank character and column 1" })
 
 -- Layer 1 (Ctrl + hjkl in Normal mode): internal Neovim split navigation only (guarded against floating modals)
 local function internal_split_nav(dir)
@@ -2063,6 +2087,7 @@ lazy.setup({
                 "rust_analyzer",
                 "gopls",
                 "pyright",
+                "ts_ls",
                 "lua_ls",
                 "bashls",
                 "terraformls",
@@ -2074,18 +2099,67 @@ lazy.setup({
         },
         config = function(_, opts)
             if #vim.api.nvim_list_uis() > 0 then
+                -- Keep background Mason status/error echoes within cmdheight=1 echospace so failed offline/mirror
+                -- installs never trigger a modal "Press ENTER" prompt that freezes the Editor pane and RPC server.
+                package.loaded["mason-lspconfig.notify"] = function(msg, level)
+                    vim.schedule(function()
+                        local m = vim.api.nvim_get_mode()
+                        if m.blocking or (m.mode ~= "n" and m.mode ~= "i") then
+                            return
+                        end
+                        local hl = (level == vim.log.levels.ERROR) and "DiagnosticError"
+                            or ((level == vim.log.levels.WARN) and "DiagnosticWarn" or "Comment")
+                        local line = tostring(msg or ""):gsub("[\r\n]+", " ")
+                        local max_w = math.max(1, (vim.v.echospace or (vim.o.columns - 12)) - 2)
+                        if vim.fn.strdisplaywidth(line) > max_w then
+                            local nchars = math.max(1, max_w - 1)
+                            local prefix = vim.fn.strcharpart(line, 0, nchars)
+                            while nchars > 1 and vim.fn.strdisplaywidth(prefix) + 1 > max_w do
+                                nchars = nchars - 1
+                                prefix = vim.fn.strcharpart(line, 0, nchars)
+                            end
+                            line = prefix .. "…"
+                        end
+                        vim.cmd("silent! redraw")
+                        pcall(vim.api.nvim_echo, { { line, hl } }, false, {})
+                    end)
+                end
                 local ok_reg, registry = pcall(require, "mason-registry")
                 if ok_reg then
                     local retried = {}
                     registry:on("package:install:failed", function(pkg)
-                        if retried[pkg.name] then return end
-                        retried[pkg.name] = true
-                        local npm_ver = vim.fn.system({ "npm", "view", pkg.name, "dist-tags.latest" }):gsub("%s+$", "")
-                        if vim.v.shell_error == 0 and npm_ver ~= "" then
-                            vim.schedule(function()
-                                pkg:install({ version = npm_ver })
-                            end)
+                        if not pkg or not pkg.name or retried[pkg.name] then
+                            return
                         end
+                        local npm_pkg = pkg.name
+                        local src_id = pkg.spec and pkg.spec.source and pkg.spec.source.id
+                        if type(src_id) == "string" and src_id ~= "" then
+                            if src_id:sub(1, 8) ~= "pkg:npm/" then
+                                return
+                            end
+                            npm_pkg = src_id:sub(9):gsub("[?#].*$", ""):gsub("@[^@/]*$", ""):gsub("%%40", "@")
+                            if npm_pkg == "" then
+                                return
+                            end
+                        end
+                        retried[pkg.name] = true
+                        vim.schedule(function()
+                            if vim.fn.executable("npm") ~= 1 or not vim.system then
+                                return
+                            end
+                            vim.system(
+                                { "npm", "view", npm_pkg, "dist-tags.latest" },
+                                { text = true },
+                                vim.schedule_wrap(function(res)
+                                    local npm_ver = (res and res.code == 0 and res.stdout or ""):gsub("%s+$", "")
+                                    if npm_ver ~= "" then
+                                        pcall(function()
+                                            pkg:install({ version = npm_ver })
+                                        end)
+                                    end
+                                end)
+                            )
+                        end)
                     end)
                 end
                 require("mason-lspconfig").setup(opts)
@@ -2152,6 +2226,7 @@ lazy.setup({
                 },
                 gopls = {},
                 pyright = {},
+                ts_ls = {},
                 bashls = {},
                 terraformls = {},
                 yamlls = {
@@ -2177,12 +2252,13 @@ lazy.setup({
 
             -- Configure servers using modern vim.lsp.config (Neovim 0.11+) with legacy fallback
             -- Note: jdtls is managed on-demand via ftplugin/java.lua with nvim-jdtls
-            local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls", "leanls" }
+            local servers = { "clangd", "rust_analyzer", "gopls", "pyright", "ts_ls", "lua_ls", "bashls", "terraformls", "yamlls", "jsonls", "leanls" }
             local server_bins = {
                 clangd = "clangd",
                 rust_analyzer = "rust-analyzer",
                 gopls = "gopls",
                 pyright = "pyright-langserver",
+                ts_ls = "typescript-language-server",
                 lua_ls = "lua-language-server",
                 bashls = "bash-language-server",
                 terraformls = "terraform-ls",

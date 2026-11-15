@@ -80,7 +80,7 @@ Any AI agent interacting with or modifying this repository must strictly adhere 
 | Bash addendum and hooks | `dotfiles/.bashrc-addendum` | `$HOME/.bashrc-addendum` | `tests/test-env.sh` |
 | Shortcuts and aliases | `dotfiles/.aliases` | `$HOME/.aliases` | `tests/test-zsh.zsh`, `tests/test-dotfiles.sh` |
 | Shell functions | `dotfiles/.zsh-functions` | `$HOME/.zsh-functions` | `tests/test-zsh.zsh`, `tests/test-dotfiles.sh` |
-| CLI completions | `dotfiles/.zsh-completions` (`_theme`, `_ide`) | `$HOME/.zsh-completions` | `tests/test-completions.sh`, `tests/test-zsh.zsh` |
+| CLI completions | `dotfiles/.zsh-completions` (`_theme`, `_ide`, `_terraform`) | `$HOME/.zsh-completions` | `tests/test-completions.sh`, `tests/test-zsh.zsh` |
 | Powerlevel10k theme | `dotfiles/.p10k.zsh` | `$HOME/.p10k.zsh` | `tests/test-zsh.zsh` |
 | Neovim configuration | `dotfiles/.config/nvim/init.lua` | `${XDG_CONFIG_HOME:-$HOME/.config}/nvim/init.lua` | `tests/test-vim.sh`, `tests/test-dotfiles.sh` |
 | Tmux IDE configuration | `dotfiles/.tmux.conf` | `$HOME/.tmux.conf` | `tests/test-dotfiles.sh`, `tests/test-bin.sh` |
