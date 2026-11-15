@@ -172,27 +172,27 @@ _ide() {
     (( CURRENT > 3 )) && prev3="${words[CURRENT-3]:-}"
     case "${words[CURRENT]:-}" in
         --ai=*|--agent=*)
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             _describe -t agents 'AI agent CLI' agents
             return
             ;;
         --agent-state=*)
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             _describe -t states 'AI lifecycle state' agent_states
             return
             ;;
         --swap=*)
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             _describe -t directions 'swap direction' swap_dirs
             return
             ;;
         --open=*|--preview=*|--ref=*)
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             _files
             return
             ;;
         --open-pr=*)
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             if (( ${#sessions} )); then
                 _describe -t sessions 'IDE session' sessions
             fi
@@ -532,13 +532,13 @@ _terraform() {
     local path_val=""
     case "$cur" in
         -chdir=*)
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             _files -/
             return
             ;;
         -plugin-dir=*|-plugin-cache-dir=*|-from-module=*|-test-directory=*|-config=*|-fs-mirror=*)
             path_val="${cur#*=}"
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             if [[ "$path_val" != /* && "$path_val" != \~* ]] && (( ${#chdir_opt} )); then
                 _files "${chdir_opt[@]}" -/
             else
@@ -548,7 +548,7 @@ _terraform() {
             ;;
         -var-file=*|-out=*|-state=*|-state-out=*|-backup=*|-backup-out=*|-backend-config=*|-generate-config-out=*|-filter=*|-junit-xml=*|-plan=*)
             path_val="${cur#*=}"
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
             if [[ "$path_val" != /* && "$path_val" != \~* ]] && (( ${#chdir_opt} )); then
                 _files "${chdir_opt[@]}"
             else
@@ -673,7 +673,7 @@ _terraform() {
         if [[ "$cur" == *=* ]]; then
             local eq_pfx="${cur%%=*}="
             cands=("${(@)cands#${(b)eq_pfx}}")
-            (( $+builtins[compset] )) && compset -P '*=' || true
+            (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true
         fi
         cands=("${(@)cands//:/\\:}")
         plain_cands=(${cands:#*=})

@@ -2893,6 +2893,7 @@ import struct
 import subprocess
 import tempfile
 import termios
+import threading
 import time
 
 cfg_path = os.environ["NVIM_CONFIG_PATH"]
@@ -2900,17 +2901,65 @@ mfd, sfd = pty.openpty()
 fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 20, 50, 0, 0))
 tmp_dir = tempfile.mkdtemp()
 proc = None
+sfd_open = True
+
+def _drain_pty(fd):
+    while True:
+        try:
+            data = os.read(fd, 8192)
+            if not data:
+                break
+        except OSError:
+            break
+
+drain_thread = threading.Thread(target=_drain_pty, args=(mfd,), daemon=True)
+drain_thread.start()
+
 try:
+    orig_data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    iso_data = os.path.join(tmp_dir, "data")
+    iso_nvim_data = os.path.join(iso_data, "nvim")
+    os.makedirs(iso_nvim_data, exist_ok=True)
+    for sub in ("lazy", "site"):
+        src_sub = os.path.join(orig_data, "nvim", sub)
+        if os.path.exists(src_sub):
+            os.symlink(src_sub, os.path.join(iso_nvim_data, sub))
+    for mason_pkg in (
+        "clangd",
+        "rust-analyzer",
+        "gopls",
+        "pyright",
+        "typescript-language-server",
+        "lua-language-server",
+        "bash-language-server",
+        "terraform-ls",
+        "yaml-language-server",
+        "json-lsp",
+        "jdtls",
+    ):
+        os.makedirs(os.path.join(iso_nvim_data, "mason", "packages", mason_pkg), exist_ok=True)
+
     bin_dir = os.path.join(tmp_dir, "bin")
     os.makedirs(bin_dir, exist_ok=True)
+    npm_log = os.path.join(tmp_dir, "npm_calls.log")
     npm_mock = os.path.join(bin_dir, "npm")
     with open(npm_mock, "w", encoding="utf-8") as fh:
-        fh.write('#!/bin/sh\nif [ "$1" = "view" ] && [ "$3" = "dist-tags.latest" ]; then\n    printf "5.1.3\\n"\n    exit 0\nfi\nexit 1\n')
+        fh.write(
+            f'#!/bin/sh\nprintf "%s\\n" "$*" >> {npm_log!r}\n'
+            'if [ "$1" = "view" ] && [ "$3" = "dist-tags.latest" ]; then\n'
+            '    case "$2" in\n'
+            '        mock-fast-event-lsp) printf "5.1.3\\n"; exit 0 ;;\n'
+            '        vscode-langservers-extracted) printf "4.10.0\\n"; exit 0 ;;\n'
+            '    esac\n'
+            'fi\nexit 1\n'
+        )
     os.chmod(npm_mock, 0o755)
     probe_lua = os.path.join(tmp_dir, "mason_ui_probe.lua")
     with open(probe_lua, "w", encoding="utf-8") as fh:
         fh.write("""
 _G.hs_mason_retried_ver = "none"
+_G.hs_mason_purl_ver = "none"
+_G.hs_mason_gh_called = "no"
 local ok_n, notify = pcall(require, "mason-lspconfig.notify")
 if ok_n and type(notify) == "function" then
     for i = 1, 6 do
@@ -2926,6 +2975,20 @@ if ok_r and registry and registry.emit then
         t:close()
         pcall(function()
             registry:emit("package:install:failed", {
+                name = "clangd",
+                spec = { source = { id = "pkg:github/clangd/clangd@23.1.0" } },
+                install = function()
+                    _G.hs_mason_gh_called = "yes"
+                end,
+            })
+            registry:emit("package:install:failed", {
+                name = "json-lsp",
+                spec = { source = { id = "pkg:npm/vscode-langservers-extracted@4.9.0" } },
+                install = function(_, opts)
+                    _G.hs_mason_purl_ver = tostring(opts and opts.version or "")
+                end,
+            })
+            registry:emit("package:install:failed", {
                 name = "mock-fast-event-lsp",
                 install = function(_, opts)
                     _G.hs_mason_retried_ver = tostring(opts and opts.version or "")
@@ -2935,21 +2998,42 @@ if ok_r and registry and registry.emit then
     end)
 else
     _G.hs_mason_retried_ver = "no-registry"
+    _G.hs_mason_purl_ver = "no-registry"
 end
 """)
     sock = os.path.join(tmp_dir, "nvim-ui.sock")
     env = dict(os.environ)
     env["PATH"] = bin_dir + ":" + env.get("PATH", "")
+    env["XDG_DATA_HOME"] = iso_data
+    env["XDG_STATE_HOME"] = os.path.join(tmp_dir, "state")
+    env["XDG_CACHE_HOME"] = os.path.join(tmp_dir, "cache")
+    env["NVIM_TS_SKIP_AUTO_INSTALL"] = "1"
     env["NVIM_LOG_FILE"] = "/dev/null"
+
+    def _attach_ctty():
+        os.setsid()
+        try:
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+        except OSError:
+            try:
+                fcntl.ioctl(0, termios.TIOCSCTTY, 1)
+            except OSError:
+                pass
+
     proc = subprocess.Popen(
         ["nvim", "-i", "NONE", "-u", cfg_path, "--listen", sock],
         stdin=sfd,
         stdout=sfd,
         stderr=sfd,
         env=env,
+        preexec_fn=_attach_ctty,
+        close_fds=True,
     )
+    os.close(sfd)
+    sfd_open = False
     ready = False
-    for _ in range(80):
+    ready_deadline = time.monotonic() + 15.0
+    while time.monotonic() < ready_deadline:
         if os.path.exists(sock):
             r0 = subprocess.run(
                 ["nvim", "--headless", "--server", sock, "--remote-expr", "v:vim_did_enter"],
@@ -2974,11 +3058,18 @@ end
             env=env,
             timeout=5,
         )
-        deadline = time.monotonic() + 4.0
+        deadline = time.monotonic() + 5.0
         state = ""
         while time.monotonic() < deadline:
             r1 = subprocess.run(
-                ["nvim", "--headless", "--server", sock, "--remote-expr", "mode(1) . '|' . luaeval('tostring(_G.hs_mason_retried_ver)') . '|' . v:errmsg"],
+                [
+                    "nvim",
+                    "--headless",
+                    "--server",
+                    sock,
+                    "--remote-expr",
+                    "mode(1) . '|' . luaeval('tostring(_G.hs_mason_retried_ver)') . '|' . luaeval('tostring(_G.hs_mason_purl_ver)') . '|' . luaeval('tostring(_G.hs_mason_gh_called)') . '|' . v:errmsg",
+                ],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
@@ -2987,9 +3078,12 @@ end
             )
             if r1.returncode == 0:
                 state = r1.stdout.strip()
-                if state.startswith("n|5.1.3|") or state.startswith("n|no-registry|"):
+                if state.startswith("n|5.1.3|4.10.0|no|") or state.startswith("n|no-registry|no-registry|no|"):
                     break
             time.sleep(0.1)
+        npm_logged = open(npm_log, encoding="utf-8").read() if os.path.exists(npm_log) else ""
+        if "clangd" in npm_logged or "json-lsp" in npm_logged:
+            state = "BAD_NPM_CALLS:" + npm_logged.replace("\n", ";")
         print(state)
 finally:
     if proc is not None:
@@ -2998,12 +3092,15 @@ finally:
             proc.wait(timeout=3)
         except Exception:
             proc.kill()
+            proc.wait()
+    if sfd_open:
+        os.close(sfd)
+    drain_thread.join(timeout=1.0)
     os.close(mfd)
-    os.close(sfd)
     shutil.rmtree(tmp_dir, ignore_errors=True)
 PY
 )"
-            if [[ "$MASON_UI_OUT" == "n|5.1.3|"* ]] || [[ "$MASON_UI_OUT" == "n|no-registry|"* ]]; then
+            if [[ "$MASON_UI_OUT" == "n|5.1.3|4.10.0|no|"* ]] || [[ "$MASON_UI_OUT" == "n|no-registry|no-registry|no|"* ]]; then
                 if [[ "$MASON_UI_OUT" != *"E5560"* ]]; then
                     pass "Neovim init.lua keeps narrow-PTY UI Mason error notifications non-blocking (zero hit-enter freeze) and retries failed npm installs asynchronously without fast-event E5560 errors"
                 else

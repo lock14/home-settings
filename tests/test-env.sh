@@ -270,8 +270,8 @@ STANDALONE_HOME=$(mktemp -d)
 
     # Test Bash terraform and tf tab completion (dynamic COMP_LINE/COMP_POINT, PTY space/slash/colon escaping, custom COMP_WORDBREAKS, Bash 3.2 fallback, and broken-shim/binary-absent fallback)
     TF_COMP_DIR="$STANDALONE_HOME/tf_comp_test"
-    mkdir -p "$TF_COMP_DIR/bin" "$TF_COMP_DIR/broken_bin" "$TF_COMP_DIR/envs/prod/vars_sub" "$TF_COMP_DIR/my dir/sub" "$TF_COMP_DIR/a:b/sub" "$TF_COMP_DIR/dir=1"
-    touch "$TF_COMP_DIR/vars.tfvars" "$TF_COMP_DIR/prod vars.tfvars" "$TF_COMP_DIR/snap:1.tfplan" "$TF_COMP_DIR/envs/prod/sub vars.tfvars"
+    mkdir -p "$TF_COMP_DIR/bin" "$TF_COMP_DIR/broken_bin" "$TF_COMP_DIR/envs/prod/vars_sub" "$TF_COMP_DIR/my dir/sub" "$TF_COMP_DIR/a:b/sub" "$TF_COMP_DIR/dir=1/sub"
+    touch "$TF_COMP_DIR/vars.tfvars" "$TF_COMP_DIR/prod vars.tfvars" "$TF_COMP_DIR/snap:1.tfplan" "$TF_COMP_DIR/envs/prod/sub vars.tfvars" "$TF_COMP_DIR/dir=1/main.tf"
     cat > "$TF_COMP_DIR/bin/terraform" <<'TFMOCK'
 #!/bin/sh
 case "${COMP_LINE:-}" in
@@ -306,7 +306,7 @@ TFBROKEN
     tf_pty_ok="ok"
     if command -v python3 >/dev/null 2>&1; then
         tf_pty_ok="$(TF_COMP_DIR="$TF_COMP_DIR" BASHRC_ADD="$SCRIPT_DIR/dotfiles/.bashrc-addendum" python3 - <<'PY'
-import os, pty, select, subprocess, time
+import fcntl, os, pty, select, struct, subprocess, termios, time
 
 wdir = os.environ["TF_COMP_DIR"]
 brc = os.environ["BASHRC_ADD"]
@@ -314,50 +314,94 @@ rc_file = os.path.join(wdir, "rc.bash")
 with open(rc_file, "w", encoding="utf-8") as fh:
     fh.write(f"source {brc!r}\nPS1='READY> '\nPROMPT_COMMAND=''\nbind 'set enable-bracketed-paste off'\n")
 
-def read_until(fd, marker, timeout=3.0):
-    buf = ""
-    end = time.monotonic() + timeout
-    while time.monotonic() < end:
-        r, _, _ = select.select([fd], [], [], 0.03)
-        if r:
-            chunk = os.read(fd, 8192).decode("utf-8", "replace")
-            if not chunk:
-                break
-            buf += chunk
-            if marker in buf:
-                break
-    return buf
+def _attach_ctty():
+    os.setsid()
+    try:
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+    except OSError:
+        try:
+            fcntl.ioctl(0, termios.TIOCSCTTY, 1)
+        except OSError:
+            pass
 
 def run_pty_group(extra_env, cases, init_cmd=""):
     mfd, sfd = pty.openpty()
+    fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 200, 0, 0))
     proc = subprocess.Popen(
-        ["bash", "--rcfile", rc_file, "-i"],
+        ["bash", "--noprofile", "--rcfile", rc_file, "-i"],
         stdin=sfd,
         stdout=sfd,
         stderr=sfd,
         cwd=wdir,
-        env={"HOME": wdir, "PATH": f"{wdir}/bin:/usr/bin:/bin", "TERM": "xterm-256color", **extra_env},
+        preexec_fn=_attach_ctty,
+        close_fds=True,
+        env={
+            "HOME": wdir,
+            "INPUTRC": "/dev/null",
+            "PATH": f"{wdir}/bin:/usr/bin:/bin",
+            "TERM": "xterm-256color",
+            **extra_env,
+        },
     )
     os.close(sfd)
+    rx_buf = ""
+
+    def read_until(marker, timeout=5.0):
+        nonlocal rx_buf
+        end = time.monotonic() + timeout
+        while marker not in rx_buf and time.monotonic() < end:
+            r, _, _ = select.select([mfd], [], [], 0.03)
+            if r:
+                try:
+                    chunk = os.read(mfd, 8192).decode("utf-8", "replace")
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                rx_buf += chunk
+        pos = rx_buf.find(marker)
+        if pos != -1:
+            end_pos = pos + len(marker)
+            taken = rx_buf[:end_pos]
+            rx_buf = rx_buf[end_pos:]
+            return taken, True
+        taken = rx_buf
+        rx_buf = ""
+        return taken, False
+
     errs = []
     try:
-        read_until(mfd, "READY> ")
-        if init_cmd:
-            os.write(mfd, init_cmd.encode() + b"\n")
-            read_until(mfd, "\r\nREADY> ")
-        for typed, expected in cases:
-            os.write(mfd, typed.encode() + b"<<<END\x15\n")
-            out = read_until(mfd, "\r\nREADY> ")
-            if expected not in out:
-                errs.append(f"{expected!r} not in {out!r}")
-        os.write(mfd, b"exit\n")
+        init_out, ok_init = read_until("READY> ", timeout=15.0)
+        if not ok_init:
+            errs.append(f"initial prompt timeout: {init_out!r}")
+        else:
+            if init_cmd:
+                os.write(mfd, init_cmd.encode() + b"\n")
+                cmd_out, ok_cmd = read_until("\r\nREADY> ", timeout=5.0)
+                if not ok_cmd:
+                    errs.append(f"init_cmd prompt timeout: {cmd_out!r}")
+            if not errs:
+                for idx, (typed, expected_tmpl) in enumerate(cases):
+                    marker = f"<<<END{idx}>>>"
+                    expected = expected_tmpl.replace("<<<END", marker)
+                    os.write(mfd, typed.encode() + marker.encode() + b"\x15\n")
+                    out, ok_step = read_until("\r\nREADY> ", timeout=5.0)
+                    if not ok_step:
+                        errs.append(f"timeout on {typed!r}: {out!r}")
+                        break
+                    if expected not in out:
+                        errs.append(f"{expected!r} not in {out!r}")
+        try:
+            os.write(mfd, b"\x15exit\n")
+        except OSError:
+            pass
     finally:
-        proc.terminate()
+        os.close(mfd)
         try:
             proc.wait(timeout=2)
         except Exception:
             proc.kill()
-        os.close(mfd)
+            proc.wait()
     return errs
 
 bad = []
@@ -366,6 +410,8 @@ bad.extend(run_pty_group({}, [
     ("tf -chdir=my\t", "tf -chdir=my\\ dir/<<<END"),
     ("tf -chdir=a:\t", "tf -chdir=a:b/<<<END"),
     ("tf -chdir=a:b/\t", "tf -chdir=a:b/sub/<<<END"),
+    ("tf -chdir=dir=1/\t", "tf -chdir=dir=1/sub/<<<END"),
+    ("tf plan -out=dir=1/ma\t", "tf plan -out=dir=1/main.tf <<<END"),
     ("tf plan -out=snap:\t", "tf plan -out=snap:1.tfplan <<<END"),
     ("tf plan -var-file=prod\t", "tf plan -var-file=prod\\ vars.tfvars <<<END"),
     ("tf -chdir=envs/prod plan -var-file=sub\t", "tf -chdir=envs/prod plan -var-file=sub\\ vars.tfvars <<<END"),

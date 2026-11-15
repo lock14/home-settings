@@ -2131,13 +2131,24 @@ lazy.setup({
                         if not pkg or not pkg.name or retried[pkg.name] then
                             return
                         end
+                        local npm_pkg = pkg.name
+                        local src_id = pkg.spec and pkg.spec.source and pkg.spec.source.id
+                        if type(src_id) == "string" and src_id ~= "" then
+                            if src_id:sub(1, 8) ~= "pkg:npm/" then
+                                return
+                            end
+                            npm_pkg = src_id:sub(9):gsub("[?#].*$", ""):gsub("@[^@/]*$", ""):gsub("%%40", "@")
+                            if npm_pkg == "" then
+                                return
+                            end
+                        end
                         retried[pkg.name] = true
                         vim.schedule(function()
                             if vim.fn.executable("npm") ~= 1 or not vim.system then
                                 return
                             end
                             vim.system(
-                                { "npm", "view", pkg.name, "dist-tags.latest" },
+                                { "npm", "view", npm_pkg, "dist-tags.latest" },
                                 { text = true },
                                 vim.schedule_wrap(function(res)
                                     local npm_ver = (res and res.code == 0 and res.stdout or ""):gsub("%s+$", "")

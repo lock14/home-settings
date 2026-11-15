@@ -55,7 +55,7 @@ fi
 # Verify sourcing .zsh-completions with an empty ~/.zsh/completions directory under Zsh NOMATCH
 EMPTY_COMP_HOME=$(mktemp -d)
 mkdir -p "$EMPTY_COMP_HOME/.zsh/completions"
-if zsh -c "setopt NOMATCH; HOME='$EMPTY_COMP_HOME'; compdef() { :; }; source '$SCRIPT_DIR/dotfiles/.zsh-completions'" >/dev/null 2>&1; then
+if zsh -f -c "setopt NOMATCH; HOME='$EMPTY_COMP_HOME'; compdef() { :; }; source '$SCRIPT_DIR/dotfiles/.zsh-completions'" >/dev/null 2>&1; then
     pass ".zsh-completions handles empty ~/.zsh/completions cleanly under Zsh NOMATCH"
 else
     fail ".zsh-completions empty directory" "Failed under Zsh NOMATCH with empty ~/.zsh/completions"
@@ -197,7 +197,7 @@ if shims_out=$(env -u ELAN_HOME HOME="$SHIMS_HOME" XDG_CONFIG_HOME="$SHIMS_HOME/
             break
         fi
     done
-    delta_binding="$(HOME="$SHIMS_HOME" zsh -c 'autoload -Uz compinit && compinit -i -d "$HOME/.zcompdump"; source "'"$SCRIPT_DIR"'/dotfiles/.zsh-completions"; print -r -- "${_comps[delta]:-none}|${_comps[tree-sitter]:-none}"' 2>/dev/null || true)"
+    delta_binding="$(HOME="$SHIMS_HOME" zsh -f -c 'autoload -Uz compinit && compinit -u -d "$HOME/.zcompdump"; source "'"$SCRIPT_DIR"'/dotfiles/.zsh-completions"; print -r -- "${_comps[delta]:-none}|${_comps[tree-sitter]:-none}"' 2>/dev/null || true)"
     if [ -z "$missing_comp" ] && [ "$delta_binding" = "_delta|_tree-sitter" ]; then
         pass "setup.sh hands off mise/shims and elan/bin on PATH to 60-shell.sh, generates _elan/_mise/_delta/_bat/_yq/_glow/_rustup/_cargo/_tree-sitter, and overrides Zsh _sccs with _delta"
     else
@@ -252,6 +252,7 @@ chmod +x "$MOCK_IDE_HOME/.local/bin/ide"
 cat << 'EOF' > "$MOCK_IDE_HOME/test-ide-comp.zsh"
 #!/usr/bin/env zsh
 set -euo pipefail
+zmodload zsh/complete 2>/dev/null || true
 typeset -gA COMP_MAP=()
 typeset -ga OFFERED=()
 compdef() {
@@ -405,7 +406,7 @@ out_root="$(run_case ide "")"
 [[ ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",kill,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
 EOF
 
-if ide_comp_err="$(HOME="$MOCK_IDE_HOME" zsh "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)"; then
+if ide_comp_err="$(HOME="$MOCK_IDE_HOME" zsh -f "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$ide_comp_err" ]; then
     pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek/quit and completes flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, and single/multi-target live IDE sessions"
 else
     fail "_ide Zsh completion" "Unexpected _ide completion behavior: $ide_comp_err"
@@ -450,6 +451,7 @@ chmod +x "$MOCK_TF_HOME/broken_bin/terraform"
 cat << 'EOF' > "$MOCK_TF_HOME/test-tf-comp.zsh"
 #!/usr/bin/env zsh
 set -euo pipefail
+zmodload zsh/complete 2>/dev/null || true
 typeset -gA COMP_MAP=()
 typeset -ga OFFERED=()
 compdef() {
@@ -598,13 +600,20 @@ EOF
 tf_zsh_pty="ok"
 if command -v python3 >/dev/null 2>&1; then
     tf_zsh_pty="$(MOCK_TF_HOME="$MOCK_TF_HOME" ZSH_COMP_FILE="$SCRIPT_DIR/dotfiles/.zsh-completions" python3 - <<'PY'
-import os, pty, re, select, subprocess, time
+import fcntl, os, pty, re, select, struct, subprocess, termios, time
 
 home = os.environ["MOCK_TF_HOME"]
 zcomp = os.environ["ZSH_COMP_FILE"]
 os.makedirs(os.path.join(home, "my dir"), exist_ok=True)
+os.makedirs(os.path.join(home, "dir=1/sub"), exist_ok=True)
+open(os.path.join(home, "dir=1/main.tf"), "w").close()
 os.makedirs(os.path.join(home, "envs/prod/vars_sub"), exist_ok=True)
 open(os.path.join(home, "envs/prod/prod vars.tfvars"), "w").close()
+os.makedirs(os.path.join(home, ".local/bin"), exist_ok=True)
+ide_mock = os.path.join(home, ".local/bin/ide")
+with open(ide_mock, "w", encoding="utf-8") as fh:
+    fh.write('#!/bin/sh\nif [ "${1:-}" = "--list" ] && [ "${2:-}" = "--plain" ]; then\n    printf "alpha-ws\\nbeta-ws\\n"\nfi\n')
+os.chmod(ide_mock, 0o755)
 
 # Simulate Oh-My-Zsh plugins/terraform autoloaded completion + matcher-list prior to sourcing .zsh-completions
 omz_tf_dir = os.path.join(home, "omz_tf")
@@ -615,9 +624,11 @@ with open(os.path.join(omz_tf_dir, "_terraform"), "w", encoding="utf-8") as fh:
 zshrc = os.path.join(home, ".zshrc")
 with open(zshrc, "w", encoding="utf-8") as fh:
     fh.write(
+        f"unsetopt PROMPT_SP\n"
         f"PROMPT='READY> '\n"
+        f"bindkey -e\n"
         f"fpath=({omz_tf_dir!r} $fpath)\n"
-        f"autoload -Uz compinit && compinit -i -d '{home}/.zcompdump'\n"
+        f"autoload -Uz compinit && compinit -u -d '{home}/.zcompdump'\n"
         f"zstyle ':completion:*' matcher-list 'm:{{a-zA-Z}}={{A-Za-z}}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'\n"
         f"alias tf=terraform\n"
         f"alias tfp='terraform plan'\n"
@@ -627,39 +638,57 @@ with open(zshrc, "w", encoding="utf-8") as fh:
 env = {
     "HOME": home,
     "ZDOTDIR": home,
-    "PATH": f"{home}/bin:/usr/bin:/bin",
+    "PATH": f"{home}/.local/bin:{home}/bin:/usr/bin:/bin",
     "TERM": "xterm-256color",
 }
 checks = [
-    ("tf init -backend=f\t", "tf init -backend=false"),
-    ("tf -chdir=my\t", "tf -chdir=my\\ dir"),
-    ("tf plan -o\t", "tf plan -out=<<<END"),
-    ("tf apply -auto\t", "tf apply -auto-approve"),
-    ("tf apply -AUTO\t", "tf apply -auto-approve"),
-    ("tf apply -approve\t", "tf apply -auto-approve"),
-    ("tf destroy -auto\t", "tf destroy -auto-approve"),
-    ("tf fmt -r\t", "tf fmt -recursive"),
-    ("tf validate -no-t\t", "tf validate -no-tests"),
-    ("tf plan -lock=f\t", "tf plan -lock=false"),
-    ("tf providers mirror -lock-file=f\t", "tf providers mirror -lock-file=false"),
-    ("tf -chdir=envs/prod plan -var-file=prod\t", "tf -chdir=envs/prod plan -var-file=prod\\ vars.tfvars"),
-    ("tf -chdir=envs/prod plan -var-file=vars\t", "tf -chdir=envs/prod plan -var-file=vars_sub/<<<END"),
-    ("tfp -o\t", "tfp -out=<<<END"),
+    ("tf init -backend=f\t", "tf init -backend=false {m}"),
+    ("tf -chdir=my\t", "tf -chdir=my\\ dir/{m}"),
+    ("tf -chdir=dir=1/\t", "tf -chdir=dir=1/sub/{m}"),
+    ("tf plan -out=dir=1/ma\t", "tf plan -out=dir=1/main.tf {m}"),
+    ("tf plan -o\t", "tf plan -out={m}"),
+    ("tf apply -auto\t", "tf apply -auto-approve {m}"),
+    ("tf apply -AUTO\t", "tf apply -auto-approve {m}"),
+    ("tf apply -approve\t", "tf apply -auto-approve {m}"),
+    ("tf destroy -auto\t", "tf destroy -auto-approve {m}"),
+    ("tf fmt -r\t", "tf fmt -recursive {m}"),
+    ("tf validate -no-t\t", "tf validate -no-tests {m}"),
+    ("tf plan -lock=f\t", "tf plan -lock=false {m}"),
+    ("tf providers mirror -lock-file=f\t", "tf providers mirror -lock-file=false {m}"),
+    ("tf -chdir=envs/prod plan -var-file=prod\t", "tf -chdir=envs/prod plan -var-file=prod\\ vars.tfvars {m}"),
+    ("tf -chdir=envs/prod plan -var-file=vars\t", "tf -chdir=envs/prod plan -var-file=vars_sub/{m}"),
+    ("tfp -o\t", "tfp -out={m}"),
+    ("ide --ai=cl\t", "ide --ai=claude {m}"),
+    ("ide --agent-state=qu\t", "ide --agent-state=quota {m}"),
+    ("ide --swap=ri\t", "ide --swap=right {m}"),
+    ("ide --open=dir=1/ma\t", "ide --open=dir=1/main.tf {m}"),
+    ("ide --open-pr=al\t", "ide --open-pr=alpha-ws {m}"),
 ]
 
-def read_until(fd, marker, timeout=3.0):
-    buf = ""
+rx_buf = ""
+
+def read_until(fd, marker, timeout=5.0):
+    global rx_buf
     end = time.monotonic() + timeout
-    while time.monotonic() < end:
+    while marker not in rx_buf and time.monotonic() < end:
         r, _, _ = select.select([fd], [], [], 0.03)
         if r:
-            chunk = os.read(fd, 8192).decode("utf-8", "replace")
+            try:
+                chunk = os.read(fd, 8192).decode("utf-8", "replace")
+            except OSError:
+                break
             if not chunk:
                 break
-            buf += chunk
-            if marker in buf:
-                break
-    return buf
+            rx_buf += chunk
+    pos = rx_buf.find(marker)
+    if pos != -1:
+        end_pos = pos + len(marker)
+        taken = rx_buf[:end_pos]
+        rx_buf = rx_buf[end_pos:]
+        return taken, True
+    taken = rx_buf
+    rx_buf = ""
+    return taken, False
 
 def render_line(raw, marker):
     s = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", raw)
@@ -677,35 +706,64 @@ def render_line(raw, marker):
             return joined
     return "".join(out)
 
+def _attach_ctty():
+    os.setsid()
+    try:
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+    except OSError:
+        try:
+            fcntl.ioctl(0, termios.TIOCSCTTY, 1)
+        except OSError:
+            pass
+
 mfd, sfd = pty.openpty()
-proc = subprocess.Popen(["zsh", "-i"], stdin=sfd, stdout=sfd, stderr=sfd, cwd=home, env=env)
+fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 200, 0, 0))
+proc = subprocess.Popen(
+    ["zsh", "-d", "-i"],
+    stdin=sfd,
+    stdout=sfd,
+    stderr=sfd,
+    cwd=home,
+    env=env,
+    preexec_fn=_attach_ctty,
+    close_fds=True,
+)
 os.close(sfd)
 bad = []
 try:
-    read_until(mfd, "READY> ")
-    for idx, (typed, expected) in enumerate(checks):
-        marker = f"<<<END{idx}"
-        sent_marker = "<<<END" if "<<<END" in expected else marker
-        os.write(mfd, typed.encode() + sent_marker.encode() + b"\x15\n")
-        out = read_until(mfd, "READY> ")
-        rendered = render_line(out, sent_marker)
-        if expected not in rendered:
-            bad.append(f"{expected!r} not in {rendered!r}")
-    os.write(mfd, b"exit\n")
+    init_out, ok_init = read_until(mfd, "READY> ", timeout=15.0)
+    if not ok_init:
+        bad.append(f"initial prompt timeout: {init_out!r}")
+    else:
+        for idx, (typed, expected_tmpl) in enumerate(checks):
+            marker = f"<<<END{idx}>>>"
+            expected = expected_tmpl.format(m=marker)
+            os.write(mfd, typed.encode() + marker.encode() + b"\x15\n")
+            out, ok_step = read_until(mfd, "READY> ", timeout=5.0)
+            rendered = render_line(out, marker)
+            if not ok_step:
+                bad.append(f"timeout on {typed!r}: {rendered!r}")
+                break
+            if expected not in rendered:
+                bad.append(f"{expected!r} not in {rendered!r}")
+    try:
+        os.write(mfd, b"\x15exit\n")
+    except OSError:
+        pass
 finally:
-    proc.terminate()
+    os.close(mfd)
     try:
         proc.wait(timeout=2)
     except Exception:
         proc.kill()
-    os.close(mfd)
+        proc.wait()
 
 print("ok" if not bad else "; ".join(bad))
 PY
 )"
 fi
 
-if tf_comp_err="$(HOME="$MOCK_TF_HOME" PATH="$MOCK_TF_HOME/bin:/usr/bin:/bin" zsh "$MOCK_TF_HOME/test-tf-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ "$tf_zsh_pty" = "ok" ]; then
+if tf_comp_err="$(HOME="$MOCK_TF_HOME" PATH="$MOCK_TF_HOME/bin:/usr/bin:/bin" zsh -f "$MOCK_TF_HOME/test-tf-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$tf_comp_err" ] && [ "$tf_zsh_pty" = "ok" ]; then
     pass "_terraform Zsh completion registers terraform and tf and completes subcommands, plan/apply/destroy/fmt/validate flags, -backend=false/-lock=false values, space-escaped -chdir=/-var-file= paths, and broken-shim/binary-absent fallback"
 else
     fail "_terraform Zsh completion" "Unexpected _terraform completion behavior: err='${tf_comp_err:-}' pty='$tf_zsh_pty'"
