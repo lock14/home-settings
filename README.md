@@ -58,7 +58,7 @@ make bootstrap
 # Clean uninstallation of managed dotfiles, binaries, and fonts
 make uninstall
 
-# Run complete test suite (500+ tests across 8 modules)
+# Run complete test suite (500+ tests across 10 modules)
 make test
 
 # Run ShellCheck, shell syntax, and documentation checks
@@ -238,11 +238,13 @@ home-settings/
 │   ├── XML.sublime-syntax           # XML syntax with namespaces, directives, and CDATA
 │   └── Zig.sublime-syntax           # Modern Zig syntax (comptime, error sets, @builtins)
 │
-└── tests/                           # Automated test suites (500+ tests across 8 modules)
+└── tests/                           # Automated test suites (500+ tests across 10 modules)
     ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
     ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap, and dry-run tests
     ├── test-dotfiles.sh             # Declarative dotfiles auto-discovery, backup, and drop-ins
-    ├── test-bin.sh                  # User binaries symlinking and compatibility shims
+    ├── test-bin.sh                  # User binaries symlinking, shims, and IDE workspace geometry
+    ├── test-theme.sh                # Multi-theme manager, palette contrast, and terminal profile tests
+    ├── test-ide-fleet.sh            # Multi-session IDE switcher, AI lifecycle, and context dispatch tests
     ├── test-env.sh                  # Environment variables, TrueColor, and Bash tests
     ├── test-zsh.zsh                 # Zsh aliases, functions, and live Git integration tests
     ├── test-completions.sh          # Completion symlinks and generator tests
@@ -294,7 +296,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
     - **Unified clipboard and terminal selection dispatch**: Mouse selection copies immediately in both local and remote SSH sessions (via OSC 52) while keeping the selection highlighted. Press `Alt+c` to copy and clear, `Escape` to clear, `Alt+v` to paste, or `a` inside Tmux `copy-mode-vi` to paste the selected terminal output directly into the AI Agent prompt (`ide --send --stdin`) without overwriting the system clipboard.
 
 - **LSP, Tree-sitter, and Neovim toolchains**:
-  - **Native LSP**: Automatic language server provisioning (`mason.nvim` and `nvim-lspconfig`) for C, C++, Rust, Go, Python, TypeScript, JavaScript, Java (`nvim-jdtls`), Lean 4 (`leanls`), Lua, Bash, Terraform, YAML, and JSON. Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) additionally bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
+  - **Native LSP**: Automatic language server provisioning via `.mise.toml` (for Python, TypeScript, JavaScript, Bash, YAML, JSON, and Lean 4 `leanls`) and `mason.nvim` with `nvim-lspconfig` (for C, C++, Rust, Go, Lua, Terraform, and Java `nvim-jdtls`). Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) additionally bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
   - **Tree-sitter and Markdown rendering**: Solarized Dark syntax highlighting aligned with `bat`, plus live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks.
   - **Telescope**: Fuzzy finders for files (`Space ff`), live grep (`Space fg`), open buffers (`Space fb`), and Git status (`Space gs`).
   - **Editor aliases**: `vi`, `vim`, and `v` launch `nvim` (with fallback to `vim`); inside an IDE session, `v [+line] [-c <cmd>] <file>` opens the file directly in the main Editor pane while standalone flags such as `v -R` or `v -O` open locally.
@@ -378,13 +380,19 @@ Interactive shells are configured for sub-10ms startup times, fast tab completio
 
 ## Developer toolchains and modern CLI suite
 
-Developer runtimes, language compilers, and modern CLI utilities are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), provisioning LTS Java (17, 21, and 25+), Maven, LTS Node.js, Go, Python, Rust, Lean 4 (`elan`), Terraform, Neovim, and the Tree-sitter CLI alongside a curated suite of 24-bit TrueColor terminal tools:
+Developer runtimes, language compilers, npm-backed language servers, and modern CLI utilities are managed declaratively in user-space via [mise](https://mise.jdx.dev/) (`.mise.toml`), provisioning LTS Java (17, 21, and 25+), Maven, LTS Node.js, Go, Python, Rust, Lean 4 (`elan`), Terraform, Neovim, and the Tree-sitter CLI alongside a curated suite of 24-bit TrueColor terminal tools:
 
 | Tool | Command or shortcut | Role and Solarized Dark integration |
 | :--- | :--- | :--- |
 | `java` | `java`, `javac` | LTS Java runtime and compiler (`java = "lts"`, targeting Java 21 and 25 LTS) |
 | `maven` | `mvn <goal>` | Apache Maven build automation and dependency manager for Java projects |
 | `node` | `node`, `npm`, `npx` | LTS Node.js JavaScript and TypeScript runtime (`node = "lts"`) |
+| `npm:typescript` | `tsc`, `tsserver` | TypeScript 6 compiler and `tsserver.js` runtime engine backing `ts_ls` in Neovim |
+| `npm:typescript-language-server` | `typescript-language-server` | TypeScript and JavaScript language server (`ts_ls`) with automatic workspace and Mise `tsserver.js` resolution |
+| `npm:pyright` | `pyright`, `pyright-langserver` | Static type checker and language server (`pyright`) for Python |
+| `npm:bash-language-server` | `bash-language-server` | Language server (`bashls`) for Bash and POSIX shell scripts with `shellcheck` diagnostics |
+| `npm:yaml-language-server` | `yaml-language-server` | Language server (`yamlls`) for YAML configuration and workflow files |
+| `npm:vscode-langservers-extracted` | `vscode-json-language-server` | Language server suite (`jsonls`) for JSON and JSONC configuration documents |
 | `go` | `go <cmd>` | Latest stable Go toolchain with XDG-compliant `GOPATH` and `GOCACHE` |
 | `python` | `python3`, `pip` | Latest stable Python runtime and package tooling |
 | `rust` | `cargo`, `rustc`, `rustup` | Latest stable Rust compiler and Cargo build toolchain |
@@ -561,13 +569,15 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 All scripts enforce `set -euo pipefail` for fail-fast safety. Run the full verification pipeline or target individual test suites through `make`:
 
 ```bash
-# Run full automated test suite (500+ tests across 8 test modules)
+# Run full automated test suite (500+ tests across 10 test modules)
 make test
 
 # Run individual test suites
 make test-system-setup
 make test-dotfiles
 make test-bin
+make test-theme
+make test-ide-fleet
 make test-env
 make test-zsh
 make test-completions

@@ -24,6 +24,9 @@ REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
 IFS= read -r -d '' THEME_PY_SRC <<'PY' || true
 from __future__ import annotations
 
+import sys
+if sys.path[:1] == [""]:
+    sys.path.pop(0)
 import datetime
 import getpass
 import os
@@ -33,7 +36,6 @@ import shlex
 import shutil
 import stat
 import subprocess
-import sys
 import time
 
 MANAGED_ORDER = [
@@ -2168,4 +2170,10 @@ if __name__ == "__main__":
     sys.exit(main())
 PY
 
-exec python3 -c "$THEME_PY_SRC" "$REPO_DIR" "$@"
+if [ -z "${THEME_PY_BIN:-}" ]; then
+    THEME_PY_BIN="python3"
+    if [ -x /usr/bin/python3 ]; then
+        THEME_PY_BIN="/usr/bin/python3"
+    fi
+fi
+PYTHONSAFEPATH=1 exec "$THEME_PY_BIN" -B -c "$THEME_PY_SRC" "$REPO_DIR" "$@"

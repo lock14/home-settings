@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/tests/test-helper.sh"
 
+ZSH_BIN="$(_hs_find_bin zsh)"
+[ -z "$ZSH_BIN" ] && ZSH_BIN="zsh"
+
 echo "========================================"
 echo "Running Completions Setup Tests"
 echo "========================================"
@@ -599,7 +602,7 @@ EOF
 
 tf_zsh_pty="ok"
 if command -v python3 >/dev/null 2>&1; then
-    tf_zsh_pty="$(MOCK_TF_HOME="$MOCK_TF_HOME" ZSH_COMP_FILE="$SCRIPT_DIR/dotfiles/.zsh-completions" python3 - <<'PY'
+    tf_zsh_pty="$(MOCK_TF_HOME="$MOCK_TF_HOME" ZSH_BIN="$ZSH_BIN" ZSH_COMP_FILE="$SCRIPT_DIR/dotfiles/.zsh-completions" python3 - <<'PY'
 import fcntl, os, pty, re, select, struct, subprocess, termios, time
 
 home = os.environ["MOCK_TF_HOME"]
@@ -719,7 +722,7 @@ def _attach_ctty():
 mfd, sfd = pty.openpty()
 fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 200, 0, 0))
 proc = subprocess.Popen(
-    ["zsh", "-d", "-i"],
+    [os.environ.get("ZSH_BIN") or "zsh", "-d", "-i"],
     stdin=sfd,
     stdout=sfd,
     stderr=sfd,
@@ -763,12 +766,105 @@ PY
 )"
 fi
 
-if tf_comp_err="$(HOME="$MOCK_TF_HOME" PATH="$MOCK_TF_HOME/bin:/usr/bin:/bin" zsh -f "$MOCK_TF_HOME/test-tf-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$tf_comp_err" ] && [ "$tf_zsh_pty" = "ok" ]; then
+if tf_comp_err="$(HOME="$MOCK_TF_HOME" PATH="$MOCK_TF_HOME/bin:/usr/bin:/bin" "$ZSH_BIN" -f "$MOCK_TF_HOME/test-tf-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$tf_comp_err" ] && [ "$tf_zsh_pty" = "ok" ]; then
     pass "_terraform Zsh completion registers terraform and tf and completes subcommands, plan/apply/destroy/fmt/validate flags, -backend=false/-lock=false values, space-escaped -chdir=/-var-file= paths, and broken-shim/binary-absent fallback"
 else
     fail "_terraform Zsh completion" "Unexpected _terraform completion behavior: err='${tf_comp_err:-}' pty='$tf_zsh_pty'"
 fi
 rm -rf "$MOCK_TF_HOME"
+
+# Test 6: Lazy subprocess execution in _ide and _theme (Zsh & Bash) + mise-before-zoxide startup order
+LAZY_COMP_HOME="$(mktemp -d)"
+mkdir -p "$LAZY_COMP_HOME/.local/bin"
+IDE_LAZY_LOG="$LAZY_COMP_HOME/ide_calls.log"
+THEME_LAZY_LOG="$LAZY_COMP_HOME/theme_calls.log"
+cat << EOF > "$LAZY_COMP_HOME/.local/bin/ide"
+#!/bin/sh
+echo "\$*" >> "$IDE_LAZY_LOG"
+printf "lazy-ws\n"
+EOF
+cat << EOF > "$LAZY_COMP_HOME/.local/bin/theme"
+#!/bin/sh
+echo "\$*" >> "$THEME_LAZY_LOG"
+printf "solarized-dark\nnord\n"
+EOF
+chmod +x "$LAZY_COMP_HOME/.local/bin/ide" "$LAZY_COMP_HOME/.local/bin/theme"
+
+cat << 'EOF' > "$LAZY_COMP_HOME/check-lazy.zsh"
+#!/usr/bin/env zsh
+set -euo pipefail
+typeset -gA COMP_MAP=()
+typeset -ga OFFERED=()
+compdef() { local fn="$1"; shift; local c; for c in "$@"; do COMP_MAP[$c]="$fn"; done; }
+_describe() { [[ "${1:-}" == "-t" ]] && shift 2; local arr="$2" it; for it in "${(@P)arr}"; do OFFERED+=("${it%%:*}"); done; }
+_files() { OFFERED+=("_FILES_"); }
+source "$1"
+run_comp() { local fn="$1"; shift; OFFERED=(); words=("$@"); CURRENT=${#words}; "$fn"; }
+run_comp _ide ide --
+run_comp _ide ide --ai ""
+run_comp _ide ide --swap ""
+run_comp _ide ide --list ""
+run_comp _ide ide --agent-state ""
+run_comp _ide ide --open ""
+run_comp _ide ide --cd ""
+run_comp _ide ide --send ""
+run_comp _theme theme --
+run_comp _theme theme -
+[[ ! -s "$2" ]] || { print -u2 "ide invoked eagerly on flag/static completion"; exit 1; }
+[[ ! -s "$3" ]] || { print -u2 "theme invoked eagerly on flag completion"; exit 1; }
+run_comp _ide ide -s ""
+run_comp _theme theme --set ""
+run_comp _theme theme --set=
+[[ -s "$2" ]] || { print -u2 "ide not invoked on session completion"; exit 1; }
+[[ -s "$3" ]] || { print -u2 "theme not invoked on theme completion"; exit 1; }
+EOF
+
+rm -f "$IDE_LAZY_LOG" "$THEME_LAZY_LOG"
+lazy_zsh_err="$(HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin:/bin" "$ZSH_BIN" -f "$LAZY_COMP_HOME/check-lazy.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$IDE_LAZY_LOG" "$THEME_LAZY_LOG" 2>&1 || true)"
+
+rm -f "$THEME_LAZY_LOG"
+lazy_bash_ok="$({ HOME="$LAZY_COMP_HOME" PATH="$LAZY_COMP_HOME/.local/bin:/usr/bin:/bin" THEME_LOG="$THEME_LAZY_LOG" "$BASH" --noprofile --norc -i -c '
+    source "'"$SCRIPT_DIR"'/dotfiles/.bashrc-addendum"
+    rm -f "$THEME_LOG"
+    COMP_WORDS=(theme --)
+    COMP_CWORD=1
+    _theme_bash_complete
+    [ ! -s "$THEME_LOG" ] || { echo "eager:${COMPREPLY[*]}"; exit 1; }
+    COMP_WORDS=(theme "")
+    COMP_CWORD=1
+    _theme_bash_complete
+    [ -s "$THEME_LOG" ] && [[ " ${COMPREPLY[*]} " == *" nord "* ]] || { echo "pos:${COMPREPLY[*]}"; exit 1; }
+    COMP_WORDS=(theme --set =)
+    COMP_CWORD=2
+    _theme_bash_complete
+    [[ " ${COMPREPLY[*]} " == *" nord "* ]] && [[ " ${COMPREPLY[*]} " != *" --list "* ]] || { echo "eq:${COMPREPLY[*]}"; exit 1; }
+    COMP_WORDS=(theme --set = -)
+    COMP_CWORD=3
+    _theme_bash_complete
+    [[ " ${COMPREPLY[*]} " != *" --list "* ]] && [[ " ${COMPREPLY[*]} " != *" -c "* ]] || { echo "eq_dash:${COMPREPLY[*]}"; exit 1; }
+    COMP_WORDS=(theme --set=no)
+    COMP_CWORD=1
+    _theme_bash_complete
+    [[ " ${COMPREPLY[*]} " == *" nord "* || " ${COMPREPLY[*]} " == *" --set=nord "* ]] && echo "ok"
+' 2>/dev/null || true; } | tail -n 1)"
+
+order_ok="$(python3 - "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.bashrc-addendum" <<'PY' 2>&1 || true
+import sys
+for path in sys.argv[1:]:
+    txt = open(path, encoding="utf-8").read()
+    m_pos = txt.find("mise activate")
+    z_pos = txt.find("zoxide init")
+    assert 0 <= m_pos < z_pos, f"{path}: mise activate ({m_pos}) must precede zoxide init ({z_pos})"
+print("ok")
+PY
+)"
+rm -rf "$LAZY_COMP_HOME"
+
+if [ -z "$lazy_zsh_err" ] && [ "$lazy_bash_ok" = "ok" ] && [ "$order_ok" = "ok" ]; then
+    pass "_ide and _theme lazy-load session/theme lists on Tab completion, and mise activate precedes zoxide init in both shells"
+else
+    fail "Lazy completions & mise/zoxide init order" "zsh_err='$lazy_zsh_err' bash='$lazy_bash_ok' order='$order_ok'"
+fi
 
 export HOME="$OLD_HOME"
 if [ -n "$OLD_XDG_DATA_HOME" ]; then export XDG_DATA_HOME="$OLD_XDG_DATA_HOME"; else unset XDG_DATA_HOME; fi

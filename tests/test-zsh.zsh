@@ -152,19 +152,27 @@ test_functions() {
             (cd "$SCRIPT_DIR" && exec nvim --clean --headless --listen "$bg_nvim_sock" </dev/null >/dev/null 2>&1) &
             local bg_nvim_pid=$!
             wait_for_nvim_socket "$bg_nvim_sock" 30 || true
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
             local bg_pane
-            bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_socket "$bg_nvim_sock"
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=bg_sess:' @ide_initial_root "$SCRIPT_DIR/modules"
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux new-session -d -s fg_sess -c "/tmp" "sleep 30"
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_socket "$multisess_dir/wrong-fg.sock"
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux set-option -t '=fg_sess:' @ide_initial_root "/tmp"
+            bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=bg_sess:' @ide_socket "$bg_nvim_sock"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=bg_sess:' @ide_initial_root "$SCRIPT_DIR/modules"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux new-session -d -s fg_sess -c "/tmp" "sleep 30"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=fg_sess:' @ide_socket "$multisess_dir/wrong-fg.sock"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=fg_sess:' @ide_initial_root "/tmp"
             local tmux_env
-            tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
+            tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
             (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
             local bg_remote_state
             bg_remote_state="$(timeout 5 nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
+            local ext_check_file="$multisess_dir/ext-check.txt"
+            printf 'before_edit\n' > "$ext_check_file"
+            python3 -c 'import os, sys, time; t = time.time() - 10; os.utime(sys.argv[1], (t, t))' "$ext_check_file"
+            (cd "$multisess_dir" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v "$ext_check_file" >/dev/null 2>&1) || true
+            printf 'after_edit\n' > "$ext_check_file"
+            (cd "$multisess_dir" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v >/dev/null 2>&1) || true
+            local bg_checktime_line
+            bg_checktime_line="$(timeout 5 nvim --headless --server "$bg_nvim_sock" --remote-expr 'getline(1)' </dev/null 2>/dev/null || true)"
             local icd_reset_pwd
             icd_reset_pwd="$(cd "$SCRIPT_DIR" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" IDE_INITIAL_ROOT="" IDE_SESSION="" icd --reset >/dev/null 2>&1 && pwd || true)"
             local sid_reset_pwd
@@ -173,12 +181,12 @@ test_functions() {
             bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
             wait "$bg_nvim_pid" 2>/dev/null || true
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" tmux kill-server >/dev/null 2>&1 || true
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
-            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
-                echo "PASS:v() and icd() target caller TMUX_PANE or \$0 session ID and verify server PID in multi-session tmux"
+            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$bg_checktime_line" = "after_edit" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
+                echo "PASS:v() and icd() target caller TMUX_PANE or \$0 session ID, trigger checktime on external edits, and verify server PID in multi-session tmux"
             else
-                echo "FAIL:v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3', '$SCRIPT_DIR/modules', and 'rejected', got state='$bg_remote_state' pwd='$icd_reset_pwd' sid_pwd='$sid_reset_pwd' bad_pid='$bad_pid_target'"
+                echo "FAIL:v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3', 'after_edit', '$SCRIPT_DIR/modules', and 'rejected', got state='$bg_remote_state' checktime='$bg_checktime_line' pwd='$icd_reset_pwd' sid_pwd='$sid_reset_pwd' bad_pid='$bad_pid_target'"
             fi
         fi
     fi
@@ -542,9 +550,12 @@ test_addendum() {
     printf 'export _HS_LEGACY_FZF_KEYS_LOADED=1\n' > "$TEMP_HOME/.fzf/shell/key-bindings.zsh"
     printf 'export _HS_LEGACY_FZF_COMP_LOADED=1\n' > "$TEMP_HOME/.fzf/shell/completion.zsh"
     local legacy_fzf_out=""
+    local legacy_zsh_bin
+    legacy_zsh_bin="$(_hs_find_bin zsh)"
+    [ -z "$legacy_zsh_bin" ] && legacy_zsh_bin="zsh"
     legacy_fzf_out="$(
         HOME="$TEMP_HOME" ZDOTDIR="$TEMP_HOME" PATH="$mock_legacy_fzf_dir:/usr/bin:/bin" \
-            zsh -f -i -c 'unset _HS_LEGACY_FZF_KEYS_LOADED _HS_LEGACY_FZF_COMP_LOADED; source "$1"; printf "%s:%s" "${_HS_LEGACY_FZF_KEYS_LOADED:-0}" "${_HS_LEGACY_FZF_COMP_LOADED:-0}"' \
+            "$legacy_zsh_bin" -f -i -c 'unset _HS_LEGACY_FZF_KEYS_LOADED _HS_LEGACY_FZF_COMP_LOADED; source "$1"; printf "%s:%s" "${_HS_LEGACY_FZF_KEYS_LOADED:-0}" "${_HS_LEGACY_FZF_COMP_LOADED:-0}"' \
             _ "$SCRIPT_DIR/dotfiles/.zshrc-addendum" </dev/null 2>/dev/null
     )"
     rm -rf "$mock_legacy_fzf_dir" "$TEMP_HOME/.fzf"
