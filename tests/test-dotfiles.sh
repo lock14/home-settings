@@ -30,7 +30,7 @@ fi
 # Test 2: Auto-discovery in temporary HOME
 echo -e "\n[2/5] Testing declarative dotfiles auto-discovery..."
 TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"' EXIT
+trap 'rm -rf "$TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
 
 HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
 
@@ -145,6 +145,8 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind m.*--monitor' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-?.*--keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind ?.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '^unbind -n WheelUpStatus$' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '^unbind -n WheelDownStatus$' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusLeft.*--sessions.*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|tab_editor' "$TEMP_HOME/.tmux.conf" && \
@@ -247,6 +249,7 @@ if command -v tmux >/dev/null 2>&1; then
         up_env_lines="$(tmux -L "$TMUX_TEST_SOCK" show-options -g update-environment)"
         up_env_total="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | wc -l | tr -d ' ')"
         up_env_uniq="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
+        root_keys_out="$(tmux -L "$TMUX_TEST_SOCK" list-keys -T root)"
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         plain_wcur_base="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur")"
         plain_wcur_run="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_run")"
@@ -254,6 +257,7 @@ if command -v tmux >/dev/null 2>&1; then
         plain_wcur_attn="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_attn")"
         plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
+           ! grep -Eq 'Wheel(Up|Down)Status' <<< "$root_keys_out" && \
            [ "$resrc_attn" = "persist-attn" ] && [ "$resrc_cnt" = "4" ] && [ "$resrc_act" = "2" ] && [ "$resrc_loaded" = "1" ] && \
            [ "$up_env_total" -gt 0 ] && [ "$up_env_total" = "$up_env_uniq" ] && \
            grep -Fq "COLORTERM" <<< "$up_env_lines" && \

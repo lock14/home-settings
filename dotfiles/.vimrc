@@ -762,6 +762,9 @@ set mouse=a
 if has('mouse_sgr')
     set ttymouse=sgr
 endif
+if exists('+smoothscroll')
+    set smoothscroll
+endif
 
 if !has('nvim')
     silent! execute "set <M-h>=\<Esc>h"

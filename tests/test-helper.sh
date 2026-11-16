@@ -8,8 +8,17 @@ COLOR_PASS="\033[32m"
 COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
-# Isolate all test suites from any live caller tmux session, zoxide database, workspace hooks, or active theme exports by default
-unset TMUX TMUX_PANE _ZO_DATA_DIR IDE_WORKSPACE_DIRS IDE_LINK_RULES HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
+# Isolate all test suites from any live caller tmux session, IDE RPC socket, runtime socket directory, zoxide database, workspace hooks, or active theme exports by default
+unset TMUX TMUX_PANE NVIM_IDE_SOCKET NVIM_IDE_PANE NVIM NVIM_LISTEN_ADDRESS IDE_SESSION IDE_AI_CLI IDE_AI_PANE IDE_INITIAL_ROOT IDE_WORKDIR IDE_MAIN_WIN IDE_LAYOUT_MODE IDE_AI_PARKED IDE_ED_PARKED IDE_TERM_PARKED IDE_CLIENT IDE_NOTIFY _ZO_DATA_DIR IDE_WORKSPACE_DIRS IDE_LINK_RULES HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
+_HS_TEST_RUNTIME_DIR="$(mktemp -d /tmp/hs-rt.XXXXXX)"
+chmod 700 "$_HS_TEST_RUNTIME_DIR" 2>/dev/null || true
+export XDG_RUNTIME_DIR="$_HS_TEST_RUNTIME_DIR"
+_hs_cleanup_test_runtime_dir() {
+    if [ -n "${_HS_TEST_RUNTIME_DIR:-}" ] && [ -d "$_HS_TEST_RUNTIME_DIR" ]; then
+        rm -rf "$_HS_TEST_RUNTIME_DIR"
+    fi
+}
+trap _hs_cleanup_test_runtime_dir EXIT
 
 # Preserve mise data/cache/state paths when individual tests override HOME or XDG_*,
 # and disable background Go/gopls telemetry writes into ephemeral XDG_CONFIG_HOME directories.
@@ -1258,6 +1267,7 @@ PY
 }
 
 test_summary() {
+    _hs_cleanup_test_runtime_dir
     printf '\n========================================\n'
     printf 'Summary: %s passed, %s failed\n' "$TESTS_PASSED" "$TESTS_FAILED"
     printf '========================================\n'

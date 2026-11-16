@@ -50,6 +50,7 @@ cleanup_test_bin() {
         fi
     done
     rm -rf "$TEMP_HOME"
+    _hs_cleanup_test_runtime_dir
 }
 trap cleanup_test_bin EXIT
 trap 'exit 130' INT
@@ -342,6 +343,44 @@ fi
 rm -rf "$LINK_TEST_DIR" "$TEMP_HOME/.config/ide"
 
 if command -v tmux >/dev/null 2>&1; then
+    # Verify tests/test-helper.sh isolates XDG_RUNTIME_DIR and unsets live NVIM_IDE_SOCKET / IDE_* exports so bin/ide and v() never unlink a caller's live nvim-ide-<session>.sock
+    HELPER_RT_INIT="$XDG_RUNTIME_DIR"
+    FAKE_CALLER_RT="$(mktemp -d /tmp/hs-caller-rt.XXXXXX)"
+    RT_GUARD_TMP="$(mktemp -d /tmp/hs-rt-tmux.XXXXXX)"
+    RT_GUARD_WS="$TEMP_HOME/ws_rt_guard"
+    mkdir -p "$RT_GUARD_WS" "$TEMP_HOME/rt_stubs" "$TEMP_HOME/v_fail_stubs"
+    printf '#!/bin/sh\nexec sleep 30\n' > "$TEMP_HOME/rt_stubs/agy"
+    chmod +x "$TEMP_HOME/rt_stubs/agy"
+    printf '#!/bin/sh\nif [ "$1" = "--headless" ]; then exit 1; fi\nexit 0\n' > "$TEMP_HOME/v_fail_stubs/nvim"
+    chmod +x "$TEMP_HOME/v_fail_stubs/nvim"
+    python3 -c 'import socket, sys; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.bind(sys.argv[1]); s.close()' "$FAKE_CALLER_RT/nvim-ide-ws_rt_guard.sock"
+    SUB_HELPER_RT="$(
+        XDG_RUNTIME_DIR="$FAKE_CALLER_RT" NVIM_IDE_SOCKET="$FAKE_CALLER_RT/nvim-ide-ws_rt_guard.sock" IDE_SESSION="ws_rt_guard" IDE_WORKDIR="$RT_GUARD_WS" IDE_INITIAL_ROOT="$RT_GUARD_WS" TMUX_TMPDIR="$RT_GUARD_TMP" PATH="$TEMP_HOME/rt_stubs:$PATH" SHELL="/bin/bash" bash -c '
+            set -euo pipefail
+            . "$1/tests/test-helper.sh"
+            printf "%s|%s|%s\n" "$XDG_RUNTIME_DIR" "${NVIM_IDE_SOCKET:-}" "${IDE_SESSION:-}"
+            "$1/bin/ide" --2pane --detach "$2" >/dev/null 2>&1
+            "$1/bin/ide" --kill ws_rt_guard >/dev/null 2>&1
+            tmux kill-server >/dev/null 2>&1 || true
+            if command -v zsh >/dev/null 2>&1; then
+                PATH="$3:$PATH" zsh -c '\''source "$1/dotfiles/.zsh-functions"; v -R /dev/null'\'' _ "$1" >/dev/null 2>&1 || true
+            fi
+        ' _ "$SCRIPT_DIR" "$RT_GUARD_WS" "$TEMP_HOME/v_fail_stubs"
+    )" || true
+    SUB_RT_DIR="${SUB_HELPER_RT%%|*}"
+    SUB_RT_REST="${SUB_HELPER_RT#*|}"
+    tmux -S "$RT_GUARD_TMP/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+    if [ -d "$HELPER_RT_INIT" ] && [ "$HELPER_RT_INIT" = "$_HS_TEST_RUNTIME_DIR" ] && \
+       [ "$HELPER_RT_INIT" != "/tmp" ] && [ "$HELPER_RT_INIT" != "/run/user/$(id -u)" ] && \
+       [ -n "$SUB_RT_DIR" ] && [ "$SUB_RT_DIR" != "$FAKE_CALLER_RT" ] && [ ! -e "$SUB_RT_DIR" ] && \
+       [ "$SUB_RT_REST" = "|" ] && \
+       [ -S "$FAKE_CALLER_RT/nvim-ide-ws_rt_guard.sock" ]; then
+        pass "tests/test-helper.sh isolates XDG_RUNTIME_DIR and clears live NVIM_IDE_SOCKET/IDE_* exports so bin/ide and v() never unlink live caller nvim-ide-<session>.sock sockets"
+    else
+        fail "tests/test-helper.sh XDG_RUNTIME_DIR & NVIM_IDE_SOCKET isolation" "init='$HELPER_RT_INIT' sub='$SUB_HELPER_RT' caller_sock_alive=$([ -S "$FAKE_CALLER_RT/nvim-ide-ws_rt_guard.sock" ] && echo 1 || echo 0)"
+    fi
+    rm -rf "$FAKE_CALLER_RT" "$RT_GUARD_TMP" "$RT_GUARD_WS" "$TEMP_HOME/rt_stubs" "$TEMP_HOME/v_fail_stubs"
+
     QUIT_TMPDIR="$(mktemp -d)"
     MOUSE_TMPDIR="$(mktemp -d)"
     export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
@@ -1526,6 +1565,7 @@ LUA
                 echo "md1=$(tmux list-keys -T root MouseDown1Pane 2>&1)"
                 echo "md8=$(tmux list-keys -T root MouseDown8Pane 2>&1)"
                 echo "md9=$(tmux list-keys -T root MouseDown9Pane 2>&1)"
+                echo "wheel_status=$(tmux list-keys -T root | grep -E 'Wheel(Up|Down)Status' || echo none)"
                 python3 - "$SCRIPT_DIR/bin/ide" "ws_mouse" "$MOUSE_CLICK_LOG" 2>&1 <<'PY'
 import fcntl, os, select, struct, subprocess, sys, termios, threading, time
 
@@ -1620,10 +1660,26 @@ for _ in range(30):
         break
     time.sleep(0.05)
 
+# Park Shell pane so _ide_park_term exists as a hidden window, then verify WheelUpStatus / WheelDownStatus on row 1 never cycle windows
+subprocess.run([ide, "--toggle-term", sess], capture_output=True)
+status_wheel_wins = set()
+for copy_flag in (False, True):
+    if copy_flag:
+        tmux("copy-mode", "-t", panes[0])
+    for btn in (64, 65):
+        for sx in (2, 25, 70, 118):
+            os.write(master, f"\x1b[<{btn};{sx};1M".encode())
+            time.sleep(0.02)
+            status_wheel_wins.add(tmux("display-message", "-p", "-t", f"={sess}:", "#{window_name}"))
+    if copy_flag:
+        tmux("send-keys", "-t", panes[0], "-X", "cancel")
+subprocess.run([ide, "--toggle-term", sess], capture_output=True)
+status_wheel_ok = (status_wheel_wins == {"ide"})
+
 attached = False
 client.terminate()
 outer_osc8 = "passed" if b"\x1b]8;" in outer_bytes else "missing"
-print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept} outer_osc8={outer_osc8}")
+print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept} outer_osc8={outer_osc8} status_wheel={'ok' if status_wheel_ok else sorted(status_wheel_wins)}")
 PY
             )" || true
             tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
@@ -1632,12 +1688,13 @@ PY
                grep -q '^md1=.*MouseDown1Pane select-pane -t = \\; send-keys -M' <<< "$mouse_out" && \
                grep -q '^md8=.*MouseDown8Pane.*send-keys C-o' <<< "$mouse_out" && \
                grep -q '^md9=.*MouseDown9Pane.*send-keys C-i' <<< "$mouse_out" && \
-               grep -q '^drag=ok kept=ok outer_osc8=passed$' <<< "$mouse_out" && \
+               grep -q '^wheel_status=none$' <<< "$mouse_out" && \
+               grep -q '^drag=ok kept=ok outer_osc8=passed status_wheel=ok$' <<< "$mouse_out" && \
                [ "$(grep -Fc 'argc=5 2=<file:///tmp/osc8_target.lua#L42> 3=<OSC8LINK>' <<< "$mouse_click_logged")" -ge 2 ] && \
                grep -Fq 'argc=5 2=<> 3=<PLAINWORD.lua:7>' <<< "$mouse_click_logged"; then
-                echo "PASS:tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom), pins native MouseDown1Pane, binds MouseDown8Pane/MouseDown9Pane (Mouse4/Mouse5) to Editor jumplist C-o/C-i, passes OSC 8 through to the outer terminal, and routes Ctrl+LeftClick (C-MouseDown1Pane) and Alt+LeftClick (M-MouseDown1Pane) for OSC 8 hyperlinks and plain-text file:line tokens"
+                echo "PASS:tmux resizes IDE panes by mouse (preserving dragged sizes across focus switches, parking/unparking, and zoom), unbinds WheelUpStatus/WheelDownStatus so top-bar wheel overscroll never enters _ide_park_* windows, pins native MouseDown1Pane, binds MouseDown8Pane/MouseDown9Pane (Mouse4/Mouse5) to Editor jumplist C-o/C-i, passes OSC 8 through to the outer terminal, and routes Ctrl+LeftClick (C-MouseDown1Pane) and Alt+LeftClick (M-MouseDown1Pane) for OSC 8 hyperlinks and plain-text file:line tokens"
             else
-                echo "FAIL:tmux mouse border resize & Ctrl/Alt+LeftClick:Expected MouseDrag1Border resize-pane -M, MouseDown1Pane select-pane -t = \\; send-keys -M, MouseDown8Pane/9Pane C-o/C-i, drag=ok kept=ok outer_osc8=passed, and C-MouseDown1Pane + M-MouseDown1Pane for OSC8LINK + PLAINWORD.lua:7; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
+                echo "FAIL:tmux mouse border resize & Ctrl/Alt+LeftClick:Expected MouseDrag1Border resize-pane -M, WheelUpStatus/WheelDownStatus unbound, status_wheel=ok, MouseDown1Pane select-pane -t = \\; send-keys -M, MouseDown8Pane/9Pane C-o/C-i, drag=ok kept=ok outer_osc8=passed, and C-MouseDown1Pane + M-MouseDown1Pane for OSC8LINK + PLAINWORD.lua:7; got out=$mouse_out click=${mouse_click_logged:-<empty>}"
             fi
         fi
     ) > "$MOUSE_WS_OUT" &

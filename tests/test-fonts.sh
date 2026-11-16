@@ -17,7 +17,7 @@ mkdir -p "$HOME_SETTINGS_FONT_CACHE"
 # Test 1: Font download & installation in temp directory (Linux)
 echo -e "\n[1/2] Testing font installation on Linux target..."
 TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"' EXIT
+trap 'rm -rf "$TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
 
 OLD_HOME="$HOME"
 export HOME="$TEMP_HOME"
@@ -160,7 +160,7 @@ fi
 # Test 2: Font installation on macOS target
 echo -e "\n[2/2] Testing font installation on macOS target..."
 MAC_TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME" "$MAC_TEMP_HOME"' EXIT
+trap 'rm -rf "$TEMP_HOME" "$MAC_TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
 
 export HOME="$MAC_TEMP_HOME"
 export XDG_DATA_HOME="$MAC_TEMP_HOME/.local/share"

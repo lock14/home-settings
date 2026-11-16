@@ -42,6 +42,9 @@ opt.signcolumn = "yes"
 opt.scrolloff = 8
 opt.sidescrolloff = 8
 opt.wrap = false
+if vim.fn.exists("+smoothscroll") == 1 then
+    opt.smoothscroll = true
+end
 
 -- Search Settings
 opt.ignorecase = true
@@ -2519,8 +2522,9 @@ lazy.setup({
             pipe_table = {
                 enabled = true,
                 preset = "round",
-                style = "full",
-                cell = "padded",
+                style = "normal",
+                cell = "raw",
+                wrap = false,
                 alignment_indicator = "━",
             },
             link = {
