@@ -28,7 +28,9 @@ configure_terminal() {
 
     # GNOME Terminal profile provisioning on Linux
     if [ "$OS" != "macos" ] && command -v dconf >/dev/null 2>&1 && command -v gsettings >/dev/null 2>&1; then
-        if gsettings list-schemas 2>/dev/null | grep -q "org.gnome.Terminal.ProfilesList"; then
+        local schemas
+        schemas="$(gsettings list-schemas 2>/dev/null || true)"
+        if grep -Fq "org.gnome.Terminal.ProfilesList" <<< "$schemas"; then
             echo "  Configuring GNOME Terminal..."
             if [ "$DRY_RUN" = true ]; then
                 "$REPO_DIR/bin/gnome-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"} --dry-run

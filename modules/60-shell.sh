@@ -65,6 +65,18 @@ if [ "$SKIP_ZSH" = false ]; then
             else
                 touch "$HOME/.zshrc"
             fi
+        elif [ -f "$ZSH_DIR/templates/zshrc.zsh-template" ] && \
+             ! grep -Eq '^[[:space:]]*([^#]*[;&|][[:space:]]*)?(source|\.)[[:space:]][^#]*(oh-my-zsh\.sh|powerlevel10k\.zsh-theme)' "$HOME/.zshrc"; then
+            zshrc_base_bak="$HOME/.zshrc.bak.$(date +%s)"
+            zshrc_bak="$zshrc_base_bak"
+            zshrc_bak_idx=1
+            while [ -e "$zshrc_bak" ] || [ -L "$zshrc_bak" ]; do
+                zshrc_bak="${zshrc_base_bak}.${zshrc_bak_idx}"
+                zshrc_bak_idx=$((zshrc_bak_idx + 1))
+            done
+            mv "$HOME/.zshrc" "$zshrc_bak"
+            cp "$ZSH_DIR/templates/zshrc.zsh-template" "$HOME/.zshrc"
+            echo "  Backed up existing non-Oh-My-Zsh ~/.zshrc to $zshrc_bak and initialized Oh-My-Zsh template."
         fi
 
         sed_i=(-i)

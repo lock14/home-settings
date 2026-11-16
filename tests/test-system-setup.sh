@@ -877,16 +877,76 @@ fi
 
 mkdir -p "$TEMP_THEME_SETUP_HOME/mock-bin"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$TEMP_THEME_SETUP_HOME/mock-bin/dconf"
-printf '%s\n' '#!/usr/bin/env bash' 'echo "org.gnome.Terminal.ProfilesList"' > "$TEMP_THEME_SETUP_HOME/mock-bin/gsettings"
+cat > "$TEMP_THEME_SETUP_HOME/mock-bin/gsettings" <<'EOF'
+#!/usr/bin/env bash
+printf 'org.gnome.Terminal.ProfilesList\n'
+i=0
+while [ "$i" -lt 2500 ]; do
+    printf 'org.example.schema.padding.%04d\n' "$i"
+    i=$((i + 1))
+done
+EOF
 chmod +x "$TEMP_THEME_SETUP_HOME/mock-bin/dconf" "$TEMP_THEME_SETUP_HOME/mock-bin/gsettings"
 term_persisted_macos="$(env -u HOME_SETTINGS_THEME DRY_RUN=true OS=macos HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/modules/70-terminal.sh" 2>&1 || true)"
 term_persisted_linux="$(env -u HOME_SETTINGS_THEME PATH="$TEMP_THEME_SETUP_HOME/mock-bin:$PATH" DRY_RUN=true OS=ubuntu DISPLAY=":99" HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/modules/70-terminal.sh" 2>&1 || true)"
 if grep -Fq "Configure 'Nord' in Terminal.app Window Settings" <<< "$term_persisted_macos" && \
    grep -Fq "Apply Nord profile" <<< "$term_persisted_linux"; then
-    pass "modules/70-terminal.sh honors persisted ~/.config/home-settings/theme on both macOS and Linux when HOME_SETTINGS_THEME is unset"
+    pass "modules/70-terminal.sh honors persisted ~/.config/home-settings/theme on both macOS and Linux (including SIGPIPE-safe multi-kilobyte gsettings list-schemas output)"
 else
     fail "modules/70-terminal.sh persisted theme" "Expected Nord profile in dry-run output: macos='$term_persisted_macos' linux='$term_persisted_linux'"
 fi
+
+# Verify modules/60-shell.sh backs up pre-existing non-Oh-My-Zsh ~/.zshrc (e.g. stock prompt adam1 skeleton),
+# initializes the Oh-My-Zsh template with Powerlevel10k + plugins, and preserves Oh-My-Zsh ~/.zshrc on re-run
+TEMP_ZSHRC_HOME=$(mktemp -d)
+mkdir -p \
+    "$TEMP_ZSHRC_HOME/mock-bin" \
+    "$TEMP_ZSHRC_HOME/.oh-my-zsh/templates" \
+    "$TEMP_ZSHRC_HOME/.oh-my-zsh/custom/themes/powerlevel10k/.git" \
+    "$TEMP_ZSHRC_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/.git" \
+    "$TEMP_ZSHRC_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/.git" \
+    "$TEMP_ZSHRC_HOME/.oh-my-zsh/custom/plugins/zsh-completions/.git"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$TEMP_ZSHRC_HOME/mock-bin/git"
+chmod +x "$TEMP_ZSHRC_HOME/mock-bin/git"
+cat > "$TEMP_ZSHRC_HOME/.oh-my-zsh/templates/zshrc.zsh-template" <<'EOF'
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git)
+source $ZSH/oh-my-zsh.sh
+EOF
+cat > "$TEMP_ZSHRC_HOME/.zshrc" <<'EOF'
+autoload -Uz promptinit
+promptinit
+prompt adam1
+# source $ZSH/oh-my-zsh.sh
+EOF
+zshrc_mig_out="$(PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/modules/60-shell.sh" 2>&1 || true)"
+zshrc_baks=("$TEMP_ZSHRC_HOME"/.zshrc.bak.*)
+if [ "${#zshrc_baks[@]}" -eq 1 ] && [ -f "${zshrc_baks[0]}" ] && \
+   grep -Fq "prompt adam1" "${zshrc_baks[0]}" && \
+   grep -Fq 'ZSH_THEME="powerlevel10k/powerlevel10k"' "$TEMP_ZSHRC_HOME/.zshrc" && \
+   grep -Fq 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)' "$TEMP_ZSHRC_HOME/.zshrc" && \
+   grep -Fq 'source $ZSH/oh-my-zsh.sh' "$TEMP_ZSHRC_HOME/.zshrc" && \
+   grep -Fq '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$TEMP_ZSHRC_HOME/.zshrc"; then
+    printf '\n# user-custom-marker\n' >> "$TEMP_ZSHRC_HOME/.zshrc"
+    PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1 || true
+    zshrc_baks_after=("$TEMP_ZSHRC_HOME"/.zshrc.bak.*)
+    if [ "${#zshrc_baks_after[@]}" -eq 1 ] && grep -Fq "# user-custom-marker" "$TEMP_ZSHRC_HOME/.zshrc"; then
+        printf '[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"\n# cond-omz-marker\n' > "$TEMP_ZSHRC_HOME/.zshrc"
+        PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1 || true
+        zshrc_baks_cond=("$TEMP_ZSHRC_HOME"/.zshrc.bak.*)
+        if [ "${#zshrc_baks_cond[@]}" -eq 1 ] && grep -Fq "# cond-omz-marker" "$TEMP_ZSHRC_HOME/.zshrc"; then
+            pass "modules/60-shell.sh backs up non-Oh-My-Zsh ~/.zshrc to initialize Powerlevel10k template and preserves existing Oh-My-Zsh ~/.zshrc on re-run"
+        else
+            fail "modules/60-shell.sh conditional oh-my-zsh preservation" "Expected conditional oh-my-zsh.sh ~/.zshrc to be preserved without extra backup"
+        fi
+    else
+        fail "modules/60-shell.sh Oh-My-Zsh preservation on re-run" "Expected existing Oh-My-Zsh ~/.zshrc to be preserved without extra backup"
+    fi
+else
+    fail "modules/60-shell.sh non-Oh-My-Zsh migration" "Expected backup and Oh-My-Zsh Powerlevel10k template initialization; out='$zshrc_mig_out'"
+fi
+rm -rf "$TEMP_ZSHRC_HOME"
 
 # Verify parse_subshell_results fails when 0 PASS:/FAIL: lines are parsed, Fedora --with-chrome gates on amd64, and modules/40-mise.sh fails if mise binary is not executable
 if (
