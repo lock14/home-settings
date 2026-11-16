@@ -203,6 +203,7 @@ Options:
   --preview <FILE> [LINE]  Preview <FILE> in the Main Editor pane via RPC without changing focus
   cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
   -s, --sessions [SESSION] Open interactive multi-session IDE workspace switcher (Alt+s / Prefix+s)
+  -n, --new                Open interactive workspace directory picker to launch or switch to a session
   --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in urgency and FIFO order (Alt+Shift+S / Prefix+S)
   --agent-state <STATE> [--message <TEXT>] [SESSION] Record deterministic AI lifecycle state: running, approval, quota, done, or idle
   --ack-ai [SESSION...]    Acknowledge AI attention across one or more IDE sessions
@@ -233,8 +234,9 @@ Environment Variables:
   IDE_AI_CLI               AI CLI tool for the AI Agent pane: agy (default), claude, or codex
   IDE_BROWSER              Optional browser executable for opening http(s):// links
   IDE_NOTIFY               Local desktop banner policy: 0 (default), 1 / unfocused, or always
-  IDE_LINK_RULES           Untracked Ctrl+click link, session-naming, notification, and VCS hooks (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
-                           defining `ide_resolve_link`, `ide_session_name`, `ide_notify`, or `ide_vcs_summary`"""
+  IDE_WORKSPACE_DIRS       Optional colon-separated workspace directories surfaced in launcher and completions
+  IDE_LINK_RULES           Untracked Ctrl+click link, workspace, session-naming, notification, and VCS hooks (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
+                           defining `ide_resolve_link`, `ide_session_name`, `ide_workspace_dirs`, `ide_resolve_workspace`, `ide_notify`, or `ide_vcs_summary`"""
 
 
 def usage(file=sys.stdout) -> None:
@@ -548,31 +550,129 @@ def sanitize_name_token(raw: str) -> str:
     return cleaned or "workspace"
 
 
-def _call_ide_hook(fn_name: str, *args: str) -> str:
+def _ide_rules_path() -> str:
     xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    rules = os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
+    return os.environ.get("IDE_LINK_RULES") or os.path.join(xdg_cfg, "ide", "links.sh")
+
+
+def _call_ide_hook(fn_name: str, *args: str, timeout: float = 1.0) -> str:
+    rules = _ide_rules_path()
     try:
         with open(rules, "r", encoding="utf-8") as f:
             if fn_name not in f.read():
                 return ""
     except OSError:
         return ""
-    res = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'. "$1" && declare -F {fn_name} >/dev/null && {fn_name} "${{@:2}}"',
-            "ide",
-            rules,
-            *args,
-        ],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
+    try:
+        res = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f'. "$1" && declare -F {fn_name} >/dev/null && {fn_name} "${{@:2}}"',
+                "ide",
+                rules,
+                *args,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
     return (res.stdout or "").strip() if res.returncode == 0 else ""
+
+
+def _scandir_child_dirs(parent: str, cache: dict[str, set[str]]) -> set[str]:
+    if parent in cache:
+        return cache[parent]
+    live: set[str] = set()
+    try:
+        with os.scandir(parent) as it:
+            for entry in it:
+                try:
+                    if entry.is_dir():
+                        live.add(entry.name)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    cache[parent] = live
+    return live
+
+
+def _collect_configured_workspace_roots(
+    parent_cache: dict[str, set[str]] | None = None,
+    include_hook: bool = True,
+) -> tuple[list[str], set[str], dict[str, set[str]]]:
+    cache = parent_cache if parent_cache is not None else {}
+    raw_candidates: list[str] = []
+    if include_hook:
+        hook_out = _call_ide_hook("ide_workspace_dirs", timeout=1.0)
+        if hook_out:
+            raw_candidates.extend(hook_out.splitlines())
+    env_ws = os.environ.get("IDE_WORKSPACE_DIRS", "")
+    if env_ws:
+        raw_candidates.extend(env_ws.split(":"))
+
+    roots: list[str] = []
+    seen_roots: set[str] = set()
+    managed_parents: set[str] = set()
+    for raw in raw_candidates:
+        s = raw.strip()
+        if not s:
+            continue
+        norm = os.path.abspath(os.path.expanduser(s))
+        if norm in seen_roots:
+            continue
+        parent = os.path.dirname(norm)
+        if parent and parent != "/":
+            managed_parents.add(parent)
+            if os.path.basename(norm) not in _scandir_child_dirs(parent, cache):
+                continue
+        elif not os.path.isdir(norm):
+            continue
+        seen_roots.add(norm)
+        roots.append(norm)
+    return roots, managed_parents, cache
+
+
+def resolve_workspace_target(raw_target: str) -> str:
+    if not raw_target or raw_target in (".", "..") or raw_target.startswith(("./", "../")):
+        return ""
+    hook_resolved = _call_ide_hook("ide_resolve_workspace", raw_target, timeout=1.0)
+    if hook_resolved:
+        first_ln = next((ln.strip() for ln in hook_resolved.splitlines() if ln.strip()), "")
+        if first_ln:
+            exp = os.path.expanduser(first_ln)
+            if os.path.isdir(exp):
+                return os.path.abspath(exp)
+
+    if raw_target.startswith(("/", "~")):
+        return ""
+    clean_rel = raw_target.rstrip("/")
+    if not clean_rel:
+        return ""
+    head, sep, tail = clean_rel.partition("/")
+    if not head or head in (".", "..") or ".." in tail.split("/"):
+        return ""
+    roots, _, _ = _collect_configured_workspace_roots()
+    for ws_root in roots:
+        if os.path.basename(ws_root) == head:
+            if not sep or not tail:
+                mount_resolved = _call_ide_hook("ide_resolve_workspace", ws_root, timeout=1.0)
+                if mount_resolved:
+                    m_ln = next((ln.strip() for ln in mount_resolved.splitlines() if ln.strip()), "")
+                    if m_ln:
+                        m_exp = os.path.expanduser(m_ln)
+                        if os.path.isdir(m_exp):
+                            return os.path.abspath(m_exp)
+                return ws_root
+            joined = os.path.join(ws_root, tail)
+            return os.path.abspath(joined) if os.path.isdir(joined) else ""
+    return ""
 
 
 def resolve_custom_session_name(target_dir: str) -> str:
@@ -2019,8 +2119,18 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
     cwd = normalize_pane_cwd(safe_getcwd(), target_arg=target_arg)
     if filepath.startswith("~/"):
         filepath = os.path.expanduser(filepath)
-    exact_ws = "" if filepath.startswith("//") else resolve_workspace_file(filepath, cwd, target_arg)
-    if filepath.startswith("//") or not exact_ws:
+
+    sess = resolve_target_session(target_arg)
+    if not session_exists(sess):
+        print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
+        return 1
+    workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+    init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+
+    direct_match = _direct_workspace_path(filepath, cwd, workdir, init_root)
+    if direct_match:
+        filepath = direct_match
+    else:
         private_url = resolve_private_link(filepath, cwd, target_arg)
         if private_url and private_url.startswith("file://"):
             p_path, p_line = parse_file_target(private_url, cwd)
@@ -2034,8 +2144,12 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
                 filepath = p_path
                 if not line and p_line:
                     line = p_line
+
     if not filepath.startswith("/"):
-        ws_resolved = resolve_workspace_file(filepath, cwd, target_arg)
+        ws_resolved = (
+            _direct_workspace_path(filepath, cwd, workdir, init_root)
+            or resolve_workspace_file(filepath, cwd, target_arg)
+        )
         if ws_resolved:
             d = os.path.dirname(ws_resolved) or "."
             b = os.path.basename(ws_resolved)
@@ -2048,11 +2162,6 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
             else:
                 rel = filepath[2:] if filepath.startswith("./") else filepath
                 filepath = os.path.join(cwd, rel)
-
-    sess = resolve_target_session(target_arg)
-    if not session_exists(sess):
-        print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
-        return 1
 
     prev_pane = "" if focus else tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}")
     sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
@@ -2514,6 +2623,31 @@ def strip_token_wrappers(s: str) -> str:
     return s
 
 
+_SKIP_WORKSPACE_SCAN_DIRS = frozenset({".git", ".hg", ".jj", ".svn", "node_modules", "__pycache__"})
+_MAX_WORKSPACE_SCAN_ENTRIES = 128
+_MAX_WORKSPACE_SCAN_DIRS = 128
+
+
+def _direct_workspace_path(
+    cand: str,
+    cwd: str,
+    workdir: str = "",
+    init_root: str = "",
+) -> str:
+    if not cand or cand.startswith(("//", "file://")):
+        return ""
+    if cand.startswith("~/"):
+        cand = os.path.expanduser(cand)
+    if cand.startswith("/"):
+        return cand if (os.path.isfile(cand) or os.path.isdir(cand)) else ""
+    for base_dir in (cwd, workdir, init_root):
+        if base_dir:
+            full = os.path.join(base_dir, cand)
+            if os.path.isfile(full) or os.path.isdir(full):
+                return full
+    return ""
+
+
 def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
     if not cand:
         return ""
@@ -2529,34 +2663,27 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
         workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
         init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
 
-    for base_dir in (cwd, workdir, init_root):
-        if base_dir:
-            full = os.path.join(base_dir, cand)
-            if os.path.isfile(full) or os.path.isdir(full):
-                return full
+    direct = _direct_workspace_path(cand, cwd, workdir, init_root)
+    if direct:
+        return direct
 
-    if shutil.which("git"):
-        for base_dir in (cwd, workdir, init_root):
-            if not base_dir or not os.path.isdir(base_dir):
-                continue
-            res = subprocess.run(
-                ["git", "-C", base_dir, "rev-parse", "--show-toplevel"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                check=False,
-            )
-            git_root = (res.stdout or "").strip() if res.returncode == 0 else ""
-            if not git_root:
-                continue
-            full = os.path.join(git_root, cand)
-            if os.path.isfile(full) or os.path.isdir(full):
-                return full
-            if "/" in cand:
-                stripped = cand.split("/", 1)[1]
-                full2 = os.path.join(git_root, stripped)
-                if os.path.isfile(full2) or os.path.isdir(full2):
-                    return full2
+    seen_git_bases: set[str] = set()
+    for base_dir in (cwd, workdir, init_root):
+        if not base_dir or base_dir in seen_git_bases or not os.path.isdir(base_dir):
+            continue
+        seen_git_bases.add(base_dir)
+        git_root, gitdir, _ = _locate_git_dirs(base_dir)
+        if not gitdir or not git_root:
+            continue
+        full = os.path.join(git_root, cand)
+        if os.path.isfile(full) or os.path.isdir(full):
+            return full
+        if "/" in cand:
+            stripped = cand.split("/", 1)[1]
+            full2 = os.path.join(git_root, stripped)
+            if os.path.isfile(full2) or os.path.isdir(full2):
+                return full2
+        if shutil.which("git"):
             ls_res = subprocess.run(
                 ["git", "-C", git_root, "ls-files", "--cached", "--others", "--exclude-standard"],
                 stdout=subprocess.PIPE,
@@ -2574,18 +2701,98 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
                             matches.append(p)
                 if len(matches) == 1:
                     return matches[0]
-            break
+        break
 
+    cand_norm = os.path.normpath(cand.replace("\\", "/"))
+    if cand_norm.startswith("..") or os.path.isabs(cand_norm):
+        return ""
+    parts = [p for p in cand_norm.split("/") if p and p != "."]
+    if not parts:
+        return ""
+    first_seg = parts[0]
+    rest_rel = os.path.join(*parts[1:]) if len(parts) > 1 else ""
+
+    visited_dirs = 0
+    seen_scan_bases: set[str] = set()
     for base_dir in (init_root, workdir, cwd):
-        if not base_dir or not os.path.isdir(base_dir):
+        if not base_dir or base_dir in seen_scan_bases or not os.path.isdir(base_dir):
             continue
-        from pathlib import Path
-        base_path = Path(base_dir)
+        seen_scan_bases.add(base_dir)
+        if visited_dirs >= _MAX_WORKSPACE_SCAN_DIRS:
+            break
+        visited_dirs += 1
+        root_entries = []
+        root_capped = False
+        try:
+            with os.scandir(base_dir) as it:
+                for entry in it:
+                    if len(root_entries) >= _MAX_WORKSPACE_SCAN_ENTRIES:
+                        root_capped = True
+                        break
+                    root_entries.append(entry)
+        except OSError:
+            continue
+        if root_capped:
+            continue
+
+        cur_level: list[str] = []
+        for entry in root_entries:
+            if entry.name in _SKIP_WORKSPACE_SCAN_DIRS:
+                continue
+            try:
+                if entry.is_dir():
+                    cur_level.append(entry.path)
+            except OSError:
+                pass
+
         glob_matches: list[str] = []
-        for pat in (f"*/{cand}", f"*/*/{cand}", f"*/*/*/{cand}"):
-            for m in base_path.glob(pat):
-                if m.is_file():
-                    glob_matches.append(str(m))
+        for depth in (1, 2, 3):
+            if not cur_level or visited_dirs >= _MAX_WORKSPACE_SCAN_DIRS or len(glob_matches) > 1:
+                break
+            next_level: list[str] = []
+            for d_path in cur_level:
+                if visited_dirs >= _MAX_WORKSPACE_SCAN_DIRS:
+                    break
+                visited_dirs += 1
+                d_entries = []
+                d_capped = False
+                try:
+                    with os.scandir(d_path) as it:
+                        for entry in it:
+                            if len(d_entries) >= _MAX_WORKSPACE_SCAN_ENTRIES:
+                                d_capped = True
+                                break
+                            d_entries.append(entry)
+                except OSError:
+                    continue
+                for entry in d_entries:
+                    if entry.name == first_seg:
+                        if not rest_rel:
+                            try:
+                                if entry.is_file():
+                                    glob_matches.append(entry.path)
+                            except OSError:
+                                pass
+                        else:
+                            try:
+                                if entry.is_dir():
+                                    cand_full = os.path.join(entry.path, rest_rel)
+                                    if os.path.isfile(cand_full):
+                                        glob_matches.append(cand_full)
+                            except OSError:
+                                pass
+                        if len(glob_matches) > 1:
+                            break
+                    if not d_capped and depth < 3 and entry.name not in _SKIP_WORKSPACE_SCAN_DIRS:
+                        try:
+                            if entry.is_dir():
+                                next_level.append(entry.path)
+                        except OSError:
+                            pass
+                if len(glob_matches) > 1:
+                    break
+            cur_level = next_level
+
         if len(glob_matches) == 1:
             return glob_matches[0]
         break
@@ -5449,55 +5656,113 @@ def switch_or_attach_session(target_sess: str, origin_sess: str = "") -> int:
 def _collect_launcher_dirs() -> list[str]:
     dirs: list[str] = []
     seen: set[str] = set()
+    parent_cache: dict[str, set[str]] = {}
+    hook_ws_roots, managed_parents, _ = _collect_configured_workspace_roots(parent_cache=parent_cache)
+    hook_ws_roots_set = set(hook_ws_roots)
+
     zoxide_bin = os.environ.get("IDE_ZOXIDE_BIN") or shutil.which("zoxide")
     if zoxide_bin:
+        res = None
         try:
             res = subprocess.run(
-                [zoxide_bin, "query", "-l"],
+                [zoxide_bin, "query", "-l", "--all"],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
-                timeout=2.0,
+                timeout=1.0,
                 check=False,
             )
-            if res.returncode == 0 and res.stdout:
-                for raw in res.stdout.splitlines():
-                    cand = raw.strip()
-                    if cand and os.path.isdir(cand):
-                        norm = os.path.abspath(cand)
-                        if norm not in seen:
-                            seen.add(norm)
-                            dirs.append(norm)
+            if res.returncode != 0:
+                res = subprocess.run(
+                    [zoxide_bin, "query", "-l"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    timeout=1.0,
+                    check=False,
+                )
         except (OSError, subprocess.SubprocessError):
-            pass
+            res = None
 
-    if not dirs:
-        home = os.path.expanduser("~")
-        if os.path.isdir(home):
-            try:
-                for entry in sorted(os.listdir(home)):
-                    if entry.startswith("."):
+        if res is not None and res.returncode == 0 and res.stdout:
+            for raw in res.stdout.splitlines():
+                cand_raw = raw.strip()
+                if not cand_raw:
+                    continue
+                norm = os.path.abspath(os.path.expanduser(cand_raw))
+
+                matched_ws = ""
+                if hook_ws_roots_set:
+                    cur = norm
+                    while True:
+                        if cur in hook_ws_roots_set:
+                            matched_ws = cur
+                            break
+                        parent = os.path.dirname(cur)
+                        if parent == cur:
+                            break
+                        cur = parent
+                if matched_ws:
+                    if matched_ws not in seen:
+                        seen.add(matched_ws)
+                        dirs.append(matched_ws)
+                    continue
+
+                if managed_parents:
+                    dead_managed_child = False
+                    cur = norm
+                    while True:
+                        parent = os.path.dirname(cur)
+                        if parent == cur:
+                            break
+                        if parent in managed_parents:
+                            if os.path.basename(cur) not in _scandir_child_dirs(parent, parent_cache):
+                                dead_managed_child = True
+                                break
+                        cur = parent
+                    if dead_managed_child:
                         continue
-                    cand = os.path.join(home, entry)
-                    if os.path.isdir(cand):
-                        norm = os.path.abspath(cand)
-                        if norm not in seen:
-                            seen.add(norm)
-                            dirs.append(norm)
-            except OSError:
-                pass
-            if not dirs:
-                dirs.append(os.path.abspath(home))
+
+                if norm not in seen and os.path.isdir(norm):
+                    seen.add(norm)
+                    dirs.append(norm)
+
+    for ws_root in hook_ws_roots:
+        if ws_root not in seen:
+            seen.add(ws_root)
+            dirs.append(ws_root)
+
+    home = os.path.expanduser("~")
+    if home and os.path.isdir(home):
+        try:
+            for entry in sorted(os.listdir(home)):
+                if entry.startswith("."):
+                    continue
+                cand = os.path.join(home, entry)
+                norm = os.path.abspath(cand)
+                if norm not in seen and os.path.isdir(cand):
+                    seen.add(norm)
+                    dirs.append(norm)
+        except OSError:
+            pass
+        if not dirs:
+            dirs.append(os.path.abspath(home))
     return dirs
 
 
-def _pick_workspace_directory(fzf_bin: str, env: dict[str, str]) -> str:
+def _pick_workspace_directory(
+    fzf_bin: str,
+    env: dict[str, str],
+    back_to_sessions: bool = True,
+) -> str:
     dirs = _collect_launcher_dirs()
     if not dirs:
         return ""
     hex_map, esc = load_active_palette()
     rows = [f"{d}\x1f{esc['BLUE']}{_shorten_home(d)}{esc['RESET']}" for d in dirs]
+    esc_hint = "Esc: back to sessions" if back_to_sessions else "Esc: cancel"
     dir_args = [
         fzf_bin,
         "--ansi",
@@ -5507,7 +5772,7 @@ def _pick_workspace_directory(fzf_bin: str, env: dict[str, str]) -> str:
         "--info=inline-right",
         "--prompt=New IDE > ",
         "--border=rounded",
-        "--border-label= Enter: launch workspace · Esc: back to sessions ",
+        f"--border-label= Enter: launch workspace · {esc_hint} ",
         "--border-label-pos=bottom",
         f"--color=label:{hex_map['BASE01']}",
     ]
@@ -5525,11 +5790,84 @@ def _pick_workspace_directory(fzf_bin: str, env: dict[str, str]) -> str:
     return first if (first and os.path.isdir(first)) else ""
 
 
-def run_sessions_picker(target_arg: str, ide_self: str) -> int:
+def _launch_picked_workspace(
+    chosen_dir: str,
+    ide_self: str,
+    origin_sess: str = "",
+    layout_mode: str = "",
+    ai_cli: str = "",
+    ai_cli_from_flag: bool = False,
+    detach_only: bool = False,
+) -> int:
+    resolved_dir = resolve_workspace_target(chosen_dir) or os.path.abspath(chosen_dir)
+    target_sess = sanitize_session_name(resolved_dir)
+    launch_cmd = [ide_self, "--detach"]
+    if layout_mode == "2pane":
+        launch_cmd.append("--2pane")
+    if ai_cli_from_flag and ai_cli:
+        launch_cmd.extend(["--ai", ai_cli])
+    launch_cmd.append(resolved_dir)
+    child_env = os.environ.copy()
+    child_env["IDE_WORKSPACE_RESOLVED"] = "1"
+    launch_res = subprocess.run(
+        launch_cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=child_env,
+        check=False,
+    )
+    if detach_only:
+        return 0 if session_exists(target_sess) else launch_res.returncode
+    if session_exists(target_sess):
+        rc = switch_or_attach_session(target_sess, origin_sess)
+        ack_ai_session([target_sess], from_hook=True, refresh_always=False)
+        return rc
+    return launch_res.returncode
+
+
+_POPUP_FORWARD_ENV_VARS = (
+    "IDE_WORKSPACE_DIRS",
+    "IDE_LINK_RULES",
+    "IDE_FZF_BIN",
+    "IDE_ZOXIDE_BIN",
+    "_ZO_DATA_DIR",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
+)
+
+
+def _build_popup_env(client_name: str, forward_ai_cli: bool = False) -> list[str]:
+    popup_env = ["IDE_IN_POPUP=1", f"IDE_CLIENT={shlex.quote(client_name)}"]
+    fwd_vars = (*_POPUP_FORWARD_ENV_VARS, "IDE_AI_CLI") if forward_ai_cli else _POPUP_FORWARD_ENV_VARS
+    for fwd_var in fwd_vars:
+        fwd_val = os.environ.get(fwd_var)
+        if fwd_val:
+            popup_env.append(f"{fwd_var}={shlex.quote(fwd_val)}")
+    return popup_env
+
+
+def run_new_workspace_picker(
+    target_arg: str,
+    ide_self: str,
+    layout_mode: str = "",
+    ai_cli: str = "",
+    ai_cli_from_flag: bool = False,
+    had_env_ai_cli: bool = False,
+    detach_only: bool = False,
+) -> int:
     resolved_arg = resolve_target_session(target_arg) if target_arg else ""
     origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
     cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
-    if os.environ.get("TMUX") and os.environ.get("IDE_IN_POPUP") != "1" and os.environ.get("IDE_NO_POPUP") != "1":
+    fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
+    if (
+        os.environ.get("TMUX")
+        and os.environ.get("IDE_IN_POPUP") != "1"
+        and os.environ.get("IDE_NO_POPUP") != "1"
+        and not detach_only
+        and fzf_bin
+    ):
         client_name = _resolve_active_client(origin_sess or cur_sess)
         raw_cur = (
             tmux_out("display-message", "-p", "-c", client_name, "#{session_name}")
@@ -5544,7 +5882,72 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
             return 0
         if client_name:
             popup_cmd = ["display-popup", "-c", client_name]
-            inner_cmd = f"IDE_IN_POPUP=1 IDE_CLIENT={shlex.quote(client_name)} {shlex.quote(ide_self)} --sessions"
+            popup_env = _build_popup_env(client_name, forward_ai_cli=had_env_ai_cli)
+            inner_parts = [
+                *popup_env,
+                shlex.quote(ide_self),
+                "--new",
+            ]
+            if layout_mode == "2pane":
+                inner_parts.append("--2pane")
+            if ai_cli_from_flag and ai_cli:
+                inner_parts.extend(["--ai", shlex.quote(ai_cli)])
+            if cur_sess:
+                inner_parts.append(shlex.quote(cur_sess))
+            popup_cmd.extend(["-E", "-w", "88%", "-h", "80%", " ".join(inner_parts)])
+            pop_res = run_tmux(*popup_cmd)
+            if pop_res.returncode == 0 or not sys.stdin.isatty():
+                return 0 if pop_res.returncode in (0, 130) else pop_res.returncode
+
+    if not fzf_bin:
+        print("Error: 'fzf' is required for 'ide --new'.", file=sys.stderr)
+        return 1
+    if not (
+        (sys.stdin.isatty() and sys.stdout.isatty())
+        or os.environ.get("IDE_IN_POPUP") == "1"
+        or bool(os.environ.get("IDE_FZF_BIN"))
+    ):
+        print("Error: 'ide --new' requires an interactive terminal.", file=sys.stderr)
+        return 1
+
+    hex_map, _ = load_active_palette()
+    env = build_fzf_env(hex_map)
+    chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=False)
+    if not chosen_dir:
+        return 0
+    return _launch_picked_workspace(
+        chosen_dir,
+        ide_self,
+        origin_sess=origin_sess or cur_sess,
+        layout_mode=layout_mode,
+        ai_cli=ai_cli,
+        ai_cli_from_flag=ai_cli_from_flag,
+        detach_only=detach_only,
+    )
+
+
+def run_sessions_picker(target_arg: str, ide_self: str, had_env_ai_cli: bool = False) -> int:
+    resolved_arg = resolve_target_session(target_arg) if target_arg else ""
+    origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
+    cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
+    fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
+    if os.environ.get("TMUX") and os.environ.get("IDE_IN_POPUP") != "1" and os.environ.get("IDE_NO_POPUP") != "1":
+        client_name = _resolve_active_client(origin_sess or cur_sess)
+        raw_cur = (
+            tmux_out("display-message", "-p", "-c", client_name, "#{session_name}")
+            if client_name
+            else (origin_sess or tmux_out("display-message", "-p", "#{session_name}"))
+        )
+        if re.match(r"^(ai|agy)-", raw_cur):
+            if client_name:
+                run_tmux("detach-client", "-t", client_name)
+            else:
+                run_tmux("detach-client")
+            return 0
+        if client_name and fzf_bin:
+            popup_cmd = ["display-popup", "-c", client_name]
+            popup_env = _build_popup_env(client_name, forward_ai_cli=had_env_ai_cli)
+            inner_cmd = f"{' '.join(popup_env)} {shlex.quote(ide_self)} --sessions"
             if cur_sess:
                 inner_cmd += f" {shlex.quote(cur_sess)}"
             popup_cmd.extend(["-E", "-w", "88%", "-h", "80%", inner_cmd])
@@ -5552,7 +5955,6 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
             if pop_res.returncode == 0 or not sys.stdin.isatty():
                 return 0 if pop_res.returncode in (0, 130) else pop_res.returncode
 
-    fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
     if not fzf_bin:
         rows_plain = build_sessions_lines(cur_sess)
         if not rows_plain:
@@ -5565,6 +5967,20 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
 
     hex_map, _ = load_active_palette()
     env = build_fzf_env(hex_map)
+    is_interactive = (sys.stdin.isatty() and sys.stdout.isatty()) or os.environ.get("IDE_IN_POPUP") == "1"
+    initial_rows = build_sessions_lines(cur_sess)
+    if not initial_rows:
+        if not is_interactive:
+            if os.environ.get("TMUX"):
+                run_tmux("display-message", "No active IDE sessions.")
+            else:
+                print("No active IDE sessions.")
+            return 0
+        chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=False)
+        if not chosen_dir:
+            return 0
+        return _launch_picked_workspace(chosen_dir, ide_self, origin_sess=origin_sess or cur_sess)
+
     self_q = shlex.quote(ide_self)
     reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
     quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{+1}})+reload({reload_cmd})"
@@ -5594,8 +6010,10 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
         "--preview-window=right:56%:wrap",
     ]
 
+    first_iter = True
     while True:
-        rows = build_sessions_lines(cur_sess)
+        rows = initial_rows if first_iter else build_sessions_lines(cur_sess)
+        first_iter = False
         if not rows:
             if os.environ.get("TMUX"):
                 run_tmux("display-message", "No active IDE sessions.")
@@ -5623,22 +6041,10 @@ def run_sessions_picker(target_arg: str, ide_self: str) -> int:
             selected_line = out_lines[0]
 
         if pressed == "alt-n":
-            chosen_dir = _pick_workspace_directory(fzf_bin, env)
+            chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=True)
             if not chosen_dir:
                 continue
-            target_sess = sanitize_session_name(os.path.abspath(chosen_dir))
-            launch_res = subprocess.run(
-                [ide_self, "--detach", chosen_dir],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            if session_exists(target_sess):
-                rc = switch_or_attach_session(target_sess, origin_sess or cur_sess)
-                ack_ai_session([target_sess], from_hook=True, refresh_always=False)
-                return rc
-            return launch_res.returncode
+            return _launch_picked_workspace(chosen_dir, ide_self, origin_sess=origin_sess or cur_sess)
 
         chosen_sess = selected_line.split("\t", 1)[0].strip()
         if not chosen_sess or not session_exists(chosen_sess):
@@ -5876,6 +6282,7 @@ def main() -> int:
     detach_mode = os.environ.get("IDE_NO_ATTACH", "0") == "1"
     force_quit = False
     plain_list = False
+    had_env_ai_cli = bool((os.environ.get("IDE_AI_CLI") or "").strip())
     ai_cli = os.environ.get("IDE_AI_CLI") or "agy"
     ai_cli_from_flag = False
     target_arg = ""
@@ -5963,6 +6370,13 @@ def main() -> int:
                 i += 1
         elif arg in ("-s", "--sessions"):
             action = "sessions"
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                target_arg = argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        elif arg in ("-n", "--new"):
+            action = "new"
             if i + 1 < n and not argv[i + 1].startswith("-"):
                 target_arg = argv[i + 1]
                 i += 2
@@ -6253,7 +6667,17 @@ def main() -> int:
     if action == "status-click":
         return status_click(status_click_x, target_arg)
     if action == "sessions":
-        return run_sessions_picker(target_arg, ide_self)
+        return run_sessions_picker(target_arg, ide_self, had_env_ai_cli=had_env_ai_cli or ai_cli_from_flag)
+    if action == "new":
+        return run_new_workspace_picker(
+            target_arg,
+            ide_self,
+            layout_mode=layout_mode,
+            ai_cli=ai_cli,
+            ai_cli_from_flag=ai_cli_from_flag,
+            had_env_ai_cli=had_env_ai_cli,
+            detach_only=detach_mode,
+        )
     if action == "sessions-lines":
         for row in build_sessions_lines(target_arg):
             print(row)
@@ -6327,19 +6751,69 @@ def main() -> int:
     if action == "kill":
         return quit_ide(target_args, True, True)
 
-    target_dir = target_arg or safe_getcwd()
-    if not os.path.isdir(target_dir):
-        print(f"Error: Directory '{target_dir}' does not exist.", file=sys.stderr)
-        return 1
-    target_dir = os.path.abspath(target_dir)
-
-    session = sanitize_session_name(target_dir)
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    nvim_socket = f"{runtime_dir}/nvim-ide-{session}.sock"
     ide_ai_cli = os.environ["IDE_AI_CLI"]
     ide_notify_env = os.environ.get("IDE_NOTIFY", "")
 
-    session_existed = session_exists(session)
+    if (
+        target_arg
+        and "/" not in target_arg
+        and target_arg not in (".", "..")
+        and not target_arg.startswith("~")
+        and not os.path.isdir(target_arg)
+        and session_exists(target_arg)
+        and check_is_ide_session(target_arg)
+    ):
+        session = target_arg
+        session_existed = True
+        target_dir = (
+            get_ide_var(session, "@ide_workdir", "IDE_WORKDIR")
+            or get_ide_var(session, "@ide_initial_root", "IDE_INITIAL_ROOT")
+            or safe_getcwd()
+        )
+        nvim_socket = (
+            get_ide_var(session, "@ide_socket", "NVIM_IDE_SOCKET")
+            or f"{runtime_dir}/nvim-ide-{session}.sock"
+        )
+    else:
+        already_resolved = os.environ.pop("IDE_WORKSPACE_RESOLVED", "") == "1"
+        if not target_arg:
+            target_dir = safe_getcwd()
+            if not os.path.isdir(target_dir):
+                print(f"Error: Directory '{target_dir}' does not exist.", file=sys.stderr)
+                return 1
+            target_dir = os.path.abspath(target_dir)
+        elif target_arg in (".", "..") or target_arg.startswith(("./", "../")):
+            if not os.path.isdir(target_arg):
+                print(f"Error: Directory '{target_arg}' does not exist.", file=sys.stderr)
+                return 1
+            target_dir = os.path.abspath(target_arg)
+        else:
+            cand_target = (
+                os.path.expanduser(target_arg)
+                if (target_arg == "~" or target_arg.startswith("~/"))
+                else target_arg
+            )
+            if os.path.isdir(cand_target):
+                abs_cand = os.path.abspath(cand_target)
+                if already_resolved:
+                    target_dir = abs_cand
+                else:
+                    hook_dir = resolve_workspace_target(abs_cand)
+                    target_dir = hook_dir if hook_dir else abs_cand
+            else:
+                hook_dir = "" if already_resolved else resolve_workspace_target(target_arg)
+                if not hook_dir:
+                    print(f"Error: Directory '{target_arg}' does not exist.", file=sys.stderr)
+                    return 1
+                target_dir = hook_dir
+
+        session = sanitize_session_name(target_dir)
+        session_existed = session_exists(session)
+        nvim_socket = (
+            (get_ide_var(session, "@ide_socket", "NVIM_IDE_SOCKET") if session_existed else "")
+            or f"{runtime_dir}/nvim-ide-{session}.sock"
+        )
     if not session_existed:
         try:
             os.unlink(nvim_socket)

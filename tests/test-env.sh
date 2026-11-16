@@ -954,7 +954,7 @@ EOF
     cd "$MOCK_REPO"
 
     # Test interactive Bash PROMPT_COMMAND coexistence with zoxide/mise, exit status propagation, and stale working directory self-healing
-    interactive_out=$(HOME="$STANDALONE_HOME" bash --norc -i -c "
+    interactive_out=$(HOME="$STANDALONE_HOME" _ZO_DATA_DIR="$STANDALONE_HOME/zoxide" bash --norc -i -c "
         source '$SCRIPT_DIR/dotfiles/.bashrc-addendum'
         mkdir -p '$MOCK_REPO/stale-bws'
         cd '$MOCK_REPO/stale-bws'

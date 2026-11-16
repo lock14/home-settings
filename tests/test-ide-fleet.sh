@@ -113,6 +113,7 @@ try:
         "XDG_CONFIG_HOME": xdg_cfg,
         "XDG_CACHE_HOME": xdg_cache,
         "XDG_RUNTIME_DIR": xdg_run,
+        "_ZO_DATA_DIR": os.path.join(thome, "zoxide"),
         "TERM": "xterm-256color",
         "LANG": _utf8_lang,
         "NO_COLOR": "1",
@@ -140,6 +141,133 @@ try:
     tmux("new-session", "-d", "-s", "agy-beta-ws", "-x", "120", "-y", "40", "exec sleep 300", check=True)
     tmux("set-option", "-q", "-t", "=ai-alpha-ws:", "@ide_session", "ai-alpha-ws", check=True)
     tmux("set-option", "-q", "-t", "=agy-beta-ws:", "@ide_session", "agy-beta-ws", check=True)
+
+    # 1b. Zero-session behavior for `ide -s` / `ide --sessions`:
+    # - Non-interactive callers preserve "No active IDE sessions."
+    # - Interactive TTY without `fzf` preserves "No active IDE sessions."
+    # - Interactive TTY (or IDE_IN_POPUP=1) with `fzf` opens `New IDE >` directly (Esc cancels cleanly without looping; Enter launches)
+    r_sess_non_tty = run_cmd([ide_bin, "-s"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_sess_non_tty.returncode == 0 and "No active IDE sessions." in r_sess_non_tty.stdout, f"sess_non_tty={r_sess_non_tty}"
+
+    def _run_pty_cmd(argv, env_dict, timeout_s=5.0):
+        m_fd, s_fd = pty.openpty()
+        fcntl.ioctl(m_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 140, 0, 0))
+        p = subprocess.Popen(
+            argv,
+            stdin=s_fd,
+            stdout=s_fd,
+            stderr=s_fd,
+            env=env_dict,
+            start_new_session=True,
+            close_fds=True,
+        )
+        os.close(s_fd)
+        buf = bytearray()
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            r_ready, _, _ = select.select([m_fd], [], [], 0.05)
+            if r_ready:
+                try:
+                    chunk = os.read(m_fd, 8192)
+                    if chunk:
+                        buf.extend(chunk)
+                except OSError:
+                    break
+            if p.poll() is not None:
+                while True:
+                    r_rem, _, _ = select.select([m_fd], [], [], 0.02)
+                    if not r_rem:
+                        break
+                    try:
+                        chunk = os.read(m_fd, 8192)
+                        if not chunk:
+                            break
+                        buf.extend(chunk)
+                    except OSError:
+                        break
+                break
+        rc_out = p.wait(timeout=2.0)
+        os.close(m_fd)
+        return rc_out, buf.decode("utf-8", errors="replace")
+
+    no_fzf_dir = os.path.join(root, "no_fzf_bin")
+    os.makedirs(no_fzf_dir, exist_ok=True)
+    for tool_nm in ("bash", "python3", "tmux", "sh"):
+        src_t = shutil.which(tool_nm)
+        if src_t:
+            os.symlink(src_t, os.path.join(no_fzf_dir, tool_nm))
+    rc_no_fzf, out_no_fzf = _run_pty_cmd([ide_bin, "-s"], {**base_env, "IDE_STRICT_PATH": "1", "PATH": no_fzf_dir, "TMUX": "", "TMUX_PANE": ""})
+    assert rc_no_fzf == 0 and "No active IDE sessions." in out_no_fzf, f"TTY without fzf should print No active IDE sessions: rc={rc_no_fzf} out={out_no_fzf!r}"
+
+    zero_esc_log = os.path.join(root, "zero_esc_fzf.log")
+    zero_esc_fzf = os.path.join(root, "zero_esc_fzf.py")
+    with open(zero_esc_fzf, "w", encoding="utf-8") as zef:
+        zef.write(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            f"with open({zero_esc_log!r}, 'a', encoding='utf-8') as f:\n"
+            "    f.write(' '.join(sys.argv[1:]) + '\\n')\n"
+            "sys.exit(130)\n"
+        )
+    os.chmod(zero_esc_fzf, 0o755)
+    rc_zero_esc, _ = _run_pty_cmd([ide_bin, "-s"], {**base_env, "IDE_FZF_BIN": zero_esc_fzf, "TMUX": "", "TMUX_PANE": ""})
+    esc_invocations = open(zero_esc_log, encoding="utf-8").read().splitlines()
+    assert rc_zero_esc == 0 and len(esc_invocations) == 1, f"expected 1 New IDE fzf call and exit 0 on Esc when 0 sessions exist, got rc={rc_zero_esc} calls={esc_invocations}"
+    assert "--prompt=New IDE > " in esc_invocations[0] and "Esc: cancel" in esc_invocations[0] and "back to sessions" not in esc_invocations[0], (
+        f"unexpected 0-session fzf args: {esc_invocations[0]}"
+    )
+
+    zero_ws_dir = os.path.join(thome, "zero-boot-ws")
+    os.makedirs(zero_ws_dir, exist_ok=True)
+    stub_agy = os.path.join(bin_dir, "agy")
+    with open(stub_agy, "w", encoding="utf-8") as saf:
+        saf.write("#!/bin/sh\nexec sleep 300\n")
+    os.chmod(stub_agy, 0o755)
+    zero_pick_fzf = os.path.join(root, "zero_pick_fzf.py")
+    with open(zero_pick_fzf, "w", encoding="utf-8") as zpf:
+        zpf.write(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
+            "picked = next(l for l in lines if 'zero-boot-ws' in l)\n"
+            "print(picked)\n"
+        )
+    os.chmod(zero_pick_fzf, 0o755)
+    # Attach temporary client to plain-non-ide and run `ide -s` inside popup mode with 0 IDE sessions -> spawns & switches to zero-boot-ws!
+    z_mfd, z_sfd = pty.openpty()
+    fcntl.ioctl(z_mfd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 140, 0, 0))
+    z_proc = subprocess.Popen(
+        ["tmux", "attach-session", "-t", "=plain-non-ide"],
+        stdin=z_sfd,
+        stdout=z_sfd,
+        stderr=z_sfd,
+        env={**base_env, "TMUX": "", "TMUX_PANE": ""},
+        start_new_session=True,
+        close_fds=True,
+    )
+    os.close(z_sfd)
+    assert wait_until(lambda: bool(tmux_out("list-clients", "-F", "#{client_name}").strip()))
+    z_client = tmux_out("list-clients", "-F", "#{client_name}").splitlines()[0].strip()
+    z_tmux_env = tmux_out("display-message", "-p", "-t", "=plain-non-ide:", "#{socket_path},#{pid},#{session_id}")
+    r_zero_pop = run_cmd(
+        [ide_bin, "-s"],
+        env={**base_env, "IDE_CLIENT": z_client, "IDE_FZF_BIN": zero_pick_fzf, "TMUX": z_tmux_env, "TMUX_PANE": ""},
+        check=True,
+    )
+    assert r_zero_pop.returncode == 0
+    assert tmux("has-session", "-t", "=zero-boot-ws", check=False).returncode == 0, "0-session ide -s did not spawn chosen workspace"
+    assert wait_until(lambda: tmux_out("display-message", "-p", "-t", z_client, "#{session_name}") == "zero-boot-ws"), "0-session ide -s did not switch client to zero-boot-ws"
+    tmux("switch-client", "-c", z_client, "-t", "=plain-non-ide", check=True)
+    run_cmd([ide_bin, "--kill", "zero-boot-ws"], env={**base_env, "TMUX": ""}, check=True)
+    tmux("detach-client", "-t", z_client, check=False)
+    try:
+        z_proc.wait(timeout=2.0)
+    except Exception:
+        z_proc.kill()
+        z_proc.wait(timeout=2.0)
+    os.close(z_mfd)
+    os.unlink(stub_agy)
+    shutil.rmtree(zero_ws_dir, ignore_errors=True)
 
     def make_ws(name, ai_cmd="exec sleep 300", ed_cmd="exec sleep 300", ai_cli="agy", git_branch="", git_dirty=False, in_home=False):
         ws_parent = os.path.join(thome, "projects") if in_home else os.path.join(root, "ws")
@@ -2036,6 +2164,214 @@ try:
         assert re.search(rf"bind -n {status_ev}\b.*mouse_status_range\}},.*--status-click", tmux_conf_txt), (
             f"missing tmux < 3.4 empty mouse_status_range --status-click fallback on {status_ev}"
         )
+
+    # (10j) External workspace hooks (ide_workspace_dirs + IDE_WORKSPACE_DIRS + ide_resolve_workspace),
+    # zoxide query -l --all frecency collapsing & fallback, zero negative-lookup stat() on dead managed children,
+    # ide -n / --new (popup + --2pane + error guards), and _call_ide_hook 1.0s timeout resilience
+    ext_parent = os.path.join(root, "ext_mounts")
+    env_parent = os.path.join(root, "env_mounts")
+    ws_frec = os.path.join(ext_parent, "ws-frecency")
+    ws_unvis = os.path.join(ext_parent, "ws-unvisited")
+    ws_deleted = os.path.join(ext_parent, "ws-deleted")
+    ws_env_only = os.path.join(env_parent, "ws-env-only")
+    home_top = os.path.join(thome, "projects", "local-top")
+    home_low = os.path.join(thome, "projects", "local-low")
+    home_unvis = os.path.join(thome, "unvisited-home-dir")
+    home_hidden = os.path.join(thome, ".hidden-home-dir")
+    for p_mk in (
+        os.path.join(ws_frec, "src_tree", "deep", "pkg"),
+        os.path.join(ws_unvis, "src_tree"),
+        ws_env_only,
+        home_top,
+        home_low,
+        home_unvis,
+        home_hidden,
+    ):
+        os.makedirs(p_mk, exist_ok=True)
+
+    ext_rules_path = os.path.join(root, "ext_launcher_rules.sh")
+    with open(ext_rules_path, "w", encoding="utf-8") as erf:
+        erf.write(
+            f"ide_workspace_dirs() {{\n"
+            f"    printf '%s\\n' {shlex.quote(ws_frec)} {shlex.quote(ws_unvis)} {shlex.quote(ws_deleted)}\n"
+            f"}}\n"
+            f"ide_resolve_workspace() {{\n"
+            f"    case \"${{1%/}}\" in\n"
+            f"        {shlex.quote(ws_frec)}|ws-frecency) printf '%s\\n' {shlex.quote(os.path.join(ws_frec, 'src_tree'))}; return 0 ;;\n"
+            f"        {shlex.quote(ws_unvis)}|ws-unvisited) printf '%s\\n' {shlex.quote(os.path.join(ws_unvis, 'src_tree'))}; return 0 ;;\n"
+            f"    esac\n"
+            f"    return 1\n"
+            f"}}\n"
+            f"ide_session_name() {{\n"
+            f"    case \"$1\" in\n"
+            f"        {shlex.quote(ext_parent)}/*)\n"
+            f"            rem=\"${{1#{shlex.quote(ext_parent)}/}}\"\n"
+            f"            printf '%s\\n' \"${{rem%%/*}}\"\n"
+            f"            return 0 ;;\n"
+            f"    esac\n"
+            f"    return 1\n"
+            f"}}\n"
+        )
+
+    zox_all_bin = os.path.join(root, "zox-all.sh")
+    with open(zox_all_bin, "w", encoding="utf-8") as zab:
+        zab.write(
+            "#!/bin/sh\n"
+            'if [ "$1" = "query" ] && [ "$2" = "-l" ] && [ "${3:-}" = "--all" ]; then\n'
+            f"    printf '%s\\n' {shlex.quote(home_top)} {shlex.quote(os.path.join(ws_deleted, 'src_tree'))} "
+            f"{shlex.quote(os.path.join(ws_frec, 'src_tree', 'deep', 'pkg'))} {shlex.quote(home_low)}\n"
+            "    exit 0\n"
+            "fi\n"
+            "exit 1\n"
+        )
+    os.chmod(zox_all_bin, 0o755)
+
+    # Load bin/ide Python module in-process to spy on negative stat/isdir calls for ws_deleted while verifying ordering
+    m_py = re.search(r"IDE_PY_SRC <<\s*'PY'[^\n]*\n(.*?)\nPY\n", ide_full_src, re.S)
+    assert m_py, "failed to extract IDE_PY_SRC from bin/ide"
+    ide_ns = {"__name__": "ide_launcher_test"}
+    exec(compile(m_py.group(1), real_ide_path, "exec"), ide_ns)
+    orig_isdir = os.path.isdir
+    dead_stat_hits = []
+
+    def _spy_isdir(path_arg):
+        if str(path_arg).startswith(ws_deleted):
+            dead_stat_hits.append(str(path_arg))
+        return orig_isdir(path_arg)
+
+    saved_env_snap = dict(os.environ)
+    try:
+        os.environ.update({
+            **base_env,
+            "IDE_LINK_RULES": ext_rules_path,
+            "IDE_WORKSPACE_DIRS": f"{ws_env_only}:{os.path.join(env_parent, 'missing-env-ws')}",
+            "IDE_ZOXIDE_BIN": zox_all_bin,
+        })
+        os.path.isdir = _spy_isdir
+        collected = ide_ns["_collect_launcher_dirs"]()
+    finally:
+        os.path.isdir = orig_isdir
+        os.environ.clear()
+        os.environ.update(saved_env_snap)
+
+    assert dead_stat_hits == [], f"_collect_launcher_dirs performed negative stat/isdir on deleted managed child: {dead_stat_hits}"
+    assert collected[:3] == [home_top, ws_frec, home_low], (
+        f"expected deep subpath under ws_frec to collapse at true zoxide frecency rank 2 between local-top and local-low, got {collected[:5]}"
+    )
+    assert ws_unvis in collected and ws_env_only in collected and home_unvis in collected, f"missing unvisited roots/home dir: {collected}"
+    assert not any(ws_deleted in c for c in collected) and home_hidden not in collected, f"dead or hidden dir leaked: {collected}"
+    assert collected.index(home_low) < collected.index(ws_unvis) < collected.index(home_unvis), f"unexpected tail ordering: {collected}"
+
+    # Verify fallback to `zoxide query -l` when `zoxide query -l --all` exits non-zero
+    zox_noall_bin = os.path.join(root, "zox-noall.sh")
+    with open(zox_noall_bin, "w", encoding="utf-8") as znb:
+        znb.write(
+            "#!/bin/sh\n"
+            'if [ "$1" = "query" ] && [ "$2" = "-l" ] && [ "${3:-}" = "--all" ]; then exit 2; fi\n'
+            f'if [ "$1" = "query" ] && [ "$2" = "-l" ]; then printf "%s\\n" {shlex.quote(home_low)}; exit 0; fi\n'
+            "exit 1\n"
+        )
+    os.chmod(zox_noall_bin, 0o755)
+    try:
+        os.environ.update({**base_env, "IDE_LINK_RULES": ext_rules_path, "IDE_ZOXIDE_BIN": zox_noall_bin})
+        os.environ.pop("IDE_WORKSPACE_DIRS", None)
+        collected_fb = ide_ns["_collect_launcher_dirs"]()
+    finally:
+        os.environ.clear()
+        os.environ.update(saved_env_snap)
+    assert collected_fb and collected_fb[0] == home_low, f"zoxide --all fallback failed: {collected_fb}"
+
+    # Verify `ide --new` error paths (missing fzf / non-interactive terminal)
+    r_new_nofzf = run_cmd([ide_bin, "--new"], env={**base_env, "IDE_STRICT_PATH": "1", "PATH": no_fzf_dir, "TMUX": "", "TMUX_PANE": ""}, check=False)
+    assert r_new_nofzf.returncode != 0 and "fzf" in r_new_nofzf.stderr, f"expected missing-fzf error on ide --new: {r_new_nofzf}"
+    r_new_nontty = run_cmd([ide_bin, "--new"], env={**base_env, "TMUX": "", "TMUX_PANE": ""}, check=False)
+    assert r_new_nontty.returncode != 0 and "interactive terminal" in r_new_nontty.stderr, f"expected non-TTY error on ide --new: {r_new_nontty}"
+
+    # Verify `ide -n --2pane` inside tmux launches via real display-popup, resolves ws_unvis -> ws_unvis/src_tree via ide_resolve_workspace,
+    # names session `ws-unvisited` via ide_session_name, and switches client_name!
+    stub_agy2 = os.path.join(bin_dir, "agy")
+    with open(stub_agy2, "w", encoding="utf-8") as sa2:
+        sa2.write("#!/bin/sh\nexec sleep 300\n")
+    os.chmod(stub_agy2, 0o755)
+    new_pop_fzf = os.path.join(root, "new-pop-fzf.py")
+    new_pop_args_log = os.path.join(root, "new_pop_args.log")
+    with open(new_pop_fzf, "w", encoding="utf-8") as npf:
+        npf.write(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            f"with open({new_pop_args_log!r}, 'w', encoding='utf-8') as f:\n"
+            "    f.write(' '.join(sys.argv[1:]))\n"
+            "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
+            "picked = next(l for l in lines if 'ws-unvisited' in l)\n"
+            "print(picked)\n"
+        )
+    os.chmod(new_pop_fzf, 0o755)
+    stub_claude2 = os.path.join(bin_dir, "claude")
+    with open(stub_claude2, "w", encoding="utf-8") as sc2:
+        sc2.write("#!/bin/sh\nexec sleep 300\n")
+    os.chmod(stub_claude2, 0o755)
+    ws_space_glob = os.path.join(env_parent, "ws [space] dir")
+    os.makedirs(ws_space_glob, exist_ok=True)
+    tmux("switch-client", "-c", client_name, "-t", "=gamma-ws", check=True)
+    _read_pty_chunk(0.1)
+    run_cmd(
+        [ide_bin, "-n", "--2pane", "gamma-ws"],
+        env={
+            **sess_env("gamma-ws", ws_gamma["ed"]),
+            "IDE_AI_CLI": "claude",
+            "IDE_CLIENT": client_name,
+            "IDE_FZF_BIN": new_pop_fzf,
+            "IDE_ZOXIDE_BIN": zox_all_bin,
+            "IDE_LINK_RULES": ext_rules_path,
+            "IDE_WORKSPACE_DIRS": ws_space_glob,
+        },
+        check=True,
+    )
+    _read_pty_chunk(0.2)
+    assert os.path.isfile(new_pop_args_log), "ide -n inside tmux did not open display-popup running IDE_FZF_BIN"
+    pop_fzf_args = open(new_pop_args_log, encoding="utf-8").read()
+    assert "--prompt=New IDE > " in pop_fzf_args and "Esc: cancel" in pop_fzf_args, f"bad ide -n popup fzf args: {pop_fzf_args}"
+    assert tmux("has-session", "-t", "=ws-unvisited", check=False).returncode == 0, "ide -n did not create ws-unvisited session"
+    assert tmux_out("show-options", "-qv", "-t", "=ws-unvisited:", "@ide_workdir") == os.path.realpath(os.path.join(ws_unvis, "src_tree")), (
+        "ide -n did not apply ide_resolve_workspace to chosen workspace root"
+    )
+    assert tmux_out("show-options", "-qv", "-t", "=ws-unvisited:", "@ide_layout_mode") == "2pane", "ide -n --2pane did not propagate 2pane layout across popup"
+    assert tmux_out("show-options", "-qv", "-t", "=ws-unvisited:", "@ide_ai_cli") == "claude", "ide -n did not propagate caller IDE_AI_CLI across popup"
+    assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "ws-unvisited", "ide -n did not switch client to ws-unvisited"
+    tmux("switch-client", "-c", client_name, "-t", "=gamma-ws", check=True)
+    run_cmd([ide_bin, "--kill", "ws-unvisited"], env=sess_env("gamma-ws", ws_gamma["ed"]), check=True)
+
+    # Verify _pick_workspace_directory preserves spaces and glob metacharacters (`[`, `]`)
+    space_pick_fzf = os.path.join(root, "space-pick-fzf.py")
+    with open(space_pick_fzf, "w", encoding="utf-8") as spf:
+        spf.write(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
+            "picked = next(l for l in lines if 'ws [space] dir' in l)\n"
+            "print(picked)\n"
+        )
+    os.chmod(space_pick_fzf, 0o755)
+    try:
+        os.environ.update({**base_env, "IDE_WORKSPACE_DIRS": ws_space_glob, "IDE_ZOXIDE_BIN": empty_zoxide, "IDE_LINK_RULES": os.path.join(root, "no_rules.sh")})
+        picked_sp = ide_ns["_pick_workspace_directory"](space_pick_fzf, dict(os.environ), back_to_sessions=False)
+    finally:
+        os.environ.clear()
+        os.environ.update(saved_env_snap)
+    assert picked_sp == os.path.abspath(ws_space_glob), f"_pick_workspace_directory corrupted space/bracket path: {picked_sp!r}"
+
+    # Verify _call_ide_hook 1.0s timeout resilience when a user hook hangs
+    slow_rules = os.path.join(root, "slow_rules.sh")
+    with open(slow_rules, "w", encoding="utf-8") as srf:
+        srf.write("ide_workspace_dirs() { sleep 5; }\n")
+    t0_hook = time.monotonic()
+    r_slow = run_cmd(
+        [ide_bin, "-n", "--detach"],
+        env={**base_env, "TMUX": "", "TMUX_PANE": "", "IDE_FZF_BIN": zero_esc_fzf, "IDE_ZOXIDE_BIN": empty_zoxide, "IDE_LINK_RULES": slow_rules},
+        check=True,
+    )
+    dt_hook = time.monotonic() - t0_hook
+    assert r_slow.returncode == 0 and dt_hook < 3.0, f"hanging ide_workspace_dirs hook was not bounded by 1.0s timeout: dt={dt_hook:.2f}s"
 
     print("ALL_FLEET_OK")
 finally:

@@ -93,6 +93,63 @@ _ide_load_sessions() {
     fi
 }
 
+_ide_load_workspaces() {
+    reply=()
+    local -a raw_dirs=()
+    local rules_file="${IDE_LINK_RULES:-${XDG_CONFIG_HOME:-$HOME/.config}/ide/links.sh}"
+    if [[ -r "$rules_file" ]]; then
+        local rules_src=""
+        rules_src="$(<"$rules_file")" 2>/dev/null || rules_src=""
+        if [[ "$rules_src" == *ide_workspace_dirs* ]]; then
+            local hook_out=""
+            if command -v timeout >/dev/null 2>&1; then
+                hook_out="$(timeout 1 bash -c 'source "$1" >/dev/null 2>&1 || exit 1; declare -F ide_workspace_dirs >/dev/null 2>&1 || exit 1; ide_workspace_dirs' _ "$rules_file" 2>/dev/null)" || hook_out=""
+            else
+                hook_out="$(bash -c 'source "$1" >/dev/null 2>&1 || exit 1; declare -F ide_workspace_dirs >/dev/null 2>&1 || exit 1; ide_workspace_dirs' _ "$rules_file" 2>/dev/null)" || hook_out=""
+            fi
+            if [[ -n "$hook_out" ]]; then
+                raw_dirs+=(${(f)hook_out})
+            fi
+        fi
+    fi
+    if [[ -n "${IDE_WORKSPACE_DIRS:-}" ]]; then
+        raw_dirs+=(${(s.:.)IDE_WORKSPACE_DIRS})
+    fi
+    (( ${#raw_dirs} )) || return 0
+
+    local d norm parent b c child_key
+    local -A seen=() scanned_parents=() live_children=()
+    local -a p_entries=()
+    for d in "${raw_dirs[@]}"; do
+        d="${d#"${d%%[![:space:]]*}"}"
+        d="${d%"${d##*[![:space:]]}"}"
+        [[ -z "$d" ]] && continue
+        [[ "$d" == "~" ]] && d="$HOME"
+        [[ "$d" == "~/"* ]] && d="$HOME/${d#\~/}"
+        norm="${d:a}"
+        [[ -z "$norm" || "$norm" == "/" ]] && continue
+        parent="${norm:h}"
+        b="${norm:t}"
+        [[ -z "$b" ]] && continue
+        if [[ -z "${scanned_parents[$parent]:-}" ]]; then
+            scanned_parents[$parent]=1
+            if [[ -d "$parent" ]]; then
+                p_entries=( "$parent"/*(N-/:t) )
+                for c in "${p_entries[@]}"; do
+                    child_key="$parent/$c"
+                    live_children[$child_key]=1
+                done
+            fi
+        fi
+        child_key="$parent/$b"
+        [[ -n "${live_children[$child_key]:-}" ]] || continue
+        if [[ -z "${seen[$b]:-}" ]]; then
+            seen[$b]=1
+            reply+=("$b")
+        fi
+    done
+}
+
 _ide() {
     local -a opts send_opts list_opts subcmds agents agent_states swap_dirs sessions reply
     opts=(
@@ -103,6 +160,8 @@ _ide() {
         '--open:Open file in the Main Editor pane via RPC and focus Editor'
         '--preview:Preview file in the Main Editor pane via RPC without changing focus'
         '--cd:Dive into directory across Editor and Shell'
+        '-n:Open interactive new-workspace directory picker'
+        '--new:Open interactive new-workspace directory picker'
         '-s:Open interactive multi-session IDE workspace switcher'
         '--sessions:Open interactive multi-session IDE workspace switcher'
         '--next-attention:Jump to oldest IDE session waiting for AI attention'
@@ -254,29 +313,53 @@ _ide() {
             ;;
     esac
 
-    local in_send=0 has_send_payload=0 in_quit_kill=0 in_ack_ai=0 in_agent_state=0 idx=2 w=""
+    local in_send=0 has_send_payload=0 in_quit_kill=0 in_ack_ai=0 in_agent_state=0 in_new=0 in_no_pos=0 is_launch_pos=0 idx=2 w=""
     [[ "${words[1]:-}" == (qide|idek|quit) ]] && in_quit_kill=1
+    [[ "${words[1]:-}" == (ide|ide2|ide3) ]] && is_launch_pos=1
     while (( idx < CURRENT )); do
         w="${words[idx]:-}"
         case "$w" in
+            --2pane|--3pane|--detach|--|--ai=*|--agent=*)
+                ;;
+            --ai|--agent)
+                (( idx++ ))
+                ;;
+            --message)
+                is_launch_pos=0
+                (( idx++ ))
+                ;;
             -q|--quit|--kill)
                 in_quit_kill=1
+                is_launch_pos=0
+                ;;
+            -n|--new)
+                in_new=1
+                is_launch_pos=0
+                ;;
+            --keys|--help-keys|--monitor|--top|--btop|-h|--help|--list|--plain)
+                in_no_pos=1
+                is_launch_pos=0
                 ;;
             --ack-ai)
                 in_ack_ai=1
+                is_launch_pos=0
                 ;;
             quit|kill)
                 (( idx == 2 )) && in_quit_kill=1
+                is_launch_pos=0
                 ;;
             --send|--switch|--no-focus)
                 in_send=1
+                is_launch_pos=0
                 ;;
             --stdin|--ref=*|--text=*)
                 in_send=1
                 has_send_payload=1
+                is_launch_pos=0
                 ;;
             --ref|--text)
                 in_send=1
+                is_launch_pos=0
                 if (( idx + 1 < CURRENT )); then
                     has_send_payload=1
                     (( idx++ ))
@@ -284,17 +367,18 @@ _ide() {
                 ;;
             --agent-state=*)
                 in_agent_state=1
+                is_launch_pos=0
                 ;;
             --agent-state)
                 in_agent_state=1
-                (( idx++ ))
-                ;;
-            --ai|--agent|--message)
+                is_launch_pos=0
                 (( idx++ ))
                 ;;
             -*)
+                is_launch_pos=0
                 ;;
             *)
+                is_launch_pos=0
                 if (( in_send )); then
                     has_send_payload=1
                 fi
@@ -302,6 +386,13 @@ _ide() {
         esac
         (( idx++ ))
     done
+
+    if (( in_new || in_no_pos )); then
+        if [[ "${words[CURRENT]:-}" == -* ]]; then
+            _describe -t options 'ide option' opts
+        fi
+        return
+    fi
 
     if (( in_send )); then
         if (( ! has_send_payload )) || [[ "${words[CURRENT]:-}" == -* ]]; then
@@ -355,7 +446,7 @@ _ide() {
         return
     fi
 
-    if [[ ( "$prev2" == ("--swap"|"--agent-state"|"--open"|"--preview") || ( "$prev3" == ("--open"|"--preview") && "$prev" == (\+|)<-> ) ) && "${words[CURRENT]:-}" != -* ]]; then
+    if [[ ( "$prev2" == ("--swap"|"--agent-state"|"--open"|"--preview"|"cd"|"--cd") || ( "$prev3" == ("--open"|"--preview") && "$prev" == (\+|)<-> ) ) && "${words[CURRENT]:-}" != -* ]]; then
         _ide_load_sessions; sessions=("${reply[@]}")
         if (( ${#sessions} )); then
             _describe -t sessions 'IDE session' sessions
@@ -365,13 +456,31 @@ _ide() {
 
     if [[ "${words[CURRENT]:-}" == -* ]]; then
         _describe -t options 'ide option' opts
-    else
+    elif (( is_launch_pos )); then
         if (( CURRENT == 2 )) && [[ "${words[1]:-}" == ide ]]; then
             _describe -t subcommands 'ide subcommand' subcmds
         fi
         _ide_load_sessions; sessions=("${reply[@]}")
         if (( ${#sessions} )); then
             _describe -t sessions 'IDE session' sessions
+        fi
+        if [[ "${words[CURRENT]:-}" != */* && "${words[CURRENT]:-}" != .* && "${words[CURRENT]:-}" != \~* ]]; then
+            local -a workspaces=() rem_workspaces=()
+            local ws_cand s_existing dup_ws
+            _ide_load_workspaces; workspaces=("${reply[@]}")
+            for ws_cand in "${workspaces[@]}"; do
+                dup_ws=0
+                for s_existing in "${sessions[@]}"; do
+                    if [[ "$s_existing" == "$ws_cand" ]]; then
+                        dup_ws=1
+                        break
+                    fi
+                done
+                (( ! dup_ws )) && rem_workspaces+=("${ws_cand//:/\\:}")
+            done
+            if (( ${#rem_workspaces} )); then
+                _describe -t workspaces 'workspace' rem_workspaces
+            fi
         fi
         _files -/
     fi

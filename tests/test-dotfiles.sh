@@ -2194,7 +2194,7 @@ rm -rf "$TEMP_EMPTY_DROPIN_HOME"
 
 # Verify stale working directory self-healing in .zshrc-addendum (preexec and precmd_functions[1]) and .bashrc-addendum (_solarized_bash_prompt) without blind stderr suppression, OLDPWD clobbering, dirstack pollution, or symlink canonicalization
 TEMP_STALE_CWD_ROOT=$(mktemp -d)
-zsh_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" zsh -c '
+zsh_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" _ZO_DATA_DIR="$TEMP_STALE_CWD_ROOT/zoxide" zsh -c '
     mkdir -p "$HOME" "'"$TEMP_STALE_CWD_ROOT"'/prev" "'"$TEMP_STALE_CWD_ROOT"'/ws"
     ln -s "'"$TEMP_STALE_CWD_ROOT"'/ws" "'"$TEMP_STALE_CWD_ROOT"'/ws-sym"
     source "'"$SCRIPT_DIR"'/dotfiles/.zshrc-addendum"
@@ -2225,7 +2225,7 @@ zsh_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" zsh -c '
         "${precmd_functions[(I)_hs_recover_stale_cwd]}" "${preexec_functions[(I)_hs_recover_stale_cwd]}" \
         "$stale_before" "$preexec_ok" "$precmd_ok" "$chpwd_hits" "$no_devnull"
 ')
-bash_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" bash --norc -i -c '
+bash_stale_out=$(HOME="$TEMP_STALE_CWD_ROOT/home" _ZO_DATA_DIR="$TEMP_STALE_CWD_ROOT/zoxide" bash --norc -i -c '
     mkdir -p "$HOME" "'"$TEMP_STALE_CWD_ROOT"'/bprev" "'"$TEMP_STALE_CWD_ROOT"'/bws"
     ln -s "'"$TEMP_STALE_CWD_ROOT"'/bws" "'"$TEMP_STALE_CWD_ROOT"'/bws-sym"
     PROMPT_COMMAND="custom_hook; _solarized_bash_prompt"

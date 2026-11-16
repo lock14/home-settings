@@ -37,6 +37,8 @@ TMUX_TEST_TMPDIR=$(mktemp -d)
 QUIT_TMPDIR=""
 MOUSE_TMPDIR=""
 export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
+export _ZO_DATA_DIR="$TEMP_HOME/zoxide"
+mkdir -p "$_ZO_DATA_DIR"
 # Tear down the isolated tmux servers (by their explicit sockets, never via $TMUX) even when a check aborts
 # or the run is interrupted, so no test server or Editor outlives the suite
 cleanup_test_bin() {
@@ -141,6 +143,7 @@ if grep -q -- '--3pane' <<< "$IDE_HELP" && \
    grep -q -- '--toggle-ai' <<< "$IDE_HELP" && \
    grep -q -- '--swap' <<< "$IDE_HELP" && \
    grep -q -- '--sessions' <<< "$IDE_HELP" && \
+   grep -q -- '--new' <<< "$IDE_HELP" && \
    grep -q -- '--send' <<< "$IDE_HELP" && \
    grep -q -- '--plain' <<< "$IDE_HELP" && \
    grep -q -- '--monitor' <<< "$IDE_HELP" && \
@@ -152,12 +155,15 @@ if grep -q -- '--3pane' <<< "$IDE_HELP" && \
    grep -q -- '--open-pr' <<< "$IDE_HELP" && \
    grep -q -- '--switch' <<< "$IDE_HELP" && \
    grep -q -- 'IDE_NOTIFY' <<< "$IDE_HELP" && \
+   grep -q -- 'IDE_WORKSPACE_DIRS' <<< "$IDE_HELP" && \
+   grep -q -- 'ide_workspace_dirs' <<< "$IDE_HELP" && \
+   grep -q -- 'ide_resolve_workspace' <<< "$IDE_HELP" && \
    grep -q -- 'ide_notify' <<< "$IDE_HELP" && \
    grep -q -- 'ide_vcs_summary' <<< "$IDE_HELP" && \
    ! grep -q -- '--on-bell' <<< "$IDE_HELP"; then
-    pass "bin/ide --help (with IDE_PY_BIN override) displays usage for 2-pane, --3pane, --open/--preview [LINE], --sessions, --next-attention, --agent-state [--message], --ack-ai, --open-pr, --send [--switch], --toggle-editor/term/ai, --swap, --keys, --kill, --list [--plain], IDE_NOTIFY, and links.sh hooks"
+    pass "bin/ide --help (with IDE_PY_BIN override) displays usage for 2-pane, --3pane, --open/--preview [LINE], --new, --sessions, --next-attention, --agent-state [--message], --ack-ai, --open-pr, --send [--switch], --toggle-editor/term/ai, --swap, --keys, --kill, --list [--plain], IDE_NOTIFY, IDE_WORKSPACE_DIRS, and links.sh hooks"
 else
-    fail "bin/ide --help" "Expected --3pane, --open/--preview [LINE], --sessions, --next-attention, --agent-state, --message, --ack-ai, --open-pr, --send, --switch, IDE_NOTIFY, ide_notify, ide_vcs_summary (without --on-bell) in bin/ide --help output"
+    fail "bin/ide --help" "Expected --3pane, --open/--preview [LINE], --new, --sessions, --next-attention, --agent-state, --message, --ack-ai, --open-pr, --send, --switch, IDE_NOTIFY, IDE_WORKSPACE_DIRS, ide_workspace_dirs, ide_resolve_workspace, ide_notify, ide_vcs_summary (without --on-bell) in bin/ide --help output"
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" --keys)"
@@ -340,6 +346,7 @@ if command -v tmux >/dev/null 2>&1; then
     MOUSE_TMPDIR="$(mktemp -d)"
     export TMUX_TMPDIR="$TMUX_TEST_TMPDIR"
     export XDG_RUNTIME_DIR="$TMUX_TEST_TMPDIR"
+    export IDE_LINK_RULES="$TEMP_HOME/no-host-rules.sh"
     unset TMUX TMUX_PANE
 
     IDE_AI_STUB_DIR="$TEMP_HOME/ai_stubs"
@@ -401,6 +408,226 @@ SH
             echo "FAIL:bin/ide ide_session_name hook:Expected session 'feature_alpha' to be created for $CUSTOM_CLIENT_DIR"
         fi
         rm -rf "$CUSTOM_RULES_FILE" "$TEMP_HOME/cloud_clients"
+
+        # Verify external workspace resolution (ide_resolve_workspace + $IDE_WORKSPACE_DIRS), zero-I/O active-session reattach,
+        # strict rejection of nonexistent subpath typos, literal CWD preservation for bare ide / . / ./sub, and bounded non-Git file scanning
+        EXT_WS_TMP="$TEMP_HOME/ext_ws_suite"
+        EXT_HOOK_LOG="$EXT_WS_TMP/hook_calls.log"
+        EXT_RULES="$EXT_WS_TMP/rules.sh"
+        mkdir -p "$EXT_WS_TMP/mounts/ws_alpha/src_root/pkg/api" "$EXT_WS_TMP/mounts/ws_alpha/local_sub" "$EXT_WS_TMP/mounts/ws_beta/app" "$EXT_WS_TMP/caller_cwd"
+        cat > "$EXT_RULES" <<SH
+ide_session_name() {
+    local d="\$1"
+    if [[ "\$d" == "$EXT_WS_TMP/mounts/"* ]]; then
+        local rem="\${d#"$EXT_WS_TMP/mounts/"}"
+        printf '%s\n' "\${rem%%/*}"
+        return 0
+    fi
+    return 1
+}
+ide_resolve_workspace() {
+    printf 'resolve:%s\n' "\$1" >> "$EXT_HOOK_LOG"
+    local t="\${1%/}"
+    if [[ "\$t" == "$EXT_WS_TMP/mounts/ws_alpha" ]]; then
+        printf '%s\n' "$EXT_WS_TMP/mounts/ws_alpha/src_root"
+        return 0
+    fi
+    if [[ "\$t" == "ws_alpha" ]]; then
+        printf '%s\n' "$EXT_WS_TMP/mounts/ws_alpha/src_root"
+        return 0
+    fi
+    if [[ "\$t" == ws_alpha/* ]]; then
+        local sub="\${t#ws_alpha/}"
+        [[ -d "$EXT_WS_TMP/mounts/ws_alpha/src_root/\$sub" ]] || return 1
+        printf '%s\n' "$EXT_WS_TMP/mounts/ws_alpha/src_root/\$sub"
+        return 0
+    fi
+    return 1
+}
+ide_resolve_link() {
+    if [[ "\$1" == "//pkg/api:handler" ]]; then
+        printf 'file://%s/inner/target_leaf.txt#L2\n' "\$2"
+        return 0
+    fi
+    return 1
+}
+SH
+        (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach ws_alpha)
+        wdir_alpha="$(tmux show-options -qv -t "=ws_alpha:" @ide_workdir 2>/dev/null || true)"
+        rm -f "$EXT_HOOK_LOG"
+        # Active IDE session reattach by single-token name must NOT invoke ide_resolve_workspace
+        (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --ai claude --detach ws_alpha)
+        ai_after_reattach="$(tmux show-options -qv -t "=ws_alpha:" @ide_ai_cli 2>/dev/null || true)"
+        reattach_hook_hits="0"
+        if [ -s "$EXT_HOOK_LOG" ]; then
+            reattach_hook_hits="1"
+        fi
+        "$SCRIPT_DIR/bin/ide" --kill ws_alpha >/dev/null 2>&1 || true
+
+        # Plain non-IDE tmux session with matching name must NOT be hijacked as an IDE session
+        tmux new-session -d -s plain_only -x 120 -y 40 "exec sleep 300"
+        plain_hijacked="0"
+        if (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach plain_only >/dev/null 2>&1); then
+            plain_hijacked="1"
+        fi
+        tmux kill-session -t "=plain_only" >/dev/null 2>&1 || true
+
+        # Shorthand subpath resolution vs nonexistent subpath typo rejection
+        (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach ws_alpha/pkg/api)
+        wdir_alpha_sub="$(tmux show-options -qv -t "=ws_alpha:" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --kill ws_alpha >/dev/null 2>&1 || true
+        typo_rejected="1"
+        if (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach ws_alpha/typo_missing >/dev/null 2>&1); then
+            typo_rejected="0"
+        fi
+
+        # Bare ide, ide ., and ide ./local_sub must stay strictly literal even inside a workspace mount root
+        rm -f "$EXT_HOOK_LOG"
+        (cd "$EXT_WS_TMP/mounts/ws_alpha" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach)
+        wdir_bare="$(tmux show-options -qv -t "=ws_alpha:" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --kill ws_alpha >/dev/null 2>&1 || true
+        (cd "$EXT_WS_TMP/mounts/ws_alpha" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach .)
+        wdir_dot="$(tmux show-options -qv -t "=ws_alpha:" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --kill ws_alpha >/dev/null 2>&1 || true
+        (cd "$EXT_WS_TMP/mounts/ws_alpha" && IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach ./local_sub)
+        wdir_dotsub="$(tmux show-options -qv -t "=ws_alpha:" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --kill ws_alpha >/dev/null 2>&1 || true
+        literal_hook_hits="0"
+        if [ -s "$EXT_HOOK_LOG" ]; then
+            literal_hook_hits="1"
+        fi
+
+        # IDE_WORKSPACE_DIRS colon-separated fallback without links.sh, AND ide_workspace_dirs fallback when links.sh mentions ide_resolve_workspace in comments/partial rules
+        (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_WS_TMP/none.sh" IDE_WORKSPACE_DIRS="$EXT_WS_TMP/mounts/ws_beta" "$SCRIPT_DIR/bin/ide" --2pane --detach ws_beta/app)
+        wdir_env_beta="$(tmux show-options -qv -t "=app:" @ide_workdir 2>/dev/null || true)"
+        env_typo_rejected="1"
+        if (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$EXT_WS_TMP/none.sh" IDE_WORKSPACE_DIRS="$EXT_WS_TMP/mounts/ws_beta" "$SCRIPT_DIR/bin/ide" --2pane --detach ws_beta/missing >/dev/null 2>&1); then
+            env_typo_rejected="0"
+        fi
+        COMMENT_RULES="$EXT_WS_TMP/comment_rules.sh"
+        mkdir -p "$EXT_WS_TMP/mounts/ws_commented"
+        cat > "$COMMENT_RULES" <<SH
+# Optional hook: ide_resolve_workspace TARGET
+ide_workspace_dirs() {
+    printf '%s\n' "$EXT_WS_TMP/mounts/ws_commented"
+}
+SH
+        (cd "$EXT_WS_TMP/caller_cwd" && IDE_LINK_RULES="$COMMENT_RULES" "$SCRIPT_DIR/bin/ide" --2pane --detach ws_commented)
+        wdir_commented="$(tmux show-options -qv -t "=ws_commented:" @ide_workdir 2>/dev/null || true)"
+        "$SCRIPT_DIR/bin/ide" --kill ws_commented >/dev/null 2>&1 || true
+        exp_src_root="$(cd "$EXT_WS_TMP/mounts/ws_alpha/src_root" && pwd -P)"
+        exp_sub_api="$(cd "$EXT_WS_TMP/mounts/ws_alpha/src_root/pkg/api" && pwd -P)"
+        exp_raw_alpha="$(cd "$EXT_WS_TMP/mounts/ws_alpha" && pwd -P)"
+        exp_local_sub="$(cd "$EXT_WS_TMP/mounts/ws_alpha/local_sub" && pwd -P)"
+        exp_beta_app="$(cd "$EXT_WS_TMP/mounts/ws_beta/app" && pwd -P)"
+        exp_commented="$(cd "$EXT_WS_TMP/mounts/ws_commented" && pwd -P)"
+        if [ "$wdir_alpha" = "$exp_src_root" ] && [ "$ai_after_reattach" = "claude" ] && [ "$reattach_hook_hits" = "0" ] && \
+           [ "$plain_hijacked" = "0" ] && [ "$wdir_alpha_sub" = "$exp_sub_api" ] && [ "$typo_rejected" = "1" ] && \
+           [ "$wdir_bare" = "$exp_raw_alpha" ] && [ "$wdir_dot" = "$exp_raw_alpha" ] && [ "$wdir_dotsub" = "$exp_local_sub" ] && \
+           [ "$literal_hook_hits" = "0" ] && [ "$wdir_env_beta" = "$exp_beta_app" ] && [ "$env_typo_rejected" = "1" ] && \
+           [ "$wdir_commented" = "$exp_commented" ]; then
+            echo "PASS:bin/ide resolves external workspaces via ide_resolve_workspace, ide_workspace_dirs, and \$IDE_WORKSPACE_DIRS, reattaches active IDE sessions with zero hook I/O, rejects subpath typos, and keeps bare/./relative launches literal"
+        else
+            echo "FAIL:bin/ide external workspace resolution:alpha=$wdir_alpha ai=$ai_after_reattach rhits=$reattach_hook_hits plain=$plain_hijacked sub=$wdir_alpha_sub typo=$typo_rejected bare=$wdir_bare dot=$wdir_dot dotsub=$wdir_dotsub lhits=$literal_hook_hits beta=$wdir_env_beta etypo=$env_typo_rejected comm=$wdir_commented"
+        fi
+
+        # Verify bounded resolve_workspace_file() & open_in_editor(): zero git forks in non-Git mounts, <=128 entry/dir & <=128 dir walk cap, and ide_resolve_link priority
+        WIDE_DIR="$EXT_WS_TMP/wide_non_git"
+        GIT_SPY_DIR="$EXT_WS_TMP/git_spy"
+        GIT_SPY_LOG="$EXT_WS_TMP/git_spy.log"
+        mkdir -p "$WIDE_DIR" "$GIT_SPY_DIR"
+        REAL_GIT_BIN="$(command -v git || true)"
+        cat > "$GIT_SPY_DIR/git" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$GIT_SPY_LOG"
+exec "${REAL_GIT_BIN:-/bin/false}" "\$@"
+SH
+        chmod +x "$GIT_SPY_DIR/git"
+        python3 - "$WIDE_DIR" <<'PY'
+import os, sys
+wide = sys.argv[1]
+for idx in range(150):
+    os.makedirs(os.path.join(wide, f"top_{idx:03d}"), exist_ok=True)
+sub = os.path.join(wide, "top_005", "work", "inner")
+os.makedirs(sub, exist_ok=True)
+with open(os.path.join(sub, "target_leaf.txt"), "w", encoding="utf-8") as fh:
+    fh.write("line1\nline2\nline3\n")
+deep = os.path.join(wide, "deep_grid")
+for idx in range(40):
+    for jdx in range(10):
+        os.makedirs(os.path.join(deep, f"a_{idx:02d}", f"b_{jdx:02d}"), exist_ok=True)
+PY
+        tmux set-option -q -t "=app:" @ide_initial_root "$WIDE_DIR"
+        tmux set-option -q -t "=app:" @ide_workdir "$WIDE_DIR/top_005/work"
+        sock_app="$(tmux show-options -qv -t "=app:" @ide_socket 2>/dev/null || true)"
+        app_nvim_pid=""
+        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_app" ]; then
+            if ! wait_for_nvim_socket "$sock_app" 20 1; then
+                nvim --clean --headless --listen "$sock_app" </dev/null >/dev/null 2>&1 &
+                app_nvim_pid=$!
+                wait_for_nvim_socket "$sock_app" 30 1 || true
+            fi
+        fi
+        rm -f "$GIT_SPY_LOG"
+        (cd "$WIDE_DIR/top_005/work" && PATH="$GIT_SPY_DIR:$PATH" IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --open "//pkg/api:handler" app >/dev/null 2>&1 || true)
+        opened_custom=""
+        line_custom=""
+        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_app" ] && [ -S "$sock_app" ]; then
+            opened_custom="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$sock_app" --remote-expr "expand('%:p')" </dev/null 2>/dev/null || true)"
+            line_custom="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$sock_app" --remote-expr "line('.')" </dev/null 2>/dev/null | tr -cd '0-9' || true)"
+            NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$sock_app" --remote-send "<C-\\><C-n><Cmd>enew!<CR>" </dev/null >/dev/null 2>&1 || true
+        fi
+        (cd "$WIDE_DIR/top_005/work" && PATH="$GIT_SPY_DIR:$PATH" IDE_LINK_RULES="$EXT_RULES" "$SCRIPT_DIR/bin/ide" --open "target_leaf.txt:3" app >/dev/null 2>&1 || true)
+        opened_scan=""
+        line_scan=""
+        if command -v nvim >/dev/null 2>&1 && [ -n "$sock_app" ] && [ -S "$sock_app" ]; then
+            opened_scan="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$sock_app" --remote-expr "expand('%:p')" </dev/null 2>/dev/null || true)"
+            line_scan="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$sock_app" --remote-expr "line('.')" </dev/null 2>/dev/null | tr -cd '0-9' || true)"
+        fi
+        git_forks_non_git="0"
+        if [ -s "$GIT_SPY_LOG" ]; then
+            git_forks_non_git="1"
+        fi
+        if [ -n "$app_nvim_pid" ]; then
+            kill "$app_nvim_pid" >/dev/null 2>&1 || true
+        fi
+        "$SCRIPT_DIR/bin/ide" --kill app >/dev/null 2>&1 || true
+
+        # Verify scandir call cap (<= 128 directories visited) and exact 128-entry vs 129-entry per-dir cap on non-Git directory trees
+        scandir_cap_ok="$(python3 - "$SCRIPT_DIR/bin/ide" "$WIDE_DIR/deep_grid" "$WIDE_DIR" <<'PY'
+import os, re, sys
+ide_file, deep_dir, wide_base = sys.argv[1], sys.argv[2], sys.argv[3]
+dir128 = os.path.join(wide_base, "exact_128")
+for i in range(128):
+    os.makedirs(os.path.join(dir128, f"sub_{i:03d}"), exist_ok=True)
+leaf128 = os.path.join(dir128, "sub_127", "exact128.txt")
+with open(leaf128, "w", encoding="utf-8") as fh:
+    fh.write("ok\n")
+txt = open(ide_file, encoding="utf-8").read()
+m = re.search(r"IDE_PY_SRC <<\s*'PY'[^\n]*\n(.*?)\nPY\n", txt, re.S)
+ns = {"__name__": "ide_mod"}
+exec(compile(m.group(1), ide_file, "exec"), ns)
+os.environ["TMUX"] = ""
+hit128 = ns["resolve_workspace_file"]("exact128.txt", dir128, "")
+orig_scandir = os.scandir
+calls = 0
+def spy_scandir(p):
+    global calls
+    calls += 1
+    return orig_scandir(p)
+os.scandir = spy_scandir
+res = ns["resolve_workspace_file"]("nonexistent_file.xyz", deep_dir, "")
+print("1" if (res == "" and 1 <= calls <= 128 and hit128 == leaf128) else f"calls={calls}:res={res}:hit128={hit128}")
+PY
+)"
+        exp_leaf="$(cd "$WIDE_DIR/top_005/work/inner" && pwd -P)/target_leaf.txt"
+        if [ "$git_forks_non_git" = "0" ] && [ "$scandir_cap_ok" = "1" ] && \
+           { ! command -v nvim >/dev/null 2>&1 || { [ "$opened_custom" = "$exp_leaf" ] && [ "$line_custom" = "2" ] && [ "$opened_scan" = "$exp_leaf" ] && [ "$line_scan" = "3" ]; }; }; then
+            echo "PASS:bin/ide open_in_editor and resolve_workspace_file resolve ide_resolve_link before wildcard scanning, fork zero git subprocesses in non-Git mounts, and cap os.scandir walks at <= 128 entries/dirs"
+        else
+            echo "FAIL:bin/ide bounded non-Git file resolution:git_forks=$git_forks_non_git cap=$scandir_cap_ok custom=$opened_custom:$line_custom scan=$opened_scan:$line_scan exp=$exp_leaf"
+        fi
+        rm -rf "$EXT_WS_TMP"
 
         "$SCRIPT_DIR/bin/ide" --ai claude --detach "$IDE_WS_3P"
         if tmux has-session -t "=ws_3pane_test" 2>/dev/null; then
