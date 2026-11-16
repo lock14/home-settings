@@ -38,6 +38,7 @@ cleanup_test_theme() {
             rm -rf "$d"
         fi
     done
+    _hs_cleanup_test_runtime_dir
 }
 trap cleanup_test_theme EXIT
 trap 'exit 130' INT

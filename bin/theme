@@ -1426,9 +1426,6 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
         skip_resolved = Path(skip_sock).resolve() if skip_sock else None
         sockets = []
         sock_dir_override = os.environ.get("THEME_NVIM_SOCKET_DIR", "").strip()
-        env_sock = os.environ.get("NVIM_IDE_SOCKET", "").strip()
-        if env_sock:
-            sockets.append(Path(env_sock))
         if sock_dir_override:
             sock_dir_path = Path(sock_dir_override)
             if sock_dir_path.is_dir():
@@ -1437,6 +1434,9 @@ def broadcast_live_reloads(theme, state_dir, repo_dir):
                         if p not in sockets:
                             sockets.append(p)
         else:
+            env_sock = os.environ.get("NVIM_IDE_SOCKET", "").strip()
+            if env_sock:
+                sockets.append(Path(env_sock))
             for p in Path("/tmp").glob("nvim-ide-*.sock"):
                 if p not in sockets:
                     sockets.append(p)

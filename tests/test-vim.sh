@@ -83,6 +83,7 @@ check_option "&tabstop == 4" "tabstop is set to 4"
 check_option "&shiftwidth == 4" "shiftwidth is set to 4"
 check_option "&expandtab == 1" "expandtab is enabled"
 check_option "&background == 'dark'" "background is set to dark"
+check_option "!exists('+smoothscroll') || &smoothscroll == 1" "smoothscroll is enabled when supported"
 
 # Test 3: Standalone & zero-dependency Solarized Dark palette verification
 echo -e "\n[3/6] Testing that dotfiles/.vimrc is standalone with inline Solarized Dark palette..."
@@ -946,6 +947,10 @@ if [ -f "$NVIM_CONFIG" ]; then
     if grep -q 'MeanderingProgrammer/render-markdown\.nvim' "$NVIM_CONFIG" && \
        grep -q '"<leader>m"' "$NVIM_CONFIG" && \
        grep -q 'SolarizedMarkdownReadability' "$NVIM_CONFIG" && \
+       grep -q 'opt\.smoothscroll = true' "$NVIM_CONFIG" && \
+       grep -q 'style\s*=\s*"normal"' "$NVIM_CONFIG" && \
+       grep -q 'cell\s*=\s*"raw"' "$NVIM_CONFIG" && \
+       grep -q 'wrap\s*=\s*false' "$NVIM_CONFIG" && \
        grep -q 'RenderMarkdownH1' "$NVIM_CONFIG" && \
        grep -q '"RenderMarkdownWarn"' "$NVIM_CONFIG" && \
        grep -q '"RenderMarkdownHint"' "$NVIM_CONFIG" && \
@@ -2104,7 +2109,7 @@ if ok and mf then
 end
 vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true)
+local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
 local hex = function(n) return n and string.format("%06x", n) or "none" end
 local hl = function(g) return vim.api.nvim_get_hl(0, { name = g, link = false }) end
 local h1, h2, h3, h4, h5, h6 = hl("RenderMarkdownH1"), hl("RenderMarkdownH2"), hl("RenderMarkdownH3"), hl("RenderMarkdownH4"), hl("RenderMarkdownH5"), hl("RenderMarkdownH6")
@@ -2116,7 +2121,31 @@ local ok_rm, rm = pcall(require, "render-markdown")
 local rm_tog_ok = true
 if ok_rm and rm and rm.get then
     local ui = require("render-markdown.core.ui")
+    local rm_state = require("render-markdown.state")
     local mbuf = vim.api.nvim_get_current_buf()
+    local bcfg = rm_state.get(mbuf)
+    if not bcfg or not bcfg.pipe_table or bcfg.pipe_table.style ~= "normal" or bcfg.pipe_table.border_enabled ~= false or bcfg.pipe_table.cell ~= "raw" or bcfg.pipe_table.wrap ~= false or #(rm_state.validate()) > 0 then
+        rm_hl_ok = false
+    end
+    vim.api.nvim_win_set_cursor(0, { 45, 0 })
+    vim.cmd("redraw")
+    ui.updater.new(mbuf, vim.api.nvim_get_current_win(), true):run()
+    local tbl_marks = vim.api.nvim_buf_get_extmarks(mbuf, ui.ns, { 42, 0 }, { 49, -1 }, { details = true })
+    local saw_pipe, saw_align = false, false
+    for _, tm in ipairs(tbl_marks) do
+        local td = tm[4] or {}
+        if td.conceal_lines ~= nil or td.virt_lines ~= nil or td.virt_text_pos == "inline" then
+            rm_hl_ok = false
+        end
+        for _, chunk in ipairs(td.virt_text or {}) do
+            local txt = chunk[1] or ""
+            if txt:find("│", 1, true) then saw_pipe = true end
+            if txt:find("━", 1, true) then saw_align = true end
+        end
+    end
+    if not saw_pipe or not saw_align then rm_hl_ok = false end
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    vim.cmd("redraw")
     ui.updater.new(mbuf, vim.api.nvim_get_current_win(), true):run()
     local marks = vim.api.nvim_buf_get_extmarks(mbuf, ui.ns, 0, -1, { details = true })
     local row0_marks = vim.api.nvim_buf_get_extmarks(mbuf, ui.ns, { 0, 0 }, { 0, -1 }, { details = true })
@@ -3135,6 +3164,354 @@ PY
                 pass "Neovim init.lua truncates mason-lspconfig.notify messages to single-line echospace in narrow PTY UIs without hit-enter freezes or E5560 fast-event errors"
             else
                 fail "Neovim Mason UI non-blocking echospace truncation" "Expected 'n|false|true|' without E5560, got '$MASON_UI_OUT'"
+            fi
+
+            MD_SCROLL_UI_OUT="$(REPO_DIR="$SCRIPT_DIR" NVIM_CONFIG_PATH="$NVIM_CONFIG" NVIM_BIN="${NVIM_BIN:-${_HS_NVIM_BIN:-nvim}}" python3 - <<'PY'
+import fcntl
+import json
+import os
+import pty
+import shutil
+import struct
+import subprocess
+import tempfile
+import termios
+import threading
+import time
+
+repo_dir = os.environ["REPO_DIR"]
+cfg_path = os.environ["NVIM_CONFIG_PATH"]
+nvim_bin = os.environ.get("NVIM_BIN") or "nvim"
+mfd, sfd = pty.openpty()
+# 85x33 matches an unzoomed 50%-width IDE Editor pane where wide Markdown tables exceed pane width
+fcntl.ioctl(sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 33, 85, 0, 0))
+tmp_dir = tempfile.mkdtemp(prefix="hs-md-scroll.")
+proc = None
+sfd_open = True
+
+
+def _drain_pty(fd):
+    while True:
+        try:
+            data = os.read(fd, 8192)
+            if not data:
+                break
+            if b"\x1b[6n" in data:
+                os.write(fd, b"\x1b[1;1R")
+            if b"\x1b[5n" in data:
+                os.write(fd, b"\x1b[0n")
+        except OSError:
+            break
+
+
+drain_thread = threading.Thread(target=_drain_pty, args=(mfd,), daemon=True)
+drain_thread.start()
+
+
+def _remote_expr(sock_path, expr, env, timeout=5):
+    try:
+        return subprocess.run(
+            [nvim_bin, "--headless", "--server", sock_path, "--remote-expr", expr],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+
+
+try:
+    orig_data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    orig_cache = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    orig_state = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    iso_data = os.path.join(tmp_dir, "data")
+    iso_state = os.path.join(tmp_dir, "state")
+    iso_cache = os.path.join(tmp_dir, "cache")
+    iso_nvim_data = os.path.join(iso_data, "nvim")
+    os.makedirs(iso_nvim_data, exist_ok=True)
+    for sub in ("lazy", "site"):
+        src_sub = os.path.join(orig_data, "nvim", sub)
+        if os.path.exists(src_sub):
+            os.symlink(src_sub, os.path.join(iso_nvim_data, sub))
+
+    if not os.path.isdir(os.path.join(iso_nvim_data, "lazy", "render-markdown.nvim")):
+        print("OK")
+    else:
+        env = dict(os.environ)
+        env["TMUX"] = ""
+        env["TMUX_PANE"] = ""
+        env["XDG_RUNTIME_DIR"] = tmp_dir
+        env.setdefault("MISE_DATA_DIR", os.path.join(orig_data, "mise"))
+        env.setdefault("MISE_CACHE_DIR", os.path.join(orig_cache, "mise"))
+        env.setdefault("MISE_STATE_DIR", os.path.join(orig_state, "mise"))
+        env["XDG_DATA_HOME"] = iso_data
+        env["XDG_STATE_HOME"] = iso_state
+        env["XDG_CACHE_HOME"] = iso_cache
+        env["NVIM_TS_SKIP_AUTO_INSTALL"] = "1"
+        env["NVIM_LOG_FILE"] = "/dev/null"
+        env["HTTPS_PROXY"] = "http://127.0.0.1:1"
+        env["https_proxy"] = "http://127.0.0.1:1"
+
+        def _attach_ctty():
+            os.setsid()
+            try:
+                fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+            except OSError:
+                try:
+                    fcntl.ioctl(0, termios.TIOCSCTTY, 1)
+                except OSError:
+                    pass
+
+        sock = os.path.join(tmp_dir, "nvim-scroll.sock")
+        proc = subprocess.Popen(
+            [nvim_bin, "-i", "NONE", "-u", cfg_path, "--listen", sock],
+            stdin=sfd,
+            stdout=sfd,
+            stderr=sfd,
+            env=env,
+            preexec_fn=_attach_ctty,
+            close_fds=True,
+        )
+        os.close(sfd)
+        sfd_open = False
+
+        ready = False
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            if os.path.exists(sock):
+                r = _remote_expr(sock, "v:vim_did_enter", env)
+                if r is not None and r.returncode == 0 and r.stdout.strip() == "1":
+                    ready = True
+                    break
+            time.sleep(0.05)
+
+        if not ready:
+            print("NOT_READY")
+        else:
+            wrap_doc = os.path.join(tmp_dir, "softwrap.md")
+            with open(wrap_doc, "w", encoding="utf-8") as wfh:
+                wfh.write(("softwrap_paragraph_token " * 32).strip() + "\n\n")
+                for idx in range(1, 50):
+                    wfh.write(f"Filler line {idx}\n")
+
+            probe_lua = os.path.join(tmp_dir, "scroll_probe.lua")
+            with open(probe_lua, "w", encoding="utf-8") as pfh:
+                pfh.write("""
+_G.hs_scroll_trace = {}
+_G.hs_scroll_rev = 0
+_G.hs_scroll_prev = nil
+local grp = vim.api.nvim_create_augroup("HsScrollProbe", { clear = true })
+vim.api.nvim_create_autocmd("WinScrolled", {
+    group = grp,
+    callback = function()
+        if not _G.hs_scroll_recording then
+            return
+        end
+        local v = vim.fn.winsaveview()
+        local cur = { v.topline, v.skipcol }
+        local prev = _G.hs_scroll_prev
+        if prev and (cur[1] > prev[1] or (cur[1] == prev[1] and cur[2] > prev[2])) then
+            _G.hs_scroll_rev = _G.hs_scroll_rev + 1
+        end
+        _G.hs_scroll_prev = cur
+        _G.hs_scroll_trace[#_G.hs_scroll_trace + 1] = cur
+    end,
+})
+function _G.hs_prep_doc(path, goto_cmd)
+    _G.hs_scroll_recording = false
+    vim.cmd("edit! " .. vim.fn.fnameescape(path))
+    vim.cmd(goto_cmd)
+    vim.cmd("redraw!")
+    local v = vim.fn.winsaveview()
+    _G.hs_scroll_prev = { v.topline, v.skipcol }
+    _G.hs_scroll_trace = {}
+    _G.hs_scroll_rev = 0
+    _G.hs_scroll_recording = true
+    return string.format("%d:%d", v.topline, v.skipcol)
+end
+function _G.hs_view_state()
+    local v = vim.fn.winsaveview()
+    return string.format("%d:%d:%d:%d", v.topline, v.skipcol, _G.hs_scroll_rev, #_G.hs_scroll_trace)
+end
+function _G.hs_prep_link_click(path)
+    _G.hs_scroll_recording = false
+    vim.cmd("edit! " .. vim.fn.fnameescape(path))
+    vim.fn.winrestview({ topline = 1, skipcol = 0, lnum = 14, col = 0 })
+    vim.cmd("redraw!")
+    return "ok"
+end
+function _G.hs_link_screenpos()
+    local v = vim.fn.winsaveview()
+    local ln = vim.api.nvim_buf_get_lines(0, 0, 1, false)[1] or ""
+    local c = (ln:find("TargetCellLink", 1, true) or 1) + 2
+    local sp = vim.fn.screenpos(0, 1, c)
+    return vim.json.encode({ sc = v.skipcol, row = sp.row, col = sp.col })
+end
+""")
+            _remote_expr(sock, f"execute('luafile {probe_lua}')", env)
+
+            def _prep_doc(doc_path, jump_cmd):
+                expr = "luaeval(" + json.dumps(f"_G.hs_prep_doc({json.dumps(doc_path)}, {json.dumps(jump_cmd)})") + ")"
+                return _remote_expr(sock, expr, env)
+
+            # 1. Verify smoothscroll screen-line progression (skipcol > 0) on soft-wrapped Markdown paragraph
+            _prep_doc(wrap_doc, "normal! gg0")
+            os.write(mfd, b"\x1b[<65;10;10M")
+            down_state = ""
+            t_end = time.monotonic() + 2.0
+            while time.monotonic() < t_end:
+                r = _remote_expr(sock, "luaeval('_G.hs_view_state()')", env)
+                if r and r.returncode == 0 and not r.stdout.strip().startswith("1:0:"):
+                    down_state = r.stdout.strip()
+                    break
+                time.sleep(0.02)
+            d_parts = [int(x) for x in down_state.split(":")] if down_state else [0, 0, 1, 0]
+            smooth_down_ok = (d_parts[0] == 1 and d_parts[1] > 0)
+
+            os.write(mfd, b"\x1b[<64;10;10M")
+            up_state = ""
+            t_end = time.monotonic() + 2.0
+            while time.monotonic() < t_end:
+                r = _remote_expr(sock, "luaeval('_G.hs_view_state()')", env)
+                if r and r.returncode == 0 and r.stdout.strip().startswith("1:0:"):
+                    up_state = r.stdout.strip()
+                    break
+                time.sleep(0.02)
+            smooth_ok = smooth_down_ok and up_state.startswith("1:0:")
+
+            # 2. Verify upward SGR mouse wheel scrolling across wide pipe_table sections in README.md and AGENTS.md
+            #    with >= 120ms pauses so render-markdown.nvim's 100ms Decorator:schedule timer fires mid-scroll
+            def _run_upward_table_scroll(doc_path, jump_cmd, bursts, ticks_per_burst):
+                init_r = _prep_doc(doc_path, jump_cmd)
+                if not init_r or init_r.returncode != 0 or not init_r.stdout.strip():
+                    return False, f"prep_failed:{init_r.stderr if init_r else 'timeout'}"
+                init_tl, init_sc = [int(x) for x in init_r.stdout.strip().split(":")]
+                time.sleep(0.14)
+                prev_pair = (init_tl, init_sc)
+                async_rev = 0
+                burst_stalls = 0
+                for _ in range(bursts):
+                    if prev_pair == (1, 0):
+                        break
+                    for _ in range(ticks_per_burst):
+                        os.write(mfd, b"\x1b[<64;10;10M")
+                        time.sleep(0.012)
+                    r1 = _remote_expr(sock, "luaeval('_G.hs_view_state()')", env)
+                    tl1, sc1, rev1, _ = [int(x) for x in r1.stdout.strip().split(":")]
+                    cur1 = (tl1, sc1)
+                    if cur1 > prev_pair:
+                        async_rev += 1
+                    elif cur1 == prev_pair and prev_pair != (1, 0):
+                        burst_stalls += 1
+                    # Pause >= 120ms so render-markdown.nvim's 100ms debounce timer fires and any async WinScrolled runs
+                    time.sleep(0.135)
+                    r2 = _remote_expr(sock, "luaeval('_G.hs_view_state()')", env)
+                    tl2, sc2, rev2, _ = [int(x) for x in r2.stdout.strip().split(":")]
+                    cur2 = (tl2, sc2)
+                    if cur2 > cur1:
+                        async_rev += 1
+                    prev_pair = cur2
+                final_r = _remote_expr(sock, "luaeval('_G.hs_view_state()')", env)
+                f_tl, f_sc, total_rev, trace_len = [int(x) for x in final_r.stdout.strip().split(":")]
+                return (
+                    total_rev == 0
+                    and async_rev == 0
+                    and burst_stalls == 0
+                    and trace_len > 0
+                    and (f_tl, f_sc) < (init_tl, init_sc),
+                    f"init={init_tl}:{init_sc}->end={f_tl}:{f_sc}:rev={total_rev}:arev={async_rev}:stalls={burst_stalls}:n={trace_len}",
+                )
+
+            prettier_doc = os.path.join(tmp_dir, "prettier_tables.md")
+            with open(prettier_doc, "w", encoding="utf-8") as ptf:
+                ptf.write("# Column-Aligned Tables Without Surrounding Blank Lines\n\n")
+                for sec in range(1, 20):
+                    ptf.write(f"Section {sec} overview:\n")
+                    ptf.write("| Subsystem Name       | Target Location      | Architectural Guarantee Across Narrow Split Windows |\n")
+                    ptf.write("| :------------------- | :------------------- | :-------------------------------------------------- |\n")
+                    ptf.write("| Shell orchestrator   | ~/.local/bin/ide     | Deterministic session targeting without wildcards   |\n")
+                    ptf.write("| Markdown table view  | ~/.config/nvim       | Zero dynamic virtual line injection during scroll   |\n")
+                    ptf.write(f"End of section {sec}.\n\n")
+
+            click_target = os.path.join(tmp_dir, "clicked_target.txt")
+            with open(click_target, "w", encoding="utf-8") as ctf:
+                ctf.write("line 1\nline 2\nline 3\nline 4\nline 5\n")
+            link_table_doc = os.path.join(tmp_dir, "wrapped_link_table.md")
+            with open(link_table_doc, "w", encoding="utf-8") as ltf:
+                ltf.write("| " + ("lead_token " * 30) + "[TargetCellLink](clicked_target.txt#L4) " + ("tail_token " * 12) + " | ColB |\n")
+                ltf.write("| :--- | :--- |\n")
+                for idx in range(1, 45):
+                    ltf.write(f"| row_{idx} | val_{idx} |\n")
+
+            readme_ok, readme_diag = _run_upward_table_scroll(
+                os.path.join(repo_dir, "README.md"), "normal! G", 25, 5
+            )
+            agents_ok, agents_diag = _run_upward_table_scroll(
+                os.path.join(repo_dir, "AGENTS.md"), "normal! 120G", 45, 5
+            )
+            prettier_ok, prettier_diag = _run_upward_table_scroll(
+                prettier_doc, "normal! G", 35, 2
+            )
+
+            # 3. Verify SGR Ctrl+LeftClick link resolution inside a soft-wrapped cell="raw" table row while skipcol > 0
+            _remote_expr(
+                sock,
+                "luaeval(" + json.dumps(f"_G.hs_prep_link_click({json.dumps(link_table_doc)})") + ")",
+                env,
+            )
+            os.write(mfd, b"\x1b[<65;10;10M")
+            link_pos = None
+            t_end = time.monotonic() + 2.0
+            while time.monotonic() < t_end:
+                rl = _remote_expr(sock, "luaeval('_G.hs_link_screenpos()')", env)
+                if rl and rl.returncode == 0 and rl.stdout.strip():
+                    cand = json.loads(rl.stdout.strip())
+                    if cand.get("sc", 0) > 0 and cand.get("row", 0) > 0 and cand.get("col", 0) > 0:
+                        link_pos = cand
+                        break
+                time.sleep(0.02)
+            skipcol_click_ok = False
+            click_diag = "no_skipcol"
+            if link_pos:
+                sx, sy = link_pos["col"], link_pos["row"]
+                os.write(mfd, f"\x1b[<16;{sx};{sy}M\x1b[<16;{sx};{sy}m".encode())
+                t_end = time.monotonic() + 2.0
+                while time.monotonic() < t_end:
+                    rc = _remote_expr(sock, "expand('%:t') . ':' . line('.')", env)
+                    if rc and rc.returncode == 0:
+                        click_diag = f"sc={link_pos['sc']}->{rc.stdout.strip()}"
+                        if rc.stdout.strip() == "clicked_target.txt:4":
+                            skipcol_click_ok = True
+                            break
+                    time.sleep(0.02)
+
+            if smooth_ok and readme_ok and agents_ok and prettier_ok and skipcol_click_ok:
+                print("OK")
+            else:
+                print(
+                    f"FAIL:smooth={smooth_ok}({down_state}->{up_state})|readme={readme_diag}|agents={agents_diag}|prettier={prettier_diag}|click={click_diag}"
+                )
+finally:
+    if proc is not None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            proc.kill()
+            proc.wait()
+    if sfd_open:
+        os.close(sfd)
+    drain_thread.join(timeout=1.0)
+    os.close(mfd)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+PY
+)"
+            if [ "$MD_SCROLL_UI_OUT" = "OK" ]; then
+                pass "Neovim init.lua scrolls soft-wrapped Markdown smoothly by screen lines (smoothscroll skipcol) and scrolls upward across wide README.md/AGENTS.md pipe_table sections in narrow 85x33 PTYs with >=120ms debounce pauses and zero topline snapbacks or stalls"
+            else
+                fail "Neovim narrow-pane Markdown PTY upward scroll & smoothscroll" "Expected 'OK', got '$MD_SCROLL_UI_OUT'"
             fi
         fi
 

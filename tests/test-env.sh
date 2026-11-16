@@ -40,7 +40,7 @@ cleanup_env_test() {
     if [ -n "$OLD_XDG_CACHE_HOME" ]; then export XDG_CACHE_HOME="$OLD_XDG_CACHE_HOME"; else unset XDG_CACHE_HOME; fi
     export COLORTERM="truecolor"
 }
-trap cleanup_env_test EXIT
+trap 'cleanup_env_test; _hs_cleanup_test_runtime_dir' EXIT
 
 export HOME="$TEMP_HOME"
 unset GOPATH XDG_DATA_HOME XDG_CACHE_HOME SVN_EDITOR COLORTERM BAT_THEME BAT_OPTS LSCOLORS EZA_COLORS EXA_COLORS FZF_DEFAULT_OPTS JQ_COLORS _ZO_ECHO _ZO_RESOLVE_SYMLINKS _ZO_FZF_OPTS
@@ -1887,7 +1887,7 @@ parse_subshell_results < "$STANDALONE_HOME/results.txt"
 rm -rf "$STANDALONE_HOME"
 
 cleanup_env_test
-trap - EXIT
+trap _hs_cleanup_test_runtime_dir EXIT
 
 # Test 4: Verify LS_COLORS / dircolors configuration
 echo -e "\n[4/4] Testing dircolors validity..."

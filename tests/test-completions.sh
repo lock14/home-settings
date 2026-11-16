@@ -25,7 +25,7 @@ fi
 # Test 2: Execution in temporary environment
 echo -e "\n[2/3] Testing dotfiles installation..."
 TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"' EXIT
+trap 'rm -rf "$TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
 
 OLD_HOME="$HOME"
 OLD_XDG_DATA_HOME="${XDG_DATA_HOME:-}"

@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
 .PHONY: setup bootstrap install system uninstall test test-system-setup test-dotfiles test-bin test-theme test-ide-fleet test-env test-zsh test-completions test-vim test-fonts lint check all help
 
-# Force 24-bit TrueColor and isolate tests from any caller tmux session
-unexport TMUX TMUX_PANE
+# Force 24-bit TrueColor and isolate tests from any caller tmux or IDE Editor RPC session
+unexport TMUX TMUX_PANE NVIM_IDE_SOCKET NVIM_IDE_PANE IDE_SESSION
 export COLORTERM ?= truecolor
 ifeq ($(COLORTERM),)
 export COLORTERM := truecolor

@@ -90,7 +90,7 @@ fi
 
 # Isolate HOME and XDG directories so setup.sh invocations never touch the caller's real $HOME
 TEMP_SETUP_HOME="$(mktemp -d)"
-trap 'rm -rf "$TEMP_SETUP_HOME"' EXIT
+trap 'rm -rf "$TEMP_SETUP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
 export HOME="$TEMP_SETUP_HOME"
 export XDG_CONFIG_HOME="$TEMP_SETUP_HOME/.config"
 export XDG_CACHE_HOME="$TEMP_SETUP_HOME/.cache"
