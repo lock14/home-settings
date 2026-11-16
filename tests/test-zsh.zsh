@@ -325,6 +325,7 @@ test_addendum() {
     trap 'rm -rf "$TEMP_HOME"' EXIT
 
     export HOME="$TEMP_HOME"
+    export _ZO_DATA_DIR="$TEMP_HOME/zoxide"
     cp "$SCRIPT_DIR/dotfiles/.aliases" "$HOME/.aliases"
     cp "$SCRIPT_DIR/dotfiles/.zsh-functions" "$HOME/.zsh-functions"
     cp "$SCRIPT_DIR/dotfiles/.p10k.zsh" "$HOME/.p10k.zsh"

@@ -6,14 +6,61 @@ if not status_ok then
     return
 end
 
--- Detect project root (Maven pom.xml, Gradle build.gradle, git repo, or fallback to file dir)
-local root_markers = { "pom.xml", "build.gradle", "build.gradle.kts", ".git", "mvnw", "gradlew" }
-local root_dir = vim.fs.root(0, root_markers) or vim.fn.expand("%:p:h")
+-- Detect Maven or Gradle build root; skip auto-starting jdtls in Bazel-only workspaces.
+-- Walk upward one level at a time checking regular files (`type == "file"`) so we stop
+-- immediately at a Bazel workspace boundary without probing outer FUSE mount parents or
+-- matching synthesized mount directories (such as `mvnw/` or `gradlew/`).
+local uv = vim.uv or vim.loop
+local maven_gradle_markers = { "pom.xml", "build.gradle", "build.gradle.kts", "mvnw", "gradlew" }
+local bazel_markers = { "WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel" }
+local buf_dir = vim.fn.expand("%:p:h")
+local build_root = nil
+local git_root = nil
+if uv and buf_dir ~= "" then
+    local cur = vim.fs.normalize(buf_dir)
+    while cur and cur ~= "" do
+        local sep = (cur == "/") and "" or "/"
+        for _, m in ipairs(maven_gradle_markers) do
+            local st = uv.fs_stat(cur .. sep .. m)
+            if st and st.type == "file" then
+                build_root = cur
+                break
+            end
+        end
+        if build_root then
+            break
+        end
+        for _, bm in ipairs(bazel_markers) do
+            local bst = uv.fs_stat(cur .. sep .. bm)
+            if bst and bst.type == "file" then
+                return
+            end
+        end
+        if not git_root and uv.fs_stat(cur .. sep .. ".git") then
+            git_root = cur
+        end
+        local parent = vim.fs.dirname(cur)
+        if not parent or parent == cur then
+            break
+        end
+        cur = parent
+    end
+end
+local root_dir = build_root or git_root or buf_dir
 
--- Compute unique workspace directory per project under XDG_CACHE_HOME to prevent lock collisions
-local project_name = vim.fn.fnamemodify(root_dir, ":p:h:t")
-local cache_dir = vim.env.XDG_CACHE_HOME or (vim.env.HOME .. "/.cache")
-local workspace_dir = cache_dir .. "/jdtls/workspaces/" .. project_name
+-- Compute hash-salted workspace directory under XDG_CACHE_HOME to prevent OSGi lock collisions
+local norm_root = vim.fs.normalize(vim.fn.fnamemodify(root_dir, ":p")):gsub("/+$", "")
+if norm_root == "" then
+    norm_root = "/"
+end
+local project_name = vim.fn.fnamemodify(norm_root, ":t")
+if project_name == "" then
+    project_name = "root"
+end
+local root_hash = vim.fn.sha256(norm_root):sub(1, 8)
+local xdg_cache = vim.env.XDG_CACHE_HOME
+local cache_dir = (xdg_cache and xdg_cache ~= "") and xdg_cache or (vim.env.HOME .. "/.cache")
+local workspace_dir = cache_dir .. "/jdtls/workspaces/" .. project_name .. "-" .. root_hash
 
 -- Locate jdtls binary (from Mason or system PATH)
 local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/jdtls"

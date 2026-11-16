@@ -271,9 +271,11 @@ _describe() {
         shift 2
     fi
     local arr_name="$2"
-    local item
+    local item unesc
     for item in "${(@P)arr_name}"; do
-        OFFERED+=("${item%%:*}")
+        unesc="${item//\\:/__HS_COLON__}"
+        unesc="${unesc%%:*}"
+        OFFERED+=("${unesc//__HS_COLON__/:}")
     done
 }
 _files() {
@@ -295,7 +297,16 @@ run_case() {
 }
 
 out_opts="$(run_case ide --)"
-[[ ",$out_opts," == *",--sessions,"* && ",$out_opts," == *",--send,"* && ",$out_opts," == *",--list,"* && ",$out_opts," == *",--next-attention,"* && ",$out_opts," == *",--agent-state,"* && ",$out_opts," == *",--message,"* && ",$out_opts," == *",--ack-ai,"* && ",$out_opts," == *",--open-pr,"* && ",$out_opts," == *",--switch,"* && ",$out_opts," != *",--on-bell,"* ]] || { print -u2 "bad opts: $out_opts"; exit 1; }
+[[ ",$out_opts," == *",--new,"* && ",$out_opts," == *",-n,"* && ",$out_opts," == *",--sessions,"* && ",$out_opts," == *",--send,"* && ",$out_opts," == *",--list,"* && ",$out_opts," == *",--next-attention,"* && ",$out_opts," == *",--agent-state,"* && ",$out_opts," == *",--message,"* && ",$out_opts," == *",--ack-ai,"* && ",$out_opts," == *",--open-pr,"* && ",$out_opts," == *",--switch,"* && ",$out_opts," != *",--on-bell,"* ]] || { print -u2 "bad opts: $out_opts"; exit 1; }
+
+out_new_pos="$(run_case ide -n "")"
+[[ "$out_new_pos" == "" ]] || { print -u2 "bad -n pos: $out_new_pos"; exit 1; }
+
+out_new_long_pos="$(run_case ide --new "")"
+[[ "$out_new_long_pos" == "" ]] || { print -u2 "bad --new pos: $out_new_long_pos"; exit 1; }
+
+out_new_flags="$(run_case ide -n --)"
+[[ ",$out_new_flags," == *",--2pane,"* && ",$out_new_flags," == *",--ai,"* ]] || { print -u2 "bad -n flags: $out_new_flags"; exit 1; }
 
 out_ai="$(run_case ide --ai "")"
 [[ "$out_ai" == "agy,claude,codex" ]] || { print -u2 "bad --ai: $out_ai"; exit 1; }
@@ -407,10 +418,61 @@ out_send_text_sess="$(run_case ide --send --text "hello" "")"
 
 out_root="$(run_case ide "")"
 [[ ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",kill,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
+
+mkdir -p "$HOME/.config/ide" "$HOME/ext1/gamma-ext" "$HOME/ext1/alpha-ws" "$HOME/ext1/colon:ws" "$HOME/ext1/space ws" "$HOME/ext2/delta-ext"
+touch "$HOME/ext2/not-a-dir.txt"
+WS_HOOK_LOG="$HOME/ws_hook.log"
+cat <<HOOK > "$HOME/.config/ide/links.sh"
+ide_workspace_dirs() {
+    printf '1\n' >> "$WS_HOOK_LOG"
+    printf '%s\n' "$HOME/ext1/gamma-ext" "$HOME/ext1/alpha-ws" "$HOME/ext1/colon:ws" "$HOME/ext1/space ws" "$HOME/ext1/dead-ext"
+}
+HOOK
+export IDE_WORKSPACE_DIRS="$HOME/ext2/delta-ext:$HOME/ext2/missing-ext:$HOME/ext2/not-a-dir.txt"
+
+rm -f "$WS_HOOK_LOG"
+out_ws_flag="$(run_case ide --)"
+out_ws_qide="$(run_case qide "")"
+out_ws_quit="$(run_case quit "")"
+out_ws_idek="$(run_case idek "")"
+out_ws_sess="$(run_case ide -s "")"
+out_ws_sess2="$(run_case ide -s alpha-ws "")"
+out_ws_pr="$(run_case ide --open-pr "")"
+out_ws_new="$(run_case ide -n "")"
+out_ws_keys="$(run_case ide --keys "")"
+out_ws_mon="$(run_case ide --monitor "")"
+out_ws_lplain="$(run_case ide --list --plain "")"
+out_ws_cd3="$(run_case ide cd subdir "")"
+out_ws_after_pos="$(run_case ide alpha-ws "")"
+out_ws_slash="$(run_case ide sub/path)"
+out_ws_dot="$(run_case ide ./sub)"
+[[ ! -s "$WS_HOOK_LOG" ]] || { print -u2 "ide_workspace_dirs invoked eagerly outside launch-target position"; exit 1; }
+for non_launch in "$out_ws_qide" "$out_ws_quit" "$out_ws_idek" "$out_ws_sess" "$out_ws_sess2" "$out_ws_pr" "$out_ws_new" "$out_ws_keys" "$out_ws_mon" "$out_ws_lplain" "$out_ws_cd3" "$out_ws_after_pos" "$out_ws_slash" "$out_ws_dot"; do
+    [[ ",$non_launch," != *",gamma-ext,"* && ",$non_launch," != *",delta-ext,"* ]] || { print -u2 "workspace leaked into non-launch completion: $non_launch"; exit 1; }
+done
+[[ "$out_ws_keys" == "" && "$out_ws_mon" == "" && "$out_ws_lplain" == "" && "$out_ws_after_pos" == "" && "$out_ws_cd3" == "alpha-ws,beta-ws" ]] || { print -u2 "bad non-launch completion outputs: keys=$out_ws_keys mon=$out_ws_mon lplain=$out_ws_lplain after=$out_ws_after_pos cd3=$out_ws_cd3"; exit 1; }
+
+out_ws_ide="$(run_case ide "")"
+[[ -s "$WS_HOOK_LOG" ]] || { print -u2 "ide_workspace_dirs not invoked at ide launch position"; exit 1; }
+[[ ",$out_ws_ide," == *",gamma-ext,"* && ",$out_ws_ide," == *",delta-ext,"* && ",$out_ws_ide," == *",colon:ws,"* && ",$out_ws_ide," == *",space ws,"* && ",$out_ws_ide," != *",dead-ext,"* && ",$out_ws_ide," != *",missing-ext,"* && ",$out_ws_ide," != *",not-a-dir.txt,"* ]] || { print -u2 "bad ide ws launch completion: $out_ws_ide"; exit 1; }
+alpha_cnt=0
+for tok in ${(s:,:)out_ws_ide}; do
+    [[ "$tok" == "alpha-ws" ]] && (( alpha_cnt++ )) || true
+done
+(( alpha_cnt == 1 )) || { print -u2 "alpha-ws not deduplicated ($alpha_cnt): $out_ws_ide"; exit 1; }
+
+out_ws_ide2="$(run_case ide2 "")"
+[[ ",$out_ws_ide2," == *",gamma-ext,"* && ",$out_ws_ide2," == *",delta-ext,"* && ",$out_ws_ide2," != *",quit,"* ]] || { print -u2 "bad ide2 ws launch completion: $out_ws_ide2"; exit 1; }
+
+out_ws_ide3="$(run_case ide3 "")"
+[[ ",$out_ws_ide3," == *",gamma-ext,"* && ",$out_ws_ide3," == *",delta-ext,"* ]] || { print -u2 "bad ide3 ws launch completion: $out_ws_ide3"; exit 1; }
+
+out_ws_2p="$(run_case ide --2pane "")"
+[[ ",$out_ws_2p," == *",gamma-ext,"* && ",$out_ws_2p," == *",delta-ext,"* ]] || { print -u2 "bad ide --2pane ws launch completion: $out_ws_2p"; exit 1; }
 EOF
 
-if ide_comp_err="$(HOME="$MOCK_IDE_HOME" zsh -f "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$ide_comp_err" ]; then
-    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek/quit and completes flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, and single/multi-target live IDE sessions"
+if ide_comp_err="$(HOME="$MOCK_IDE_HOME" XDG_CONFIG_HOME="$MOCK_IDE_HOME/.config" zsh -f "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$ide_comp_err" ]; then
+    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek/quit and completes -n/--new, flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, live IDE sessions, and lazy ide_workspace_dirs / IDE_WORKSPACE_DIRS basenames strictly at launch positions"
 else
     fail "_ide Zsh completion" "Unexpected _ide completion behavior: $ide_comp_err"
 fi
@@ -470,9 +532,11 @@ _describe() {
         shift 2
     fi
     local arr_name="$2"
-    local item
+    local item unesc
     for item in "${(@P)arr_name}"; do
-        OFFERED+=("${item%%:*}")
+        unesc="${item//\\:/__HS_COLON__}"
+        unesc="${unesc%%:*}"
+        OFFERED+=("${unesc//__HS_COLON__/:}")
     done
 }
 _files() {

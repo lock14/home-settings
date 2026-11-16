@@ -8,8 +8,8 @@ COLOR_PASS="\033[32m"
 COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
-# Isolate all test suites from any live caller tmux session or active theme exports by default
-unset TMUX TMUX_PANE HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
+# Isolate all test suites from any live caller tmux session, zoxide database, workspace hooks, or active theme exports by default
+unset TMUX TMUX_PANE _ZO_DATA_DIR IDE_WORKSPACE_DIRS IDE_LINK_RULES HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
 
 # Preserve mise data/cache/state paths when individual tests override HOME or XDG_*,
 # and disable background Go/gopls telemetry writes into ephemeral XDG_CONFIG_HOME directories.

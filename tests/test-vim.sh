@@ -3138,6 +3138,116 @@ PY
             fi
         fi
 
+        JAVA_FT_TMP="$(mktemp -d)"
+        mkdir -p "$JAVA_FT_TMP/bin" "$JAVA_FT_TMP/home"
+        printf '#!/bin/sh\nexit 0\n' > "$JAVA_FT_TMP/bin/jdtls"
+        chmod +x "$JAVA_FT_TMP/bin/jdtls"
+        cat << 'EOF' > "$JAVA_FT_TMP/test_java_ft.lua"
+local tmp = vim.env.JAVA_FT_TMP
+local java_ft = vim.env.JAVA_FT_PATH
+local calls = {}
+package.loaded["jdtls"] = {
+    start_or_attach = function(cfg)
+        table.insert(calls, cfg)
+    end,
+    organize_imports = function() end,
+    extract_variable = function() end,
+    extract_constant = function() end,
+    extract_method = function() end,
+}
+
+local function touch(p)
+    vim.fn.mkdir(vim.fn.fnamemodify(p, ":h"), "p")
+    vim.fn.writefile({ "class Main {}" }, p)
+end
+
+local function open_and_run(java_file)
+    vim.cmd("edit " .. vim.fn.fnameescape(java_file))
+    dofile(java_ft)
+end
+
+-- 1. Bazel-only workspaces (WORKSPACE, WORKSPACE.bazel, MODULE.bazel) skip jdtls,
+--    even when outer mount parents contain `mvnw/` or `gradlew/` directories, without probing above the Bazel root
+vim.fn.mkdir(tmp .. "/mount_parent/mvnw", "p")
+vim.fn.mkdir(tmp .. "/mount_parent/gradlew", "p")
+touch(tmp .. "/mount_parent/user_ns/ws_client/bzl1/WORKSPACE")
+touch(tmp .. "/mount_parent/user_ns/ws_client/bzl1/src/App.java")
+local stat_above_bzl = 0
+local orig_fs_stat = vim.uv.fs_stat
+vim.uv.fs_stat = function(p, ...)
+    local s = tostring(p or "")
+    if s == tmp .. "/mount_parent" or s:find(tmp .. "/mount_parent/mvnw", 1, true) == 1 or s:find(tmp .. "/mount_parent/gradlew", 1, true) == 1 or s:find(tmp .. "/mount_parent/user_ns/", 1, true) == 1 and not s:find(tmp .. "/mount_parent/user_ns/ws_client/bzl1", 1, true) then
+        stat_above_bzl = stat_above_bzl + 1
+    end
+    return orig_fs_stat(p, ...)
+end
+open_and_run(tmp .. "/mount_parent/user_ns/ws_client/bzl1/src/App.java")
+vim.uv.fs_stat = orig_fs_stat
+
+touch(tmp .. "/bzl2/WORKSPACE.bazel")
+touch(tmp .. "/bzl2/pkg/App.java")
+open_and_run(tmp .. "/bzl2/pkg/App.java")
+
+touch(tmp .. "/bzl3/MODULE.bazel")
+touch(tmp .. "/bzl3/mod/App.java")
+open_and_run(tmp .. "/bzl3/mod/App.java")
+local bazel_skipped = (#calls == 0 and stat_above_bzl == 0)
+
+-- 2. Hybrid Maven/Gradle + Bazel workspaces still start jdtls at the Maven/Gradle root
+touch(tmp .. "/hybrid1/WORKSPACE")
+touch(tmp .. "/hybrid1/pom.xml")
+touch(tmp .. "/hybrid1/src/App.java")
+open_and_run(tmp .. "/hybrid1/src/App.java")
+local hybrid1_ok = (#calls == 1 and calls[1].root_dir == tmp .. "/hybrid1")
+
+touch(tmp .. "/hybrid2/MODULE.bazel")
+touch(tmp .. "/hybrid2/sub/build.gradle.kts")
+touch(tmp .. "/hybrid2/sub/src/App.java")
+open_and_run(tmp .. "/hybrid2/sub/src/App.java")
+local hybrid2_ok = (#calls == 2 and calls[2].root_dir == tmp .. "/hybrid2/sub")
+
+-- 3. Identical project basenames under distinct paths receive distinct hash-salted workspace_dir caches
+touch(tmp .. "/org_a/my-service/pom.xml")
+touch(tmp .. "/org_a/my-service/App.java")
+open_and_run(tmp .. "/org_a/my-service/App.java")
+
+touch(tmp .. "/org_b/my-service/gradlew")
+touch(tmp .. "/org_b/my-service/App.java")
+open_and_run(tmp .. "/org_b/my-service/App.java")
+
+local function data_arg(cfg)
+    for i, v in ipairs(cfg.cmd or {}) do
+        if v == "-data" then
+            return cfg.cmd[i + 1] or ""
+        end
+    end
+    return ""
+end
+
+local ws_a = data_arg(calls[3] or {})
+local ws_b = data_arg(calls[4] or {})
+local pat = "/jdtls/workspaces/my%-service%-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]$"
+local hash_ok = (ws_a:match(pat) ~= nil and ws_b:match(pat) ~= nil and ws_a ~= ws_b)
+
+-- 4. Empty XDG_CACHE_HOME falls back cleanly to HOME/.cache
+vim.env.XDG_CACHE_HOME = ""
+touch(tmp .. "/standalone/.git/HEAD")
+touch(tmp .. "/standalone/App.java")
+open_and_run(tmp .. "/standalone/App.java")
+local ws_empty_xdg = data_arg(calls[5] or {})
+local empty_xdg_ok = (ws_empty_xdg:find(vim.env.HOME .. "/.cache/jdtls/workspaces/standalone-", 1, true) == 1)
+
+io.write(string.format("BZL=%s|H1=%s|H2=%s|HASH=%s|XDG=%s",
+    tostring(bazel_skipped), tostring(hybrid1_ok), tostring(hybrid2_ok), tostring(hash_ok), tostring(empty_xdg_ok)))
+EOF
+        JAVA_FT_OUT="$(export HOME="$JAVA_FT_TMP/home" XDG_CACHE_HOME="$JAVA_FT_TMP/cache" JAVA_FT_TMP JAVA_FT_PATH="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua" PATH="$JAVA_FT_TMP/bin:$PATH"; run_nvim_headless -i NONE -u NONE -c "luafile $JAVA_FT_TMP/test_java_ft.lua" 2>/dev/null || true)"
+        rm -rf "$JAVA_FT_TMP"
+        if [ "$JAVA_FT_OUT" = "BZL=true|H1=true|H2=true|HASH=true|XDG=true" ]; then
+            pass "ftplugin/java.lua skips jdtls auto-start in Bazel-only workspaces (WORKSPACE, WORKSPACE.bazel, MODULE.bazel), starts jdtls in Maven/Gradle and hybrid projects, and hash-salts workspace_dir (<project>-<8hex>) across colliding basenames"
+        else
+            fail "ftplugin/java.lua Bazel guard & workspace_dir hash-salting" "Expected 'BZL=true|H1=true|H2=true|HASH=true|XDG=true', got '$JAVA_FT_OUT'"
+        fi
+
         NVIM_ERR_TMP="$(mktemp -d)"
         cat << 'EOF' > "$NVIM_ERR_TMP/fail_script.lua"
 io.write("PASS:before crash\n")
