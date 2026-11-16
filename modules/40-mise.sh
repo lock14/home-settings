@@ -46,11 +46,13 @@ else
 
         # Ensure Lean 4 stable toolchain is initialized when elan is installed
         if "$MISE_BIN" which elan >/dev/null 2>&1; then
-            if ! "$MISE_BIN" exec -- elan show 2>/dev/null | grep -Fq "(default)"; then
+            elan_out="$("$MISE_BIN" exec -- elan show 2>/dev/null || true)"
+            if ! grep -Fq "(default)" <<< "$elan_out"; then
                 "$MISE_BIN" exec -- elan default stable || "$MISE_BIN" exec -- elan default stable
             fi
         elif command -v elan >/dev/null 2>&1; then
-            if ! elan show 2>/dev/null | grep -Fq "(default)"; then
+            elan_out="$(elan show 2>/dev/null || true)"
+            if ! grep -Fq "(default)" <<< "$elan_out"; then
                 elan default stable || elan default stable
             fi
         fi
