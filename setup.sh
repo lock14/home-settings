@@ -135,40 +135,49 @@ General Options:
 EOF
 }
 
+require_opt_arg() {
+    local flag="$1"
+    local val="${2:-}"
+    local hint="$3"
+    if [ -z "$val" ] || [[ "$val" == -* ]]; then
+        echo "Error: $flag requires $hint" >&2
+        exit 1
+    fi
+}
+
+enable_default_apps_unless_explicit() {
+    if [ "$IDE_EXPLICIT" = false ]; then
+        IDE_NAME="code"
+        INSTALL_APPS=true
+    elif [ "$IDE_NAME" != "none" ]; then
+        INSTALL_APPS=true
+    fi
+}
+
+merge_db_choice() {
+    local engine="$1"
+    SKIP_DB=false
+    case "$DB_CHOICE" in
+        none|"$engine") DB_CHOICE="$engine" ;;
+        *) DB_CHOICE="all" ;;
+    esac
+}
+
 # Parse CLI arguments
 while [ $# -gt 0 ]; do
     case "$1" in
         --theme)
-            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
-                echo "Error: --theme requires a theme name (such as solarized-dark, catppuccin-mocha, nord)" >&2
-                exit 1
-            fi
+            require_opt_arg "--theme" "${2:-}" "a theme name (such as solarized-dark, catppuccin-mocha, nord)"
             export HOME_SETTINGS_THEME="$2"
             shift 2
             ;;
         --theme=*)
-            theme_arg="${1#--theme=}"
-            if [ -z "$theme_arg" ] || [[ "$theme_arg" == -* ]]; then
-                echo "Error: --theme requires a theme name (such as solarized-dark, catppuccin-mocha, nord)" >&2
-                exit 1
-            fi
-            export HOME_SETTINGS_THEME="$theme_arg"
+            require_opt_arg "--theme" "${1#--theme=}" "a theme name (such as solarized-dark, catppuccin-mocha, nord)"
+            export HOME_SETTINGS_THEME="${1#--theme=}"
             shift
             ;;
-        --uninstall)
-            ACTION="uninstall"
-            shift
-            ;;
-        --uninstall-dotfiles)
-            ACTION="uninstall-dotfiles"
-            shift
-            ;;
-        --uninstall-fonts)
-            ACTION="uninstall-fonts"
-            shift
-            ;;
-        --uninstall-bin)
-            ACTION="uninstall-bin"
+        --uninstall|--uninstall-dotfiles|--uninstall-fonts|--uninstall-bin)
+            ACTION="${1#--}"
             shift
             ;;
         --bootstrap)
@@ -193,18 +202,12 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --os)
-            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
-                echo "Error: --os requires an argument (such as ubuntu, fedora, or macos)" >&2
-                exit 1
-            fi
+            require_opt_arg "--os" "${2:-}" "an argument (such as ubuntu, fedora, or macos)"
             TARGET_OS="$2"
             shift 2
             ;;
         -i|--ide)
-            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
-                echo "Error: $1 requires an argument (such as intellij, intellij-ultimate, code, or none)" >&2
-                exit 1
-            fi
+            require_opt_arg "$1" "${2:-}" "an argument (such as intellij, intellij-ultimate, code, or none)"
             IDE_NAME="$2"
             IDE_EXPLICIT=true
             if [ "$IDE_NAME" = "none" ]; then
@@ -215,41 +218,25 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --db)
-            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
-                echo "Error: --db requires an argument (such as postgres, mariadb, all, or none)" >&2
-                exit 1
-            fi
+            require_opt_arg "--db" "${2:-}" "an argument (such as postgres, mariadb, all, or none)"
             DB_CHOICE="$2"
             [ "$DB_CHOICE" = "postgresql" ] && DB_CHOICE="postgres"
             [ "$DB_CHOICE" != "none" ] && SKIP_DB=false
             shift 2
             ;;
         --db=*)
+            require_opt_arg "--db" "${1#*=}" "an argument (such as postgres, mariadb, all, or none)"
             DB_CHOICE="${1#*=}"
-            if [ -z "$DB_CHOICE" ]; then
-                echo "Error: --db requires an argument (such as postgres, mariadb, all, or none)" >&2
-                exit 1
-            fi
             [ "$DB_CHOICE" = "postgresql" ] && DB_CHOICE="postgres"
             [ "$DB_CHOICE" != "none" ] && SKIP_DB=false
             shift
             ;;
         --with-postgres|--with-postgresql)
-            SKIP_DB=false
-            if [ "$DB_CHOICE" = "mariadb" ] || [ "$DB_CHOICE" = "all" ]; then
-                DB_CHOICE="all"
-            else
-                DB_CHOICE="postgres"
-            fi
+            merge_db_choice "postgres"
             shift
             ;;
         --with-mariadb)
-            SKIP_DB=false
-            if [ "$DB_CHOICE" = "postgres" ] || [ "$DB_CHOICE" = "postgresql" ] || [ "$DB_CHOICE" = "all" ]; then
-                DB_CHOICE="all"
-            else
-                DB_CHOICE="mariadb"
-            fi
+            merge_db_choice "mariadb"
             shift
             ;;
         --skip-db)
@@ -260,85 +247,25 @@ while [ $# -gt 0 ]; do
         --with-gui)
             INSTALL_CHROME=true
             INSTALL_GHOSTTY=true
-            if [ "$IDE_EXPLICIT" = false ]; then
-                IDE_NAME="code"
-                INSTALL_APPS=true
-            elif [ "$IDE_NAME" != "none" ]; then
-                INSTALL_APPS=true
-            fi
+            enable_default_apps_unless_explicit
             shift
             ;;
-        --with-ghostty)
-            INSTALL_GHOSTTY=true
-            shift
-            ;;
-        --skip-ghostty)
-            INSTALL_GHOSTTY=false
-            shift
-            ;;
-        --with-chrome)
-            INSTALL_CHROME=true
-            shift
-            ;;
-        --with-apps)
-            if [ "$IDE_EXPLICIT" = false ]; then
-                IDE_NAME="code"
-                INSTALL_APPS=true
-            elif [ "$IDE_NAME" != "none" ]; then
-                INSTALL_APPS=true
-            fi
-            shift
-            ;;
-        --skip-chrome)
-            INSTALL_CHROME=false
-            shift
-            ;;
-        --skip-apps)
-            INSTALL_APPS=false
-            IDE_NAME="none"
-            IDE_EXPLICIT=true
-            shift
-            ;;
-        --skip-packages)
-            SKIP_PACKAGES=true
-            shift
-            ;;
-        --skip-fonts)
-            SKIP_FONTS=true
-            shift
-            ;;
-        --skip-tools)
-            SKIP_TOOLS=true
-            shift
-            ;;
-        --skip-nvim)
-            SKIP_NVIM=true
-            shift
-            ;;
-        --skip-vim)
-            SKIP_VIM=true
-            shift
-            ;;
-        --skip-zsh)
-            SKIP_ZSH=true
-            shift
-            ;;
-        --skip-bash)
-            SKIP_BASH=true
-            shift
-            ;;
-        --skip-bin)
-            SKIP_BIN=true
-            shift
-            ;;
-        --skip-completions)
-            SKIP_COMPLETIONS=true
-            shift
-            ;;
-        --skip-terminal)
-            SKIP_TERMINAL=true
-            shift
-            ;;
+        --with-ghostty)   INSTALL_GHOSTTY=true; shift ;;
+        --skip-ghostty)   INSTALL_GHOSTTY=false; shift ;;
+        --with-chrome)    INSTALL_CHROME=true; shift ;;
+        --skip-chrome)    INSTALL_CHROME=false; shift ;;
+        --with-apps)      enable_default_apps_unless_explicit; shift ;;
+        --skip-apps)      INSTALL_APPS=false; IDE_NAME="none"; IDE_EXPLICIT=true; shift ;;
+        --skip-packages)  SKIP_PACKAGES=true; shift ;;
+        --skip-fonts)     SKIP_FONTS=true; shift ;;
+        --skip-tools)     SKIP_TOOLS=true; shift ;;
+        --skip-nvim)      SKIP_NVIM=true; shift ;;
+        --skip-vim)       SKIP_VIM=true; shift ;;
+        --skip-zsh)       SKIP_ZSH=true; shift ;;
+        --skip-bash)      SKIP_BASH=true; shift ;;
+        --skip-bin)       SKIP_BIN=true; shift ;;
+        --skip-completions) SKIP_COMPLETIONS=true; shift ;;
+        --skip-terminal)  SKIP_TERMINAL=true; shift ;;
         -h|--help)
             usage
             exit 0
@@ -353,10 +280,13 @@ done
 
 OS="$(detect_os)"
 export OS
-if [ "$OS" != "ubuntu" ] && [ "$OS" != "fedora" ] && [ "$OS" != "macos" ]; then
-    echo "Error: Unsupported or unrecognized distribution: '$OS'. Please specify --os ubuntu, --os fedora, or --os macos." >&2
-    exit 1
-fi
+case "$OS" in
+    ubuntu|fedora|macos) ;;
+    *)
+        echo "Error: Unsupported or unrecognized distribution: '$OS'. Please specify --os ubuntu, --os fedora, or --os macos." >&2
+        exit 1
+        ;;
+esac
 
 ARCH="$(detect_arch)"
 export ARCH
@@ -364,18 +294,10 @@ export ARCH
 # Handle uninstallation actions
 if [ "$ACTION" != "install" ]; then
     case "$ACTION" in
-        uninstall)
-            "$SCRIPT_DIR/modules/99-uninstall.sh" all
-            ;;
-        uninstall-dotfiles)
-            "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles
-            ;;
-        uninstall-fonts)
-            "$SCRIPT_DIR/modules/99-uninstall.sh" fonts
-            ;;
-        uninstall-bin)
-            "$SCRIPT_DIR/modules/99-uninstall.sh" bin
-            ;;
+        uninstall)          "$SCRIPT_DIR/modules/99-uninstall.sh" all ;;
+        uninstall-dotfiles) "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles ;;
+        uninstall-fonts)    "$SCRIPT_DIR/modules/99-uninstall.sh" fonts ;;
+        uninstall-bin)      "$SCRIPT_DIR/modules/99-uninstall.sh" bin ;;
     esac
     exit 0
 fi
@@ -398,9 +320,14 @@ case "$DB_CHOICE" in
         exit 1
         ;;
 esac
+
 # Validate Color Theme (if explicitly specified via --theme or HOME_SETTINGS_THEME)
-if [ -n "${HOME_SETTINGS_THEME:-}" ] && [ -x "$SCRIPT_DIR/bin/theme" ]; then
-    if ! "$SCRIPT_DIR/bin/theme" --dry-run --no-live --set="$HOME_SETTINGS_THEME" >/dev/null; then
+if [ -n "${HOME_SETTINGS_THEME:-}" ]; then
+    if [[ "$HOME_SETTINGS_THEME" == -* ]]; then
+        echo "Error: Invalid theme name '$HOME_SETTINGS_THEME'" >&2
+        exit 1
+    fi
+    if [ -x "$SCRIPT_DIR/bin/theme" ] && ! "$SCRIPT_DIR/bin/theme" --dry-run --no-live --set="$HOME_SETTINGS_THEME" >/dev/null; then
         exit 1
     fi
 fi
@@ -412,26 +339,15 @@ echo "Target OS : $OS"
 echo "Arch      : $ARCH"
 echo "IDE Choice: $IDE_NAME"
 echo "Database  : Server: $DB_CHOICE (Clients: $([ "$SKIP_DB" = true ] && echo "skipped" || echo "enabled"))"
-if [ -n "${HOME_SETTINGS_THEME:-}" ]; then
-    echo "Theme     : $HOME_SETTINGS_THEME"
-fi
-if [ "$BOOTSTRAP_MODE" = true ]; then
-    echo "Mode      : BOOTSTRAP (Full turnkey machine setup)"
-fi
-if [ "$DRY_RUN" = true ]; then
-    echo "Mode      : DRY RUN (preview only, no modifications)"
-fi
+[ -n "${HOME_SETTINGS_THEME:-}" ] && echo "Theme     : $HOME_SETTINGS_THEME"
+[ "$BOOTSTRAP_MODE" = true ] && echo "Mode      : BOOTSTRAP (Full turnkey machine setup)"
+[ "$DRY_RUN" = true ] && echo "Mode      : DRY RUN (preview only, no modifications)"
 echo "====================================================="
-export ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}"
-case ":$PATH:" in
-    *":$HOME/.local/bin:"*) ;;
-    *) PATH="$HOME/.local/bin:$PATH" ;;
-esac
-export PATH
 
-# ─────────────────────────────────────────────────────────────────────────────
+export ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}"
+prepend_path "$HOME/.local/bin"
+
 # 1. System Provisioning (OS packages, Database, Chrome, Apps)
-# ─────────────────────────────────────────────────────────────────────────────
 if [ "$SKIP_SYSTEM" = false ]; then
     echo -e "\n[1/2] Running System-Level Provisioning..."
     "$SCRIPT_DIR/modules/00-packages.sh"
@@ -439,47 +355,19 @@ else
     echo -e "\n[1/2] Skipping System-Level Provisioning."
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
 # 2. User-Level Configuration (Dotfiles, Fonts, Tools, Shell, Terminal)
-# ─────────────────────────────────────────────────────────────────────────────
 if [ "$SKIP_USER" = false ]; then
     echo -e "\n[2/2] Running User Dotfiles & Environment Setup..."
-
-    # Dotfiles auto-discovery and linking
     "$SCRIPT_DIR/modules/10-dotfiles.sh"
-
-    # User binaries
-    if [ "$SKIP_BIN" = false ]; then
-        "$SCRIPT_DIR/modules/20-bin.sh"
-    fi
-
-    # Fonts
-    if [ "$SKIP_FONTS" = false ]; then
-        "$SCRIPT_DIR/modules/30-fonts.sh"
-    fi
-
-    # Mise polyglot toolchains
-    if [ "$SKIP_TOOLS" = false ]; then
-        "$SCRIPT_DIR/modules/40-mise.sh"
-    fi
+    [ "$SKIP_BIN" = false ] && "$SCRIPT_DIR/modules/20-bin.sh"
+    [ "$SKIP_FONTS" = false ] && "$SCRIPT_DIR/modules/30-fonts.sh"
+    [ "$SKIP_TOOLS" = false ] && "$SCRIPT_DIR/modules/40-mise.sh"
 
     # Expose Mise shims and Elan toolchain binaries on PATH for shell completion generation
-    for _setup_path_dir in "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" "$ELAN_HOME/bin"; do
-        case ":$PATH:" in
-            *":$_setup_path_dir:"*) ;;
-            *) PATH="$_setup_path_dir:$PATH" ;;
-        esac
-    done
-    unset _setup_path_dir
-    export PATH
+    prepend_path "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" "$ELAN_HOME/bin"
 
-    # Shell environment (Zsh, Bash, Completions)
     "$SCRIPT_DIR/modules/60-shell.sh"
-
-    # Terminal emulator profiles (GNOME Terminal Solarized Dark)
-    if [ "$SKIP_TERMINAL" = false ]; then
-        "$SCRIPT_DIR/modules/70-terminal.sh"
-    fi
+    [ "$SKIP_TERMINAL" = false ] && "$SCRIPT_DIR/modules/70-terminal.sh"
 fi
 
 echo -e "\n====================================================="

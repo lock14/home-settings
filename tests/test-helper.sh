@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared test assertion library for home-settings test suites.
+# Shared test assertion, sandbox isolation, mock-bin, and static lint library for home-settings.
 
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -8,13 +8,81 @@ COLOR_PASS="\033[32m"
 COLOR_FAIL="\033[31m"
 COLOR_RESET="\033[0m"
 
-# Isolate all test suites from any live caller tmux session, IDE RPC socket, runtime socket directory, zoxide database, workspace hooks, or active theme exports by default
-unset TMUX TMUX_PANE NVIM_IDE_SOCKET NVIM_IDE_PANE NVIM NVIM_LISTEN_ADDRESS IDE_SESSION IDE_AI_CLI IDE_AI_PANE IDE_INITIAL_ROOT IDE_WORKDIR IDE_MAIN_WIN IDE_LAYOUT_MODE IDE_AI_PARKED IDE_ED_PARKED IDE_TERM_PARKED IDE_CLIENT IDE_NOTIFY _ZO_DATA_DIR IDE_WORKSPACE_DIRS IDE_LINK_RULES HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
+# Isolate all test suites from any live caller tmux session, IDE RPC socket, runtime socket directory,
+# zoxide database, workspace hooks, or active theme exports by default.
+unset TMUX TMUX_PANE NVIM_IDE_SOCKET NVIM_IDE_PANE NVIM NVIM_LISTEN_ADDRESS \
+      IDE_SESSION IDE_AI_CLI IDE_AI_PANE IDE_INITIAL_ROOT IDE_WORKDIR IDE_MAIN_WIN \
+      IDE_LAYOUT_MODE IDE_AI_PARKED IDE_ED_PARKED IDE_TERM_PARKED IDE_CLIENT IDE_NOTIFY \
+      _ZO_DATA_DIR IDE_WORKSPACE_DIRS IDE_LINK_RULES \
+      HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE \
+      THEME_NVIM_SOCKET_DIR BAT_THEME _HS_LOADED_THEME _HS_PROMPT_OS_ICON
+
 _HS_TEST_RUNTIME_DIR="$(mktemp -d /tmp/hs-rt.XXXXXX)"
 chmod 700 "$_HS_TEST_RUNTIME_DIR" 2>/dev/null || true
 export XDG_RUNTIME_DIR="$_HS_TEST_RUNTIME_DIR"
+
+# Register an isolated tmux TMPDIR so its server socket and directory are torn down on exit.
+register_tmux_tmpdir() {
+    local dir
+    for dir in "$@"; do
+        [ -n "$dir" ] || continue
+        if [ -n "${_HS_TEST_RUNTIME_DIR:-}" ] && [ -d "$_HS_TEST_RUNTIME_DIR" ]; then
+            printf '%s\n' "$dir" >> "$_HS_TEST_RUNTIME_DIR/.tmux_sockets"
+        fi
+    done
+}
+
+# Register one or more temporary directories to be removed automatically on exit.
+register_cleanup_dir() {
+    local dir
+    for dir in "$@"; do
+        [ -n "$dir" ] || continue
+        if [ -n "${_HS_TEST_RUNTIME_DIR:-}" ] && [ -d "$_HS_TEST_RUNTIME_DIR" ]; then
+            printf '%s\n' "$dir" >> "$_HS_TEST_RUNTIME_DIR/.cleanups"
+        fi
+    done
+}
+
+# Create a temporary directory, register it for automatic cleanup, and print its path.
+make_sandbox_dir() {
+    local dir
+    dir="$(mktemp -d)"
+    register_cleanup_dir "$dir"
+    printf '%s\n' "$dir"
+}
+
+# Create a temporary directory with pre-initialized XDG subdirectories for isolated HOME tests.
+make_sandbox_home() {
+    local home_dir
+    home_dir="$(make_sandbox_dir)"
+    mkdir -p "$home_dir/.config" "$home_dir/.cache" "$home_dir/.local/share"
+    printf '%s\n' "$home_dir"
+}
+
+# Create an isolated TMUX_TMPDIR registered for automatic server shutdown and directory removal.
+make_tmux_sandbox_dir() {
+    local dir
+    dir="$(mktemp -d)"
+    register_tmux_tmpdir "$dir"
+    printf '%s\n' "$dir"
+}
+
 _hs_cleanup_test_runtime_dir() {
+    local reg_entry uid_num
     if [ -n "${_HS_TEST_RUNTIME_DIR:-}" ] && [ -d "$_HS_TEST_RUNTIME_DIR" ]; then
+        if [ -f "$_HS_TEST_RUNTIME_DIR/.tmux_sockets" ]; then
+            uid_num="$(id -u)"
+            while IFS= read -r reg_entry; do
+                [ -n "$reg_entry" ] || continue
+                tmux -S "$reg_entry/tmux-${uid_num}/default" kill-server >/dev/null 2>&1 || true
+                rm -rf "$reg_entry"
+            done < "$_HS_TEST_RUNTIME_DIR/.tmux_sockets"
+        fi
+        if [ -f "$_HS_TEST_RUNTIME_DIR/.cleanups" ]; then
+            while IFS= read -r reg_entry; do
+                [ -n "$reg_entry" ] && [ -e "$reg_entry" ] && rm -rf "$reg_entry"
+            done < "$_HS_TEST_RUNTIME_DIR/.cleanups"
+        fi
         rm -rf "$_HS_TEST_RUNTIME_DIR"
     fi
 }
@@ -125,6 +193,69 @@ assert_symlink() {
     fi
 }
 
+# Assert that a command exits with a non-zero status.
+assert_cmd_fails() {
+    local desc="$1"
+    shift
+    local out=""
+    if out="$("$@" 2>&1)"; then
+        fail "$desc" "Expected non-zero exit status, got success: $out"
+    else
+        pass "$desc"
+    fi
+}
+
+# Create an executable mock binary in mock_dir/name with the given body (defaults to exit 0).
+write_mock_bin() {
+    local mock_dir="$1"
+    local bin_name="$2"
+    local body="${3:-exit 0}"
+    mkdir -p "$mock_dir"
+    printf '#!/usr/bin/env bash\n%s\n' "$body" > "$mock_dir/$bin_name"
+    chmod +x "$mock_dir/$bin_name"
+}
+
+# Validate syntax of a Bash, Zsh, or Python 3.9+ script according to extension or shebang.
+check_script_syntax() {
+    local path="$1"
+    [ -f "$path" ] || return 1
+    case "$path" in
+        *.py)
+            python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), filename=sys.argv[1], feature_version=(3, 9))' "$path"
+            return $?
+            ;;
+        *.zsh)
+            zsh -n "$path"
+            return $?
+            ;;
+    esac
+
+    local first_line=""
+    IFS= read -r first_line < "$path" || first_line=""
+    case "$first_line" in
+        '#!'*python*)
+            python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), filename=sys.argv[1], feature_version=(3, 9))' "$path"
+            ;;
+        '#!'*zsh*)
+            zsh -n "$path"
+            ;;
+        *)
+            bash -n "$path"
+            ;;
+    esac
+}
+
+# Assert that a script passes syntax validation for its language runtime.
+assert_script_syntax() {
+    local path="$1"
+    local label="${2:-$(basename "$path")}"
+    if check_script_syntax "$path"; then
+        pass "Syntax valid: $label"
+    else
+        fail "Syntax check failed: $label" "Syntax validator returned non-zero for $path"
+    fi
+}
+
 _hs_find_bin() {
     local p=""
     if [ -n "${ZSH_VERSION:-}" ]; then
@@ -225,6 +356,7 @@ parse_subshell_results() {
 lint_documentation() {
     local root_dir="${1:-.}"
     python3 - "$root_dir" <<'PY'
+import glob
 import json
 import os
 import re
@@ -458,6 +590,18 @@ def extract_markdown_link_targets(line):
             targets.append(target)
         pos = j + 1
     return targets
+
+
+def _iter_pkg_py_files(pkg_dir):
+    out = []
+    if not os.path.isdir(pkg_dir):
+        return out
+    for walk_root, dirs, fnames in os.walk(pkg_dir):
+        dirs[:] = sorted(d for d in dirs if d != "__pycache__" and not d.startswith("."))
+        for fn in sorted(fnames):
+            if fn.endswith(".py"):
+                out.append(os.path.join(walk_root, fn))
+    return out
 
 
 doc_files = [
@@ -699,15 +843,18 @@ for rel_doc in doc_files:
                             f'{where}: broken anchor link "{target}"'
                         )
 
-# Check CLI help/error strings in setup.sh and bin/* for forbidden Latin abbreviations
-cli_scripts = ["setup.sh"]
+# Check CLI help/error strings in setup.sh, bin/*, and bin/*_lib/**/*.py for forbidden Latin abbreviations
+cli_paths = [os.path.join(root_dir, "setup.sh")]
 bin_dir = os.path.join(root_dir, "bin")
 if os.path.isdir(bin_dir):
     for entry in sorted(os.listdir(bin_dir)):
-        cli_scripts.append(os.path.join("bin", entry))
+        full_entry = os.path.join(bin_dir, entry)
+        if os.path.isfile(full_entry):
+            cli_paths.append(full_entry)
+        elif os.path.isdir(full_entry) and entry != "__pycache__" and not entry.startswith("."):
+            cli_paths.extend(_iter_pkg_py_files(full_entry))
 
-for rel_cli in cli_scripts:
-    cli_path = os.path.join(root_dir, rel_cli)
+for cli_path in cli_paths:
     if not os.path.isfile(cli_path):
         continue
     where = cli_path.replace("\\", "/")
@@ -819,7 +966,7 @@ if readme_text:
                             f'{readme_where}: missing .mise.toml tool "{tool_key}" in Developer toolchains table'
                         )
 
-    # 6d. bin/* getopts and case options vs script usage() and README.md
+    # 6d. bin/* (and bin/*_lib/*.py) options vs script usage() and README.md
     for short_script in ("gen-passwd", "repeat-until-success", "sum"):
         sp = os.path.join(root_dir, "bin", short_script)
         if os.path.isfile(sp):
@@ -860,7 +1007,12 @@ if readme_text:
         if os.path.isfile(lp):
             lp_where = lp.replace("\\", "/")
             with open(lp, encoding="utf-8") as lfh:
-                ltext = lfh.read()
+                entry_text = lfh.read()
+            lib_texts = [entry_text]
+            for py_mod in _iter_pkg_py_files(os.path.join(root_dir, "bin", f"{long_script}_lib")):
+                with open(py_mod, encoding="utf-8") as pfh:
+                    lib_texts.append(pfh.read())
+            ltext = "\n".join(lib_texts)
             usage_m = re.search(
                 r'USAGE_TEXT\s*=\s*"""(.*?)"""', ltext, re.DOTALL
             ) or re.search(
@@ -889,7 +1041,10 @@ if readme_text:
                             f'{readme_where}: {long_script} option "{flag}" missing from Standalone utilities table'
                         )
             if long_script == "update-system":
-                after_usage = ltext[usage_m.end() :] if usage_m else ltext
+                entry_usage_m = re.search(
+                    r"usage\(\)\s*\{(.*?)^\}", entry_text, re.DOTALL | re.MULTILINE
+                )
+                after_usage = entry_text[entry_usage_m.end() :] if entry_usage_m else entry_text
                 for pat_m in re.finditer(
                     r"^\s*(--[a-z0-9|-]+)\)", after_usage, re.MULTILINE
                 ):
@@ -1003,11 +1158,19 @@ if readme_text:
         if os.path.isfile(abs_src):
             all_keys = list(keys)
             if rel_src.endswith(".lua"):
-                with open(abs_src, encoding="utf-8") as lfh:
-                    for leader_suffix in re.findall(r'"<leader>([^"]+)"', lfh.read()):
-                        label = f"Space {leader_suffix}"
-                        if label not in all_keys:
-                            all_keys.append(label)
+                lua_scan_files = [abs_src]
+                if rel_src == os.path.join("dotfiles", ".config", "nvim", "init.lua"):
+                    lua_dir = os.path.join(root_dir, "dotfiles", ".config", "nvim", "lua")
+                    lua_scan_files.extend(
+                        sorted(glob.glob(os.path.join(lua_dir, "**", "*.lua"), recursive=True))
+                    )
+                for lua_file in lua_scan_files:
+                    if os.path.isfile(lua_file):
+                        with open(lua_file, encoding="utf-8") as lfh:
+                            for leader_suffix in re.findall(r'"<leader>([^"]+)"', lfh.read()):
+                                label = f"Space {leader_suffix}"
+                                if label not in all_keys:
+                                    all_keys.append(label)
             elif rel_src == os.path.join("dotfiles", ".config", "ghostty", "config"):
                 abs_where = abs_src.replace("\\", "/")
                 with open(abs_src, encoding="utf-8") as gfh:
@@ -1022,8 +1185,13 @@ if readme_text:
                 theme_bin_path = os.path.join(root_dir, "bin", "theme")
                 if os.path.isfile(theme_bin_path):
                     theme_where = theme_bin_path.replace("\\", "/")
+                    theme_parts = []
                     with open(theme_bin_path, encoding="utf-8") as tfh:
-                        ttext = tfh.read()
+                        theme_parts.append(tfh.read())
+                    for py_mod in _iter_pkg_py_files(os.path.join(root_dir, "bin", "theme_lib")):
+                        with open(py_mod, encoding="utf-8") as pfh:
+                            theme_parts.append(pfh.read())
+                    ttext = "\n".join(theme_parts)
                     for key, req_directives in ghostty_expected_directives.items():
                         for req_dir in req_directives:
                             escaped_dir = req_dir.replace("\\", "\\\\")
@@ -1080,25 +1248,48 @@ import re
 import sys
 
 root_dir = sys.argv[1]
-patterns = [
+
+standalone_py_files: list[str] = []
+bin_dir = os.path.join(root_dir, "bin")
+if os.path.isdir(bin_dir):
+    for walk_root, dirs, fnames in os.walk(bin_dir):
+        dirs[:] = sorted(d for d in dirs if d != "__pycache__" and not d.startswith("."))
+        for fn in sorted(fnames):
+            full_p = os.path.join(walk_root, fn)
+            if not os.path.isfile(full_p):
+                continue
+            if fn.endswith(".py"):
+                standalone_py_files.append(full_p)
+            elif walk_root == bin_dir:
+                with open(full_p, encoding="utf-8", errors="replace") as fh:
+                    first = fh.readline()
+                if first.startswith("#!") and "python" in first:
+                    standalone_py_files.append(full_p)
+
+shell_patterns = [
     os.path.join(root_dir, "bin", "*"),
     os.path.join(root_dir, "lib", "*.sh"),
     os.path.join(root_dir, "modules", "*.sh"),
+    os.path.join(root_dir, "dotfiles", ".config", "shell", "*.sh"),
+    os.path.join(root_dir, "dotfiles", ".config", "shell", "*.zsh"),
+    os.path.join(root_dir, "dotfiles", ".config", "shell", "*", "*.sh"),
+    os.path.join(root_dir, "dotfiles", ".config", "shell", "*", "*.zsh"),
     os.path.join(root_dir, "tests", "*.sh"),
     os.path.join(root_dir, "tests", "*.zsh"),
     os.path.join(root_dir, "setup.sh"),
 ]
-files = []
-for pat in patterns:
+standalone_set = set(standalone_py_files)
+shell_files: list[str] = []
+for pat in shell_patterns:
     for path in sorted(glob.glob(pat)):
-        if os.path.isfile(path) and path not in files:
-            files.append(path)
+        if os.path.isfile(path) and path not in standalone_set and path not in shell_files:
+            shell_files.append(path)
 
 heredoc_re = re.compile(
     r"(?:\bpython3\b[^\n]*|_PY(?:_SRC)?\s+)<<(-?)\s*'([A-Za-z0-9_]+)'(?:\s*(?:(?:[0-9]*[><]|[|&;#)]).*)?)?$"
 )
 parsed_blocks = 0
-errors = []
+errors: list[str] = []
 
 
 def _has_future_annotations(tree: ast.Module) -> bool:
@@ -1148,7 +1339,95 @@ def _is_type_union_operand(expr: ast.AST) -> bool:
     return False
 
 
-for path in files:
+def _validate_py39_source(src: str, path: str, start_line: int) -> None:
+    try:
+        tree = ast.parse(
+            src,
+            filename=f"{path}:{start_line}",
+            feature_version=(3, 9),
+        )
+    except SyntaxError as exc:
+        err_line = start_line + (exc.lineno or 1) - 1
+        errors.append(f"{path}:{err_line}: Python 3.9 SyntaxError: {exc.msg}")
+        return
+
+    has_future_ann = _has_future_annotations(tree)
+    ann_roots = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.returns is not None:
+                ann_roots.append(node.returns)
+            all_args = (
+                list(getattr(node.args, "posonlyargs", []))
+                + list(node.args.args)
+                + list(node.args.kwonlyargs)
+            )
+            if node.args.vararg:
+                all_args.append(node.args.vararg)
+            if node.args.kwarg:
+                all_args.append(node.args.kwarg)
+            for a in all_args:
+                if a.annotation is not None:
+                    ann_roots.append(a.annotation)
+        elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
+            ann_roots.append(node.annotation)
+
+    if not has_future_ann:
+        for ann in ann_roots:
+            bline = _find_bitor_line(ann)
+            if bline is not None:
+                err_line = start_line + bline - 1
+                errors.append(
+                    f"{path}:{err_line}: un-postponed PEP 604 union annotation (X | Y) without 'from __future__ import annotations' breaks Python 3.9"
+                )
+
+    postponed_ids = {id(sub) for ann in ann_roots for sub in ast.walk(ann)}
+    isinstance_union_ids: set[int] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("isinstance", "issubclass")
+            and len(node.args) >= 2
+        ):
+            bline = _find_bitor_line(node.args[1])
+            if bline is not None:
+                isinstance_union_ids.update(id(sub) for sub in ast.walk(node.args[1]))
+                err_line = start_line + bline - 1
+                errors.append(
+                    f"{path}:{err_line}: PEP 604 union in {node.func.id}() breaks Python 3.9 at runtime"
+                )
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "zip"
+            and any(kw.arg == "strict" for kw in node.keywords)
+        ):
+            err_line = start_line + getattr(node, "lineno", 1) - 1
+            errors.append(
+                f"{path}:{err_line}: zip(..., strict=...) requires Python 3.10+ and breaks Python 3.9"
+            )
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.BinOp)
+            and isinstance(node.op, ast.BitOr)
+            and id(node) not in postponed_ids
+            and id(node) not in isinstance_union_ids
+            and (_is_type_union_operand(node.left) or _is_type_union_operand(node.right))
+        ):
+            err_line = start_line + getattr(node, "lineno", 1) - 1
+            errors.append(
+                f"{path}:{err_line}: runtime PEP 604 type union (X | Y) breaks Python 3.9"
+            )
+
+
+for py_path in standalone_py_files:
+    with open(py_path, encoding="utf-8") as fh:
+        py_src = fh.read()
+    parsed_blocks += 1
+    _validate_py39_source(py_src, py_path, 1)
+
+for path in shell_files:
     with open(path, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
     idx = 0
@@ -1170,94 +1449,11 @@ for path in files:
                     idx += 1
                 src = "\n".join(block) + "\n"
                 parsed_blocks += 1
-                try:
-                    tree = ast.parse(
-                        src,
-                        filename=f"{path}:{start_line}",
-                        feature_version=(3, 9),
-                    )
-                except SyntaxError as exc:
-                    err_line = start_line + (exc.lineno or 1) - 1
-                    errors.append(f"{path}:{err_line}: Python 3.9 SyntaxError: {exc.msg}")
-                    idx += 1
-                    continue
-
-                has_future_ann = _has_future_annotations(tree)
-                ann_roots = []
-                for node in ast.walk(tree):
-                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        if node.returns is not None:
-                            ann_roots.append(node.returns)
-                        all_args = (
-                            list(getattr(node.args, "posonlyargs", []))
-                            + list(node.args.args)
-                            + list(node.args.kwonlyargs)
-                        )
-                        if node.args.vararg:
-                            all_args.append(node.args.vararg)
-                        if node.args.kwarg:
-                            all_args.append(node.args.kwarg)
-                        for a in all_args:
-                            if a.annotation is not None:
-                                ann_roots.append(a.annotation)
-                    elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
-                        ann_roots.append(node.annotation)
-
-                if not has_future_ann:
-                    for ann in ann_roots:
-                        bline = _find_bitor_line(ann)
-                        if bline is not None:
-                            err_line = start_line + bline - 1
-                            errors.append(
-                                f"{path}:{err_line}: un-postponed PEP 604 union annotation (X | Y) without 'from __future__ import annotations' breaks Python 3.9"
-                            )
-
-                postponed_ids = (
-                    {id(sub) for ann in ann_roots for sub in ast.walk(ann)}
-                    if has_future_ann
-                    else {id(sub) for ann in ann_roots for sub in ast.walk(ann)}
-                )
-                isinstance_union_ids: set[int] = set()
-                for node in ast.walk(tree):
-                    if (
-                        isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Name)
-                        and node.func.id in ("isinstance", "issubclass")
-                        and len(node.args) >= 2
-                    ):
-                        bline = _find_bitor_line(node.args[1])
-                        if bline is not None:
-                            isinstance_union_ids.update(id(sub) for sub in ast.walk(node.args[1]))
-                            err_line = start_line + bline - 1
-                            errors.append(
-                                f"{path}:{err_line}: PEP 604 union in {node.func.id}() breaks Python 3.9 at runtime"
-                            )
-                    elif (
-                        isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Name)
-                        and node.func.id == "zip"
-                        and any(kw.arg == "strict" for kw in node.keywords)
-                    ):
-                        err_line = start_line + getattr(node, "lineno", 1) - 1
-                        errors.append(
-                            f"{path}:{err_line}: zip(..., strict=...) requires Python 3.10+ and breaks Python 3.9"
-                        )
-                for node in ast.walk(tree):
-                    if (
-                        isinstance(node, ast.BinOp)
-                        and isinstance(node.op, ast.BitOr)
-                        and id(node) not in postponed_ids
-                        and id(node) not in isinstance_union_ids
-                        and (_is_type_union_operand(node.left) or _is_type_union_operand(node.right))
-                    ):
-                        err_line = start_line + getattr(node, "lineno", 1) - 1
-                        errors.append(
-                            f"{path}:{err_line}: runtime PEP 604 type union (X | Y) breaks Python 3.9"
-                        )
+                _validate_py39_source(src, path, start_line)
         idx += 1
 
 if parsed_blocks == 0:
-    errors.append("No embedded Python blocks found across scripts")
+    errors.append("No Python modules or embedded Python blocks found across scripts")
 
 if errors:
     for err in errors:

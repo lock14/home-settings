@@ -11,32 +11,24 @@ echo "========================================"
 echo "Running System & Cross-Platform Engine Tests"
 echo "========================================"
 
-# Test 1: Bash syntax checks
-echo -e "\n[1/6] Checking syntax with 'bash -n'..."
-if bash -n "$SCRIPT_DIR/setup.sh"; then
-    pass "Syntax valid: setup.sh"
-else
-    fail "Syntax check failed: setup.sh" "bash -n returned non-zero"
-fi
+# Test 1: Script and module syntax checks
+echo -e "\n[1/6] Checking syntax of setup.sh, lib/*.sh, modules/*.sh, and bin/..."
+assert_script_syntax "$SCRIPT_DIR/setup.sh" "setup.sh"
+
+for lib_f in "$SCRIPT_DIR"/lib/*.sh; do
+    [ -f "$lib_f" ] && assert_script_syntax "$lib_f" "lib/$(basename "$lib_f")"
+done
 
 for f in "$SCRIPT_DIR"/bin/*; do
-    if [ -f "$f" ]; then
-        if bash -n "$f"; then
-            pass "Syntax valid: $(basename "$f")"
-        else
-            fail "Syntax check failed: $(basename "$f")" "bash -n returned non-zero"
-        fi
-    fi
+    [ -f "$f" ] && assert_script_syntax "$f" "$(basename "$f")"
+done
+
+for py_mod in "$SCRIPT_DIR"/bin/*_lib/*.py; do
+    [ -f "$py_mod" ] && assert_script_syntax "$py_mod" "${py_mod#"$SCRIPT_DIR"/}"
 done
 
 for m in "$SCRIPT_DIR"/modules/*.sh; do
-    if [ -f "$m" ]; then
-        if bash -n "$m"; then
-            pass "Syntax valid: $(basename "$m")"
-        else
-            fail "Syntax check failed: $(basename "$m")" "bash -n returned non-zero"
-        fi
-    fi
+    [ -f "$m" ] && assert_script_syntax "$m" "$(basename "$m")"
 done
 
 # Test 2: CLI Validation on setup.sh
@@ -52,49 +44,22 @@ else
     fail "setup.sh --help" "Expected exit code 0"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os unsupported_distro 2>&1); then
-    fail "setup.sh invalid OS" "Expected error on invalid OS, got success: $output"
-else
-    pass "setup.sh rejects invalid OS"
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os 2>&1); then
-    fail "setup.sh missing OS argument" "Expected error on missing OS argument, got success: $output"
-else
-    pass "setup.sh rejects missing OS argument"
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide invalid_ide 2>&1); then
-    fail "setup.sh invalid IDE" "Expected error on invalid IDE, got success: $output"
-else
-    pass "setup.sh rejects invalid IDE"
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide 2>&1); then
-    fail "setup.sh missing IDE argument" "Expected error on missing IDE argument, got success: $output"
-else
-    pass "setup.sh rejects missing IDE argument"
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db invalid_engine 2>&1); then
-    fail "setup.sh invalid DB" "Expected error on invalid DB engine, got success: $output"
-else
-    pass "setup.sh rejects invalid DB engine"
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db 2>&1); then
-    fail "setup.sh missing DB argument" "Expected error on missing DB argument, got success: $output"
-else
-    pass "setup.sh rejects missing DB argument"
-fi
+assert_cmd_fails "setup.sh rejects invalid OS" "$SCRIPT_DIR/setup.sh" --os unsupported_distro
+assert_cmd_fails "setup.sh rejects missing OS argument" "$SCRIPT_DIR/setup.sh" --os
+assert_cmd_fails "setup.sh rejects invalid IDE" "$SCRIPT_DIR/setup.sh" --os ubuntu --ide invalid_ide
+assert_cmd_fails "setup.sh rejects missing IDE argument" "$SCRIPT_DIR/setup.sh" --os ubuntu --ide
+assert_cmd_fails "setup.sh rejects invalid DB engine" "$SCRIPT_DIR/setup.sh" --os ubuntu --db invalid_engine
+assert_cmd_fails "setup.sh rejects missing DB argument" "$SCRIPT_DIR/setup.sh" --os ubuntu --db
 
 # Isolate HOME and XDG directories so setup.sh invocations never touch the caller's real $HOME
-TEMP_SETUP_HOME="$(mktemp -d)"
-trap 'rm -rf "$TEMP_SETUP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
+TEMP_SETUP_HOME="$(make_sandbox_home)"
 export HOME="$TEMP_SETUP_HOME"
 export XDG_CONFIG_HOME="$TEMP_SETUP_HOME/.config"
 export XDG_CACHE_HOME="$TEMP_SETUP_HOME/.cache"
 export XDG_DATA_HOME="$TEMP_SETUP_HOME/.local/share"
+
+# Clear pre-created sandbox XDG dirs before Test 3 so --dry-run zero-mutation check starts from an empty HOME
+rm -rf "$TEMP_SETUP_HOME/.config" "$TEMP_SETUP_HOME/.cache" "$TEMP_SETUP_HOME/.local"
 
 # Test 3: Dry-run Execution across Platforms
 echo -e "\n[3/6] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
@@ -1009,5 +974,115 @@ else
 fi
 
 rm -rf "$TEMP_THEME_SETUP_HOME"
+
+# Verify lint_python_embeds and lint_documentation support modular bin/*_lib/*.py, Python-shebang bin/*, and dotfiles/.config/nvim/lua/**/*.lua
+TEMP_MOD_LINT_BAD="$(make_sandbox_dir)"
+mkdir -p "$TEMP_MOD_LINT_BAD/bin/theme_lib"
+printf '%s\n' 'def bad_pkg_fn(x: int | None) -> str | None:' '    return None' > "$TEMP_MOD_LINT_BAD/bin/theme_lib/bad.py"
+
+TEMP_MOD_SHEBANG_BAD="$(make_sandbox_dir)"
+mkdir -p "$TEMP_MOD_SHEBANG_BAD/bin"
+printf '%s\n' '#!/usr/bin/python3 -B' 'match 1:' '    case 1: pass' > "$TEMP_MOD_SHEBANG_BAD/bin/theme"
+
+TEMP_MOD_LINT_OK="$(make_sandbox_dir)"
+mkdir -p "$TEMP_MOD_LINT_OK/bin/ide_lib" "$TEMP_MOD_LINT_OK/bin/theme_lib" "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/lua/solarized" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty"
+printf '%s\n' '#!/usr/bin/python3 -B' 'from __future__ import annotations' 'from ide_lib.core import run' > "$TEMP_MOD_LINT_OK/bin/ide"
+printf '%s\n' 'from __future__ import annotations' 'def run(x: int | None = None) -> int:' '    return x or 0' > "$TEMP_MOD_LINT_OK/bin/ide_lib/core.py"
+cat > "$TEMP_MOD_LINT_OK/bin/theme" <<'EOF'
+#!/usr/bin/env bash
+exec python3 -B -c "import sys" "$@"
+EOF
+cat > "$TEMP_MOD_LINT_OK/bin/theme_lib/cli.py" <<'EOF'
+from __future__ import annotations
+USAGE_TEXT = """Usage: theme
+  --list          List themes
+"""
+EOF
+cat > "$TEMP_MOD_LINT_OK/bin/theme_lib/generators.py" <<'EOF'
+from __future__ import annotations
+GHOSTTY_TEMPLATE = """
+keybind = ctrl+shift+d=new_split:auto
+keybind = ctrl+shift+w=close_surface
+keybind = ctrl+shift+enter=toggle_split_zoom
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+j=goto_split:bottom
+keybind = ctrl+shift+k=goto_split:top
+keybind = ctrl+shift+l=goto_split:right
+keybind = ctrl+shift+t=new_tab
+keybind = alt+left=text:\\x1b[1;3D
+keybind = alt+right=text:\\x1b[1;3C
+keybind = alt+up=text:\\x1b[1;3A
+keybind = alt+down=text:\\x1b[1;3B
+"""
+EOF
+cp "$SCRIPT_DIR/dotfiles/.config/ghostty/config" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty/config"
+printf '%s\n' 'require("solarized.keymaps")' > "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/init.lua"
+printf '%s\n' 'vim.keymap.set("n", "<leader>qm", "<cmd>echo 1<CR>")' > "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/lua/solarized/keymaps.lua"
+cat > "$TEMP_MOD_LINT_OK/README.md" <<'EOF'
+# Modular test
+
+Keys: `Ctrl+Shift+D`, `Ctrl+Shift+W`, `Ctrl+Shift+Enter`, `Ctrl+Shift+H/J/K/L`, `Ctrl+Shift+T`, `Alt+Left/Right/Up/Down`, `Space w`, `Space h`, `Space e`, `Space E`, `Space m`, `Space ff`, `Space fg`, `Space fb`, `Space gs`, `Space rn`, `Space ca`, `Space d`, `Space a`, `Space q`, `Space ?`, `Space cd`, `gd`, `gr`, `K`, `gx`, `Home`, `H`, `L`.
+
+## Standalone utilities
+
+| Script | Flags |
+| :--- | :--- |
+| `theme` | `--list` |
+| `Ctrl+Shift+D` | `Ctrl+Shift+W` `Ctrl+Shift+Enter` `Ctrl+Shift+H/J/K/L` `Ctrl+Shift+T` `Alt+Left/Right/Up/Down` |
+| `Space w` | `Space h` `Space e` `Space E` `Space m` `Space ff` `Space fg` `Space fb` `Space gs` `Space rn` `Space ca` `Space d` `Space a` `Space q` `Space ?` `Space cd` `gd` `gr` `K` `gx` `Home` `H` `L` |
+EOF
+
+mod_doc_err="$(lint_documentation "$TEMP_MOD_LINT_OK" 2>&1 || true)"
+if ! lint_python_embeds "$TEMP_MOD_LINT_BAD" >/dev/null 2>&1 && \
+   ! lint_python_embeds "$TEMP_MOD_SHEBANG_BAD" >/dev/null 2>&1 && \
+   lint_python_embeds "$TEMP_MOD_LINT_OK" >/dev/null 2>&1 && \
+   grep -Fq 'keybinding "Space qm"' <<< "$mod_doc_err" && \
+   ! grep -Fq 'Ghostty keybinding' <<< "$mod_doc_err" && \
+   ! grep -Fq 'theme option "--list" missing' <<< "$mod_doc_err"; then
+    pass "lint_python_embeds and lint_documentation validate standalone bin/*_lib/*.py modules, Python-shebang bin/* entrypoints, and modular nvim/lua/**/*.lua keymaps"
+else
+    fail "Modular lint_python_embeds / lint_documentation" "Unexpected modular lint result: doc_err='$mod_doc_err'"
+fi
+
+# Verify shared lib/ primitives (backup_existing_path collision-free suffixes, retry_cmd, resolve_script_dir, prepend_path)
+TEMP_LIB_SANDBOX="$(make_sandbox_dir)"
+lib_unit_ok="$(
+    set -euo pipefail
+    # shellcheck source=/dev/null
+    . "$SCRIPT_DIR/lib/log.sh"
+    # shellcheck source=/dev/null
+    . "$SCRIPT_DIR/lib/os.sh"
+    printf 'v1\n' > "$TEMP_LIB_SANDBOX/conf"
+    b1="$(backup_existing_path "$TEMP_LIB_SANDBOX/conf")"
+    printf 'v2\n' > "$TEMP_LIB_SANDBOX/conf"
+    # Force a collision with b1's exact timestamp if within the same second, or create matching base
+    : > "${TEMP_LIB_SANDBOX}/conf.bak.$(date +%s)"
+    b2="$(backup_existing_path "$TEMP_LIB_SANDBOX/conf")"
+    tries_file="$TEMP_LIB_SANDBOX/tries"
+    flaky_fn() {
+        local n=0
+        [ -f "$tries_file" ] && n="$(cat "$tries_file")"
+        n=$((n + 1))
+        printf '%s' "$n" > "$tries_file"
+        [ "$n" -ge 2 ]
+    }
+    retry_cmd 3 0 flaky_fn
+    mkdir -p "$TEMP_LIB_SANDBOX/real/bin" "$TEMP_LIB_SANDBOX/links"
+    printf '#!/bin/sh\n' > "$TEMP_LIB_SANDBOX/real/bin/tool"
+    ln -s "../real/bin/tool" "$TEMP_LIB_SANDBOX/links/tool-link"
+    resolved_dir="$(resolve_script_dir "$TEMP_LIB_SANDBOX/links/tool-link")"
+    exp_dir="$(cd -P "$TEMP_LIB_SANDBOX/real/bin" && pwd)"
+    PATH="/usr/bin:/bin"
+    prepend_path "/custom/a" "/custom/b" "/custom/a"
+    if [ -f "$b1" ] && [ -f "$b2" ] && [ "$b1" != "$b2" ] && \
+       [ "$(cat "$tries_file")" = "2" ] && \
+       [ "$resolved_dir" = "$exp_dir" ] && \
+       [ "$PATH" = "/custom/b:/custom/a:/usr/bin:/bin" ]; then
+        printf 'OK\n'
+    else
+        printf 'BAD:%s|%s|%s|%s\n' "$b1" "$b2" "$resolved_dir" "$PATH"
+    fi
+)"
+assert_eq "OK" "$lib_unit_ok" "Shared lib/ helpers handle collision-free backups, transient retries, chained symlink resolution, and deduplicated PATH prepending"
 
 test_summary

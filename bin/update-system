@@ -8,32 +8,23 @@
 
 set -euo pipefail
 
-# ANSI Color Palette (Solarized Dark aligned)
-COLOR_RESET="\033[0m"
-COLOR_INFO="\033[34m"    # Blue (#268BD2)
-COLOR_SUCCESS="\033[32m" # Green (#859900)
-COLOR_WARN="\033[33m"    # Yellow (#B58900)
-COLOR_ERROR="\033[31m"   # Red (#DC322F)
+SOURCE_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE_PATH" ]; do
+    SOURCE_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
+    SOURCE_PATH="$(readlink "$SOURCE_PATH")"
+    [[ "$SOURCE_PATH" != /* ]] && SOURCE_PATH="$SOURCE_DIR/$SOURCE_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
+REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
 
-log_header() {
-    echo -e "\n${COLOR_INFO}==>${COLOR_RESET} $*"
-}
-
-log_step() {
-    echo -e "  ${COLOR_INFO}➜${COLOR_RESET} $*"
-}
-
-log_success() {
-    echo -e "  ${COLOR_SUCCESS}✔${COLOR_RESET} $*"
-}
-
-log_warn() {
-    echo -e "  ${COLOR_WARN}⚠${COLOR_RESET} $*" >&2
-}
-
-log_error() {
-    echo -e "  ${COLOR_ERROR}✘${COLOR_RESET} $*" >&2
-}
+# shellcheck source=/dev/null
+. "$REPO_DIR/lib/log.sh"
+# shellcheck source=/dev/null
+. "$REPO_DIR/lib/os.sh"
+# shellcheck source=/dev/null
+. "$REPO_DIR/lib/pkg.sh"
+# shellcheck source=/dev/null
+. "$REPO_DIR/lib/shell-env.sh"
 
 # Configuration flags
 DRY_RUN=false
@@ -80,7 +71,6 @@ Examples:
 EOF
 }
 
-# Parse CLI arguments
 while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)
@@ -129,7 +119,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --os)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
                 log_error "Option --os requires an argument (such as ubuntu, fedora, macos, or arch)"
                 exit 1
             fi
@@ -144,66 +134,8 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Detect operating system
-detect_system_os() {
-    if [ -n "${TARGET_OS:-}" ]; then
-        echo "$TARGET_OS"
-        return 0
-    fi
-
-    if [[ "${OSTYPE:-}" == "darwin"* ]]; then
-        echo "macos"
-        return 0
-    fi
-
-    if [ -f /etc/os-release ]; then
-        # shellcheck source=/dev/null
-        . /etc/os-release
-        case "${ID:-}" in
-            ubuntu|debian|pop|linuxmint|elementary|kali)
-                echo "ubuntu"
-                return 0
-                ;;
-            fedora|rhel|centos|rocky|almalinux)
-                echo "fedora"
-                return 0
-                ;;
-            arch|manjaro|endeavouros)
-                echo "arch"
-                return 0
-                ;;
-        esac
-
-        case "${ID_LIKE:-}" in
-            *ubuntu*|*debian*)
-                echo "ubuntu"
-                return 0
-                ;;
-            *fedora*|*rhel*)
-                echo "fedora"
-                return 0
-                ;;
-            *arch*)
-                echo "arch"
-                return 0
-                ;;
-        esac
-    fi
-
-    if command -v apt-get >/dev/null 2>&1; then
-        echo "ubuntu"
-    elif command -v dnf >/dev/null 2>&1; then
-        echo "fedora"
-    elif command -v pacman >/dev/null 2>&1; then
-        echo "arch"
-    elif command -v brew >/dev/null 2>&1; then
-        echo "macos"
-    else
-        echo "unknown"
-    fi
-}
-
-OS="$(detect_system_os)"
+export DRY_RUN TARGET_OS
+OS="$(detect_os)"
 case "$OS" in
     ubuntu|fedora|macos|arch) ;;
     *)
@@ -212,228 +144,40 @@ case "$OS" in
         ;;
 esac
 
-# Execution helpers
-run_cmd() {
-    if [ "$DRY_RUN" = true ]; then
-        echo "  [DryRun] $*"
-    else
-        "$@"
-    fi
-}
-
-run_elevated() {
-    if [ "$DRY_RUN" = true ]; then
-        if [ "$(id -u)" -eq 0 ]; then
-            echo "  [DryRun] $*"
-        else
-            echo "  [DryRun] sudo $*"
-        fi
-    else
-        if [ "$(id -u)" -eq 0 ]; then
-            "$@"
-        else
-            sudo "$@"
-        fi
-    fi
-}
-
-ensure_sudo() {
-    if [ "$DRY_RUN" = false ] && [ "$(id -u)" -ne 0 ]; then
-        if ! sudo -n true 2>/dev/null; then
-            log_step "Elevated permissions required. Authenticating sudo session..."
-            sudo -v
-        fi
-    fi
-}
-
-# Display planned run configuration
 log_header "System Update Orchestrator"
 echo "  Target OS     : $OS"
 echo "  Interactive   : $([ "$NON_INTERACTIVE" = true ] && echo "No (auto -y)" || echo "Yes")"
 echo "  Scope         : $([ "$SYSTEM_ONLY" = true ] && echo "Native OS Packages Only" || echo "System + App Runtimes$([ "$WITH_DEV" = true ] && echo " + Dev Tools" || echo "")")"
-if [ "$DRY_RUN" = true ]; then
-    echo "  Mode          : DRY RUN (Preview only, no system changes)"
-fi
+[ "$DRY_RUN" = true ] && echo "  Mode          : DRY RUN (Preview only, no system changes)"
 
-# Pre-authenticate sudo if privileged commands are anticipated
 if [ "$OS" != "macos" ] || [ "$INCLUDE_MACOS_SYSTEM" = true ]; then
     ensure_sudo
 fi
 
 START_TIME="$(date +%s)"
 
-# ─────────────────────────────────────────────────────────────────────────────
 # 1. Native OS Package Manager
-# ─────────────────────────────────────────────────────────────────────────────
 log_header "Native OS Package Manager ($OS)"
-
-case "$OS" in
-    ubuntu)
-        log_step "Updating APT package indices..."
-        run_elevated apt-get update
-
-        log_step "Upgrading installed packages..."
-        if [ "$NON_INTERACTIVE" = true ]; then
-            run_elevated apt-get upgrade -y
-        else
-            run_elevated apt-get upgrade
-        fi
-
-        if [ "$DO_CLEANUP" = true ]; then
-            log_step "Autoremoving unused APT packages..."
-            if [ "$NON_INTERACTIVE" = true ]; then
-                run_elevated apt-get autoremove -y
-            else
-                run_elevated apt-get autoremove
-            fi
-
-            log_step "Cleaning APT package cache..."
-            run_elevated apt-get autoclean
-        fi
-        ;;
-
-    fedora)
-        log_step "Updating DNF package metadata and upgrading packages..."
-        if [ "$NON_INTERACTIVE" = true ]; then
-            run_elevated dnf upgrade --refresh -y
-        else
-            run_elevated dnf upgrade --refresh
-        fi
-
-        if [ "$DO_CLEANUP" = true ]; then
-            log_step "Autoremoving unused DNF packages..."
-            if [ "$NON_INTERACTIVE" = true ]; then
-                run_elevated dnf autoremove -y
-            else
-                run_elevated dnf autoremove
-            fi
-
-            log_step "Cleaning DNF package cache..."
-            if [ "$NON_INTERACTIVE" = true ]; then
-                run_elevated dnf clean packages -y
-            else
-                run_elevated dnf clean packages
-            fi
-        fi
-        ;;
-
-    macos)
-        if command -v brew >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
-            log_step "Updating Homebrew formulae and casks..."
-            run_cmd brew update
-
-            log_step "Upgrading Homebrew packages and casks..."
-            run_cmd brew upgrade
-
-            if [ "$DO_CLEANUP" = true ]; then
-                log_step "Removing stale Homebrew lockfiles and downloads..."
-                run_cmd brew cleanup -s
-
-                log_step "Autoremoving unused Homebrew dependencies..."
-                run_cmd brew autoremove
-            fi
-        else
-            log_warn "Homebrew (brew) command not found on macOS host."
-        fi
-
-        if [ "$INCLUDE_MACOS_SYSTEM" = true ]; then
-            log_step "Checking Apple Software Update..."
-            run_elevated softwareupdate -ia --verbose
-        fi
-        ;;
-
-    arch)
-        log_step "Upgrading Arch Linux packages (Pacman)..."
-        if [ "$NON_INTERACTIVE" = true ]; then
-            run_elevated pacman -Syu --noconfirm
-        else
-            run_elevated pacman -Syu
-        fi
-
-        if [ "$DO_CLEANUP" = true ]; then
-            log_step "Cleaning Pacman package cache..."
-            if [ "$NON_INTERACTIVE" = true ]; then
-                run_elevated pacman -Sc --noconfirm
-            else
-                run_elevated pacman -Sc
-            fi
-        fi
-        ;;
-esac
-
+pkg_upgrade_native "$OS" "$NON_INTERACTIVE" "$DO_CLEANUP" "$INCLUDE_MACOS_SYSTEM"
 log_success "Native OS package management finished."
 
-# ─────────────────────────────────────────────────────────────────────────────
 # 2. Universal Application Packages (Snap, Flatpak, Mac App Store)
-# ─────────────────────────────────────────────────────────────────────────────
 if [ "$SYSTEM_ONLY" = false ]; then
-    # Snap packages (Linux only)
-    if [ "$OS" != "macos" ] && [ "$SKIP_SNAPS" = false ]; then
-        if command -v snap >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
-            log_header "Snap Packages"
-            log_step "Refreshing installed Snap packages..."
-            run_elevated snap refresh
-            log_success "Snap packages updated."
-        fi
-    fi
-
-    # Flatpak packages (Linux only)
-    if [ "$OS" != "macos" ] && [ "$SKIP_FLATPAK" = false ]; then
-        if command -v flatpak >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
-            log_header "Flatpak Packages"
-            log_step "Updating installed Flatpaks..."
-            if [ "$NON_INTERACTIVE" = true ]; then
-                run_cmd flatpak update -y
-            else
-                run_cmd flatpak update
-            fi
-
-            if [ "$DO_CLEANUP" = true ]; then
-                log_step "Uninstalling unused Flatpak runtimes..."
-                if [ "$NON_INTERACTIVE" = true ]; then
-                    run_cmd flatpak uninstall --unused -y
-                else
-                    run_cmd flatpak uninstall --unused
-                fi
-            fi
-            log_success "Flatpak packages updated."
-        fi
-    fi
-
-    # Mac App Store (macOS only)
-    if [ "$OS" = "macos" ]; then
-        if command -v mas >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
-            log_header "Mac App Store"
-            log_step "Upgrading Mac App Store applications..."
-            run_cmd mas upgrade
-            log_success "Mac App Store applications updated."
-        fi
-    fi
+    pkg_upgrade_universal "$OS" "$NON_INTERACTIVE" "$DO_CLEANUP" "$SKIP_SNAPS" "$SKIP_FLATPAK"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. Developer Toolchains (Mise, Rustup, Oh-My-Zsh) [Opt-in via --with-dev]
-# ─────────────────────────────────────────────────────────────────────────────
+# 3. Developer Toolchains (Mise, Rustup, Elan, Oh-My-Zsh, CLI Completions)
 if [ "$WITH_DEV" = true ]; then
     log_header "Developer Toolchains & Runtimes"
 
-    _prepend_existing_dev_paths() {
-        local _elan_bin="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}/bin"
-        local _mise_shims="${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims"
-        local _upd_dir=""
-        for _upd_dir in "$HOME/.local/bin" "$_mise_shims" "$_elan_bin"; do
-            if [ -d "$_upd_dir" ]; then
-                case ":$PATH:" in
-                    *":$_upd_dir:"*) ;;
-                    *) PATH="$_upd_dir:$PATH" ;;
-                esac
-            fi
-        done
-        export PATH
+    refresh_dev_paths() {
+        prepend_existing_paths \
+            "$HOME/.local/bin" \
+            "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" \
+            "${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}/bin"
     }
-    _prepend_existing_dev_paths
+    refresh_dev_paths
 
-    # Mise polyglot toolchains
     if command -v mise >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
         log_step "Updating Mise plugins and toolchain runtimes..."
         run_cmd mise plugins update
@@ -442,95 +186,36 @@ if [ "$WITH_DEV" = true ]; then
             log_step "Pruning old Mise toolchain versions..."
             run_cmd mise prune -y
         fi
-        _prepend_existing_dev_paths
+        refresh_dev_paths
         log_success "Mise toolchains updated."
     fi
 
-    # Rustup toolchain
     if command -v rustup >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
         log_step "Updating Rustup toolchains and components..."
         run_cmd rustup update
         log_success "Rustup toolchains updated."
     fi
 
-    # Elan (Lean 4) toolchain
     if command -v elan >/dev/null 2>&1 || [ "$DRY_RUN" = true ]; then
         log_step "Updating Lean 4 toolchains via elan..."
         ELAN_HOME="${ELAN_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/elan}" run_cmd elan update
         log_success "Lean 4 toolchains updated."
     fi
 
-    # Oh-My-Zsh update (framework + custom Git plugins and themes)
-    omz_dir="${ZSH:-$HOME/.oh-my-zsh}"
-    omz_custom_dir="${ZSH_CUSTOM:-$omz_dir/custom}"
-    if [ -d "$omz_dir" ] || [ -d "$omz_custom_dir" ] || [ "$DRY_RUN" = true ]; then
-        if [ -d "$omz_dir" ] || [ "$DRY_RUN" = true ]; then
-            log_step "Updating Oh-My-Zsh framework..."
-            if command -v omz >/dev/null 2>&1; then
-                run_cmd omz update --unattended
-            elif [ -f "$omz_dir/tools/upgrade.sh" ] || [ "$DRY_RUN" = true ]; then
-                run_cmd env ZSH="$omz_dir" sh "$omz_dir/tools/upgrade.sh" --unattended
-            fi
-        fi
-        if [ -d "$omz_custom_dir" ]; then
-            for custom_repo in "$omz_custom_dir"/plugins/* "$omz_custom_dir"/themes/*; do
-                [ -e "$custom_repo/.git" ] || continue
-                log_step "Updating Oh-My-Zsh custom repo $(basename "$custom_repo")..."
-                if ! run_cmd git -C "$custom_repo" pull --ff-only; then
-                    log_warn "Skipped fast-forward update for $(basename "$custom_repo") (local changes, detached HEAD, or diverged branch)."
-                fi
-            done
-        fi
-        log_success "Oh-My-Zsh updated."
-    fi
+    update_oh_my_zsh_stack
 
-    # Refresh Zsh CLI completions if managed completions directory is present
     completions_dir="$HOME/.zsh/completions"
     if [ -d "$completions_dir" ]; then
         log_step "Refreshing CLI tab completions in $completions_dir..."
         if [ "$DRY_RUN" = true ]; then
             echo "  [DryRun] Refresh CLI tab completions in $completions_dir"
         else
-            refresh_zsh_completion() {
-                local target="$1"
-                shift
-                local tmp_comp="${target}.tmp.$$" first_line=""
-                if MISE_NOT_FOUND_AUTO_INSTALL=false "$@" > "$tmp_comp" 2>/dev/null && [ -s "$tmp_comp" ] && IFS= read -r first_line < "$tmp_comp" && [[ "$first_line" == \#* ]]; then
-                    mv -f "$tmp_comp" "$target"
-                else
-                    rm -f "$tmp_comp"
-                fi
-            }
-            if command -v gh >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_gh" gh completion -s zsh; fi
-            if command -v kubectl >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_kubectl" kubectl completion zsh; fi
-            if command -v helm >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_helm" helm completion zsh; fi
-            if command -v elan >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_elan" elan completions zsh; fi
-            if command -v mise >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_mise" mise completion zsh; fi
-            if command -v delta >/dev/null 2>&1; then BAT_THEME="" refresh_zsh_completion "$completions_dir/_delta" delta --generate-completion zsh; fi
-            if command -v bat >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_bat" bat --completion zsh; fi
-            if command -v yq >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_yq" yq shell-completion zsh; fi
-            if command -v glow >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_glow" glow completion zsh; fi
-            if command -v rustup >/dev/null 2>&1; then
-                refresh_zsh_completion "$completions_dir/_rustup" rustup completions zsh
-                if command -v cargo >/dev/null 2>&1; then
-                    refresh_zsh_completion "$completions_dir/_cargo" rustup completions zsh cargo
-                fi
-            elif command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
-                _rustc_sysroot="$(MISE_NOT_FOUND_AUTO_INSTALL=false rustc --print sysroot 2>/dev/null || true)"
-                if [ -n "$_rustc_sysroot" ] && [ -s "$_rustc_sysroot/share/zsh/site-functions/_cargo" ]; then
-                    cp -f "$_rustc_sysroot/share/zsh/site-functions/_cargo" "$completions_dir/_cargo.tmp.$$"
-                    mv -f "$completions_dir/_cargo.tmp.$$" "$completions_dir/_cargo"
-                fi
-                unset _rustc_sysroot
-            fi
-            if command -v tree-sitter >/dev/null 2>&1; then refresh_zsh_completion "$completions_dir/_tree-sitter" tree-sitter complete --shell zsh; fi
+            sync_zsh_cli_completions "$completions_dir" false
         fi
         log_success "CLI tab completions refreshed."
     fi
 fi
 
-END_TIME="$(date +%s)"
-DURATION=$((END_TIME - START_TIME))
-
+DURATION=$(( $(date +%s) - START_TIME ))
 log_header "Update Complete"
 log_success "All requested updates completed successfully in ${DURATION}s."

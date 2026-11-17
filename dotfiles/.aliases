@@ -1,86 +1,59 @@
-# Unified Shell Aliases (Zsh & Bash)
+# Unified Shell Aliases (Zsh and Bash)
+# Delegates to modular dotfiles/.config/shell/aliases-core.sh.
 
-# git custom workflows
-alias gcommit='git add -A && git commit'
-alias gamend='git add -A && git commit --amend --no-edit'
-alias gpush='git push -u origin HEAD'
-alias gpushf='git push -u --force-with-lease origin HEAD'
-alias gpull='git pull --rebase --autostash'
-alias gup='git pull --rebase --autostash --prune'
-alias gprune='git fetch --prune 2>/dev/null; target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --merged "$target" | sed "s/^[ *]*//" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -d "$b"; done'
-alias gpurge='target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --format="%(refname:short)" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
-alias guser-branch='b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -z "$b" ] || [ "$b" = "HEAD" ]; then echo "Error: not on a valid branch" >&2; false; elif [ "$b" = "main" ] || [ "$b" = "master" ] || [ "$b" = "trunk" ]; then echo "Error: refusing to prefix $b branch" >&2; false; else git branch -m "${USER:-$(whoami)}/$(echo "$b" | sed -E "s|^(${USER:-$(whoami)}/)+||")"; fi'
-
-
-# editor shortcuts (Neovim default with Vim fallback; `v` is an RPC-aware function in .zsh-functions / .bashrc-addendum)
-if command -v nvim >/dev/null 2>&1; then
-    alias vi='nvim'
-    alias vim='nvim'
-else
-    alias vi='vim'
-fi
-
-# modern file viewing (bat with TrueColor Solarized Dark; cat remains coreutils)
-if command -v bat >/dev/null 2>&1; then
-    alias b='bat'
-elif command -v batcat >/dev/null 2>&1; then
-    alias bat='batcat'
-    alias b='batcat'
-fi
-
-# standard directory listing (GNU ls / BSD ls defaults)
-if [ "$(uname -s)" = "Darwin" ]; then
-    alias ls='ls -G'
-    alias ll='ls -alFG'
-    alias la='ls -AG'
-    alias l='ls -CFG'
-else
-    alias ls='ls --color=auto'
-    alias ll='ls -alF'
-    alias la='ls -A'
-    alias l='ls -CF'
-fi
-
-# optional modern directory listing (eza shortcuts with Nerd Fonts v3 icons)
-if command -v eza >/dev/null 2>&1; then
-    alias e='eza --icons=auto --group-directories-first'
-    alias el='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso'
-    alias elm='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso --sort=modified'
-    alias et='eza --tree --level=2 --icons=auto'
-    alias elt='eza -la --tree --level=2 --icons=auto --git --group --time-style=long-iso'
-    alias elx='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso -H -i -S --extended'
-fi
-
-# terraform
-alias tf='terraform'
-
-# Aux
-alias ide2='ide --2pane'
-alias ide3='ide --3pane'
-alias idek='ide --kill'
-alias qide='ide --quit'
-alias quit='ide --quit'
-alias ds='dust'
-alias update='update-system'
-if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
-    alias fd='fdfind'
-fi
-
-# Source custom alias drop-ins (~/.aliases.d/*.sh)
-if [ -d "$HOME/.aliases.d" ]; then
-    _source_alias_dropins() {
-        if [ -n "${ZSH_VERSION:-}" ]; then
-            setopt local_options null_glob
+_hs_al_mod=""
+if [ -n "${BASH_VERSION:-}" ]; then
+    eval '_hs_al_src="${BASH_SOURCE[0]:-}"'
+    if [ -n "${_hs_al_src:-}" ]; then
+        if [ -L "$_hs_al_src" ] && command -v readlink >/dev/null 2>&1; then
+            while [ -L "$_hs_al_src" ]; do
+                _hs_al_dir="${_hs_al_src%/*}"
+                [ "$_hs_al_dir" = "$_hs_al_src" ] && _hs_al_dir="."
+                _hs_al_lnk="$(readlink "$_hs_al_src" 2>/dev/null || true)"
+                [ -n "$_hs_al_lnk" ] || break
+                case "$_hs_al_lnk" in
+                    /*) _hs_al_src="$_hs_al_lnk" ;;
+                    *)  _hs_al_src="$_hs_al_dir/$_hs_al_lnk" ;;
+                esac
+            done
         fi
-        for _f in "$HOME/.aliases.d"/*.sh; do
-            if [ -r "$_f" ]; then
-                # shellcheck source=/dev/null
-                . "$_f"
-            fi
-        done
-        unset _f
-    }
-    _source_alias_dropins
-    unset -f _source_alias_dropins
+        _hs_al_dir="${_hs_al_src%/*}"
+        [ "$_hs_al_dir" = "$_hs_al_src" ] && _hs_al_dir="."
+        if [ -r "$_hs_al_dir/.config/shell/aliases-core.sh" ]; then
+            _hs_al_mod="$_hs_al_dir/.config/shell/aliases-core.sh"
+        fi
+    fi
+elif [ -n "${ZSH_VERSION:-}" ]; then
+    eval '
+        _hs_al_had_rpi=${+ZLE_RPROMPT_INDENT}
+        _hs_al_rpi=${ZLE_RPROMPT_INDENT:-}
+        _hs_al_dir="${${(%):-%x}:A:h}/.config/shell"
+        (( _hs_al_had_rpi )) && ZLE_RPROMPT_INDENT=$_hs_al_rpi
+        unset _hs_al_had_rpi _hs_al_rpi
+    '
+    if [ -r "${_hs_al_dir:-}/aliases-core.sh" ]; then
+        _hs_al_mod="$_hs_al_dir/aliases-core.sh"
+    fi
 fi
 
+if [ -z "$_hs_al_mod" ]; then
+    if [ -n "${_HS_SHELL_DIR:-}" ] && [ -r "$_HS_SHELL_DIR/aliases-core.sh" ]; then
+        _hs_al_mod="$_HS_SHELL_DIR/aliases-core.sh"
+    elif [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/aliases-core.sh" ]; then
+        _hs_al_mod="${XDG_CONFIG_HOME:-$HOME/.config}/shell/aliases-core.sh"
+    elif [ -r "$HOME/.config/shell/aliases-core.sh" ]; then
+        _hs_al_mod="$HOME/.config/shell/aliases-core.sh"
+    fi
+fi
+
+if [ -n "$_hs_al_mod" ]; then
+    # shellcheck source=/dev/null
+    . "$_hs_al_mod"
+elif [ -d "$HOME/.aliases.d" ]; then
+    for _hs_al_f in "$HOME/.aliases.d"/*.sh; do
+        # shellcheck source=/dev/null
+        [ -r "$_hs_al_f" ] && . "$_hs_al_f"
+    done
+    unset _hs_al_f
+fi
+unset _hs_al_mod _hs_al_src _hs_al_dir _hs_al_lnk

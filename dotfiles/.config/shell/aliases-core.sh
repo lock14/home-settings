@@ -1,0 +1,92 @@
+# Unified Shell Aliases (Zsh and Bash)
+# Sourced by dotfiles/.aliases and dotfiles/.bashrc-addendum.
+
+# Custom Git workflows (standard ga/gst/gco/gd/gb/gl/gp stay in Oh-My-Zsh git plugin)
+alias gcommit='git add -A && git commit'
+alias gamend='git add -A && git commit --amend --no-edit'
+alias gpush='git push -u origin HEAD'
+alias gpushf='git push -u --force-with-lease origin HEAD'
+alias gpull='git pull --rebase --autostash'
+alias gup='git pull --rebase --autostash --prune'
+# shellcheck disable=SC2154
+alias gprune='git fetch --prune 2>/dev/null; target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --merged "$target" | sed "s/^[ *]*//" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -d "$b"; done'
+# shellcheck disable=SC2154
+alias gpurge='target=$(git show-ref --verify --quiet refs/heads/main && echo main || (git show-ref --verify --quiet refs/heads/master && echo master || git rev-parse --abbrev-ref HEAD 2>/dev/null)); git branch --format="%(refname:short)" | grep -E -v "^(main|master|$target|$(git rev-parse --abbrev-ref HEAD 2>/dev/null))$" | while read -r b; do [ -n "$b" ] && git branch -D "$b"; done'
+# shellcheck disable=SC2154
+alias guser-branch='b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -z "$b" ] || [ "$b" = "HEAD" ]; then echo "Error: not on a valid branch" >&2; false; elif [ "$b" = "main" ] || [ "$b" = "master" ] || [ "$b" = "trunk" ]; then echo "Error: refusing to prefix $b branch" >&2; false; else git branch -m "${USER:-$(whoami)}/$(echo "$b" | sed -E "s|^(${USER:-$(whoami)}/)+||")"; fi'
+
+# Editor shortcuts (Neovim default with Vim fallback; `v` is an RPC-aware function)
+if command -v nvim >/dev/null 2>&1; then
+    alias vi='nvim'
+    alias vim='nvim'
+elif command -v vim >/dev/null 2>&1; then
+    alias vi='vim'
+fi
+
+# Modern file viewing (bat with TrueColor Solarized Dark; cat remains coreutils)
+if command -v bat >/dev/null 2>&1; then
+    alias b='bat'
+elif command -v batcat >/dev/null 2>&1; then
+    alias bat='batcat'
+    alias b='batcat'
+fi
+
+# Standard directory listing (GNU ls and BSD ls defaults; zero-fork OSTYPE check first)
+_hs_is_darwin=0
+case "${OSTYPE:-}" in
+    darwin*) _hs_is_darwin=1 ;;
+    "")      [ "$(uname -s 2>/dev/null)" = "Darwin" ] && _hs_is_darwin=1 ;;
+esac
+if [ "$_hs_is_darwin" = "1" ]; then
+    alias ls='ls -G'
+    alias ll='ls -alFG'
+    alias la='ls -AG'
+    alias l='ls -CFG'
+else
+    alias ls='ls --color=auto'
+    alias ll='ls -alF'
+    alias la='ls -A'
+    alias l='ls -CF'
+fi
+unset _hs_is_darwin
+
+# Modern directory listing (eza shortcuts with Nerd Fonts v3 icons)
+if command -v eza >/dev/null 2>&1; then
+    alias e='eza --icons=auto --group-directories-first'
+    alias el='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso'
+    alias elm='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso --sort=modified'
+    alias et='eza --tree --level=2 --icons=auto'
+    alias elt='eza -la --tree --level=2 --icons=auto --git --group --time-style=long-iso'
+    alias elx='eza -la --icons=auto --git --header --group --group-directories-first --time-style=long-iso -H -i -S --extended'
+fi
+
+# Terraform, Hybrid IDE, and utility shortcuts
+alias tf='terraform'
+alias ide2='ide --2pane'
+alias ide3='ide --3pane'
+alias idek='ide --kill'
+alias qide='ide --quit'
+alias quit='ide --quit'
+alias ds='dust'
+alias update='update-system'
+if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
+    alias fd='fdfind'
+fi
+
+# Source custom alias drop-ins (~/.aliases.d/*.sh)
+if [ -d "$HOME/.aliases.d" ]; then
+    _source_alias_dropins() {
+        if [ -n "${ZSH_VERSION:-}" ]; then
+            setopt local_options null_glob
+        fi
+        for _f in "$HOME/.aliases.d"/*.sh; do
+            if [ -r "$_f" ]; then
+                # shellcheck source=/dev/null
+                . "$_f"
+            fi
+        done
+        unset _f
+    }
+    _source_alias_dropins
+    unset -f _source_alias_dropins
+fi

@@ -572,121 +572,188 @@ else
     fail "setup.sh vim bundles" "Unexpected legacy modules/50-vim.sh found in repository or setup.sh"
 fi
 
-# Test 6: Verify Neovim init.lua configuration
-echo -e "\n[6/6] Testing Neovim init.lua configuration..."
+# Test 6: Verify Neovim init.lua & lua/solarized/*.lua modular configuration
+echo -e "\n[6/6] Testing Neovim init.lua & modular lua/solarized/*.lua configuration..."
 NVIM_CONFIG="$SCRIPT_DIR/dotfiles/.config/nvim/init.lua"
-if [ -f "$NVIM_CONFIG" ]; then
-    pass "Neovim init.lua exists at dotfiles/.config/nvim/init.lua"
+NVIM_LUA_DIR="$SCRIPT_DIR/dotfiles/.config/nvim/lua/solarized"
+if [ -f "$NVIM_CONFIG" ] && [ -d "$NVIM_LUA_DIR" ]; then
+    NVIM_LUA_FILES=("$NVIM_CONFIG" "$NVIM_LUA_DIR"/*.lua)
+    pass "Neovim init.lua and lua/solarized/ module directory exist"
 
-    if grep -q 'maxmx03/solarized.nvim' "$NVIM_CONFIG" && grep -q 'nvim-treesitter' "$NVIM_CONFIG" && grep -q 'nvim-telescope/telescope.nvim' "$NVIM_CONFIG" && grep -q 'mason-lspconfig' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua contains Solarized, Treesitter, Telescope, and Mason LSP"
+    NVIM_EXPECTED_MODS=(options autocmds links keymaps ide theme_groups theme treesitter lsp plugins)
+    NVIM_MOD_MISSING=""
+    for _m in "${NVIM_EXPECTED_MODS[@]}"; do
+        if [ ! -f "$NVIM_LUA_DIR/${_m}.lua" ]; then
+            NVIM_MOD_MISSING="${NVIM_MOD_MISSING} ${_m}.lua"
+        fi
+    done
+    NVIM_PLUGIN_COLLISIONS=""
+    for _c in init palette highlights config utils variants color command groups; do
+        if [ -e "$NVIM_LUA_DIR/${_c}.lua" ] || [ -e "$NVIM_LUA_DIR/${_c}" ]; then
+            NVIM_PLUGIN_COLLISIONS="${NVIM_PLUGIN_COLLISIONS} ${_c}"
+        fi
+    done
+    INIT_LINE_COUNT="$(wc -l < "$NVIM_CONFIG" | tr -d ' ')"
+    if [ -z "$NVIM_MOD_MISSING" ] && [ -z "$NVIM_PLUGIN_COLLISIONS" ] && [ "$INIT_LINE_COUNT" -le 120 ] && \
+       grep -q 'debug\.getinfo(1, "S")\.source' "$NVIM_CONFIG" && \
+       grep -q 'vim\.opt\.rtp:prepend(config_dir)' "$NVIM_CONFIG"; then
+        pass "Neovim init.lua is a concise orchestrator (${INIT_LINE_COUNT} lines) prepending its own config_dir to rtp and loading 10 non-colliding lua/solarized/*.lua modules"
     else
-        fail "Neovim plugins" "Missing expected plugin declarations in init.lua"
+        fail "Neovim modular architecture" "missing='${NVIM_MOD_MISSING}' collisions='${NVIM_PLUGIN_COLLISIONS}' init_lines=${INIT_LINE_COUNT}"
     fi
 
-    if grep -q 'smart_tmux_nav' "$NVIM_CONFIG" && \
-       grep -q 'internal_split_nav' "$NVIM_CONFIG" && \
-       grep -q 'window_zoomed_flag' "$NVIM_CONFIG" && \
-       grep -q 'netrw_liststyle = 3' "$NVIM_CONFIG" && \
-       grep -q 'map("n", "<C-h>", internal_split_nav("h")' "$NVIM_CONFIG" && \
-       ! grep -q 'map({ "n", "t" }, "<C-h>"' "$NVIM_CONFIG" && \
-       grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "$NVIM_CONFIG" && \
-       grep -Fq 'map({ "n", "v", "o" }, "<Home>", smart_home_expr' "$NVIM_CONFIG" && \
-       grep -Fq 'map("i", "<Home>", function()' "$NVIM_CONFIG" && \
-       grep -Fq 'map({ "n", "v" }, "<X1Mouse>", "<C-o>"' "$NVIM_CONFIG" && \
-       grep -Fq 'map("i", "<X1Mouse>", "<C-\\><C-o><C-o>"' "$NVIM_CONFIG" && \
-       grep -Fq 'map({ "n", "v" }, "<X2Mouse>", "<C-i>"' "$NVIM_CONFIG" && \
-       grep -Fq 'map("i", "<X2Mouse>", "<C-\\><C-o><C-i>"' "$NVIM_CONFIG" && \
-       grep -q 'map("n", "H", "<cmd>bprevious<CR>"' "$NVIM_CONFIG" && \
-       grep -q 'map("n", "L", "<cmd>bnext<CR>"' "$NVIM_CONFIG" && \
-       grep -q 'move_selection_next' "$NVIM_CONFIG" && \
-       grep -q 'move_selection_previous' "$NVIM_CONFIG" && \
-       grep -q 'map({ "n", "i", "v", "t" }, "<M-a>"' "$NVIM_CONFIG" && \
-       grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "$NVIM_CONFIG" && \
-       grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "$NVIM_CONFIG" && \
-       grep -q 'map({ "n", "i", "v", "t" }, "<M-H>"' "$NVIM_CONFIG" && \
-       grep -q -- '--show-editor' "$NVIM_CONFIG" && \
-       grep -q -- '--show-term' "$NVIM_CONFIG" && \
-       grep -q -- '--toggle-editor' "$NVIM_CONFIG" && \
-       grep -q -- '--toggle-term' "$NVIM_CONFIG" && \
-       grep -q -- '--swap' "$NVIM_CONFIG" && \
-       grep -q 'MiniFilesBorder' "$NVIM_CONFIG" && \
-       grep -q 'MiniFilesBufferCreate' "$NVIM_CONFIG" && \
-       grep -Fq '<2-LeftMouse>' "$NVIM_CONFIG" && \
-       grep -q 'require("mini.files").setup' "$NVIM_CONFIG" && \
-       grep -q 'require("mini.icons").setup' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, <X1Mouse>/<X2Mouse> jumplist Back/Forward, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files with arrow/CR/<2-LeftMouse> bindings)"
+    if grep -q 'maxmx03/solarized.nvim' "${NVIM_LUA_FILES[@]}" && grep -q 'nvim-treesitter' "${NVIM_LUA_FILES[@]}" && grep -q 'nvim-telescope/telescope.nvim' "${NVIM_LUA_FILES[@]}" && grep -q 'mason-lspconfig' "${NVIM_LUA_FILES[@]}"; then
+        pass "Neovim configuration declares Solarized, Treesitter, Telescope, and Mason LSP"
     else
-        fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, <X1Mouse>/<X2Mouse>, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup in init.lua"
+        fail "Neovim plugins" "Missing expected plugin declarations in dotfiles/.config/nvim"
     fi
 
-    if grep -q 'opt\.autoread = true' "$NVIM_CONFIG" && \
-       grep -q 'SolarizedAutoRead' "$NVIM_CONFIG" && \
-       grep -q 'silent! checktime' "$NVIM_CONFIG" && \
-       grep -q 'toggle_file_explorer(false)' "$NVIM_CONFIG" && \
-       grep -q 'toggle_file_explorer(true)' "$NVIM_CONFIG" && \
-       ! grep -q 'vim\.keymap\.set.*<leader>[eE]' "$NVIM_CONFIG" && \
-       grep -q 'nvim_create_user_command("IdeCd"' "$NVIM_CONFIG" && \
-       grep -q 'nvim_create_user_command("Q"' "$NVIM_CONFIG" && \
-       grep -q 'nvim_create_user_command("Quit"' "$NVIM_CONFIG" && \
-       grep -q '"<leader>gs"' "$NVIM_CONFIG" && \
-       ! grep -q 'SolarizedIdeTree' "$NVIM_CONFIG" && \
-       ! grep -q 'IdeFollow' "$NVIM_CONFIG" && \
-       ! grep -q 'IdeClose' "$NVIM_CONFIG" && \
-       ! grep -q 'IdeWriteClose' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua configures native autoread + SolarizedAutoRead checktime, mini.files explorer (<leader>e buffer dir / <leader>E workspace cwd), <leader>gs git_status, IdeCd, and Q/Quit without custom SolarizedIdeTree, IdeFollow, or :q/:qa hijack"
+    if grep -q 'smart_tmux_nav' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'internal_split_nav' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'window_zoomed_flag' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'netrw_liststyle = 3' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map("n", "<C-h>", internal_split_nav("h")' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'map({ "n", "t" }, "<C-h>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-h>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq 'map({ "n", "v", "o" }, "<Home>", smart_home_expr' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq 'map("i", "<Home>", function()' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq 'map({ "n", "v" }, "<X1Mouse>", "<C-o>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq 'map("i", "<X1Mouse>", "<C-\\><C-o><C-o>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq 'map({ "n", "v" }, "<X2Mouse>", "<C-i>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq 'map("i", "<X2Mouse>", "<C-\\><C-o><C-i>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map("n", "H", "<cmd>bprevious<CR>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map("n", "L", "<cmd>bnext<CR>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'move_selection_next' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'move_selection_previous' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-a>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-H>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q -- '--show-editor' "${NVIM_LUA_FILES[@]}" && \
+       grep -q -- '--show-term' "${NVIM_LUA_FILES[@]}" && \
+       grep -q -- '--toggle-editor' "${NVIM_LUA_FILES[@]}" && \
+       grep -q -- '--toggle-term' "${NVIM_LUA_FILES[@]}" && \
+       grep -q -- '--swap' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'MiniFilesBorder' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'MiniFilesBufferCreate' "${NVIM_LUA_FILES[@]}" && \
+       grep -Fq '<2-LeftMouse>' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'require("mini.files").setup' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'require("mini.icons").setup' "${NVIM_LUA_FILES[@]}"; then
+        pass "Neovim configures 4-layer navigation (C-hjkl internal_split_nav, M-hjkl smart_tmux_nav across all modes, <Home>, <X1Mouse>/<X2Mouse> jumplist Back/Forward, H/L buffer cycling, Telescope C-j/C-k, M-a/e/t focus, M-E/T pane toggles, M-H/J/K/L pane swaps, and Mini.files with arrow/CR/<2-LeftMouse> bindings)"
     else
-        fail "Neovim native autoread & explorer" "Expected opt.autoread, SolarizedAutoRead, toggle_file_explorer(false/true), IdeCd, Q/Quit, <leader>gs, and no SolarizedIdeTree/IdeFollow/IdeClose in init.lua"
+        fail "Neovim IDE integration" "Missing expected 4-layer navigation, <Home>, <X1Mouse>/<X2Mouse>, H/L buffer cycling, M-E/T toggles, M-H/J/K/L swaps, or Mini.files setup"
     fi
 
-    if grep -q 'if not in_ssh then' "$NVIM_CONFIG" && \
-       grep -q 'opt\.clipboard = "unnamedplus"' "$NVIM_CONFIG" && \
-       grep -q '"<M-c>"' "$NVIM_CONFIG" && \
-       grep -q '"<M-v>"' "$NVIM_CONFIG" && \
-       ! grep -q 'broadcast_copy' "$NVIM_CONFIG" && \
-       ! grep -q 'vim\.g\.clipboard' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua guards local /tmp/.X11-unix/X0 fallback behind not in_ssh, relies on built-in unnamedplus + OSC 52 clipboard provider, and binds <M-c> / <M-v> without custom broadcast_copy"
+    if grep -q 'opt\.autoread = true' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'SolarizedAutoRead' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'silent! checktime' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'toggle_file_explorer(false)' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'toggle_file_explorer(true)' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'vim\.keymap\.set.*<leader>[eE]' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'nvim_create_user_command("IdeCd"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'nvim_create_user_command("Q"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'nvim_create_user_command("Quit"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"<leader>gs"' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'SolarizedIdeTree' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'IdeFollow' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'IdeClose' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'IdeWriteClose' "${NVIM_LUA_FILES[@]}"; then
+        pass "Neovim configures native autoread + SolarizedAutoRead checktime, mini.files explorer (<leader>e buffer dir / <leader>E workspace cwd), <leader>gs git_status, IdeCd, and Q/Quit without custom SolarizedIdeTree, IdeFollow, or :q/:qa hijack"
     else
-        fail "Neovim native clipboard & SSH guard" "Expected 'if not in_ssh then', unnamedplus, <M-c>/<M-v>, and no broadcast_copy/vim.g.clipboard override in init.lua"
+        fail "Neovim native autoread & explorer" "Expected opt.autoread, SolarizedAutoRead, toggle_file_explorer(false/true), IdeCd, Q/Quit, <leader>gs, and no SolarizedIdeTree/IdeFollow/IdeClose"
     fi
 
-    if grep -q 'local function set_hl(groups, spec)' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.1"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.2"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.3"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.4"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.5"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.6"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.quote"' "$NVIM_CONFIG" && \
-       grep -q '"@type"' "$NVIM_CONFIG" && \
-       grep -q '"@keyword\.type"' "$NVIM_CONFIG" && \
-       grep -q '"@keyword\.conditional\.ternary"' "$NVIM_CONFIG" && \
-       grep -q '"markdownH1"' "$NVIM_CONFIG" && \
-       grep -q '"markdownH2"' "$NVIM_CONFIG" && \
-       grep -q '"@constant"' "$NVIM_CONFIG" && \
-       grep -q '"@attribute"' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua defines first-principles markup headings (H1 Orange, H2 Blue, H3 Violet, H4 Base1, H5/H6 Base0), Base0 quotes, calm base0 types, green declaration keywords, magenta constants, and calm operators matching bat"
+    if grep -q 'if not in_ssh then' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'opt\.clipboard = "unnamedplus"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"<M-c>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"<M-v>"' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'broadcast_copy' "${NVIM_LUA_FILES[@]}" && \
+       ! grep -q 'vim\.g\.clipboard' "${NVIM_LUA_FILES[@]}"; then
+        pass "Neovim guards local /tmp/.X11-unix/X0 fallback behind not in_ssh, relies on built-in unnamedplus + OSC 52 clipboard provider, and binds <M-c> / <M-v> without custom broadcast_copy"
     else
-        fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, @constant, or markdownH1 in init.lua"
+        fail "Neovim native clipboard & SSH guard" "Expected 'if not in_ssh then', unnamedplus, <M-c>/<M-v>, and no broadcast_copy/vim.g.clipboard override"
     fi
 
+    if grep -q 'local function set_hl(groups, spec)' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.1"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.2"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.3"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.4"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.5"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.6"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.quote"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@type"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@keyword\.type"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@keyword\.conditional\.ternary"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"markdownH1"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"markdownH2"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@constant"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@attribute"' "${NVIM_LUA_FILES[@]}"; then
+        pass "Neovim defines first-principles markup headings (H1 Orange, H2 Blue, H3 Violet, H4 Base1, H5/H6 Base0), Base0 quotes, calm base0 types, green declaration keywords, magenta constants, and calm operators matching bat"
+    else
+        fail "Neovim markup overrides" "Missing or misconfigured @markup.heading.1-6, @markup.quote, @type, @keyword.type, @constant, or markdownH1"
+    fi
+
+    ALL_NVIM_LUA_TARGETS=("${NVIM_LUA_FILES[@]}" "$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua")
     if command -v nvim >/dev/null 2>&1; then
-        if nvim --headless -u NONE -c "lua local f, err = loadfile('$NVIM_CONFIG'); if not f then io.stderr:write(tostring(err) .. '\n'); vim.cmd('cquit 1') end" +qall >/dev/null 2>&1; then
-            pass "Neovim verified init.lua syntax cleanly"
+        NVIM_SYNTAX_SCRIPT="$(mktemp)"
+        cat <<'EOF' > "$NVIM_SYNTAX_SCRIPT"
+for _, path in ipairs(vim.split(vim.env.NVIM_LUA_TARGET_LIST or "", "\n", { trimempty = true })) do
+    local f, err = loadfile(path)
+    if not f then
+        io.stderr:write(tostring(path) .. ": " .. tostring(err) .. "\n")
+        vim.cmd("cquit 1")
+    end
+end
+EOF
+        if NVIM_LUA_TARGET_LIST="$(printf '%s\n' "${ALL_NVIM_LUA_TARGETS[@]}")" run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_SYNTAX_SCRIPT" >/dev/null 2>&1; then
+            pass "Neovim verified Lua syntax cleanly across init.lua, lua/solarized/*.lua, and ftplugin/java.lua"
         else
-            fail "Neovim init.lua syntax" "Neovim reported errors when parsing init.lua"
+            fail "Neovim Lua syntax" "Neovim reported errors when parsing init.lua or lua/solarized/*.lua"
+        fi
+        rm -f "$NVIM_SYNTAX_SCRIPT"
+
+        EMPTY_XDG_CFG="$(mktemp -d)"
+        EMPTY_XDG_PROBE="$(mktemp)"
+        cat <<'EOF' > "$EMPTY_XDG_PROBE"
+local msgs_before = vim.trim(vim.fn.execute("messages"))
+dofile(vim.env.NVIM_CONFIG_PATH)
+local msgs_after = vim.trim(vim.fn.execute("messages"))
+local ok_pal, pal = pcall(require, "solarized.palette")
+local has_sp = (ok_pal and type(pal) == "table" and type(pal.solarized) == "table")
+io.write(table.concat({
+    "MSGS0=" .. tostring(msgs_before == ""),
+    "MSGS1=" .. tostring(msgs_after == ""),
+    "PAL=" .. tostring(has_sp),
+    "THEME=" .. tostring(_G.apply_home_settings_theme and _G.apply_home_settings_theme() or ""),
+}, "|"))
+EOF
+        EMPTY_XDG_OUT="$(XDG_CONFIG_HOME="$EMPTY_XDG_CFG" NVIM_TS_SKIP_AUTO_INSTALL=1 NVIM_CONFIG_PATH="$NVIM_CONFIG" run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $EMPTY_XDG_PROBE" 2>/dev/null || true)"
+        rm -rf "$EMPTY_XDG_CFG" "$EMPTY_XDG_PROBE"
+        if [ "$EMPTY_XDG_OUT" = "MSGS0=true|MSGS1=true|PAL=true|THEME=solarized-dark" ]; then
+            pass "Neovim -u init.lua loads cleanly in an unlinked empty XDG_CONFIG_HOME, preserves maxmx03/solarized.nvim palette, and supports idempotent re-sourcing with zero :messages errors"
+        else
+            fail "Neovim empty XDG_CONFIG_HOME & re-source check" "Expected 'MSGS0=true|MSGS1=true|PAL=true|THEME=solarized-dark', got '$EMPTY_XDG_OUT'"
         fi
     elif command -v luajit >/dev/null 2>&1; then
-        if luajit -bl "$NVIM_CONFIG" >/dev/null 2>&1; then
-            pass "Lua syntax valid: init.lua"
+        LUA_SYN_OK=true
+        for _lf in "${ALL_NVIM_LUA_TARGETS[@]}"; do
+            luajit -bl "$_lf" >/dev/null 2>&1 || LUA_SYN_OK=false
+        done
+        if [ "$LUA_SYN_OK" = true ]; then
+            pass "Lua syntax valid across init.lua and lua/solarized/*.lua"
         else
-            fail "Lua syntax error" "init.lua failed syntax check"
+            fail "Lua syntax error" "LuaJIT syntax check failed"
         fi
     elif command -v lua >/dev/null 2>&1; then
-        if lua -e "assert(loadfile('$NVIM_CONFIG'))" >/dev/null 2>&1; then
-            pass "Lua syntax valid: init.lua"
+        LUA_SYN_OK=true
+        for _lf in "${ALL_NVIM_LUA_TARGETS[@]}"; do
+            lua -e "assert(loadfile('$_lf'))" >/dev/null 2>&1 || LUA_SYN_OK=false
+        done
+        if [ "$LUA_SYN_OK" = true ]; then
+            pass "Lua syntax valid across init.lua and lua/solarized/*.lua"
         else
-            fail "Lua syntax error" "init.lua failed syntax check"
+            fail "Lua syntax error" "Lua syntax check failed"
         fi
     fi
 
@@ -711,33 +778,33 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim C++ query extension" "Missing or invalid after/queries/cpp/highlights.scm"
     fi
 
-    if grep -q '"@module"' "$NVIM_CONFIG" && \
-       grep -q '"@lsp\.type\.namespace"' "$NVIM_CONFIG"; then
+    if grep -q '"@module"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@lsp\.type\.namespace"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim maps @module and @lsp.type.namespace to Solarized Violet (#6c71c4)"
     else
-        fail "Neovim namespace highlights" "Missing @module or @lsp.type.namespace mapped to colors.violet in init.lua"
+        fail "Neovim namespace highlights" "Missing @module or @lsp.type.namespace mapped to colors.violet"
     fi
 
     PRINTF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/printf/highlights.scm"
     if [ -f "$PRINTF_QUERY" ] && grep -q 'format.*@string.special' "$PRINTF_QUERY" && \
-       grep -q '"@string\.escape"' "$NVIM_CONFIG" && \
-       grep -q '"@character\.printf"' "$NVIM_CONFIG" && \
-       grep -q '"printf"' "$NVIM_CONFIG"; then
+       grep -q '"@string\.escape"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@character\.printf"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"printf"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter printf format specifiers and string escapes in Solarized Cyan"
     else
-        fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences in init.lua"
+        fail "Neovim printf highlights" "Missing or invalid printf format specifiers and escape sequences"
     fi
 
     DIFF_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/diff/highlights.scm"
     if [ -f "$DIFF_QUERY" ] && grep -q 'deletion.*@diff.minus' "$DIFF_QUERY" && \
        grep -q 'addition.*@diff.plus' "$DIFF_QUERY" && \
        grep -q 'location.*@diff.line' "$DIFF_QUERY" && \
-       grep -q '"@diff\.plus"' "$NVIM_CONFIG" && \
-       grep -q '"@diff\.minus"' "$NVIM_CONFIG" && \
-       grep -q '"@diff\.line"' "$NVIM_CONFIG"; then
+       grep -q '"@diff\.plus"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@diff\.minus"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@diff\.line"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter query extensions and highlights for diff (Green additions, Red deletions, Blue hunk lines)"
     else
-        fail "Neovim diff query extension" "Missing or invalid after/queries/diff/highlights.scm or init.lua diff overrides"
+        fail "Neovim diff query extension" "Missing or invalid after/queries/diff/highlights.scm or diff highlight overrides"
     fi
 
     GO_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/go/highlights.scm"
@@ -819,14 +886,14 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim XML query extension" "Missing or invalid after/queries/xml/highlights.scm"
     fi
 
-    if grep -q '"@tag"' "$NVIM_CONFIG" && \
-       grep -q '"@tag\.attribute"' "$NVIM_CONFIG" && \
-       grep -q '"@tag\.delimiter"' "$NVIM_CONFIG" && \
-       grep -q '"xmlTagName"' "$NVIM_CONFIG" && \
-       grep -q '"xml"' "$NVIM_CONFIG"; then
+    if grep -q '"@tag"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@tag\.attribute"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@tag\.delimiter"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"xmlTagName"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"xml"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter and legacy syntax highlights for XML (Blue tags, Green attributes, Base0 delimiters, parsers table)"
     else
-        fail "Neovim XML highlights in init.lua" "Missing or invalid XML highlight groups or parser in init.lua"
+        fail "Neovim XML highlights" "Missing or invalid XML highlight groups or parser"
     fi
 
     HTML_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/html/highlights.scm"
@@ -839,12 +906,12 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim HTML query base" "Missing or invalid queries/html/highlights.scm or queries/html_tags/highlights.scm"
     fi
 
-    if grep -q '"htmlTagName"' "$NVIM_CONFIG" && \
-       grep -q '"@markup\.heading\.html"' "$NVIM_CONFIG" && \
-       grep -q '"html"' "$NVIM_CONFIG"; then
+    if grep -q '"htmlTagName"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@markup\.heading\.html"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"html"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter and legacy syntax highlights for HTML (Blue tags, Base0 heading desensitization, parsers table)"
     else
-        fail "Neovim HTML highlights in init.lua" "Missing or invalid HTML highlight groups or parser in init.lua"
+        fail "Neovim HTML highlights" "Missing or invalid HTML highlight groups or parser"
     fi
 
     PROTO_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/proto/highlights.scm"
@@ -853,13 +920,13 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'function\.method' "$PROTO_QUERY" && [ -f "$TEXTPROTO_QUERY" ] && \
        grep -q 'property\.textproto' "$TEXTPROTO_QUERY" && \
        grep -q '@tag' "$TEXTPROTO_QUERY" && \
-       grep -q '"@property\.textproto"' "$NVIM_CONFIG" && \
-       grep -q '"protoRepeat"' "$NVIM_CONFIG" && \
-       grep -q '"pbtxtMessage"' "$NVIM_CONFIG" && \
-       grep -q '"proto"' "$NVIM_CONFIG" && grep -q '"textproto"' "$NVIM_CONFIG"; then
+       grep -q '"@property\.textproto"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"protoRepeat"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"pbtxtMessage"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"proto"' "${NVIM_LUA_FILES[@]}" && grep -q '"textproto"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter base queries and legacy fallbacks for Protocol Buffers (.proto) and Textproto (.textproto / .pbtxt)"
     else
-        fail "Neovim Protobuf & Textproto queries/highlights" "Missing or invalid queries/proto/highlights.scm, queries/textproto/highlights.scm, or init.lua highlights"
+        fail "Neovim Protobuf & Textproto queries/highlights" "Missing or invalid queries/proto/highlights.scm, queries/textproto/highlights.scm, or highlights"
     fi
 
     KOTLIN_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/kotlin/highlights.scm"
@@ -868,10 +935,10 @@ if [ -f "$NVIM_CONFIG" ]; then
        grep -q 'interpolation_identifier_start' "$KOTLIN_QUERY" && \
        [ -f "$SWIFT_QUERY" ] && grep -q '"defer"' "$SWIFT_QUERY" && \
        grep -q '"fallthrough"' "$SWIFT_QUERY" && \
-       grep -q '"kotlin"' "$NVIM_CONFIG" && grep -q '"swift"' "$NVIM_CONFIG"; then
+       grep -q '"kotlin"' "${NVIM_LUA_FILES[@]}" && grep -q '"swift"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter query extensions and parser registrations for Kotlin (.kt/.kts) and Swift (.swift)"
     else
-        fail "Neovim Kotlin & Swift queries/parsers" "Missing or invalid after/queries/kotlin/highlights.scm, after/queries/swift/highlights.scm, or init.lua parser entries"
+        fail "Neovim Kotlin & Swift queries/parsers" "Missing or invalid after/queries/kotlin/highlights.scm, after/queries/swift/highlights.scm, or parser entries"
     fi
 
     GRAPHQL_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/queries/graphql/highlights.scm"
@@ -880,11 +947,11 @@ if [ -f "$NVIM_CONFIG" ]; then
     if [ -f "$GRAPHQL_QUERY" ] && grep -q 'type_system_directive_location' "$GRAPHQL_QUERY" && \
        [ -f "$STARLARK_QUERY" ] && grep -q '"load"' "$STARLARK_QUERY" && \
        [ -f "$REGO_QUERY" ] && grep -q 'expr_every' "$REGO_QUERY" && \
-       grep -q '"@property\.graphql"' "$NVIM_CONFIG" && \
-       grep -q '"graphql"' "$NVIM_CONFIG" && grep -q '"starlark"' "$NVIM_CONFIG" && grep -q '"rego"' "$NVIM_CONFIG"; then
+       grep -q '"@property\.graphql"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"graphql"' "${NVIM_LUA_FILES[@]}" && grep -q '"starlark"' "${NVIM_LUA_FILES[@]}" && grep -q '"rego"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter queries and parser registrations for GraphQL (.graphql), Starlark/Bazel (.bzl), and OPA Rego (.rego)"
     else
-        fail "Neovim GraphQL, Starlark & Rego queries/parsers" "Missing or invalid queries/graphql/highlights.scm, after/queries/starlark/highlights.scm, queries/rego/highlights.scm, or init.lua entries"
+        fail "Neovim GraphQL, Starlark & Rego queries/parsers" "Missing or invalid queries/graphql/highlights.scm, after/queries/starlark/highlights.scm, queries/rego/highlights.scm, or entries"
     fi
 
     LUA_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/lua/highlights.scm"
@@ -895,10 +962,10 @@ if [ -f "$NVIM_CONFIG" ]; then
        [ -f "$DOCKER_QUERY" ] && grep -q 'from_instruction' "$DOCKER_QUERY" && \
        [ -f "$DOCKER_INJ_QUERY" ] && ! grep -q '#set! injection\.combined' "$DOCKER_INJ_QUERY" && \
        [ -f "$MAKE_QUERY" ] && grep -q 'automatic_variable' "$MAKE_QUERY" && \
-       grep -q '"dockerfile"' "$NVIM_CONFIG" && grep -q '"make"' "$NVIM_CONFIG"; then
+       grep -q '"dockerfile"' "${NVIM_LUA_FILES[@]}" && grep -q '"make"' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter queries and parser registrations for Lua (.lua), Dockerfile (Containerfile), and GNU Make (.mk)"
     else
-        fail "Neovim Lua, Dockerfile & Make queries/parsers" "Missing or invalid after/queries/{lua,dockerfile,make}/highlights.scm, queries/dockerfile/injections.scm, or init.lua entries"
+        fail "Neovim Lua, Dockerfile & Make queries/parsers" "Missing or invalid after/queries/{lua,dockerfile,make}/highlights.scm, queries/dockerfile/injections.scm, or entries"
     fi
 
     ELIXIR_QUERY="$SCRIPT_DIR/dotfiles/.config/nvim/after/queries/elixir/highlights.scm"
@@ -913,14 +980,14 @@ if [ -f "$NVIM_CONFIG" ]; then
        [ -f "$OCAML_QUERY" ] && grep -q 'type_variable' "$OCAML_QUERY" && \
        [ -f "$CLOJURE_QUERY" ] && grep -q 'defprotocol' "$CLOJURE_QUERY" && \
        [ -f "$LEAN_QUERY" ] && grep -q 'interpolated_str' "$LEAN_QUERY" && \
-       grep -q '"@string\.special\.symbol\.elixir"' "$NVIM_CONFIG" && \
-       grep -q '"@string\.special\.symbol\.clojure"' "$NVIM_CONFIG" && \
-       grep -q '"elixir"' "$NVIM_CONFIG" && grep -q '"haskell"' "$NVIM_CONFIG" && \
-       grep -q '"ocaml"' "$NVIM_CONFIG" && grep -q '"clojure"' "$NVIM_CONFIG" && \
-       grep -q '"lean"' "$NVIM_CONFIG" && grep -q 'tree-sitter-lean' "$NVIM_CONFIG"; then
+       grep -q '"@string\.special\.symbol\.elixir"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"@string\.special\.symbol\.clojure"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"elixir"' "${NVIM_LUA_FILES[@]}" && grep -q '"haskell"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"ocaml"' "${NVIM_LUA_FILES[@]}" && grep -q '"clojure"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"lean"' "${NVIM_LUA_FILES[@]}" && grep -q 'tree-sitter-lean' "${NVIM_LUA_FILES[@]}"; then
         pass "Neovim defines Tree-sitter queries and parser registrations for Elixir (.ex), Haskell (.hs), OCaml (.ml), Clojure (.clj), and Lean 4 (.lean)"
     else
-        fail "Neovim Elixir, Haskell, OCaml, Clojure & Lean queries/parsers" "Missing or invalid after/queries/{elixir,haskell,ocaml,clojure}/highlights.scm, queries/{elixir/injections,lean/highlights}.scm, or init.lua entries"
+        fail "Neovim Elixir, Haskell, OCaml, Clojure & Lean queries/parsers" "Missing or invalid after/queries/{elixir,haskell,ocaml,clojure}/highlights.scm, queries/{elixir/injections,lean/highlights}.scm, or entries"
     fi
 
     JAVA_FTPLUGIN="$SCRIPT_DIR/dotfiles/.config/nvim/ftplugin/java.lua"
@@ -930,36 +997,36 @@ if [ -f "$NVIM_CONFIG" ]; then
         fail "Neovim Java ftplugin" "Missing or invalid dotfiles/.config/nvim/ftplugin/java.lua"
     fi
 
-    if grep -q '"clangd"' "$NVIM_CONFIG" && \
-       grep -q '"rust_analyzer"' "$NVIM_CONFIG" && \
-       grep -q '"ts_ls"' "$NVIM_CONFIG" && \
-       grep -q '"typescript-language-server"' "$NVIM_CONFIG" && \
-       grep -q '"lua_ls"' "$NVIM_CONFIG" && \
-       grep -q '"bashls"' "$NVIM_CONFIG" && \
-       grep -q '"jdtls"' "$NVIM_CONFIG" && \
-       grep -q 'nvim-jdtls' "$NVIM_CONFIG"; then
-        pass "Neovim configures Polyglot LSPs (clangd, rust_analyzer, gopls, pyright, ts_ls, lua_ls, bashls, jdtls) in init.lua"
+    if grep -q '"clangd"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"rust_analyzer"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"ts_ls"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"typescript-language-server"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"lua_ls"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"bashls"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"jdtls"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'nvim-jdtls' "${NVIM_LUA_FILES[@]}"; then
+        pass "Neovim configures Polyglot LSPs (clangd, rust_analyzer, gopls, pyright, ts_ls, lua_ls, bashls, jdtls)"
     else
-        fail "Neovim polyglot LSPs" "Missing expected polyglot LSPs (including ts_ls) in dotfiles/.config/nvim/init.lua"
+        fail "Neovim polyglot LSPs" "Missing expected polyglot LSPs (including ts_ls)"
     fi
 
     LAZY_LOCK="$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json"
-    if grep -q 'MeanderingProgrammer/render-markdown\.nvim' "$NVIM_CONFIG" && \
-       grep -q '"<leader>m"' "$NVIM_CONFIG" && \
-       grep -q 'SolarizedMarkdownReadability' "$NVIM_CONFIG" && \
-       grep -q 'opt\.smoothscroll = true' "$NVIM_CONFIG" && \
-       grep -q 'style\s*=\s*"normal"' "$NVIM_CONFIG" && \
-       grep -q 'cell\s*=\s*"raw"' "$NVIM_CONFIG" && \
-       grep -q 'wrap\s*=\s*false' "$NVIM_CONFIG" && \
-       grep -q 'RenderMarkdownH1' "$NVIM_CONFIG" && \
-       grep -q '"RenderMarkdownWarn"' "$NVIM_CONFIG" && \
-       grep -q '"RenderMarkdownHint"' "$NVIM_CONFIG" && \
-       grep -q '"RenderMarkdownBullet"' "$NVIM_CONFIG" && \
-       grep -q 'RenderMarkdownCodeInfo\s*=\s*{\s*fg\s*=\s*colors\.base01' "$NVIM_CONFIG" && \
-       grep -q 'highlight_language\s*=\s*"RenderMarkdownCodeInfo"' "$NVIM_CONFIG" && \
-       grep -q 'yaml\s*=\s*{\s*enabled\s*=\s*false\s*}' "$NVIM_CONFIG" && \
-       grep -q 'SolarizedMiniFilesWindow' "$NVIM_CONFIG" && \
-       grep -q 'max_number\s*=\s*2' "$NVIM_CONFIG" && \
+    if grep -q 'MeanderingProgrammer/render-markdown\.nvim' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"<leader>m"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'SolarizedMarkdownReadability' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'opt\.smoothscroll = true' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'style\s*=\s*"normal"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'cell\s*=\s*"raw"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'wrap\s*=\s*false' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'RenderMarkdownH1' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"RenderMarkdownWarn"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"RenderMarkdownHint"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q '"RenderMarkdownBullet"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'RenderMarkdownCodeInfo\s*=\s*{\s*fg\s*=\s*colors\.base01' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'highlight_language\s*=\s*"RenderMarkdownCodeInfo"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'yaml\s*=\s*{\s*enabled\s*=\s*false\s*}' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'SolarizedMiniFilesWindow' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'max_number\s*=\s*2' "${NVIM_LUA_FILES[@]}" && \
        [ -f "$LAZY_LOCK" ] && grep -q '"render-markdown\.nvim"' "$LAZY_LOCK"; then
         pass "Neovim configures render-markdown.nvim (<leader>m, SolarizedMarkdownReadability, RenderMarkdown* highlights) and left-anchored mini.files (max_number = 2, SolarizedMiniFilesWindow)"
     else

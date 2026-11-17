@@ -6,7 +6,6 @@ set -euo pipefail
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
 
-# Source helper libraries
 # shellcheck source=/dev/null
 . "$REPO_DIR/lib/log.sh"
 # shellcheck source=/dev/null
@@ -22,18 +21,19 @@ if [ "$DRY_RUN" = true ]; then
     echo "  [DryRun] Symlinking bin/* into $DEST_DIR"
 else
     mkdir -p "$DEST_DIR"
+    # Only regular top-level executables in bin/ are linked; package subdirs (bin/*_lib) stay internal.
     for f in "$BIN_DIR"/*; do
-        if [ -f "$f" ]; then
-            chmod +x "$f"
-            link_file "$f" "$DEST_DIR/$(basename "$f")"
-        fi
+        [ -f "$f" ] || continue
+        chmod +x "$f"
+        link_file "$f" "$DEST_DIR/$(basename "$f")"
     done
 
     # Compatibility shims for Debian/Ubuntu package naming conventions
-    if [ ! -e "$DEST_DIR/fd" ] && command -v fdfind >/dev/null 2>&1; then
-        link_file "$(command -v fdfind)" "$DEST_DIR/fd"
-    fi
-    if [ ! -e "$DEST_DIR/bat" ] && command -v batcat >/dev/null 2>&1; then
-        link_file "$(command -v batcat)" "$DEST_DIR/bat"
-    fi
+    for shim_pair in "fd:fdfind" "bat:batcat"; do
+        shim_name="${shim_pair%%:*}"
+        distro_cmd="${shim_pair#*:}"
+        if [ ! -e "$DEST_DIR/$shim_name" ] && command -v "$distro_cmd" >/dev/null 2>&1; then
+            link_file "$(command -v "$distro_cmd")" "$DEST_DIR/$shim_name"
+        fi
+    done
 fi

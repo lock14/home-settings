@@ -132,7 +132,7 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 
 ## Architecture overview
 
-The repository is organized into a thin CLI orchestrator (`setup.sh`), stage-based provisioning modules (`modules/`), declaratively mirrored user configurations (`dotfiles/` and `bin/`), standalone syntax and color definitions (`syntaxes/` and `colors/`), and an automated verification suite (`tests/`):
+The repository is organized into a thin CLI orchestrator (`setup.sh`), stage-based provisioning modules (`modules/`) and shared shell libraries (`lib/`), declaratively mirrored user configurations (`dotfiles/`), standalone CLI utilities backed by modular Python packages (`bin/`), standalone syntax and color definitions (`syntaxes/` and `colors/`), and an automated verification suite (`tests/`):
 
 ```text
 home-settings/
@@ -145,20 +145,22 @@ home-settings/
 │   ├── gen-passwd                   # Password generator with custom character sets
 │   ├── gnome-terminal-solarized     # GNOME Terminal TrueColor profile provisioner
 │   ├── ide                          # Tmux, Neovim, and AI Agent (agy, claude, codex) IDE workspace launcher
+│   ├── ide_lib/                     # Python domain package backing bin/ide (layout, fleet, tmux, git, RPC, links)
 │   ├── macos-terminal-solarized     # macOS Terminal.app TrueColor profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   ├── sum                          # High-performance AWK number summation and stats
 │   ├── theme                        # Multi-theme color scheme manager with interactive fzf preview
+│   ├── theme_lib/                   # Python package backing bin/theme and terminal profile provisioners
 │   └── update-system                # Cross-platform system package, Snap, Flatpak, and toolchain updater
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, CLI, and Terraform shortcuts (also auto-loads ~/.aliases.d/*.sh)
-│   ├── .bashrc-addendum             # Standalone Bash prompt, Readline history drawer, theme switcher, and zoxide hook
+│   ├── .bashrc-addendum             # Modular Bash prompt, Readline history drawer, theme switcher, and zoxide hook
 │   ├── .environment-variables       # Environment, COLORTERM, and PATH (also auto-loads ~/.environment-variables.d/*.sh)
 │   ├── .p10k.zsh                    # Powerlevel10k single-line prompt configuration
 │   ├── .tmux.conf                   # Solarized Dark TrueColor Tmux multiplexer and IDE pane bindings
 │   ├── .vimrc                       # Standalone TrueColor Vim configuration and :Theme switcher
-│   ├── .zsh-completions             # Fpath completion registration
+│   ├── .zsh-completions             # Fpath completion registration and CLI completion loader
 │   ├── .zsh-functions               # Git synchronization (gsync), search (fs), IDE opener (v, icd), and theme switcher (theme)
 │   ├── .zshrc-addendum              # Zsh integration hook, zoxide, and plugin loader
 │   ├── .dir-colors/dircolors        # Solarized Dark dircolors database
@@ -173,14 +175,18 @@ home-settings/
 │       ├── nvim/                    # Modern Lua Neovim (Lazy.nvim, Native LSP, Tree-sitter, Telescope)
 │       │   ├── init.lua
 │       │   ├── lazy-lock.json
+│       │   ├── lua/solarized/
 │       │   ├── ftplugin/java.lua
 │       │   ├── queries/
 │       │   └── after/queries/
+│       ├── shell/                   # Modular Bash, Zsh, completion, and Powerlevel10k runtime scripts
 │       └── tealdeer/config.toml     # Tealdeer tldr cheatsheet viewer with TrueColor styling
 │
 ├── lib/                             # Shared helper libraries
-│   ├── log.sh                       # Terminal logging and dry-run runner
-│   ├── os.sh                        # Operating system and architecture detection
+│   ├── log.sh                       # Terminal logging, dry-run runner, and atomic file helpers
+│   ├── os.sh                        # Operating system, architecture, and PATH helpers
+│   ├── pkg.sh                       # Cross-platform native, Snap, and desktop package primitives
+│   ├── shell-env.sh                 # Shell RC hooks, Oh-My-Zsh sync, and Zsh completion generator
 │   └── symlink.sh                   # Safe atomic symlinking with directory backup support
 │
 ├── modules/                         # Stage-based single-responsibility modules
@@ -256,7 +262,7 @@ home-settings/
 
 The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim, and AI CLIs (`agy`, `claude`, and `codex`, selectable via `ide --agent <cli>` or `$IDE_AI_CLI`). Launch or reattach workspaces by directory path, active session name, or custom workspace shorthand (`ide [dir|name]`), or open the interactive workspace directory picker directly via `ide -n` (`ide --new`).
 
-- **Spatial window architecture**: Configured in `bin/ide` and `dotfiles/.tmux.conf`:
+- **Spatial window architecture**: Configured in `bin/ide`, `bin/ide_lib/`, and `dotfiles/.tmux.conf`:
   - **Single-window geometry**: Runs inside a single Tmux window (`ide`) using an AI-first inverted-T layout:
     - **3-pane layout**: Launched by default via `ide`, `ide3`, or `ide --3pane` with a top-left AI Agent (50%×75%, focused on launch), top-right Main Editor (50%×75%, single Neovim server), and full-width bottom Interactive Shell (100%×25%).
     - **2-pane layout**: Launched via `ide2` or `ide --2pane` with a side-by-side 50% AI Agent and 50% full-height Main Editor.
@@ -371,7 +377,7 @@ The following table indexes all keyboard shortcuts, mouse actions, editor comman
 Interactive shells are configured for sub-10ms startup times, fast tab completion, and Solarized Dark styling:
 
 - **Zsh engine and completion**: Fast interactive startup with `fpath` tab completions, support for untracked local `*.d/` drop-in directories, and automatic working directory recovery across Zsh and Bash when a FUSE or network workspace mount reconnects.
-- **Powerlevel10k and Bash Git prompts**: Configured in `.p10k.zsh` and `.bashrc-addendum`:
+- **Powerlevel10k and Bash Git prompts**: Configured in `.p10k.zsh`, `.bashrc-addendum`, and `.config/shell/`:
   - **Single-line shelf prompt**: Solarized Dark Base02 shelf displaying the OS icon, working directory, Git host icon, branch status, and execution telemetry in both Zsh and Bash.
   - **Daemon-free Git status**: Queries `git status --porcelain=v2` directly without `gitstatusd`, supporting standard, SHA-256, and `reftable` repositories.
   - **Clickable pull and merge request badges**: Renders `<branch>@<N>` as a clickable link to the active pull or merge request on GitHub, GitLab, Bitbucket, Gitea, Forgejo, and Codeberg. Pull request numbers are resolved and cached in the background via forge CLIs or `git ls-remote` so the prompt never blocks.
@@ -453,7 +459,7 @@ The `theme` command switches the active color scheme across all terminal emulato
   - **Classic developer palettes**: `solarized-dark` (default), `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`.
   - **Major US Holiday palettes**: `new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`.
 - **Interactive fuzzy picker**: Running `theme` with no arguments opens an interactive `fzf` selector with a full-pane TrueColor swatch, diff, prompt, and syntax preview (`theme --preview {1}`) rendered on the highlighted theme's background, applying the chosen theme immediately on `Enter`.
-- **Unified multi-tool synchronization**: Applying a theme (via `theme <name>` in the shell or `:Theme <name>` inside Neovim and Vim) updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/init.lua` and live RPC hot-reload across active `/tmp/nvim-ide-*.sock` sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt and Readline history drawer (`dotfiles/.bashrc-addendum`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences. Both `dotfiles/.bashrc-addendum` and `dotfiles/.vimrc` also embed all 17 palettes and custom theme support for zero-dependency 2-file deployment on remote servers.
+- **Unified multi-tool synchronization**: Applying a theme (via `theme <name>` in the shell or `:Theme <name>` inside Neovim and Vim) updates Ghostty (`dotfiles/.config/ghostty/config`), GNOME Terminal (`dconf`), macOS `Terminal.app`, `bat` (`colors/*.tmTheme` and `BAT_THEME`), Neovim (`dotfiles/.config/nvim/lua/solarized/` and live RPC hot-reload across active IDE Neovim sockets), Vim (`dotfiles/.vimrc`), Tmux (`dotfiles/.tmux.conf` and live server reload), `delta` (`dotfiles/.config/git/config`), `btop` (`dotfiles/.config/btop/btop.conf`), `tealdeer` (`dotfiles/.config/tealdeer/config.toml`), Powerlevel10k (`dotfiles/.p10k.zsh`), Bash prompt and Readline history drawer (`dotfiles/.bashrc-addendum` and `dotfiles/.config/shell/`), `fzf`, `eza`, `jq`, `less`, `LS_COLORS`, Zsh syntax highlighting, and live terminal emulator palettes via OSC 10, 11, 12, and 4 escape sequences. Standalone Vim (`dotfiles/.vimrc`) embeds all 17 palettes in a single file, while `dotfiles/.bashrc-addendum` paired with `dotfiles/.config/shell/` provides zero-dependency Bash theme and prompt parity on restricted remote servers and degrades cleanly when sourced alone.
 - **User-defined custom themes**: Drop any `.theme` or `.conf` file into `${XDG_CONFIG_HOME:-$HOME/.config}/themes/` (or scaffold one with `theme --create <name> [--from <base>]`) to register a custom 16-color and semantic accent palette that participates in `theme --list`, `:Theme` completion, interactive `fzf` previews, and full tool generation.
 
 | Command | Description |
@@ -509,7 +515,7 @@ notify = ["ide", "--agent-state", "done"]
 
 ## Git and shell shortcuts
 
-Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` provide shortcuts for history search, directory jumping, `eza` directory listings, IDE session control, theme switching, and Git branch maintenance:
+Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` (backed by shared modules in `dotfiles/.config/shell/`) provide shortcuts for history search, directory jumping, `eza` directory listings, IDE session control, theme switching, and Git branch maintenance:
 
 | Shortcut | Description |
 | :--- | :--- |
@@ -554,7 +560,7 @@ Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` 
 
 ## Standalone utilities (`bin/`)
 
-Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by `modules/20-bin.sh`. Every utility runs under `set -euo pipefail` and accepts `-h` or `--help` to display command-line usage:
+Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by `modules/20-bin.sh`, while internal Python packages in `bin/ide_lib/` and `bin/theme_lib/` remain private to the repository. Every utility runs under `set -euo pipefail` and accepts `-h` or `--help` to display command-line usage:
 
 | Script | Key options and arguments | Description |
 | :--- | :--- | :--- |

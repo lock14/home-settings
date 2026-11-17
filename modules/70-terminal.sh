@@ -1,12 +1,11 @@
 #!/bin/bash
-# Stage 70: Terminal emulator configuration (GNOME Terminal, etc.).
+# Stage 70: Terminal emulator configuration (GNOME Terminal, macOS Terminal.app).
 
 set -euo pipefail
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
 
-# Source helper libraries
 # shellcheck source=/dev/null
 . "$REPO_DIR/lib/log.sh"
 # shellcheck source=/dev/null
@@ -16,37 +15,25 @@ OS="${OS:-$(detect_os)}"
 DRY_RUN="${DRY_RUN:-false}"
 
 configure_terminal() {
-    local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
-    local resolved_theme="${HOME_SETTINGS_THEME:-}"
-    if [ -z "$resolved_theme" ] && [ -f "$xdg_config/home-settings/theme" ]; then
-        resolved_theme="$(tr -d '[:space:]' < "$xdg_config/home-settings/theme" || true)"
-    fi
-    local -a theme_args=()
-    if [ -n "$resolved_theme" ]; then
-        theme_args=("--theme=$resolved_theme")
+    local resolved_theme
+    resolved_theme="$(resolve_persisted_theme "${XDG_CONFIG_HOME:-$HOME/.config}")"
+
+    local -a cli_args=()
+    [ -n "$resolved_theme" ] && cli_args+=("--theme=$resolved_theme")
+    [ "$DRY_RUN" = true ] && cli_args+=("--dry-run")
+
+    if [ "$OS" = "macos" ]; then
+        echo "  Configuring macOS Terminal.app..."
+        "$REPO_DIR/bin/macos-terminal-solarized" ${cli_args[@]+"${cli_args[@]}"}
+        return 0
     fi
 
-    # GNOME Terminal profile provisioning on Linux
-    if [ "$OS" != "macos" ] && command -v dconf >/dev/null 2>&1 && command -v gsettings >/dev/null 2>&1; then
+    if command -v dconf >/dev/null 2>&1 && command -v gsettings >/dev/null 2>&1; then
         local schemas
         schemas="$(gsettings list-schemas 2>/dev/null || true)"
         if grep -Fq "org.gnome.Terminal.ProfilesList" <<< "$schemas"; then
             echo "  Configuring GNOME Terminal..."
-            if [ "$DRY_RUN" = true ]; then
-                "$REPO_DIR/bin/gnome-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"} --dry-run
-            else
-                "$REPO_DIR/bin/gnome-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"}
-            fi
-        fi
-    fi
-
-    # macOS Terminal.app profile provisioning on macOS
-    if [ "$OS" = "macos" ]; then
-        echo "  Configuring macOS Terminal.app..."
-        if [ "$DRY_RUN" = true ]; then
-            "$REPO_DIR/bin/macos-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"} --dry-run
-        else
-            "$REPO_DIR/bin/macos-terminal-solarized" ${theme_args[@]+"${theme_args[@]}"}
+            "$REPO_DIR/bin/gnome-terminal-solarized" ${cli_args[@]+"${cli_args[@]}"}
         fi
     fi
 }

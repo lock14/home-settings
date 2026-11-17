@@ -26,7 +26,7 @@ run_zsh_subtest() {
 
 # Test 1: Syntax check with zsh -n
 echo "\n[1/5] Checking Zsh file syntax with 'zsh -n'..."
-for f in "$SCRIPT_DIR/dotfiles/.aliases" "$SCRIPT_DIR/dotfiles/.zsh-functions" "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SCRIPT_DIR/dotfiles/.p10k.zsh"; do
+for f in "$SCRIPT_DIR/dotfiles/.aliases" "$SCRIPT_DIR/dotfiles/.zsh-functions" "$SCRIPT_DIR/dotfiles/.zshrc-addendum" "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SCRIPT_DIR/dotfiles/.p10k.zsh" "$SCRIPT_DIR"/dotfiles/.config/shell/*.zsh "$SCRIPT_DIR"/dotfiles/.config/shell/*.sh; do
     if [ -f "$f" ]; then
         if zsh -n "$f"; then
             pass "Syntax valid: $(basename "$f")"
@@ -560,13 +560,23 @@ test_addendum() {
             _ "$SCRIPT_DIR/dotfiles/.zshrc-addendum" </dev/null 2>/dev/null
     )"
     rm -rf "$mock_legacy_fzf_dir" "$TEMP_HOME/.fzf"
+    local empty_home_dir="$TEMP_HOME/empty-unprovisioned"
+    mkdir -p "$empty_home_dir"
+    local empty_zsh_out=""
+    empty_zsh_out="$(
+        HOME="$empty_home_dir" XDG_CONFIG_HOME="/nonexistent" ZDOTDIR="$empty_home_dir" PATH="/usr/bin:/bin" \
+            "$legacy_zsh_bin" -f -c 'source "$1"; printf "%s:%d" "${ZSH_HIGHLIGHT_STYLES[command]:-none}" "${+functions[_hs_recover_stale_cwd]}"' \
+            _ "$SCRIPT_DIR/dotfiles/.zshrc-addendum" </dev/null 2>&1
+    )"
+    rm -rf "$empty_home_dir"
     if [ "$legacy_fzf_out" = "1:1" ] && \
-       grep -Fq '/usr/share/fzf/shell' "$SCRIPT_DIR/dotfiles/.zshrc-addendum" && \
-       grep -Fq '/opt/homebrew/opt/fzf/shell' "$SCRIPT_DIR/dotfiles/.zshrc-addendum" && \
-       grep -Fq '/usr/local/opt/fzf/shell' "$SCRIPT_DIR/dotfiles/.zshrc-addendum"; then
-        echo "PASS:.zshrc-addendum falls back cleanly when fzf < 0.48.0 lacks --zsh across Debian, Fedora, Arch/Alpine (/usr/share/fzf/shell), Homebrew, and ~/.fzf/shell"
+       [ "$empty_zsh_out" = "fg=#859900:1" ] && \
+       grep -Fq '/usr/share/fzf/shell' "$SCRIPT_DIR/dotfiles/.config/shell/functions.sh" && \
+       grep -Fq '/opt/homebrew/opt/fzf/shell' "$SCRIPT_DIR/dotfiles/.config/shell/functions.sh" && \
+       grep -Fq '/usr/local/opt/fzf/shell' "$SCRIPT_DIR/dotfiles/.config/shell/functions.sh"; then
+        echo "PASS:.zshrc-addendum resolves .config/shell modules in empty HOME and falls back cleanly when fzf < 0.48.0 lacks --zsh across Debian, Fedora, Arch/Alpine (/usr/share/fzf/shell), Homebrew, and ~/.fzf/shell"
     else
-        echo "FAIL:.zshrc-addendum legacy fzf discovery:out='$legacy_fzf_out'"
+        echo "FAIL:.zshrc-addendum modular or legacy fzf discovery:out='$legacy_fzf_out' empty='$empty_zsh_out'"
     fi
 
     if [ "${POWERLEVEL9K_DISABLE_GITSTATUS:-}" = "true" ] && typeset -f prompt_vcs >/dev/null 2>&1; then

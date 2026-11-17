@@ -1,5 +1,5 @@
 # Easter TrueColor theme for btop
-# Matches the 16-slot semantic palette architecture
+# Matches the 16-color semantic palette architecture
 
 # Main background, empty for terminal default, need to be empty if you want transparent background
 theme[main_bg]="#fdf7ff"
@@ -22,7 +22,7 @@ theme[selected_fg]="#221033"
 # Color of inactive/disabled text
 theme[inactive_fg]="#86659c"
 
-# Color of text appearing on top of graphs, i.e uptime and current network graph scaling
+# Color of text appearing on top of graphs, such as uptime and current network graph scaling
 theme[graph_text]="#6e4e85"
 
 # Background color of the percentage meters

@@ -1,4 +1,14 @@
-" Indentation & Formatting (compatible with minimal -eval vim.tiny builds)
+" =============================================================
+" Standalone Portable Vim Configuration (.vimrc)
+" Zero-dependency 17-theme Solarized engine & Neovim keymap parity
+" =============================================================
+
+" -------------------------------------------------------------
+" 0. Minimal -eval (vim.tiny) Safe Bootstrap
+" -------------------------------------------------------------
+" Only primitive :set and :map commands appear before `if 1` so Debian/Ubuntu
+" `vim.tiny` (-eval) loads indentation and core bindings with zero E319 errors
+" and skips the +eval runtime block cleanly down to the matching outer `endif`.
 set nocompatible
 set tabstop=4
 set shiftwidth=4
@@ -11,9 +21,20 @@ noremap <Home> ^
 inoremap <Home> <Esc>^i
 
 if 1
+
+" -------------------------------------------------------------
+" 1. Core Editor Options, Terminal TrueColor, Focus & Mouse
+" -------------------------------------------------------------
 filetype plugin indent on
 
-" TrueColor (24-bit) Terminal Support & Focus Events (Vim 8/9+)
+set mouse=a
+if has('mouse_sgr')
+    set ttymouse=sgr
+endif
+if exists('+smoothscroll')
+    set smoothscroll
+endif
+
 if !has('nvim') && !has('gui_running') && &term =~# '^\(tmux\|screen\|xterm\|rxvt\|alacritty\|wezterm\|foot\)'
     silent! let &t_fe = "\<Esc>[?1004h"
     silent! let &t_fd = "\<Esc>[?1004l"
@@ -25,9 +46,42 @@ if has('termguicolors') && &term !=# 'linux'
         set termguicolors
     endif
 endif
+if !has('nvim')
+    silent! execute "set <M-h>=\<Esc>h"
+    silent! execute "set <M-j>=\<Esc>j"
+    silent! execute "set <M-k>=\<Esc>k"
+    silent! execute "set <M-l>=\<Esc>l"
+    silent! execute "set <M-c>=\<Esc>c"
+    silent! execute "set <M-v>=\<Esc>v"
+endif
 
-" Zero-Dependency Inline Solarized Dark Fallback and Dynamic 17-Theme + Custom Palette Engine
+" -------------------------------------------------------------
+" 2. Palette Schema & 17 Built-in Theme Definitions
+" -------------------------------------------------------------
 let s:vimrc_repo_root = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
+
+let s:base_color_keys = [
+    \ 'BASE03', 'BASE02', 'BASE01', 'BASE00', 'BASE0', 'BASE1', 'BASE2', 'BASE3',
+    \ 'YELLOW', 'ORANGE', 'RED', 'MAGENTA', 'VIOLET', 'BLUE', 'CYAN', 'GREEN'
+    \ ]
+
+let s:mix_blend_specs = [
+    \ ['BASE04',      'BASE02',  50],
+    \ ['MIX_GREEN',   'GREEN',   18],
+    \ ['MIX_RED',     'RED',     18],
+    \ ['MIX_YELLOW',  'YELLOW',  20],
+    \ ['MIX_BLUE',    'BLUE',    22],
+    \ ['MIX_MAGENTA', 'MAGENTA', 20],
+    \ ['MIX_BASE1',   'BASE1',   16]
+    \ ]
+
+let s:all_color_keys = [
+    \ 'BASE03', 'BASE02', 'BASE04', 'BASE01', 'BASE00', 'BASE0', 'BASE1', 'BASE2', 'BASE3',
+    \ 'YELLOW', 'ORANGE', 'RED', 'MAGENTA', 'VIOLET', 'BLUE', 'CYAN', 'GREEN',
+    \ 'MIX_GREEN', 'MIX_RED', 'MIX_YELLOW', 'MIX_BLUE', 'MIX_MAGENTA', 'MIX_BASE1'
+    \ ]
+
+let s:builtin_field_keys = ['THEME_LABEL', 'THEME_MODE', 'BAT_THEME_NAME'] + s:all_color_keys
 
 let s:builtin_theme_order = [
     \ 'solarized-dark', 'solarized-light', 'catppuccin-mocha', 'catppuccin-latte',
@@ -58,15 +112,25 @@ let s:builtin_themes = {
     \ 'christmas':        'Christmas|dark|Christmas-TrueColor|#062012|#0E3820|#03140B|#5C9E78|#78B894|#F0FAF4|#FFFFFF|#FFFDF7|#FAFAFF|#38E5FF|#FF7B24|#FF1738|#B8FF3D|#C788FF|#FFD700|#FF6B9E|#2EE66B|#0F4224|#3D1620|#0F3E3B|#3D4A0F|#2A471A|#234231'
     \ }
 
-let s:builtin_field_keys = [
-    \ 'THEME_LABEL', 'THEME_MODE', 'BAT_THEME_NAME',
-    \ 'BASE03', 'BASE02', 'BASE04', 'BASE01', 'BASE00', 'BASE0', 'BASE1', 'BASE2', 'BASE3',
-    \ 'YELLOW', 'ORANGE', 'RED', 'MAGENTA', 'VIOLET', 'BLUE', 'CYAN', 'GREEN',
-    \ 'MIX_GREEN', 'MIX_RED', 'MIX_YELLOW', 'MIX_BLUE', 'MIX_MAGENTA', 'MIX_BASE1'
-    \ ]
-
+" -------------------------------------------------------------
+" 3. Theme Discovery, File Parsing & Palette Blending Helpers
+" -------------------------------------------------------------
 function! s:Trim(str) abort
     return substitute(a:str, '^\s\+\|\s\+$', '', 'g')
+endfunction
+
+function! s:NormSlug(str) abort
+    return substitute(tolower(s:Trim(a:str)), '_', '-', 'g')
+endfunction
+
+function! s:ConfigHome() abort
+    return empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
+endfunction
+
+function! s:ThemeError(msg) abort
+    echohl ErrorMsg
+    echomsg 'Theme switch failed: ' . a:msg
+    echohl None
 endfunction
 
 function! s:UnpackBuiltinTheme(slug) abort
@@ -156,8 +220,7 @@ function! s:FindUserThemeFile(slug, cfg_home) abort
             let l:cand = l:udir . '/' . a:slug . l:ext
             if filereadable(l:cand)
                 let l:kv = s:ParseThemeFile(l:cand)
-                let l:cid = substitute(tolower(s:Trim(get(l:kv, 'THEME_ID', a:slug))), '_', '-', 'g')
-                if l:cid ==# a:slug
+                if s:NormSlug(get(l:kv, 'THEME_ID', a:slug)) ==# a:slug
                     return l:cand
                 endif
             endif
@@ -167,8 +230,7 @@ function! s:FindUserThemeFile(slug, cfg_home) abort
         if isdirectory(l:udir)
             for l:cand in sort(glob(l:udir . '/*.theme', 0, 1) + glob(l:udir . '/*.conf', 0, 1))
                 let l:kv = s:ParseThemeFile(l:cand)
-                let l:cid = substitute(tolower(s:Trim(get(l:kv, 'THEME_ID', fnamemodify(l:cand, ':t:r')))), '_', '-', 'g')
-                if l:cid ==# a:slug
+                if s:NormSlug(get(l:kv, 'THEME_ID', fnamemodify(l:cand, ':t:r'))) ==# a:slug
                     return l:cand
                 endif
             endfor
@@ -178,7 +240,7 @@ function! s:FindUserThemeFile(slug, cfg_home) abort
 endfunction
 
 function! s:ResolveThemeBySlug(slug, cfg_home) abort
-    let l:norm = substitute(tolower(s:Trim(a:slug)), '_', '-', 'g')
+    let l:norm = s:NormSlug(a:slug)
     if empty(l:norm)
         return {}
     endif
@@ -202,11 +264,11 @@ function! s:ResolveThemeBySlug(slug, cfg_home) abort
 endfunction
 
 function! s:ReadActiveTheme() abort
-    let l:cfg_home = empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
+    let l:cfg_home = s:ConfigHome()
     if !exists('s:user_env_theme') || $HOME_SETTINGS_THEME !=# get(s:, 'internal_env_theme', '')
         let s:user_env_theme = $HOME_SETTINGS_THEME
     endif
-    let l:req_slug = substitute(tolower(s:Trim(s:user_env_theme)), '_', '-', 'g')
+    let l:req_slug = s:NormSlug(s:user_env_theme)
     let l:p = {}
     if !empty($HOME_SETTINGS_THEME_FILE)
         if filereadable($HOME_SETTINGS_THEME_FILE)
@@ -221,12 +283,12 @@ function! s:ReadActiveTheme() abort
         if filereadable(l:state_file)
             let l:lines = readfile(l:state_file, '', 1)
             if !empty(l:lines)
-                let l:saved_slug = substitute(tolower(s:Trim(substitute(l:lines[0], "\r$", '', ''))), '_', '-', 'g')
+                let l:saved_slug = s:NormSlug(substitute(l:lines[0], "\r$", '', ''))
             endif
         endif
         if filereadable(l:active_file)
             let l:p = s:ParseThemeFile(l:active_file)
-            let l:active_id = substitute(tolower(s:Trim(get(l:p, 'THEME_ID', ''))), '_', '-', 'g')
+            let l:active_id = s:NormSlug(get(l:p, 'THEME_ID', ''))
             if !empty(l:saved_slug) && l:saved_slug !=# l:active_id
                 let l:override_p = s:ResolveThemeBySlug(l:saved_slug, l:cfg_home)
                 if !empty(l:override_p)
@@ -264,7 +326,7 @@ function! s:FileSig(path) abort
 endfunction
 
 function! s:ActiveThemeSignature() abort
-    let l:cfg_home = empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
+    let l:cfg_home = s:ConfigHome()
     let l:env_t = ($HOME_SETTINGS_THEME !=# get(s:, 'internal_env_theme', '')) ? $HOME_SETTINGS_THEME : get(s:, 'user_env_theme', '')
     if !empty($HOME_SETTINGS_THEME_FILE)
         return 'F:' . $HOME_SETTINGS_THEME_FILE . ':' . s:FileSig($HOME_SETTINGS_THEME_FILE) . '|E:' . l:env_t
@@ -275,7 +337,7 @@ function! s:ActiveThemeSignature() abort
     if filereadable(l:sf)
         let l:slines = readfile(l:sf, '', 1)
         if !empty(l:slines)
-            let l:cand_slug = substitute(tolower(s:Trim(substitute(l:slines[0], "\r$", '', ''))), '_', '-', 'g')
+            let l:cand_slug = s:NormSlug(substitute(l:slines[0], "\r$", '', ''))
             if !empty(l:cand_slug)
                 let l:slug = l:cand_slug
             endif
@@ -288,36 +350,183 @@ endfunction
 function! s:BuildCompletePalette(raw) abort
     let l:mode = tolower(s:Trim(get(a:raw, 'THEME_MODE', 'dark'))) ==# 'light' ? 'light' : 'dark'
     let l:base = s:UnpackBuiltinTheme(l:mode ==# 'light' ? 'solarized-light' : 'solarized-dark')
-    let l:id = substitute(tolower(s:Trim(get(a:raw, 'THEME_ID', 'solarized-dark'))), '_', '-', 'g')
+    let l:id = s:NormSlug(get(a:raw, 'THEME_ID', 'solarized-dark'))
     if l:id !~# '^[a-z0-9][a-z0-9-]*$'
         let l:id = 'solarized-dark'
     endif
     let l:c = {'THEME_ID': l:id, 'THEME_MODE': l:mode}
-    let l:label_Parts = split(l:id, '[-_]\+')
-    let l:def_label = join(map(copy(l:label_Parts), 'toupper(v:val[0]) . strpart(v:val, 1)'), ' ')
-    let l:def_bat = join(map(copy(l:label_Parts), 'toupper(v:val[0]) . strpart(v:val, 1)'), '-') . '-TrueColor'
+    let l:label_parts = split(l:id, '[-_]\+')
+    let l:def_label = join(map(copy(l:label_parts), 'toupper(v:val[0]) . strpart(v:val, 1)'), ' ')
+    let l:def_bat = join(map(copy(l:label_parts), 'toupper(v:val[0]) . strpart(v:val, 1)'), '-') . '-TrueColor'
     let l:raw_label = substitute(s:Trim(get(a:raw, 'THEME_LABEL', '')), '["\\$`\r\n]', '', 'g')
     let l:raw_bat = s:Trim(get(a:raw, 'BAT_THEME_NAME', ''))
     let l:c['THEME_LABEL'] = !empty(l:raw_label) ? l:raw_label : get(s:UnpackBuiltinTheme(l:id), 'THEME_LABEL', l:def_label)
     let l:c['BAT_THEME_NAME'] = (l:raw_bat =~# '^[A-Za-z0-9._-]\+$') ? l:raw_bat : get(s:UnpackBuiltinTheme(l:id), 'BAT_THEME_NAME', l:def_bat)
-    for l:k in ['BASE03', 'BASE02', 'BASE01', 'BASE00', 'BASE0', 'BASE1', 'BASE2', 'BASE3', 'YELLOW', 'ORANGE', 'RED', 'MAGENTA', 'VIOLET', 'BLUE', 'CYAN', 'GREEN']
+    for l:k in s:base_color_keys
         let l:c[l:k] = s:SafeHex(a:raw, l:k, l:base[l:k])
     endfor
-    let l:c['BASE04']      = s:SafeHex(a:raw, 'BASE04',      (l:c['BASE03'] ==# l:base['BASE03'] && l:c['BASE02'] ==# l:base['BASE02'])   ? l:base['BASE04']      : s:BlendHex(l:c['BASE02'],  l:c['BASE03'], 50))
-    let l:c['MIX_GREEN']   = s:SafeHex(a:raw, 'MIX_GREEN',   (l:c['BASE03'] ==# l:base['BASE03'] && l:c['GREEN'] ==# l:base['GREEN'])     ? l:base['MIX_GREEN']   : s:BlendHex(l:c['GREEN'],   l:c['BASE03'], 18))
-    let l:c['MIX_RED']     = s:SafeHex(a:raw, 'MIX_RED',     (l:c['BASE03'] ==# l:base['BASE03'] && l:c['RED'] ==# l:base['RED'])         ? l:base['MIX_RED']     : s:BlendHex(l:c['RED'],     l:c['BASE03'], 18))
-    let l:c['MIX_YELLOW']  = s:SafeHex(a:raw, 'MIX_YELLOW',  (l:c['BASE03'] ==# l:base['BASE03'] && l:c['YELLOW'] ==# l:base['YELLOW'])   ? l:base['MIX_YELLOW']  : s:BlendHex(l:c['YELLOW'],  l:c['BASE03'], 20))
-    let l:c['MIX_BLUE']    = s:SafeHex(a:raw, 'MIX_BLUE',    (l:c['BASE03'] ==# l:base['BASE03'] && l:c['BLUE'] ==# l:base['BLUE'])       ? l:base['MIX_BLUE']    : s:BlendHex(l:c['BLUE'],    l:c['BASE03'], 22))
-    let l:c['MIX_MAGENTA'] = s:SafeHex(a:raw, 'MIX_MAGENTA', (l:c['BASE03'] ==# l:base['BASE03'] && l:c['MAGENTA'] ==# l:base['MAGENTA']) ? l:base['MIX_MAGENTA'] : s:BlendHex(l:c['MAGENTA'], l:c['BASE03'], 20))
-    let l:c['MIX_BASE1']   = s:SafeHex(a:raw, 'MIX_BASE1',   (l:c['BASE03'] ==# l:base['BASE03'] && l:c['BASE1'] ==# l:base['BASE1'])     ? l:base['MIX_BASE1']   : s:BlendHex(l:c['BASE1'],   l:c['BASE03'], 16))
+    for [l:mkey, l:src_key, l:pct] in s:mix_blend_specs
+        let l:fb = (l:c['BASE03'] ==# l:base['BASE03'] && l:c[l:src_key] ==# l:base[l:src_key])
+            \ ? l:base[l:mkey]
+            \ : s:BlendHex(l:c[l:src_key], l:c['BASE03'], l:pct)
+        let l:c[l:mkey] = s:SafeHex(a:raw, l:mkey, l:fb)
+    endfor
     return l:c
 endfunction
 
+" -------------------------------------------------------------
+" 4. Converged 7-Pillar Highlight Engine (TrueColor & cterm)
+" -------------------------------------------------------------
 function! s:Hi(groups, cterm, ctermfg, ctermbg, gui, guifg, guibg) abort
     let l:spec = ' cterm=' . a:cterm . ' ctermfg=' . a:ctermfg . ' ctermbg=' . a:ctermbg . ' gui=' . a:gui . ' guifg=' . a:guifg . ' guibg=' . a:guibg
     for l:grp in a:groups
         execute 'highlight ' . l:grp . l:spec
     endfor
+endfunction
+
+function! s:ApplyTerminalPalette(c) abort
+    " 16-color ANSI terminal palette for :terminal buffers (1:1 with Ghostty & Neovim)
+    let g:terminal_ansi_colors = [
+        \ a:c['BASE02'], a:c['RED'],    a:c['GREEN'],  a:c['YELLOW'],
+        \ a:c['BLUE'],   a:c['MAGENTA'], a:c['CYAN'],  a:c['BASE2'],
+        \ a:c['BASE01'], a:c['ORANGE'], a:c['BASE01'], a:c['BASE00'],
+        \ a:c['BASE0'],  a:c['VIOLET'], a:c['BASE1'],  a:c['BASE3']
+        \ ]
+    if has('nvim')
+        for l:ti in range(16)
+            let g:['terminal_color_' . l:ti] = g:terminal_ansi_colors[l:ti]
+        endfor
+    elseif exists('*term_list') && exists('*term_setansicolors') && (&termguicolors || has('gui_running'))
+        for l:tbuf in term_list()
+            silent! call term_setansicolors(l:tbuf, g:terminal_ansi_colors)
+        endfor
+    endif
+endfunction
+
+function! s:ApplyUiHighlights(c) abort
+    " Canvas, Gutter, Splits, Floats & UI Chrome (ctermbg=NONE on canvas/gutter/splits)
+    call s:Hi(['Normal', 'NormalNC'], 'NONE', '12', 'NONE', 'NONE', a:c['BASE0'], a:c['BASE03'])
+    call s:Hi(['EndOfBuffer'], 'NONE', '10', 'NONE', 'NONE', a:c['BASE03'], 'NONE')
+    call s:Hi(['LineNr', 'LineNrAbove', 'LineNrBelow', 'VertSplit', 'WinSeparator', 'FoldColumn', 'SignColumn'], 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'], a:c['BASE03'])
+    call s:Hi(['StatusLine', 'StatusLineTerm'], 'NONE', '14', '0', 'NONE', a:c['BASE1'], a:c['BASE02'])
+    call s:Hi(['StatusLineNC', 'StatusLineTermNC', 'Folded', 'PmenuShadow', 'PmenuBorder', 'TabLine', 'TabLineFill'], 'NONE', '10', '0', 'NONE', a:c['BASE01'], a:c['BASE02'])
+    call s:Hi(['NonText', 'SpecialKey', 'Conceal', 'Whitespace'], 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'], 'NONE')
+    call s:Hi(['CursorLine', 'CursorColumn', 'ColorColumn', 'PmenuSbar'], 'NONE', 'NONE', '0', 'NONE', 'NONE', a:c['BASE02'])
+    call s:Hi(['CursorLineNr', 'WildMenu', 'MatchParen', 'QuickFixLine', 'FloatTitle', 'PopupTitle'], 'bold', '14', '0', 'bold', a:c['BASE1'], a:c['BASE02'])
+    call s:Hi(['NormalFloat', 'Popup', 'PopupNotification', 'MessageWindow'], 'NONE', '12', '0', 'NONE', a:c['BASE0'], a:c['BASE04'])
+    call s:Hi(['FloatBorder', 'PopupBorder'], 'NONE', '10', '0', 'NONE', a:c['BASE01'], a:c['BASE04'])
+    call s:Hi(['Visual'], 'reverse', 'NONE', '0', 'NONE', a:c['BASE1'], a:c['MIX_BASE1'])
+    call s:Hi(['VisualNOS'], 'NONE', 'NONE', '0', 'NONE', a:c['BASE1'], a:c['MIX_BASE1'])
+    call s:Hi(['Pmenu'], 'NONE', '12', '0', 'NONE', a:c['BASE0'], a:c['BASE02'])
+    call s:Hi(['PmenuSel'], 'bold', '14', '10', 'bold', a:c['BASE1'], a:c['BASE01'])
+    call s:Hi(['PmenuThumb'], 'NONE', 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'])
+    call s:Hi(['TabLineSel'], 'bold', '14', 'NONE', 'bold', a:c['BASE1'], a:c['BASE03'])
+    call s:Hi(['Search'], 'NONE', '0', '3', 'bold', a:c['BASE1'], a:c['MIX_YELLOW'])
+    call s:Hi(['IncSearch', 'CurSearch'], 'bold', '0', '5', 'bold', a:c['MAGENTA'], a:c['MIX_MAGENTA'])
+    call s:Hi(['MoreMsg'], 'NONE', '2', 'NONE', 'NONE', a:c['GREEN'], 'NONE')
+    call s:Hi(['ModeMsg'], 'bold', '14', 'NONE', 'bold', a:c['BASE1'], 'NONE')
+    call s:Hi(['Question'], 'NONE', '6', 'NONE', 'NONE', a:c['CYAN'], 'NONE')
+    call s:Hi(['Underlined'], 'underline', '13', 'NONE', 'underline', a:c['VIOLET'], 'NONE')
+    call s:Hi(['Ignore'], 'NONE', '8', 'NONE', 'NONE', a:c['BASE03'], 'NONE')
+    execute 'highlight SpellBad cterm=underline ctermfg=1 ctermbg=NONE gui=undercurl guisp=' . a:c['RED']
+    execute 'highlight SpellCap cterm=underline ctermfg=4 ctermbg=NONE gui=undercurl guisp=' . a:c['BLUE']
+    execute 'highlight SpellRare cterm=underline ctermfg=13 ctermbg=NONE gui=undercurl guisp=' . a:c['VIOLET']
+    execute 'highlight SpellLocal cterm=underline ctermfg=6 ctermbg=NONE gui=undercurl guisp=' . a:c['CYAN']
+endfunction
+
+function! s:ApplyCoreSyntaxHighlights(c) abort
+    " Core Semantic Syntax Architecture (7 Pillars + Converged Diagnostic Ladder)
+    call s:Hi(['Identifier', 'Delimiter', 'Operator', 'TagDelimiter'], 'NONE', '12', 'NONE', 'NONE', a:c['BASE0'], 'NONE')
+    call s:Hi(['Comment'], 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'], 'NONE')
+    call s:Hi(['Conditional', 'Repeat', 'Label', 'Exception'], 'NONE', '3', 'NONE', 'NONE', a:c['YELLOW'], 'NONE')
+    call s:Hi(['Statement', 'Keyword', 'Type', 'StorageClass', 'Structure', 'Typedef'], 'NONE', '2', 'NONE', 'NONE', a:c['GREEN'], 'NONE')
+    call s:Hi(['Function', 'Directory', 'Tag'], 'NONE', '4', 'NONE', 'NONE', a:c['BLUE'], 'NONE')
+    call s:Hi(['Include', 'Special'], 'NONE', '13', 'NONE', 'NONE', a:c['VIOLET'], 'NONE')
+    call s:Hi(['PreProc', 'Define', 'Macro', 'PreCondit', 'Title'], 'NONE', '9', 'NONE', 'NONE', a:c['ORANGE'], 'NONE')
+    call s:Hi(['String', 'Character', 'SpecialChar'], 'NONE', '6', 'NONE', 'NONE', a:c['CYAN'], 'NONE')
+    call s:Hi(['Constant', 'Number', 'Boolean', 'Float'], 'NONE', '5', 'NONE', 'NONE', a:c['MAGENTA'], 'NONE')
+    call s:Hi(['Error', 'ErrorMsg'], 'bold', '1', 'NONE', 'bold', a:c['RED'], a:c['BASE03'])
+    call s:Hi(['WarningMsg'], 'bold', '3', 'NONE', 'bold', a:c['YELLOW'], 'NONE')
+    call s:Hi(['Todo'], 'bold', '5', '0', 'bold', a:c['MAGENTA'], a:c['BASE02'])
+    call s:Hi(['Added', 'diffAdded'], 'NONE', '2', 'NONE', 'NONE', a:c['GREEN'], 'NONE')
+    call s:Hi(['Changed', 'diffChanged'], 'NONE', '3', 'NONE', 'NONE', a:c['YELLOW'], 'NONE')
+    call s:Hi(['Removed', 'diffRemoved'], 'NONE', '1', 'NONE', 'NONE', a:c['RED'], 'NONE')
+    execute 'highlight DiffAdd term=reverse cterm=bold ctermbg=green ctermfg=white gui=NONE guifg=' . a:c['GREEN'] . ' guibg=' . a:c['MIX_GREEN']
+    execute 'highlight DiffChange term=reverse cterm=bold ctermbg=cyan ctermfg=black gui=NONE guifg=' . a:c['YELLOW'] . ' guibg=' . a:c['MIX_YELLOW']
+    execute 'highlight DiffText term=reverse cterm=bold ctermbg=gray ctermfg=black gui=bold guifg=' . a:c['BLUE'] . ' guibg=' . a:c['MIX_BLUE']
+    execute 'highlight DiffDelete term=reverse cterm=bold ctermbg=red ctermfg=black gui=NONE guifg=' . a:c['RED'] . ' guibg=' . a:c['MIX_RED']
+endfunction
+
+function! s:ApplyFiletypeHighlights(c) abort
+    " Markdown semantic hierarchy (H1..H6 without bold or Yellow)
+    call s:Hi(['markdownH1'], 'NONE', '9', 'NONE', 'NONE', a:c['ORANGE'], 'NONE')
+    call s:Hi(['markdownH2', 'markdownLinkText', 'markdownId'], 'NONE', '4', 'NONE', 'NONE', a:c['BLUE'], 'NONE')
+    call s:Hi(['markdownH3'], 'NONE', '13', 'NONE', 'NONE', a:c['VIOLET'], 'NONE')
+    call s:Hi(['markdownH4'], 'NONE', '14', 'NONE', 'NONE', a:c['BASE1'], 'NONE')
+    call s:Hi(['markdownH5', 'markdownH6', 'markdownBlockquote', 'markdownCodeBlock'], 'NONE', '12', 'NONE', 'NONE', a:c['BASE0'], 'NONE')
+    call s:Hi([
+        \ 'markdownHeadingDelimiter', 'markdownH1Delimiter', 'markdownH2Delimiter', 'markdownH3Delimiter',
+        \ 'markdownH4Delimiter', 'markdownH5Delimiter', 'markdownH6Delimiter', 'markdownRule',
+        \ 'markdownHeadingRule', 'markdownCodeDelimiter', 'markdownUrlDelimiter', 'markdownLinkDelimiter',
+        \ 'markdownIdDelimiter'
+        \ ], 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'], 'NONE')
+    call s:Hi(['markdownListMarker', 'markdownOrderedListMarker'], 'NONE', '2', 'NONE', 'NONE', a:c['GREEN'], 'NONE')
+    call s:Hi(['markdownCode', 'markdownUrl', 'markdownAutomaticLink', 'markdownIdDeclaration'], 'NONE', '6', 'NONE', 'NONE', a:c['CYAN'], 'NONE')
+    call s:Hi(['markdownBold'], 'bold', '14', 'NONE', 'bold', a:c['BASE1'], 'NONE')
+    call s:Hi(['markdownItalic'], 'italic', '12', 'NONE', 'italic', a:c['BASE0'], 'NONE')
+
+    " Zero-Yellow declarative data, config, markup, stylesheet, and schema overrides
+    call s:Hi([
+        \ 'jsonKeyword', 'jsonTest', 'yamlMappingKey', 'yamlBlockMappingKey', 'yamlFlowMappingKey',
+        \ 'yamlBlockMappingMerge', 'yamlFlowMappingMerge', 'tomlKey', 'tomlKeyDq', 'tomlKeySq',
+        \ 'xmlAttrib', 'htmlArg', 'cssProp', 'jpropertiesIdentifier', 'protoStructure', 'protoRepeat',
+        \ 'protoDefault', 'protoExtend', 'protoRPC', 'protoType', 'protoTypedef', 'pbtxtField'
+        \ ], 'NONE', '2', 'NONE', 'NONE', a:c['GREEN'], 'NONE')
+    call s:Hi([
+        \ 'tomlTable', 'tomlTableArray', 'xmlTagName', 'xmlNamespace', 'htmlTagName',
+        \ 'htmlSpecialTagName', 'cssTagName', 'cssClassName', 'cssIdentifier', 'pbtxtMessage',
+        \ 'diffLine', 'diffSubname'
+        \ ], 'NONE', '4', 'NONE', 'NONE', a:c['BLUE'], 'NONE')
+    call s:Hi([
+        \ 'xmlCdataStart', 'xmlCdataEnd', 'xmlCdataCdata',
+        \ 'cssPseudoClass', 'cssPseudoClassId', 'cssPagePseudo'
+        \ ], 'NONE', '13', 'NONE', 'NONE', a:c['VIOLET'], 'NONE')
+    call s:Hi([
+        \ 'yamlDocumentStart', 'yamlDocumentEnd', 'xmlProcessing', 'xmlDocTypeDecl',
+        \ 'xmlDocTypeKeyword', 'htmlDoctype', 'cssAtRule', 'cssAtKeyword', 'protoSyntax'
+        \ ], 'NONE', '9', 'NONE', 'NONE', a:c['ORANGE'], 'NONE')
+    call s:Hi([
+        \ 'jsonNull', 'jsonBoolean', 'jsonNumber', 'yamlNull', 'yamlBool', 'yamlInteger', 'yamlFloat',
+        \ 'yamlTimestamp', 'tomlDate', 'tomlBoolean', 'tomlInteger', 'tomlFloat', 'xmlEntity',
+        \ 'xmlEntityPunct', 'htmlSpecialChar', 'cssColor', 'cssValueNumber', 'cssValueInteger',
+        \ 'cssValueLength', 'cssValueAngle', 'cssValueTime', 'cssValueFrequency', 'cssUnitDecorators',
+        \ 'hsJPropertiesConst', 'protoBool', 'protoInt', 'protoFloat', 'pbtxtEnum', 'pbtxtBool',
+        \ 'pbtxtInt', 'pbtxtHex', 'pbtxtFloat'
+        \ ], 'NONE', '5', 'NONE', 'NONE', a:c['MAGENTA'], 'NONE')
+    call s:Hi([
+        \ 'jsonString', 'jsonEscape', 'yamlString', 'yamlFlowString', 'tomlString', 'tomlEscape',
+        \ 'xmlString', 'htmlString', 'cssStringQ', 'cssStringQQ', 'cssURL', 'jpropertiesString',
+        \ 'jpropertiesExtendString', 'jpropertiesSpecial', 'jpropertiesSpecialChar', 'protoString',
+        \ 'pbtxtString', 'diffFile', 'diffOldFile', 'diffNewFile'
+        \ ], 'NONE', '6', 'NONE', 'NONE', a:c['CYAN'], 'NONE')
+    call s:Hi([
+        \ 'jsonBraces', 'jsonNoise', 'yamlKeyValueDelimiter', 'yamlBlockMappingDelimiter',
+        \ 'yamlFlowMappingDelimiter', 'yamlFlowIndicator', 'yamlBlockCollectionItemStart',
+        \ 'yamlBlockScalarHeader', 'yamlNodeTag', 'xmlTag', 'xmlEndTag', 'xmlEqual', 'xmlCdata',
+        \ 'htmlTag', 'htmlEndTag', 'htmlHead', 'htmlTitle', 'htmlH1', 'htmlH2', 'htmlH3', 'htmlH4',
+        \ 'htmlH5', 'htmlH6', 'htmlBold', 'htmlItalic', 'htmlUnderline', 'htmlBoldItalic',
+        \ 'htmlBoldUnderline', 'htmlBoldUnderlineItalic', 'htmlUnderlineItalic', 'htmlLink', 'cssBraces',
+        \ 'cssClassNameDot', 'cssAttributeSelector', 'cssCustomProp', 'cssCustomProperty', 'cssVar',
+        \ 'cssAttr', 'cssFunctionName', 'cssFunctionComma', 'cssSelectorOp', 'cssSelectorOp2',
+        \ 'cssAttrComma', 'cssNoise', 'cssUnitizers', 'jpropertiesAssignment', 'jpropertiesDelimiter',
+        \ 'hsJPropertiesInterp'
+        \ ], 'NONE', '12', 'NONE', 'NONE', a:c['BASE0'], 'NONE')
+    call s:Hi([
+        \ 'yamlAnchor', 'yamlAlias', 'xmlComment', 'xmlCommentPart', 'xmlProcessingDelim',
+        \ 'htmlComment', 'htmlCommentPart', 'jpropertiesComment', 'protoComment', 'protoTodo',
+        \ 'pbtxtComment', 'pbtxtTodo', 'diffIndexLine'
+        \ ], 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'], 'NONE')
+    call s:Hi(['cssImportant'], 'NONE', '1', 'NONE', 'NONE', a:c['RED'], 'NONE')
 endfunction
 
 function! s:ApplySolarizedDark() abort
@@ -334,116 +543,10 @@ function! s:ApplySolarizedDark() abort
         execute 'noautocmd set background=' . l:c['THEME_MODE']
     endif
 
-    let l:b03  = l:c['BASE03']
-    let l:b02  = l:c['BASE02']
-    let l:b04  = l:c['BASE04']
-    let l:b01  = l:c['BASE01']
-    let l:b00  = l:c['BASE00']
-    let l:b0   = l:c['BASE0']
-    let l:b1   = l:c['BASE1']
-    let l:b2   = l:c['BASE2']
-    let l:b3   = l:c['BASE3']
-    let l:yel  = l:c['YELLOW']
-    let l:ora  = l:c['ORANGE']
-    let l:red  = l:c['RED']
-    let l:mag  = l:c['MAGENTA']
-    let l:vio  = l:c['VIOLET']
-    let l:blu  = l:c['BLUE']
-    let l:cya  = l:c['CYAN']
-    let l:grn  = l:c['GREEN']
-    let l:mgrn = l:c['MIX_GREEN']
-    let l:mred = l:c['MIX_RED']
-    let l:myel = l:c['MIX_YELLOW']
-    let l:mblu = l:c['MIX_BLUE']
-    let l:mmag = l:c['MIX_MAGENTA']
-    let l:mb1  = l:c['MIX_BASE1']
-
-    " 16-slot ANSI terminal palette for :terminal buffers (1:1 with Ghostty & Neovim)
-    let g:terminal_ansi_colors = [
-        \ l:b02, l:red, l:grn, l:yel, l:blu, l:mag, l:cya, l:b2,
-        \ l:b01, l:ora, l:b01, l:b00, l:b0,  l:vio, l:b1,  l:b3
-        \ ]
-    if has('nvim')
-        for l:ti in range(16)
-            let g:['terminal_color_' . l:ti] = g:terminal_ansi_colors[l:ti]
-        endfor
-    elseif exists('*term_list') && exists('*term_setansicolors') && (&termguicolors || has('gui_running'))
-        for l:tbuf in term_list()
-            silent! call term_setansicolors(l:tbuf, g:terminal_ansi_colors)
-        endfor
-    endif
-
-    " Canvas, Gutter, Splits, Floats & UI Chrome (ctermbg=NONE on canvas/gutter/splits)
-    call s:Hi(['Normal', 'NormalNC'], 'NONE', '12', 'NONE', 'NONE', l:b0, l:b03)
-    call s:Hi(['EndOfBuffer'], 'NONE', '10', 'NONE', 'NONE', l:b03, 'NONE')
-    call s:Hi(['LineNr', 'LineNrAbove', 'LineNrBelow', 'VertSplit', 'WinSeparator', 'FoldColumn', 'SignColumn'], 'NONE', '10', 'NONE', 'NONE', l:b01, l:b03)
-    call s:Hi(['StatusLine', 'StatusLineTerm'], 'NONE', '14', '0', 'NONE', l:b1, l:b02)
-    call s:Hi(['StatusLineNC', 'StatusLineTermNC', 'Folded', 'PmenuShadow', 'PmenuBorder', 'TabLine', 'TabLineFill'], 'NONE', '10', '0', 'NONE', l:b01, l:b02)
-    call s:Hi(['NonText', 'SpecialKey', 'Conceal', 'Whitespace'], 'NONE', '10', 'NONE', 'NONE', l:b01, 'NONE')
-    call s:Hi(['CursorLine', 'CursorColumn', 'ColorColumn', 'PmenuSbar'], 'NONE', 'NONE', '0', 'NONE', 'NONE', l:b02)
-    call s:Hi(['CursorLineNr', 'WildMenu', 'MatchParen', 'QuickFixLine', 'FloatTitle', 'PopupTitle'], 'bold', '14', '0', 'bold', l:b1, l:b02)
-    call s:Hi(['NormalFloat', 'Popup', 'PopupNotification', 'MessageWindow'], 'NONE', '12', '0', 'NONE', l:b0, l:b04)
-    call s:Hi(['FloatBorder', 'PopupBorder'], 'NONE', '10', '0', 'NONE', l:b01, l:b04)
-    call s:Hi(['Visual'], 'reverse', 'NONE', '0', 'NONE', l:b1, l:mb1)
-    call s:Hi(['VisualNOS'], 'NONE', 'NONE', '0', 'NONE', l:b1, l:mb1)
-    call s:Hi(['Pmenu'], 'NONE', '12', '0', 'NONE', l:b0, l:b02)
-    call s:Hi(['PmenuSel'], 'bold', '14', '10', 'bold', l:b1, l:b01)
-    call s:Hi(['PmenuThumb'], 'NONE', 'NONE', '10', 'NONE', 'NONE', l:b01)
-    call s:Hi(['TabLineSel'], 'bold', '14', 'NONE', 'bold', l:b1, l:b03)
-    call s:Hi(['Search'], 'NONE', '0', '3', 'bold', l:b1, l:myel)
-    call s:Hi(['IncSearch', 'CurSearch'], 'bold', '0', '5', 'bold', l:mag, l:mmag)
-    call s:Hi(['MoreMsg'], 'NONE', '2', 'NONE', 'NONE', l:grn, 'NONE')
-    call s:Hi(['ModeMsg'], 'bold', '14', 'NONE', 'bold', l:b1, 'NONE')
-    call s:Hi(['Question'], 'NONE', '6', 'NONE', 'NONE', l:cya, 'NONE')
-    call s:Hi(['Underlined'], 'underline', '13', 'NONE', 'underline', l:vio, 'NONE')
-    call s:Hi(['Ignore'], 'NONE', '8', 'NONE', 'NONE', l:b03, 'NONE')
-    execute 'highlight SpellBad cterm=underline ctermfg=1 ctermbg=NONE gui=undercurl guisp=' . l:red
-    execute 'highlight SpellCap cterm=underline ctermfg=4 ctermbg=NONE gui=undercurl guisp=' . l:blu
-    execute 'highlight SpellRare cterm=underline ctermfg=13 ctermbg=NONE gui=undercurl guisp=' . l:vio
-    execute 'highlight SpellLocal cterm=underline ctermfg=6 ctermbg=NONE gui=undercurl guisp=' . l:cya
-
-    " Core Semantic Syntax Architecture (7 Pillars + Converged Diagnostic Ladder)
-    call s:Hi(['Identifier', 'Delimiter', 'Operator', 'TagDelimiter'], 'NONE', '12', 'NONE', 'NONE', l:b0, 'NONE')
-    call s:Hi(['Comment'], 'NONE', '10', 'NONE', 'NONE', l:b01, 'NONE')
-    call s:Hi(['Conditional', 'Repeat', 'Label', 'Exception'], 'NONE', '3', 'NONE', 'NONE', l:yel, 'NONE')
-    call s:Hi(['Statement', 'Keyword', 'Type', 'StorageClass', 'Structure', 'Typedef'], 'NONE', '2', 'NONE', 'NONE', l:grn, 'NONE')
-    call s:Hi(['Function', 'Directory', 'Tag'], 'NONE', '4', 'NONE', 'NONE', l:blu, 'NONE')
-    call s:Hi(['Include', 'Special'], 'NONE', '13', 'NONE', 'NONE', l:vio, 'NONE')
-    call s:Hi(['PreProc', 'Define', 'Macro', 'PreCondit', 'Title'], 'NONE', '9', 'NONE', 'NONE', l:ora, 'NONE')
-    call s:Hi(['String', 'Character', 'SpecialChar'], 'NONE', '6', 'NONE', 'NONE', l:cya, 'NONE')
-    call s:Hi(['Constant', 'Number', 'Boolean', 'Float'], 'NONE', '5', 'NONE', 'NONE', l:mag, 'NONE')
-    call s:Hi(['Error', 'ErrorMsg'], 'bold', '1', 'NONE', 'bold', l:red, l:b03)
-    call s:Hi(['WarningMsg'], 'bold', '3', 'NONE', 'bold', l:yel, 'NONE')
-    call s:Hi(['Todo'], 'bold', '5', '0', 'bold', l:mag, l:b02)
-    call s:Hi(['Added', 'diffAdded'], 'NONE', '2', 'NONE', 'NONE', l:grn, 'NONE')
-    call s:Hi(['Changed', 'diffChanged'], 'NONE', '3', 'NONE', 'NONE', l:yel, 'NONE')
-    call s:Hi(['Removed', 'diffRemoved'], 'NONE', '1', 'NONE', 'NONE', l:red, 'NONE')
-    execute 'highlight DiffAdd term=reverse cterm=bold ctermbg=green ctermfg=white gui=NONE guifg=' . l:grn . ' guibg=' . l:mgrn
-    execute 'highlight DiffChange term=reverse cterm=bold ctermbg=cyan ctermfg=black gui=NONE guifg=' . l:yel . ' guibg=' . l:myel
-    execute 'highlight DiffText term=reverse cterm=bold ctermbg=gray ctermfg=black gui=bold guifg=' . l:blu . ' guibg=' . l:mblu
-    execute 'highlight DiffDelete term=reverse cterm=bold ctermbg=red ctermfg=black gui=NONE guifg=' . l:red . ' guibg=' . l:mred
-
-    " Filetype Syntax Overrides (Markdown H1..H6 without bold/Yellow, and zero-Yellow declarative configs)
-    call s:Hi(['markdownH1'], 'NONE', '9', 'NONE', 'NONE', l:ora, 'NONE')
-    call s:Hi(['markdownH2', 'markdownLinkText', 'markdownId'], 'NONE', '4', 'NONE', 'NONE', l:blu, 'NONE')
-    call s:Hi(['markdownH3'], 'NONE', '13', 'NONE', 'NONE', l:vio, 'NONE')
-    call s:Hi(['markdownH4'], 'NONE', '14', 'NONE', 'NONE', l:b1, 'NONE')
-    call s:Hi(['markdownH5', 'markdownH6', 'markdownBlockquote', 'markdownCodeBlock'], 'NONE', '12', 'NONE', 'NONE', l:b0, 'NONE')
-    call s:Hi(['markdownHeadingDelimiter', 'markdownH1Delimiter', 'markdownH2Delimiter', 'markdownH3Delimiter', 'markdownH4Delimiter', 'markdownH5Delimiter', 'markdownH6Delimiter', 'markdownRule', 'markdownHeadingRule', 'markdownCodeDelimiter', 'markdownUrlDelimiter', 'markdownLinkDelimiter', 'markdownIdDelimiter'], 'NONE', '10', 'NONE', 'NONE', l:b01, 'NONE')
-    call s:Hi(['markdownListMarker', 'markdownOrderedListMarker'], 'NONE', '2', 'NONE', 'NONE', l:grn, 'NONE')
-    call s:Hi(['markdownCode', 'markdownUrl', 'markdownAutomaticLink', 'markdownIdDeclaration'], 'NONE', '6', 'NONE', 'NONE', l:cya, 'NONE')
-    call s:Hi(['markdownBold'], 'bold', '14', 'NONE', 'bold', l:b1, 'NONE')
-    call s:Hi(['markdownItalic'], 'italic', '12', 'NONE', 'italic', l:b0, 'NONE')
-
-    call s:Hi(['jsonKeyword', 'jsonTest', 'yamlMappingKey', 'yamlBlockMappingKey', 'yamlFlowMappingKey', 'yamlBlockMappingMerge', 'yamlFlowMappingMerge', 'tomlKey', 'tomlKeyDq', 'tomlKeySq', 'xmlAttrib', 'htmlArg', 'cssProp', 'jpropertiesIdentifier', 'protoStructure', 'protoRepeat', 'protoDefault', 'protoExtend', 'protoRPC', 'protoType', 'protoTypedef', 'pbtxtField'], 'NONE', '2', 'NONE', 'NONE', l:grn, 'NONE')
-    call s:Hi(['tomlTable', 'tomlTableArray', 'xmlTagName', 'xmlNamespace', 'htmlTagName', 'htmlSpecialTagName', 'cssTagName', 'cssClassName', 'cssIdentifier', 'pbtxtMessage', 'diffLine', 'diffSubname'], 'NONE', '4', 'NONE', 'NONE', l:blu, 'NONE')
-    call s:Hi(['xmlCdataStart', 'xmlCdataEnd', 'xmlCdataCdata', 'cssPseudoClass', 'cssPseudoClassId', 'cssPagePseudo'], 'NONE', '13', 'NONE', 'NONE', l:vio, 'NONE')
-    call s:Hi(['yamlDocumentStart', 'yamlDocumentEnd', 'xmlProcessing', 'xmlDocTypeDecl', 'xmlDocTypeKeyword', 'htmlDoctype', 'cssAtRule', 'cssAtKeyword', 'protoSyntax'], 'NONE', '9', 'NONE', 'NONE', l:ora, 'NONE')
-    call s:Hi(['jsonNull', 'jsonBoolean', 'jsonNumber', 'yamlNull', 'yamlBool', 'yamlInteger', 'yamlFloat', 'yamlTimestamp', 'tomlDate', 'tomlBoolean', 'tomlInteger', 'tomlFloat', 'xmlEntity', 'xmlEntityPunct', 'htmlSpecialChar', 'cssColor', 'cssValueNumber', 'cssValueInteger', 'cssValueLength', 'cssValueAngle', 'cssValueTime', 'cssValueFrequency', 'cssUnitDecorators', 'hsJPropertiesConst', 'protoBool', 'protoInt', 'protoFloat', 'pbtxtEnum', 'pbtxtBool', 'pbtxtInt', 'pbtxtHex', 'pbtxtFloat'], 'NONE', '5', 'NONE', 'NONE', l:mag, 'NONE')
-    call s:Hi(['jsonString', 'jsonEscape', 'yamlString', 'yamlFlowString', 'tomlString', 'tomlEscape', 'xmlString', 'htmlString', 'cssStringQ', 'cssStringQQ', 'cssURL', 'jpropertiesString', 'jpropertiesExtendString', 'jpropertiesSpecial', 'jpropertiesSpecialChar', 'protoString', 'pbtxtString', 'diffFile', 'diffOldFile', 'diffNewFile'], 'NONE', '6', 'NONE', 'NONE', l:cya, 'NONE')
-    call s:Hi(['jsonBraces', 'jsonNoise', 'yamlKeyValueDelimiter', 'yamlBlockMappingDelimiter', 'yamlFlowMappingDelimiter', 'yamlFlowIndicator', 'yamlBlockCollectionItemStart', 'yamlBlockScalarHeader', 'yamlNodeTag', 'xmlTag', 'xmlEndTag', 'xmlEqual', 'xmlCdata', 'htmlTag', 'htmlEndTag', 'htmlHead', 'htmlTitle', 'htmlH1', 'htmlH2', 'htmlH3', 'htmlH4', 'htmlH5', 'htmlH6', 'htmlBold', 'htmlItalic', 'htmlUnderline', 'htmlBoldItalic', 'htmlBoldUnderline', 'htmlBoldUnderlineItalic', 'htmlUnderlineItalic', 'htmlLink', 'cssBraces', 'cssClassNameDot', 'cssAttributeSelector', 'cssCustomProp', 'cssCustomProperty', 'cssVar', 'cssAttr', 'cssFunctionName', 'cssFunctionComma', 'cssSelectorOp', 'cssSelectorOp2', 'cssAttrComma', 'cssNoise', 'cssUnitizers', 'jpropertiesAssignment', 'jpropertiesDelimiter', 'hsJPropertiesInterp'], 'NONE', '12', 'NONE', 'NONE', l:b0, 'NONE')
-    call s:Hi(['yamlAnchor', 'yamlAlias', 'xmlComment', 'xmlCommentPart', 'xmlProcessingDelim', 'htmlComment', 'htmlCommentPart', 'jpropertiesComment', 'protoComment', 'protoTodo', 'pbtxtComment', 'pbtxtTodo', 'diffIndexLine'], 'NONE', '10', 'NONE', 'NONE', l:b01, 'NONE')
-    call s:Hi(['cssImportant'], 'NONE', '1', 'NONE', 'NONE', l:red, 'NONE')
+    call s:ApplyTerminalPalette(l:c)
+    call s:ApplyUiHighlights(l:c)
+    call s:ApplyCoreSyntaxHighlights(l:c)
+    call s:ApplyFiletypeHighlights(l:c)
 
     let s:applied_theme_sig = s:ActiveThemeSignature()
 endfunction
@@ -454,6 +557,9 @@ function! s:SyncActiveTheme() abort
     endif
 endfunction
 
+" -------------------------------------------------------------
+" 5. Holiday Calendar & :Theme Command
+" -------------------------------------------------------------
 function! s:HolidayScheduleForYear(year) abort
     let l:a = a:year % 19
     let l:b = a:year / 100
@@ -529,13 +635,39 @@ function! s:WriteFileAtomic(path, lines) abort
     return 0
 endfunction
 
+function! s:PersistStandaloneThemeState(c, cfg_home) abort
+    let l:state_dir = a:cfg_home . '/home-settings'
+    try
+        call mkdir(l:state_dir, 'p')
+    catch
+    endtry
+    let l:active_lines = [
+        \ '# Active home-settings palette (' . a:c['THEME_ID'] . ')',
+        \ 'THEME_ID="' . a:c['THEME_ID'] . '"',
+        \ 'THEME_LABEL="' . a:c['THEME_LABEL'] . '"',
+        \ 'THEME_MODE="' . a:c['THEME_MODE'] . '"',
+        \ 'BAT_THEME_NAME="' . a:c['BAT_THEME_NAME'] . '"'
+        \ ]
+    for l:k in s:all_color_keys
+        call add(l:active_lines, l:k . '="' . a:c[l:k] . '"')
+    endfor
+    if !isdirectory(l:state_dir)
+        \ || !s:WriteFileAtomic(l:state_dir . '/active-theme.theme', l:active_lines)
+        \ || !s:WriteFileAtomic(l:state_dir . '/theme', [a:c['THEME_ID']])
+        call s:ThemeError('cannot write theme state in ' . l:state_dir)
+        return 0
+    endif
+    silent! call delete(l:state_dir . '/theme-env.sh')
+    return 1
+endfunction
+
 function! s:ThemeCommand(raw_arg) abort
     let l:arg = s:Trim(a:raw_arg)
     if empty(l:arg)
         echomsg 'Active theme: ' . get(g:, 'home_settings_theme', 'solarized-dark')
         return
     endif
-    let l:cfg_home = empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
+    let l:cfg_home = s:ConfigHome()
     let l:theme_bin = expand('$HOME/.local/bin/theme')
     if !executable(l:theme_bin)
         let l:repo_bin = s:vimrc_repo_root . '/bin/theme'
@@ -552,9 +684,7 @@ function! s:ThemeCommand(raw_arg) abort
         let $THEME_SKIP_NVIM_SOCKET = l:prev_skip
         if l:rc != 0
             let l:msg = s:Trim(l:out)
-            echohl ErrorMsg
-            echomsg 'Theme switch failed: ' . (!empty(l:msg) ? l:msg : l:arg)
-            echohl None
+            call s:ThemeError(!empty(l:msg) ? l:msg : l:arg)
             return
         endif
         let $HOME_SETTINGS_THEME_FILE = ''
@@ -567,51 +697,28 @@ function! s:ThemeCommand(raw_arg) abort
     if l:arg ==# '--holiday' || l:arg ==# 'holiday'
         let l:slug = s:ResolveNearestHolidaySlug()
         if empty(l:slug)
-            echohl ErrorMsg
-            echomsg 'Theme switch failed: invalid THEME_HOLIDAY_DATE: ' . $THEME_HOLIDAY_DATE
-            echohl None
+            call s:ThemeError('invalid THEME_HOLIDAY_DATE: ' . $THEME_HOLIDAY_DATE)
             return
         endif
     else
-        let l:slug = substitute(tolower(l:arg), '_', '-', 'g')
+        let l:slug = s:NormSlug(l:arg)
     endif
     let l:raw = s:ResolveThemeBySlug(l:slug, l:cfg_home)
     if empty(l:raw)
-        echohl ErrorMsg
-        echomsg 'Theme switch failed: unknown theme: ' . l:arg
-        echohl None
+        call s:ThemeError('unknown theme: ' . l:arg)
         return
     endif
     let l:c = s:BuildCompletePalette(l:raw)
-    let l:state_dir = l:cfg_home . '/home-settings'
-    try
-        call mkdir(l:state_dir, 'p')
-    catch
-    endtry
-    let l:active_lines = [
-        \ '# Active home-settings palette (' . l:c['THEME_ID'] . ')',
-        \ 'THEME_ID="' . l:c['THEME_ID'] . '"',
-        \ 'THEME_LABEL="' . l:c['THEME_LABEL'] . '"',
-        \ 'THEME_MODE="' . l:c['THEME_MODE'] . '"',
-        \ 'BAT_THEME_NAME="' . l:c['BAT_THEME_NAME'] . '"'
-        \ ]
-    for l:k in ['BASE03', 'BASE02', 'BASE04', 'BASE01', 'BASE00', 'BASE0', 'BASE1', 'BASE2', 'BASE3', 'YELLOW', 'ORANGE', 'RED', 'MAGENTA', 'VIOLET', 'BLUE', 'CYAN', 'GREEN', 'MIX_GREEN', 'MIX_RED', 'MIX_YELLOW', 'MIX_BLUE', 'MIX_MAGENTA', 'MIX_BASE1']
-        call add(l:active_lines, l:k . '="' . l:c[l:k] . '"')
-    endfor
-    if !isdirectory(l:state_dir) || !s:WriteFileAtomic(l:state_dir . '/active-theme.theme', l:active_lines) || !s:WriteFileAtomic(l:state_dir . '/theme', [l:c['THEME_ID']])
-        echohl ErrorMsg
-        echomsg 'Theme switch failed: cannot write theme state in ' . l:state_dir
-        echohl None
+    if !s:PersistStandaloneThemeState(l:c, l:cfg_home)
         return
     endif
-    silent! call delete(l:state_dir . '/theme-env.sh')
     let $HOME_SETTINGS_THEME_FILE = ''
     let s:user_env_theme = ''
     call s:ApplySolarizedDark()
 endfunction
 
 function! s:CompleteTheme(arg_lead, cmd_line, cursor_pos) abort
-    let l:cfg_home = empty($XDG_CONFIG_HOME) ? expand('$HOME/.config') : $XDG_CONFIG_HOME
+    let l:cfg_home = s:ConfigHome()
     let l:seen = {}
     let l:items = []
     for l:slug in s:builtin_theme_order
@@ -625,7 +732,7 @@ function! s:CompleteTheme(arg_lead, cmd_line, cursor_pos) abort
                 let l:stem = fnamemodify(l:f, ':t:r')
                 if l:stem !=# 'active-theme'
                     let l:kv = s:ParseThemeFile(l:f)
-                    let l:cslug = substitute(tolower(s:Trim(get(l:kv, 'THEME_ID', l:stem))), '_', '-', 'g')
+                    let l:cslug = s:NormSlug(get(l:kv, 'THEME_ID', l:stem))
                     if l:cslug =~# '^[a-z0-9][a-z0-9-]*$' && l:cslug !=# 'active-theme' && !has_key(l:seen, l:cslug)
                         let l:seen[l:cslug] = 1
                         call add(l:custom, l:cslug)
@@ -641,6 +748,9 @@ endfunction
 
 command! -nargs=? -complete=customlist,s:CompleteTheme Theme call s:ThemeCommand(<q-args>)
 
+" -------------------------------------------------------------
+" 6. Polyglot Filetypes, Syntax Overrides & Live Theme Sync
+" -------------------------------------------------------------
 augroup SolarizedFiletypes
     autocmd!
     autocmd BufNewFile,BufRead *.proto setfiletype proto
@@ -658,7 +768,6 @@ augroup SolarizedFiletypes
     autocmd BufNewFile,BufRead Dockerfile,Containerfile,*.Dockerfile,*.Containerfile,Dockerfile.*,Containerfile.* setfiletype dockerfile
 augroup END
 
-" Syntax & Visual Theme
 syntax enable
 
 function! s:ApplyJPropertiesSyntax() abort
@@ -711,7 +820,9 @@ unlet s:initial_theme
 silent! colorscheme solarized
 call s:ApplySolarizedDark()
 
-" Navigation & Hybrid Tmux Split Integration
+" -------------------------------------------------------------
+" 7. Keymaps, Smart-Home, Netrw, Clipboard & Tmux Navigation
+" -------------------------------------------------------------
 let mapleader = " "
 
 " Clear search highlight & Fast Save (1:1 parity with Neovim init.lua)
@@ -758,23 +869,7 @@ let g:netrw_altv = 1
 let g:netrw_winsize = 20
 nnoremap <silent> <leader>e :Lexplore<CR>
 
-set mouse=a
-if has('mouse_sgr')
-    set ttymouse=sgr
-endif
-if exists('+smoothscroll')
-    set smoothscroll
-endif
-
-if !has('nvim')
-    silent! execute "set <M-h>=\<Esc>h"
-    silent! execute "set <M-j>=\<Esc>j"
-    silent! execute "set <M-k>=\<Esc>k"
-    silent! execute "set <M-l>=\<Esc>l"
-    silent! execute "set <M-c>=\<Esc>c"
-    silent! execute "set <M-v>=\<Esc>v"
-endif
-
+" System Clipboard & Mouse4/Mouse5 Jumplist Navigation
 if has('clipboard')
     xnoremap <silent> <LeftRelease> <LeftRelease>"+ygv"*ygv
     xnoremap <silent> <C-c> "+y
@@ -799,6 +894,7 @@ vnoremap <silent> <X2Mouse> <C-i>
 inoremap <silent> <X1Mouse> <C-\><C-o><C-o>
 inoremap <silent> <X2Mouse> <C-\><C-o><C-i>
 
+" Internal Vim Splits (Ctrl+hjkl) & Seamless Tmux Spatial Navigation (Alt+hjkl)
 function! s:TmuxNavigate(dir, tmux_dir) abort
     let l:cur_win = winnr()
     execute 'wincmd ' . a:dir
@@ -825,4 +921,5 @@ inoremap <silent> <M-h> <Esc>:call <SID>TmuxNavigate('h', 'L')<CR>
 inoremap <silent> <M-j> <Esc>:call <SID>TmuxNavigate('j', 'D')<CR>
 inoremap <silent> <M-k> <Esc>:call <SID>TmuxNavigate('k', 'U')<CR>
 inoremap <silent> <M-l> <Esc>:call <SID>TmuxNavigate('l', 'R')<CR>
+
 endif

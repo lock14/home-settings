@@ -8,6 +8,18 @@ ifeq ($(COLORTERM),)
 export COLORTERM := truecolor
 endif
 
+TEST_SUITES := \
+	system-setup:bash:tests/test-system-setup.sh \
+	dotfiles:bash:tests/test-dotfiles.sh \
+	bin:bash:tests/test-bin.sh \
+	theme:bash:tests/test-theme.sh \
+	ide-fleet:bash:tests/test-ide-fleet.sh \
+	env:bash:tests/test-env.sh \
+	zsh:zsh:tests/test-zsh.zsh \
+	completions:bash:tests/test-completions.sh \
+	vim:bash:tests/test-vim.sh \
+	fonts:bash:tests/test-fonts.sh
+
 ## setup: Run full machine setup (packages, apps, dotfiles, tools).
 setup:
 	@./setup.sh --system
@@ -31,7 +43,7 @@ uninstall:
 test:
 	@tmpdir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmpdir"' EXIT INT TERM; \
-	suites="system-setup:bash:tests/test-system-setup.sh dotfiles:bash:tests/test-dotfiles.sh bin:bash:tests/test-bin.sh theme:bash:tests/test-theme.sh ide-fleet:bash:tests/test-ide-fleet.sh env:bash:tests/test-env.sh zsh:zsh:tests/test-zsh.zsh completions:bash:tests/test-completions.sh vim:bash:tests/test-vim.sh fonts:bash:tests/test-fonts.sh"; \
+	suites="$(TEST_SUITES)"; \
 	pids=""; \
 	for spec in $$suites; do \
 		name="$${spec%%:*}"; rest="$${spec#*:}"; runner="$${rest%%:*}"; script="$${rest#*:}"; \
@@ -82,20 +94,34 @@ test-fonts:
 ## lint: Run syntax validation, shellcheck, and documentation hygiene checks.
 lint:
 	@echo "Checking zsh syntax..."
-	@zsh -n dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh tests/test-zsh.zsh
+	@set -e; \
+	for zf in dotfiles/.aliases dotfiles/.zsh-functions dotfiles/.zshrc-addendum dotfiles/.zsh-completions dotfiles/.p10k.zsh tests/test-zsh.zsh dotfiles/.config/shell/*.zsh dotfiles/.config/shell/*/*.zsh; do \
+		[ -f "$$zf" ] || continue; \
+		zsh -n "$$zf" || exit 1; \
+	done
 	@echo "Checking bash script syntax with 'bash -n'..."
-	@bash -n dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh bin/* lib/*.sh modules/*.sh tests/*.sh
-	@if command -v shellcheck >/dev/null 2>&1; then \
+	@set -e; \
+	set -- dotfiles/.aliases dotfiles/.bashrc-addendum dotfiles/.environment-variables setup.sh; \
+	for sf in lib/*.sh modules/*.sh tests/*.sh dotfiles/.config/shell/*.sh dotfiles/.config/shell/*/*.sh; do \
+		[ -f "$$sf" ] && set -- "$$@" "$$sf"; \
+	done; \
+	for bf in bin/*; do \
+		[ -f "$$bf" ] || continue; \
+		IFS= read -r first < "$$bf" || first=""; \
+		case "$$first" in '#!'*python*) continue ;; esac; \
+		set -- "$$@" "$$bf"; \
+	done; \
+	bash -n "$$@" || exit 1; \
+	if command -v shellcheck >/dev/null 2>&1; then \
 		echo "Running shellcheck on bash/sh scripts..."; \
 		jobs=$$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4); \
 		case "$$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac; \
 		[ "$$jobs" -gt 8 ] && jobs=8; \
-		printf '%s\0' dotfiles/.bashrc-addendum tests/*.sh bin/* setup.sh modules/*.sh lib/*.sh dotfiles/.aliases dotfiles/.environment-variables \
-			| xargs -0 -n 1 -P "$$jobs" shellcheck --severity=warning -e SC2148,SC2154; \
+		printf '%s\0' "$$@" | xargs -0 -n 1 -P "$$jobs" shellcheck --severity=warning -e SC2148,SC2154; \
 	else \
 		echo "shellcheck not found in PATH (skipped shellcheck static analysis)."; \
 	fi
-	@echo "Checking embedded Python AST syntax..."
+	@echo "Checking Python module and embedded AST syntax..."
 	@bash -c '. tests/test-helper.sh && lint_python_embeds .'
 	@echo "Checking documentation hygiene and links..."
 	@bash -c '. tests/test-helper.sh && lint_documentation .'
