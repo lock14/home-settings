@@ -46,7 +46,7 @@ trap 'exit 143' TERM HUP
 
 # Test 1: bin/theme unified multi-theme color scheme manager
 echo -e "\n[1/1] Testing bin/theme unified multi-theme manager..."
-unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE
+unset HOME_SETTINGS_THEME HOME_SETTINGS_THEME_MODE HOME_SETTINGS_THEME_FILE THEME_NVIM_SOCKET_DIR THEME_SKIP_NVIM_SOCKET
 THEME_TEST_HOME="$(mktemp -d)"
 export THEME_TEST_Cfg="$THEME_TEST_HOME/.config"
 export THEME_TEST_Cache="$THEME_TEST_HOME/.cache"
@@ -252,70 +252,42 @@ else
 fi
 
 # Verify monotonic luminance ramp, canvas & shelf contrast, and semantic utility separation across ALL 17 built-in themes
-if python3 - "$SCRIPT_DIR" "$THEME_TEST_HOME" "$THEME_TEST_Cfg" "$THEME_TEST_Cache" <<'PY'; then
-import colorsys
-import math
+if python3 -B - "$SCRIPT_DIR" "$THEME_TEST_HOME" "$THEME_TEST_Cfg" "$THEME_TEST_Cache" <<'PY'; then
+from __future__ import annotations
+
 import pathlib
 import re
 import subprocess
 import sys
 
+sys.dont_write_bytecode = True
 repo = pathlib.Path(sys.argv[1])
+sys.path.insert(0, str(repo / "bin"))
+
+from theme_lib.palette import (
+    CLASSIC_THEMES as classic,
+    HOLIDAY_THEMES as holidays,
+    contrast_ratio as contrast,
+    hex_to_rgb,
+    hue_difference as hue_diff,
+    parse_theme_file,
+    relative_luminance,
+    rgb_distance as rgb_dist,
+)
+
 test_home = sys.argv[2]
 test_cfg = sys.argv[3]
 test_cache = sys.argv[4]
 
-def hex_to_rgb(h):
-    h = h.lstrip("#")
-    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-
-def rel_lum(rgb):
-    def ch(c):
-        c = c / 255.0
-        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-    r, g, b = rgb
-    return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
-
-def contrast(h1, h2):
-    l1, l2 = rel_lum(hex_to_rgb(h1)), rel_lum(hex_to_rgb(h2))
-    return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
-
-def rgb_dist(h1, h2):
-    r1, g1, b1 = hex_to_rgb(h1)
-    r2, g2, b2 = hex_to_rgb(h2)
-    rm = (r1 + r2) / 2.0
-    dr, dg, db = r1 - r2, g1 - g2, b1 - b2
-    return math.sqrt((2 + rm / 256.0) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256.0) * db * db)
-
-def hue_diff(h1, h2):
-    r1, g1, b1 = [x / 255.0 for x in hex_to_rgb(h1)]
-    r2, g2, b2 = [x / 255.0 for x in hex_to_rgb(h2)]
-    hue1, _, _ = colorsys.rgb_to_hsv(r1, g1, b1)
-    hue2, _, _ = colorsys.rgb_to_hsv(r2, g2, b2)
-    d = abs(hue1 - hue2) * 360.0
-    return min(d, 360.0 - d)
-
-classic = [
-    "solarized-dark", "solarized-light", "catppuccin-mocha", "catppuccin-latte",
-    "gruvbox-dark", "tokyonight-night", "kanagawa-wave", "nord", "onedark",
-]
-holidays = [
-    "new-years", "valentines", "st-patricks", "easter",
-    "independence-day", "halloween", "thanksgiving", "christmas",
-]
 accents = ["YELLOW", "ORANGE", "RED", "MAGENTA", "VIOLET", "BLUE", "CYAN", "GREEN"]
 ramp_keys = ["BASE03", "BASE02", "BASE01", "BASE00", "BASE0", "BASE1"]
 
 for slug in classic + holidays:
     p = repo / "colors" / "themes" / f"{slug}.theme"
-    d = {}
-    for line in p.read_text(encoding="utf-8").splitlines():
-        m = re.match(r'^([A-Z0-9_]+)="(.*)"$', line.strip())
-        if m:
-            d[m.group(1)] = m.group(2)
+    d = parse_theme_file(p, default_slug=slug, source="builtin")
 
     is_light = d.get("THEME_MODE", "dark") == "light"
-    lums = [rel_lum(hex_to_rgb(d[k])) for k in ramp_keys]
+    lums = [relative_luminance(d[k]) for k in ramp_keys]
     for idx in range(len(ramp_keys) - 1):
         if is_light and not (lums[idx] > lums[idx + 1]):
             raise SystemExit(f"{slug}: non-monotonic light ramp {ramp_keys[idx]} ({d[ramp_keys[idx]]}) -> {ramp_keys[idx+1]} ({d[ramp_keys[idx+1]]})")
@@ -665,14 +637,24 @@ fi
 # Verify uniform preview card geometry across ALL 17 built-in themes (standalone 94 cols and narrow fzf 72 cols) and Tmux status-right client_width>=105 holiday guard
 HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set halloween --no-live >/dev/null 2>&1
 if grep -Fq '#{>=:#{client_width},105}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
-   python3 - "$SCRIPT_DIR/bin/theme" "$SCRIPT_DIR/bin/ide" "${managed_themes[@]}" <<'PY'
-import os, re, subprocess, sys
+   python3 -B - "$SCRIPT_DIR/bin/theme" "$SCRIPT_DIR/bin/ide" "${managed_themes[@]}" <<'PY'
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+
+sys.dont_write_bytecode = True
 theme_bin, ide_bin = sys.argv[1], sys.argv[2]
 slugs = sys.argv[3:]
-ANSI_RE = re.compile(r"\033\[[0-9;]*m")
-def vlen(s):
-    plain = ANSI_RE.sub("", s)
-    return sum(2 if (0x1F300 <= ord(c) <= 0x1FAFF or c == "✨") else 1 for c in plain)
+bin_dir = Path(theme_bin).resolve().parent
+sys.path.insert(0, str(bin_dir))
+
+from theme_lib.preview import visible_len as vlen
 
 for slug in slugs:
     env = dict(os.environ)
@@ -688,19 +670,20 @@ for slug in slugs:
     if not status_lines or vlen(status_lines[0]) != 72:
         raise SystemExit(f"{slug}: narrow status width != 72")
 
-# Verify status_click in bin/ide uses _visible_width(plain_left) for 2-column holiday emoji and East Asian wide glyphs,
-# and bin/theme broadcast_live_reloads discovers $XDG_RUNTIME_DIR/nvim-ide-*.sock across peer IDE sessions
-src = open(ide_bin, encoding="utf-8").read()
-assert "#{status-left}" in src and "_visible_width(plain_left)" in src
-theme_src = open(theme_bin, encoding="utf-8").read()
+# Verify status_click in bin/ide (+ bin/ide_lib/*.py) uses visible_width for 2-column holiday emoji and East Asian wide glyphs,
+# and bin/theme (+ bin/theme_lib/*.py) emits clickable range tags and discovers $XDG_RUNTIME_DIR/nvim-ide-*.sock while isolating THEME_NVIM_SOCKET_DIR
+ide_files = [Path(ide_bin)] + sorted(bin_dir.glob("ide_lib/*.py"))
+src = "\n".join(p.read_text(encoding="utf-8") for p in ide_files if p.is_file())
+assert "#{status-left}" in src and ("_visible_width(" in src or "visible_width(" in src)
+theme_files = [Path(theme_bin)] + sorted(bin_dir.glob("theme_lib/*.py"))
+theme_src = "\n".join(p.read_text(encoding="utf-8") for p in theme_files if p.is_file())
 assert 'range=user|tab_ai' in theme_src and 'range=user|tab_editor' in theme_src and 'range=user|tab_term' in theme_src and 'range=user|tab_zoom' in theme_src
-import shutil as _shutil_mod
-if _shutil_mod.which("nvim"):
-    import socket as _sock_mod
-    import tempfile as _tf_mod
-    with _tf_mod.TemporaryDirectory() as xdg_rt_tmp:
+
+if shutil.which("nvim"):
+    with tempfile.TemporaryDirectory() as xdg_rt_tmp, tempfile.TemporaryDirectory() as iso_sock_tmp:
         sock_a = os.path.join(xdg_rt_tmp, "nvim-ide-peer-a.sock")
         sock_b = os.path.join(xdg_rt_tmp, "nvim-ide-peer-b.sock")
+        iso_sock = os.path.join(iso_sock_tmp, "nvim-ide-isolated.sock")
         nvim_log = os.path.join(xdg_rt_tmp, "nvim_rpc.log")
         mock_nvim_dir = os.path.join(xdg_rt_tmp, "bin")
         os.makedirs(mock_nvim_dir, exist_ok=True)
@@ -708,16 +691,20 @@ if _shutil_mod.which("nvim"):
         with open(mock_nvim, "w", encoding="utf-8") as mf:
             mf.write(f"#!/usr/bin/env python3\nimport sys\nwith open({nvim_log!r}, 'a', encoding='utf-8') as f:\n    f.write(' '.join(sys.argv[1:]) + '\\n')\n")
         os.chmod(mock_nvim, 0o755)
-        s1 = _sock_mod.socket(_sock_mod.AF_UNIX, _sock_mod.SOCK_STREAM)
-        s2 = _sock_mod.socket(_sock_mod.AF_UNIX, _sock_mod.SOCK_STREAM)
+        s1 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s3 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s1.bind(sock_a)
         s2.bind(sock_b)
+        s3.bind(iso_sock)
         try:
             rt_env = {
                 **env,
                 "PATH": f"{mock_nvim_dir}:{env['PATH']}",
                 "XDG_RUNTIME_DIR": xdg_rt_tmp,
                 "NVIM_IDE_SOCKET": "",
+                "THEME_NVIM_SOCKET_DIR": "",
+                "THEME_SKIP_NVIM_SOCKET": "",
                 "THEME_LIVE_NVIM": "1",
                 "THEME_UPDATE_TERMINAL_PROFILE": "0",
                 "TMUX": "",
@@ -726,17 +713,50 @@ if _shutil_mod.which("nvim"):
             subprocess.run([theme_bin, "--set", "nord"], env=rt_env, stdout=subprocess.DEVNULL, check=True)
             rpc_txt = open(nvim_log, encoding="utf-8").read()
             assert sock_a in rpc_txt and sock_b in rpc_txt, f"bin/theme missed $XDG_RUNTIME_DIR/nvim-ide-*.sock: {rpc_txt!r}"
+
+            # Verify THEME_NVIM_SOCKET_DIR strictly ignores inherited NVIM_IDE_SOCKET and XDG_RUNTIME_DIR
+            open(nvim_log, "w", encoding="utf-8").close()
+            iso_env = {
+                **rt_env,
+                "THEME_NVIM_SOCKET_DIR": iso_sock_tmp,
+                "NVIM_IDE_SOCKET": sock_a,
+            }
+            subprocess.run([theme_bin, "--set", "onedark"], env=iso_env, stdout=subprocess.DEVNULL, check=True)
+            iso_rpc_txt = open(nvim_log, encoding="utf-8").read()
+            assert iso_sock in iso_rpc_txt and sock_a not in iso_rpc_txt and sock_b not in iso_rpc_txt, (
+                f"THEME_NVIM_SOCKET_DIR leaked into NVIM_IDE_SOCKET/XDG_RUNTIME_DIR: {iso_rpc_txt!r}"
+            )
         finally:
             s1.close()
             s2.close()
+            s3.close()
 PY
 then
-    pass "bin/theme renders uniform rectangular preview cards across all 17 themes (standalone 94-col & narrow 72-col fzf), guards Tmux holiday badge with client_width>=105, and bin/ide status_click accounts for 2-cell holiday emojis"
+    pass "bin/theme renders uniform rectangular preview cards across all 17 themes (standalone 94-col & narrow 72-col fzf), guards Tmux holiday badge with client_width>=105, isolates THEME_NVIM_SOCKET_DIR, and bin/ide status_click accounts for 2-cell holiday emojis"
 else
-    fail "bin/theme 17-theme preview geometry & Tmux status-bar holiday guards" "Preview card widths, client_width>=105 guard, or bin/ide status-left emoji width calculation failed"
+    fail "bin/theme 17-theme preview geometry & Tmux status-bar holiday guards" "Preview card widths, client_width>=105 guard, THEME_NVIM_SOCKET_DIR isolation, or bin/ide status-left emoji width calculation failed"
 fi
 
 rm -rf "$THEME_TEST_HOME"
+
+# Verify symlinked invocation in a temp directory resolves bin/theme_lib cleanly across theme & terminal CLIs
+SYMLINK_BIN_TMP="$(mktemp -d)"
+mkdir -p "$SYMLINK_BIN_TMP/bin" "$SYMLINK_BIN_TMP/hop" "$SYMLINK_BIN_TMP/home/.config"
+ln -s "$SCRIPT_DIR/bin/theme" "$SYMLINK_BIN_TMP/bin/theme"
+ln -s "../bin/theme" "$SYMLINK_BIN_TMP/hop/theme-chained"
+ln -s "$SCRIPT_DIR/bin/gnome-terminal-solarized" "$SYMLINK_BIN_TMP/bin/gnome-terminal-solarized"
+ln -s "$SCRIPT_DIR/bin/macos-terminal-solarized" "$SYMLINK_BIN_TMP/bin/macos-terminal-solarized"
+sym_list_out="$(HOME="$SYMLINK_BIN_TMP/home" XDG_CONFIG_HOME="$SYMLINK_BIN_TMP/home/.config" "$SYMLINK_BIN_TMP/hop/theme-chained" --list --plain 2>&1)" || sym_list_out=""
+sym_dry_out="$(HOME="$SYMLINK_BIN_TMP/home" XDG_CONFIG_HOME="$SYMLINK_BIN_TMP/home/.config" "$SYMLINK_BIN_TMP/bin/theme" --dry-run nord 2>&1)" || sym_dry_out=""
+sym_mac_out="$(OS=macos HOME="$SYMLINK_BIN_TMP/home" XDG_CONFIG_HOME="$SYMLINK_BIN_TMP/home/.config" "$SYMLINK_BIN_TMP/bin/macos-terminal-solarized" --theme nord --dry-run 2>&1)" || sym_mac_out=""
+rm -rf "$SYMLINK_BIN_TMP"
+if grep -Fxq "nord" <<< "$sym_list_out" && \
+   grep -Fq "[DRY-RUN] Theme: Nord (nord" <<< "$sym_dry_out" && \
+   grep -Fq "Configure 'Nord' in Terminal.app" <<< "$sym_mac_out"; then
+    pass "Symlinked bin/theme (including chained relative symlinks) and terminal provisioners resolve bin/theme_lib cleanly"
+else
+    fail "Symlinked bin/theme_lib resolution" "list='$sym_list_out' dry='$sym_dry_out' mac='$sym_mac_out'"
+fi
 
 # Verify bin/theme bypasses slow mise/shims/python3 when /usr/bin/python3 is available and honors THEME_PY_BIN
 SHIM_PY_DIR="$(mktemp -d)"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared symlink creation and cleanup helper for home-settings.
+# Shared symlink creation, ownership verification, and Bat cache helpers.
 
 _link_path() {
     local flags="$1"
@@ -11,16 +11,21 @@ _link_path() {
     else
         mkdir -p "$(dirname "$dst")"
         if [ -e "$dst" ] && [ ! -L "$dst" ]; then
-            local base_bak bak idx
-            base_bak="${dst}.bak.$(date +%s)"
-            bak="$base_bak"
-            idx=1
-            while [ -e "$bak" ] || [ -L "$bak" ]; do
-                bak="${base_bak}.${idx}"
-                idx=$((idx + 1))
-            done
+            local bak
+            if declare -F backup_existing_path >/dev/null 2>&1; then
+                bak="$(backup_existing_path "$dst")"
+            else
+                local base_bak
+                local idx=1
+                base_bak="${dst}.bak.$(date +%s)"
+                bak="$base_bak"
+                while [ -e "$bak" ] || [ -L "$bak" ]; do
+                    bak="${base_bak}.${idx}"
+                    idx=$((idx + 1))
+                done
+                mv "$dst" "$bak"
+            fi
             echo "  Backing up pre-existing path to $bak"
-            mv "$dst" "$bak"
         fi
         ln "$flags" "$src" "$dst"
     fi
@@ -32,6 +37,38 @@ link_file() {
 
 link_dir() {
     _link_path -sfn "$1" "$2"
+}
+
+# Symlink all matching files in src_dir into dest_dir (creating dest_dir when live).
+link_glob_files() {
+    local src_dir="$1"
+    local glob_pat="$2"
+    local dest_dir="$3"
+    [ -d "$src_dir" ] || return 0
+    [ "${DRY_RUN:-false}" = true ] || mkdir -p "$dest_dir"
+    local item
+    # shellcheck disable=SC2231
+    for item in "$src_dir"/$glob_pat; do
+        [ -e "$item" ] || continue
+        link_file "$item" "$dest_dir/$(basename "$item")"
+    done
+}
+
+# Print top-level regular dotfile paths managed from dotfiles_dir (one per line).
+list_managed_top_dotfiles() {
+    local dotfiles_dir="$1"
+    [ -d "$dotfiles_dir" ] || return 0
+    local src name
+    for src in "$dotfiles_dir"/.* "$dotfiles_dir"/*; do
+        [ -e "$src" ] || continue
+        name="$(basename "$src")"
+        case "$name" in
+            .|..|.git|.gitignore|.config|.dir-colors|'*') continue ;;
+        esac
+        if [ -f "$src" ]; then
+            printf '%s\n' "$src"
+        fi
+    done
 }
 
 _canonicalize_ownership_path() {
@@ -123,6 +160,22 @@ unlink_path() {
             rm -f "$target"
         fi
     fi
+}
+
+# Remove dangling symlinks directly inside dest_dir whose target points under source_prefix.
+prune_dangling_managed_symlinks() {
+    local dest_dir="$1"
+    local source_prefix="$2"
+    [ -d "$dest_dir" ] || return 0
+    local existing target_link
+    for existing in "$dest_dir"/*; do
+        if [ -L "$existing" ] && [ ! -e "$existing" ]; then
+            target_link="$(readlink "$existing" 2>/dev/null || true)"
+            if [[ "$target_link" == *"$source_prefix"* ]]; then
+                unlink_path "$existing"
+            fi
+        fi
+    done
 }
 
 rebuild_bat_cache() {

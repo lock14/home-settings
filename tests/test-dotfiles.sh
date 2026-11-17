@@ -14,11 +14,7 @@ echo "========================================"
 
 # Test 1: Module syntax check
 echo -e "\n[1/5] Checking module syntax..."
-if bash -n "$SCRIPT_DIR/modules/10-dotfiles.sh"; then
-    pass "Syntax valid: modules/10-dotfiles.sh"
-else
-    fail "modules/10-dotfiles.sh" "bash -n returned non-zero"
-fi
+assert_script_syntax "$SCRIPT_DIR/modules/10-dotfiles.sh" "modules/10-dotfiles.sh"
 
 # The module runs below under a temporary $HOME, so it must never reach live tmux servers or IDE editors
 if ! grep -Eq '^[^#]*(tmux |luafile|--remote-expr|nvim-ide-)' "$SCRIPT_DIR/modules/10-dotfiles.sh"; then
@@ -29,8 +25,7 @@ fi
 
 # Test 2: Auto-discovery in temporary HOME
 echo -e "\n[2/5] Testing declarative dotfiles auto-discovery..."
-TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
+TEMP_HOME="$(make_sandbox_dir)"
 
 HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
 
@@ -324,6 +319,9 @@ else
     fail "JS/TS queries symlink" "Expected after/queries/javascript and after/queries/typescript in mirrored .config/nvim"
 fi
 assert_symlink "$TEMP_HOME/.config/ghostty" "" "Auto-discovered and symlinked: .config/ghostty"
+if [ -d "$SCRIPT_DIR/dotfiles/.config/shell" ]; then
+    assert_symlink "$TEMP_HOME/.config/shell" "" "Auto-discovered and symlinked: .config/shell"
+fi
 assert_symlink "$TEMP_HOME/.config/clangd" "" "Auto-discovered and symlinked: .config/clangd"
 if [ -f "$TEMP_HOME/.config/clangd/config.yaml" ] && \
    grep -q 'std=gnu++20' "$TEMP_HOME/.config/clangd/config.yaml" && \
@@ -2301,7 +2299,7 @@ for df in "${expected_top_level[@]}"; do
     fi
 done
 
-if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/git/config" ] || [ -L "$TEMP_HOME/.config/tealdeer" ] || [ -L "$TEMP_HOME/.config/clangd" ] || [ -L "$TEMP_HOME/.config/fontconfig" ]; then
+if [ -L "$TEMP_HOME/.config/ghostty" ] || [ -L "$TEMP_HOME/.config/nvim" ] || [ -L "$TEMP_HOME/.config/shell" ] || [ -L "$TEMP_HOME/.config/btop" ] || [ -L "$TEMP_HOME/.config/git" ] || [ -L "$TEMP_HOME/.config/git/config" ] || [ -L "$TEMP_HOME/.config/tealdeer" ] || [ -L "$TEMP_HOME/.config/clangd" ] || [ -L "$TEMP_HOME/.config/fontconfig" ]; then
     all_unlinked=false
     fail "Unlink check" ".config subtrees or git/config still linked"
 fi
@@ -2354,5 +2352,30 @@ else
     fail "modules/10-dotfiles.sh SKIP_* flags" "Unexpected files created or missing when SKIP_ZSH/SKIP_BASH/SKIP_COMPLETIONS=true"
 fi
 rm -rf "$TEMP_SKIP_HOME"
+
+# Verify modular dotfiles/.config/shell and dangling .config symlink pruning across 10-dotfiles.sh and 99-uninstall.sh
+TEMP_MOD_REPO="$(make_sandbox_dir)"
+TEMP_MOD_HOME="$(make_sandbox_home)"
+mkdir -p "$TEMP_MOD_REPO/modules" "$TEMP_MOD_REPO/dotfiles/.config/shell" "$TEMP_MOD_REPO/dotfiles/.config/nvim/lua/solarized"
+ln -s "$SCRIPT_DIR/lib" "$TEMP_MOD_REPO/lib"
+cp "$SCRIPT_DIR/modules/10-dotfiles.sh" "$SCRIPT_DIR/modules/99-uninstall.sh" "$TEMP_MOD_REPO/modules/"
+chmod +x "$TEMP_MOD_REPO/modules/10-dotfiles.sh" "$TEMP_MOD_REPO/modules/99-uninstall.sh"
+printf 'export _HS_MOD_SHELL_OK=1\n' > "$TEMP_MOD_REPO/dotfiles/.config/shell/env-defaults.sh"
+printf 'return {}\n' > "$TEMP_MOD_REPO/dotfiles/.config/nvim/lua/solarized/options.lua"
+ln -s "$TEMP_MOD_REPO/dotfiles/.config/retired-mod" "$TEMP_MOD_HOME/.config/retired-mod"
+HOME="$TEMP_MOD_HOME" XDG_CONFIG_HOME="$TEMP_MOD_HOME/.config" XDG_CACHE_HOME="$TEMP_MOD_HOME/.cache" "$TEMP_MOD_REPO/modules/10-dotfiles.sh" >/dev/null 2>&1
+if [ -L "$TEMP_MOD_HOME/.config/shell" ] && \
+   [ -f "$TEMP_MOD_HOME/.config/shell/env-defaults.sh" ] && \
+   [ -f "$TEMP_MOD_HOME/.config/nvim/lua/solarized/options.lua" ] && \
+   [ ! -L "$TEMP_MOD_HOME/.config/retired-mod" ]; then
+    HOME="$TEMP_MOD_HOME" XDG_CONFIG_HOME="$TEMP_MOD_HOME/.config" XDG_CACHE_HOME="$TEMP_MOD_HOME/.cache" "$TEMP_MOD_REPO/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
+    if [ ! -L "$TEMP_MOD_HOME/.config/shell" ] && [ ! -L "$TEMP_MOD_HOME/.config/nvim" ]; then
+        pass "modules/10-dotfiles.sh and modules/99-uninstall.sh mirror, prune dangling symlinks, and cleanly unlink modular .config/shell and .config/nvim/lua subtrees"
+    else
+        fail "Modular .config/shell uninstallation" "Expected .config/shell and .config/nvim symlinks to be removed"
+    fi
+else
+    fail "Modular .config/shell auto-discovery" "Expected .config/shell and .config/nvim/lua linked and retired-mod pruned"
+fi
 
 test_summary

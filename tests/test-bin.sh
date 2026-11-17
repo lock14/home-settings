@@ -12,22 +12,16 @@ echo "========================================"
 echo "Running User Binaries & Shims Tests"
 echo "========================================"
 
-# Test 1: Module syntax check
-echo -e "\n[1/8] Checking module syntax..."
-if bash -n "$SCRIPT_DIR/modules/20-bin.sh"; then
-    pass "Syntax valid: modules/20-bin.sh"
-else
-    fail "modules/20-bin.sh" "bash -n returned non-zero"
-fi
+# Test 1: Module and CLI script syntax check
+echo -e "\n[1/8] Checking module and bin syntax..."
+assert_script_syntax "$SCRIPT_DIR/modules/20-bin.sh" "modules/20-bin.sh"
 
 for f in "$SCRIPT_DIR"/bin/*; do
-    if [ -f "$f" ]; then
-        if bash -n "$f"; then
-            pass "Syntax valid: $(basename "$f")"
-        else
-            fail "Syntax check failed: $(basename "$f")" "bash -n returned non-zero"
-        fi
-    fi
+    [ -f "$f" ] && assert_script_syntax "$f" "$(basename "$f")"
+done
+
+for py_mod in "$SCRIPT_DIR"/bin/*_lib/*.py; do
+    [ -f "$py_mod" ] && assert_script_syntax "$py_mod" "${py_mod#"$SCRIPT_DIR"/}"
 done
 
 # Test 2: Symlink creation into temporary HOME
@@ -100,6 +94,31 @@ done
 
 if [ "$all_bin_unlinked" = true ]; then
     pass "All managed user binaries successfully removed by uninstaller"
+fi
+
+# Verify modules/20-bin.sh and modules/99-uninstall.sh skip package subdirectories (bin/ide_lib, bin/theme_lib)
+TEMP_MOD_BIN_REPO="$(make_sandbox_dir)"
+TEMP_MOD_BIN_HOME="$(make_sandbox_dir)"
+mkdir -p "$TEMP_MOD_BIN_REPO/modules" "$TEMP_MOD_BIN_REPO/bin/ide_lib" "$TEMP_MOD_BIN_REPO/bin/theme_lib"
+ln -s "$SCRIPT_DIR/lib" "$TEMP_MOD_BIN_REPO/lib"
+cp "$SCRIPT_DIR/modules/20-bin.sh" "$SCRIPT_DIR/modules/99-uninstall.sh" "$TEMP_MOD_BIN_REPO/modules/"
+chmod +x "$TEMP_MOD_BIN_REPO/modules/20-bin.sh" "$TEMP_MOD_BIN_REPO/modules/99-uninstall.sh"
+write_mock_bin "$TEMP_MOD_BIN_REPO/bin" "ide" "exit 0"
+write_mock_bin "$TEMP_MOD_BIN_REPO/bin" "theme" "exit 0"
+printf '# internal pkg\n' > "$TEMP_MOD_BIN_REPO/bin/ide_lib/__init__.py"
+printf '# internal pkg\n' > "$TEMP_MOD_BIN_REPO/bin/theme_lib/__init__.py"
+HOME="$TEMP_MOD_BIN_HOME" "$TEMP_MOD_BIN_REPO/modules/20-bin.sh" >/dev/null 2>&1
+if [ -L "$TEMP_MOD_BIN_HOME/.local/bin/ide" ] && [ -L "$TEMP_MOD_BIN_HOME/.local/bin/theme" ] && \
+   [ ! -e "$TEMP_MOD_BIN_HOME/.local/bin/ide_lib" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/ide_lib" ] && \
+   [ ! -e "$TEMP_MOD_BIN_HOME/.local/bin/theme_lib" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/theme_lib" ]; then
+    HOME="$TEMP_MOD_BIN_HOME" "$TEMP_MOD_BIN_REPO/modules/99-uninstall.sh" bin >/dev/null 2>&1
+    if [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/ide" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/theme" ]; then
+        pass "modules/20-bin.sh and modules/99-uninstall.sh link and clean top-level executables while skipping bin/*_lib package subdirectories"
+    else
+        fail "modules/99-uninstall.sh with bin/*_lib" "Expected ide and theme symlinks to be removed"
+    fi
+else
+    fail "modules/20-bin.sh with bin/*_lib" "Expected only regular bin/* executables linked without bin/*_lib directories"
 fi
 
 # Test 5: bin/sum process substitution and whitespace-padded delimited columns
@@ -217,6 +236,14 @@ for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x03", b"\
 print("OK")
 PY
 )"
+IDE_KEYS_DEFS=0
+for _ide_src_f in "$SCRIPT_DIR/bin/ide" "$SCRIPT_DIR"/bin/ide_lib/*.py; do
+    [ -f "$_ide_src_f" ] || continue
+    _cnt="$(grep -Ec '^[[:space:]]*(show_keys_cheatsheet\(\)[[:space:]]*\{|def[[:space:]]+show_keys_cheatsheet\()' "$_ide_src_f" || true)"
+    IDE_KEYS_DEFS=$((IDE_KEYS_DEFS + _cnt))
+done
+unset _ide_src_f _cnt
+
 if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    [ "$IDE_KEYS_OUT" = "$IDE_KEYS_COMPOUND_OUT" ] && \
    ! "$SCRIPT_DIR/bin/ide" --keys --unknown-flag >/dev/null 2>&1 && \
@@ -242,11 +269,11 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
    [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 28 ] && \
-   [ "$(grep -c 'show_keys_cheatsheet()' "$SCRIPT_DIR/bin/ide")" -eq 1 ] && \
+   [ "$IDE_KEYS_DEFS" -eq 1 ] && \
    [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
     pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including session switcher, Alt+Shift+S attention jump, focus, swap, resize, context dispatch, mini.files, Space m, jumplist, clipboard, and quit shortcuts) within popup height and drains multi-byte escape sequences on PTY"
 else
-    fail "bin/ide --keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet(), line overflow, or PTY key handling failed ($IDE_KEYS_PTY_OK)"
+    fail "bin/ide --keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet() ($IDE_KEYS_DEFS), line overflow, or PTY key handling failed ($IDE_KEYS_PTY_OK)"
 fi
 
 if ! "$SCRIPT_DIR/bin/ide" --unknown-flag >/dev/null 2>&1 && \
@@ -260,11 +287,10 @@ else
     fail "bin/ide flag validation" "Expected non-zero on unknown/--on-bell/invalid state and exit-0 outside tmux for --agent-state/--next-attention"
 fi
 
-MON_TEST_DIR="$(mktemp -d)"
+MON_TEST_DIR="$(make_sandbox_dir)"
 ln -sf "$(command -v bash)" "$MON_TEST_DIR/bash"
 for m_cmd in btop htop top; do
-    printf '#!/bin/sh\necho "MONITOR:%s"\n' "$m_cmd" > "$MON_TEST_DIR/$m_cmd"
-    chmod +x "$MON_TEST_DIR/$m_cmd"
+    write_mock_bin "$MON_TEST_DIR" "$m_cmd" "echo 'MONITOR:$m_cmd'"
 done
 MON_PY_BIN="$(command -v python3)"
 mon_out_1="$(IDE_STRICT_PATH=1 IDE_PY_BIN="$MON_PY_BIN" PATH="$MON_TEST_DIR" "$SCRIPT_DIR/bin/ide" --monitor)"
@@ -283,23 +309,9 @@ else
 fi
 rm -rf "$MON_TEST_DIR"
 
-if "$SCRIPT_DIR/bin/ide" --swap diagonal >/dev/null 2>&1; then
-    fail "bin/ide invalid --swap direction" "Expected non-zero exit status on invalid --swap direction"
-else
-    pass "bin/ide rejects invalid --swap directions (enforces left, right, up, down)"
-fi
-
-if "$SCRIPT_DIR/bin/ide" "$TEMP_HOME/does-not-exist-dir" >/dev/null 2>&1; then
-    fail "bin/ide missing directory" "Expected non-zero exit status on non-existent directory"
-else
-    pass "bin/ide rejects non-existent workspace directory"
-fi
-
-if "$SCRIPT_DIR/bin/ide" --ai invalid-agent "$TEMP_HOME" >/dev/null 2>&1; then
-    fail "bin/ide invalid --ai value" "Expected non-zero exit status on unsupported --ai agent"
-else
-    pass "bin/ide rejects unsupported --ai agent values (enforces agy, claude, codex)"
-fi
+assert_cmd_fails "bin/ide rejects invalid --swap directions (enforces left, right, up, down)" "$SCRIPT_DIR/bin/ide" --swap diagonal
+assert_cmd_fails "bin/ide rejects non-existent workspace directory" "$SCRIPT_DIR/bin/ide" "$TEMP_HOME/does-not-exist-dir"
+assert_cmd_fails "bin/ide rejects unsupported --ai agent values (enforces agy, claude, codex)" "$SCRIPT_DIR/bin/ide" --ai invalid-agent "$TEMP_HOME"
 
 # Ctrl+click link rules come only from an untracked rules file (default ~/.config/ide/links.sh, or $IDE_LINK_RULES)
 LINK_TEST_DIR="$TEMP_HOME/link-rules-test"
@@ -633,21 +645,42 @@ PY
         "$SCRIPT_DIR/bin/ide" --kill app >/dev/null 2>&1 || true
 
         # Verify scandir call cap (<= 128 directories visited) and exact 128-entry vs 129-entry per-dir cap on non-Git directory trees
-        scandir_cap_ok="$(python3 - "$SCRIPT_DIR/bin/ide" "$WIDE_DIR/deep_grid" "$WIDE_DIR" <<'PY'
-import os, re, sys
+        scandir_cap_ok="$(python3 -B - "$SCRIPT_DIR/bin/ide" "$WIDE_DIR/deep_grid" "$WIDE_DIR" <<'PY'
+import importlib, os, pkgutil, re, sys
+sys.dont_write_bytecode = True
 ide_file, deep_dir, wide_base = sys.argv[1], sys.argv[2], sys.argv[3]
+ide_bin_dir = os.path.dirname(os.path.abspath(ide_file))
+if ide_bin_dir not in sys.path:
+    sys.path.insert(0, ide_bin_dir)
 dir128 = os.path.join(wide_base, "exact_128")
 for i in range(128):
     os.makedirs(os.path.join(dir128, f"sub_{i:03d}"), exist_ok=True)
 leaf128 = os.path.join(dir128, "sub_127", "exact128.txt")
 with open(leaf128, "w", encoding="utf-8") as fh:
     fh.write("ok\n")
-txt = open(ide_file, encoding="utf-8").read()
-m = re.search(r"IDE_PY_SRC <<\s*'PY'[^\n]*\n(.*?)\nPY\n", txt, re.S)
-ns = {"__name__": "ide_mod"}
-exec(compile(m.group(1), ide_file, "exec"), ns)
+
+resolve_fn = None
+ide_lib_dir = os.path.join(ide_bin_dir, "ide_lib")
+if os.path.isdir(ide_lib_dir):
+    pkg = importlib.import_module("ide_lib")
+    resolve_fn = getattr(pkg, "resolve_workspace_file", None)
+    if resolve_fn is None:
+        for mod_info in pkgutil.iter_modules([ide_lib_dir]):
+            mod = importlib.import_module(f"ide_lib.{mod_info.name}")
+            resolve_fn = getattr(mod, "resolve_workspace_file", None)
+            if resolve_fn is not None:
+                break
+if resolve_fn is None:
+    txt = open(ide_file, encoding="utf-8").read()
+    m = re.search(r"IDE_PY_SRC <<\s*'PY'[^\n]*\n(.*?)\nPY\n", txt, re.S)
+    py_code = m.group(1) if m else txt
+    ns = {"__name__": "ide_mod", "__file__": ide_file}
+    os.environ.setdefault("IDE_BIN_DIR", ide_bin_dir)
+    exec(compile(py_code, ide_file, "exec"), ns)
+    resolve_fn = ns["resolve_workspace_file"]
+
 os.environ["TMUX"] = ""
-hit128 = ns["resolve_workspace_file"]("exact128.txt", dir128, "")
+hit128 = resolve_fn("exact128.txt", dir128, "")
 orig_scandir = os.scandir
 calls = 0
 def spy_scandir(p):
@@ -655,7 +688,9 @@ def spy_scandir(p):
     calls += 1
     return orig_scandir(p)
 os.scandir = spy_scandir
-res = ns["resolve_workspace_file"]("nonexistent_file.xyz", deep_dir, "")
+if "scandir" in resolve_fn.__globals__:
+    resolve_fn.__globals__["scandir"] = spy_scandir
+res = resolve_fn("nonexistent_file.xyz", deep_dir, "")
 print("1" if (res == "" and 1 <= calls <= 128 and hit128 == leaf128) else f"calls={calls}:res={res}:hit128={hit128}")
 PY
 )"
@@ -1739,22 +1774,18 @@ else
     fail "bin/update-system --help" "Expected complete options in bin/update-system --help output"
 fi
 
-if "$SCRIPT_DIR/bin/update-system" --unrecognized-flag >/dev/null 2>&1; then
-    fail "bin/update-system invalid flag" "Expected non-zero exit status on unknown flag"
-else
-    pass "bin/update-system rejects unknown CLI flags"
-fi
+assert_cmd_fails "bin/update-system rejects unknown CLI flags" "$SCRIPT_DIR/bin/update-system" --unrecognized-flag
+assert_cmd_fails "bin/update-system rejects --os without argument" "$SCRIPT_DIR/bin/update-system" --os
+assert_cmd_fails "bin/update-system rejects unsupported operating system families" "$SCRIPT_DIR/bin/update-system" --os solaris
 
-if "$SCRIPT_DIR/bin/update-system" --os >/dev/null 2>&1; then
-    fail "bin/update-system missing --os arg" "Expected non-zero exit status when --os has no argument"
+# Verify bin/update-system resolves shared lib/*.sh cleanly when invoked via a ~/.local/bin symlink
+UPDATE_SYM_DIR="$(make_sandbox_dir)"
+ln -s "$SCRIPT_DIR/bin/update-system" "$UPDATE_SYM_DIR/update-system"
+if sym_upd_out="$("$UPDATE_SYM_DIR/update-system" --os ubuntu --system-only --dry-run 2>&1)" && \
+   grep -Fq "apt-get update" <<< "$sym_upd_out"; then
+    pass "bin/update-system resolves shared lib/*.sh helpers cleanly across ~/.local/bin symlinks"
 else
-    pass "bin/update-system rejects --os without argument"
-fi
-
-if "$SCRIPT_DIR/bin/update-system" --os solaris >/dev/null 2>&1; then
-    fail "bin/update-system invalid OS" "Expected non-zero exit status on unsupported OS family"
-else
-    pass "bin/update-system rejects unsupported operating system families"
+    fail "bin/update-system symlink resolution" "Failed to invoke update-system via symlink: ${sym_upd_out:-}"
 fi
 
 # Test Ubuntu dry-run plan

@@ -16,11 +16,20 @@ echo "========================================"
 
 # Test 1: Syntax validation
 echo -e "\n[1/3] Checking completion syntax..."
-if zsh -n "$SCRIPT_DIR/dotfiles/.zsh-completions"; then
-    pass "Syntax valid: dotfiles/.zsh-completions"
-else
-    fail "Syntax check failed: dotfiles/.zsh-completions" "zsh -n returned non-zero"
-fi
+for zf in "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SCRIPT_DIR/dotfiles/.config/shell/completions-ide.zsh" "$SCRIPT_DIR/dotfiles/.config/shell/completions-terraform.zsh" "$SCRIPT_DIR/dotfiles/.config/shell/terraform-flags.sh"; do
+    if zsh -n "$zf"; then
+        pass "Syntax valid (zsh): $(basename "$zf")"
+    else
+        fail "Syntax check failed (zsh): $(basename "$zf")" "zsh -n returned non-zero"
+    fi
+done
+for bf in "$SCRIPT_DIR/dotfiles/.config/shell/terraform-flags.sh" "$SCRIPT_DIR/dotfiles/.config/shell/bash-completions.sh"; do
+    if bash -n "$bf"; then
+        pass "Syntax valid (bash): $(basename "$bf")"
+    else
+        fail "Syntax check failed (bash): $(basename "$bf")" "bash -n returned non-zero"
+    fi
+done
 
 # Test 2: Execution in temporary environment
 echo -e "\n[2/3] Testing dotfiles installation..."

@@ -6,11 +6,12 @@ set -euo pipefail
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
 
-# Source helper libraries
 # shellcheck source=/dev/null
 . "$REPO_DIR/lib/log.sh"
 # shellcheck source=/dev/null
 . "$REPO_DIR/lib/os.sh"
+# shellcheck source=/dev/null
+. "$REPO_DIR/lib/shell-env.sh"
 
 OS="${OS:-$(detect_os)}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -19,7 +20,7 @@ SKIP_ZSH="${SKIP_ZSH:-false}"
 SKIP_BASH="${SKIP_BASH:-false}"
 SKIP_COMPLETIONS="${SKIP_COMPLETIONS:-false}"
 
-# Zsh, Oh-My-Zsh & Powerlevel10k
+# 1. Zsh, Oh-My-Zsh & Powerlevel10k
 if [ "$SKIP_ZSH" = false ]; then
     echo "  Configuring Zsh, Oh-My-Zsh, plugins, and Powerlevel10k..."
     if [ "$DRY_RUN" = true ]; then
@@ -33,28 +34,17 @@ if [ "$SKIP_ZSH" = false ]; then
         ZSH_CUSTOM_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
         mkdir -p "$ZSH_CUSTOM_DIR/themes" "$ZSH_CUSTOM_DIR/plugins"
 
-        clone_zsh() {
-            local repo="$1"
-            local dest="$2"
-            if [ -d "$dest/.git" ]; then
-                git -C "$dest" pull --ff-only
-            else
-                if [ -d "$dest" ]; then
-                    rm -rf "$dest"
-                fi
-                git clone --depth=1 "$repo" "$dest"
-            fi
-        }
-
+        zsh_repos=(
+            "https://github.com/romkatv/powerlevel10k.git|$ZSH_CUSTOM_DIR/themes/powerlevel10k"
+            "https://github.com/zsh-users/zsh-autosuggestions.git|$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions"
+            "https://github.com/zsh-users/zsh-syntax-highlighting.git|$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting"
+            "https://github.com/zsh-users/zsh-completions.git|$ZSH_CUSTOM_DIR/plugins/zsh-completions"
+        )
         zsh_pids=()
-        clone_zsh "https://github.com/romkatv/powerlevel10k.git" "$ZSH_CUSTOM_DIR/themes/powerlevel10k" &
-        zsh_pids+=("$!")
-        clone_zsh "https://github.com/zsh-users/zsh-autosuggestions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions" &
-        zsh_pids+=("$!")
-        clone_zsh "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting" &
-        zsh_pids+=("$!")
-        clone_zsh "https://github.com/zsh-users/zsh-completions.git" "$ZSH_CUSTOM_DIR/plugins/zsh-completions" &
-        zsh_pids+=("$!")
+        for spec in "${zsh_repos[@]}"; do
+            sync_git_plugin_repo "${spec%%|*}" "${spec#*|}" &
+            zsh_pids+=("$!")
+        done
         for pid in "${zsh_pids[@]}"; do
             wait "$pid"
         done
@@ -67,104 +57,45 @@ if [ "$SKIP_ZSH" = false ]; then
             fi
         elif [ -f "$ZSH_DIR/templates/zshrc.zsh-template" ] && \
              ! grep -Eq '^[[:space:]]*([^#]*[;&|][[:space:]]*)?(source|\.)[[:space:]][^#]*(oh-my-zsh\.sh|powerlevel10k\.zsh-theme)' "$HOME/.zshrc"; then
-            zshrc_base_bak="$HOME/.zshrc.bak.$(date +%s)"
-            zshrc_bak="$zshrc_base_bak"
-            zshrc_bak_idx=1
-            while [ -e "$zshrc_bak" ] || [ -L "$zshrc_bak" ]; do
-                zshrc_bak="${zshrc_base_bak}.${zshrc_bak_idx}"
-                zshrc_bak_idx=$((zshrc_bak_idx + 1))
-            done
-            mv "$HOME/.zshrc" "$zshrc_bak"
+            zshrc_bak="$(backup_existing_path "$HOME/.zshrc")"
             cp "$ZSH_DIR/templates/zshrc.zsh-template" "$HOME/.zshrc"
             echo "  Backed up existing non-Oh-My-Zsh ~/.zshrc to $zshrc_bak and initialized Oh-My-Zsh template."
         fi
 
-        sed_i=(-i)
-        [ "$OS" = "macos" ] && sed_i=(-i '')
-        sed "${sed_i[@]}" 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' "$HOME/.zshrc"
-        sed "${sed_i[@]}" 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g' "$HOME/.zshrc"
-        sed "${sed_i[@]}" -E 's/[[:space:]]*fzf-zsh-plugin//g' "$HOME/.zshrc"
-        grep -qxF '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$HOME/.zshrc" || \
-            printf '\n# home-settings\n[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum\n' >> "$HOME/.zshrc"
+        sed_in_place "$HOME/.zshrc" 's|ZSH_THEME="robbyrussell"|ZSH_THEME="powerlevel10k/powerlevel10k"|g'
+        sed_in_place "$HOME/.zshrc" 's|plugins=(git)|plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-completions)|g'
+        sed_in_place "$HOME/.zshrc" -E 's/[[:space:]]*fzf-zsh-plugin//g'
+        ensure_shell_rc_hook "$HOME/.zshrc" ".zshrc-addendum"
     fi
 fi
 
-# Bash Configuration
+# 2. Bash Configuration
 if [ "$SKIP_BASH" = false ]; then
     if [ "$DRY_RUN" = true ]; then
         echo "  [DryRun] Adding source ~/.bashrc-addendum to ~/.bashrc"
     else
-        if [ ! -f "$HOME/.bashrc" ]; then
-            touch "$HOME/.bashrc"
-        fi
-        grep -qxF '[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum' "$HOME/.bashrc" || \
-            printf '\n# home-settings\n[ -f ~/.bashrc-addendum ] && source ~/.bashrc-addendum\n' >> "$HOME/.bashrc"
+        ensure_shell_rc_hook "$HOME/.bashrc" ".bashrc-addendum"
     fi
 fi
 
-# CLI Completions (gh, kubectl, helm, elan, mise, delta, bat, yq, glow, rustup, cargo, tree-sitter)
+# 3. CLI Completions
 if [ "$SKIP_COMPLETIONS" = false ]; then
     COMPLETIONS_DIR="$HOME/.zsh/completions"
     if [ "$DRY_RUN" = true ]; then
         echo "  [DryRun] Generating CLI tab completions in $COMPLETIONS_DIR"
     else
-        mkdir -p "$COMPLETIONS_DIR"
-        gen_zsh_completion() {
-            local target="$1"
-            shift
-            local tmp_comp="${target}.tmp.$$" first_line=""
-            if "$@" > "$tmp_comp" && [ -s "$tmp_comp" ] && IFS= read -r first_line < "$tmp_comp" && [[ "$first_line" == \#* ]]; then
-                mv -f "$tmp_comp" "$target"
-            else
-                rm -f "$tmp_comp"
-                return 1
-            fi
-        }
-        gen_tool_zsh_completion() {
-            if [ "$SKIP_TOOLS" = true ]; then
-                MISE_TRUSTED_CONFIG_PATHS="$REPO_DIR/.mise.toml${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}" \
-                MISE_NOT_FOUND_AUTO_INSTALL=false \
-                    gen_zsh_completion "$@" 2>/dev/null || true
-            else
-                gen_zsh_completion "$@"
-            fi
-        }
-        if command -v gh &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_gh" gh completion -s zsh; fi
-        if command -v kubectl &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_kubectl" kubectl completion zsh; fi
-        if command -v helm &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_helm" helm completion zsh; fi
-        if command -v elan &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_elan" elan completions zsh; fi
-        if command -v mise &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_mise" mise completion zsh; fi
-        if command -v delta &>/dev/null; then BAT_THEME="" gen_tool_zsh_completion "$COMPLETIONS_DIR/_delta" delta --generate-completion zsh; fi
-        if command -v bat &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_bat" bat --completion zsh; fi
-        if command -v yq &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_yq" yq shell-completion zsh; fi
-        if command -v glow &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_glow" glow completion zsh; fi
-        if command -v rustup &>/dev/null; then
-            gen_tool_zsh_completion "$COMPLETIONS_DIR/_rustup" rustup completions zsh
-            if command -v cargo &>/dev/null; then
-                gen_tool_zsh_completion "$COMPLETIONS_DIR/_cargo" rustup completions zsh cargo
-            fi
-        elif command -v cargo &>/dev/null && command -v rustc &>/dev/null; then
-            _rustc_sysroot="$(MISE_TRUSTED_CONFIG_PATHS="$REPO_DIR/.mise.toml${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}" MISE_NOT_FOUND_AUTO_INSTALL=false rustc --print sysroot 2>/dev/null || true)"
-            if [ -n "$_rustc_sysroot" ] && [ -s "$_rustc_sysroot/share/zsh/site-functions/_cargo" ]; then
-                cp -f "$_rustc_sysroot/share/zsh/site-functions/_cargo" "$COMPLETIONS_DIR/_cargo.tmp.$$"
-                mv -f "$COMPLETIONS_DIR/_cargo.tmp.$$" "$COMPLETIONS_DIR/_cargo"
-            fi
-            unset _rustc_sysroot
-        fi
-        if command -v tree-sitter &>/dev/null; then gen_tool_zsh_completion "$COMPLETIONS_DIR/_tree-sitter" tree-sitter complete --shell zsh; fi
+        strict_completions=true
+        [ "$SKIP_TOOLS" = true ] && strict_completions=false
+        sync_zsh_cli_completions "$COMPLETIONS_DIR" "$strict_completions" "$REPO_DIR/.mise.toml"
     fi
 fi
 
-# Default Login Shell
+# 4. Default Login Shell
 if [ "$SKIP_ZSH" = false ]; then
     CURRENT_SHELL="$(getent passwd "${USER:-$(whoami)}" 2>/dev/null | cut -d: -f7 || echo "${SHELL:-}")"
     ZSH_BIN="$(command -v zsh 2>/dev/null || true)"
-    if [ -n "$ZSH_BIN" ] && [ "$CURRENT_SHELL" != "$ZSH_BIN" ] && [ -t 0 ] && command -v chsh &>/dev/null; then
+    if [ -n "$ZSH_BIN" ] && [ "$CURRENT_SHELL" != "$ZSH_BIN" ] && [ -t 0 ] && command -v chsh >/dev/null 2>&1; then
         echo "  Changing default login shell to Zsh ($ZSH_BIN)..."
-        if [ "$DRY_RUN" = true ]; then
-            echo "  [DryRun] chsh -s $ZSH_BIN"
-        else
-            chsh -s "$ZSH_BIN" || true
-        fi
+        run_cmd chsh -s "$ZSH_BIN" || true
     fi
 fi

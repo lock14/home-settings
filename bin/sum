@@ -1,4 +1,6 @@
 #!/bin/bash
+# Sum, average, or summarize numeric streams from arguments, files, or stdin.
+
 set -euo pipefail
 
 usage() {
@@ -29,13 +31,13 @@ HELP
 }
 
 for arg in "$@"; do
-  case "$arg" in
-    --) break ;;
-    --help)
-      usage
-      exit 0
-      ;;
-  esac
+    case "$arg" in
+        --) break ;;
+        --help)
+            usage
+            exit 0
+            ;;
+    esac
 done
 
 DELIM=""
@@ -46,77 +48,68 @@ STATS=0
 FMT=""
 
 while [ "$OPTIND" -le "$#" ]; do
-  next_arg="${!OPTIND}"
-  if [[ "$next_arg" =~ ^-[0-9.] ]]; then
-    break
-  fi
-  if ! getopts ":d:k:Hf:asth" opt; then
-    break
-  fi
-  case ${opt} in
-    d )
-      DELIM="$OPTARG"
-      ;;
-    k )
-      COL="$OPTARG"
-      if ! [[ "$COL" =~ ^[0-9]+$ ]] || [ "$COL" -le 0 ]; then
-        echo "Error: column (-k) must be a positive integer" >&2
-        exit 1
-      fi
-      ;;
-    H )
-      HUMAN=1
-      ;;
-    a )
-      AVG=1
-      ;;
-    s )
-      STATS=1
-      ;;
-    f )
-      FMT="$OPTARG"
-      ;;
-    t )
-      set -o xtrace
-      ;;
-    h )
-      usage
-      exit 0
-      ;;
-    \? )
-      echo "Invalid option: -$OPTARG" >&2
-      usage >&2
-      exit 1
-      ;;
-    : )
-      echo "Invalid option: -$OPTARG requires an argument" >&2
-      usage >&2
-      exit 1
-      ;;
-  esac
+    next_arg="${!OPTIND}"
+    if [[ "$next_arg" =~ ^-[0-9.] ]]; then
+        break
+    fi
+    if ! getopts ":d:k:Hf:asth" opt; then
+        break
+    fi
+    case "$opt" in
+        d) DELIM="$OPTARG" ;;
+        k)
+            COL="$OPTARG"
+            if ! [[ "$COL" =~ ^[0-9]+$ ]] || [ "$COL" -le 0 ]; then
+                echo "Error: column (-k) must be a positive integer" >&2
+                exit 1
+            fi
+            ;;
+        H) HUMAN=1 ;;
+        a) AVG=1 ;;
+        s) STATS=1 ;;
+        f) FMT="$OPTARG" ;;
+        t) set -o xtrace ;;
+        h)
+            usage
+            exit 0
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            usage >&2
+            exit 1
+            ;;
+        :)
+            echo "Invalid option: -$OPTARG requires an argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
 done
 shift $((OPTIND - 1))
 
+NUM_RE='^[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)([eE][+-]?[0-9]+)?$'
+HUMAN_RE='^[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)([kKmMgGtTpPeE]i?[bB]?)$'
+
 # shellcheck disable=SC2016
-awk_script='
+AWK_SUM_SCRIPT='
 function parse_val(val,  num, suf) {
-    if (HUMAN && val ~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([kKmMgGtTpPeE]i?[bB]?)$/) {
+    if (HUMAN && val ~ HUMAN_RE) {
         match(val, /[a-zA-Z]+/)
         suf = toupper(substr(val, RSTART))
-        num = substr(val, 1, RSTART-1) + 0
+        num = substr(val, 1, RSTART - 1) + 0
         if (suf ~ /^K/) return num * 1024
-        if (suf ~ /^M/) return num * (1024^2)
-        if (suf ~ /^G/) return num * (1024^3)
-        if (suf ~ /^T/) return num * (1024^4)
-        if (suf ~ /^P/) return num * (1024^5)
-        if (suf ~ /^E/) return num * (1024^6)
+        if (suf ~ /^M/) return num * (1024 ^ 2)
+        if (suf ~ /^G/) return num * (1024 ^ 3)
+        if (suf ~ /^T/) return num * (1024 ^ 4)
+        if (suf ~ /^P/) return num * (1024 ^ 5)
+        if (suf ~ /^E/) return num * (1024 ^ 6)
     }
     return val + 0
 }
 
 function process_item(item,  val) {
     gsub(/^[ \t\r]+|[ \t\r]+$/, "", item)
-    if ((HUMAN && item ~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([kKmMgGtTpPeE]i?[bB]?)$/) || item ~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$/) {
+    if ((HUMAN && item ~ HUMAN_RE) || item ~ NUM_RE) {
         val = parse_val(item)
         sum += val
         count++
@@ -160,123 +153,122 @@ END {
     } else {
         mean = sum / count
     }
-
+    fmt = (FMT != "" ? FMT : "%g")
     if (STATS) {
-        if (FMT != "") {
-            printf "count: %d\nmin: " FMT "\nmax: " FMT "\nmean: " FMT "\nsum: " FMT "\n", count, min, max, mean, sum
-        } else {
-            printf "count: %d\nmin: %g\nmax: %g\nmean: %g\nsum: %g\n", count, min, max, mean, sum
-        }
+        printf "count: %d\nmin: " fmt "\nmax: " fmt "\nmean: " fmt "\nsum: " fmt "\n", count, min, max, mean, sum
     } else if (AVG) {
-        if (FMT != "") {
-            printf FMT "\n", mean
-        } else {
-            printf "%g\n", mean
-        }
+        printf fmt "\n", mean
     } else {
-        if (FMT != "") {
-            printf FMT "\n", sum
-        } else {
-            printf "%g\n", sum
-        }
+        printf fmt "\n", sum
     }
 }
 '
 
+run_sum_awk() {
+    awk \
+        -v DELIM="$DELIM" \
+        -v COL="$COL" \
+        -v HUMAN="$HUMAN" \
+        -v AVG="$AVG" \
+        -v STATS="$STATS" \
+        -v FMT="$FMT" \
+        -v NUM_RE="$NUM_RE" \
+        -v HUMAN_RE="$HUMAN_RE" \
+        "$AWK_SUM_SCRIPT" "$@"
+}
+
 is_numeric_token() {
-  local tok="$1"
-  if [[ "$tok" =~ ^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$ ]]; then
-    return 0
-  fi
-  if [ "$HUMAN" -eq 1 ] && [[ "$tok" =~ ^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([kKmMgGtTpPeE]i?[bB]?)$ ]]; then
-    return 0
-  fi
-  return 1
+    local tok="$1"
+    if [[ "$tok" =~ $NUM_RE ]]; then
+        return 0
+    fi
+    if [ "$HUMAN" -eq 1 ] && [[ "$tok" =~ $HUMAN_RE ]]; then
+        return 0
+    fi
+    return 1
 }
 
 is_numeric_arg() {
-  local val="$1"
-  [ -n "$val" ] || return 1
-  if is_numeric_token "$val"; then
-    return 0
-  fi
-  if [ "$DELIM" = "" ]; then
-    local normalized tok
-    normalized="${val//,/ }"
-    local -a toks=()
-    read -r -a toks <<< "$normalized"
-    [ "${#toks[@]}" -gt 0 ] || return 1
-    for tok in "${toks[@]}"; do
-      is_numeric_token "$tok" || return 1
-    done
-    return 0
-  fi
-  if [ ! -e "$val" ]; then
-    # shellcheck disable=SC2016
-    awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" '
-      function is_num(s) {
-        gsub(/^[ \t\r]+|[ \t\r]+$/, "", s)
-        if (s ~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$/) return 1
-        if (HUMAN && s ~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([kKmMgGtTpPeE]i?[bB]?)$/) return 1
+    local val="$1"
+    [ -n "$val" ] || return 1
+    if is_numeric_token "$val"; then
         return 0
-      }
-      BEGIN { FS = DELIM; ok = 0 }
-      {
-        if (NF < 2) { ok = 0; exit 1 }
-        if (COL > 0) {
-          if (COL <= NF && is_num($COL)) ok = 1
-          else { ok = 0; exit 1 }
-        } else {
-          for (i = 1; i <= NF; i++) {
-            if (!is_num($i)) { ok = 0; exit 1 }
-          }
-          ok = 1
-        }
-      }
-      END { exit(ok ? 0 : 1) }
-    ' <<< "$val" && return 0
-  fi
-  return 1
+    fi
+    if [ -z "$DELIM" ]; then
+        local normalized tok
+        normalized="${val//,/ }"
+        local -a toks=()
+        read -r -a toks <<< "$normalized"
+        [ "${#toks[@]}" -gt 0 ] || return 1
+        for tok in "${toks[@]}"; do
+            is_numeric_token "$tok" || return 1
+        done
+        return 0
+    fi
+    if [ ! -e "$val" ]; then
+        # shellcheck disable=SC2016
+        awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v NUM_RE="$NUM_RE" -v HUMAN_RE="$HUMAN_RE" '
+            function is_num(s) {
+                gsub(/^[ \t\r]+|[ \t\r]+$/, "", s)
+                return (s ~ NUM_RE) || (HUMAN && s ~ HUMAN_RE)
+            }
+            BEGIN { FS = DELIM; ok = 0 }
+            {
+                if (NF < 2) { ok = 0; exit 1 }
+                if (COL > 0) {
+                    if (COL <= NF && is_num($COL)) ok = 1
+                    else { ok = 0; exit 1 }
+                } else {
+                    for (i = 1; i <= NF; i++) {
+                        if (!is_num($i)) { ok = 0; exit 1 }
+                    }
+                    ok = 1
+                }
+            }
+            END { exit(ok ? 0 : 1) }
+        ' <<< "$val" && return 0
+    fi
+    return 1
 }
 
 if [ "$#" -gt 0 ]; then
-  HAS_FILES=0
-  HAS_NUMS=0
-  for arg in "$@"; do
-    if [ "$arg" = "-" ]; then
-      HAS_FILES=1
-    elif is_numeric_arg "$arg"; then
-      HAS_NUMS=1
-    elif [ -d "$arg" ]; then
-      echo "Error: $arg: Is a directory" >&2
-      exit 1
-    elif [ ! -e "$arg" ]; then
-      echo "Error: $arg: No such file or directory" >&2
-      exit 1
-    elif [ ! -r "$arg" ]; then
-      echo "Error: $arg: Permission denied" >&2
-      exit 1
-    else
-      HAS_FILES=1
-    fi
-  done
-
-  if [ "$HAS_FILES" -eq 1 ] && [ "$HAS_NUMS" -eq 0 ]; then
-    awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script" "$@"
-  elif [ "$HAS_FILES" -eq 1 ]; then
-    {
-      for arg in "$@"; do
-        if [ "$arg" != "-" ] && is_numeric_arg "$arg"; then
-          printf '%s\n' "$arg"
+    HAS_FILES=0
+    HAS_NUMS=0
+    for arg in "$@"; do
+        if [ "$arg" = "-" ]; then
+            HAS_FILES=1
+        elif is_numeric_arg "$arg"; then
+            HAS_NUMS=1
+        elif [ -d "$arg" ]; then
+            echo "Error: $arg: Is a directory" >&2
+            exit 1
+        elif [ ! -e "$arg" ]; then
+            echo "Error: $arg: No such file or directory" >&2
+            exit 1
+        elif [ ! -r "$arg" ]; then
+            echo "Error: $arg: Permission denied" >&2
+            exit 1
         else
-          cat -- "$arg"
-          printf '\n'
+            HAS_FILES=1
         fi
-      done
-    } | awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script"
-  else
-    printf '%s\n' "$@" | awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script"
-  fi
+    done
+
+    if [ "$HAS_FILES" -eq 1 ] && [ "$HAS_NUMS" -eq 0 ]; then
+        run_sum_awk "$@"
+    elif [ "$HAS_FILES" -eq 1 ]; then
+        {
+            for arg in "$@"; do
+                if [ "$arg" != "-" ] && is_numeric_arg "$arg"; then
+                    printf '%s\n' "$arg"
+                else
+                    cat -- "$arg"
+                    printf '\n'
+                fi
+            done
+        } | run_sum_awk
+    else
+        printf '%s\n' "$@" | run_sum_awk
+    fi
 else
-  awk -v DELIM="$DELIM" -v COL="$COL" -v HUMAN="$HUMAN" -v AVG="$AVG" -v STATS="$STATS" -v FMT="$FMT" "$awk_script"
+    run_sum_awk
 fi

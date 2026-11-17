@@ -14,18 +14,43 @@ echo "========================================"
 export HOME_SETTINGS_FONT_CACHE="${HOME_SETTINGS_FONT_CACHE:-/tmp/home-settings-fonts-cache}"
 mkdir -p "$HOME_SETTINGS_FONT_CACHE"
 
+TEMP_HOME=""
+MAC_TEMP_HOME=""
+FAIL_FONT_HOME=""
+FAIL_FONT_CACHE=""
+MOCK_CURL_DIR=""
+TRUNC_FONT_HOME=""
+TRUNC_FONT_CACHE=""
+TRUNC_FONT_BIN=""
+OLD_HOME="$HOME"
+
+cleanup_test_fonts() {
+    local d
+    for d in "$TEMP_HOME" "$MAC_TEMP_HOME" "$FAIL_FONT_HOME" "$FAIL_FONT_CACHE" "$MOCK_CURL_DIR" "$TRUNC_FONT_HOME" "$TRUNC_FONT_CACHE" "$TRUNC_FONT_BIN"; do
+        if [ -n "$d" ] && [ -d "$d" ]; then
+            rm -rf "$d"
+        fi
+    done
+    _hs_cleanup_test_runtime_dir
+}
+trap cleanup_test_fonts EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+init_font_sandbox_env() {
+    local target_home="$1"
+    export HOME="$target_home"
+    export XDG_DATA_HOME="$target_home/.local/share"
+    export XDG_CONFIG_HOME="$target_home/.config"
+    export XDG_CACHE_HOME="$target_home/.cache"
+    mkdir -p "$XDG_CACHE_HOME/bat"
+    touch "$XDG_CACHE_HOME/bat/themes.bin" "$XDG_CACHE_HOME/bat/syntaxes.bin"
+}
+
 # Test 1: Font download & installation in temp directory (Linux)
 echo -e "\n[1/2] Testing font installation on Linux target..."
 TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
-
-OLD_HOME="$HOME"
-export HOME="$TEMP_HOME"
-export XDG_DATA_HOME="$TEMP_HOME/.local/share"
-export XDG_CONFIG_HOME="$TEMP_HOME/.config"
-export XDG_CACHE_HOME="$TEMP_HOME/.cache"
-mkdir -p "$XDG_CACHE_HOME/bat"
-touch "$XDG_CACHE_HOME/bat/themes.bin" "$XDG_CACHE_HOME/bat/syntaxes.bin"
+init_font_sandbox_env "$TEMP_HOME"
 
 # Run installer (fonts only)
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
@@ -160,14 +185,7 @@ fi
 # Test 2: Font installation on macOS target
 echo -e "\n[2/2] Testing font installation on macOS target..."
 MAC_TEMP_HOME=$(mktemp -d)
-trap 'rm -rf "$TEMP_HOME" "$MAC_TEMP_HOME"; _hs_cleanup_test_runtime_dir' EXIT
-
-export HOME="$MAC_TEMP_HOME"
-export XDG_DATA_HOME="$MAC_TEMP_HOME/.local/share"
-export XDG_CONFIG_HOME="$MAC_TEMP_HOME/.config"
-export XDG_CACHE_HOME="$MAC_TEMP_HOME/.cache"
-mkdir -p "$XDG_CACHE_HOME/bat"
-touch "$XDG_CACHE_HOME/bat/themes.bin" "$XDG_CACHE_HOME/bat/syntaxes.bin"
+init_font_sandbox_env "$MAC_TEMP_HOME"
 if output=$("$SCRIPT_DIR/setup.sh" --os macos --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
     pass "setup.sh font installation succeeded on macOS target"
 else

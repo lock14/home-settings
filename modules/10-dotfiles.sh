@@ -6,7 +6,6 @@ set -euo pipefail
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
 
-# Source helper libraries
 # shellcheck source=/dev/null
 . "$REPO_DIR/lib/log.sh"
 # shellcheck source=/dev/null
@@ -19,21 +18,33 @@ DRY_RUN="${DRY_RUN:-false}"
 DOTFILES_DIR="$REPO_DIR/dotfiles"
 XDG_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 
+bat_cache_needs_rebuild() {
+    local cache_dir="$1"
+    if [ ! -f "$cache_dir/themes.bin" ] || [ ! -f "$cache_dir/syntaxes.bin" ]; then
+        return 0
+    fi
+    local asset
+    for asset in "$REPO_DIR/colors"/*.tmTheme; do
+        [ -e "$asset" ] || continue
+        [ "$asset" -nt "$cache_dir/themes.bin" ] && return 0
+    done
+    for asset in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
+        [ -e "$asset" ] || continue
+        [ "$asset" -nt "$cache_dir/syntaxes.bin" ] && return 0
+    done
+    return 1
+}
+
 echo "  Symlinking dotfiles from $DOTFILES_DIR to $HOME..."
 
 # 1. Discover and link all top-level files in dotfiles/
-for src in "$DOTFILES_DIR"/.* "$DOTFILES_DIR"/*; do
-    [ -e "$src" ] || continue
+while IFS= read -r src; do
+    [ -n "$src" ] || continue
     name="$(basename "$src")"
     case "$name" in
-        .|..|.git|.gitignore|.config|.dir-colors|'*')
-            continue
+        .vimrc)
+            [ "${SKIP_VIM:-false}" = true ] && continue
             ;;
-    esac
-    if [ "$name" = ".vimrc" ] && [ "${SKIP_VIM:-false}" = true ]; then
-        continue
-    fi
-    case "$name" in
         .zshrc-addendum|.zsh-functions|.p10k.zsh)
             [ "${SKIP_ZSH:-false}" = true ] && continue
             ;;
@@ -44,21 +55,13 @@ for src in "$DOTFILES_DIR"/.* "$DOTFILES_DIR"/*; do
             [ "${SKIP_BASH:-false}" = true ] && continue
             ;;
     esac
-    if [ -f "$src" ]; then
-        link_file "$src" "$HOME/$name"
-    fi
-done
+    link_file "$src" "$HOME/$name"
+done < <(list_managed_top_dotfiles "$DOTFILES_DIR")
 
 # 2. Discover and link directory-based dotfiles (.dir-colors)
-if [ -d "$DOTFILES_DIR/.dir-colors" ]; then
-    [ "$DRY_RUN" = true ] || mkdir -p "$HOME/.dir-colors"
-    for f in "$DOTFILES_DIR/.dir-colors"/*; do
-        [ -e "$f" ] || continue
-        link_file "$f" "$HOME/.dir-colors/$(basename "$f")"
-    done
-fi
+link_glob_files "$DOTFILES_DIR/.dir-colors" '*' "$HOME/.dir-colors"
 
-# 3. Discover and link .config subtrees (e.g. nvim)
+# 3. Discover and link .config subtrees (including nvim, shell, ghostty, btop, etc.)
 if [ -d "$DOTFILES_DIR/.config" ]; then
     [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG"
     for item in "$DOTFILES_DIR/.config"/*; do
@@ -68,20 +71,15 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
             continue
         fi
         if [ "$target_name" = "git" ] && [ -d "$item" ]; then
-            # Keep ~/.config/git as a real directory so user-local files (ignore, attributes) survive theme switches
+            # Keep ~/.config/git as a physical directory so user-local ignore/attributes survive
             if [ -L "$XDG_CONFIG/git" ]; then
                 if _is_managed_symlink "$XDG_CONFIG/git"; then
                     unlink_path "$XDG_CONFIG/git"
                 elif [ "$DRY_RUN" = false ]; then
-                    git_bak="${XDG_CONFIG}/git.bak.$(date +%s)"
-                    mv "$XDG_CONFIG/git" "$git_bak"
+                    backup_existing_path "$XDG_CONFIG/git" >/dev/null
                 fi
             fi
-            [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/git"
-            for git_f in "$item"/*; do
-                [ -e "$git_f" ] || continue
-                link_file "$git_f" "$XDG_CONFIG/git/$(basename "$git_f")"
-            done
+            link_glob_files "$item" '*' "$XDG_CONFIG/git"
             continue
         fi
         if [ -d "$item" ]; then
@@ -90,15 +88,7 @@ if [ -d "$DOTFILES_DIR/.config" ]; then
             link_file "$item" "$XDG_CONFIG/$target_name"
         fi
     done
-    # Prune dangling symlinks in $XDG_CONFIG pointing into dotfiles/.config
-    for existing in "$XDG_CONFIG"/*; do
-        if [ -L "$existing" ] && [ ! -e "$existing" ]; then
-            target_link="$(readlink "$existing" 2>/dev/null || true)"
-            if [[ "$target_link" == *"$DOTFILES_DIR/.config"* ]]; then
-                unlink_path "$existing"
-            fi
-        fi
-    done
+    prune_dangling_managed_symlinks "$XDG_CONFIG" "$DOTFILES_DIR/.config"
 fi
 
 # 4. Ghostty macOS Application Support compatibility symlink
@@ -112,51 +102,15 @@ if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
 fi
 
 # 5. Bat TrueColor Syntax Highlighting Themes & Granular Syntaxes
-BAT_THEME_SRC="$REPO_DIR/colors/Solarized-Dark-TrueColor.tmTheme"
 if [ -d "$REPO_DIR/colors" ]; then
     echo "  Configuring Bat TrueColor themes..."
-    [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/bat/themes"
-    for tmtheme in "$REPO_DIR/colors"/*.tmTheme; do
-        [ -e "$tmtheme" ] || continue
-        link_file "$tmtheme" "$XDG_CONFIG/bat/themes/$(basename "$tmtheme")"
-    done
+    link_glob_files "$REPO_DIR/colors" '*.tmTheme' "$XDG_CONFIG/bat/themes"
 fi
+link_glob_files "$REPO_DIR/syntaxes" '*.sublime-syntax' "$XDG_CONFIG/bat/syntaxes"
 
-if [ -d "$REPO_DIR/syntaxes" ]; then
-    [ "$DRY_RUN" = true ] || mkdir -p "$XDG_CONFIG/bat/syntaxes"
-    for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
-        [ -e "$syn" ] || continue
-        link_file "$syn" "$XDG_CONFIG/bat/syntaxes/$(basename "$syn")"
-    done
-fi
-
-if [ -f "$BAT_THEME_SRC" ] || [ -d "$REPO_DIR/syntaxes" ]; then
-    if [ "$DRY_RUN" = false ]; then
-        BAT_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bat"
-        need_bat_build=false
-        if [ ! -f "$BAT_CACHE_DIR/themes.bin" ] || [ ! -f "$BAT_CACHE_DIR/syntaxes.bin" ]; then
-            need_bat_build=true
-        elif [ -f "$BAT_THEME_SRC" ] && [ "$BAT_THEME_SRC" -nt "$BAT_CACHE_DIR/themes.bin" ]; then
-            need_bat_build=true
-        else
-            for tmtheme in "$REPO_DIR/colors"/*.tmTheme; do
-                [ -e "$tmtheme" ] || continue
-                if [ "$tmtheme" -nt "$BAT_CACHE_DIR/themes.bin" ]; then
-                    need_bat_build=true
-                    break
-                fi
-            done
-            for syn in "$REPO_DIR/syntaxes"/*.sublime-syntax; do
-                [ -e "$syn" ] || continue
-                if [ "$syn" -nt "$BAT_CACHE_DIR/syntaxes.bin" ]; then
-                    need_bat_build=true
-                    break
-                fi
-            done
-        fi
-        if [ "$need_bat_build" = true ]; then
-            rebuild_bat_cache
-        fi
+if [ "$DRY_RUN" = false ] && { [ -f "$REPO_DIR/colors/Solarized-Dark-TrueColor.tmTheme" ] || [ -d "$REPO_DIR/syntaxes" ]; }; then
+    if bat_cache_needs_rebuild "${XDG_CACHE_HOME:-$HOME/.cache}/bat"; then
+        rebuild_bat_cache
     fi
 fi
 
@@ -165,23 +119,20 @@ if [ -f "$REPO_DIR/.mise.toml" ]; then
     link_file "$REPO_DIR/.mise.toml" "$XDG_CONFIG/mise/config.toml"
 fi
 
-# 7. Re-apply active color theme if configured or previously persisted
-EFFECTIVE_THEME="${HOME_SETTINGS_THEME:-${THEME_NAME:-}}"
-if [ -n "$EFFECTIVE_THEME" ] && [ -x "$REPO_DIR/bin/theme" ]; then
+# 7. Apply explicit or previously persisted color theme without touching live server sockets
+EXPLICIT_THEME="${HOME_SETTINGS_THEME:-${THEME_NAME:-}}"
+if [ -n "$EXPLICIT_THEME" ] && [ -x "$REPO_DIR/bin/theme" ]; then
     if [ "$DRY_RUN" = true ]; then
-        "$REPO_DIR/bin/theme" --dry-run --no-live --set="$EFFECTIVE_THEME"
+        "$REPO_DIR/bin/theme" --dry-run --no-live --set="$EXPLICIT_THEME"
     else
-        "$REPO_DIR/bin/theme" --no-live --set="$EFFECTIVE_THEME" >/dev/null
+        "$REPO_DIR/bin/theme" --no-live --set="$EXPLICIT_THEME" >/dev/null
     fi
-elif [ -f "$XDG_CONFIG/home-settings/theme" ] && [ -x "$REPO_DIR/bin/theme" ] && [ "$DRY_RUN" = false ]; then
-    saved_theme="$(tr -d '[:space:]' < "$XDG_CONFIG/home-settings/theme" || true)"
-    if [ -n "$saved_theme" ]; then
-        "$REPO_DIR/bin/theme" --no-live --set="$saved_theme" >/dev/null || true
+elif [ "$DRY_RUN" = false ] && [ -x "$REPO_DIR/bin/theme" ]; then
+    SAVED_THEME="$(resolve_persisted_theme "$XDG_CONFIG")"
+    if [ -n "$SAVED_THEME" ]; then
+        "$REPO_DIR/bin/theme" --no-live --set="$SAVED_THEME" >/dev/null || true
     fi
 fi
 
-# Live servers are intentionally never touched here: this module also runs under a temporary
-# $HOME in tests, and hot-reloading running servers would mutate live sessions.
-# `ide` re-sources ~/.tmux.conf on every launch/attach (or press `prefix r`); restart an IDE
-# Editor pane to pick up init.lua changes.
-
+# Live servers are intentionally never reloaded here: this module runs under temporary $HOME
+# directories in test suites, and hot-reloading running servers would mutate live sessions.

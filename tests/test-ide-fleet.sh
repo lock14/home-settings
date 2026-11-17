@@ -12,9 +12,195 @@ echo "========================================"
 echo "Running IDE Fleet & Lifecycle Tests"
 echo "========================================"
 
+# Phase 0: Modular bin/ide_lib architecture, acyclic DAG, reusable domain unit tests, symlink resolution, and <50ms cold CLI latency
+MODULAR_TEST_OUT="$(TMUX="" TMUX_PANE="" NVIM_IDE_SOCKET="" IDE_SESSION="" python3 -B - "$SCRIPT_DIR" 2>&1 <<'PY'
+from __future__ import annotations
+
+import ast
+import glob
+import os
+import subprocess
+import sys
+import tempfile
+import time
+
+repo_dir = sys.argv[1]
+ide_entry = os.path.join(repo_dir, "bin", "ide")
+ide_lib_dir = os.path.join(repo_dir, "bin", "ide_lib")
+
+# 1. Verify thin bootstrapper and expected cohesive domain modules
+with open(ide_entry, encoding="utf-8") as fh:
+    ide_lines = fh.read().splitlines()
+assert len(ide_lines) <= 300, f"bin/ide should stay a thin bootstrapper (<=300 lines), got {len(ide_lines)}"
+
+expected_modules = {
+    "__init__.py",
+    "constants.py",
+    "hooks.py",
+    "git_info.py",
+    "tmux.py",
+    "theme.py",
+    "nvim_rpc.py",
+    "fleet.py",
+    "layout.py",
+    "links.py",
+    "sessions.py",
+    "cli.py",
+}
+found_files = sorted(glob.glob(os.path.join(ide_lib_dir, "*.py")))
+found_names = {os.path.basename(p) for p in found_files}
+assert expected_modules.issubset(found_names), f"missing expected ide_lib modules: {expected_modules - found_names}"
+
+# 2. Verify Python 3.9 AST compatibility and strict acyclic import DAG across bin/ide_lib/*.py
+dag: dict[str, set[str]] = {}
+for path in found_files:
+    mod_name = os.path.splitext(os.path.basename(path))[0]
+    dag[mod_name] = set()
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src, filename=path, feature_version=(3, 9))
+    has_future = any(
+        isinstance(n, ast.ImportFrom)
+        and n.module == "__future__"
+        and any(a.name == "annotations" for a in n.names)
+        for n in tree.body
+    )
+    assert has_future, f"{path} missing 'from __future__ import annotations'"
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("ide_lib"):
+            parts = node.module.split(".")
+            if len(parts) >= 2:
+                dag[mod_name].add(parts[1])
+
+visiting: set[str] = set()
+visited: set[str] = set()
+
+
+def _check_dag(node_name: str, trail: list[str]) -> None:
+    assert node_name not in visiting, f"circular import in ide_lib: {trail + [node_name]}"
+    if node_name in visited:
+        return
+    visiting.add(node_name)
+    for dep in sorted(dag.get(node_name, ())):
+        _check_dag(dep, trail + [node_name])
+    visiting.remove(node_name)
+    visited.add(node_name)
+
+
+for mname in sorted(dag):
+    _check_dag(mname, [])
+
+# 3. Direct in-process unit checks of reusable ide_lib domain functions (zero tmux subprocesses)
+sys.path.insert(0, os.path.join(repo_dir, "bin"))
+from ide_lib import TMUX_SEP, USAGE_TEXT
+from ide_lib.constants import sanitize_agent_msg, sanitize_http_url, visible_width
+from ide_lib.fleet import format_attn_summary
+from ide_lib.git_info import build_forge_pr_url
+from ide_lib.links import parse_file_target, strip_token_wrappers
+from ide_lib.theme import hex_to_fg
+
+assert TMUX_SEP == "\t__IDE_SEP__\t"
+assert visible_width("\x1b[38;2;38;139;210malpha\x1b[0m") == 5
+assert sanitize_agent_msg("\x1b[31mQuota\tlimit\x1b[0m\nhit") == "Quota limit hit"
+assert sanitize_http_url("https://example.com/pr/42") == "https://example.com/pr/42"
+assert sanitize_http_url("-aCalculator") == ""
+assert sanitize_http_url("javascript:alert(1)") == ""
+assert build_forge_pr_url("git@github.com:acme/widgets.git", "17") == "https://github.com/acme/widgets/pull/17"
+assert build_forge_pr_url("https://gitlab.com/acme/group/sub.git", "9") == "https://gitlab.com/acme/group/sub/-/merge_requests/9"
+assert parse_file_target("src/app.py:42:7") == ("src/app.py", "42")
+assert parse_file_target("file:///tmp/demo.py#L19") == ("/tmp/demo.py", "19")
+assert strip_token_wrappers("(`src/app.py:42`),") == "src/app.py:42"
+assert format_attn_summary(
+    [
+        {"sess": "beta", "state": "DONE", "attn_ts": 5.0, "needs_attn": True},
+        {"sess": "alpha", "state": "ATTN", "attn_ts": 10.0, "needs_attn": True},
+        {"sess": "gamma", "state": "WORKING", "attn_ts": 0.0, "needs_attn": False},
+    ]
+) == "alpha +1"
+assert hex_to_fg("#268BD2") == "\033[38;2;38;139;210m"
+
+# 4. Isolated temp-dir symlink resolution + <50ms cold CLI latency budget (--keys, --help, --list --plain)
+tmp_root = tempfile.mkdtemp(prefix="ide-mod-lat.")
+try:
+    sym_dir = os.path.join(tmp_root, "isolated_bin")
+    run_dir = os.path.join(tmp_root, "run")
+    os.makedirs(sym_dir, mode=0o700)
+    os.makedirs(run_dir, mode=0o700)
+    sym_ide = os.path.join(sym_dir, "ide")
+    os.symlink(ide_entry, sym_ide)
+
+    env = {
+        **os.environ,
+        "TMUX": "",
+        "TMUX_PANE": "",
+        "NVIM_IDE_SOCKET": "",
+        "IDE_SESSION": "",
+        "TMUX_TMPDIR": run_dir,
+        "XDG_RUNTIME_DIR": run_dir,
+        "IDE_KEYS_NO_WAIT": "1",
+    }
+
+    checks = (
+        (["--keys"], "IDE Workspace & Editor Keybindings"),
+        (["--help"], USAGE_TEXT + "\n"),
+        (["--list", "--plain"], ""),
+    )
+    for target_bin in (ide_entry, sym_ide):
+        for flag_args, exp_out in checks:
+            subprocess.run([target_bin, *flag_args], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            samples = []
+            last_out = ""
+            for _ in range(3):
+                t0 = time.monotonic()
+                res = subprocess.run([target_bin, *flag_args], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+                samples.append((time.monotonic() - t0) * 1000.0)
+                assert res.returncode == 0
+                last_out = res.stdout
+            if flag_args == ["--help"]:
+                assert last_out == exp_out, "bin/ide --help fast-path diverged from ide_lib.constants.USAGE_TEXT"
+            elif exp_out:
+                assert exp_out in last_out, f"unexpected stdout for {target_bin} {flag_args}: {last_out!r}"
+            else:
+                assert last_out.strip() == "", f"expected empty --list --plain stdout, got {last_out!r}"
+            best_ms = min(samples)
+            assert best_ms < 50.0, (
+                f"cold CLI latency budget (<50ms) exceeded for {target_bin} {flag_args}: {best_ms:.1f}ms (samples={samples})"
+            )
+finally:
+    import shutil as _shutil
+
+    _shutil.rmtree(tmp_root, ignore_errors=True)
+
+# Verify un-`-B` in-process IDE_PY_SRC execution sets sys.dont_write_bytecode = True (never polluting bin/ide_lib/__pycache__)
+subprocess.run(
+    [
+        sys.executable,
+        "-c",
+        (
+            "import os, re, sys; "
+            "p = sys.argv[1]; txt = open(p, encoding='utf-8').read(); "
+            "m = re.search(r\"IDE_PY_SRC <<\\s*'PY'[^\\n]*\\n(.*?)\\nPY\\n\", txt, re.S); "
+            "ns = {'__name__': 'ide_mod'}; exec(compile(m.group(1), p, 'exec'), ns); "
+            "assert sys.dont_write_bytecode is True"
+        ),
+        ide_entry,
+    ],
+    check=True,
+)
+assert not os.path.exists(os.path.join(ide_lib_dir, "__pycache__")), "bin/ide_lib/__pycache__ must not be created"
+
+print("MODULAR_ARCH_OK")
+PY
+)" || true
+if grep -Fq "MODULAR_ARCH_OK" <<< "$MODULAR_TEST_OUT"; then
+    pass "bin/ide + bin/ide_lib modular architecture: thin bootstrapper, Python 3.9 AST compliance, acyclic DAG, domain unit tests, isolated symlink resolution, and <50ms cold CLI latency"
+else
+    fail "bin/ide + bin/ide_lib modular architecture suite" "Suite failed: $MODULAR_TEST_OUT"
+fi
+
 # End-to-end hermetic multi-session workspace switcher, parked-window exclusion, live ANSI preview, and context dispatch tests
 if command -v tmux >/dev/null 2>&1; then
-    FLEET_TEST_OUT="$(python3 - "$SCRIPT_DIR" 2>&1 <<'PY'
+    FLEET_TEST_OUT="$(python3 -B - "$SCRIPT_DIR" 2>&1 <<'PY'
 import fcntl
 import os
 import pty
@@ -794,9 +980,13 @@ try:
         assert tmux("has-session", "-t", "=dirty-ws", check=False).returncode != 0, "dirty-ws survived --quit --force"
 
     # 8. Deterministic Hook-Only AI Lifecycle State, Zero Heuristic Invention, FIFO --next-attention, Parked AI Preservation, Stale-Hook SHELL Guard, and Top-Bar Width Invariance
-    ide_src = open(ide_bin, encoding="utf-8").read()
+    import glob as _glob
+    _ide_py_files = sorted(_glob.glob(os.path.join(repo_dir, "bin", "ide_lib", "*.py")))
+    _combined_ide_src = "\n".join(
+        open(p, encoding="utf-8").read() for p in [os.path.realpath(ide_bin), *_ide_py_files]
+    )
     for banned_heuristic in ("inspect_fleet_procs", "inspect_ai_viewport", "alert-bell", "--on-bell"):
-        assert banned_heuristic not in ide_src, f"heuristic remnant {banned_heuristic!r} found in bin/ide"
+        assert banned_heuristic not in _combined_ide_src, f"heuristic remnant {banned_heuristic!r} found in bin/ide or bin/ide_lib"
 
     # Detach client2 so client_name is the sole attached viewer on alpha-ws Editor pane
     tmux("detach-client", "-t", client2_name, check=False)
@@ -2109,7 +2299,8 @@ try:
     # Ensure bin/ide uses printable/tab-based _TMUX_SEP and survives C0-octal-escaped tmux format output
     # even when @ide_workdir contains literal tab characters.
     ide_full_src = open(real_ide_path, encoding="utf-8").read()
-    assert '_TMUX_SEP = "\\t__IDE_SEP__\\t"' in ide_full_src, "missing printable/tab _TMUX_SEP delimiter in bin/ide"
+    constants_src = open(os.path.join(repo_dir, "bin", "ide_lib", "constants.py"), encoding="utf-8").read()
+    assert '_TMUX_SEP = "\\t__IDE_SEP__\\t"' in constants_src, "missing printable/tab _TMUX_SEP delimiter in bin/ide_lib/constants.py"
     real_tmux_bin = shutil.which("tmux")
     assert real_tmux_bin, "tmux binary not found on PATH"
     tmux34_dir = os.path.join(root, "tmux34_compat_bin")

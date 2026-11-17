@@ -1,8 +1,7 @@
 #!/bin/bash
+# Generate random passwords from /dev/urandom with selectable character classes.
 
-set -o errexit   # abort on nonzero exitstatus
-set -o nounset   # abort on unbound variable
-set -o pipefail  # don't hide errors within pipes
+set -euo pipefail
 
 UPPER="A-Z"
 LOWER="a-z"
@@ -32,79 +31,66 @@ EOF
 }
 
 for arg in "$@"; do
-  case "$arg" in
-    --) break ;;
-    --help)
-      usage
-      exit 0
-      ;;
-  esac
+    case "$arg" in
+        --) break ;;
+        --help)
+            usage
+            exit 0
+            ;;
+    esac
 done
 
 while getopts ":ulnsht" opt; do
-  case ${opt} in
-    u )
-      USE_UPPER=1
-      ;;
-    l )
-      USE_LOWER=1
-      ;;
-    n )
-      USE_NUMBERS=1
-      ;;
-    s )
-      USE_SYMBOLS=1
-      ;;
-    h )
-      usage
-      exit 0
-      ;;
-    t )
-      set -o xtrace # toggle trace
-      ;;
-    \? )
-      echo "Invalid option: $OPTARG" 1>&2
-      usage >&2
-      exit 1
-      ;;
-    : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
-      usage >&2
-      exit 1
-      ;;
-  esac
+    case "$opt" in
+        u) USE_UPPER=1 ;;
+        l) USE_LOWER=1 ;;
+        n) USE_NUMBERS=1 ;;
+        s) USE_SYMBOLS=1 ;;
+        h)
+            usage
+            exit 0
+            ;;
+        t) set -o xtrace ;;
+        \?)
+            echo "Invalid option: $OPTARG" >&2
+            usage >&2
+            exit 1
+            ;;
+        :)
+            echo "Invalid option: $OPTARG requires an argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
 done
-shift $((OPTIND -1))
+shift $((OPTIND - 1))
 
 if [ "${1:-}" != "" ]; then
-  LENGTH="$1"
+    LENGTH="$1"
 fi
 
-INTEGER='^[0-9]+$'
-if ! [[ $LENGTH =~ $INTEGER ]] || [ "$LENGTH" -le 0 ]; then
-   echo "Error: $LENGTH is not a valid positive length" >&2
-   usage >&2
-   exit 1
+if ! [[ "$LENGTH" =~ ^[0-9]+$ ]] || [ "$LENGTH" -le 0 ]; then
+    echo "Error: $LENGTH is not a valid positive length" >&2
+    usage >&2
+    exit 1
 fi
 
 if [ "$USE_UPPER" -eq 0 ] && [ "$USE_LOWER" -eq 0 ] && [ "$USE_NUMBERS" -eq 0 ] && [ "$USE_SYMBOLS" -eq 0 ]; then
-  USE_UPPER=1
-  USE_LOWER=1
-  USE_NUMBERS=1
-  USE_SYMBOLS=1
+    USE_UPPER=1
+    USE_LOWER=1
+    USE_NUMBERS=1
+    USE_SYMBOLS=1
 fi
 
 CHARACTER_SET=""
-[ "$USE_UPPER" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$UPPER"
-[ "$USE_LOWER" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$LOWER"
-[ "$USE_NUMBERS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$NUMBERS"
-[ "$USE_SYMBOLS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}$SYMBOLS"
-# Place hyphen strictly at the end of the character set so tr treats it as a literal rather than a range
-[ "$USE_SYMBOLS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}-"
+[ "$USE_UPPER" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}${UPPER}"
+[ "$USE_LOWER" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}${LOWER}"
+[ "$USE_NUMBERS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}${NUMBERS}"
+# Append hyphen strictly last so tr treats it as a literal rather than a character range
+[ "$USE_SYMBOLS" -eq 1 ] && CHARACTER_SET="${CHARACTER_SET}${SYMBOLS}-"
 
-# Disable pipefail because head -c closes the pipe early, causing tr to receive SIGPIPE (Broken pipe)
+# Disable pipefail briefly because head -c closes the pipe once LENGTH bytes are read
 set +o pipefail
 < /dev/urandom LC_ALL=C tr -dc -- "$CHARACTER_SET" | head -c "$LENGTH"
 set -o pipefail
 echo
-

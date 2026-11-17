@@ -15,7 +15,7 @@ echo "========================================"
 
 # Test 1: Bash syntax checks
 echo -e "\n[1/4] Checking script syntax with 'bash -n'..."
-for f in "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment-variables" "$SCRIPT_DIR/dotfiles/.aliases"; do
+for f in "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SCRIPT_DIR/dotfiles/.environment-variables" "$SCRIPT_DIR/dotfiles/.aliases" "$SCRIPT_DIR"/dotfiles/.config/shell/*.sh; do
     if bash -n "$f"; then
         pass "Syntax valid: $(basename "$f")"
     else
@@ -1031,10 +1031,23 @@ EOF
         echo "FAIL:Bash theme() wrapper:Unexpected state ($bash_theme_out)"
     fi
 
-    # Test 2-file standalone copied .bashrc-addendum: 1:1 17-theme parity without repo/bin/theme
+    # Test portable copied .bashrc-addendum + .config/shell modules: 1:1 17-theme parity without repo/bin/theme, plus graceful lone-file fallback
     TWOFILE_DIR="$STANDALONE_HOME/twofile-isolated"
-    mkdir -p "$TWOFILE_DIR"
+    BAREFILE_DIR="$STANDALONE_HOME/barefile-isolated"
+    mkdir -p "$TWOFILE_DIR/.config" "$BAREFILE_DIR"
     cp "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$TWOFILE_DIR/.bashrc-addendum"
+    cp -R "$SCRIPT_DIR/dotfiles/.config/shell" "$TWOFILE_DIR/.config/shell"
+    cp "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$BAREFILE_DIR/.bashrc-addendum"
+    bare_out="$(HOME="$BAREFILE_DIR/empty" XDG_CONFIG_HOME="/nonexistent" PATH="/usr/bin:/bin" "$BASH" -c "
+        set -euo pipefail
+        source '$BAREFILE_DIR/.bashrc-addendum'
+        printf '%s|%s|%s\n' \"\${EDITOR:-}\" \"\${HISTSIZE:-}\" \"\${PS1:-}\"
+    " 2>&1)"
+    if [[ "$bare_out" == *"|50000|"* ]] && [ -n "${bare_out%%|*}" ]; then
+        echo "PASS:Lone copied .bashrc-addendum without .config/shell degrades gracefully with zero errors and valid fallback environment"
+    else
+        echo "FAIL:Lone copied .bashrc-addendum fallback:Unexpected output ($bare_out)"
+    fi
     bash_17_fail=""
     for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
         t_id="$(awk -F'"' '/^THEME_ID=/ {print $2}' "$tf")"
@@ -1280,7 +1293,7 @@ INNER2
     fzf_prev_content=""
     [ -r "$TWOFILE_DIR/fzf-prev.txt" ] && IFS= read -r -d '' fzf_prev_content < "$TWOFILE_DIR/fzf-prev.txt" || true
     bash4_hits=0
-    if grep -Eq '(\$\{[A-Za-z_][A-Za-z0-9_]*(\^\^|,,)\}|declare[[:space:]]+-A|local[[:space:]]+-A|\b(mapfile|readarray)\b)' "$TWOFILE_DIR/.bashrc-addendum"; then
+    if grep -Eq '(\$\{[A-Za-z_][A-Za-z0-9_]*(\^\^|,,)\}|declare[[:space:]]+-A|local[[:space:]]+-A|\b(mapfile|readarray)\b)' "$TWOFILE_DIR/.bashrc-addendum" "$TWOFILE_DIR"/.config/shell/*.sh; then
         bash4_hits=1
     fi
     if [ "$bash4_hits" -eq 0 ] && \
@@ -1351,8 +1364,8 @@ INNER2
     )
 
     # Test Layer 1 Readline/history hardening + Layer 2 zero-dependency inline Ctrl+r history drawer (unit + real PTY)
-    if ! grep -Eq 'bind [^#\n]*2>/dev/null|history -a[^#\n]*2>/dev/null|\bhistory[[:space:]]+-c\b' "$TWOFILE_DIR/.bashrc-addendum"; then
-        echo "PASS:.bashrc-addendum contains zero blind stderr suppression on bind/history -a and zero destructive history -c"
+    if ! grep -Eq 'bind [^#\n]*2>/dev/null|history -a[^#\n]*2>/dev/null|\bhistory[[:space:]]+-c\b' "$TWOFILE_DIR/.bashrc-addendum" "$TWOFILE_DIR"/.config/shell/*.sh; then
+        echo "PASS:.bashrc-addendum and .config/shell/*.sh contain zero blind stderr suppression on bind/history -a and zero destructive history -c"
     else
         echo "FAIL:.bashrc-addendum hygiene:Found forbidden 2>/dev/null on bind/history -a or history -c"
     fi

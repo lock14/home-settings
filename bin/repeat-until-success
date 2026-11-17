@@ -1,11 +1,10 @@
 #!/bin/bash
+# Retry a command with fixed backoff until it exits zero or reaches max attempts.
 
-set -o errexit   # abort on nonzero exitstatus
-set -o nounset   # abort on unbound variable
-set -o pipefail  # don't hide errors within pipes
+set -euo pipefail
 
 MAX_ATTEMPTS="10"
-SLEEP_SECONDS=30
+SLEEP_SECONDS="30"
 
 usage() {
     cat <<EOF
@@ -23,55 +22,44 @@ EOF
 
 expect_optarg=0
 for arg in "$@"; do
-  if [ "$expect_optarg" -eq 1 ]; then
-    expect_optarg=0
-    continue
-  fi
-  case "$arg" in
-    --) break ;;
-    --help)
-      usage
-      exit 0
-      ;;
-    -n|-s|-d)
-      expect_optarg=1
-      ;;
-    -*)
-      ;;
-    *)
-      break
-      ;;
-  esac
+    if [ "$expect_optarg" -eq 1 ]; then
+        expect_optarg=0
+        continue
+    fi
+    case "$arg" in
+        --) break ;;
+        --help)
+            usage
+            exit 0
+            ;;
+        -n|-s|-d) expect_optarg=1 ;;
+        -*) ;;
+        *) break ;;
+    esac
 done
 
 while getopts ":n:s:d:ht" opt; do
-  case ${opt} in
-    n )
-      MAX_ATTEMPTS=$OPTARG
-      ;;
-    s | d )
-      SLEEP_SECONDS=$OPTARG
-      ;;
-    h )
-      usage
-      exit 0
-      ;;
-    t )
-      set -o xtrace # toggle trace
-      ;;
-    \? )
-      echo "Invalid option: $OPTARG" 1>&2
-      usage >&2
-      exit 1
-      ;;
-    : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
-      usage >&2
-      exit 1
-      ;;
-  esac
+    case "$opt" in
+        n) MAX_ATTEMPTS="$OPTARG" ;;
+        s|d) SLEEP_SECONDS="$OPTARG" ;;
+        h)
+            usage
+            exit 0
+            ;;
+        t) set -o xtrace ;;
+        \?)
+            echo "Invalid option: $OPTARG" >&2
+            usage >&2
+            exit 1
+            ;;
+        :)
+            echo "Invalid option: $OPTARG requires an argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
 done
-shift $((OPTIND -1))
+shift $((OPTIND - 1))
 
 if ! [[ "$MAX_ATTEMPTS" =~ ^[0-9]+$ ]] || [ "$MAX_ATTEMPTS" -le 0 ]; then
     echo "Error: -n MAX_ATTEMPTS must be a positive integer" >&2
@@ -86,26 +74,24 @@ if ! [[ "$SLEEP_SECONDS" =~ ^[0-9]+$ ]]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-    echo "Error: no command specified" 1>&2
+    echo "Error: no command specified" >&2
     usage >&2
     exit 1
 fi
 
-for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+for ((i = 1; i <= MAX_ATTEMPTS; i++)); do
     echo "attempting (attempt $i/$MAX_ATTEMPTS) cmd: $*"
     if "$@"; then
         echo "cmd succeeded"
         exit 0
-    else
-        exit_code="$?"
-        echo "cmd failed with status $exit_code"
-        if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
-            echo "retrying in $SLEEP_SECONDS seconds..."
-            sleep "$SLEEP_SECONDS"
-        fi
+    fi
+    exit_code="$?"
+    echo "cmd failed with status $exit_code"
+    if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+        echo "retrying in $SLEEP_SECONDS seconds..."
+        sleep "$SLEEP_SECONDS"
     fi
 done
 
-echo "max retries limit of $MAX_ATTEMPTS has been reached" 1>&2
+echo "max retries limit of $MAX_ATTEMPTS has been reached" >&2
 exit 1
-

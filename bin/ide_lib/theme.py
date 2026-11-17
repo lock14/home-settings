@@ -1,0 +1,98 @@
+"""Active `home-settings` theme palette loader and `fzf` TrueColor environment builder."""
+
+from __future__ import annotations
+
+import os
+import re
+import shlex
+import shutil
+
+from ide_lib.constants import DEFAULT_THEME_HEX
+from ide_lib.tmux import tmux_out
+
+_THEME_KV_RE = re.compile(r'^([A-Z0-9_]+)="?(#[0-9A-Fa-f]{6})"?$')
+
+
+def hex_to_fg(hex_code: str) -> str:
+    """Convert `#RRGGBB` into a 24-bit TrueColor foreground SGR sequence."""
+    h = hex_code.lstrip("#")
+    if len(h) != 6:
+        return ""
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"\033[38;2;{r};{g};{b}m"
+    except ValueError:
+        return ""
+
+
+def load_active_palette() -> tuple[dict[str, str], dict[str, str]]:
+    """Load `(hex_map, ansi_fg_map)` from `active-theme.theme`, defaulting to Solarized Dark."""
+    hex_map = dict(DEFAULT_THEME_HEX)
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    active_file = os.path.join(xdg_cfg, "home-settings", "active-theme.theme")
+    try:
+        with open(active_file, "r", encoding="utf-8") as fh:
+            for raw_line in fh:
+                m = _THEME_KV_RE.match(raw_line.strip())
+                if m and m.group(1) in hex_map:
+                    hex_map[m.group(1)] = m.group(2)
+    except OSError:
+        pass
+    esc_map = {k: hex_to_fg(v) for k, v in hex_map.items()}
+    esc_map["RESET"] = "\033[0m"
+    return hex_map, esc_map
+
+
+def state_color(state: str, esc: dict[str, str]) -> str:
+    """Map an AI fleet urgency state label to its semantic palette escape sequence."""
+    if state == "ATTN":
+        return esc["ORANGE"]
+    if state == "QUOTA":
+        return esc["YELLOW"]
+    if state == "WORKING":
+        return esc["CYAN"]
+    if state == "DONE":
+        return esc["GREEN"]
+    if state == "IDLE":
+        return esc["BASE0"]
+    return esc["BASE01"]
+
+
+def build_fzf_env(hex_map: dict[str, str]) -> dict[str, str]:
+    """Return environment dictionary with `FZF_DEFAULT_OPTS` synchronized to the active theme."""
+    env = os.environ.copy()
+    xdg_cfg = env.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    theme_env_path = os.path.join(xdg_cfg, "home-settings", "theme-env.sh")
+    loaded_opts = ""
+    try:
+        with open(theme_env_path, "r", encoding="utf-8") as fh:
+            for raw_line in fh:
+                stripped = raw_line.strip()
+                if stripped.startswith("export FZF_DEFAULT_OPTS="):
+                    rhs = stripped[len("export FZF_DEFAULT_OPTS="):]
+                    try:
+                        parts = shlex.split(rhs, posix=True)
+                        if len(parts) == 1:
+                            loaded_opts = parts[0]
+                    except ValueError:
+                        pass
+                    if not loaded_opts and len(rhs) >= 2 and rhs[0] == rhs[-1] and rhs[0] in ("'", '"'):
+                        loaded_opts = rhs[1:-1]
+    except OSError:
+        pass
+    if loaded_opts:
+        env["FZF_DEFAULT_OPTS"] = loaded_opts
+    elif env.get("TMUX") and shutil.which("tmux"):
+        tmux_fzf = tmux_out("show-environment", "-g", "FZF_DEFAULT_OPTS")
+        if tmux_fzf.startswith("FZF_DEFAULT_OPTS=") and tmux_fzf[17:]:
+            env["FZF_DEFAULT_OPTS"] = tmux_fzf[17:]
+    if not env.get("FZF_DEFAULT_OPTS"):
+        env["FZF_DEFAULT_OPTS"] = (
+            f"--color=bg+:{hex_map['BASE02']},bg:{hex_map['BASE03']},spinner:{hex_map['GREEN']},"
+            f"hl:{hex_map['BASE01']},fg:{hex_map['BASE0']},header:{hex_map['BASE01']},"
+            f"label:{hex_map['BASE01']},"
+            f"info:{hex_map['YELLOW']},pointer:{hex_map['GREEN']},marker:{hex_map['GREEN']},"
+            f"fg+:{hex_map['BASE1']},prompt:{hex_map['YELLOW']},hl+:{hex_map['BLUE']} "
+            "--layout=reverse --border=rounded --info=inline --no-scrollbar"
+        )
+    return env
