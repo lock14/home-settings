@@ -72,7 +72,7 @@ local function heal_lazy_git_repos()
                     pcall(run_git_files_ref, { "git", "-C", dir, "refs", "migrate", "--ref-format=files" })
                 end
                 local cfg = read_small_file(uv, git_dir .. "/config")
-                if cfg and cfg:find(".invalid", 1, true) then
+                if cfg and cfg:find("refs/heads/.invalid", 1, true) then
                     pcall(run_git_files_ref, {
                         "git",
                         "-C",
@@ -80,7 +80,7 @@ local function heal_lazy_git_repos()
                         "config",
                         "--unset-all",
                         "remote.origin.fetch",
-                        "\\.invalid",
+                        "refs/heads/\\.invalid",
                     })
                 end
                 if name == "nvim-treesitter" then

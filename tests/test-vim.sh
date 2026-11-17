@@ -3756,7 +3756,7 @@ EOF
             rm -rf "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable"
             git init -q "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable"
         fi
-        printf '[remote "origin"]\n\turl = https://example.com/mock.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tfetch = +refs/heads/.invalid:refs/remotes/origin/.invalid\n' >> "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable/.git/config"
+        printf '[remote "origin"]\n\turl = https://mirror.invalid/mock.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tfetch = +refs/heads/.invalid:refs/remotes/origin/.invalid\n' >> "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable/.git/config"
 
         GIT_DEFAULT_REF_FORMAT=files git init -q "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter"
         git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter" config user.email "test@example.com"
@@ -3791,7 +3791,41 @@ package.preload["nvim-treesitter"] = function()
     return {}
 end
 spec.config()
+local build_calls, pwait_calls = 0, 0
+package.preload["nvim-treesitter.install"] = function()
+    return {
+        update = function(langs, opts)
+            if langs == "all" and opts and opts.summary == true then
+                build_calls = build_calls + 1
+            end
+            return {
+                pwait = function(_, timeout_ms)
+                    if timeout_ms == 300000 then
+                        pwait_calls = pwait_calls + 1
+                    end
+                end,
+            }
+        end,
+    }
+end
+-- While legacy nvim-treesitter.configs is loaded (master -> main migration), build() must no-op
+if type(spec.build) == "function" then
+    spec.build()
+end
+local skip_legacy_ok = (build_calls == 0)
+package.loaded["nvim-treesitter.configs"] = nil
+vim.env.NVIM_TS_SKIP_AUTO_INSTALL = "1"
+if type(spec.build) == "function" then
+    spec.build()
+end
+local skip_env_ok = (build_calls == 0)
+vim.env.NVIM_TS_SKIP_AUTO_INSTALL = nil
+if type(spec.build) == "function" then
+    spec.build()
+end
+local build_ok = (type(spec.build) == "function") and skip_legacy_ok and skip_env_ok and (build_calls == 1) and (pwait_calls == 1)
 local ts_ok = (spec.branch == "main")
+    and build_ok
     and (type(captured_legacy) == "table")
     and (captured_legacy.auto_install == false)
     and (type(captured_legacy.ensure_installed) == "table" and #captured_legacy.ensure_installed == 0)
@@ -3808,7 +3842,8 @@ plugins.heal_lazy_git_repos()
 
 local rt_gone = (uv.fs_stat(tmp .. "/data/nvim/lazy/mock-reftable/.git/reftable") == nil)
 local cfg_lines = table.concat(vim.fn.readfile(tmp .. "/data/nvim/lazy/mock-reftable/.git/config"), "\n")
-local invalid_gone = (cfg_lines:find(".invalid", 1, true) == nil)
+local invalid_gone = (cfg_lines:find("refs/heads/.invalid", 1, true) == nil)
+    and (cfg_lines:find("mirror.invalid", 1, true) ~= nil)
 local origin_head = table.concat(vim.fn.readfile(tmp .. "/data/nvim/lazy/nvim-treesitter/.git/refs/remotes/origin/HEAD"), "\n")
 local head_healed = (origin_head:find("refs/remotes/origin/main", 1, true) ~= nil)
 local env_clean = (vim.env.GIT_DEFAULT_REF_FORMAT == nil)
@@ -3895,7 +3930,7 @@ for name, spec in pairs(lock) do
     local gdir = base .. "/" .. name .. "/.git"
     vim.fn.mkdir(gdir, "p")
     vim.fn.writefile({ spec.commit }, gdir .. "/HEAD")
-    vim.fn.writefile({ "[core]", "\trepositoryformatversion = 0" }, gdir .. "/config")
+    vim.fn.writefile({ "[core]", "\trepositoryformatversion = 0", '[remote "origin"]', "\turl = https://mirror.invalid/plugin.git" }, gdir .. "/config")
 end
 EOF
         HS_LOCKFILE="$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json" \

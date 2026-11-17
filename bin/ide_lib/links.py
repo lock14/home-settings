@@ -133,7 +133,7 @@ def _git_ls_files_unique_match(git_root: str, cand: str) -> str:
         for rel in ls_res.stdout.splitlines():
             if rel == cand or rel.endswith(suffix):
                 p = os.path.join(git_root, rel)
-                if os.path.isfile(p):
+                if p not in matches and os.path.isfile(p):
                     matches.append(p)
                     if len(matches) > 1:
                         break
@@ -541,11 +541,14 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
     pane_targets = _resolve_capture_pane_targets(target_arg)
     for pt in pane_targets:
         joined_out = tmux_out("capture-pane", "-p", "-J", "-S", "-200", *pt)
-        if joined_out:
-            for m in _WRAP_REF_RE.finditer(joined_out):
-                full = strip_token_wrappers(m.group(0))
-                if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
-                    return full
+        if not joined_out:
+            continue
+        for m in _WRAP_REF_RE.finditer(joined_out):
+            full = strip_token_wrappers(m.group(0))
+            if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
+                return full
+        if word not in joined_out or not _WRAP_REF_RE.search(joined_out):
+            continue
         raw_lines = tmux_out("capture-pane", "-p", "-S", "-200", *pt).splitlines()
         for idx, line in enumerate(raw_lines):
             m_tail = _URL_TAIL_RE.search(line.strip())
@@ -761,10 +764,7 @@ def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     if not word:
         return 0
 
-    if word.startswith(("http://", "https://", "file://", "//")) or not _direct_workspace_path(
-        parse_file_target(word, cwd)[0], cwd
-    ):
-        word = unsplit_wrapped_url(word, target_arg)
+    word = unsplit_wrapped_url(word, target_arg)
     private_url = resolve_private_link(word, cwd, target_arg)
     if private_url:
         if private_url.startswith("file://"):

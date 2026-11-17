@@ -113,7 +113,18 @@ function M.plugin_spec(ctx)
     return {
         "nvim-treesitter/nvim-treesitter",
         branch = "main",
-        build = ":TSUpdate",
+        build = function()
+            if vim.env.NVIM_TS_SKIP_AUTO_INSTALL == "1" or package.loaded["nvim-treesitter.configs"] then
+                return
+            end
+            local ok_inst, install = pcall(require, "nvim-treesitter.install")
+            if ok_inst and type(install.update) == "function" then
+                local task = install.update("all", { summary = true })
+                if #vim.api.nvim_list_uis() == 0 and type(task) == "table" and type(task.pwait) == "function" then
+                    pcall(task.pwait, task, 300000)
+                end
+            end
+        end,
         lazy = false,
         priority = 900,
         config = function()

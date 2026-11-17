@@ -1101,7 +1101,14 @@ done
 if command -v git >/dev/null 2>&1; then
     ln -sf "$(command -v git)" "$NVIM_OLD_MOCK_BIN/git"
 fi
-write_mock_bin "$NVIM_OLD_MOCK_BIN" "nvim" "exit 1"
+write_mock_bin "$NVIM_OLD_MOCK_BIN" "nvim" '
+for arg in "$@"; do
+    case "$arg" in
+        *"vim."*) exit 0 ;;
+        *"!has(\"nvim-0.10\")"*cquit*) exit 1 ;;
+    esac
+done
+exit 0'
 nvim_missing_out="$(PATH="$NVIM_MISSING_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1)"
 nvim_old_out="$(PATH="$NVIM_OLD_MOCK_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1)"
 if [[ "$nvim_dry_default" == *"[DryRun] Syncing Neovim plugins from lazy-lock.json"* ]] && \

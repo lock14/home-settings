@@ -45,7 +45,7 @@ if ! command -v nvim >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
 fi
 
 if ! NVIM_LOG_FILE=/dev/null run_bounded 15 nvim --headless -u NONE -i NONE \
-    -c 'if vim.fn.has("nvim-0.10") == 0 then vim.cmd("cquit 1") end' \
+    -c 'if !has("nvim-0.10") | cquit 1 | endif' \
     -c 'qall!' </dev/null >/dev/null 2>&1; then
     echo "  Notice: Neovim < 0.10 detected; skipping headless plugin sync."
     exit 0
@@ -168,7 +168,7 @@ else
                 break
             end
             local cfg = read_file(git_dir .. "/config") or ""
-            if cfg:find(".invalid", 1, true) then
+            if cfg:find("refs/heads/.invalid", 1, true) then
                 synced = false
                 break
             end
@@ -195,7 +195,8 @@ probe_out="$(
     HS_CHECK_LUA="$tmp_dir/check.lua" \
     NVIM_LOG_FILE=/dev/null \
         run_bounded 30 nvim --headless -u NONE -i NONE \
-        -c 'lua dofile(vim.env.HS_CHECK_LUA)' -c 'qall!' </dev/null
+        -c 'lua local ok, err = pcall(dofile, vim.env.HS_CHECK_LUA); if not ok then io.stderr:write(tostring(err) .. "\n"); vim.cmd("cquit 1") end' \
+        -c 'qall!' </dev/null
 )"
 
 synced="false"
@@ -227,10 +228,14 @@ done
 for repo in "$lazy_dir"/*; do
     [ -d "$repo/.git" ] || continue
     if [ -d "$repo/.git/reftable" ]; then
-        GIT_DEFAULT_REF_FORMAT=files git -C "$repo" refs migrate --ref-format=files
+        if ! GIT_DEFAULT_REF_FORMAT=files git -C "$repo" refs migrate --ref-format=files; then
+            echo "  Warning: git refs migrate failed for $(basename "$repo"); removing for clean re-clone." >&2
+            rm -rf "$repo"
+            continue
+        fi
     fi
-    if [ -f "$repo/.git/config" ] && grep -Fq '.invalid' "$repo/.git/config"; then
-        git -C "$repo" config --unset-all remote.origin.fetch '\.invalid' || true
+    if [ -f "$repo/.git/config" ] && grep -Fq 'refs/heads/.invalid' "$repo/.git/config"; then
+        git -C "$repo" config --unset-all remote.origin.fetch 'refs/heads/\.invalid' || true
     fi
 done
 
@@ -259,6 +264,22 @@ if not ok then
 end
 lazy.restore({ wait = true, show = false })
 lazy.clean({ wait = true, show = false })
+local Config = require("lazy.core.config")
+local Plugin = require("lazy.core.plugin")
+local errs = {}
+for name, plugin in pairs(Config.plugins or {}) do
+    if Plugin.has_errors(plugin) then
+        for _, task in ipairs((plugin._ and plugin._.tasks) or {}) do
+            if task:has_errors() then
+                table.insert(errs, name .. " (" .. tostring(task.name) .. "): " .. tostring(task:output(vim.log.levels.ERROR)))
+            end
+        end
+    end
+end
+if #errs > 0 then
+    io.stderr:write("Neovim plugin sync failed:\n" .. table.concat(errs, "\n") .. "\n")
+    vim.cmd("cquit 1")
+end
 EOF
 
 NVIM_LAZY_LOCKFILE="$tmp_dir/lazy-lock.json" \
@@ -267,7 +288,8 @@ NVIM_LOG_FILE=/dev/null \
 GIT_DEFAULT_REF_FORMAT=files \
 HS_NVIM_SYNC_LUA="$tmp_dir/sync.lua" \
     run_bounded 180 nvim --headless -i NONE -u "$INIT_LUA" \
-    -c 'lua dofile(vim.env.HS_NVIM_SYNC_LUA)' -c 'qall!' </dev/null >/dev/null
+    -c 'lua local ok, err = pcall(dofile, vim.env.HS_NVIM_SYNC_LUA); if not ok then io.stderr:write(tostring(err) .. "\n"); vim.cmd("cquit 1") end' \
+    -c 'qall!' </dev/null >/dev/null
 
 if [ -d "$lazy_dir/nvim-treesitter/.git" ] && \
    [ -f "$lazy_dir/nvim-treesitter/.git/refs/remotes/origin/HEAD" ] && \
