@@ -1120,9 +1120,45 @@ SH
                     if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
                         line_after_split_wrap="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
                     fi
+                    # Verify tracked git basenames resolve via fast `git ls-files --cached` without walking `--others`,
+                    # and stalled `git ls-files --others` calls time out cleanly without double-scanning on misses.
+                    git_fast_ok="1"
+                    if command -v git >/dev/null 2>&1; then
+                        git_fast_ok="0"
+                        REAL_GIT_BIN="$(command -v git)"
+                        GIT_FAST_WS="$TEMP_HOME/git_fast_ws"
+                        GIT_SLOW_MOCK="$TEMP_HOME/git_slow_mock"
+                        mkdir -p "$GIT_FAST_WS/deep/pkg" "$GIT_SLOW_MOCK"
+                        printf "tracked1\ntracked2\n" > "$GIT_FAST_WS/deep/pkg/tracked_fast.txt"
+                        git -C "$GIT_FAST_WS" init -q
+                        git -C "$GIT_FAST_WS" config user.email "test@example.com"
+                        git -C "$GIT_FAST_WS" config user.name "Test"
+                        git -C "$GIT_FAST_WS" add deep/pkg/tracked_fast.txt
+                        git -C "$GIT_FAST_WS" -c commit.gpgsign=false commit -q --no-gpg-sign -m "init"
+                        cat > "$GIT_SLOW_MOCK/git" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+    if [ "\$arg" = "--others" ]; then
+        sleep 10
+        exit 0
+    fi
+done
+exec "$REAL_GIT_BIN" "\$@"
+EOF
+                        chmod +x "$GIT_SLOW_MOCK/git"
+                        if PATH="$GIT_SLOW_MOCK:$PATH" timeout 3 "$SCRIPT_DIR/bin/ide" --open-link "" "tracked_fast.txt:2" "$GIT_FAST_WS" "ws_3pane_test" && \
+                           PATH="$GIT_SLOW_MOCK:$PATH" timeout 3 "$SCRIPT_DIR/bin/ide" --open-link "" "missing_untracked_probe.txt:1" "$GIT_FAST_WS" "ws_3pane_test"; then
+                            line_after_git_fast="2"
+                            if command -v nvim >/dev/null 2>&1 && [ -n "$sock_3p" ] && [ -S "$sock_3p" ]; then
+                                line_after_git_fast="$(nvim_rpc_3p --remote-expr "line('.')" 2>/dev/null | tr -cd '0-9' || true)"
+                            fi
+                            [ "$line_after_git_fast" = "2" ] && git_fast_ok="1"
+                        fi
+                        rm -rf "$GIT_FAST_WS" "$GIT_SLOW_MOCK"
+                    fi
                     tmux select-pane -t "$ed_pane"
                     active_after_link="$(tmux display-message -p -t "$main_win" "#{pane_id}")"
-                    if [ "$active_after_link" = "$ed_pane" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$buf_after_jump_back" = "nested.txt:1" ] && [ "$buf_after_jump_fwd" = "route.ts:2" ] && [ "$line_after_host_col_hash" = "2" ] && [ "$line_after_colon_l" = "3" ] && [ "$line_after_href_word_line" = "2" ] && [ "$buf_after_hash_file" = "foo#bar.txt:3" ] && [ "$line_after_md_file_anchor" = "3" ] && [ "$line_after_md_anchor" = "1" ] && [ "$line_after_osc8_rule" = "2" ] && [ "$line_after_root_ref" = "3" ] && [ "$line_after_root_wildcard" = "1" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$sfx_osc8_pr_url" = "https://gitlab.com/org/project/-/merge_requests/42" ] && [ "$line_after_split_osc8" = "3" ] && [ "$line_after_split_sgr" = "1" ] && [ "$line_after_split_sep" = "2" ] && [ "$line_after_split_wrap" = "3" ]; then
+                    if [ "$active_after_link" = "$ed_pane" ] && [ "$git_fast_ok" = "1" ] && [ "$line_after_href" = "2" ] && [ "$line_after_word" = "3" ] && [ "$line_after_md" = "1" ] && [ "$line_after_wrap" = "3" ] && [ "$line_after_base" = "2" ] && [ "$line_after_collapsed" = "3" ] && [ "$line_after_tool" = "1" ] && [ "$buf_after_paren_file" = "route.ts:2" ] && [ "$buf_after_jump_back" = "nested.txt:1" ] && [ "$buf_after_jump_fwd" = "route.ts:2" ] && [ "$line_after_host_col_hash" = "2" ] && [ "$line_after_colon_l" = "3" ] && [ "$line_after_href_word_line" = "2" ] && [ "$buf_after_hash_file" = "foo#bar.txt:3" ] && [ "$line_after_md_file_anchor" = "3" ] && [ "$line_after_md_anchor" = "1" ] && [ "$line_after_osc8_rule" = "2" ] && [ "$line_after_root_ref" = "3" ] && [ "$line_after_root_wildcard" = "1" ] && [ "$wrap_url_line1" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$wrap_url_line2" = "https://github.com/lock14/home-settings/pull/118" ] && [ "$sfx_osc8_pr_url" = "https://gitlab.com/org/project/-/merge_requests/42" ] && [ "$line_after_split_osc8" = "3" ] && [ "$line_after_split_sgr" = "1" ] && [ "$line_after_split_sep" = "2" ] && [ "$line_after_split_wrap" = "3" ]; then
                         echo "PASS:bin/ide --open-link handles file://#L<line>, file://host/path#L<line>:<col>-L<end>:<col>, filepath:L<line>, file:// href + word:line-end, filenames with '#', Markdown #anchor and file.md#anchor heading jumps, ide_resolve_link http(s)://->file:// & //pkg/... rewrites, compiler paths (filepath:line:col:), markdown [label](file:///...#L1-L3), single-step jumplist Back/Forward (<C-o>/<C-i>, Mouse4/Mouse5), line-wrapped URLs across unfocused panes, 1st-character and suffix split OSC 8 links (recover_split_osc8_href including mid-token SGR, word-separator prefixes, <branch>@<N> PR links, and wrapped continuations), file URLs with parentheses, Read(...) tool headers, collapsed empty-href args (with matching CWD subdir), and workspace basenames (unparking Editor if hidden)"
                     else
                         echo "FAIL:bin/ide --open-link focus/line:Expected active=$ed_pane, paren=route.ts:2, jump_back=nested.txt:1, jump_fwd=route.ts:2, hash=foo#bar.txt:3, md_anchor=3/1, osc8_rule=2/3/1, wrapped URLs=https://github.com/lock14/home-settings/pull/118, sfx_pr=https://gitlab.com/org/project/-/merge_requests/42, split_osc8=3/1/2/3, and lines 2/3/1/3/2/3/1/2/3/2, got active=$active_after_link href=$line_after_href word=$line_after_word md=$line_after_md wrap=$line_after_wrap base=$line_after_base collapsed=$line_after_collapsed tool=$line_after_tool paren=$buf_after_paren_file back=$buf_after_jump_back fwd=$buf_after_jump_fwd host_col=$line_after_host_col_hash colon_l=$line_after_colon_l href_word=$line_after_href_word_line hash=$buf_after_hash_file md_anchor=$line_after_md_file_anchor/$line_after_md_anchor osc8_rule=$line_after_osc8_rule/$line_after_root_ref/$line_after_root_wildcard wrap1=$wrap_url_line1 wrap2=$wrap_url_line2 sfx_pr=$sfx_osc8_pr_url split_osc8=$line_after_split_osc8/$line_after_split_sgr/$line_after_split_sep/$line_after_split_wrap"
@@ -1586,8 +1622,8 @@ LUA
             IDE_WS_MOUSE="$MOUSE_HOME/ws_mouse"
             MOUSE_CLICK_LOG="$MOUSE_HOME/mouse_click.log"
             mkdir -p "$IDE_WS_MOUSE" "$MOUSE_HOME/.local/bin"
-            printf '#!/usr/bin/env bash\nif [ "${1:-}" = "--open-link" ]; then printf "argc=%%s 2=<%%s> 3=<%%s> 4=<%%s> 5=<%%s>\\n" "$#" "${2:-}" "${3:-}" "${4:-}" "${5:-}" >> %q; fi\nexec %q "$@"\n' \
-                "$MOUSE_CLICK_LOG" "$SCRIPT_DIR/bin/ide" > "$MOUSE_HOME/.local/bin/ide"
+            printf '#!/usr/bin/env bash\n"%s" "$@"\nrc=$?\nif [ "${1:-}" = "--open-link" ]; then printf "argc=%%s 2=<%%s> 3=<%%s> 4=<%%s> 5=<%%s>\\n" "$#" "${2:-}" "${3:-}" "${4:-}" "${5:-}" >> %q; fi\nexit "$rc"\n' \
+                "$SCRIPT_DIR/bin/ide" "$MOUSE_CLICK_LOG" > "$MOUSE_HOME/.local/bin/ide"
             chmod +x "$MOUSE_HOME/.local/bin/ide"
             : > "$MOUSE_CLICK_LOG"
             mouse_out="$(

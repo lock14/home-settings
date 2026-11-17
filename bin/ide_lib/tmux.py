@@ -513,6 +513,8 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
                 run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", msg)
             elif os.environ.get("TMUX_PANE"):
                 run_tmux("display-message", "-d", "4000", "-t", os.environ["TMUX_PANE"], msg)
+    if not ssh_active:
+        discover_display_env(sess or target_arg)
     ide_browser = (os.environ.get("IDE_BROWSER") or "").strip()
     if ide_browser:
         parts = [ide_browser] if (os.path.isfile(ide_browser) and os.access(ide_browser, os.X_OK)) else shlex.split(ide_browser)

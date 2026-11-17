@@ -505,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
     if action in ("copy", "paste"):
         set_allow_tmux_env_fallback(True)
 
-    if action in ("copy", "paste", "open-link"):
+    if action in ("copy", "paste"):
         discover_display_env(target_arg)
     elif action == "launch":
         discover_display_env(target_arg, ignore_tmux_env=not bool(os.environ.get("TMUX")))
