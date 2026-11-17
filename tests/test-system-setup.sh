@@ -1085,4 +1085,33 @@ lib_unit_ok="$(
 )"
 assert_eq "OK" "$lib_unit_ok" "Shared lib/ helpers handle collision-free backups, transient retries, chained symlink resolution, and deduplicated PATH prepending"
 
+# Verify setup.sh Stage 50 (modules/50-nvim.sh) --dry-run, --skip-nvim, and missing/old nvim guards
+TEMP_NVIM_STAGE_HOME="$(make_sandbox_dir)"
+nvim_dry_default="$(HOME="$TEMP_NVIM_STAGE_HOME" XDG_CONFIG_HOME="$TEMP_NVIM_STAGE_HOME/.config" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/.local/share" "$SCRIPT_DIR/setup.sh" --dotfiles-only --dry-run 2>&1)"
+nvim_dry_skipped="$(HOME="$TEMP_NVIM_STAGE_HOME" XDG_CONFIG_HOME="$TEMP_NVIM_STAGE_HOME/.config" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/.local/share" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-nvim --dry-run 2>&1)"
+NVIM_MISSING_BIN="$TEMP_NVIM_STAGE_HOME/missing-nvim-bin"
+NVIM_OLD_MOCK_BIN="$TEMP_NVIM_STAGE_HOME/old-nvim-bin"
+mkdir -p "$NVIM_MISSING_BIN" "$NVIM_OLD_MOCK_BIN"
+for util in bash sh dirname basename mkdir rm ln cp mv cat grep tr wc readlink date; do
+    if command -v "$util" >/dev/null 2>&1; then
+        ln -sf "$(command -v "$util")" "$NVIM_MISSING_BIN/$util"
+        ln -sf "$(command -v "$util")" "$NVIM_OLD_MOCK_BIN/$util"
+    fi
+done
+if command -v git >/dev/null 2>&1; then
+    ln -sf "$(command -v git)" "$NVIM_OLD_MOCK_BIN/git"
+fi
+write_mock_bin "$NVIM_OLD_MOCK_BIN" "nvim" "exit 1"
+nvim_missing_out="$(PATH="$NVIM_MISSING_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1)"
+nvim_old_out="$(PATH="$NVIM_OLD_MOCK_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1)"
+if [[ "$nvim_dry_default" == *"[DryRun] Syncing Neovim plugins from lazy-lock.json"* ]] && \
+   [[ "$nvim_dry_skipped" != *"Syncing Neovim plugins from lazy-lock.json"* ]] && \
+   [ ! -e "$TEMP_NVIM_STAGE_HOME/.local" ] && \
+   [[ "$nvim_missing_out" == *"Notice: nvim or git not found on PATH; skipping headless plugin sync."* ]] && \
+   [[ "$nvim_old_out" == *"Notice: Neovim < 0.10 detected; skipping headless plugin sync."* ]]; then
+    pass "modules/50-nvim.sh honors --dry-run and --skip-nvim without mutating HOME and skips cleanly when git/nvim is missing or Neovim < 0.10"
+else
+    fail "modules/50-nvim.sh dry-run & guards" "default='$nvim_dry_default' skipped='$nvim_dry_skipped' missing='$nvim_missing_out' old='$nvim_old_out'"
+fi
+
 test_summary

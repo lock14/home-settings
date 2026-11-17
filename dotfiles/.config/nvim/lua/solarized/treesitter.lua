@@ -112,6 +112,7 @@ function M.plugin_spec(ctx)
     local config_dir = ctx and ctx.config_dir or nil
     return {
         "nvim-treesitter/nvim-treesitter",
+        branch = "main",
         build = ":TSUpdate",
         lazy = false,
         priority = 900,
@@ -123,12 +124,13 @@ function M.plugin_spec(ctx)
                 callback = pin_parsers,
             })
 
-            -- Legacy nvim-treesitter.configs compatibility
+            -- Legacy nvim-treesitter.configs compatibility (when opened before lazy-lock.json syncs to main):
+            -- enable highlight and indent only without triggering legacy `tree-sitter generate --no-bindings` installs.
             local ts_configs_ok, ts_configs = pcall(require, "nvim-treesitter.configs")
             if ts_configs_ok then
                 ts_configs.setup({
-                    ensure_installed = M.parsers,
-                    auto_install = true,
+                    ensure_installed = {},
+                    auto_install = false,
                     highlight = {
                         enable = true,
                         additional_vim_regex_highlighting = false,

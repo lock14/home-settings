@@ -3734,6 +3734,196 @@ EOF
         else
             fail "Neovim init.lua lazy.nvim clone failure check" "Expected OK=false with Failed to clone lazy.nvim error, got '$NVIM_CLONE_FAIL_OUT'"
         fi
+
+        # Verify treesitter.lua pins branch="main", disables legacy ts_configs auto_install,
+        # plugins.lua heals Git reftable/.invalid/origin-HEAD repos, scopes GIT_DEFAULT_REF_FORMAT=files
+        # to lazy git spawns, honors NVIM_LAZY_LOCKFILE & refreshes stale state lockfiles, and
+        # modules/50-nvim.sh fast-paths synced lazy-lock.json state with zero git calls.
+        NVIM_HARDEN_TMP="$(make_sandbox_dir)"
+        mkdir -p "$NVIM_HARDEN_TMP/data/nvim/lazy" "$NVIM_HARDEN_TMP/cfg/nvim" "$NVIM_HARDEN_TMP/state/nvim"
+        cp -f "$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json" "$NVIM_HARDEN_TMP/cfg/nvim/lazy-lock.json"
+        printf '{"stale":true}\n' > "$NVIM_HARDEN_TMP/state/nvim/lazy-lock.json"
+
+        REFTABLE_SUPPORTED="false"
+        if git init -q --ref-format=reftable "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable" 2>/dev/null; then
+            REFTABLE_SUPPORTED="true"
+            git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable" config user.email "test@example.com"
+            git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable" config user.name "Test"
+            printf 'init\n' > "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable/README.md"
+            git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable" add README.md
+            git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable" -c commit.gpgsign=false commit -q --no-gpg-sign -m "init"
+        else
+            rm -rf "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable"
+            git init -q "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable"
+        fi
+        printf '[remote "origin"]\n\turl = https://example.com/mock.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tfetch = +refs/heads/.invalid:refs/remotes/origin/.invalid\n' >> "$NVIM_HARDEN_TMP/data/nvim/lazy/mock-reftable/.git/config"
+
+        GIT_DEFAULT_REF_FORMAT=files git init -q "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter"
+        git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter" config user.email "test@example.com"
+        git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter" config user.name "Test"
+        printf 'ts\n' > "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter/README.md"
+        git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter" add README.md
+        git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter" -c commit.gpgsign=false commit -q --no-gpg-sign -m "ts"
+        ts_sha="$(git -C "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter" rev-parse HEAD)"
+        mkdir -p "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter/.git/refs/remotes/origin"
+        printf '%s\n' "$ts_sha" > "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter/.git/refs/remotes/origin/main"
+        printf '%s\n' "$ts_sha" > "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter/.git/refs/remotes/origin/master"
+        printf 'ref: refs/remotes/origin/master\n' > "$NVIM_HARDEN_TMP/data/nvim/lazy/nvim-treesitter/.git/refs/remotes/origin/HEAD"
+
+        cat << 'EOF' > "$NVIM_HARDEN_TMP/harden_probe.lua"
+local uv = vim.uv or vim.loop
+local repo = vim.env.HS_REPO_ROOT
+local tmp = vim.env.NVIM_HARDEN_TMP
+vim.opt.rtp:prepend(repo .. "/dotfiles/.config/nvim")
+
+-- 1. treesitter.lua branch="main" and legacy ts_configs auto_install=false
+local ts = require("solarized.treesitter")
+local spec = ts.plugin_spec({ config_dir = repo .. "/dotfiles/.config/nvim" })
+local captured_legacy = nil
+package.preload["nvim-treesitter.configs"] = function()
+    return {
+        setup = function(opts)
+            captured_legacy = opts
+        end,
+    }
+end
+package.preload["nvim-treesitter"] = function()
+    return {}
+end
+spec.config()
+local ts_ok = (spec.branch == "main")
+    and (type(captured_legacy) == "table")
+    and (captured_legacy.auto_install == false)
+    and (type(captured_legacy.ensure_installed) == "table" and #captured_legacy.ensure_installed == 0)
+
+-- 2. plugins.lua heal_lazy_git_repos + wrap_lazy_git_spawn + lockfile resolution
+vim.fn.stdpath = function(what)
+    if what == "data" then return tmp .. "/data/nvim" end
+    if what == "config" then return tmp .. "/cfg/nvim" end
+    if what == "state" then return tmp .. "/state/nvim" end
+    return tmp
+end
+local plugins = require("solarized.plugins")
+plugins.heal_lazy_git_repos()
+
+local rt_gone = (uv.fs_stat(tmp .. "/data/nvim/lazy/mock-reftable/.git/reftable") == nil)
+local cfg_lines = table.concat(vim.fn.readfile(tmp .. "/data/nvim/lazy/mock-reftable/.git/config"), "\n")
+local invalid_gone = (cfg_lines:find(".invalid", 1, true) == nil)
+local origin_head = table.concat(vim.fn.readfile(tmp .. "/data/nvim/lazy/nvim-treesitter/.git/refs/remotes/origin/HEAD"), "\n")
+local head_healed = (origin_head:find("refs/remotes/origin/main", 1, true) ~= nil)
+local env_clean = (vim.env.GIT_DEFAULT_REF_FORMAT == nil)
+
+local git_seen_env, sh_seen_env = nil, nil
+package.loaded["lazy.manage.process"] = {
+    spawn = function(cmd, opts)
+        local bin = type(cmd) == "table" and cmd[1] or cmd
+        if bin == "git" then
+            git_seen_env = opts and opts.env and opts.env.GIT_DEFAULT_REF_FORMAT or "missing"
+        else
+            sh_seen_env = opts and opts.env and opts.env.GIT_DEFAULT_REF_FORMAT or "unset"
+        end
+    end,
+}
+plugins.wrap_lazy_git_spawn()
+package.loaded["lazy.manage.process"].spawn({ "git", "clone", "x" }, {})
+package.loaded["lazy.manage.process"].spawn({ "sh", "-c", "true" }, {})
+local spawn_ok = (git_seen_env == "files" and sh_seen_env == "unset" and vim.env.GIT_DEFAULT_REF_FORMAT == nil)
+
+local captured_lazy_opts = nil
+vim.fn.mkdir(tmp .. "/data/nvim/lazy/lazy.nvim", "p")
+package.loaded["lazy"] = {
+    setup = function(_, opts)
+        captured_lazy_opts = opts
+    end,
+}
+_G.apply_home_settings_theme = function() end
+local theme_stub = {
+    solarized_plugin_spec = function()
+        return { "maxmx03/solarized.nvim" }
+    end,
+}
+vim.env.XDG_DATA_HOME = tmp .. "/data"
+plugins.setup({ config_dir = tmp .. "/cfg/nvim", repo_root = repo }, theme_stub)
+local acmd_git_env = nil
+package.loaded["lazy.manage.process"] = {
+    spawn = function(_, opts)
+        acmd_git_env = opts and opts.env and opts.env.GIT_DEFAULT_REF_FORMAT or "missing"
+    end,
+}
+vim.api.nvim_exec_autocmds("User", { pattern = "LazyInstallPre", modeline = false })
+package.loaded["lazy.manage.process"].spawn({ "git", "clone", "y" }, {})
+spawn_ok = spawn_ok and (acmd_git_env == "files")
+local state_lock = tmp .. "/state/nvim/lazy-lock.json"
+local seeded_lines = table.concat(vim.fn.readfile(state_lock), "\n")
+local refresh_ok = (captured_lazy_opts and captured_lazy_opts.lockfile == state_lock)
+    and (seeded_lines:find("nvim-treesitter", 1, true) ~= nil)
+    and (seeded_lines:find('"stale"', 1, true) == nil)
+
+package.loaded["lazy.core.config"] = nil
+vim.env.NVIM_LAZY_LOCKFILE = tmp .. "/custom-ephemeral-lock.json"
+plugins.setup({ config_dir = tmp .. "/cfg/nvim", repo_root = repo }, theme_stub)
+local override_ok = (captured_lazy_opts and captured_lazy_opts.lockfile == tmp .. "/custom-ephemeral-lock.json")
+
+io.write(table.concat({
+    "TS=" .. tostring(ts_ok),
+    "HEAL=" .. tostring(rt_gone and invalid_gone and head_healed and env_clean),
+    "SPAWN=" .. tostring(spawn_ok),
+    "REFRESH=" .. tostring(refresh_ok),
+    "OVERRIDE=" .. tostring(override_ok),
+}, "|"))
+EOF
+        NVIM_HARDEN_OUT="$(
+            unset GIT_DEFAULT_REF_FORMAT NVIM_TS_SKIP_AUTO_INSTALL NVIM_LAZY_LOCKFILE
+            export HS_REPO_ROOT="$SCRIPT_DIR" NVIM_HARDEN_TMP
+            run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_HARDEN_TMP/harden_probe.lua" 2>&1 || true
+        )"
+        if [ "$NVIM_HARDEN_OUT" = "TS=true|HEAL=true|SPAWN=true|REFRESH=true|OVERRIDE=true" ]; then
+            pass "Neovim treesitter.lua pins branch='main' with inert legacy ts_configs fallback, and plugins.lua heals reftable/.invalid/origin-HEAD repos (reftable=$REFTABLE_SUPPORTED), scopes GIT_DEFAULT_REF_FORMAT=files to lazy git spawns, and honors NVIM_LAZY_LOCKFILE"
+        else
+            fail "Neovim treesitter/plugins hardening" "Expected all true, got '$NVIM_HARDEN_OUT' (reftable=$REFTABLE_SUPPORTED)"
+        fi
+
+        # Verify modules/50-nvim.sh fast-paths synced lazy-lock.json state with zero git subprocess calls
+        # and triggers reconciliation when stale tree-sitter-* temp dirs or unmanaged plugin dirs exist
+        FAST_SYNC_HOME="$NVIM_HARDEN_TMP/fast-sync-home"
+        mkdir -p "$FAST_SYNC_HOME/.local/share/nvim/lazy" "$FAST_SYNC_HOME/no-git-call-bin"
+        cat << 'EOF' > "$NVIM_HARDEN_TMP/seed_fast_sync.lua"
+local lock_raw = table.concat(vim.fn.readfile(vim.env.HS_LOCKFILE), "\n")
+local lock = vim.json.decode(lock_raw)
+local base = vim.env.FAST_LAZY_DIR
+for name, spec in pairs(lock) do
+    local gdir = base .. "/" .. name .. "/.git"
+    vim.fn.mkdir(gdir, "p")
+    vim.fn.writefile({ spec.commit }, gdir .. "/HEAD")
+    vim.fn.writefile({ "[core]", "\trepositoryformatversion = 0" }, gdir .. "/config")
+end
+EOF
+        HS_LOCKFILE="$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json" \
+        FAST_LAZY_DIR="$FAST_SYNC_HOME/.local/share/nvim/lazy" \
+            run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_HARDEN_TMP/seed_fast_sync.lua" >/dev/null 2>&1
+        write_mock_bin "$FAST_SYNC_HOME/no-git-call-bin" "git" 'echo "unexpected git call: $*" >&2; exit 99'
+        FAST_SYNC_OUT="$(
+            PATH="$FAST_SYNC_HOME/no-git-call-bin:$PATH" \
+            HOME="$FAST_SYNC_HOME" \
+            XDG_DATA_HOME="$FAST_SYNC_HOME/.local/share" \
+            DRY_RUN=false \
+                /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1 || true
+        )"
+        mkdir -p "$FAST_SYNC_HOME/.local/share/nvim/tree-sitter-swift"
+        STALE_TS_RC=0
+        PATH="$FAST_SYNC_HOME/no-git-call-bin:$PATH" \
+        HOME="$FAST_SYNC_HOME" \
+        XDG_DATA_HOME="$FAST_SYNC_HOME/.local/share" \
+        DRY_RUN=false \
+            /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" >/dev/null 2>&1 || STALE_TS_RC=$?
+        if [[ "$FAST_SYNC_OUT" == *"Neovim plugins already match lazy-lock.json."* ]] && \
+           [ "$STALE_TS_RC" -ne 0 ] && \
+           [ ! -d "$FAST_SYNC_HOME/.local/share/nvim/tree-sitter-swift" ] && \
+           git -C "$SCRIPT_DIR" diff --quiet -- dotfiles/.config/nvim/lazy-lock.json; then
+            pass "modules/50-nvim.sh fast-paths synced lazy-lock.json state with zero git calls, detects and removes leftover tree-sitter-* directories, and keeps tracked lazy-lock.json read-only"
+        else
+            fail "modules/50-nvim.sh fast-path & stale temp cleanup" "fast_out='$FAST_SYNC_OUT' stale_rc='$STALE_TS_RC'"
+        fi
     fi
 else
     fail "Neovim init.lua missing" "Expected dotfiles/.config/nvim/init.lua"

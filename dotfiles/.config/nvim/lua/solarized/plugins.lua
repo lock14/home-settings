@@ -1,14 +1,132 @@
--- Lazy.nvim bootstrapper, isolated lockfile seeding, and plugin ecosystem assembly.
+-- Lazy.nvim bootstrapper, files-refstorage guard, isolated lockfile seeding, and plugin ecosystem assembly.
 
 local treesitter = require("solarized.treesitter")
 local lsp = require("solarized.lsp")
 
 local M = {}
 
+local function read_small_file(uv, path)
+    if not (uv and uv.fs_open) then
+        return nil
+    end
+    local fd = uv.fs_open(path, "r", 438)
+    if not fd then
+        return nil
+    end
+    local st = uv.fs_fstat(fd)
+    local data = (st and st.size and st.size > 0 and st.size <= 65536) and uv.fs_read(fd, st.size, 0) or nil
+    uv.fs_close(fd)
+    return data
+end
+
+-- Execute a git command with GIT_DEFAULT_REF_FORMAT=files scoped strictly to the child call so
+-- lazy.nvim (which reads raw .git/HEAD and .git/refs/* files) never encounters reftable stubs,
+-- without leaking GIT_DEFAULT_REF_FORMAT into Neovim terminals or child shells.
+local function run_git_files_ref(cmd)
+    local had_env = vim.env.GIT_DEFAULT_REF_FORMAT ~= nil
+    local prev_env = vim.env.GIT_DEFAULT_REF_FORMAT
+    vim.env.GIT_DEFAULT_REF_FORMAT = "files"
+    local ok, out = pcall(vim.fn.system, cmd)
+    local err_code = vim.v.shell_error
+    if had_env then
+        vim.env.GIT_DEFAULT_REF_FORMAT = prev_env
+    else
+        vim.env.GIT_DEFAULT_REF_FORMAT = nil
+    end
+    if not ok then
+        error(out)
+    end
+    return out, err_code
+end
+
+-- Zero-fork startup scan over stdpath("data")/lazy: only spawns git when a plugin checkout uses
+-- Git reftable storage, contains poisoned `.invalid` fetch refspecs, or has nvim-treesitter's
+-- origin/HEAD still pointing at legacy master.
+local function heal_lazy_git_repos()
+    local uv = vim.uv or vim.loop
+    if not (uv and uv.fs_scandir) then
+        return
+    end
+    local lazy_root = vim.fn.stdpath("data") .. "/lazy"
+    local scan = uv.fs_scandir(lazy_root)
+    if not scan then
+        return
+    end
+    while true do
+        local name, ftype = uv.fs_scandir_next(scan)
+        if not name then
+            break
+        end
+        local dir = lazy_root .. "/" .. name
+        local is_dir = (ftype == "directory")
+        if not is_dir and (ftype == nil or ftype == "link") then
+            local st = uv.fs_stat(dir)
+            is_dir = (st ~= nil and st.type == "directory")
+        end
+        if is_dir then
+            local git_dir = dir .. "/.git"
+            local git_st = uv.fs_stat(git_dir)
+            if git_st and git_st.type == "directory" then
+                local rt_st = uv.fs_stat(git_dir .. "/reftable")
+                if rt_st and rt_st.type == "directory" then
+                    pcall(run_git_files_ref, { "git", "-C", dir, "refs", "migrate", "--ref-format=files" })
+                end
+                local cfg = read_small_file(uv, git_dir .. "/config")
+                if cfg and cfg:find(".invalid", 1, true) then
+                    pcall(run_git_files_ref, {
+                        "git",
+                        "-C",
+                        dir,
+                        "config",
+                        "--unset-all",
+                        "remote.origin.fetch",
+                        "\\.invalid",
+                    })
+                end
+                if name == "nvim-treesitter" then
+                    local origin_head = read_small_file(uv, git_dir .. "/refs/remotes/origin/HEAD")
+                    if origin_head and origin_head:find("refs/remotes/origin/master", 1, true) then
+                        local has_main = uv.fs_stat(git_dir .. "/refs/remotes/origin/main") ~= nil
+                        if not has_main then
+                            local packed = read_small_file(uv, git_dir .. "/packed-refs") or ""
+                            has_main = packed:find("refs/remotes/origin/main", 1, true) ~= nil
+                        end
+                        if has_main then
+                            pcall(run_git_files_ref, { "git", "-C", dir, "remote", "set-head", "origin", "main" })
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function wrap_lazy_git_spawn()
+    local ok_proc, proc = pcall(require, "lazy.manage.process")
+    if not (ok_proc and type(proc) == "table" and type(proc.spawn) == "function") then
+        return
+    end
+    if proc._hs_files_ref_wrapped then
+        return
+    end
+    local orig_spawn = proc.spawn
+    proc.spawn = function(cmd, opts)
+        local bin = type(cmd) == "table" and cmd[1] or cmd
+        if bin == "git" then
+            opts = vim.tbl_extend("force", {}, opts or {})
+            opts.env = vim.tbl_extend("keep", opts.env or {}, {
+                GIT_DEFAULT_REF_FORMAT = "files",
+            })
+        end
+        return orig_spawn(cmd, opts)
+    end
+    proc._hs_files_ref_wrapped = true
+end
+
 local function bootstrap_lazy()
     local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
     if not (vim.uv or vim.loop).fs_stat(lazypath) then
-        local out = vim.fn.system({
+        local out, err_code = run_git_files_ref({
             "git",
             "clone",
             "--filter=blob:none",
@@ -16,7 +134,7 @@ local function bootstrap_lazy()
             "--branch=stable",
             lazypath,
         })
-        if vim.v.shell_error ~= 0 then
+        if err_code ~= 0 then
             error("Failed to clone lazy.nvim:\n" .. tostring(out))
         end
     end
@@ -24,6 +142,10 @@ local function bootstrap_lazy()
 end
 
 local function resolve_lazy_lockfile(repo_root)
+    if vim.env.NVIM_LAZY_LOCKFILE and vim.env.NVIM_LAZY_LOCKFILE ~= "" then
+        return vim.env.NVIM_LAZY_LOCKFILE
+    end
+    local uv = vim.uv or vim.loop
     local default_data_home = (vim.fn.expand("$HOME") .. "/.local/share"):gsub("/+$", "")
     local current_data_home = (vim.env.XDG_DATA_HOME and vim.env.XDG_DATA_HOME ~= "")
         and vim.env.XDG_DATA_HOME:gsub("/+$", "")
@@ -33,19 +155,21 @@ local function resolve_lazy_lockfile(repo_root)
     local lazy_lockfile = cfg_lockfile
     if
         current_data_home ~= default_data_home
-        or not (vim.uv or vim.loop).fs_stat(vim.fn.stdpath("data") .. "/lazy/solarized.nvim")
+        or not uv.fs_stat(vim.fn.stdpath("data") .. "/lazy/solarized.nvim")
     then
-        local uv = vim.uv or vim.loop
         local state_dir = vim.fn.stdpath("state")
         vim.fn.mkdir(state_dir, "p")
         lazy_lockfile = state_dir .. "/lazy-lock.json"
         local seed_lockfile = (vim.fn.filereadable(cfg_lockfile) == 1 and cfg_lockfile) or repo_lockfile
-        local lock_stat = uv.fs_stat(lazy_lockfile)
-        if vim.fn.filereadable(seed_lockfile) == 1 and not (lock_stat and (lock_stat.size or 0) > 0) then
-            local tmp_lock = string.format("%s.%d.tmp", lazy_lockfile, vim.fn.getpid())
-            if pcall(vim.fn.writefile, vim.fn.readfile(seed_lockfile), tmp_lock) then
-                if not uv.fs_rename(tmp_lock, lazy_lockfile) then
-                    uv.fs_unlink(tmp_lock)
+        if vim.fn.filereadable(seed_lockfile) == 1 then
+            local seed_raw = read_small_file(uv, seed_lockfile)
+            local cur_raw = read_small_file(uv, lazy_lockfile)
+            if seed_raw and seed_raw ~= cur_raw then
+                local tmp_lock = string.format("%s.%d.tmp", lazy_lockfile, vim.fn.getpid())
+                if pcall(vim.fn.writefile, vim.fn.readfile(seed_lockfile), tmp_lock) then
+                    if not uv.fs_rename(tmp_lock, lazy_lockfile) then
+                        uv.fs_unlink(tmp_lock)
+                    end
                 end
             end
         end
@@ -260,7 +384,11 @@ local function render_markdown_plugin_spec()
     }
 end
 
+M.heal_lazy_git_repos = heal_lazy_git_repos
+M.wrap_lazy_git_spawn = wrap_lazy_git_spawn
+
 function M.setup(ctx, theme)
+    heal_lazy_git_repos()
     bootstrap_lazy()
 
     local status_ok, lazy = pcall(require, "lazy")
@@ -274,6 +402,14 @@ function M.setup(ctx, theme)
         _G.apply_home_settings_theme()
         return
     end
+
+    -- Wrap lazy.manage.process.spawn lazily when any Lazy git lifecycle task begins so
+    -- `lazy.core.config` is not prematurely loaded before `lazy.setup()` runs.
+    vim.api.nvim_create_autocmd("User", {
+        group = vim.api.nvim_create_augroup("SolarizedLazyGitRefFormat", { clear = true }),
+        pattern = { "LazyInstallPre", "LazyUpdatePre", "LazySyncPre", "LazyRestorePre", "LazyCheckPre" },
+        callback = wrap_lazy_git_spawn,
+    })
 
     local specs = {
         theme.solarized_plugin_spec(),

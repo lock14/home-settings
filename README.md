@@ -195,6 +195,7 @@ home-settings/
 │   ├── 20-bin.sh                    # User binaries and Debian shims (fd, bat)
 │   ├── 30-fonts.sh                  # MesloLGS Nerd Font Mono (v3) downloader with disk cache
 │   ├── 40-mise.sh                   # Mise runtime manager and polyglot toolchains
+│   ├── 50-nvim.sh                   # Headless Neovim plugin lockfile reconciliation
 │   ├── 60-shell.sh                  # Oh-My-Zsh, plugins, shellrc hooks, completions
 │   ├── 70-terminal.sh               # Terminal emulator profile provisioning (GNOME Terminal and macOS)
 │   └── 99-uninstall.sh              # Clean uninstallation of managed components
@@ -303,7 +304,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
 
 - **LSP, Tree-sitter, and Neovim toolchains**:
   - **Native LSP**: Automatic language server provisioning via `.mise.toml` (for Python, TypeScript, JavaScript, Bash, YAML, JSON, and Lean 4 `leanls`) and `mason.nvim` with `nvim-lspconfig` (for C, C++, Rust, Go, Lua, Terraform, and Java `nvim-jdtls`). Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) isolate Eclipse JDTLS caches per root path hash (`<project>-<sha256>`), skip auto-starting JDTLS in Bazel-only workspaces (`WORKSPACE`, `WORKSPACE.bazel`, or `MODULE.bazel` without Maven or Gradle build files), and bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
-  - **Tree-sitter and Markdown rendering**: Solarized Dark syntax highlighting aligned with `bat`, plus live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks.
+  - **Tree-sitter and Markdown rendering**: Solarized Dark syntax highlighting aligned with `bat`, pinned `nvim-treesitter` `main`-branch plugin synchronization (`lazy-lock.json` via `modules/50-nvim.sh`), and live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks.
   - **Telescope**: Fuzzy finders for files (`Space ff`), live grep (`Space fg`), open buffers (`Space fb`), and Git status (`Space gs`).
   - **Editor aliases**: `vi`, `vim`, and `v` launch `nvim` (with fallback to `vim`); inside an IDE session, `v [+line] [-c <cmd>] <file>` opens the file directly in the main Editor pane while standalone flags such as `v -R` or `v -O` open locally.
 
