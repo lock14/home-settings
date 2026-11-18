@@ -346,6 +346,34 @@ def session_has_focused_client(sess: str) -> bool:
     return False
 
 
+def _notify_session_editor_images(sess: str) -> None:
+    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    nvim_bin = shutil.which("nvim")
+    if not sock or not nvim_bin or not is_socket_path(sock):
+        return
+    cmd = [
+        nvim_bin,
+        "--headless",
+        "--server",
+        sock,
+        "--remote-expr",
+        "luaeval('(_G.refresh_home_settings_images and _G.refresh_home_settings_images()) or 0')",
+    ]
+    timeout_bin = shutil.which("timeout")
+    if timeout_bin:
+        cmd = [timeout_bin, "3", *cmd]
+    try:
+        subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
+        pass
+
+
 def switch_or_attach_session(target_sess: str, origin_sess: str = "") -> int:
     """Switch the active tmux client (or `exec` `attach-session` outside tmux) to `target_sess`."""
     if not target_sess or not session_exists(target_sess):
@@ -356,9 +384,12 @@ def switch_or_attach_session(target_sess: str, origin_sess: str = "") -> int:
         if ide_client:
             res = run_tmux("switch-client", "-c", ide_client, "-t", f"={target_sess}")
             if res.returncode == 0:
+                _notify_session_editor_images(target_sess)
                 return 0
         if os.environ.get("TMUX"):
-            run_tmux("switch-client", "-t", f"={target_sess}")
+            res = run_tmux("switch-client", "-t", f"={target_sess}")
+            if res.returncode == 0:
+                _notify_session_editor_images(target_sess)
             return 0
     if os.environ.get("IDE_NO_ATTACH", "0") == "1" or not (sys.stdin.isatty() and sys.stdout.isatty()):
         return 0

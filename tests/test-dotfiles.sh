@@ -155,6 +155,8 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n MouseDown3Status display-menu' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g pane-focus-in "if-shell -F .*--ack-ai --hook' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g client-session-changed "if-shell -F .*--ack-ai --hook' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g client-attached.*@ide_socket.*refresh_home_settings_images' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g client-detached.*@ide_socket.*refresh_home_settings_images' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g session-created.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g session-closed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g session-renamed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
@@ -336,7 +338,7 @@ if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
    grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'cursor-style = block' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'cursor-style-blink = false' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -q 'shell-integration-features = no-cursor' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fxq 'shell-integration-features = no-cursor,ssh-env' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'clipboard-read = allow' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'clipboard-write = allow' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'macos-option-as-alt = true' "$TEMP_HOME/.config/ghostty/config" && \
@@ -345,9 +347,9 @@ if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
    grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$TEMP_HOME/.config/ghostty/config" && \
    grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$TEMP_HOME/.config/ghostty/config" && \
    grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, steady block cursor (no-cursor shell override), clipboard-read/write = allow, macos-option-as-alt = true, Ctrl+Shift+T, and Alt+Arrow ESC keybinds"
+    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, steady block cursor and SSH env fallback (no-cursor,ssh-env), clipboard-read/write = allow, macos-option-as-alt = true, Ctrl+Shift+T, and Alt+Arrow ESC keybinds"
 else
-    fail "Ghostty config verification" "Ghostty config missing expected theme, font, block cursor / no-cursor, clipboard-read/write, macos-option-as-alt, or Ctrl+Shift+T / Alt+Arrow keybinds"
+    fail "Ghostty config verification" "Ghostty config missing expected theme, font, block cursor / no-cursor,ssh-env, clipboard-read/write, macos-option-as-alt, or Ctrl+Shift+T / Alt+Arrow keybinds"
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then

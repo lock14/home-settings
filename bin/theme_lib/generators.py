@@ -228,7 +228,7 @@ clipboard-read = allow
 clipboard-write = allow
 confirm-close-surface = false
 shell-integration = detect
-shell-integration-features = no-cursor
+shell-integration-features = no-cursor,ssh-env
 mouse-hide-while-typing = true
 macos-option-as-alt = true
 {keybind_lines}

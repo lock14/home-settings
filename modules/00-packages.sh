@@ -27,16 +27,16 @@ IDE_NAME="${IDE_NAME:-none}"
 UBUNTU_CORE_PKGS=(
     git curl wget vim neovim tmux zsh fzf fontconfig dconf-cli
     xclip wl-clipboard shellcheck command-not-found bat fd-find
-    ripgrep zoxide tree libatomic1
+    ripgrep zoxide tree libatomic1 imagemagick
 )
 FEDORA_CORE_PKGS=(
     git curl wget vim neovim tmux zsh fzf fontconfig dconf
     xclip wl-clipboard snapd util-linux-user ShellCheck bat fd-find
-    ripgrep zoxide eza tree libatomic
+    ripgrep zoxide eza tree libatomic ImageMagick
 )
 MACOS_CORE_PKGS=(
     git curl wget vim neovim tmux zsh fzf fontconfig shellcheck
-    bat btop fd ripgrep zoxide eza tree
+    bat btop fd ripgrep zoxide eza tree imagemagick
 )
 
 # 1. Core System Packages & Lightweight Database Clients

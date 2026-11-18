@@ -1506,7 +1506,10 @@ def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
     has_nvim = bool(resolve_nvim_bin())
     home_dir = os.path.expanduser("~")
     editors_refreshed = 0
-    theme_reload_ex = "if exists('*v:lua.apply_home_settings_theme') | silent! call v:lua.apply_home_settings_theme() | endif"
+    theme_reload_ex = (
+        "if exists('*v:lua.apply_home_settings_theme') | silent! call v:lua.apply_home_settings_theme() | endif | "
+        "if exists('*v:lua.refresh_home_settings_images') | silent! call v:lua.refresh_home_settings_images() | endif"
+    )
 
     for item in target_items:
         sess = item["sess"]

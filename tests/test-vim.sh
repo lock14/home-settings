@@ -580,7 +580,7 @@ if [ -f "$NVIM_CONFIG" ] && [ -d "$NVIM_LUA_DIR" ]; then
     NVIM_LUA_FILES=("$NVIM_CONFIG" "$NVIM_LUA_DIR"/*.lua)
     pass "Neovim init.lua and lua/solarized/ module directory exist"
 
-    NVIM_EXPECTED_MODS=(options autocmds links keymaps ide theme_groups theme treesitter lsp plugins)
+    NVIM_EXPECTED_MODS=(options autocmds links keymaps ide images theme_groups theme treesitter lsp plugins)
     NVIM_MOD_MISSING=""
     for _m in "${NVIM_EXPECTED_MODS[@]}"; do
         if [ ! -f "$NVIM_LUA_DIR/${_m}.lua" ]; then
@@ -597,7 +597,7 @@ if [ -f "$NVIM_CONFIG" ] && [ -d "$NVIM_LUA_DIR" ]; then
     if [ -z "$NVIM_MOD_MISSING" ] && [ -z "$NVIM_PLUGIN_COLLISIONS" ] && [ "$INIT_LINE_COUNT" -le 120 ] && \
        grep -q 'debug\.getinfo(1, "S")\.source' "$NVIM_CONFIG" && \
        grep -q 'vim\.opt\.rtp:prepend(config_dir)' "$NVIM_CONFIG"; then
-        pass "Neovim init.lua is a concise orchestrator (${INIT_LINE_COUNT} lines) prepending its own config_dir to rtp and loading 10 non-colliding lua/solarized/*.lua modules"
+        pass "Neovim init.lua is a concise orchestrator (${INIT_LINE_COUNT} lines) prepending its own config_dir to rtp and loading 11 non-colliding lua/solarized/*.lua modules"
     else
         fail "Neovim modular architecture" "missing='${NVIM_MOD_MISSING}' collisions='${NVIM_PLUGIN_COLLISIONS}' init_lines=${INIT_LINE_COUNT}"
     fi
@@ -1027,8 +1027,10 @@ EOF
        grep -q 'yaml\s*=\s*{\s*enabled\s*=\s*false\s*}' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'SolarizedMiniFilesWindow' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'max_number\s*=\s*2' "${NVIM_LUA_FILES[@]}" && \
-       [ -f "$LAZY_LOCK" ] && grep -q '"render-markdown\.nvim"' "$LAZY_LOCK"; then
-        pass "Neovim configures render-markdown.nvim (<leader>m, SolarizedMarkdownReadability, RenderMarkdown* highlights) and left-anchored mini.files (max_number = 2, SolarizedMiniFilesWindow)"
+       grep -q 'folke/snacks\.nvim' "${NVIM_LUA_FILES[@]}" && \
+       [ -f "$LAZY_LOCK" ] && grep -q '"render-markdown\.nvim"' "$LAZY_LOCK" && \
+       grep -q '"snacks\.nvim"' "$LAZY_LOCK"; then
+        pass "Neovim configures render-markdown.nvim (<leader>m, SolarizedMarkdownReadability, RenderMarkdown* highlights), snacks.image, and left-anchored mini.files (max_number = 2, SolarizedMiniFilesWindow)"
     else
         fail "Neovim render-markdown.nvim & mini.files config" "Missing render-markdown.nvim, SolarizedMarkdownReadability, SolarizedMiniFilesWindow, or lazy-lock.json pin"
     fi
@@ -2550,6 +2552,8 @@ return table.concat({
 EOF
         PEER_SOCK="$NVIM_SOCK_DIR/nvim-peer.sock"
         SELF_SOCK="$NVIM_SOCK_DIR/nvim-self.sock"
+        LOCK_SNAP_THEME="$NVIM_CMD_HOME/lazy-lock.before"
+        cp -f "$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json" "$LOCK_SNAP_THEME"
         (cd "$SCRIPT_DIR" && exec env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-peer" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-peer" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-peer.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$PEER_SOCK" </dev/null >/dev/null 2>&1) &
         PEER_PID=$!
         (cd "$SCRIPT_DIR" && exec env -u HOME_SETTINGS_THEME -u HOME_SETTINGS_THEME_FILE NVIM_TS_SKIP_AUTO_INSTALL=1 XDG_DATA_HOME="$ORIG_XDG_DATA_HOME" HOME="$NVIM_CMD_HOME" XDG_CONFIG_HOME="$NVIM_CMD_HOME/.config" XDG_CACHE_HOME="$NVIM_CMD_HOME/.cache-self" XDG_STATE_HOME="$NVIM_CMD_HOME/.state-self" NVIM_LOG_FILE="$NVIM_CMD_HOME/nvim-self.log" THEME_NVIM_SOCKET_DIR="$NVIM_SOCK_DIR" THEME_UPDATE_TERMINAL_PROFILE=0 TMUX="" TMUX_TMPDIR="" NVIM_IDE_SOCKET="" nvim --headless -i NONE -u "$NVIM_CMD_HOME/.config/nvim/init.lua" --listen "$SELF_SOCK" </dev/null >/dev/null 2>&1) &
@@ -2559,7 +2563,7 @@ EOF
             PEER_CMD_OUT="$(timeout 10 nvim --headless --server "$PEER_SOCK" --remote-expr "get(g:, 'home_settings_theme', '') . ':' . toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) . ':' . get(g:, 'terminal_color_4', '')" </dev/null 2>/dev/null || true)"
             if [ "$SELF_CMD_OUT" = "COMP=true|BAD=true|SELF=true|LOCK=true" ] && \
                [ "$PEER_CMD_OUT" = "nord:#2E3440:#81A1C1" ] && \
-               git -C "$SCRIPT_DIR" diff --quiet -- dotfiles/.config/nvim/lazy-lock.json; then
+               cmp -s "$LOCK_SNAP_THEME" "$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json"; then
                 pass "Neovim :Theme completes custom .theme/.conf user themes, parses single-quoted/commented palettes, reports errors without mutating state, live-reloads peer Neovim servers, and isolates lazy-lock.json"
             else
                 fail "Neovim :Theme & lazy-lock.json isolation" "self='$SELF_CMD_OUT' peer='$PEER_CMD_OUT'"
@@ -3933,6 +3937,8 @@ for name, spec in pairs(lock) do
     vim.fn.writefile({ "[core]", "\trepositoryformatversion = 0", '[remote "origin"]', "\turl = https://mirror.invalid/plugin.git" }, gdir .. "/config")
 end
 EOF
+        LOCK_SNAP_FAST="$NVIM_HARDEN_TMP/lazy-lock.before"
+        cp -f "$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json" "$LOCK_SNAP_FAST"
         HS_LOCKFILE="$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json" \
         FAST_LAZY_DIR="$FAST_SYNC_HOME/.local/share/nvim/lazy" \
             run_nvim_headless -i NONE -u NONE -c "luafile $NVIM_HARDEN_TMP/seed_fast_sync.lua" >/dev/null 2>&1
@@ -3954,10 +3960,901 @@ EOF
         if [[ "$FAST_SYNC_OUT" == *"Neovim plugins already match lazy-lock.json."* ]] && \
            [ "$STALE_TS_RC" -ne 0 ] && \
            [ ! -d "$FAST_SYNC_HOME/.local/share/nvim/tree-sitter-swift" ] && \
-           git -C "$SCRIPT_DIR" diff --quiet -- dotfiles/.config/nvim/lazy-lock.json; then
+           cmp -s "$LOCK_SNAP_FAST" "$SCRIPT_DIR/dotfiles/.config/nvim/lazy-lock.json"; then
             pass "modules/50-nvim.sh fast-paths synced lazy-lock.json state with zero git calls, detects and removes leftover tree-sitter-* directories, and keeps tracked lazy-lock.json read-only"
         else
             fail "modules/50-nvim.sh fast-path & stale temp cleanup" "fast_out='$FAST_SYNC_OUT' stale_rc='$STALE_TS_RC'"
+        fi
+
+        # Verify snacks.image isolation (SNACKS_TMUX=false, non-image modules disabled, binary-safe :edit *.png),
+        # Markdown (image) AST link navigation, standalone PTY wire probing (Ghostty, VTE, WezTerm), win_width - textoff
+        # gutter clamping, mini.files image preview, and =session-scoped tmux client_termtype / SSH dynamic switching
+        IMG_UNIT_TMP="$(make_sandbox_dir)"
+        mkdir -p "$IMG_UNIT_TMP/poison-bin" "$IMG_UNIT_TMP/ws/sub"
+        POISON_TMUX_HIT="$IMG_UNIT_TMP/tmux_called"
+        write_mock_bin "$IMG_UNIT_TMP/poison-bin" "tmux" "echo called > '$POISON_TMUX_HIT'; exit 99"
+        python3 - "$IMG_UNIT_TMP/ws" <<'PY'
+from __future__ import annotations
+
+import os
+import struct
+import sys
+import zlib
+
+sys.dont_write_bytecode = True
+ws = sys.argv[1]
+
+
+def make_png(w: int, h: int) -> bytes:
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + tag
+            + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        )
+
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
+    raw = b"".join(b"\x00" + b"\x26\x8b\xd2" * w for _ in range(h))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+
+
+for rel in ("chart-a.png", "sub/chart-b.png", "sub/my chart.png"):
+    full = os.path.join(ws, rel)
+    with open(full, "wb") as fh:
+        fh.write(make_png(320, 160))
+
+for code in range(97, 123):
+    ch = chr(code)
+    with open(os.path.join(ws, f"{ch}.png"), "wb") as fh:
+        fh.write(make_png(24, 24))
+    with open(os.path.join(ws, "sub", f"{ch}.png"), "wb") as fh:
+        fh.write(make_png(48, 48))
+
+with open(os.path.join(ws, "sub/target.md"), "w", encoding="utf-8") as fh:
+    fh.write("# Target Doc\nline 2\n")
+
+with open(os.path.join(ws, "report.md"), "w", encoding="utf-8") as fh:
+    fh.write(
+        "\n".join(
+            [
+                "# Growth Summary",
+                "",
+                "![Chart A](chart-a.png)",
+                "- ![Bullet Chart](sub/chart-b.png)",
+                '1. ![Spaced Chart](<sub/my chart.png> "Chart Title")',
+                "- [x] ![Task Chart](chart-a.png)",
+                "[![Badge](chart-a.png)](sub/target.md)",
+                "![[sub/chart-b.png|300]]",
+                "![Ref Chart][chart-ref]",
+                "",
+                "[chart-ref]: sub/chart-b.png",
+            ]
+        )
+        + "\n"
+    )
+PY
+        cat <<'EOF' > "$IMG_UNIT_TMP/test_images_headless.lua"
+local imgs = require("solarized.images")
+local snacks = require("snacks")
+local ws = vim.env.IMG_WS
+
+-- 1. Headless / unset-TMUX isolation even when TERM=tmux-256color
+local snacks_tmux_off = (vim.env.SNACKS_TMUX == "false")
+local st = imgs.state()
+local headless_ok = snacks_tmux_off and (st.mode == "headless") and (st.supported == false) and (st.placeholders == false)
+
+-- 2. Only snacks.image enabled; all other snacks modules disabled and gh:// BufReadCmd cleared
+local img_cfg = snacks.config.image or {}
+local cfg_ok = (img_cfg.enabled == true)
+    and (img_cfg.doc and img_cfg.doc.inline == true and img_cfg.doc.float == false)
+    and (img_cfg.math and img_cfg.math.enabled == false)
+for _, mod_name in ipairs({
+    "animate", "bigfile", "dashboard", "dim", "explorer", "gh", "gitbrowse",
+    "indent", "input", "layout", "lazygit", "notifier", "picker", "profiler",
+    "quickfile", "scope", "scratch", "scroll", "statuscolumn", "terminal",
+    "toggle", "words", "zen",
+}) do
+    if not (snacks.config[mod_name] and snacks.config[mod_name].enabled == false) then
+        cfg_ok = false
+    end
+end
+local gh_acmds = vim.api.nvim_get_autocmds({ group = "snacks", event = "BufReadCmd", pattern = "gh://*" })
+if #gh_acmds ~= 0 then
+    cfg_ok = false
+end
+
+-- 3. Pure wire-probe, XTGETTCAP TN fallback, deterministic doc-relative resolve, and tmux-output evaluators
+local ev_ghostty_u1 = imgs.evaluate_wire_probe({ has_graphics = true, feature_u1 = true, xtversion = "Ghostty 1.2.0" })
+local ev_kitty_xt = imgs.evaluate_wire_probe({ has_graphics = true, feature_u1 = nil, xtversion = "kitty(0.39.0)" })
+local ev_tn_fallback = imgs.evaluate_wire_probe({ has_graphics = true, feature_u1 = nil, xtversion = "", xtcap_tn = "xterm-ghostty" })
+local ev_future_u1 = imgs.evaluate_wire_probe({ has_graphics = true, feature_u1 = true, xtversion = "NewTerm 1.0" })
+local ev_wez_no_u1 = imgs.evaluate_wire_probe({ has_graphics = true, feature_u1 = nil, xtversion = "WezTerm 20240203" })
+local ev_explicit_no_u1 = imgs.evaluate_wire_probe({ has_graphics = true, feature_u1 = false, xtversion = "Ghostty 1.2.0" })
+local ev_spoof_env = imgs.evaluate_wire_probe({ has_graphics = false, feature_u1 = nil, xtversion = "Ghostty 1.2.0" })
+local ev_vte = imgs.evaluate_wire_probe({ has_graphics = false, feature_u1 = nil, xtversion = "VTE(8201)" })
+
+local t_det = imgs.parse_tmux_probe_output("SSH_CONNECTION=1.2.3.4 1 5.6.7.8 22\n", {})
+local t_empty = imgs.parse_tmux_probe_output("__HS_CLIENT__\t/dev/pts/1\t\txterm-256color\nSSH_CONNECTION=1 2 3 4\n", {})
+local t_ghostty_ssh = imgs.parse_tmux_probe_output("__HS_CLIENT__\t/dev/pts/1\tGhostty 1.2.0\txterm-256color\nSSH_CONNECTION=1 2 3 4\n", {})
+local t_kitty_local = imgs.parse_tmux_probe_output("__HS_CLIENT__\t/dev/pts/2\tkitty(0.40.0)\txterm-kitty\n-SSH_CONNECTION\n-SSH_CLIENT\n-SSH_TTY\n", { SSH_CONNECTION = "stale" })
+local t_mixed = imgs.parse_tmux_probe_output("__HS_CLIENT__\t/dev/pts/1\tGhostty 1.2.0\txterm-256color\n__HS_CLIENT__\t/dev/pts/2\tVTE(8201)\txterm-256color\n", {})
+
+vim.fn.chdir(ws)
+local Doc = require("snacks.image.doc")
+local sub_buf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_name(sub_buf, ws .. "/sub/target.md")
+local resolve_ok = true
+for code = 97, 122 do
+    local fn = string.char(code) .. ".png"
+    local expected = (vim.uv or vim.loop).fs_realpath(ws .. "/sub/" .. fn)
+    if Doc.resolve(sub_buf, fn) ~= expected then
+        resolve_ok = false
+        break
+    end
+end
+
+local eval_ok = ev_ghostty_u1.supported and ev_ghostty_u1.placeholders
+    and ev_kitty_xt.supported and ev_kitty_xt.placeholders
+    and ev_tn_fallback.supported and ev_tn_fallback.placeholders and (ev_tn_fallback.term_name == "ghostty")
+    and ev_future_u1.supported and ev_future_u1.placeholders
+    and (not ev_wez_no_u1.supported) and (not ev_wez_no_u1.placeholders)
+    and (not ev_explicit_no_u1.supported)
+    and (not ev_spoof_env.supported)
+    and (not ev_vte.supported)
+    and (t_det.state == "detached" and not t_det.supported and t_det.remote == true)
+    and (t_empty.state == "transient_empty" and not t_empty.supported)
+    and (t_ghostty_ssh.state == "supported" and t_ghostty_ssh.supported and t_ghostty_ssh.remote == true)
+    and (t_kitty_local.state == "supported" and t_kitty_local.supported and t_kitty_local.remote == false)
+    and (t_mixed.state == "unsupported" and not t_mixed.supported)
+    and resolve_ok
+
+-- 4. Binary-file safety on :edit chart-a.png in headless/unsupported environment
+vim.cmd("edit " .. vim.fn.fnameescape(ws .. "/chart-a.png"))
+local png_lines = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+local png_safe = (vim.bo.modifiable == false)
+    and (vim.bo.modified == false)
+    and (png_lines:find("# Image viewer", 1, true) ~= nil)
+    and (png_lines:find("\137PNG", 1, true) == nil)
+    and (png_lines:find(vim.fn.nr2char(0x10EEEE), 1, true) == nil)
+
+-- 5. Markdown (image) AST link navigation (<CR>, gd, gx, bullet/numbered/task prefixes, linked badge, wikilinks, ref images, Ctrl+O jump-back)
+vim.cmd("edit " .. vim.fn.fnameescape(ws .. "/report.md"))
+vim.opt_local.conceallevel = 2
+
+-- Line 3: ![Chart A](chart-a.png) at col 0 ('!') -> opens chart-a.png, Ctrl+O returns to report.md:3
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local nav1_ok = (vim.fn.expand("%:t") == "chart-a.png")
+vim.cmd("normal! \15")
+nav1_ok = nav1_ok and (vim.fn.expand("%:t") == "report.md" and vim.api.nvim_win_get_cursor(0)[1] == 3)
+
+-- Line 4: - ![Bullet Chart](sub/chart-b.png) at col 0 ('-') via gx
+vim.api.nvim_win_set_cursor(0, { 4, 0 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gx", true, false, true), "mx", false)
+local nav2_ok = (vim.fn.expand("%:t") == "chart-b.png")
+vim.cmd("normal! \15")
+nav2_ok = nav2_ok and (vim.fn.expand("%:t") == "report.md" and vim.api.nvim_win_get_cursor(0)[1] == 4)
+
+-- Line 5: 1. ![Spaced Chart](<sub/my chart.png> "Chart Title") at col 0 ('1') via gd
+vim.api.nvim_win_set_cursor(0, { 5, 0 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gd", true, false, true), "mx", false)
+local nav3_ok = (vim.fn.expand("%:t") == "my chart.png")
+vim.cmd("normal! \15")
+nav3_ok = nav3_ok and (vim.fn.expand("%:t") == "report.md" and vim.api.nvim_win_get_cursor(0)[1] == 5)
+
+-- Line 6: - [x] ![Task Chart](chart-a.png) at col 0 ('-')
+vim.api.nvim_win_set_cursor(0, { 6, 0 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local nav4_ok = (vim.fn.expand("%:t") == "chart-a.png")
+vim.cmd("normal! \15")
+
+-- Line 7: [![Badge](chart-a.png)](sub/target.md) -> outer link on badge label, inner image when inside (chart-a.png)
+vim.api.nvim_win_set_cursor(0, { 7, 2 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local nav5_outer = (vim.fn.expand("%:t") == "target.md")
+vim.cmd("normal! \15")
+vim.api.nvim_win_set_cursor(0, { 7, 12 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local nav5_inner = (vim.fn.expand("%:t") == "chart-a.png")
+vim.cmd("normal! \15")
+
+-- Line 8: ![[sub/chart-b.png|300]] wikilink image and Line 9: ![Ref Chart][chart-ref] reference image
+vim.api.nvim_win_set_cursor(0, { 8, 2 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "mx", false)
+local nav6_wiki = (vim.fn.expand("%:t") == "chart-b.png")
+vim.cmd("normal! \15")
+vim.api.nvim_win_set_cursor(0, { 9, 2 })
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gx", true, false, true), "mx", false)
+local nav7_ref = (vim.fn.expand("%:t") == "chart-b.png")
+vim.cmd("normal! \15")
+
+local nav_ok = nav1_ok and nav2_ok and nav3_ok and nav4_ok and nav5_outer and nav5_inner and nav6_wiki and nav7_ref
+io.write(table.concat({
+    "HEADLESS=" .. tostring(headless_ok),
+    "CFG=" .. tostring(cfg_ok),
+    "EVAL=" .. tostring(eval_ok),
+    "PNG=" .. tostring(png_safe),
+    "NAV=" .. tostring(nav_ok),
+}, "|"))
+EOF
+        IMG_UNIT_OUT="$(
+            PATH="$IMG_UNIT_TMP/poison-bin:$PATH" \
+            TERM="tmux-256color" \
+            TMUX="" \
+            TMUX_PANE="" \
+            IMG_WS="$IMG_UNIT_TMP/ws" \
+            NVIM_TS_SKIP_AUTO_INSTALL=1 \
+                run_nvim_headless -i NONE -u "$NVIM_CONFIG" -c "luafile $IMG_UNIT_TMP/test_images_headless.lua" 2>/dev/null || true
+        )"
+        if [ "$IMG_UNIT_OUT" = "HEADLESS=true|CFG=true|EVAL=true|PNG=true|NAV=true" ] && [ ! -e "$POISON_TMUX_HIT" ]; then
+            pass "Neovim solarized.images enforces SNACKS_TMUX=false when TMUX is unset (zero tmux forks under TERM=tmux-256color), disables all non-image snacks modules, keeps :edit *.png binary-safe, and resolves Markdown (image) links across bullets, task items, spaces, and badges"
+        else
+            fail "Neovim solarized.images headless & Markdown image link checks" "out='$IMG_UNIT_OUT' tmux_called='$([ -e "$POISON_TMUX_HIT" ] && echo yes || echo no)'"
+        fi
+
+        if command -v python3 >/dev/null 2>&1 && { command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; }; then
+            IMG_PTY_OUT="$(python3 -B - "$SCRIPT_DIR" "$IMG_UNIT_TMP/ws" <<'PY'
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+import pty
+import select
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+
+sys.dont_write_bytecode = True
+repo_dir = sys.argv[1]
+ws_dir = sys.argv[2]
+init_lua = os.path.join(repo_dir, "dotfiles", ".config", "nvim", "init.lua")
+
+
+def set_winsize(fd: int, rows: int, cols: int) -> None:
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+
+def rpc_eval(sock: str, lua_code: str, env: dict[str, str]):
+    out = subprocess.check_output(
+        ["nvim", "--headless", "--server", sock, "--remote-expr", "luaeval(" + json.dumps(lua_code) + ")"],
+        stdin=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+        text=True,
+        timeout=5,
+    ).strip()
+    if out.startswith(("{", "[")):
+        return json.loads(out)
+    return out
+
+
+def run_standalone_pty_case(
+    reply_bytes: bytes,
+    ssh_mode: bool = False,
+    reply_delay_sec: float = 0.0,
+) -> dict[str, object]:
+    tmp = tempfile.mkdtemp()
+    mfd, sfd = pty.openpty()
+    set_winsize(sfd, 34, 84)
+    sock = os.path.join(tmp, "nvim.sock")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("TMUX", "TMUX_PANE", "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "SNACKS_TMUX")
+    }
+    env["TERM"] = "xterm-256color"
+    env["XDG_CACHE_HOME"] = os.path.join(tmp, "cache")
+    env["XDG_STATE_HOME"] = os.path.join(tmp, "state")
+    env["NVIM_TS_SKIP_AUTO_INSTALL"] = "1"
+    env["NVIM_LOG_FILE"] = "/dev/null"
+    if ssh_mode:
+        env["SSH_CONNECTION"] = "10.0.0.1 12345 10.0.0.2 22"
+    os.makedirs(env["XDG_CACHE_HOME"], exist_ok=True)
+    os.makedirs(env["XDG_STATE_HOME"], exist_ok=True)
+
+    proc = subprocess.Popen(
+        ["nvim", "-i", "NONE", "-u", init_lua, "--listen", sock, os.path.join(ws_dir, "report.md")],
+        stdin=sfd,
+        stdout=sfd,
+        stderr=sfd,
+        close_fds=True,
+        env=env,
+    )
+    os.close(sfd)
+    wire = bytearray()
+    post_probe_offset = None
+    replied = False
+    probe_sent_t = 0.0
+    probed_done_t = 0.0
+    try:
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 4.0:
+            r, _, _ = select.select([mfd], [], [], 0.02)
+            if r:
+                wire.extend(os.read(mfd, 65536))
+                if not replied and b"\x1bP+q544E\x1b\\" in wire:
+                    replied = True
+                    post_probe_offset = len(wire)
+                    if reply_delay_sec > 0:
+                        time.sleep(reply_delay_sec)
+                    probe_sent_t = time.monotonic()
+                    if reply_bytes:
+                        os.write(mfd, reply_bytes)
+            if os.path.exists(sock) and replied:
+                try:
+                    st = rpc_eval(sock, "vim.json.encode(require('solarized.images').state())", env)
+                    if isinstance(st, dict) and st.get("probed"):
+                        probed_done_t = time.monotonic()
+                        break
+                except Exception:
+                    pass
+
+        def drain(duration: float = 0.15) -> None:
+            end_t = time.monotonic() + duration
+            while time.monotonic() < end_t:
+                rr, _, _ = select.select([mfd], [], [], 0.02)
+                if rr:
+                    wire.extend(os.read(mfd, 65536))
+
+        st = rpc_eval(sock, "vim.json.encode(require('solarized.images').state())", env)
+        if isinstance(st, dict) and st.get("supported"):
+            t_wait = time.monotonic()
+            info = {}
+            while time.monotonic() - t_wait < 5.0:
+                drain(0.06)
+                info = rpc_eval(
+                    sock,
+                    """vim.json.encode((function()
+                        local ns = require('snacks.image.placement').ns
+                        local marks = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })
+                        local u_cnt = 0
+                        local max_w = 0
+                        for _, m in ipairs(marks) do
+                            for _, vl in ipairs((m[4] and m[4].virt_lines) or {}) do
+                                local w = 0
+                                for _, ch in ipairs(vl) do
+                                    if (ch[1] or ''):find(vim.fn.nr2char(0x10EEEE), 1, true) then
+                                        u_cnt = u_cnt + 1
+                                    end
+                                    w = w + vim.api.nvim_strwidth(ch[1] or '')
+                                end
+                                max_w = math.max(max_w, w)
+                            end
+                        end
+                        local wi = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+                        return { u_cnt = u_cnt, max_w = max_w, avail_w = wi.width - wi.textoff }
+                    end)())""",
+                    env,
+                )
+                if info.get("u_cnt", 0) >= 2:
+                    break
+
+            # Narrow active window via vertical split (38 cols) and verify dynamic gutter-clamped resize
+            narrow_info = rpc_eval(
+                sock,
+                """vim.json.encode((function()
+                    vim.cmd('botright vnew | vertical resize 46 | wincmd p | vertical resize 38')
+                    vim.cmd('doautocmd WinResized')
+                    return { ok = true }
+                end)())""",
+                env,
+            )
+            _ = narrow_info
+            t_nar = time.monotonic()
+            narrow_res = {}
+            while time.monotonic() - t_nar < 3.0:
+                drain(0.05)
+                narrow_res = rpc_eval(
+                    sock,
+                    """vim.json.encode((function()
+                        local ns = require('snacks.image.placement').ns
+                        local marks = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })
+                        local max_w = 0
+                        for _, m in ipairs(marks) do
+                            for _, vl in ipairs((m[4] and m[4].virt_lines) or {}) do
+                                local w = 0
+                                for _, ch in ipairs(vl) do
+                                    w = w + vim.api.nvim_strwidth(ch[1] or '')
+                                end
+                                max_w = math.max(max_w, w)
+                            end
+                        end
+                        local wi = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+                        return { max_w = max_w, avail_w = wi.width - wi.textoff }
+                    end)())""",
+                    env,
+                )
+                if 0 < narrow_res.get("max_w", 999) <= narrow_res.get("avail_w", 0):
+                    break
+
+            # Verify `:source $MYVIMRC` preserves live solarized.images state without split-brain reset
+            post_source_st = rpc_eval(
+                sock,
+                "vim.json.encode((function() vim.cmd('source ' .. vim.fn.fnameescape("
+                + json.dumps(init_lua)
+                + ")); return require('solarized.images').state() end)())",
+                env,
+            )
+
+            # Verify mini.files preview of chart-a.png renders U+10EEEE image buffer without -Non-text-file residue
+            rpc_eval(
+                sock,
+                "vim.json.encode((function() vim.cmd('only'); require('mini.files').open("
+                + json.dumps(os.path.join(ws_dir, "chart-a.png"))
+                + ", false); return { ok = true } end)())",
+                env,
+            )
+            t_mf = time.monotonic()
+            mf_res = {}
+            while time.monotonic() - t_mf < 4.0:
+                drain(0.05)
+                mf_res = rpc_eval(
+                    sock,
+                    """vim.json.encode((function()
+                        local st_mf = require('mini.files').get_explorer_state()
+                        if not (st_mf and st_mf.windows and #st_mf.windows >= 2) then
+                            return { ready = false }
+                        end
+                        local pwin = st_mf.windows[#st_mf.windows].win_id
+                        local pbuf = vim.api.nvim_win_get_buf(pwin)
+                        local ns = require('snacks.image.placement').ns
+                        local marks = vim.api.nvim_buf_get_extmarks(pbuf, ns, 0, -1, { details = true })
+                        local has_u = false
+                        for _, m in ipairs(marks) do
+                            for _, ch in ipairs((m[4] and m[4].virt_text) or {}) do
+                                if (ch[1] or ''):find(vim.fn.nr2char(0x10EEEE), 1, true) then
+                                    has_u = true
+                                end
+                            end
+                            for _, vl in ipairs((m[4] and m[4].virt_lines) or {}) do
+                                for _, ch in ipairs(vl) do
+                                    if (ch[1] or ''):find(vim.fn.nr2char(0x10EEEE), 1, true) then
+                                        has_u = true
+                                    end
+                                end
+                            end
+                        end
+                        local txt = table.concat(vim.api.nvim_buf_get_lines(pbuf, 0, -1, false), '\\n')
+                        return {
+                            ready = has_u,
+                            win_h = vim.api.nvim_win_get_height(pwin),
+                            ft = vim.bo[pbuf].filetype,
+                            no_nontext = (txt:find('Non-text-file', 1, true) == nil),
+                        }
+                    end)())""",
+                    env,
+                )
+                if mf_res.get("ready"):
+                    break
+
+            after_probe = bytes(wire[post_probe_offset or 0 :])
+            return {
+                "st": st,
+                "post_source_st": post_source_st,
+                "fence_ms": (probed_done_t - probe_sent_t) * 1000.0 if probed_done_t > probe_sent_t else 9999.0,
+                "info": info,
+                "narrow": narrow_res,
+                "mf": mf_res,
+                "has_tf": (b"t=f" in after_probe),
+                "has_td": (b"t=d" in after_probe),
+            }
+
+        # Unsupported path: trigger CursorMoved on image line and :edit chart-a.png, ensure zero leaks/popups
+        un_res = rpc_eval(
+            sock,
+            """vim.json.encode((function()
+                vim.api.nvim_win_set_cursor(0, { 3, 2 })
+                vim.cmd('doautocmd CursorMoved')
+                local wins_md = #vim.api.nvim_list_wins()
+                local ns = require('snacks.image.placement').ns
+                local marks_md = #vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {})
+                vim.cmd('edit ' .. vim.fn.fnameescape("""
+            + json.dumps(os.path.join(ws_dir, "chart-a.png"))
+            + """))
+                local lines_png = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\\n')
+                return {
+                    wins_md = wins_md,
+                    marks_md = marks_md,
+                    png_meta = (lines_png:find('# Image viewer', 1, true) ~= nil),
+                }
+            end)())""",
+            env,
+        )
+        drain(0.15)
+        after_probe = bytes(wire[post_probe_offset or 0 :])
+        return {
+            "st": st,
+            "un": un_res,
+            "leaked_apc": (b"\x1b_G" in after_probe),
+            "leaked_u10eeee": ("\U0010eeee".encode("utf-8") in after_probe),
+        }
+    finally:
+        try:
+            os.close(mfd)
+        except OSError:
+            pass
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+            proc.wait()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+ghostty_local = run_standalone_pty_case(
+    b"\x1b_Gi=4294967265;OK\x1b\\\x1b_Gi=4294967266,e=T,U=1;OK\x1b\\\x1bP>|Ghostty 1.2.0\x1b\\\x1bP1+r544E=787465726D2D67686F73747479\x1b\\",
+    ssh_mode=False,
+)
+ghostty_ssh = run_standalone_pty_case(
+    b"\x1b_Gi=4294967265;OK\x1b\\\x1bP>|kitty(0.40.0)\x1b\\\x1bP0+r\x1b\\",
+    ssh_mode=True,
+    reply_delay_sec=0.32,
+)
+vte_case = run_standalone_pty_case(
+    b"\x1bP>|VTE(8201)\x1b\\\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\",
+    ssh_mode=False,
+)
+wez_case = run_standalone_pty_case(
+    b"\x1b_Gi=4294967265;OK\x1b\\\x1b_Gi=4294967266,e=T;OK\x1b\\\x1bP>|WezTerm 20240203\x1b\\\x1bP1+r544e=77657a7465726d\x1b\\",
+    ssh_mode=False,
+)
+
+gl_ok = (
+    ghostty_local["st"]["supported"] is True
+    and ghostty_local["post_source_st"]["supported"] is True
+    and ghostty_local["post_source_st"]["mode"] == "standalone"
+    and ghostty_local["fence_ms"] < 200.0
+    and ghostty_local["has_tf"] is True
+    and ghostty_local["has_td"] is False
+    and ghostty_local["info"]["u_cnt"] >= 2
+    and 0 < ghostty_local["info"]["max_w"] <= ghostty_local["info"]["avail_w"]
+    and 0 < ghostty_local["narrow"]["max_w"] <= ghostty_local["narrow"]["avail_w"]
+    and ghostty_local["mf"].get("ready") is True
+    and ghostty_local["mf"].get("win_h", 0) >= 5
+    and ghostty_local["mf"].get("ft") == "image"
+    and ghostty_local["mf"].get("no_nontext") is True
+)
+gs_ok = ghostty_ssh["st"]["supported"] is True and ghostty_ssh["has_td"] is True and ghostty_ssh["has_tf"] is False
+vte_ok = (
+    vte_case["st"]["supported"] is False
+    and vte_case["un"]["wins_md"] == 1
+    and vte_case["un"]["marks_md"] == 0
+    and vte_case["un"]["png_meta"] is True
+    and vte_case["leaked_apc"] is False
+    and vte_case["leaked_u10eeee"] is False
+)
+wez_ok = (
+    wez_case["st"]["supported"] is False
+    and wez_case["un"]["marks_md"] == 0
+    and wez_case["leaked_apc"] is False
+    and wez_case["leaked_u10eeee"] is False
+)
+
+if gl_ok and gs_ok and vte_ok and wez_ok:
+    print("OK")
+else:
+    print(f"FAIL:gl={gl_ok}|gs={gs_ok}|vte={vte_ok}|wez={wez_ok}")
+PY
+)"
+            if [ "$IMG_PTY_OUT" = "OK" ]; then
+                pass "Neovim solarized.images standalone UIEnter wire probe (XTGETTCAP TN/0+r fence, >300ms SSH RTT, :source \$MYVIMRC persistence) renders U+10EEEE inline Markdown & mini.files previews in Ghostty/Kitty and stays a silent no-op in VTE & WezTerm"
+            else
+                fail "Neovim solarized.images standalone PTY E2E" "Expected 'OK', got '$IMG_PTY_OUT'"
+            fi
+        fi
+
+        if command -v tmux >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && { command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; }; then
+            IMG_TMUX_OUT="$(python3 -B - "$SCRIPT_DIR" "$IMG_UNIT_TMP/ws" <<'PY'
+from __future__ import annotations
+
+import json
+import os
+import pty
+import select
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+sys.dont_write_bytecode = True
+repo_dir = sys.argv[1]
+ws_dir = sys.argv[2]
+init_lua = os.path.join(repo_dir, "dotfiles", ".config", "nvim", "init.lua")
+tmux_conf = os.path.join(repo_dir, "dotfiles", ".tmux.conf")
+
+tmp = tempfile.mkdtemp()
+tmux_sock = os.path.join(tmp, "tmux.sock")
+nvim_sock = os.path.join(tmp, "nvim.sock")
+slow_bin = os.path.join(tmp, "slow-bin")
+os.makedirs(slow_bin, exist_ok=True)
+slow_gate = os.path.join(tmp, "enable_slow_magick")
+for tool_name in ("magick", "convert", "identify"):
+    real_tool = shutil.which(tool_name)
+    if real_tool:
+        wpath = os.path.join(slow_bin, tool_name)
+        with open(wpath, "w", encoding="utf-8") as fh:
+            fh.write(
+                f"#!/usr/bin/env bash\n"
+                f"[ -f {slow_gate!r} ] && sleep 0.25\n"
+                f"exec {real_tool!r} \"$@\"\n"
+            )
+        os.chmod(wpath, 0o755)
+
+clean_env = {
+    k: v
+    for k, v in os.environ.items()
+    if k not in ("TMUX", "TMUX_PANE", "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "SNACKS_TMUX", "NVIM_IDE_SOCKET", "IDE_SESSION")
+}
+clean_env["TERM"] = "xterm-256color"
+clean_env["XDG_CACHE_HOME"] = os.path.join(tmp, "cache")
+clean_env["XDG_STATE_HOME"] = os.path.join(tmp, "state")
+clean_env["NVIM_LOG_FILE"] = "/dev/null"
+os.makedirs(clean_env["XDG_CACHE_HOME"], exist_ok=True)
+os.makedirs(clean_env["XDG_STATE_HOME"], exist_ok=True)
+
+
+def attach_client(
+    sess: str,
+    xtversion_reply: str,
+    delay_sec: float = 0.0,
+    extra_env: dict[str, str] | None = None,
+):
+    mfd, sfd = pty.openpty()
+    c_env = dict(clean_env)
+    if extra_env:
+        c_env.update(extra_env)
+    proc = subprocess.Popen(
+        ["tmux", "-S", tmux_sock, "attach-session", "-t", f"={sess}"],
+        stdin=sfd,
+        stdout=sfd,
+        stderr=sfd,
+        close_fds=True,
+        env=c_env,
+    )
+    os.close(sfd)
+    raw = bytearray()
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 2.5:
+        r, _, _ = select.select([mfd], [], [], 0.03)
+        if r:
+            raw.extend(os.read(mfd, 65536))
+            if b"\x1b[>q" in raw:
+                if delay_sec > 0:
+                    time.sleep(delay_sec)
+                if xtversion_reply:
+                    os.write(mfd, f"\x1bP>|{xtversion_reply}\x1b\\".encode())
+                break
+    return proc, mfd, raw
+
+
+def detach_client(proc: subprocess.Popen, mfd: int) -> None:
+    try:
+        os.close(mfd)
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=2)
+    except Exception:
+        proc.kill()
+        proc.wait()
+
+
+def rpc_eval(lua_code: str):
+    out = subprocess.check_output(
+        ["nvim", "--headless", "--server", nvim_sock, "--remote-expr", "luaeval(" + json.dumps(lua_code) + ")"],
+        stdin=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=clean_env,
+        text=True,
+        timeout=5,
+    ).strip()
+    if out.startswith(("{", "[")):
+        return json.loads(out)
+    return out
+
+
+other_proc = None
+other_mfd = -1
+try:
+    # Peer session has Ghostty attached; target =ws_main starts detached (`new-session -d`) with unfocused Editor pane
+    subprocess.run(
+        ["tmux", "-S", tmux_sock, "-f", tmux_conf, "new-session", "-d", "-s", "other_sess", "exec sleep 60"],
+        env=clean_env,
+        check=True,
+    )
+    other_proc, other_mfd, _ = attach_client("other_sess", "Ghostty 1.2.0")
+
+    nvim_cmd = (
+        f"env IDE_SESSION=ws_main PATH={slow_bin}:{clean_env['PATH']} "
+        f"XDG_CACHE_HOME={clean_env['XDG_CACHE_HOME']} "
+        f"XDG_STATE_HOME={clean_env['XDG_STATE_HOME']} NVIM_TS_SKIP_AUTO_INSTALL=1 "
+        f"nvim -i NONE -u {init_lua} --listen {nvim_sock} {os.path.join(ws_dir, 'report.md')}"
+    )
+    subprocess.run(
+        ["tmux", "-S", tmux_sock, "new-session", "-d", "-x", "104", "-y", "30", "-s", "ws_main", "-n", "ide", nvim_cmd],
+        env=clean_env,
+        check=True,
+    )
+    subprocess.run(
+        ["tmux", "-S", tmux_sock, "set-option", "-t", "=ws_main:", "@ide_socket", nvim_sock],
+        env=clean_env,
+        check=True,
+    )
+    # Split right-hand AI pane and leave focus on AI pane so Editor pane (.1) is visible but UNFOCUSED
+    subprocess.run(
+        ["tmux", "-S", tmux_sock, "split-window", "-h", "-t", "=ws_main:ide", "exec sleep 60"],
+        env=clean_env,
+        check=True,
+    )
+
+    for _ in range(60):
+        if os.path.exists(nvim_sock):
+            try:
+                if rpc_eval("vim.v.vim_did_enter") == "1":
+                    break
+            except Exception:
+                pass
+        time.sleep(0.05)
+
+    time.sleep(0.15)
+    st_det = rpc_eval("vim.json.encode(require('solarized.images').state())")
+    detached_isolated = (st_det["supported"] is False and st_det["state"] == "detached")
+
+    # Attach SSH Ghostty client with 100ms 1-RTT empty client_termtype window (Editor pane remains unfocused)
+    g_proc, g_mfd, g_raw = attach_client(
+        "ws_main",
+        "Ghostty 1.2.0",
+        delay_sec=0.1,
+        extra_env={"SSH_CONNECTION": "10.0.0.1 1 10.0.0.2 22"},
+    )
+    t0 = time.monotonic()
+    ssh_ghostty_ok = False
+    while time.monotonic() - t0 < 5.0:
+        r, _, _ = select.select([g_mfd], [], [], 0.05)
+        if r:
+            g_raw.extend(os.read(g_mfd, 65536))
+        cur = rpc_eval(
+            """vim.json.encode((function()
+                local ns = require('snacks.image.placement').ns
+                local marks = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })
+                local has_u = false
+                for _, m in ipairs(marks) do
+                    for _, vl in ipairs((m[4] and m[4].virt_lines) or {}) do
+                        for _, ch in ipairs(vl) do
+                            if (ch[1] or ''):find(vim.fn.nr2char(0x10EEEE), 1, true) then
+                                has_u = true
+                            end
+                        end
+                    end
+                end
+                return { st = require('solarized.images').state(), has_u = has_u }
+            end)())"""
+        )
+        if cur["st"]["supported"] and cur["st"]["remote"] and cur["has_u"] and (b"t=d" in g_raw):
+            ssh_ghostty_ok = True
+            break
+
+    # Start slow uncached image buffer conversion (`z.png`) right before detaching Ghostty & attaching VTE
+    open(slow_gate, "w").close()
+    rpc_eval("vim.cmd('edit ' .. vim.fn.fnameescape(" + json.dumps(os.path.join(ws_dir, "z.png")) + ")) or 'ok'")
+    time.sleep(0.05)
+    detach_client(g_proc, g_mfd)
+
+    # Switch =ws_main to VTE(8201) while AI pane is focused (NO manual refresh() call — driven by client-attached hook!)
+    v_proc, v_mfd, _ = attach_client("ws_main", "VTE(8201)")
+    v_after = bytearray()
+    t0 = time.monotonic()
+    vte_teardown_ok = False
+    while time.monotonic() - t0 < 3.0:
+        r, _, _ = select.select([v_mfd], [], [], 0.04)
+        if r:
+            v_after.extend(os.read(v_mfd, 65536))
+        cur = rpc_eval(
+            """vim.json.encode((function()
+                local ns = require('snacks.image.placement').ns
+                local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+                return {
+                    st = require('solarized.images').state(),
+                    n = #vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}),
+                    meta = ((lines[1] or ''):find('# Image viewer', 1, true) ~= nil),
+                }
+            end)())"""
+        )
+        if (not cur["st"]["supported"]) and cur["st"]["probed"] and cur["n"] == 0 and cur["meta"]:
+            vte_teardown_ok = True
+            break
+    # Wait past slow magick completion + 80ms progress timer ticks to confirm zero leaked spinner extmarks or APC bytes
+    end_wait = time.monotonic() + 0.35
+    while time.monotonic() < end_wait:
+        if select.select([v_mfd], [], [], 0.04)[0]:
+            v_after.extend(os.read(v_mfd, 65536))
+    os.unlink(slow_gate)
+    post_conv = rpc_eval(
+        "vim.json.encode(#vim.api.nvim_buf_get_extmarks(0, require('snacks.image.placement').ns, 0, -1, {}))"
+    )
+    pane_txt = subprocess.check_output(
+        ["tmux", "-S", tmux_sock, "capture-pane", "-p", "-t", "=ws_main:ide.1"],
+        env=clean_env,
+        text=True,
+    )
+    vte_clean = (
+        vte_teardown_ok
+        and (int(post_conv) == 0)
+        and (b"\x1b_G" not in v_after)
+        and ("\U0010eeee" not in pane_txt)
+    )
+    detach_client(v_proc, v_mfd)
+
+    # Re-open report.md and re-attach local Kitty (auto-triggered via client-attached hook) -> remote=false, t=f re-transmitted
+    rpc_eval("vim.cmd('edit ' .. vim.fn.fnameescape(" + json.dumps(os.path.join(ws_dir, "report.md")) + ")) or 'ok'")
+    k_proc, k_mfd, k_raw = attach_client("ws_main", "kitty(0.40.1)")
+    t0 = time.monotonic()
+    local_kitty_ok = False
+    while time.monotonic() - t0 < 4.0:
+        r, _, _ = select.select([k_mfd], [], [], 0.05)
+        if r:
+            k_raw.extend(os.read(k_mfd, 65536))
+        cur = rpc_eval(
+            """vim.json.encode((function()
+                local ns = require('snacks.image.placement').ns
+                local marks = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })
+                local has_u = false
+                for _, m in ipairs(marks) do
+                    for _, vl in ipairs((m[4] and m[4].virt_lines) or {}) do
+                        for _, ch in ipairs(vl) do
+                            if (ch[1] or ''):find(vim.fn.nr2char(0x10EEEE), 1, true) then
+                                has_u = true
+                            end
+                        end
+                    end
+                end
+                return { st = require('solarized.images').state(), has_u = has_u }
+            end)())"""
+        )
+        if cur["st"]["supported"] and (not cur["st"]["remote"]) and cur["has_u"] and (b"t=f" in k_raw):
+            local_kitty_ok = True
+            break
+
+    # Verify plain tmux rename-session (without IDE_SESSION) re-resolves via $TMUX_PANE and stays supported
+    rpc_eval("(function() vim.env.IDE_SESSION = nil; return 'ok' end)()")
+    subprocess.run(["tmux", "-S", tmux_sock, "rename-session", "-t", "=ws_main", "ws_renamed"], env=clean_env, check=True)
+    rpc_eval("require('solarized.images').refresh() or 'ok'")
+    t0 = time.monotonic()
+    rename_ok = False
+    while time.monotonic() - t0 < 2.0:
+        st_ren = rpc_eval("vim.json.encode(require('solarized.images').state())")
+        if st_ren["supported"] is True and st_ren["state"] == "supported":
+            rename_ok = True
+            break
+        time.sleep(0.05)
+    detach_client(k_proc, k_mfd)
+
+    if detached_isolated and ssh_ghostty_ok and vte_clean and local_kitty_ok and rename_ok:
+        print("OK")
+    else:
+        print(
+            f"FAIL:det={detached_isolated}|ssh_g={ssh_ghostty_ok}|vte={vte_clean}|kit={local_kitty_ok}|ren={rename_ok}"
+        )
+finally:
+    if other_proc is not None and other_mfd >= 0:
+        detach_client(other_proc, other_mfd)
+    subprocess.run(["tmux", "-S", tmux_sock, "kill-server"], env=clean_env, stderr=subprocess.DEVNULL)
+    shutil.rmtree(tmp, ignore_errors=True)
+PY
+)"
+            if [ "$IMG_TMUX_OUT" = "OK" ]; then
+                pass "Neovim solarized.images scopes tmux #{client_termtype} to =session (surviving rename-session), auto-refreshes unfocused Editor panes via client-attached/detached hooks, halts in-flight spinners on VTE switch, and switches t=d (SSH) / t=f (local)"
+            else
+                fail "Neovim solarized.images live tmux =session lifecycle" "Expected 'OK', got '$IMG_TMUX_OUT'"
+            fi
         fi
     fi
 else
