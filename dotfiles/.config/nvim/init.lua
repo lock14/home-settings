@@ -34,6 +34,7 @@ for _, mod in ipairs({
     "links",
     "keymaps",
     "ide",
+    "images",
     "theme_groups",
     "theme",
     "treesitter",

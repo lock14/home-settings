@@ -58,6 +58,50 @@ function M.find_markdown_anchor_line(bufnr, raw_slug)
     return nil
 end
 
+local function resolve_markdown_ref_label(bufnr, raw_label)
+    local cleaned = (vim.trim((raw_label or ""):gsub("^%[", ""):gsub("%]$", "")):gsub("%s+", " "))
+    local norm = vim.fn.tolower(cleaned)
+    if norm == "" then
+        return nil
+    end
+    local b = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+    local ok, parser = pcall(vim.treesitter.get_parser, b, "markdown")
+    if not (ok and parser) then
+        return nil
+    end
+    local tree = (parser:parse() or {})[1]
+    if not tree then
+        return nil
+    end
+    local q_ok, q = pcall(
+        vim.treesitter.query.parse,
+        "markdown",
+        "(link_reference_definition (link_label) @lbl (link_destination) @dst)"
+    )
+    if not (q_ok and q) then
+        return nil
+    end
+    for _, match in q:iter_matches(tree:root(), b) do
+        local lbl_node = match[1]
+        local dst_node = match[2]
+        if type(lbl_node) == "table" then
+            lbl_node = lbl_node[1]
+        end
+        if type(dst_node) == "table" then
+            dst_node = dst_node[1]
+        end
+        if lbl_node and dst_node then
+            local cand_clean = (
+                vim.trim(vim.treesitter.get_node_text(lbl_node, b):gsub("^%[", ""):gsub("%]$", "")):gsub("%s+", " ")
+            )
+            if vim.fn.tolower(cand_clean) == norm then
+                return (vim.treesitter.get_node_text(dst_node, b):gsub("^<", ""):gsub(">$", ""))
+            end
+        end
+    end
+    return nil
+end
+
 function M.extract_link_at_cursor()
     pcall(vim.treesitter.start, 0)
     local pos = vim.api.nvim_win_get_cursor(0)
@@ -69,15 +113,71 @@ function M.extract_link_at_cursor()
         end
     end)
     local line = vim.api.nvim_get_current_line()
-    local bcol = line:find("%[")
-    if bcol and col < bcol - 1 and line:sub(1, bcol):match("^%s*[-*+%d.)]*%s*%[$") then
-        col = bcol - 1
+    local lcol = line:match("^%s*[-*+%d.)]*%s*%[[ xX]%]%s*()[!]?%[")
+        or line:match("^%s*[-*+%d.)]*%s*()[!]?%[")
+    if lcol and col < lcol - 1 then
+        col = lcol - 1
     end
     local ok, node = pcall(vim.treesitter.get_node, { pos = { row, col }, ignore_injections = false })
     while ok and node do
         local t = node:type()
         if t == "uri_autolink" then
             return (vim.treesitter.get_node_text(node, 0):gsub("^<", ""):gsub(">$", "")), true
+        elseif t == "image" then
+            local dest, in_dest = nil, false
+            local ref_label, desc_node = nil, nil
+            for child in node:iter_children() do
+                local ct = child:type()
+                if ct == "link_destination" then
+                    dest = vim.treesitter.get_node_text(child, 0):gsub("^<", ""):gsub(">$", "")
+                    local sr, sc, er, ec = child:range()
+                    if (row > sr or (row == sr and col >= sc)) and (row < er or (row == er and col < ec)) then
+                        in_dest = true
+                    end
+                elseif ct == "link_label" then
+                    ref_label = vim.treesitter.get_node_text(child, 0)
+                elseif ct == "image_description" then
+                    desc_node = child
+                end
+            end
+            if (not dest or dest == "") and desc_node then
+                for sub in desc_node:iter_children() do
+                    if sub:type() == "shortcut_link" then
+                        for inner in sub:iter_children() do
+                            if inner:type() == "link_text" then
+                                local wiki = vim.treesitter.get_node_text(inner, 0)
+                                    :gsub("^%[", "")
+                                    :gsub("%]$", "")
+                                    :gsub("|.*$", "")
+                                if wiki ~= "" then
+                                    dest = wiki
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            if (not dest or dest == "") and (ref_label or desc_node) then
+                local lookup = (ref_label and ref_label ~= "[]") and ref_label
+                    or (desc_node and vim.treesitter.get_node_text(desc_node, 0):gsub("^!%[", ""):gsub("%]$", ""))
+                if lookup and lookup ~= "" then
+                    dest = resolve_markdown_ref_label(0, lookup)
+                end
+            end
+            local has_outer_link = false
+            if not in_dest then
+                local anc = node:parent()
+                while anc do
+                    if anc:type() == "inline_link" then
+                        has_outer_link = true
+                        break
+                    end
+                    anc = anc:parent()
+                end
+            end
+            if dest and dest ~= "" and not has_outer_link then
+                return dest, true
+            end
         elseif t == "inline_link" then
             local dest, label = nil, nil
             for child in node:iter_children() do

@@ -611,15 +611,15 @@ fi
 # Verify bin/theme generated Ghostty cursor/keybindings and live tmux global FZF_DEFAULT_OPTS broadcast
 if grep -Fq 'cursor-style = block' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'cursor-style-blink = false' "$THEME_TEST_Cfg/ghostty/config" && \
-   grep -Fq 'shell-integration-features = no-cursor' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fxq 'shell-integration-features = no-cursor,ssh-env' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = ctrl+shift+t=new_tab' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$THEME_TEST_Cfg/ghostty/config"; then
-    pass "bin/theme generates Ghostty config with steady block cursor (no-cursor) and Ctrl+Shift+T / Alt+Arrow ESC keybindings"
+    pass "bin/theme generates Ghostty config with steady block cursor, ssh-env fallback (no-cursor,ssh-env), and Ctrl+Shift+T / Alt+Arrow ESC keybindings"
 else
-    fail "bin/theme Ghostty cursor & keybindings" "Missing steady block cursor (no-cursor) or Ctrl+Shift+T / Alt+Arrow keybindings in generated Ghostty config"
+    fail "bin/theme Ghostty cursor & keybindings" "Missing steady block cursor (no-cursor,ssh-env) or Ctrl+Shift+T / Alt+Arrow keybindings in generated Ghostty config"
 fi
 
 if command -v tmux >/dev/null 2>&1; then

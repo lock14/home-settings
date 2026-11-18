@@ -65,8 +65,8 @@ rm -rf "$TEMP_SETUP_HOME/.config" "$TEMP_SETUP_HOME/.cache" "$TEMP_SETUP_HOME/.l
 echo -e "\n[3/6] Testing Dry-run execution across Ubuntu, Fedora, and macOS..."
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" == *"tmux"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
-        pass "setup.sh --os ubuntu --dry-run executes cleanly with tmux, client DB tools, and skips GUI apps"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : ubuntu"* ]] && [[ "$output" == *"tmux"* ]] && [[ "$output" == *"imagemagick"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"snap install"* ]] && [[ "$output" == *"postgresql-client"* ]]; then
+        pass "setup.sh --os ubuntu --dry-run executes cleanly with tmux, imagemagick, client DB tools, and skips GUI apps"
     else
         fail "setup.sh ubuntu dry-run output" "Unexpected output: $output"
     fi
@@ -186,8 +186,8 @@ else
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os fedora --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"install ghostty"* ]]; then
-        pass "setup.sh --os fedora --dry-run executes cleanly with Fedora packages (no GUI apps)"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : fedora"* ]] && [[ "$output" == *"ImageMagick"* ]] && [[ "$output" != *"google-chrome"* ]] && [[ "$output" != *"install ghostty"* ]]; then
+        pass "setup.sh --os fedora --dry-run executes cleanly with Fedora packages including ImageMagick (no GUI apps)"
     else
         fail "setup.sh fedora dry-run output" "Missing expected output markers: $output"
     fi
@@ -196,8 +196,8 @@ else
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os macos --dry-run 2>&1); then
-    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : macos"* ]] && [[ "$output" == *"brew install"* ]] && [[ "$output" != *"--cask"* ]]; then
-        pass "setup.sh --os macos --dry-run executes cleanly with Homebrew packages (no GUI casks)"
+    if [[ "$output" == *"[DryRun]"* ]] && [[ "$output" == *"Target OS : macos"* ]] && [[ "$output" == *"brew install"* ]] && [[ "$output" == *"imagemagick"* ]] && [[ "$output" != *"--cask"* ]]; then
+        pass "setup.sh --os macos --dry-run executes cleanly with Homebrew packages including imagemagick (no GUI casks)"
     else
         fail "setup.sh macos dry-run output" "Missing expected output markers: $output"
     fi

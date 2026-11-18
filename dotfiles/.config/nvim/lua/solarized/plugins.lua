@@ -2,6 +2,7 @@
 
 local treesitter = require("solarized.treesitter")
 local lsp = require("solarized.lsp")
+local images = require("solarized.images")
 
 local M = {}
 
@@ -400,6 +401,7 @@ function M.setup(ctx, theme)
     -- Skip re-running lazy.setup() when init.lua is re-sourced inside an active session
     if package.loaded["lazy.core.config"] then
         _G.apply_home_settings_theme()
+        images.on_reload()
         return
     end
 
@@ -419,6 +421,7 @@ function M.setup(ctx, theme)
     vim.list_extend(specs, lsp.plugin_specs())
     table.insert(specs, mini_plugin_spec())
     table.insert(specs, render_markdown_plugin_spec())
+    table.insert(specs, images.plugin_spec())
 
     lazy.setup(specs, {
         lockfile = resolve_lazy_lockfile(ctx and ctx.repo_root or ""),
