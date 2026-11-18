@@ -74,6 +74,74 @@ _BRACKETED_PASTE_ESC_RE = re.compile(r"(?:\x1b\[|\x9b)20[01]~")
 _SKIP_WORKSPACE_SCAN_DIRS = frozenset({".git", ".hg", ".jj", ".svn", "node_modules", "__pycache__"})
 _MAX_WORKSPACE_SCAN_ENTRIES = 128
 _MAX_WORKSPACE_SCAN_DIRS = 128
+_GIT_LS_TIMEOUT = 0.8
+
+
+def _query_session_link_vars(sess: str, need_socket: bool = False) -> tuple[bool, str, str, str]:
+    if not sess:
+        return False, "", "", ""
+    info = tmux_out(
+        "display-message",
+        "-p",
+        "-t",
+        f"={sess}:",
+        f"#{{session_name}}{TMUX_SEP}#{{@ide_workdir}}{TMUX_SEP}#{{@ide_initial_root}}{TMUX_SEP}#{{@ide_socket}}",
+    )
+    if TMUX_SEP not in info:
+        if not session_exists(sess):
+            return False, "", "", ""
+        return (
+            True,
+            get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR"),
+            get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"),
+            get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET") if need_socket else "",
+        )
+    parts = info.split(TMUX_SEP)
+    _, workdir, init_root, sock = (parts + ["", "", "", ""])[:4]
+    if not workdir:
+        workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+    if not init_root:
+        init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+    if need_socket and not sock:
+        sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    return True, workdir, init_root, sock
+
+
+def _git_ls_files_unique_match(git_root: str, cand: str) -> str:
+    if not shutil.which("git"):
+        return ""
+    suffix = "/" + cand
+    for args in (
+        ["ls-files", "--cached"],
+        ["ls-files", "--others", "--exclude-standard"],
+    ):
+        try:
+            ls_res = subprocess.run(
+                ["git", "-C", git_root, *args],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=_GIT_LS_TIMEOUT,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if ls_res.returncode != 0:
+            continue
+        matches: list[str] = []
+        for rel in ls_res.stdout.splitlines():
+            if rel == cand or rel.endswith(suffix):
+                p = os.path.join(git_root, rel)
+                if p not in matches and os.path.isfile(p):
+                    matches.append(p)
+                    if len(matches) > 1:
+                        break
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            return ""
+    return ""
 
 
 def resolve_private_link(link_word: str, link_cwd: str, target_arg: str = "") -> str:
@@ -197,11 +265,7 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
         return cand if (os.path.isfile(cand) or os.path.isdir(cand)) else ""
 
     sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
-    workdir = ""
-    init_root = ""
-    if sess and session_exists(sess):
-        workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
-        init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+    _, workdir, init_root, _ = _query_session_link_vars(sess)
 
     direct = _direct_workspace_path(cand, cwd, workdir, init_root)
     if direct:
@@ -223,24 +287,9 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
             full2 = os.path.join(git_root, stripped)
             if os.path.isfile(full2) or os.path.isdir(full2):
                 return full2
-        if shutil.which("git"):
-            ls_res = subprocess.run(
-                ["git", "-C", git_root, "ls-files", "--cached", "--others", "--exclude-standard"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                check=False,
-            )
-            if ls_res.returncode == 0:
-                suffix = "/" + cand
-                matches = []
-                for rel in ls_res.stdout.splitlines():
-                    if rel == cand or rel.endswith(suffix):
-                        p = os.path.join(git_root, rel)
-                        if os.path.isfile(p):
-                            matches.append(p)
-                if len(matches) == 1:
-                    return matches[0]
+        git_match = _git_ls_files_unique_match(git_root, cand)
+        if git_match:
+            return git_match
         break
 
     cand_norm = os.path.normpath(cand.replace("\\", "/"))
@@ -347,11 +396,10 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
         filepath = os.path.expanduser(filepath)
 
     sess = resolve_target_session(target_arg)
-    if not session_exists(sess):
+    sess_ok, workdir, init_root, sock = _query_session_link_vars(sess, need_socket=True)
+    if not sess_ok:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
-    workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
-    init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
 
     direct_match = _direct_workspace_path(filepath, cwd, workdir, init_root)
     if direct_match:
@@ -390,7 +438,6 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
                 filepath = os.path.join(cwd, rel)
 
     prev_pane = "" if focus else tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}")
-    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     if focus:
         toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
     else:
@@ -409,7 +456,13 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
     if not sock:
         sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     if sock and is_socket_path(sock) and resolve_nvim_bin():
-        ws_dir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT") or cwd
+        ws_dir = (
+            workdir
+            or init_root
+            or get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+            or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+            or cwd
+        )
         nvim_remote_file(sock, filepath, line, fallback_dir=ws_dir)
     if not focus and pane_exists(prev_pane):
         run_tmux("select-pane", "-t", prev_pane)
@@ -438,6 +491,7 @@ def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str, fallback
         resolved = resolve_workspace_file(parse_path, cwd, target_arg)
         if resolved:
             return open_file_or_dir_target(resolved, parse_line, target_arg)
+        return open_file_or_dir_target(parse_path, parse_line, target_arg)
     if open_file_or_dir_target(parse_path, parse_line, target_arg):
         return True
     resolved = resolve_workspace_file(parse_path, cwd, target_arg)
@@ -451,23 +505,33 @@ def _resolve_capture_pane_targets(target_arg: str = "") -> list[list[str]]:
         return []
     if not (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg):
         return []
-    sess = ""
     if target_arg and target_arg.startswith("%"):
-        pane_target = ["-t", target_arg]
-    else:
-        sess = resolve_target_session(target_arg)
-        if sess and session_exists(sess):
-            pane_target = ["-t", f"={sess}:"]
-        elif os.environ.get("TMUX_PANE"):
-            pane_target = ["-t", os.environ["TMUX_PANE"]]
-        else:
-            return []
-    pane_targets = [pane_target]
-    if not (target_arg and target_arg.startswith("%")) and sess and session_exists(sess):
-        for pid in tmux_out("list-panes", "-t", f"={sess}:", "-F", "#{pane_id}").splitlines():
-            if pid and ["-t", pid] not in pane_targets:
-                pane_targets.append(["-t", pid])
-    return pane_targets
+        return [["-t", target_arg]]
+    sess = resolve_target_session(target_arg)
+    if sess:
+        rows = tmux_out("list-panes", "-t", f"={sess}:", "-F", "#{pane_active}\t#{pane_id}").splitlines()
+        if rows:
+            active_targets: list[list[str]] = []
+            other_targets: list[list[str]] = []
+            for row in rows:
+                if "\t" not in row:
+                    continue
+                is_active, pid = row.split("\t", 1)
+                if not pid:
+                    continue
+                target = ["-t", pid]
+                if is_active == "1":
+                    if target not in active_targets:
+                        active_targets.append(target)
+                elif target not in other_targets:
+                    other_targets.append(target)
+            if active_targets or other_targets:
+                return active_targets + other_targets
+        if session_exists(sess):
+            return [["-t", f"={sess}:"]]
+    if os.environ.get("TMUX_PANE"):
+        return [["-t", os.environ["TMUX_PANE"]]]
+    return []
 
 
 def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
@@ -476,13 +540,16 @@ def unsplit_wrapped_url(word: str, target_arg: str = "") -> str:
         return word
     pane_targets = _resolve_capture_pane_targets(target_arg)
     for pt in pane_targets:
-        joined_out = tmux_out("capture-pane", "-p", "-J", *pt)
-        if joined_out:
-            for m in _WRAP_REF_RE.finditer(joined_out):
-                full = strip_token_wrappers(m.group(0))
-                if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
-                    return full
-        raw_lines = tmux_out("capture-pane", "-p", *pt).splitlines()
+        joined_out = tmux_out("capture-pane", "-p", "-J", "-S", "-200", *pt)
+        if not joined_out:
+            continue
+        for m in _WRAP_REF_RE.finditer(joined_out):
+            full = strip_token_wrappers(m.group(0))
+            if len(full) > len(word) and (full.startswith(word) or full.endswith(word)):
+                return full
+        if word not in joined_out or not _WRAP_REF_RE.search(joined_out):
+            continue
+        raw_lines = tmux_out("capture-pane", "-p", "-S", "-200", *pt).splitlines()
         for idx, line in enumerate(raw_lines):
             m_tail = _URL_TAIL_RE.search(line.strip())
             if not m_tail:
@@ -600,7 +667,7 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
         f"(function() local s = '{esc_slug}'; "
         "local ok, p = pcall(vim.treesitter.get_parser, 0, 'markdown'); "
         "if not ok or not p then return 0 end; "
-        "local t = (p:parse(true) or {})[1]; "
+        "local t = (p:parse() or {})[1]; "
         "if not t then return 0 end; "
         "local q = vim.treesitter.query.parse('markdown', '(atx_heading (inline) @h)'); "
         "local seen = {}; "
@@ -667,7 +734,8 @@ def _normalize_clicked_word(word: str) -> str:
 def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     """Route `Ctrl+Click` or `Alt+Click` OSC 8 / plain-text token into Neovim or the browser."""
     cwd = normalize_pane_cwd(cwd, target_arg=target_arg)
-    run_tmux("set-option", "-gq", "word-separators", TMUX_WORD_SEPS)
+    if os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg:
+        run_tmux("set-option", "-gq", "word-separators", TMUX_WORD_SEPS)
 
     if not href and word:
         href = recover_split_osc8_href(word, target_arg)

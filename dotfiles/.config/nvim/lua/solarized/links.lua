@@ -33,7 +33,7 @@ function M.find_markdown_anchor_line(bufnr, raw_slug)
     local b = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
     local ok, parser = pcall(vim.treesitter.get_parser, b, "markdown")
     if ok and parser then
-        local tree = (parser:parse(true) or {})[1]
+        local tree = (parser:parse() or {})[1]
         if tree then
             local q = vim.treesitter.query.parse("markdown", "(atx_heading (inline) @h)")
             local seen = {}
@@ -60,11 +60,14 @@ end
 
 function M.extract_link_at_cursor()
     pcall(vim.treesitter.start, 0)
-    pcall(function()
-        vim.treesitter.get_parser(0):parse(true)
-    end)
     local pos = vim.api.nvim_win_get_cursor(0)
     local row, col = pos[1] - 1, pos[2]
+    pcall(function()
+        local parser = vim.treesitter.get_parser(0)
+        if not pcall(parser.parse, parser, { row, row + 1 }) then
+            parser:parse(true)
+        end
+    end)
     local line = vim.api.nvim_get_current_line()
     local bcol = line:find("%[")
     if bcol and col < bcol - 1 and line:sub(1, bcol):match("^%s*[-*+%d.)]*%s*%[$") then

@@ -64,10 +64,10 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -Fq "bind -n TripleClick1Pane select-pane -t = \; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-line ; send-keys -X copy-pipe-no-clear'" "$TEMP_HOME/.tmux.conf" && \
    ! grep -Fq "copy-mode -H \;" "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '[[:space:]]MouseDown1Pane.*run-shell' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -T copy-mode-vi C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -T copy-mode-vi M-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n C-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-MouseDown1Pane.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi C-MouseDown1Pane.*run-shell -b.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi M-MouseDown1Pane.*run-shell -b.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n C-MouseDown1Pane.*run-shell -b.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-MouseDown1Pane.*run-shell -b.*mouse_hyperlink' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown8Pane.*send-keys C-o' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown9Pane.*send-keys C-i' "$TEMP_HOME/.tmux.conf" && \
    ! grep -Fq "'select-pane -t = \; if-shell" "$TEMP_HOME/.tmux.conf" && \

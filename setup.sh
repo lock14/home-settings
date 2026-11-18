@@ -363,9 +363,10 @@ if [ "$SKIP_USER" = false ]; then
     [ "$SKIP_FONTS" = false ] && "$SCRIPT_DIR/modules/30-fonts.sh"
     [ "$SKIP_TOOLS" = false ] && "$SCRIPT_DIR/modules/40-mise.sh"
 
-    # Expose Mise shims and Elan toolchain binaries on PATH for shell completion generation
+    # Expose Mise shims and Elan toolchain binaries on PATH for Neovim sync and shell completions
     prepend_path "${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims" "$ELAN_HOME/bin"
 
+    [ "$SKIP_NVIM" = false ] && "$SCRIPT_DIR/modules/50-nvim.sh"
     "$SCRIPT_DIR/modules/60-shell.sh"
     [ "$SKIP_TERMINAL" = false ] && "$SCRIPT_DIR/modules/70-terminal.sh"
 fi
