@@ -137,7 +137,8 @@ else
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2>&1); then
-    if [[ "$output" == *"google-chrome"* ]] && [[ "$output" == *"snap install code"* ]] && [[ "$output" == *"snap install ghostty"* ]]; then
+    if [[ "$output" == *"google-chrome"* ]] && [[ "$output" == *"snap install code"* ]] && \
+       { [[ "$output" == *"snap install ghostty"* ]] || [[ "$output" == *"apt-get install -y ghostty"* ]] || [[ "$output" == *"ghostty_latest_"*".deb"* ]]; }; then
         pass "setup.sh --with-gui enables Chrome, Ghostty, and desktop applications"
     else
         fail "setup.sh with-gui dry-run output" "Missing expected GUI application commands: $output"
@@ -1119,6 +1120,183 @@ if [[ "$nvim_dry_default" == *"[DryRun] Syncing Neovim plugins from lazy-lock.js
     pass "modules/50-nvim.sh honors --dry-run and --skip-nvim without mutating HOME and skips cleanly when git/nvim is missing or Neovim < 0.10"
 else
     fail "modules/50-nvim.sh dry-run & guards" "default='$nvim_dry_default' skipped='$nvim_dry_skipped' missing='$nvim_missing_out' old='$nvim_old_out'"
+fi
+
+# Verify Ubuntu/Debian 3-tier Ghostty provisioning (APT repo -> Snap -> .deb fallback with suite & libc/gtk probing)
+TEMP_GHOSTTY_STAGE="$(make_sandbox_dir)"
+GHOSTTY_MOCK_BIN="$TEMP_GHOSTTY_STAGE/bin"
+GHOSTTY_MOCK_DATA="$TEMP_GHOSTTY_STAGE/data"
+mkdir -p "$GHOSTTY_MOCK_BIN" "$GHOSTTY_MOCK_DATA"
+for util in bash sh awk sed grep tr cut head wc cat cp mv rm chmod mktemp uname id printf sleep curl; do
+    if command -v "$util" >/dev/null 2>&1; then
+        ln -sf "$(command -v "$util")" "$GHOSTTY_MOCK_BIN/$util"
+    fi
+done
+
+printf 'dummy-deb-payload\n' > "$GHOSTTY_MOCK_DATA/ghostty_1.4.0-0.ppa2_amd64_forky.deb"
+printf 'dummy-deb-payload\n' > "$GHOSTTY_MOCK_DATA/ghostty_1.3.1-0.ppa2_arm64_24.04.deb"
+cat > "$GHOSTTY_MOCK_DATA/releases.json" <<EOF
+[
+  {
+    "tag_name": "1.4.0-0-ppa2",
+    "assets": [
+      {"browser_download_url": "file://$GHOSTTY_MOCK_DATA/ghostty_1.4.0-0.ppa2_amd64_forky.deb"},
+      {"browser_download_url": "file://$GHOSTTY_MOCK_DATA/ghostty_1.4.0-0.ppa2_amd64_trixie.deb"}
+    ]
+  },
+  {
+    "tag_name": "1.3.1-0-ppa2",
+    "assets": [
+      {"browser_download_url": "file://$GHOSTTY_MOCK_DATA/ghostty_1.3.1-0.ppa2_arm64_24.04.deb"}
+    ]
+  }
+]
+EOF
+
+write_mock_bin "$GHOSTTY_MOCK_BIN" "sudo" '
+echo "[sudo] $*"
+"$@"'
+write_mock_bin "$GHOSTTY_MOCK_BIN" "apt-get" '
+for arg in "$@"; do
+    if [ -f "$arg" ]; then
+        if [ -r "$arg" ]; then
+            perm="$(ls -l "$arg" 2>/dev/null | awk "{print \$1}")"
+            echo "[apt-get-deb] $arg perm=$perm"
+            exit 0
+        fi
+    fi
+done
+echo "[apt-get] $*"
+exit 0'
+if command -v ls >/dev/null 2>&1; then
+    ln -sf "$(command -v ls)" "$GHOSTTY_MOCK_BIN/ls"
+fi
+write_mock_bin "$GHOSTTY_MOCK_BIN" "apt-cache" '
+pkg="${2:-}"
+case "$pkg" in
+    ghostty)
+        case "${MOCK_APT_GHOSTTY:-none}" in
+            remote)
+                printf "ghostty:\n  Installed: (none)\n  Candidate: 1.4.0-1\n  Version table:\n     1.4.0-1 500\n        500 http://archive.ubuntu.com/ubuntu resolute/universe amd64 Packages\n"
+                ;;
+            dpkg_only)
+                printf "ghostty:\n  Installed: 1.4.0-0~ppa2\n  Candidate: 1.4.0-0~ppa2\n  Version table:\n *** 1.4.0-0~ppa2 100\n        100 /var/lib/dpkg/status\n"
+                ;;
+            *)
+                printf "ghostty:\n  Installed: (none)\n  Candidate: (none)\n  Version table:\n"
+                ;;
+        esac
+        ;;
+    libc6)
+        printf "libc6:\n  Installed: %s\n  Candidate: %s\n" "${MOCK_LIBC_VER:-2.43-1}" "${MOCK_LIBC_VER:-2.43-1}"
+        ;;
+    libgtk-4-1)
+        printf "libgtk-4-1:\n  Installed: (none)\n  Candidate: %s\n" "${MOCK_GTK_VER:-4.22.4-1}"
+        ;;
+esac'
+write_mock_bin "$GHOSTTY_MOCK_BIN" "dpkg-query" '
+pkg="${3:-}"
+if [ "$pkg" = "ghostty" ] && [ -n "${MOCK_DPKG_GHOSTTY_VER:-}" ]; then
+    printf "install ok installed\t%s\n" "$MOCK_DPKG_GHOSTTY_VER"
+fi
+exit 0'
+# Portable dpkg --compare-versions mock using python3 so tests pass on macOS as well as Linux
+if command -v python3 >/dev/null 2>&1; then
+    ln -sf "$(command -v python3)" "$GHOSTTY_MOCK_BIN/python3"
+fi
+write_mock_bin "$GHOSTTY_MOCK_BIN" "dpkg" '
+if [ "${1:-}" = "--compare-versions" ]; then
+    python3 - "$2" "$3" "$4" <<'\''PY'\''
+import re, sys
+a, op, b = sys.argv[1], sys.argv[2], sys.argv[3]
+def key(v):
+    v = v.split("-", 1)[0] if "~ppa" not in v else v
+    parts = re.split(r"(~|[0-9]+)", v)
+    out = []
+    for p in parts:
+        if p == "": continue
+        elif p == "~": out.append((-1, ""))
+        elif p.isdigit(): out.append((1, int(p)))
+        else: out.append((0, p))
+    return out
+ka, kb = key(a), key(b)
+sys.exit(0 if (ka >= kb if op == "ge" else ka == kb) else 1)
+PY
+    exit $?
+fi
+echo "[dpkg] $*"'
+
+cat > "$GHOSTTY_MOCK_DATA/os-debian-rolling" <<'EOF'
+ID=debian
+VERSION_CODENAME=sid
+EOF
+cat > "$GHOSTTY_MOCK_DATA/os-mint-noble" <<'EOF'
+ID=linuxmint
+VERSION_ID="22"
+UBUNTU_CODENAME=noble
+EOF
+cat > "$GHOSTTY_MOCK_DATA/os-debian-trixie" <<'EOF'
+ID=debian
+VERSION_CODENAME=trixie
+EOF
+
+ghostty_tier1_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" MOCK_APT_GHOSTTY=remote \
+        GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
+        DRY_RUN=false \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+)"
+ghostty_deb_rolling_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" MOCK_APT_GHOSTTY=dpkg_only GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-rolling" \
+        GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
+        MOCK_LIBC_VER="2.43-7" MOCK_GTK_VER="4.22.4-1" DRY_RUN=false \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+)"
+ghostty_deb_idempotent_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" MOCK_APT_GHOSTTY=dpkg_only MOCK_DPKG_GHOSTTY_VER="1.4.0-0~ppa2" \
+        GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-rolling" \
+        GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
+        DRY_RUN=false \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+)"
+ghostty_deb_mint24_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-mint-noble" \
+        GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
+        DRY_RUN=false \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu arm64' 2>&1
+)"
+ghostty_deb_arch_skip_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-trixie" DRY_RUN=false \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu riscv64' 2>&1
+)"
+
+# Add mock snap that fails in live mode to verify automatic fallback to .deb
+write_mock_bin "$GHOSTTY_MOCK_BIN" "snap" '
+echo "[snap] $*"
+exit 1'
+ghostty_snap_dry_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" DRY_RUN=true \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+)"
+ghostty_snap_fallback_out="$(
+    PATH="$GHOSTTY_MOCK_BIN" GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-rolling" \
+        GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
+        DRY_RUN=false \
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+)"
+
+if [[ "$ghostty_tier1_out" == *"[apt-get] install -y ghostty"* ]] && \
+   [[ "$ghostty_deb_rolling_out" == *"[apt-get-deb] /tmp/ghostty_amd64_forky."*".deb perm=-rw-r--r--"* ]] && \
+   [[ "$ghostty_deb_idempotent_out" == *"Ghostty (1.4.0-0~ppa2) is already installed and up to date."* ]] && \
+   [[ "$ghostty_deb_idempotent_out" != *"[apt-get-deb]"* ]] && \
+   [[ "$ghostty_deb_mint24_out" == *"[apt-get-deb] /tmp/ghostty_arm64_24.04."*".deb perm=-rw-r--r--"* ]] && \
+   [[ "$ghostty_deb_arch_skip_out" == *"Notice: Ghostty prebuilt .deb packages support amd64 and arm64 only (current: riscv64)."* ]] && \
+   [[ "$ghostty_snap_dry_out" == *"snap install ghostty --classic"* ]] && \
+   [[ "$ghostty_snap_fallback_out" == *"Snap Ghostty install failed; falling back to .deb package"* ]] && \
+   [[ "$ghostty_snap_fallback_out" == *"[apt-get-deb] /tmp/ghostty_amd64_forky."*".deb"* ]]; then
+    pass "install_ghostty on ubuntu resolves native APT candidates, Snap (with failure fallback), and Snap-less Debian/Ubuntu .deb packages idempotently"
+else
+    fail "install_ghostty ubuntu 3-tier provisioning" "tier1='$ghostty_tier1_out' rolling='$ghostty_deb_rolling_out' idem='$ghostty_deb_idempotent_out' mint24='$ghostty_deb_mint24_out' arch='$ghostty_deb_arch_skip_out' snap_dry='$ghostty_snap_dry_out' snap_fb='$ghostty_snap_fallback_out'"
 fi
 
 test_summary

@@ -96,5 +96,5 @@ fi
 
 if [ "$INSTALL_GHOSTTY" = true ]; then
     echo "  Installing Ghostty terminal emulator on $OS..."
-    install_ghostty "$OS"
+    install_ghostty "$OS" "$ARCH"
 fi

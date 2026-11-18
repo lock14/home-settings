@@ -108,7 +108,7 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 | `--with-mariadb` | disabled | Install MariaDB server and client tools |
 | `--skip-db` | disabled | Skip all database client and server installations |
 | `--with-gui` | disabled | Install all GUI desktop applications (Chrome, Ghostty, and VS Code or IDE) |
-| `--with-ghostty` | disabled | Install Ghostty terminal emulator (macOS cask, Snap on Ubuntu, COPR on Fedora) |
+| `--with-ghostty` | disabled | Install Ghostty terminal emulator (Homebrew cask on macOS, APT, Snap, or `.deb` on Ubuntu and Debian, COPR on Fedora) |
 | `--skip-ghostty` | disabled | Skip Ghostty terminal emulator installation |
 | `--with-chrome` | disabled | Install Google Chrome |
 | `--skip-chrome` | disabled | Skip Google Chrome installation |
