@@ -608,15 +608,18 @@ if command -v nvim >/dev/null 2>&1; then
     rm -f "$LIVE_NVIM_SOCK" "$STANDALONE_NVIM_SOCK"
 fi
 
-# Verify bin/theme generated Ghostty keybindings and live tmux global FZF_DEFAULT_OPTS broadcast
-if grep -Fq 'keybind = ctrl+shift+t=new_tab' "$THEME_TEST_Cfg/ghostty/config" && \
+# Verify bin/theme generated Ghostty cursor/keybindings and live tmux global FZF_DEFAULT_OPTS broadcast
+if grep -Fq 'cursor-style = block' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'cursor-style-blink = false' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'shell-integration-features = no-cursor' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = ctrl+shift+t=new_tab' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$THEME_TEST_Cfg/ghostty/config"; then
-    pass "bin/theme generates Ghostty config with Ctrl+Shift+T and Alt+Left/Right/Up/Down ESC keybindings"
+    pass "bin/theme generates Ghostty config with steady block cursor (no-cursor) and Ctrl+Shift+T / Alt+Arrow ESC keybindings"
 else
-    fail "bin/theme Ghostty keybindings" "Missing Ctrl+Shift+T or Alt+Arrow keybindings in generated Ghostty config"
+    fail "bin/theme Ghostty cursor & keybindings" "Missing steady block cursor (no-cursor) or Ctrl+Shift+T / Alt+Arrow keybindings in generated Ghostty config"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
