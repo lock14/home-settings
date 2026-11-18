@@ -108,7 +108,7 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 | `--with-mariadb` | disabled | Install MariaDB server and client tools |
 | `--skip-db` | disabled | Skip all database client and server installations |
 | `--with-gui` | disabled | Install all GUI desktop applications (Chrome, Ghostty, and VS Code or IDE) |
-| `--with-ghostty` | disabled | Install Ghostty terminal emulator (macOS cask, Snap on Ubuntu, COPR on Fedora) |
+| `--with-ghostty` | disabled | Install Ghostty terminal emulator (Homebrew cask on macOS, APT, Snap, or `.deb` on Ubuntu and Debian, COPR on Fedora) |
 | `--skip-ghostty` | disabled | Skip Ghostty terminal emulator installation |
 | `--with-chrome` | disabled | Install Google Chrome |
 | `--skip-chrome` | disabled | Skip Google Chrome installation |
@@ -431,7 +431,7 @@ Developer runtimes, language compilers, npm-backed language servers, and modern 
 Terminal emulator profiles and system monitors are pre-configured with Ethan Schoonover's Solarized Dark palette, calibrated dim-text contrast (`#586E75`), and `MesloLGS Nerd Font Mono` typography:
 
 - **Ghostty**: Configured in `dotfiles/.config/ghostty/config`:
-  - 24-bit Solarized Dark theme with `MesloLGS Nerd Font Mono` (12pt), block cursor, flush window edges, and `macos-option-as-alt = true` so `Option` shortcuts map to `Alt`.
+  - 24-bit Solarized Dark theme with `MesloLGS Nerd Font Mono` (12pt), steady block cursor (`cursor-style = block` with `shell-integration-features = no-cursor`), flush window edges, and `macos-option-as-alt = true` so `Option` shortcuts map to `Alt`.
   - Built-in split and tab management: `Ctrl+Shift+D` opens a new split (`new_split:auto`), `Ctrl+Shift+W` closes the current surface, `Ctrl+Shift+Enter` toggles split zoom, `Ctrl+Shift+H/J/K/L` move focus across splits, `Ctrl+Shift+T` opens a new tab, and `Alt+Left/Right/Up/Down` forward standard ESC-prefixed sequences (`\x1b[1;3D`, `\x1b[1;3C`, `\x1b[1;3A`, `\x1b[1;3B`) to Tmux and the shell.
   - Automatically linked to `~/.config/ghostty/config` and macOS `Application Support`.
 - **GNOME Terminal**: Configured via `bin/gnome-terminal-solarized`:
