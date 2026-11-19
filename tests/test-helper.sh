@@ -62,7 +62,8 @@ make_sandbox_home() {
 # Create an isolated TMUX_TMPDIR registered for automatic server shutdown and directory removal.
 make_tmux_sandbox_dir() {
     local dir
-    dir="$(mktemp -d)"
+    dir="$(mktemp -d /tmp/hs-tmux.XXXXXX)"
+    chmod 700 "$dir" 2>/dev/null || true
     register_tmux_tmpdir "$dir"
     printf '%s\n' "$dir"
 }
@@ -75,15 +76,17 @@ _hs_cleanup_test_runtime_dir() {
             while IFS= read -r reg_entry; do
                 [ -n "$reg_entry" ] || continue
                 tmux -S "$reg_entry/tmux-${uid_num}/default" kill-server >/dev/null 2>&1 || true
-                rm -rf "$reg_entry"
+                rm -rf "$reg_entry" 2>/dev/null || { chmod -R u+w "$reg_entry" 2>/dev/null || true; rm -rf "$reg_entry" 2>/dev/null || true; }
             done < "$_HS_TEST_RUNTIME_DIR/.tmux_sockets"
         fi
         if [ -f "$_HS_TEST_RUNTIME_DIR/.cleanups" ]; then
             while IFS= read -r reg_entry; do
-                [ -n "$reg_entry" ] && [ -e "$reg_entry" ] && rm -rf "$reg_entry"
+                [ -n "$reg_entry" ] && [ -e "$reg_entry" ] && {
+                    rm -rf "$reg_entry" 2>/dev/null || { chmod -R u+w "$reg_entry" 2>/dev/null || true; rm -rf "$reg_entry" 2>/dev/null || true; }
+                }
             done < "$_HS_TEST_RUNTIME_DIR/.cleanups"
         fi
-        rm -rf "$_HS_TEST_RUNTIME_DIR"
+        rm -rf "$_HS_TEST_RUNTIME_DIR" 2>/dev/null || true
     fi
 }
 trap _hs_cleanup_test_runtime_dir EXIT

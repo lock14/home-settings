@@ -1278,7 +1278,7 @@ EOF
 
         local v_ed_listen_ok="1"
         if command -v tmux >/dev/null 2>&1; then
-            local v_tmux_dir="$(mktemp -d)"
+            local v_tmux_dir="$(make_tmux_sandbox_dir)"
             local v_ed_sock="$v_tmux_dir/nvim-ide-v_ed_zsh.sock"
             local v_ed_log="$v_tmux_dir/ed_nvim.log"
             : > "$v_ed_log"
@@ -1320,12 +1320,14 @@ EOF
                 mkdir -p "$TEMP_HOME/.local/bin"
                 ln -sf "$SCRIPT_DIR/bin/ide" "$TEMP_HOME/.local/bin/ide"
                 printf 'one\ntwo\nthree\n' > "$v_test_dir/repo/heal_target.txt"
-                TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux respawn-pane -k -t "$v_ed_p" -c "$v_test_dir/repo" "env XDG_RUNTIME_DIR='$v_tmux_dir' NVIM_LOG_FILE=/dev/null nvim --clean"
+                TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux respawn-pane -k -t "$v_ed_p" -c "$v_test_dir/repo" "env XDG_RUNTIME_DIR='$v_tmux_dir' TMPDIR='$v_tmux_dir' NVIM_LOG_FILE=/dev/null nvim --clean"
                 local _t
-                for _t in {1..60}; do
+                for _t in {1..80}; do
                     setopt local_options null_glob
-                    local -a _ephems=("$v_tmux_dir"/nvim.*.0)
-                    (( ${#_ephems[@]} > 0 )) && break
+                    local -a _ephems=("$v_tmux_dir"/nvim.*.0 "$v_tmux_dir"/nvim.*/nvim.*.0 "$v_tmux_dir"/nvim.*/*/nvim.*.0)
+                    if (( ${#_ephems[@]} > 0 )) && [ "$(NVIM_LOG_FILE=/dev/null sh -c 'if command -v timeout >/dev/null 2>&1; then exec timeout 3 "$@"; else exec "$@"; fi' _ nvim --headless --server "${_ephems[1]}" --remote-expr 'len(nvim_list_uis())' </dev/null 2>/dev/null || true)" = "1" ]; then
+                        break
+                    fi
                     sleep 0.05
                 done
                 (
@@ -1337,7 +1339,7 @@ EOF
                 ) || true
                 local healed_state=""
                 if [ -S "$v_ed_sock" ]; then
-                    healed_state="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$v_ed_sock" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
+                    healed_state="$(NVIM_LOG_FILE=/dev/null sh -c 'if command -v timeout >/dev/null 2>&1; then exec timeout 5 "$@"; else exec "$@"; fi' _ nvim --headless --server "$v_ed_sock" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
                 fi
                 if [ "$healed_state" != "heal_target.txt:2" ]; then
                     v_ed_listen_ok="heal_mismatch:$healed_state"
@@ -1351,7 +1353,7 @@ EOF
                         cd "$v_test_dir/repo"
                         v +3 heal_target.txt >/dev/null 2>&1
                     ) || true
-                    local sub_state="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$v_ed_sock" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
+                    local sub_state="$(NVIM_LOG_FILE=/dev/null sh -c 'if command -v timeout >/dev/null 2>&1; then exec timeout 5 "$@"; else exec "$@"; fi' _ nvim --headless --server "$v_ed_sock" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
                     if [ "$sub_state" != "heal_target.txt:3" ]; then
                         v_ed_listen_ok="subshell_heal_mismatch:$sub_state"
                     elif command -v timeout >/dev/null 2>&1; then
@@ -1379,6 +1381,9 @@ EOF
                         fi
                     fi
                 fi
+            fi
+            if [ -S "$v_ed_sock" ] && command -v nvim >/dev/null 2>&1; then
+                NVIM_LOG_FILE=/dev/null sh -c 'if command -v timeout >/dev/null 2>&1; then exec timeout 2 "$@"; else exec "$@"; fi' _ nvim --headless --server "$v_ed_sock" --remote-send '<C-\><C-n><Cmd>qall!<CR>' </dev/null >/dev/null 2>&1 || true
             fi
             TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$v_tmux_dir"

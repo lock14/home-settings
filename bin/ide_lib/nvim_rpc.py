@@ -295,7 +295,15 @@ def bind_nvim_server_socket(cand_sock: str, target_sock: str, sess: str = "") ->
     esc_n = sess.replace("\\", "\\\\").replace("'", "\\'")
     lua_fn = (
         "(function(s, n) "
-        "if #vim.api.nvim_list_uis() == 0 or (vim.env.NVIM or '') ~= '' then return '0' end; "
+        "if (vim.env.NVIM or '') ~= '' then return '0' end; "
+        "if #vim.api.nvim_list_uis() == 0 then "
+        "local argv = vim.v.argv or {}; "
+        "for _, a in ipairs(argv) do "
+        "if a == '--headless' or a == '-es' or a == '-Es' or a == '-e' or a == '-E' then return '0' end "
+        "end; "
+        "vim.wait(400, function() return #vim.api.nvim_list_uis() > 0 end, 15); "
+        "if #vim.api.nvim_list_uis() == 0 then return '0' end "
+        "end; "
         "local u = vim.uv or vim.loop; "
         "for _, srv in ipairs(vim.fn.serverlist()) do "
         "if srv == s then "
