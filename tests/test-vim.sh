@@ -2178,7 +2178,12 @@ if ok and mf then
 end
 vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
+local md_so = vim.wo.scrolloff
+vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.go")
+local go_so = vim.wo.scrolloff
+vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and md_so == 0 and go_so == 8 and vim.wo.scrolloff == 0 and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
 local hex = function(n) return n and string.format("%06x", n) or "none" end
 local hl = function(g) return vim.api.nvim_get_hl(0, { name = g, link = false }) end
 local h1, h2, h3, h4, h5, h6 = hl("RenderMarkdownH1"), hl("RenderMarkdownH2"), hl("RenderMarkdownH3"), hl("RenderMarkdownH4"), hl("RenderMarkdownH5"), hl("RenderMarkdownH6")

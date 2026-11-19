@@ -50,7 +50,7 @@ _ide_tmux_target() {
     [[ "$tmux_target" == %* ]] && id_fmt='#{pane_id}'
     if [ "$with_meta" = "1" ]; then
         local srv_info srv_prefix
-        srv_info="$(tmux display-message -p -t "$tmux_target" "#{pid}:${id_fmt}"$'\t'"#{@ide_socket}"$'\t'"#{@ide_editor_pane}" 2>/dev/null || true)"
+        srv_info="$(tmux display-message -p -t "$tmux_target" "#{pid}:${id_fmt}"$'\t'"#{@ide_socket}"$'\t'"#{@ide_editor_pane}"$'\t'"#{@ide_role}"$'\t'"#{pane_pid}" 2>/dev/null || true)"
         srv_prefix="${srv_info%%$'\t'*}"
         [ "$srv_prefix" = "$tmux_pid:$tmux_target" ] || return 1
         printf '%s' "${tmux_target}"$'\t'"${srv_info#*$'\t'}"
@@ -131,15 +131,19 @@ v() {
     done
     [ "$expect_cmd" = "1" ] && local_only=1
 
-    local tmux_target="" tmux_meta="" tmux_meta_rest="" tmux_ed_pane=""
-    if [ "$local_only" = "0" ] && [ -n "${TMUX:-}" ]; then
+    local tmux_target="" tmux_meta="" tmux_meta_rest="" tmux_ed_pane="" tmux_role="" tmux_pane_pid="" is_editor_pane=0
+    if [ -n "${TMUX:-}" ]; then
         tmux_meta="$(_ide_tmux_target -m || true)"
     fi
     if [ -n "$tmux_meta" ]; then
         tmux_target="${tmux_meta%%$'\t'*}"
         tmux_meta_rest="${tmux_meta#*$'\t'}"
         tmux_sock="${tmux_meta_rest%%$'\t'*}"
-        tmux_ed_pane="${tmux_meta_rest#*$'\t'}"
+        tmux_meta_rest="${tmux_meta_rest#*$'\t'}"
+        tmux_ed_pane="${tmux_meta_rest%%$'\t'*}"
+        tmux_meta_rest="${tmux_meta_rest#*$'\t'}"
+        tmux_role="${tmux_meta_rest%%$'\t'*}"
+        tmux_pane_pid="${tmux_meta_rest#*$'\t'}"
         if [ -z "$tmux_sock" ]; then
             local env_sock
             env_sock="$(tmux show-environment -t "$tmux_target" NVIM_IDE_SOCKET 2>/dev/null || true)"
@@ -158,28 +162,85 @@ v() {
                 fi
             fi
         fi
+        if [[ "${TMUX_PANE:-}" == %* ]]; then
+            if { [ -n "$tmux_ed_pane" ] && [ "$TMUX_PANE" = "$tmux_ed_pane" ]; } || [ "$tmux_role" = "editor" ]; then
+                is_editor_pane=1
+            fi
+        fi
+    fi
+
+    local ide_bin="" has_timeout=0 can_heal=0
+    command -v timeout >/dev/null 2>&1 && has_timeout=1
+    if [ -n "${TMUX:-}" ]; then
+        if [ -x "$HOME/.local/bin/ide" ]; then
+            ide_bin="$HOME/.local/bin/ide"
+        elif command -v ide >/dev/null 2>&1; then
+            ide_bin="$(command -v ide)"
+        fi
+    fi
+    if [ -n "$tmux_meta" ] && [ -n "$ide_bin" ]; then
+        if [ "$is_editor_pane" = "0" ] || [ -n "${NVIM:-}" ] || { [ -n "$tmux_pane_pid" ] && [ "$$" != "$tmux_pane_pid" ]; }; then
+            can_heal=1
+        fi
+    fi
+
+    if [ "$can_heal" = "1" ] && [ -n "$sock" ] && [ ! -S "$sock" ]; then
+        if [ "$local_only" = "0" ] || [ "$is_editor_pane" = "1" ]; then
+            "$ide_bin" --heal-socket >/dev/null 2>&1 || true
+        fi
     fi
 
     if [ -n "$sock" ] && [ -S "$sock" ] && command -v nvim >/dev/null 2>&1; then
         if [ "$local_only" = "0" ]; then
-            if nvim --headless --server "$sock" --remote-expr 'exists("*luaeval") ? luaeval("(function() local u=vim.uv or vim.loop; if u then local p=nil; for _,c in ipairs({vim.env.PWD or \"\",vim.env.IDE_WORKDIR or \"\",vim.env.IDE_INITIAL_ROOT or \"\"}) do if c and c~=\"\" and vim.fn.isdirectory(c)==1 then p=c; break end end; if p then local d,s=u.fs_stat(\".\"),u.fs_stat(p); if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then pcall(vim.fn.chdir,p); vim.env.PWD=p end end end; pcall(vim.cmd,\"silent! checktime\"); return 1 end)()") : len(execute("silent! checktime"))+1' >/dev/null 2>&1; then
+            local rpc_check_expr='exists("*luaeval") ? luaeval("(function() local u=vim.uv or vim.loop; if u then local p=nil; for _,c in ipairs({vim.env.PWD or \"\",vim.env.IDE_WORKDIR or \"\",vim.env.IDE_INITIAL_ROOT or \"\"}) do if c and c~=\"\" and vim.fn.isdirectory(c)==1 then p=c; break end end; if p then local d,s=u.fs_stat(\".\"),u.fs_stat(p); if not u.cwd() or not d or d.nlink==0 or (vim.fn.haslocaldir()==0 and vim.fn.haslocaldir(-1,0)==0 and s and (d.dev~=s.dev or d.ino~=s.ino)) then pcall(vim.fn.chdir,p); vim.env.PWD=p end end end; pcall(vim.cmd,\"silent! checktime\"); return 1 end)()") : len(execute("silent! checktime"))+1'
+            local rpc_ready=0 rpc_rc=0
+            if [ "$has_timeout" = "1" ]; then
+                timeout 3 nvim --headless --server "$sock" --remote-expr "$rpc_check_expr" >/dev/null 2>&1 || rpc_rc=$?
+            else
+                nvim --headless --server "$sock" --remote-expr "$rpc_check_expr" >/dev/null 2>&1 || rpc_rc=$?
+            fi
+            if [ "$rpc_rc" = "0" ]; then
+                rpc_ready=1
+            elif [ "$rpc_rc" != "124" ] && [ "$rpc_rc" != "137" ]; then
+                rm -f "$sock" 2>/dev/null || true
+                if [ "$can_heal" = "1" ] && "$ide_bin" --heal-socket >/dev/null 2>&1 && [ -S "$sock" ]; then
+                    rpc_rc=0
+                    if [ "$has_timeout" = "1" ]; then
+                        timeout 3 nvim --headless --server "$sock" --remote-expr "$rpc_check_expr" >/dev/null 2>&1 || rpc_rc=$?
+                    else
+                        nvim --headless --server "$sock" --remote-expr "$rpc_check_expr" >/dev/null 2>&1 || rpc_rc=$?
+                    fi
+                    if [ "$rpc_rc" = "0" ]; then
+                        rpc_ready=1
+                    elif [ "$rpc_rc" != "124" ] && [ "$rpc_rc" != "137" ]; then
+                        rm -f "$sock" 2>/dev/null || true
+                    fi
+                fi
+            fi
+            if [ "$rpc_ready" = "1" ]; then
                 if [ "${#abs_args[@]}" -gt 0 ]; then
-                    nvim --server "$sock" --remote "${abs_args[@]}"
+                    if [ "$has_timeout" = "1" ]; then
+                        timeout 5 nvim --server "$sock" --remote "${abs_args[@]}"
+                    else
+                        nvim --server "$sock" --remote "${abs_args[@]}"
+                    fi
                 fi
                 if [ "${#plus_cmds[@]}" -gt 0 ]; then
                     for p_cmd in "${plus_cmds[@]}"; do
                         esc_cmd="${p_cmd//\\/\\\\}"
                         esc_cmd="${esc_cmd//\"/\\\"}"
-                        nvim --headless --server "$sock" --remote-expr "execute(\"$esc_cmd\")" >/dev/null 2>&1 || true
+                        if [ "$has_timeout" = "1" ]; then
+                            timeout 3 nvim --headless --server "$sock" --remote-expr "execute(\"$esc_cmd\")" >/dev/null 2>&1 || true
+                        else
+                            nvim --headless --server "$sock" --remote-expr "execute(\"$esc_cmd\")" >/dev/null 2>&1 || true
+                        fi
                     done
                 fi
                 if [ -n "${TMUX:-}" ] && { [ -z "$tmux_sock" ] || [ "$sock" = "$tmux_sock" ]; }; then
                     local cur_pane="${TMUX_PANE:-}"
                     if [ -z "$pane" ] || [ "$cur_pane" != "$pane" ]; then
-                        if [ -x "$HOME/.local/bin/ide" ]; then
-                            IDE_SKIP_CHECKTIME=1 "$HOME/.local/bin/ide" --focus-editor >/dev/null 2>&1 || true
-                        elif command -v ide >/dev/null 2>&1; then
-                            IDE_SKIP_CHECKTIME=1 ide --focus-editor >/dev/null 2>&1 || true
+                        if [ -n "$ide_bin" ]; then
+                            IDE_SKIP_CHECKTIME=1 "$ide_bin" --focus-editor >/dev/null 2>&1 || true
                         elif [ -n "$pane" ]; then
                             tmux select-window -t "$pane" 2>/dev/null || true
                             tmux select-pane -t "$pane" 2>/dev/null || true
@@ -187,16 +248,51 @@ v() {
                     fi
                 fi
                 return 0
+            fi
+        else
+            local ping_rc=0
+            if [ "$has_timeout" = "1" ]; then
+                timeout 3 nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1 || ping_rc=$?
             else
+                nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1 || ping_rc=$?
+            fi
+            if [ "$ping_rc" != "0" ] && [ "$ping_rc" != "124" ] && [ "$ping_rc" != "137" ]; then
                 rm -f "$sock" 2>/dev/null || true
             fi
-        elif ! nvim --headless --server "$sock" --remote-expr "1" >/dev/null 2>&1; then
-            rm -f "$sock" 2>/dev/null || true
         fi
     fi
 
     if command -v nvim >/dev/null 2>&1; then
-        command nvim "$@"
+        local use_listen=0
+        if [ "$is_editor_pane" = "1" ] && [ -z "${NVIM:-}" ] && [ -n "$sock" ] && [ ! -e "$sock" ] && [ ! -L "$sock" ]; then
+            use_listen=1
+            local v_arg v_skip_val=0
+            for v_arg in "$@"; do
+                if [ "$v_skip_val" = "1" ]; then
+                    v_skip_val=0
+                    continue
+                fi
+                [ "$v_arg" = "--" ] && break
+                case "$v_arg" in
+                    -c|--cmd|-u|-i|-s|-S|--startuptime)
+                        v_skip_val=1
+                        ;;
+                    --listen|--listen=*|--server|--server=*|--remote*|--headless|--embed|--api-info|-l|-v|--version|-h|--help|-\?|-e|-E|-es|-Es)
+                        use_listen=0
+                        break
+                        ;;
+                esac
+            done
+        fi
+        if [ "$use_listen" = "1" ]; then
+            local sock_dir="${sock%/*}"
+            if [ -n "$sock_dir" ] && [ "$sock_dir" != "$sock" ] && [ ! -d "$sock_dir" ]; then
+                { mkdir -p "$sock_dir" && chmod 700 "$sock_dir"; } 2>/dev/null || true
+            fi
+            command nvim --listen "$sock" "$@"
+        else
+            command nvim "$@"
+        fi
     elif command -v vim >/dev/null 2>&1; then
         command vim "$@"
     else

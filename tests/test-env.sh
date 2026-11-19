@@ -1850,6 +1850,111 @@ EOF
         v_calls="$(cat "$V_LOG" 2>/dev/null || true)"
         rm -f "$V_SOCK"
 
+        v_ed_listen_ok="1"
+        if command -v tmux >/dev/null 2>&1; then
+            V_TMUX_DIR="$(mktemp -d)"
+            V_ED_SOCK="$V_TMUX_DIR/nvim-ide-v_ed_bash.sock"
+            V_ED_LOG="$V_TMUX_DIR/ed_nvim.log"
+            : > "$V_ED_LOG"
+            cat > "$V_TEST_DIR/bin/nvim" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$V_ED_LOG"
+EOF
+            chmod +x "$V_TEST_DIR/bin/nvim"
+            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux -f /dev/null new-session -d -s v_ed_bash -c "$V_TEST_DIR/repo" "sleep 30"
+            v_ed_p="$(TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux display-message -p -t '=v_ed_bash:' '#{pane_id}')"
+            v_tm_p="$(TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux split-window -v -P -F '#{pane_id}' -t '=v_ed_bash:' -c "$V_TEST_DIR/repo" "sleep 30")"
+            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux set-option -p -t "$v_ed_p" @ide_role "editor"
+            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux set-option -p -t "$v_tm_p" @ide_role "term"
+            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux set-option -t '=v_ed_bash:' @ide_editor_pane "$v_ed_p"
+            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux set-option -t '=v_ed_bash:' @ide_socket "$V_ED_SOCK"
+            v_tmux_env="$(TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux display-message -p -t '=v_ed_bash:' '#{socket_path},#{pid},0')"
+            (
+                export PATH="$V_TEST_DIR/bin:$PATH"
+                export TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="$v_tmux_env" NVIM_IDE_SOCKET="$V_ED_SOCK"
+                unset NVIM_IDE_PANE NVIM
+                source "$TWOFILE_DIR/.bashrc-addendum"
+                cd "$V_TEST_DIR/repo"
+                TMUX_PANE="$v_ed_p" v alpha.txt
+                TMUX_PANE="$v_ed_p" v -O alpha.txt beta.txt
+                TMUX_PANE="$v_ed_p" v --version
+                TMUX_PANE="$v_ed_p" v -l script.lua
+                TMUX_PANE="$v_ed_p" NVIM="/tmp/nested.sock" v alpha.txt
+                TMUX_PANE="$v_tm_p" v alpha.txt
+                TMUX_PANE="$v_tm_p" v -R alpha.txt
+            )
+            ed_expected="$(printf '%s\n' "--listen $V_ED_SOCK alpha.txt" "--listen $V_ED_SOCK -O alpha.txt beta.txt" "--version" "-l script.lua" "alpha.txt" "alpha.txt" "-R alpha.txt")"
+            ed_actual="$(cat "$V_ED_LOG" 2>/dev/null || true)"
+            if [ "$ed_actual" != "$ed_expected" ]; then
+                v_ed_listen_ok="mock_mismatch:${ed_actual//$'\n'/|}"
+            fi
+
+            rm -f "$V_TEST_DIR/bin/nvim"
+            if [ "$v_ed_listen_ok" = "1" ] && command -v nvim >/dev/null 2>&1; then
+                mkdir -p "$STANDALONE_HOME/.local/bin"
+                ln -sf "$SCRIPT_DIR/bin/ide" "$STANDALONE_HOME/.local/bin/ide"
+                printf 'one\ntwo\nthree\n' > "$V_TEST_DIR/repo/heal_target.txt"
+                TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux respawn-pane -k -t "$v_ed_p" -c "$V_TEST_DIR/repo" "env XDG_RUNTIME_DIR='$V_TMUX_DIR' NVIM_LOG_FILE=/dev/null nvim --clean"
+                for _ in $(seq 1 60); do
+                    ls "$V_TMUX_DIR"/nvim.*.0 >/dev/null 2>&1 && break
+                    sleep 0.05
+                done
+                (
+                    export HOME="$STANDALONE_HOME" TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="$v_tmux_env" TMUX_PANE="$v_tm_p" NVIM_IDE_SOCKET="$V_ED_SOCK"
+                    unset NVIM_IDE_PANE NVIM
+                    source "$TWOFILE_DIR/.bashrc-addendum"
+                    cd "$V_TEST_DIR/repo"
+                    v +2 heal_target.txt >/dev/null 2>&1
+                ) || true
+                healed_state=""
+                if [ -S "$V_ED_SOCK" ]; then
+                    healed_state="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$V_ED_SOCK" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
+                fi
+                if [ "$healed_state" != "heal_target.txt:2" ]; then
+                    v_ed_listen_ok="heal_mismatch:$healed_state"
+                fi
+                if [ "$v_ed_listen_ok" = "1" ]; then
+                    rm -f "$V_ED_SOCK"
+                    (
+                        export HOME="$STANDALONE_HOME" TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="$v_tmux_env" TMUX_PANE="$v_ed_p" NVIM_IDE_SOCKET="$V_ED_SOCK"
+                        unset NVIM_IDE_PANE NVIM
+                        source "$TWOFILE_DIR/.bashrc-addendum"
+                        cd "$V_TEST_DIR/repo"
+                        v +3 heal_target.txt >/dev/null 2>&1
+                    ) || true
+                    sub_state="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$V_ED_SOCK" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
+                    if [ "$sub_state" != "heal_target.txt:3" ]; then
+                        v_ed_listen_ok="subshell_heal_mismatch:$sub_state"
+                    elif command -v timeout >/dev/null 2>&1; then
+                        cat > "$V_TEST_DIR/bin/timeout" <<'EOF'
+#!/usr/bin/env bash
+exit 124
+EOF
+                        chmod +x "$V_TEST_DIR/bin/timeout"
+                        cat > "$V_TEST_DIR/bin/nvim" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+                        chmod +x "$V_TEST_DIR/bin/nvim"
+                        (
+                            export PATH="$V_TEST_DIR/bin:$PATH" HOME="$STANDALONE_HOME" NVIM_IDE_SOCKET="$V_ED_SOCK"
+                            unset TMUX TMUX_PANE NVIM_IDE_PANE NVIM
+                            source "$TWOFILE_DIR/.bashrc-addendum"
+                            cd "$V_TEST_DIR/repo"
+                            v -R alpha.txt >/dev/null 2>&1
+                            v alpha.txt >/dev/null 2>&1
+                        ) || true
+                        rm -f "$V_TEST_DIR/bin/timeout" "$V_TEST_DIR/bin/nvim"
+                        if [ ! -S "$V_ED_SOCK" ]; then
+                            v_ed_listen_ok="timeout_unlinked_live_sock"
+                        fi
+                    fi
+                fi
+            fi
+            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
+            rm -rf "$V_TMUX_DIR"
+        fi
+
         cd "$V_TEST_DIR/repo"
         git init -q -b "feat/esc"
         git config user.email "t@example.com"
@@ -1886,12 +1991,13 @@ GITCFG
            grep -Fq -- "--server $V_SOCK --remote $V_TEST_DIR/repo/-dash.txt" "$V_LOG" && \
            grep -Fq -- 'execute("12")' "$V_LOG" && \
            grep -Fq -- 'execute("set number")' "$V_LOG" && \
+           [ "$v_ed_listen_ok" = "1" ] && \
            [[ "$ps1_esc_cfg" == *""* ]] && \
            [[ "$ps1_esc_cfg" == *'\[\e]8;;https://gitlab.com/acme/repo/-/merge_requests/88\a\]'* ]] && \
            [[ "$ps1_esc_cfg" == *'@'*'88\[\e]8;;\a\]'* ]]; then
             echo "PASS:Bash v() runs unrecognized -* flags (-R, -O, -p) locally while routing +line/-c/-- to remote IDE Editor, and _solarized_parse_git_config handles even trailing backslashes and escaped quotes"
         else
-            echo "FAIL:Bash v() flag routing or .git/config escaping:v_calls='${v_calls//$'\n'/ | }' ps1='$ps1_esc_cfg'"
+            echo "FAIL:Bash v() flag routing or .git/config escaping:v_calls='${v_calls//$'\n'/ | }' ed_listen='$v_ed_listen_ok' ps1='$ps1_esc_cfg'"
         fi
     )
 ) > "$STANDALONE_HOME/results.txt"

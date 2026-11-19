@@ -93,11 +93,12 @@ for mname in sorted(dag):
 # 3. Direct in-process unit checks of reusable ide_lib domain functions (zero tmux subprocesses)
 sys.path.insert(0, os.path.join(repo_dir, "bin"))
 from ide_lib import TMUX_SEP, USAGE_TEXT
-from ide_lib.constants import sanitize_agent_msg, sanitize_http_url, visible_width
+from ide_lib.constants import is_live_socket, sanitize_agent_msg, sanitize_http_url, visible_width
 from ide_lib.fleet import format_attn_summary
 from ide_lib.git_info import build_forge_pr_url
 from ide_lib.links import parse_file_target, strip_token_wrappers
 from ide_lib.theme import hex_to_fg
+from ide_lib.tmux import pane_tree_pids
 
 assert TMUX_SEP == "\t__IDE_SEP__\t"
 assert visible_width("\x1b[38;2;38;139;210malpha\x1b[0m") == 5
@@ -118,6 +119,47 @@ assert format_attn_summary(
     ]
 ) == "alpha +1"
 assert hex_to_fg("#268BD2") == "\033[38;2;38;139;210m"
+
+import socket as _socket
+
+_sock_tmp = tempfile.mkdtemp(prefix="ide-live-sock.")
+try:
+    _live_p = os.path.join(_sock_tmp, "live.sock")
+    _dead_p = os.path.join(_sock_tmp, "dead.sock")
+    _reg_p = os.path.join(_sock_tmp, "regular.txt")
+    with open(_reg_p, "w", encoding="utf-8") as _rf:
+        _rf.write("not a socket\n")
+    _ls = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    _ls.bind(_live_p)
+    _ls.listen(1)
+    _ds = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    _ds.bind(_dead_p)
+    _ds.close()
+    try:
+        assert is_live_socket(_live_p) is True
+        assert is_live_socket(_dead_p) is False
+        assert is_live_socket(_reg_p) is False
+        assert is_live_socket(os.path.join(_sock_tmp, "missing.sock")) is False
+        assert is_live_socket(os.path.join(_sock_tmp, "x" * 130 + ".sock")) is False
+        os.chmod(_live_p, 0)
+        try:
+            if os.geteuid() != 0:
+                assert is_live_socket(_live_p) is False
+        finally:
+            os.chmod(_live_p, 0o600)
+    finally:
+        _ls.close()
+    _child_sleep = subprocess.Popen(["sleep", "5"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        _tree = pane_tree_pids(str(os.getpid()))
+        assert _tree and _tree[0] == os.getpid() and _child_sleep.pid in _tree, f"unexpected pane_tree_pids: {_tree}"
+    finally:
+        _child_sleep.terminate()
+        _child_sleep.wait(timeout=2)
+finally:
+    import shutil as _sock_shutil
+
+    _sock_shutil.rmtree(_sock_tmp, ignore_errors=True)
 
 # 4. Isolated temp-dir symlink resolution + <50ms cold CLI latency budget (--keys, --help, --list --plain)
 tmp_root = tempfile.mkdtemp(prefix="ide-mod-lat.")
@@ -2563,6 +2605,307 @@ try:
     )
     dt_hook = time.monotonic() - t0_hook
     assert r_slow.returncode == 0 and dt_hook < 3.0, f"hanging ide_workspace_dirs hook was not bounded by 1.0s timeout: dt={dt_hook:.2f}s"
+
+    # End-to-end @ide_socket self-healing & strict Editor-pane isolation (nvim_rpc.py + ide.lua)
+    if shutil.which("nvim"):
+        import socket as _hsock
+
+        from ide_lib.tmux import discover_pane_nvim_sockets
+
+        ws_heal = make_ws("heal-ws", ai_cmd="exec /bin/sh", ed_cmd="exec /bin/sh")
+        heal_sock = os.path.join(xdg_run, "nvim-ide-heal-ws.sock")
+        heal_dot_dir = os.path.join(ws_heal["dir"], "dotfiles")
+        heal_sub_dir = os.path.join(ws_heal["dir"], "subdir")
+        os.makedirs(heal_dot_dir, exist_ok=True)
+        os.makedirs(heal_sub_dir, exist_ok=True)
+        heal_tmux_conf = os.path.join(heal_dot_dir, ".tmux.conf")
+        with open(heal_tmux_conf, "w", encoding="utf-8") as htf:
+            htf.write("".join(f"# line {ln}\n" for ln in range(1, 45)))
+
+        # 1. Headless nvim in Editor pane + interactive nvim in Shell & AI panes must NEVER bind @ide_socket
+        headless_ed = subprocess.Popen(
+            ["nvim", "--clean", "--headless"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env={**base_env, "NVIM_IDE_SOCKET": heal_sock},
+        )
+        tmux("send-keys", "-t", ws_heal["ed"], f" nvim --clean --headless </dev/zero >/dev/null 2>&1 &", "C-m", check=True)
+        tmux("send-keys", "-t", ws_heal["tm"], " nvim --clean", "C-m", check=True)
+        tmux("send-keys", "-t", ws_heal["ai"], " nvim --clean", "C-m", check=True)
+        tm_pid = tmux_out("display-message", "-p", "-t", ws_heal["tm"], "#{pane_pid}")
+        ai_pid_h = tmux_out("display-message", "-p", "-t", ws_heal["ai"], "#{pane_pid}")
+        ed_pid_h = tmux_out("display-message", "-p", "-t", ws_heal["ed"], "#{pane_pid}")
+        assert wait_until(lambda: bool(discover_pane_nvim_sockets(tm_pid, sock_hint=heal_sock)), timeout=4.0), "Shell nvim socket did not appear"
+        assert wait_until(lambda: bool(discover_pane_nvim_sockets(ai_pid_h, sock_hint=heal_sock)), timeout=4.0), "AI nvim socket did not appear"
+        assert wait_until(lambda: bool(discover_pane_nvim_sockets(ed_pid_h, sock_hint=heal_sock)), timeout=4.0), "Editor headless nvim socket did not appear"
+        r_no_steal = run_cmd([ide_bin, "--heal-socket", "heal-ws"], env={**base_env, "TMUX": ""}, check=False)
+        assert r_no_steal.returncode != 0 and not os.path.exists(heal_sock), (
+            f"--heal-socket must refuse headless Editor nvim and Shell/AI nvim: rc={r_no_steal.returncode}"
+        )
+        headless_ed.terminate()
+        headless_ed.wait(timeout=2)
+        tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
+
+        # 2. Interactive `nvim --clean` in Editor pane WITHOUT --listen + dead stale @ide_socket on disk:
+        #    `ide --open-link` heals @ide_socket via serverstart() and opens dotfiles/.tmux.conf:37 in Editor (never Shell/AI)
+        dead_s = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
+        dead_s.bind(heal_sock)
+        dead_s.close()
+        ed_pid_clean = tmux_out("display-message", "-p", "-t", ws_heal["ed"], "#{pane_pid}")
+        tmux("send-keys", "-t", ws_heal["ed"], " env -u NVIM_IDE_PANE nvim --clean", "C-m", check=True)
+        ed_ephem_socks = wait_until(lambda: discover_pane_nvim_sockets(ed_pid_clean, sock_hint=heal_sock), timeout=4.0)
+        assert ed_ephem_socks, "Editor interactive nvim --clean ephemeral socket did not appear"
+        ed_ephem = ed_ephem_socks[0]
+
+        run_cmd(
+            [ide_bin, "--open-link", "", "dotfiles/.tmux.conf:37", ws_heal["dir"], "heal-ws"],
+            env={**base_env, "TMUX": ""},
+            check=True,
+        )
+        assert wait_until(
+            lambda: nvim_expr_eq(
+                heal_sock,
+                "fnamemodify(bufname('%'), ':p') . ':' . line('.') . '|' . $IDE_SESSION",
+                f"{os.path.realpath(heal_tmux_conf)}:37|heal-ws",
+            ),
+            timeout=3.0,
+        ), "ide --open-link failed to self-heal missing/stale @ide_socket and open dotfiles/.tmux.conf:37"
+        tm_ephem = discover_pane_nvim_sockets(tm_pid, sock_hint=heal_sock)[0]
+        assert nvim_expr_eq(tm_ephem, "bufname('%')", ""), "Shell pane nvim must remain untouched by ide --open-link"
+
+        # 3. Unsaved-buffer guard in `ide --quit`, workspace dive `ide --cd`, and `ide --refresh` all self-heal missing @ide_socket
+        os.unlink(heal_sock)
+        subprocess.run(
+            ["nvim", "--headless", "--server", ed_ephem, "--remote-expr", "setline(1, 'unsaved-mod')"],
+            env=base_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=True,
+        )
+        r_quit_guard = run_cmd([ide_bin, "--quit", "heal-ws"], env={**base_env, "TMUX": ""}, check=False)
+        assert r_quit_guard.returncode != 0 and os.path.exists(heal_sock), (
+            f"ide --quit failed to heal missing @ide_socket and guard unsaved buffer: rc={r_quit_guard.returncode}"
+        )
+        assert "Unsaved changes" in tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_quit_err")
+        # Unlinking @ide_socket while Editor is still running must NOT cause --sessions-lines to wipe @ide_quit_err
+        os.unlink(heal_sock)
+        run_cmd([ide_bin, "--sessions-lines", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert "Unsaved changes" in tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_quit_err"), (
+            "classify_ide_fleet wiped @ide_quit_err while Editor nvim was still running with unsaved changes"
+        )
+        r_prev_unsaved = run_cmd([ide_bin, "--session-preview", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert os.path.exists(heal_sock) and "Unsaved changes" in r_prev_unsaved.stdout, (
+            "render_session_preview failed to heal @ide_socket and preserve unsaved warning"
+        )
+        subprocess.run(
+            ["nvim", "--headless", "--server", ed_ephem, "--remote-expr", "execute('edit!')"],
+            env=base_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=True,
+        )
+        os.unlink(heal_sock)
+        run_cmd([ide_bin, "--session-preview", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_quit_err") == "", (
+            "render_session_preview failed to heal @ide_socket and clear @ide_quit_err once buffer was clean"
+        )
+
+        os.unlink(heal_sock)
+        run_cmd([ide_bin, "--cd", heal_sub_dir, "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert nvim_expr_eq(heal_sock, "getcwd()", os.path.realpath(heal_sub_dir)), (
+            "ide --cd failed to heal missing @ide_socket and cd Editor"
+        )
+
+        os.unlink(heal_sock)
+        r_ref_heal = run_cmd([ide_bin, "--refresh", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert os.path.exists(heal_sock) and "(1 editor(s))" in r_ref_heal.stdout, (
+            f"ide --refresh failed to heal missing @ide_socket: {r_ref_heal.stdout!r}"
+        )
+
+        # 4. Neovim `solarized/ide.lua` (`SolarizedIdeSocket`) startup self-binding in Editor vs Shell/split/nested guards
+        init_lua_path = os.path.join(repo_dir, "dotfiles", ".config", "nvim", "init.lua")
+        tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
+        tmux("respawn-pane", "-k", "-t", ws_heal["tm"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
+        tmux("respawn-pane", "-k", "-t", ws_heal["ai"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
+        if os.path.exists(heal_sock):
+            os.unlink(heal_sock)
+
+        adhoc_pane = tmux_out("split-window", "-h", "-P", "-F", "#{pane_id}", "-t", ws_heal["tm"], "-c", ws_heal["dir"], "exec /bin/sh")
+        tmux(
+            "send-keys",
+            "-t",
+            ws_heal["tm"],
+            f" env NVIM_TS_SKIP_AUTO_INSTALL=1 NVIM_IDE_SOCKET={shlex.quote(heal_sock)} nvim -i NONE -u {shlex.quote(init_lua_path)}",
+            "C-m",
+            check=True,
+        )
+        tmux(
+            "send-keys",
+            "-t",
+            adhoc_pane,
+            f" env NVIM_TS_SKIP_AUTO_INSTALL=1 NVIM_IDE_SOCKET={shlex.quote(heal_sock)} nvim -i NONE -u {shlex.quote(init_lua_path)}",
+            "C-m",
+            check=True,
+        )
+        tm_pid2 = tmux_out("display-message", "-p", "-t", ws_heal["tm"], "#{pane_pid}")
+        adhoc_pid = tmux_out("display-message", "-p", "-t", adhoc_pane, "#{pane_pid}")
+        assert wait_until(lambda: bool(discover_pane_nvim_sockets(tm_pid2, sock_hint=heal_sock)), timeout=5.0), "Shell init.lua nvim did not boot"
+        assert wait_until(lambda: bool(discover_pane_nvim_sockets(adhoc_pid, sock_hint=heal_sock)), timeout=5.0), "Adhoc init.lua nvim did not boot"
+        time.sleep(0.25)
+        assert not os.path.exists(heal_sock), "Shell or ad-hoc split nvim with init.lua must NEVER claim @ide_socket"
+
+        # Plant dead stale socket, then boot interactive `nvim -u init.lua` WITHOUT --listen inside Editor pane
+        dead_s2 = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
+        dead_s2.bind(heal_sock)
+        dead_s2.close()
+        tmux(
+            "send-keys",
+            "-t",
+            ws_heal["ed"],
+            f" env -u NVIM_IDE_PANE NVIM_TS_SKIP_AUTO_INSTALL=1 nvim -i NONE -u {shlex.quote(init_lua_path)}",
+            "C-m",
+            check=True,
+        )
+        assert wait_until(lambda: nvim_expr_eq(heal_sock, "$IDE_SESSION", "heal-ws"), timeout=6.0), (
+            "Editor nvim -u init.lua failed to self-bind @ide_socket over stale socket on VimEnter"
+        )
+        ed_srv_pid = subprocess.check_output(
+            ["nvim", "--headless", "--server", heal_sock, "--remote-expr", "string(getpid())"],
+            env=base_env,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=3,
+        ).strip()
+
+        # Launching and exiting a second nvim with TMUX_PANE=ed_pane (e.g. Ctrl+Z or :!git commit) must NOT steal or unlink live @ide_socket
+        m_sub, s_sub = pty.openpty()
+        try:
+            sub_env = {
+                **sess_env("heal-ws", ws_heal["ed"]),
+                "NVIM_IDE_SOCKET": heal_sock,
+                "NVIM_TS_SKIP_AUTO_INSTALL": "1",
+            }
+            sub_nvim = subprocess.Popen(
+                ["nvim", "-i", "NONE", "-u", init_lua_path, "-c", "lua vim.defer_fn(function() vim.cmd('qa!') end, 250)"],
+                stdin=s_sub,
+                stdout=s_sub,
+                stderr=s_sub,
+                env=sub_env,
+                close_fds=True,
+            )
+            os.close(s_sub)
+            s_sub = -1
+            sub_nvim.wait(timeout=8.0)
+        finally:
+            if s_sub >= 0:
+                os.close(s_sub)
+            os.close(m_sub)
+        assert nvim_expr_eq(heal_sock, "string(getpid())", ed_srv_pid), (
+            "Secondary nvim inside Editor pane stole or unlinked live @ide_socket"
+        )
+
+        # 5. Nested `:!nvim` (e.g. `:!git commit`, where $NVIM is unset) inside `nvim --clean` must NEVER claim @ide_socket
+        tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
+        if os.path.exists(heal_sock):
+            os.unlink(heal_sock)
+        ed_pid_bang = tmux_out("display-message", "-p", "-t", ws_heal["ed"], "#{pane_pid}")
+        tmux(
+            "send-keys",
+            "-t",
+            ws_heal["ed"],
+            " env -u NVIM_IDE_PANE nvim --clean -c 'let g:is_outer_ed = 77'",
+            "C-m",
+            check=True,
+        )
+        outer_bang_socks = wait_until(lambda: discover_pane_nvim_sockets(ed_pid_bang, sock_hint=heal_sock), timeout=4.0)
+        assert outer_bang_socks, "Outer nvim --clean socket did not appear"
+        bang_marker = os.path.join(ws_heal["dir"], ".bang_inner_ready")
+        bang_lua = f'lua io.open({bang_marker!r}, "w"):close(); vim.defer_fn(function() vim.cmd("qall") end, 300)'
+        tmux(
+            "send-keys",
+            "-t",
+            ws_heal["ed"],
+            f":!NVIM_TS_SKIP_AUTO_INSTALL=1 nvim -i NONE -u {shlex.quote(init_lua_path)} -c {shlex.quote(bang_lua)}",
+            "C-m",
+            check=True,
+        )
+        assert wait_until(lambda: os.path.exists(bang_marker), timeout=5.0), "Nested :!nvim child did not start"
+        time.sleep(0.1)
+        assert not os.path.exists(heal_sock), "Nested :!nvim inside Editor pane must NEVER claim @ide_socket"
+        assert discover_pane_nvim_sockets(ed_pid_bang, sock_hint=heal_sock) == outer_bang_socks, (
+            "discover_pane_nvim_sockets must exclude nested :!nvim children under an outer Editor nvim"
+        )
+        time.sleep(0.35)
+        tmux("send-keys", "-t", ws_heal["ed"], "C-m", check=True)
+        assert wait_until(
+            lambda: run_cmd([ide_bin, "--heal-socket", "heal-ws"], env={**base_env, "TMUX": ""}, check=False).returncode == 0,
+            timeout=3.0,
+        )
+        assert nvim_expr_eq(heal_sock, "string(g:is_outer_ed)", "77"), "Outer Editor nvim was not healed after :!nvim"
+
+        # 6. Special characters (spaces + single quotes) in @ide_socket path + Ctrl+Z foreground priority + relaunch wait
+        weird_sock_dir = os.path.join(xdg_run, "sp 'dir")
+        weird_sock = os.path.join(weird_sock_dir, "nvim-ide-heal-ws.sock")
+        tmux("set-option", "-t", "=heal-ws:", "@ide_socket", weird_sock, check=True)
+        run_cmd([ide_bin, "--heal-socket", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert nvim_expr_eq(weird_sock, "string(g:is_outer_ed)", "77"), (
+            f"bind_nvim_server_socket failed on socket path with spaces and quotes: {weird_sock!r}"
+        )
+        tmux("set-option", "-t", "=heal-ws:", "@ide_socket", heal_sock, check=True)
+
+        if shutil.which("bash"):
+            tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec bash --norc --noprofile -i", check=True)
+            if os.path.exists(heal_sock):
+                os.unlink(heal_sock)
+            ed_pid_cz = tmux_out("display-message", "-p", "-t", ws_heal["ed"], "#{pane_pid}")
+            tmux("send-keys", "-t", ws_heal["ed"], " nvim --clean -c 'let g:cz_ord = 1'", "C-m", check=True)
+            assert wait_until(lambda: len(discover_pane_nvim_sockets(ed_pid_cz, sock_hint=heal_sock)) == 1, timeout=4.0)
+            tmux("send-keys", "-t", ws_heal["ed"], "C-z", check=True)
+            time.sleep(0.35)
+            tmux("send-keys", "-t", ws_heal["ed"], " nvim --clean -c 'let g:cz_ord = 2'", "C-m", check=True)
+            assert wait_until(lambda: len(discover_pane_nvim_sockets(ed_pid_cz, sock_hint=heal_sock)) == 2, timeout=4.0)
+            t0_cz = time.monotonic()
+            run_cmd([ide_bin, "--heal-socket", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+            dt_cz = time.monotonic() - t0_cz
+            assert dt_cz < 1.5 and nvim_expr_eq(heal_sock, "string(g:cz_ord)", "2"), (
+                f"--heal-socket failed to prioritize foreground nvim over Ctrl+Z background nvim (dt={dt_cz:.2f}s)"
+            )
+
+        # Bare-shell relaunch (`--preview`) and closed-split heal (`--open-link` + dead stale socket) must wait for socket & open target line
+        tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
+        if os.path.exists(heal_sock):
+            os.unlink(heal_sock)
+        tmux("set-option", "-t", "=heal-ws:", "@ide_quit_err", "Stale quit warning", check=True)
+        dead_s3 = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
+        dead_s3.bind(heal_sock)
+        dead_s3.close()
+        run_cmd([ide_bin, "--sessions-lines", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_quit_err") == "", (
+            "classify_ide_fleet failed to clear @ide_quit_err when Editor exited leaving a dead stale socket"
+        )
+        run_cmd([ide_bin, "--preview", f"{heal_tmux_conf}:37", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert wait_until(
+            lambda: nvim_expr_eq(heal_sock, "fnamemodify(bufname('%'), ':p') . ':' . line('.')", f"{os.path.realpath(heal_tmux_conf)}:37"),
+            timeout=4.0,
+        ), "ide --preview failed to wait for relaunched Editor socket and open target file:line"
+
+        cur_ed_p = tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_editor_pane")
+        tmux("kill-pane", "-t", cur_ed_p, check=True)
+        if os.path.exists(heal_sock):
+            os.unlink(heal_sock)
+        dead_s4 = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
+        dead_s4.bind(heal_sock)
+        dead_s4.close()
+        run_cmd([ide_bin, "--open-link", "", "dotfiles/.tmux.conf:41", ws_heal["dir"], "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
+        assert wait_until(
+            lambda: nvim_expr_eq(heal_sock, "fnamemodify(bufname('%'), ':p') . ':' . line('.')", f"{os.path.realpath(heal_tmux_conf)}:41"),
+            timeout=4.0,
+        ), "ide --open-link after Editor pane close failed to wait for healed Editor socket and open target file:line"
+
+        run_cmd([ide_bin, "--kill", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
 
     print("ALL_FLEET_OK")
 finally:

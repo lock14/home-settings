@@ -12,6 +12,7 @@ import time
 
 from ide_lib.constants import (
     TMUX_SEP,
+    is_live_socket,
     is_socket_path,
     sanitize_agent_msg,
     sanitize_http_url,
@@ -79,6 +80,7 @@ def list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]:
             "#{@ide_socket}",
             "#{@ide_main_win}",
             "#{@ide_ai_pane}",
+            "#{@ide_editor_pane}",
             "#{@ide_ai_cli}",
             "#{@ide_workdir}",
             "#{@ide_initial_root}",
@@ -97,7 +99,7 @@ def list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]:
         return ([], True)
     items: list[dict[str, str]] = []
     for line in res.stdout.splitlines():
-        cols = (line.split(TMUX_SEP) + [""] * 18)[:18]
+        cols = (line.split(TMUX_SEP) + [""] * 19)[:19]
         (
             sess_name,
             activity,
@@ -107,6 +109,7 @@ def list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]:
             ide_sock,
             ide_win,
             ai_pane,
+            ed_pane,
             ai_cli,
             workdir,
             init_root,
@@ -129,6 +132,7 @@ def list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]:
             "ide_sock": ide_sock,
             "ide_win": ide_win,
             "ai_pane": ai_pane,
+            "ed_pane": ed_pane,
             "ai_cli": ai_cli or "agy",
             "workdir": workdir or init_root,
             "init_root": init_root or workdir,
@@ -248,6 +252,8 @@ def classify_ide_fleet(
     fallback_dir_by_sess: dict[str, str] = {}
     ai_pid_by_sess: dict[str, int] = {}
     ai_cmd_by_sess: dict[str, str] = {}
+    ed_pid_by_sess: dict[str, int] = {}
+    ed_cmd_by_sess: dict[str, str] = {}
     win_act_by_sess: dict[str, int] = {}
     ai_win_pane_focused_by_sess: dict[str, bool] = {}
 
@@ -255,9 +261,12 @@ def classify_ide_fleet(
         sess = item["sess"]
         spanes = panes_by_sess.get(sess, [])
         rec_ai = item["ai_pane"]
+        rec_ed = item.get("ed_pane", "")
         ide_win = item["ide_win"]
         ai_pid_str = ""
         ai_cmd_str = ""
+        ed_pid_str = ""
+        ed_cmd_str = ""
         visible_ai = ""
         active_vis_pane = ""
         first_vis_pane = ""
@@ -269,6 +278,9 @@ def classify_ide_fleet(
             if rec_ai and pid == rec_ai and not ai_pid_str:
                 ai_pid_str = ppid
                 ai_cmd_str = pcmd
+            if rec_ed and pid == rec_ed and not ed_pid_str:
+                ed_pid_str = ppid
+                ed_cmd_str = pcmd
             if w_act_ts.isdigit():
                 max_win_act = max(max_win_act, int(w_act_ts))
             if wname.startswith("_ide_park_"):
@@ -294,6 +306,12 @@ def classify_ide_fleet(
                     ai_pid_str = ppid
                     ai_cmd_str = pcmd
                     break
+        if not ed_pid_str:
+            for _, _, _, ppid, _, _, _, prole, _, pcmd, _ in spanes:
+                if prole == "editor":
+                    ed_pid_str = ppid
+                    ed_cmd_str = pcmd
+                    break
         if not visible_ai:
             for _, wname, pid, _, _, _, _, prole, _, _, _ in spanes:
                 if wname.startswith("_ide_park_"):
@@ -309,8 +327,11 @@ def classify_ide_fleet(
         if ai_pid_str.strip().isdigit():
             ai_pid_by_sess[sess] = int(ai_pid_str.strip())
             ai_cmd_by_sess[sess] = ai_cmd_str.strip()
+        if ed_pid_str.strip().isdigit():
+            ed_pid_by_sess[sess] = int(ed_pid_str.strip())
+            ed_cmd_by_sess[sess] = ed_cmd_str.strip()
 
-    alive_child_pids = pids_with_children(set(ai_pid_by_sess.values()))
+    alive_child_pids = pids_with_children(set(ai_pid_by_sess.values()) | set(ed_pid_by_sess.values()))
     stale_cleanup_cmds: list[str] = []
     now_ts = time.time()
     if include_git:
@@ -346,11 +367,17 @@ def classify_ide_fleet(
         raw_ai_msg = item.get("ai_msg", "").strip()
         raw_quit_err = item.get("quit_err", "").strip()
         ide_sock = item.get("ide_sock", "").strip()
-        if raw_quit_err and (not ide_sock or not is_socket_path(ide_sock)):
-            if stale_cleanup_cmds:
-                stale_cleanup_cmds.append(";")
-            stale_cleanup_cmds.extend(["set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err"])
-            raw_quit_err = ""
+        if raw_quit_err:
+            ed_pid = ed_pid_by_sess.get(sess, 0)
+            ed_cmd = ed_cmd_by_sess.get(sess, "")
+            ed_has_child = bool(ed_pid) and (
+                ed_pid in alive_child_pids or not is_bare_shell_cmd(ed_cmd)
+            )
+            if not (ide_sock and is_live_socket(ide_sock)) and not ed_has_child:
+                if stale_cleanup_cmds:
+                    stale_cleanup_cmds.append(";")
+                stale_cleanup_cmds.extend(["set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err"])
+                raw_quit_err = ""
         needs_attn = False
         state_ts = 0.0
         ai_msg_out = raw_ai_msg

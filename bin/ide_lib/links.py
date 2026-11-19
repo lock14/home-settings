@@ -12,6 +12,7 @@ from ide_lib.constants import (
     TMUX_SEP,
     TMUX_WORD_SEPS,
     _SGR_RE,
+    is_live_socket,
     is_socket_path,
     safe_getcwd,
 )
@@ -21,9 +22,11 @@ from ide_lib.hooks import call_ide_hook
 from ide_lib.layout import cd_ide_workspace, toggle_main_pane, unpark_role_pane
 from ide_lib.nvim_rpc import (
     ensure_editor_nvim_running,
+    ensure_session_editor_socket,
     nvim_remote_expr,
     nvim_remote_file,
     resolve_nvim_bin,
+    wait_for_editor_socket,
 )
 from ide_lib.tmux import (
     current_ide_session,
@@ -437,6 +440,9 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
                 rel = filepath[2:] if filepath.startswith("./") else filepath
                 filepath = os.path.join(cwd, rel)
 
+    if not sock:
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+        sock = f"{runtime_dir}/nvim-ide-{sess}.sock"
     prev_pane = "" if focus else tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}")
     if focus:
         toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
@@ -447,15 +453,17 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
         main_win = resolve_main_win(sess, editor_pane, ai_pane, term_pane)
         if pane_is_parked(editor_pane, main_win):
             unpark_role_pane(sess, "editor", main_win, ai_pane, editor_pane, term_pane, "")
-            ensure_editor_nvim_running(editor_pane, sock)
+            ensure_editor_nvim_running(editor_pane, sock, sess=sess)
         elif not pane_exists(editor_pane):
             toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
         else:
-            ensure_editor_nvim_running(editor_pane, sock)
+            ensure_editor_nvim_running(editor_pane, sock, sess=sess)
 
-    if not sock:
+    if resolve_nvim_bin():
+        sock = wait_for_editor_socket(sess, sock)
+    elif not sock:
         sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
-    if sock and is_socket_path(sock) and resolve_nvim_bin():
+    if sock and is_live_socket(sock) and resolve_nvim_bin():
         ws_dir = (
             workdir
             or init_root
@@ -659,8 +667,12 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
         return False
     if focus:
         toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
-    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
-    if not sock or not is_socket_path(sock) or not resolve_nvim_bin():
+    sock = (
+        ensure_session_editor_socket(sess)
+        if resolve_nvim_bin()
+        else get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    )
+    if not sock or not is_live_socket(sock) or not resolve_nvim_bin():
         return False
     esc_slug = slug.replace("\\", "\\\\").replace("'", "\\'")
     lua_expr = (

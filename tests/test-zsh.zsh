@@ -1276,6 +1276,114 @@ EOF
         local v_remote_calls="$(grep -- '--remote ' "$v_log" || true)"
         rm -f "$v_sock"
 
+        local v_ed_listen_ok="1"
+        if command -v tmux >/dev/null 2>&1; then
+            local v_tmux_dir="$(mktemp -d)"
+            local v_ed_sock="$v_tmux_dir/nvim-ide-v_ed_zsh.sock"
+            local v_ed_log="$v_tmux_dir/ed_nvim.log"
+            : > "$v_ed_log"
+            cat > "$v_test_dir/bin/nvim" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$v_ed_log"
+EOF
+            chmod +x "$v_test_dir/bin/nvim"
+            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux -f /dev/null new-session -d -s v_ed_zsh -c "$v_test_dir/repo" "sleep 30"
+            local v_ed_p="$(TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux display-message -p -t '=v_ed_zsh:' '#{pane_id}')"
+            local v_tm_p="$(TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux split-window -v -P -F '#{pane_id}' -t '=v_ed_zsh:' -c "$v_test_dir/repo" "sleep 30")"
+            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux set-option -p -t "$v_ed_p" @ide_role "editor"
+            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux set-option -p -t "$v_tm_p" @ide_role "term"
+            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=v_ed_zsh:' @ide_editor_pane "$v_ed_p"
+            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=v_ed_zsh:' @ide_socket "$v_ed_sock"
+            local v_tmux_env="$(TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux display-message -p -t '=v_ed_zsh:' '#{socket_path},#{pid},0')"
+            (
+                export PATH="$v_test_dir/bin:$PATH"
+                export TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="$v_tmux_env" NVIM_IDE_SOCKET="$v_ed_sock"
+                unset NVIM_IDE_PANE NVIM
+                source "$SCRIPT_DIR/dotfiles/.zsh-functions"
+                cd "$v_test_dir/repo"
+                TMUX_PANE="$v_ed_p" v alpha.txt
+                TMUX_PANE="$v_ed_p" v -O alpha.txt beta.txt
+                TMUX_PANE="$v_ed_p" v --version
+                TMUX_PANE="$v_ed_p" v -l script.lua
+                TMUX_PANE="$v_ed_p" NVIM="/tmp/nested.sock" v alpha.txt
+                TMUX_PANE="$v_tm_p" v alpha.txt
+                TMUX_PANE="$v_tm_p" v -R alpha.txt
+            )
+            local ed_expected="$(printf '%s\n' "--listen $v_ed_sock alpha.txt" "--listen $v_ed_sock -O alpha.txt beta.txt" "--version" "-l script.lua" "alpha.txt" "alpha.txt" "-R alpha.txt")"
+            local ed_actual="$(<"$v_ed_log")"
+            if [ "$ed_actual" != "$ed_expected" ]; then
+                v_ed_listen_ok="mock_mismatch:${ed_actual//$'\n'/|}"
+            fi
+
+            rm -f "$v_test_dir/bin/nvim"
+            if [ "$v_ed_listen_ok" = "1" ] && command -v nvim >/dev/null 2>&1; then
+                mkdir -p "$TEMP_HOME/.local/bin"
+                ln -sf "$SCRIPT_DIR/bin/ide" "$TEMP_HOME/.local/bin/ide"
+                printf 'one\ntwo\nthree\n' > "$v_test_dir/repo/heal_target.txt"
+                TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux respawn-pane -k -t "$v_ed_p" -c "$v_test_dir/repo" "env XDG_RUNTIME_DIR='$v_tmux_dir' NVIM_LOG_FILE=/dev/null nvim --clean"
+                local _t
+                for _t in {1..60}; do
+                    setopt local_options null_glob
+                    local -a _ephems=("$v_tmux_dir"/nvim.*.0)
+                    (( ${#_ephems[@]} > 0 )) && break
+                    sleep 0.05
+                done
+                (
+                    export HOME="$TEMP_HOME" TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="$v_tmux_env" TMUX_PANE="$v_tm_p" NVIM_IDE_SOCKET="$v_ed_sock"
+                    unset NVIM_IDE_PANE NVIM
+                    source "$SCRIPT_DIR/dotfiles/.zsh-functions"
+                    cd "$v_test_dir/repo"
+                    v +2 heal_target.txt >/dev/null 2>&1
+                ) || true
+                local healed_state=""
+                if [ -S "$v_ed_sock" ]; then
+                    healed_state="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$v_ed_sock" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
+                fi
+                if [ "$healed_state" != "heal_target.txt:2" ]; then
+                    v_ed_listen_ok="heal_mismatch:$healed_state"
+                fi
+                if [ "$v_ed_listen_ok" = "1" ]; then
+                    rm -f "$v_ed_sock"
+                    (
+                        export HOME="$TEMP_HOME" TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="$v_tmux_env" TMUX_PANE="$v_ed_p" NVIM_IDE_SOCKET="$v_ed_sock"
+                        unset NVIM_IDE_PANE NVIM
+                        source "$SCRIPT_DIR/dotfiles/.zsh-functions"
+                        cd "$v_test_dir/repo"
+                        v +3 heal_target.txt >/dev/null 2>&1
+                    ) || true
+                    local sub_state="$(NVIM_LOG_FILE=/dev/null timeout 5 nvim --headless --server "$v_ed_sock" --remote-expr 'expand("%:t") . ":" . line(".")' </dev/null 2>/dev/null || true)"
+                    if [ "$sub_state" != "heal_target.txt:3" ]; then
+                        v_ed_listen_ok="subshell_heal_mismatch:$sub_state"
+                    elif command -v timeout >/dev/null 2>&1; then
+                        cat > "$v_test_dir/bin/timeout" <<'EOF'
+#!/usr/bin/env bash
+exit 124
+EOF
+                        chmod +x "$v_test_dir/bin/timeout"
+                        cat > "$v_test_dir/bin/nvim" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+                        chmod +x "$v_test_dir/bin/nvim"
+                        (
+                            export PATH="$v_test_dir/bin:$PATH" HOME="$TEMP_HOME" NVIM_IDE_SOCKET="$v_ed_sock"
+                            unset TMUX TMUX_PANE NVIM_IDE_PANE NVIM
+                            source "$SCRIPT_DIR/dotfiles/.zsh-functions"
+                            cd "$v_test_dir/repo"
+                            v -R alpha.txt >/dev/null 2>&1
+                            v alpha.txt >/dev/null 2>&1
+                        ) || true
+                        rm -f "$v_test_dir/bin/timeout" "$v_test_dir/bin/nvim"
+                        if [ ! -S "$v_ed_sock" ]; then
+                            v_ed_listen_ok="timeout_unlinked_live_sock"
+                        fi
+                    fi
+                fi
+            fi
+            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
+            rm -rf "$v_tmux_dir"
+        fi
+
         cd "$v_test_dir/repo"
         git init -q -b "feat/esc"
         git config user.email "t@example.com"
@@ -1313,12 +1421,13 @@ GITCFG
            [[ "$v_remote_calls" == *"--server $v_sock --remote $v_test_dir/repo/-dash.txt"* ]] && \
            [[ "$v_calls" == *'execute("12")'* ]] && \
            [[ "$v_calls" == *'execute("set number")'* ]] && \
+           [ "$v_ed_listen_ok" = "1" ] && \
            [[ "$zsh_esc_icon" == *""* ]] && \
            [[ "$zsh_esc_seg" == *"https://gitlab.com/acme/repo/-/merge_requests/88"* ]] && \
            [[ "$zsh_esc_seg" == *"@%F{"*"88"* ]]; then
             echo "PASS:Zsh v() runs unrecognized -* flags (-R, -O, -p) locally while routing +line/-c/-- to remote IDE Editor, and _p9k_vcs_parse_cfg handles even trailing backslashes and escaped quotes"
         else
-            echo "FAIL:Zsh v() flag routing or .git/config escaping:v_calls='${v_calls//$'\n'/ | }' icon='$zsh_esc_icon' seg='${(V)zsh_esc_seg}'"
+            echo "FAIL:Zsh v() flag routing or .git/config escaping:v_calls='${v_calls//$'\n'/ | }' ed_listen='$v_ed_listen_ok' icon='$zsh_esc_icon' seg='${(V)zsh_esc_seg}'"
         fi
     )
 }

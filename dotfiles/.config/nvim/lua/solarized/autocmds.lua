@@ -121,14 +121,17 @@ function M.setup(opts)
         end,
     })
 
-    -- Word-boundary soft-wrapping and conceal-aware link navigation scoped strictly to Markdown buffers
+    -- Word-boundary soft-wrapping, zero buffer-line scrolloff snapback, and conceal-aware link navigation for Markdown
+    local md_group = vim.api.nvim_create_augroup("SolarizedMarkdownReadability", { clear = true })
     vim.api.nvim_create_autocmd("FileType", {
-        group = vim.api.nvim_create_augroup("SolarizedMarkdownReadability", { clear = true }),
+        group = md_group,
         pattern = { "markdown" },
         callback = function(ev)
             vim.opt_local.wrap = true
             vim.opt_local.linebreak = true
             vim.opt_local.breakindent = true
+            vim.opt_local.scrolloff = 0
+            vim.w._hs_md_scrolloff = true
             local buf = (ev and ev.buf) or true
             vim.keymap.set("n", "<CR>", function()
                 if not (follow_editor_link and follow_editor_link(false, false)) then
@@ -140,6 +143,22 @@ function M.setup(opts)
                     vim.lsp.buf.definition()
                 end
             end, { buffer = buf, silent = true, desc = "Follow Markdown link or LSP definition" })
+        end,
+    })
+    vim.api.nvim_create_autocmd("BufWinEnter", {
+        group = md_group,
+        callback = function(ev)
+            local ft = (ev and ev.buf and vim.api.nvim_buf_is_valid(ev.buf)) and vim.bo[ev.buf].filetype or vim.bo.filetype
+            if ft == "markdown" then
+                vim.opt_local.wrap = true
+                vim.opt_local.linebreak = true
+                vim.opt_local.breakindent = true
+                vim.opt_local.scrolloff = 0
+                vim.w._hs_md_scrolloff = true
+            elseif vim.w._hs_md_scrolloff then
+                vim.w._hs_md_scrolloff = nil
+                vim.opt_local.scrolloff = -1
+            end
         end,
     })
 end
