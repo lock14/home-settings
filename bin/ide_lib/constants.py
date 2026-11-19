@@ -111,6 +111,29 @@ def is_socket_path(path: str | os.PathLike[str]) -> bool:
         return False
 
 
+def is_live_socket(path: str | os.PathLike[str]) -> bool:
+    """Return True when `path` is a Unix domain socket with an active listener."""
+    if not is_socket_path(path):
+        return False
+    import errno
+    import socket
+
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(0.2)
+    try:
+        s.connect(os.fspath(path))
+        return True
+    except (TimeoutError, socket.timeout):
+        return True
+    except OSError as exc:
+        return exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINPROGRESS)
+    finally:
+        try:
+            s.close()
+        except OSError:
+            pass
+
+
 def safe_getcwd() -> str:
     """Return a live working directory path, healing stale or unlinked descriptors."""
     pwd = os.environ.get("PWD") or ""

@@ -10,8 +10,17 @@ import shutil
 import subprocess
 import time
 
-from ide_lib.constants import TMUX_SEP, is_socket_path
-from ide_lib.tmux import run_tmux, tmux_out
+from ide_lib.constants import TMUX_SEP, is_live_socket, is_socket_path
+from ide_lib.tmux import (
+    discover_pane_nvim_sockets,
+    get_ide_var,
+    resolve_role_pane,
+    resolve_target_session,
+    run_tmux,
+    session_exists,
+    set_ide_var,
+    tmux_out,
+)
 
 _NVIM_BIN_CACHE: str | None = None
 _NVIM_BIN_RESOLVED = False
@@ -240,6 +249,18 @@ def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> 
     """Send leading-space `nvim --listen <sock>` (or `vim` fallback) launch command to `pane_id`."""
     nvim_bin = resolve_nvim_bin()
     if nvim_bin:
+        if sock:
+            sock_parent = os.path.dirname(sock)
+            if sock_parent and not os.path.isdir(sock_parent):
+                try:
+                    os.makedirs(sock_parent, mode=0o700, exist_ok=True)
+                except OSError:
+                    pass
+            if is_socket_path(sock) and not is_live_socket(sock):
+                try:
+                    os.unlink(sock)
+                except OSError:
+                    pass
         run_tmux("set-option", "-p", "-t", pane_id, "@ide_nvim_launch_ts", str(int(time.time())))
         path_nvim = shutil.which("nvim")
         use_bare = os.path.basename(nvim_bin) == "nvim" and "/mise/" not in nvim_bin and nvim_bin == path_nvim
@@ -253,34 +274,169 @@ def send_editor_launch_keys(pane_id: str, sock: str, initial_file: str = "") -> 
         run_tmux("send-keys", "-t", pane_id, " vim", "C-m")
 
 
+def bind_nvim_server_socket(cand_sock: str, target_sock: str, sess: str = "") -> bool:
+    """Bind `target_sock` onto the running Neovim server at `cand_sock` via `serverstart()`."""
+    if not cand_sock or not target_sock or not resolve_nvim_bin():
+        return False
+    if is_live_socket(target_sock):
+        return True
+    sock_parent = os.path.dirname(target_sock)
+    if sock_parent and not os.path.isdir(sock_parent):
+        try:
+            os.makedirs(sock_parent, mode=0o700, exist_ok=True)
+        except OSError:
+            return False
+    if is_socket_path(target_sock):
+        try:
+            os.unlink(target_sock)
+        except OSError:
+            pass
+    esc_s = target_sock.replace("\\", "\\\\").replace("'", "\\'")
+    esc_n = sess.replace("\\", "\\\\").replace("'", "\\'")
+    lua_fn = (
+        "(function(s, n) "
+        "if (vim.env.NVIM or '') ~= '' then return '0' end; "
+        "if #vim.api.nvim_list_uis() == 0 then "
+        "local argv = vim.v.argv or {}; "
+        "for _, a in ipairs(argv) do "
+        "if a == '--headless' or a == '-es' or a == '-Es' or a == '-e' or a == '-E' then return '0' end "
+        "end; "
+        "vim.wait(400, function() return #vim.api.nvim_list_uis() > 0 end, 15); "
+        "if #vim.api.nvim_list_uis() == 0 then return '0' end "
+        "end; "
+        "local u = vim.uv or vim.loop; "
+        "for _, srv in ipairs(vim.fn.serverlist()) do "
+        "if srv == s then "
+        "if u and u.fs_stat(s) then vim.env.NVIM_IDE_SOCKET = s; "
+        "if n ~= '' then vim.env.IDE_SESSION = n end; return '1' end; "
+        "pcall(vim.fn.serverstop, s); break end end; "
+        "local ok, res = pcall(vim.fn.serverstart, s); "
+        "if ok and res == s then vim.env.NVIM_IDE_SOCKET = s; "
+        "if n ~= '' then vim.env.IDE_SESSION = n end; return '1' end; "
+        f"return '0' end)('{esc_s}', '{esc_n}')"
+    )
+    expr = 'luaeval("' + lua_fn.replace("\\", "\\\\").replace('"', '\\"') + '")'
+    out = nvim_remote_expr(cand_sock, expr)
+    return out == "1" and is_live_socket(target_sock)
+
+
+def heal_editor_nvim_socket(
+    editor_pane: str,
+    sock: str,
+    sess: str = "",
+    pane_pid_hint: str = "",
+) -> bool:
+    """Ensure `@ide_socket` (`sock`) is bound if Neovim is already running inside `editor_pane`."""
+    if not sock:
+        return False
+    if is_live_socket(sock):
+        return True
+    if not editor_pane or not resolve_nvim_bin():
+        return False
+    pane_pid = (
+        pane_pid_hint.strip()
+        if pane_pid_hint
+        else tmux_out("display-message", "-p", "-t", editor_pane, "#{pane_pid}").strip()
+    )
+    if not pane_pid:
+        return False
+    for cand in discover_pane_nvim_sockets(pane_pid, sock_hint=sock):
+        if bind_nvim_server_socket(cand, sock, sess=sess):
+            if sess:
+                set_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET", sock)
+            return True
+    return False
+
+
+def ensure_session_editor_socket(sess: str, sock: str = "", editor_pane: str = "") -> str:
+    """Return `sess`'s `@ide_socket`, self-healing it over RPC if Editor Neovim is running."""
+    if not sess:
+        return sock
+    if not sock:
+        sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    if not sock:
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+        sock = f"{runtime_dir}/nvim-ide-{sess}.sock"
+    if is_live_socket(sock):
+        return sock
+    ed_pane = editor_pane or resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
+    if ed_pane:
+        heal_editor_nvim_socket(ed_pane, sock, sess=sess)
+    return sock
+
+
+def heal_target_session_socket(target_arg: str = "") -> int:
+    """Heal `@ide_socket` for `target_arg` (or the caller's IDE session) without changing focus."""
+    sess = resolve_target_session(target_arg)
+    if not sess or not session_exists(sess):
+        return 1
+    sock = ensure_session_editor_socket(sess)
+    return 0 if (sock and is_live_socket(sock)) else 1
+
+
+def wait_for_editor_socket(sess: str, sock: str = "", timeout_s: float = 3.0) -> str:
+    """Return `sess`'s live `@ide_socket`, awaiting freshly launched `nvim --listen` when starting up."""
+    if sock and is_live_socket(sock):
+        return sock
+    if not sess or not resolve_nvim_bin():
+        return sock
+    ed_pane = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
+    sock = ensure_session_editor_socket(sess, sock, editor_pane=ed_pane)
+    if sock and is_live_socket(sock):
+        return sock
+    if not ed_pane or not sock:
+        return sock
+    launch_ts = tmux_out("display-message", "-p", "-t", ed_pane, "#{@ide_nvim_launch_ts}").strip()
+    if not (launch_ts.isdigit() and (int(time.time()) - int(launch_ts)) < 5):
+        return sock
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        time.sleep(0.025)
+        if is_live_socket(sock):
+            return sock
+    return ensure_session_editor_socket(sess, sock, editor_pane=ed_pane)
+
+
 def ensure_editor_nvim_running(
     editor_pane: str,
     sock: str,
     initial_file: str = "",
     cached_cmd_ts: tuple[str, str] | None = None,
+    sess: str = "",
+    pane_pid_hint: str = "",
 ) -> bool:
-    """Relaunch Neovim inside `editor_pane` if the Editor exited back to a shell."""
+    """Heal `@ide_socket` on a running Editor Neovim, or relaunch if exited back to a shell."""
     if not editor_pane or not sock:
         return False
-    if is_socket_path(sock):
+    if is_live_socket(sock):
         return False
     if not resolve_nvim_bin():
         return False
-    if cached_cmd_ts is not None:
+    if cached_cmd_ts is not None and pane_pid_hint:
+        cmd, launch_ts, pane_pid = cached_cmd_ts[0].strip(), cached_cmd_ts[1].strip(), pane_pid_hint.strip()
+    elif cached_cmd_ts is not None:
         cmd, launch_ts = cached_cmd_ts[0].strip(), cached_cmd_ts[1].strip()
+        pane_pid = tmux_out("display-message", "-p", "-t", editor_pane, "#{pane_pid}").strip()
     else:
         info = tmux_out(
             "display-message",
             "-p",
             "-t",
             editor_pane,
-            TMUX_SEP.join(["#{pane_current_command}", "#{@ide_nvim_launch_ts}"]),
+            TMUX_SEP.join(["#{pane_current_command}", "#{@ide_nvim_launch_ts}", "#{pane_pid}"]),
         )
-        parts = (info.split(TMUX_SEP) + ["", ""])[:2]
-        cmd, launch_ts = parts[0].strip(), parts[1].strip()
+        parts = (info.split(TMUX_SEP) + ["", "", ""])[:3]
+        cmd, launch_ts, pane_pid = parts[0].strip(), parts[1].strip(), parts[2].strip()
+    if pane_pid and heal_editor_nvim_socket(editor_pane, sock, sess=sess, pane_pid_hint=pane_pid):
+        return False
     if not cmd or "nvim" in cmd or cmd in ("vim", "vi"):
         return False
     if launch_ts.isdigit() and (int(time.time()) - int(launch_ts)) < 5:
         return False
+    if is_socket_path(sock):
+        try:
+            os.unlink(sock)
+        except OSError:
+            pass
     send_editor_launch_keys(editor_pane, sock, initial_file)
     return True

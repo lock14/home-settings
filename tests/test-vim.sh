@@ -2178,7 +2178,12 @@ if ok and mf then
 end
 vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
+local md_so = vim.wo.scrolloff
+vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.go")
+local go_so = vim.wo.scrolloff
+vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and md_so == 0 and go_so == 8 and vim.wo.scrolloff == 0 and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
 local hex = function(n) return n and string.format("%06x", n) or "none" end
 local hl = function(g) return vim.api.nvim_get_hl(0, { name = g, link = false }) end
 local h1, h2, h3, h4, h5, h6 = hl("RenderMarkdownH1"), hl("RenderMarkdownH2"), hl("RenderMarkdownH3"), hl("RenderMarkdownH4"), hl("RenderMarkdownH5"), hl("RenderMarkdownH6")
@@ -4243,16 +4248,31 @@ def run_standalone_pty_case(
     mfd, sfd = pty.openpty()
     set_winsize(sfd, 34, 84)
     sock = os.path.join(tmp, "nvim.sock")
+    orig_data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    iso_data = os.path.join(tmp, "data")
+    os.makedirs(os.path.join(iso_data, "nvim"), exist_ok=True)
+    for _sub in ("lazy", "site"):
+        _src = os.path.join(orig_data, "nvim", _sub)
+        if os.path.exists(_src):
+            os.symlink(_src, os.path.join(iso_data, "nvim", _sub))
+    for _mpkg in ("clangd", "rust-analyzer", "gopls", "lua-language-server", "terraform-ls", "jdtls"):
+        os.makedirs(os.path.join(iso_data, "nvim", "mason", "packages", _mpkg), exist_ok=True)
     env = {
         k: v
         for k, v in os.environ.items()
         if k not in ("TMUX", "TMUX_PANE", "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "SNACKS_TMUX")
     }
     env["TERM"] = "xterm-256color"
+    env.setdefault("MISE_DATA_DIR", os.path.join(orig_data, "mise"))
+    env["XDG_DATA_HOME"] = iso_data
     env["XDG_CACHE_HOME"] = os.path.join(tmp, "cache")
     env["XDG_STATE_HOME"] = os.path.join(tmp, "state")
     env["NVIM_TS_SKIP_AUTO_INSTALL"] = "1"
     env["NVIM_LOG_FILE"] = "/dev/null"
+    env["HTTPS_PROXY"] = "http://127.0.0.1:1"
+    env["https_proxy"] = "http://127.0.0.1:1"
+    env["HTTP_PROXY"] = "http://127.0.0.1:1"
+    env["http_proxy"] = "http://127.0.0.1:1"
     if ssh_mode:
         env["SSH_CONNECTION"] = "10.0.0.1 12345 10.0.0.2 22"
     os.makedirs(env["XDG_CACHE_HOME"], exist_ok=True)
@@ -4588,15 +4608,30 @@ for tool_name in ("magick", "convert", "identify"):
             )
         os.chmod(wpath, 0o755)
 
+orig_data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+iso_data = os.path.join(tmp, "data")
+os.makedirs(os.path.join(iso_data, "nvim"), exist_ok=True)
+for _sub in ("lazy", "site"):
+    _src = os.path.join(orig_data, "nvim", _sub)
+    if os.path.exists(_src):
+        os.symlink(_src, os.path.join(iso_data, "nvim", _sub))
+for _mpkg in ("clangd", "rust-analyzer", "gopls", "lua-language-server", "terraform-ls", "jdtls"):
+    os.makedirs(os.path.join(iso_data, "nvim", "mason", "packages", _mpkg), exist_ok=True)
 clean_env = {
     k: v
     for k, v in os.environ.items()
     if k not in ("TMUX", "TMUX_PANE", "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "SNACKS_TMUX", "NVIM_IDE_SOCKET", "IDE_SESSION")
 }
 clean_env["TERM"] = "xterm-256color"
+clean_env.setdefault("MISE_DATA_DIR", os.path.join(orig_data, "mise"))
+clean_env["XDG_DATA_HOME"] = iso_data
 clean_env["XDG_CACHE_HOME"] = os.path.join(tmp, "cache")
 clean_env["XDG_STATE_HOME"] = os.path.join(tmp, "state")
 clean_env["NVIM_LOG_FILE"] = "/dev/null"
+clean_env["HTTPS_PROXY"] = "http://127.0.0.1:1"
+clean_env["https_proxy"] = "http://127.0.0.1:1"
+clean_env["HTTP_PROXY"] = "http://127.0.0.1:1"
+clean_env["http_proxy"] = "http://127.0.0.1:1"
 os.makedirs(clean_env["XDG_CACHE_HOME"], exist_ok=True)
 os.makedirs(clean_env["XDG_STATE_HOME"], exist_ok=True)
 
@@ -4674,6 +4709,7 @@ try:
 
     nvim_cmd = (
         f"env IDE_SESSION=ws_main PATH={slow_bin}:{clean_env['PATH']} "
+        f"XDG_DATA_HOME={clean_env['XDG_DATA_HOME']} "
         f"XDG_CACHE_HOME={clean_env['XDG_CACHE_HOME']} "
         f"XDG_STATE_HOME={clean_env['XDG_STATE_HOME']} NVIM_TS_SKIP_AUTO_INSTALL=1 "
         f"nvim -i NONE -u {init_lua} --listen {nvim_sock} {os.path.join(ws_dir, 'report.md')}"
@@ -4846,6 +4882,16 @@ try:
 finally:
     if other_proc is not None and other_mfd >= 0:
         detach_client(other_proc, other_mfd)
+    if os.path.exists(nvim_sock):
+        subprocess.run(
+            ["nvim", "--headless", "--server", nvim_sock, "--remote-send", "<C-\\><C-n><Cmd>qall!<CR>"],
+            env=clean_env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+            check=False,
+        )
     subprocess.run(["tmux", "-S", tmux_sock, "kill-server"], env=clean_env, stderr=subprocess.DEVNULL)
     shutil.rmtree(tmp, ignore_errors=True)
 PY

@@ -26,6 +26,7 @@ from ide_lib.fleet import (
 from ide_lib.hooks import resolve_workspace_target, sanitize_session_name
 from ide_lib.nvim_rpc import (
     ensure_editor_nvim_running,
+    ensure_session_editor_socket,
     nvim_modified_buf_count,
     nvim_recover_and_checktime,
     nvim_remote_expr,
@@ -422,7 +423,8 @@ def unpark_role_pane(
     if park_opt:
         set_ide_var(sess, park_opt, park_env, "0")
 
-    if role == "editor":
+    if role == "editor" and sock:
+        sock = ensure_session_editor_socket(sess, sock, editor_pane=editor_pane)
         nvim_recover_and_checktime(
             sock,
             get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"),
@@ -521,7 +523,8 @@ def park_role_pane(
         )
     if fallback_pane and pane_in_win(fallback_pane, main_win):
         run_tmux("select-window", "-t", main_win, ";", "select-pane", "-t", fallback_pane)
-        if fallback_pane == editor_pane:
+        if fallback_pane == editor_pane and sock:
+            sock = ensure_session_editor_socket(sess, sock, editor_pane=editor_pane)
             nvim_recover_and_checktime(
                 sock,
                 get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"),
@@ -1004,10 +1007,14 @@ def toggle_main_pane(
 
     def _ensure_ed_nvim() -> bool:
         ed_hint: tuple[str, str] | None = None
+        pid_hint = ""
         if not layout_mutated and editor_pane in panes_by_id:
             ed_v = panes_by_id[editor_pane]
             ed_hint = (ed_v[9], ed_v[10])
-        return ensure_editor_nvim_running(editor_pane, sock, cached_cmd_ts=ed_hint)
+            pid_hint = ed_v[8]
+        return ensure_editor_nvim_running(
+            editor_pane, sock, cached_cmd_ts=ed_hint, sess=sess, pane_pid_hint=pid_hint
+        )
 
     def _flush_pending() -> None:
         if pending_cmds:
@@ -1312,15 +1319,17 @@ def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> i
             print(missing_session_msg(sess))
             continue
 
-        sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        raw_sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        sock = ensure_session_editor_socket(sess, raw_sock) if resolve_nvim_bin() else raw_sock
         if not force_quit and sock and is_socket_path(sock) and resolve_nvim_bin():
             modified = nvim_modified_buf_count(sock)
             if modified > 0:
                 warn_msg = f"Unsaved changes in {modified} buffer(s) — press Enter or Ctrl+e to review"
                 run_tmux("set-option", "-q", "-t", f"={sess}:", "@ide_quit_err", warn_msg)
+                ed_warn = f"Unsaved changes in {modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q (:Q!) to force-quit"
                 nvim_remote_send(
                     sock,
-                    f'<C-\\><C-n>:redraw! | echohl ErrorMsg | echo "Unsaved changes in {modified} buffer(s)! Save (:wqa) or press Alt+Shift+Q (:Q!) to force-quit" | echohl None<CR>',
+                    f'<C-\\><C-n><Cmd>redraw! | echohl ErrorMsg | echo strcharpart("{ed_warn}", 0, max([1, v:echospace])) | echohl None<CR>',
                 )
                 if not in_popup:
                     toggle_main_pane("focus-editor", raw or sess, clear_quit_err=False)
@@ -1421,7 +1430,8 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
 
     run_tmux("attach-session", "-t", f"={sess}", "-c", target_dir)
 
-    sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    raw_sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    sock = ensure_session_editor_socket(sess, raw_sock) if resolve_nvim_bin() else raw_sock
     term_pane = resolve_role_pane(sess, "term", "@ide_term_pane", "IDE_TERM_PANE")
     escaped_dir = target_dir.replace("'", "''")
 
@@ -1525,7 +1535,8 @@ def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
                 fb_dir = cand_d
                 break
 
-        sock = item.get("ide_sock", "") or get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        raw_sock = item.get("ide_sock", "") or get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        sock = ensure_session_editor_socket(sess, raw_sock) if has_nvim else raw_sock
         if sock and is_socket_path(sock) and has_nvim:
             nvim_recover_and_checktime(sock, fb_dir, extra_ex=theme_reload_ex)
             editors_refreshed += 1
@@ -1693,7 +1704,7 @@ def launch_or_attach_workspace(
     else:
         ed_pane_existing = resolve_role_pane(session, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
         if pane_exists(ed_pane_existing):
-            ensure_editor_nvim_running(ed_pane_existing, nvim_socket)
+            ensure_editor_nvim_running(ed_pane_existing, nvim_socket, sess=session)
         if ai_cli_from_flag:
             existing_ai_cli = get_ide_var(session, "@ide_ai_cli", "IDE_AI_CLI")
             set_ide_var(session, "@ide_ai_cli", "IDE_AI_CLI", ide_ai_cli)

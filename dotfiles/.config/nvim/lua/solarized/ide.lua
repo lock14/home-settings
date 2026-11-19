@@ -293,8 +293,321 @@ local function run_ide_send(opts)
     end
 end
 
+-- When Neovim is launched manually inside the IDE Editor pane (`nvim`, `vim`, `vi`),
+-- verify exact tmux server PID + Editor pane identity asynchronously and self-bind `@ide_socket`
+-- without blocking startup and without ever claiming `@ide_socket` from Shell, AI, or `:terminal` panes.
+M._socket_probe_state = "idle"
+
+local function maybe_bind_editor_ide_socket()
+    if #vim.api.nvim_list_uis() == 0 then
+        M._socket_probe_state = "skipped_headless"
+        return
+    end
+    if (vim.env.NVIM or "") ~= "" then
+        M._socket_probe_state = "skipped_nested_env"
+        return
+    end
+    local tmux_env = vim.env.TMUX or ""
+    local pane = vim.env.TMUX_PANE or ""
+    if tmux_env == "" or pane == "" or pane:sub(1, 1) ~= "%" then
+        M._socket_probe_state = "skipped_not_tmux"
+        return
+    end
+    local srv_pid = tmux_env:match(",(%d+),[^,]*$")
+    if not srv_pid or vim.fn.executable("tmux") ~= 1 then
+        M._socket_probe_state = "skipped_not_tmux"
+        return
+    end
+    local env_sock = vim.env.NVIM_IDE_SOCKET or ""
+    if env_sock ~= "" then
+        local uv0 = vim.uv or vim.loop
+        for _, srv in ipairs(vim.fn.serverlist()) do
+            if srv == env_sock and (not uv0 or uv0.fs_stat(env_sock)) then
+                M._socket_probe_state = "already_listening"
+                return
+            end
+        end
+    end
+
+    M._socket_probe_state = "running"
+    local out_chunks = {}
+    local jid = vim.fn.jobstart({
+        "tmux",
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        "#{pid}:#{pane_id}\t#{@ide_role}\t#{@ide_editor_pane}\t#{@ide_socket}\t#{@ide_session}\t#{pane_pid}",
+    }, {
+        stdout_buffered = true,
+        on_stdout = function(_, data)
+            if type(data) == "table" then
+                for _, line in ipairs(data) do
+                    if line and line ~= "" then
+                        table.insert(out_chunks, line)
+                    end
+                end
+            end
+        end,
+        on_exit = function(_, code)
+            if code ~= 0 or #out_chunks == 0 then
+                M._socket_probe_state = "skipped_tmux_exit"
+                return
+            end
+            local raw = out_chunks[1]:gsub("\r$", "")
+            local parts = vim.split(raw, "\t", { plain = true })
+            local prefix = parts[1] or ""
+            local role = parts[2] or ""
+            local ed_pane = parts[3] or ""
+            local ide_sock = parts[4] or ""
+            local ide_sess = parts[5] or ""
+            local pane_pid_num = tonumber(parts[6] or "")
+            if prefix ~= (srv_pid .. ":" .. pane) then
+                M._socket_probe_state = "skipped_server_mismatch"
+                return
+            end
+            if not ((ed_pane ~= "" and pane == ed_pane) or role == "editor") then
+                M._socket_probe_state = "skipped_non_editor"
+                return
+            end
+            if ide_sock == "" then
+                ide_sock = env_sock
+            end
+            if ide_sock == "" then
+                M._socket_probe_state = "skipped_no_sock"
+                return
+            end
+            vim.schedule(function()
+                if vim.v.exiting ~= vim.NIL then
+                    M._socket_probe_state = "exiting"
+                    return
+                end
+                local uv = vim.uv or vim.loop
+                for _, srv in ipairs(vim.fn.serverlist()) do
+                    if srv == ide_sock then
+                        if not uv or uv.fs_stat(ide_sock) then
+                            vim.env.NVIM_IDE_SOCKET = ide_sock
+                            if ide_sess ~= "" then
+                                vim.env.IDE_SESSION = ide_sess
+                            end
+                            M._socket_probe_state = "already_listening"
+                            return
+                        end
+                        pcall(vim.fn.serverstop, ide_sock)
+                        break
+                    end
+                end
+
+                local function check_pane_ancestry()
+                    if not pane_pid_num or pane_pid_num <= 0 then
+                        return "unknown"
+                    end
+                    local my_pid = (uv and uv.os_getpid and uv.os_getpid()) or vim.fn.getpid()
+                    local my_ppid = (uv and uv.os_getppid and uv.os_getppid()) or nil
+                    if my_pid == pane_pid_num or my_ppid == pane_pid_num then
+                        return "direct"
+                    end
+                    local f0 = io.open("/proc/" .. tostring(my_pid) .. "/stat", "r")
+                    if f0 then
+                        f0:close()
+                        local cur = my_ppid
+                        for _ = 1, 32 do
+                            if not cur or cur <= 1 then
+                                break
+                            end
+                            if cur == pane_pid_num then
+                                return "direct"
+                            end
+                            local fh = io.open("/proc/" .. tostring(cur) .. "/stat", "r")
+                            if not fh then
+                                return "outside_pane"
+                            end
+                            local st_txt = fh:read("*a") or ""
+                            fh:close()
+                            local comm, rest = st_txt:match("^%d+%s+%((.*)%)%s+(.*)$")
+                            if not comm or not rest then
+                                return "outside_pane"
+                            end
+                            if cur ~= my_ppid and (comm == "nvim" or comm:find("^nvim", 1) ~= nil) then
+                                return "nested_nvim"
+                            end
+                            local next_ppid = tonumber(rest:match("^%S+%s+(%d+)"))
+                            if next_ppid == pane_pid_num then
+                                return "direct"
+                            end
+                            cur = next_ppid
+                        end
+                        return "outside_pane"
+                    end
+
+                    -- Non-/proc POSIX fallback (macOS / BSD)
+                    if vim.fn.executable("ps") ~= 1 then
+                        return "unknown"
+                    end
+                    local ps_lines = vim.fn.systemlist({ "ps", "-eo", "pid=,ppid=,comm=" })
+                    if vim.v.shell_error ~= 0 or type(ps_lines) ~= "table" or #ps_lines == 0 then
+                        return "unknown"
+                    end
+                    local ppid_by_pid = {}
+                    local comm_by_pid = {}
+                    for _, pline in ipairs(ps_lines) do
+                        local p_s, pp_s, cm_s = pline:match("^%s*(%d+)%s+(%d+)%s+(.+)$")
+                        if p_s and pp_s and cm_s then
+                            local p_n = tonumber(p_s)
+                            local pp_n = tonumber(pp_s)
+                            if p_n and pp_n then
+                                ppid_by_pid[p_n] = pp_n
+                                local trimmed = vim.trim(cm_s)
+                                comm_by_pid[p_n] = trimmed:match("([^/]+)$") or trimmed
+                            end
+                        end
+                    end
+                    local start_ppid = my_ppid or ppid_by_pid[my_pid]
+                    if start_ppid == pane_pid_num then
+                        return "direct"
+                    end
+                    local cur = start_ppid
+                    for _ = 1, 32 do
+                        if not cur or cur <= 1 then
+                            break
+                        end
+                        if cur == pane_pid_num then
+                            return "direct"
+                        end
+                        local cm = comm_by_pid[cur]
+                        local next_ppid = ppid_by_pid[cur]
+                        if not next_ppid then
+                            return "outside_pane"
+                        end
+                        if cur ~= start_ppid and cm and (cm == "nvim" or cm:find("^nvim", 1) ~= nil) then
+                            return "nested_nvim"
+                        end
+                        if next_ppid == pane_pid_num then
+                            return "direct"
+                        end
+                        cur = next_ppid
+                    end
+                    return "outside_pane"
+                end
+
+                local function resolve_ide_bin()
+                    local cand = vim.fn.expand("$HOME/.local/bin/ide")
+                    if vim.fn.executable(cand) == 1 then
+                        return cand
+                    end
+                    local exe = vim.fn.exepath("ide")
+                    return (exe ~= "") and exe or nil
+                end
+
+                local function delegate_heal_or_bind(bind_fn, unlink_first)
+                    local ancestry = check_pane_ancestry()
+                    if ancestry == "outside_pane" or ancestry == "nested_nvim" then
+                        M._socket_probe_state = "skipped_ancestry:" .. ancestry
+                        return
+                    end
+                    if ancestry == "direct" then
+                        if unlink_first and uv and uv.fs_unlink then
+                            pcall(uv.fs_unlink, ide_sock)
+                        end
+                        bind_fn()
+                        return
+                    end
+                    local ide_bin = resolve_ide_bin()
+                    if ide_bin then
+                        local hcmd = { ide_bin, "--heal-socket" }
+                        if ide_sess ~= "" then
+                            table.insert(hcmd, ide_sess)
+                        end
+                        vim.fn.jobstart(hcmd, { detach = true })
+                        M._socket_probe_state = "delegated_heal"
+                    else
+                        M._socket_probe_state = "skipped_ancestry:unknown"
+                    end
+                end
+
+                local function bind_sock()
+                    vim.schedule(function()
+                        if vim.v.exiting ~= vim.NIL then
+                            M._socket_probe_state = "exiting"
+                            return
+                        end
+                        for _, srv in ipairs(vim.fn.serverlist()) do
+                            if srv == ide_sock then
+                                if not uv or uv.fs_stat(ide_sock) then
+                                    M._socket_probe_state = "already_listening"
+                                    return
+                                end
+                                pcall(vim.fn.serverstop, ide_sock)
+                                break
+                            end
+                        end
+                        local parent = vim.fn.fnamemodify(ide_sock, ":h")
+                        if parent ~= "" and vim.fn.isdirectory(parent) == 0 then
+                            pcall(vim.fn.mkdir, parent, "p", "0700")
+                        end
+                        local ok, started = pcall(vim.fn.serverstart, ide_sock)
+                        if ok and started == ide_sock then
+                            vim.env.NVIM_IDE_SOCKET = ide_sock
+                            if ide_sess ~= "" then
+                                vim.env.IDE_SESSION = ide_sess
+                            end
+                            M._socket_probe_state = "bound"
+                        else
+                            M._socket_probe_state = "bind_failed"
+                        end
+                    end)
+                end
+
+                local st = uv and uv.fs_stat(ide_sock) or nil
+                if not st then
+                    delegate_heal_or_bind(bind_sock, false)
+                elseif st.type == "socket" and uv and uv.new_pipe then
+                    local pipe = uv.new_pipe(false)
+                    if pipe then
+                        pipe:connect(ide_sock, function(err)
+                            pcall(function()
+                                if not pipe:is_closing() then
+                                    pipe:close()
+                                end
+                            end)
+                            if err then
+                                vim.schedule(function()
+                                    if vim.v.exiting == vim.NIL then
+                                        delegate_heal_or_bind(bind_sock, true)
+                                    else
+                                        M._socket_probe_state = "exiting"
+                                    end
+                                end)
+                            else
+                                M._socket_probe_state = "live_peer"
+                            end
+                        end)
+                    else
+                        M._socket_probe_state = "skipped_no_pipe"
+                    end
+                else
+                    M._socket_probe_state = "skipped_non_socket"
+                end
+            end)
+        end,
+    })
+    if type(jid) ~= "number" or jid <= 0 then
+        M._socket_probe_state = "skipped_jobstart_failed"
+    end
+end
+
 function M.setup()
     local map = vim.keymap.set
+    local sock_group = vim.api.nvim_create_augroup("SolarizedIdeSocket", { clear = true })
+    if vim.v.vim_did_enter == 1 then
+        maybe_bind_editor_ide_socket()
+    else
+        vim.api.nvim_create_autocmd("VimEnter", {
+            group = sock_group,
+            once = true,
+            callback = maybe_bind_editor_ide_socket,
+        })
+    end
 
     -- Role focus, visibility parking, directional swaps, fleet switcher, and context dispatch
     map("n", "<leader>a", tmux_ide_action("--toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })

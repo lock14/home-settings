@@ -23,6 +23,7 @@ _SINGLE_ARG_ACTIONS = frozenset({
     "--toggle-term",
     "--next-attention",
     "--refresh-attn",
+    "--heal-socket",
     "--run-ai-popup",
     "--paste",
 })
@@ -494,6 +495,11 @@ def main(argv: list[str] | None = None) -> int:
         from ide_lib.links import send_to_ai
 
         return send_to_ai(send_mode, send_payload, send_no_focus, send_switch, target_arg)
+
+    if action == "heal-socket":
+        from ide_lib.nvim_rpc import heal_target_session_socket
+
+        return heal_target_session_socket(target_arg)
 
     from ide_lib.tmux import (
         copy_to_system_clipboard,

@@ -11,6 +11,7 @@ import sys
 
 from ide_lib.constants import (
     _SGR_RE,
+    is_live_socket,
     is_socket_path,
     pad_visible,
     shorten_home,
@@ -233,12 +234,14 @@ def render_session_preview(target_arg: str) -> int:
     ai_msg = str(entry.get("ai_msg") or "")
     quit_err = str(entry.get("quit_err") or "")
     ide_sock = str(entry.get("ide_sock") or "")
-    if quit_err and ide_sock and is_socket_path(ide_sock):
-        from ide_lib.nvim_rpc import nvim_modified_buf_count, resolve_nvim_bin
+    if quit_err:
+        from ide_lib.nvim_rpc import ensure_session_editor_socket, nvim_modified_buf_count, resolve_nvim_bin
 
-        if resolve_nvim_bin() and nvim_modified_buf_count(ide_sock) == 0:
-            run_tmux("set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err")
-            quit_err = ""
+        if resolve_nvim_bin():
+            ide_sock = ensure_session_editor_socket(sess, ide_sock)
+            if ide_sock and is_live_socket(ide_sock) and nvim_modified_buf_count(ide_sock) == 0:
+                run_tmux("set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err")
+                quit_err = ""
     short_path = str(entry["short_path"])
     git_branch = str(entry["git_branch"])
     git_detail = str(entry["git_detail"])
