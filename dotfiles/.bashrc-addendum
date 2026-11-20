@@ -96,6 +96,9 @@ else
     elif command -v vim >/dev/null 2>&1; then export EDITOR=vim
     else export EDITOR=vi; fi
     export VISUAL="$EDITOR"
+    if [ -S "$HOME/.ssh/ssh_auth_sock" ] || { [ -L "$HOME/.ssh/ssh_auth_sock" ] && [ ! -S "${SSH_AUTH_SOCK:-}" ]; }; then
+        export SSH_AUTH_SOCK="$HOME/.ssh/ssh_auth_sock"
+    fi
 fi
 
 case "${HISTSIZE-}" in

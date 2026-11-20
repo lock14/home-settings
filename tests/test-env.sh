@@ -89,6 +89,58 @@ else
     fail "IDE_AI_CLI override" "Expected IDE_AI_CLI override to be preserved"
 fi
 
+if (
+    SSH_TEST_HOME="$(mktemp -d)"
+    trap 'rm -rf "$SSH_TEST_HOME"' EXIT
+    export HOME="$SSH_TEST_HOME"
+    SSH_AUTH_SOCK="/tmp/keep-default-$$.sock"
+    . "$SCRIPT_DIR/dotfiles/.environment-variables"
+    [ "$SSH_AUTH_SOCK" = "/tmp/keep-default-$$.sock" ] || exit 1
+    mkdir -p "$HOME/.ssh"
+    ln -sf "/tmp/missing-target-$$.sock" "$HOME/.ssh/ssh_auth_sock"
+    . "$SCRIPT_DIR/dotfiles/.environment-variables"
+    [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/ssh_auth_sock" ] || exit 1
+    if command -v python3 >/dev/null 2>&1; then
+        SCRIPT_ENV_PATH="$SCRIPT_DIR/dotfiles/.environment-variables" python3 - "$HOME/.ssh" <<'PY'
+import os, socket, subprocess, sys
+ssh_dir = sys.argv[1]
+real_sock = os.path.join(ssh_dir, "ephemeral.sock")
+live_other = os.path.join(ssh_dir, "live-other.sock")
+s1 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+try:
+    s1.bind(real_sock)
+    s2.bind(live_other)
+    sym = os.path.join(ssh_dir, "ssh_auth_sock")
+    if os.path.lexists(sym):
+        os.unlink(sym)
+    os.symlink(os.path.join(ssh_dir, "dead.sock"), sym)
+    env = {**os.environ, "SSH_AUTH_SOCK": live_other}
+    out_live = subprocess.check_output(
+        ["sh", "-c", '. "$1" && printf "%s" "$SSH_AUTH_SOCK"', "_", os.environ["SCRIPT_ENV_PATH"]],
+        env=env,
+        text=True,
+    )
+    assert out_live == live_other, f"expected {live_other!r}, got {out_live!r}"
+    os.unlink(sym)
+    os.symlink(real_sock, sym)
+    out = subprocess.check_output(
+        ["sh", "-c", '. "$1" && printf "%s" "$SSH_AUTH_SOCK"', "_", os.environ["SCRIPT_ENV_PATH"]],
+        env=env,
+        text=True,
+    )
+    assert out == sym, f"expected {sym!r}, got {out!r}"
+finally:
+    s1.close()
+    s2.close()
+PY
+    fi
+) 2>/dev/null; then
+    pass "SSH_AUTH_SOCK pins to \$HOME/.ssh/ssh_auth_sock when present while preserving custom sockets otherwise"
+else
+    fail "SSH_AUTH_SOCK symlink pinning" "Expected .environment-variables to pin SSH_AUTH_SOCK to ~/.ssh/ssh_auth_sock"
+fi
+
 if [ -n "${LSCOLORS:-}" ] && [ "${LSCOLORS:-}" = "exgxfxdxcxfxfxegedabagacad" ]; then
     pass "LSCOLORS configured with Solarized Dark palette for macOS BSD ls parity"
 else
