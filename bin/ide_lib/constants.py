@@ -331,20 +331,41 @@ def _find_mise_installed_bin(mise_root: str, pkg_name: str, tool_name: str) -> s
     return None
 
 
+def which_executable(cmd: str) -> str | None:
+    """Locate executable `cmd` on `PATH` using pure `os` syscalls without importing `shutil`."""
+    if not cmd:
+        return None
+    if os.sep in cmd or (os.altsep and os.altsep in cmd):
+        return cmd if (os.path.isfile(cmd) and os.access(cmd, os.X_OK)) else None
+    raw_path = os.environ.get("PATH")
+    if raw_path is None:
+        raw_path = os.defpath
+    if not raw_path:
+        return None
+    seen: set[str] = set()
+    for entry in raw_path.split(os.pathsep):
+        d = entry or "."
+        if d in seen:
+            continue
+        seen.add(d)
+        cand = os.path.join(d, cmd)
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
 def resolve_mise_tool_bin(
     tool_name: str,
     install_dir_name: str = "",
     env_override: str = "",
 ) -> str | None:
     """Resolve `tool_name` on `PATH`, bypassing `mise/shims` overhead when installed under `mise/installs`."""
-    import shutil
-
     if env_override:
         raw_ovr = (os.environ.get(env_override) or "").strip()
         if raw_ovr:
             if os.path.isfile(raw_ovr) and os.access(raw_ovr, os.X_OK):
                 return raw_ovr
-            return shutil.which(raw_ovr)
+            return which_executable(raw_ovr)
     env_mise = (os.environ.get("MISE_DATA_DIR") or "").strip()
     cache_key = (
         tool_name,
@@ -354,7 +375,7 @@ def resolve_mise_tool_bin(
     if cache_key in _MISE_TOOL_BIN_CACHE:
         return _MISE_TOOL_BIN_CACHE[cache_key]
 
-    cand = shutil.which(tool_name)
+    cand = which_executable(tool_name)
     if cand:
         try:
             real = os.path.realpath(cand)

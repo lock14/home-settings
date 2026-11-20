@@ -89,6 +89,9 @@ uninstall_dotfiles() {
             "$xdg_config/home-settings/delta-theme.gitconfig" 2>/dev/null || true
         rm -rf "$xdg_config/home-settings/active" 2>/dev/null || true
         rmdir "$xdg_config/home-settings/themes" "$xdg_config/home-settings" 2>/dev/null || true
+        local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+        rm -rf "$xdg_cache/home-settings/pycache" "$xdg_cache/home-settings/fzf-cap.cache" 2>/dev/null || true
+        rmdir "$xdg_cache/home-settings" 2>/dev/null || true
 
         rebuild_bat_cache
         rm -rf "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/fzf-zsh-plugin" 2>/dev/null || true
