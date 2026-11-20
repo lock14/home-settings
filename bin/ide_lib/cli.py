@@ -118,7 +118,11 @@ def _normalize_ai_cli(ai_cli: str, from_flag: bool) -> bool:
 def main(argv: list[str] | None = None) -> int:
     """Parse CLI arguments and dispatch to the matching `ide_lib` domain handler."""
     raw_self = os.environ.pop("IDE_SELF", "")
-    ide_self = os.path.abspath(raw_self) if raw_self else ""
+    ide_self = (
+        os.path.abspath(raw_self)
+        if raw_self
+        else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ide"))
+    )
     _calibrate_ide_path()
     os.environ["FORCE_HYPERLINK"] = "1"
     args = sys.argv[1:] if argv is None else list(argv)
@@ -550,19 +554,35 @@ def main(argv: list[str] | None = None) -> int:
             print(str(entry["sess"]))
         return 0
 
-    if action in ("sessions", "new", "sessions-lines", "session-preview", "switcher-op", "next-attention", "list"):
+    if action == "session-preview":
+        from ide_lib.preview import render_session_preview
+
+        return render_session_preview(target_arg, follow=preview_follow)
+
+    if action == "switcher-op":
+        from ide_lib.switcher import handle_switcher_op
+
+        return handle_switcher_op(switcher_op, target_arg)
+
+    if action in ("sessions", "new", "sessions-lines", "next-attention", "list"):
         from ide_lib.sessions import (
             build_sessions_lines,
-            handle_switcher_op,
             list_ide_fleet,
             next_attention,
-            render_session_preview,
             run_new_workspace_picker,
             run_sessions_picker,
         )
 
         if action == "sessions":
-            return run_sessions_picker(target_arg, ide_self, had_env_ai_cli=had_env_ai_cli or ai_cli_from_flag)
+            return run_sessions_picker(
+                target_arg,
+                ide_self,
+                had_env_ai_cli=had_env_ai_cli,
+                layout_mode=layout_mode,
+                ai_cli=ai_cli,
+                ai_cli_from_flag=ai_cli_from_flag,
+                detach_only=detach_mode,
+            )
         if action == "new":
             return run_new_workspace_picker(
                 target_arg,
@@ -577,10 +597,6 @@ def main(argv: list[str] | None = None) -> int:
             for row in build_sessions_lines(target_arg):
                 print(row)
             return 0
-        if action == "session-preview":
-            return render_session_preview(target_arg, follow=preview_follow)
-        if action == "switcher-op":
-            return handle_switcher_op(switcher_op, target_arg)
         if action == "next-attention":
             return next_attention(target_arg)
         return list_ide_fleet(plain=plain_list)

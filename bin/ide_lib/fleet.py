@@ -13,25 +13,22 @@ import time
 from ide_lib.constants import (
     TMUX_SEP,
     is_live_socket,
-    is_socket_path,
+    is_switcher_session_name,
     sanitize_agent_msg,
     sanitize_http_url,
     shorten_home,
 )
 from ide_lib.hooks import ide_rules_with_fn
+from ide_lib.proc import is_bare_shell_cmd, pane_has_child_procs, pids_with_children
 from ide_lib.tmux import (
     check_is_ide_session,
     current_ide_session,
     discover_display_env,
     get_ide_var,
-    is_bare_shell_cmd,
     is_ide_session_meta,
     is_ssh_session,
-    is_switcher_session_name,
     missing_session_msg,
     open_browser_url,
-    pane_has_child_procs,
-    pids_with_children,
     resolve_active_client,
     resolve_role_pane,
     resolve_target_session,

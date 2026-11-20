@@ -13,8 +13,15 @@ from ide_lib.constants import (
     TMUX_WORD_SEPS,
     _SGR_RE,
     is_live_socket,
-    is_socket_path,
+    is_switcher_session_name,
     safe_getcwd,
+)
+from ide_lib.dock import (
+    caller_switcher_session,
+    close_switcher_session,
+    pane_in_switcher_session,
+    switch_or_attach_session,
+    undock_switcher_session,
 )
 from ide_lib.fleet import ack_ai_session
 from ide_lib.git_info import locate_git_dirs
@@ -28,18 +35,14 @@ from ide_lib.nvim_rpc import (
     resolve_nvim_bin,
     wait_for_editor_socket,
 )
+from ide_lib.proc import pane_has_child_procs
 from ide_lib.tmux import (
-    caller_switcher_session,
-    close_switcher_session,
     current_ide_session,
     get_ide_var,
-    is_switcher_session_name,
     missing_session_msg,
     normalize_pane_cwd,
     open_browser_url,
     pane_exists,
-    pane_has_child_procs,
-    pane_in_switcher_session,
     pane_is_parked,
     resolve_main_win,
     resolve_role_pane,
@@ -47,9 +50,7 @@ from ide_lib.tmux import (
     resolve_target_session,
     run_tmux,
     session_exists,
-    switch_or_attach_session,
     tmux_out,
-    undock_switcher_session,
 )
 
 _RE_FILE_URI = re.compile(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)")
@@ -522,6 +523,17 @@ def open_file_or_dir_target(fpath: str, line: str, target_arg: str) -> bool:
         open_in_editor(fpath, True, target_arg, line)
         return True
     if os.path.isdir(fpath):
+        sw_sess = caller_switcher_session(target_arg)
+        if sw_sess:
+            docked_s, sw_cl, sw_rf = resolve_switcher_context(sw_sess)
+            if not docked_s:
+                return False
+            undock_switcher_session(sw_sess)
+            cd_ide_workspace(fpath, docked_s)
+            close_switcher_session(sw_sess, action="switch", target=docked_s, res_file_hint=sw_rf)
+            if not sw_rf and sw_cl:
+                run_tmux("switch-client", "-c", sw_cl, "-t", f"={docked_s}")
+            return True
         cd_ide_workspace(fpath, target_arg)
         return True
     return False

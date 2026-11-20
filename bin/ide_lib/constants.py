@@ -18,6 +18,7 @@ TMUX_SEP = _TMUX_SEP
 
 _TMUX_WORD_SEPS = " ()[]{}<>\"'`,;*"
 TMUX_WORD_SEPS = _TMUX_WORD_SEPS
+_SWITCHER_SESS_PREFIX = "ai-sw-"
 
 ROLE_PARK_VARS: dict[str, tuple[str, str]] = {
     "ai": ("@ide_ai_parked", "IDE_AI_PARKED"),
@@ -247,6 +248,53 @@ def trunc_visible(text: str, max_w: int, suffix: str = "…") -> str:
     return "".join(out) + suffix
 
 
+def is_switcher_session_name(sess: str) -> bool:
+    """Return True when `sess` names an ephemeral 2-pane `ide --sessions` switcher session (`ai-sw-*`)."""
+    return bool(sess) and sess.startswith(_SWITCHER_SESS_PREFIX)
+
+
+def write_switcher_result(res_path: str, action: str, target: str = "", pressed: str = "") -> None:
+    """Atomically record the user's switcher selection (`switch`, `launch`, or `none`) to `res_path`."""
+    if not res_path:
+        return
+    import json
+
+    tmp_p = f"{res_path}.tmp.{os.getpid()}"
+    payload = json.dumps({"action": action, "target": target, "pressed": pressed})
+    try:
+        fd = os.open(tmp_p, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, (payload + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+        os.replace(tmp_p, res_path)
+    except OSError:
+        try:
+            os.unlink(tmp_p)
+        except OSError:
+            pass
+
+
+def read_switcher_result(res_path: str) -> tuple[str, str, str] | None:
+    """Read `(action, target, pressed)` from `res_path`, returning `None` if absent or invalid."""
+    if not res_path or not os.path.isfile(res_path):
+        return None
+    import json
+
+    try:
+        with open(res_path, "r", encoding="utf-8") as fh:
+            data = json.loads(fh.read())
+        if isinstance(data, dict):
+            return (
+                str(data.get("action") or ""),
+                str(data.get("target") or ""),
+                str(data.get("pressed") or ""),
+            )
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 _MISE_TOOL_BIN_CACHE: dict[tuple[str, str, str], str | None] = {}
 _MISE_VER_NUM_RE = re.compile(r"[0-9]+")
 
@@ -258,24 +306,53 @@ def _mise_ver_sort_key(ver_name: str) -> tuple[int, ...]:
     return tuple(nums) if nums else (0,)
 
 
+def _find_mise_installed_bin(mise_root: str, pkg_name: str, tool_name: str) -> str | None:
+    pkg_dir = os.path.join(mise_root, "installs", pkg_name)
+    if not os.path.isdir(pkg_dir):
+        return None
+    ver_dirs: list[tuple[tuple[int, ...], str]] = []
+    try:
+        with os.scandir(pkg_dir) as it:
+            for dent in it:
+                if dent.name.startswith("."):
+                    continue
+                try:
+                    if dent.is_dir():
+                        ver_dirs.append((_mise_ver_sort_key(dent.name), dent.path))
+                except OSError:
+                    pass
+    except OSError:
+        return None
+    ver_dirs.sort(key=lambda x: x[0], reverse=True)
+    for _, vdir in ver_dirs:
+        for sub in (os.path.join(vdir, "bin", tool_name), os.path.join(vdir, tool_name)):
+            if os.path.isfile(sub) and os.access(sub, os.X_OK):
+                return sub
+    return None
+
+
 def resolve_mise_tool_bin(
     tool_name: str,
     install_dir_name: str = "",
     env_override: str = "",
 ) -> str | None:
     """Resolve `tool_name` on `PATH`, bypassing `mise/shims` overhead when installed under `mise/installs`."""
+    import shutil
+
     if env_override:
         raw_ovr = (os.environ.get(env_override) or "").strip()
         if raw_ovr:
-            return raw_ovr
+            if os.path.isfile(raw_ovr) and os.access(raw_ovr, os.X_OK):
+                return raw_ovr
+            return shutil.which(raw_ovr)
+    env_mise = (os.environ.get("MISE_DATA_DIR") or "").strip()
     cache_key = (
         tool_name,
         install_dir_name,
-        f"{os.environ.get('PATH', '')}\0{os.environ.get('MISE_DATA_DIR', '')}",
+        f"{os.environ.get('PATH', '')}\0{env_mise}",
     )
     if cache_key in _MISE_TOOL_BIN_CACHE:
         return _MISE_TOOL_BIN_CACHE[cache_key]
-    import shutil
 
     cand = shutil.which(tool_name)
     if cand:
@@ -285,26 +362,18 @@ def resolve_mise_tool_bin(
             real = cand
         norm_cand = cand.replace("\\", "/")
         if "/mise/shims/" in norm_cand or os.path.basename(real) == "mise":
-            mise_root = os.path.dirname(os.path.dirname(os.path.abspath(cand)))
-            pkg_dir = os.path.join(mise_root, "installs", install_dir_name or tool_name)
-            if os.path.isdir(pkg_dir):
-                ver_dirs: list[tuple[tuple[int, ...], str]] = []
-                try:
-                    with os.scandir(pkg_dir) as it:
-                        for dent in it:
-                            try:
-                                if dent.is_dir():
-                                    ver_dirs.append((_mise_ver_sort_key(dent.name), dent.path))
-                            except OSError:
-                                pass
-                except OSError:
-                    pass
-                ver_dirs.sort(key=lambda x: x[0], reverse=True)
-                for _, vdir in ver_dirs:
-                    for sub in (os.path.join(vdir, "bin", tool_name), os.path.join(vdir, tool_name)):
-                        if os.path.isfile(sub) and os.access(sub, os.X_OK):
-                            _MISE_TOOL_BIN_CACHE[cache_key] = sub
-                            return sub
+            shim_root = os.path.dirname(os.path.dirname(os.path.abspath(cand)))
+            pkg_name = install_dir_name or tool_name
+            seen_roots: set[str] = set()
+            for m_root in (shim_root, env_mise):
+                clean_root = m_root.rstrip("/") if m_root and m_root != "/" else m_root
+                if not clean_root or clean_root in seen_roots:
+                    continue
+                seen_roots.add(clean_root)
+                direct = _find_mise_installed_bin(clean_root, pkg_name, tool_name)
+                if direct:
+                    _MISE_TOOL_BIN_CACHE[cache_key] = direct
+                    return direct
         _MISE_TOOL_BIN_CACHE[cache_key] = cand
         return cand
     _MISE_TOOL_BIN_CACHE[cache_key] = None

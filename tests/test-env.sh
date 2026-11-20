@@ -89,23 +89,43 @@ else
     fail "IDE_AI_CLI override" "Expected IDE_AI_CLI override to be preserved"
 fi
 
-if (
-    SSH_TEST_HOME="$(mktemp -d)"
+SSH_TEST_OUT="$(
+    SSH_TEST_HOME="$(mktemp -d /tmp/hs-ssh.XXXXXX)"
     trap 'rm -rf "$SSH_TEST_HOME"' EXIT
     export HOME="$SSH_TEST_HOME"
+    export XDG_CONFIG_HOME="$SSH_TEST_HOME/.config"
     SSH_AUTH_SOCK="/tmp/keep-default-$$.sock"
     . "$SCRIPT_DIR/dotfiles/.environment-variables"
-    [ "$SSH_AUTH_SOCK" = "/tmp/keep-default-$$.sock" ] || exit 1
+    [ "$SSH_AUTH_SOCK" = "/tmp/keep-default-$$.sock" ] || { echo "default override failed: $SSH_AUTH_SOCK"; exit 1; }
     mkdir -p "$HOME/.ssh"
     ln -sf "/tmp/missing-target-$$.sock" "$HOME/.ssh/ssh_auth_sock"
     . "$SCRIPT_DIR/dotfiles/.environment-variables"
-    [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/ssh_auth_sock" ] || exit 1
+    [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/ssh_auth_sock" ] || { echo "dangling fallback failed: $SSH_AUTH_SOCK"; exit 1; }
+
+    # Verify lone .environment-variables and lone .bashrc-addendum fallbacks (without .config/shell/env-defaults.sh)
+    LONE_HOME="$SSH_TEST_HOME/lone"
+    mkdir -p "$LONE_HOME/.ssh" "$LONE_HOME/.config"
+    ln -sf "/tmp/missing-lone-$$.sock" "$LONE_HOME/.ssh/ssh_auth_sock"
+    cp "$SCRIPT_DIR/dotfiles/.environment-variables" "$LONE_HOME/.environment-variables"
+    lone_ev_sock="$(HOME="$LONE_HOME" XDG_CONFIG_HOME="$LONE_HOME/.config" _HS_SHELL_DIR="" SSH_AUTH_SOCK="" sh -c '. "$1" && printf "%s" "$SSH_AUTH_SOCK"' _ "$LONE_HOME/.environment-variables")"
+    [ "$lone_ev_sock" = "$LONE_HOME/.ssh/ssh_auth_sock" ] || { echo "lone .environment-variables failed: $lone_ev_sock"; exit 1; }
+    rm -f "$LONE_HOME/.environment-variables"
+    cp "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$LONE_HOME/.bashrc-addendum"
+    lone_bash_sock="$(HOME="$LONE_HOME" XDG_CONFIG_HOME="$LONE_HOME/.config" _HS_SHELL_DIR="" SSH_AUTH_SOCK="" bash --norc --noprofile -c '. "$1" && printf "%s" "$SSH_AUTH_SOCK"' _ "$LONE_HOME/.bashrc-addendum")"
+    [ "$lone_bash_sock" = "$LONE_HOME/.ssh/ssh_auth_sock" ] || { echo "lone .bashrc-addendum failed: $lone_bash_sock"; exit 1; }
+
     if command -v python3 >/dev/null 2>&1; then
         SCRIPT_ENV_PATH="$SCRIPT_DIR/dotfiles/.environment-variables" python3 - "$HOME/.ssh" <<'PY'
-import os, socket, subprocess, sys
+from __future__ import annotations
+
+import os
+import socket
+import subprocess
+import sys
+
 ssh_dir = sys.argv[1]
-real_sock = os.path.join(ssh_dir, "ephemeral.sock")
-live_other = os.path.join(ssh_dir, "live-other.sock")
+real_sock = os.path.join(ssh_dir, "ephem.sock")
+live_other = os.path.join(ssh_dir, "other.sock")
 s1 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 s2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 try:
@@ -135,10 +155,12 @@ finally:
     s2.close()
 PY
     fi
-) 2>/dev/null; then
-    pass "SSH_AUTH_SOCK pins to \$HOME/.ssh/ssh_auth_sock when present while preserving custom sockets otherwise"
+    echo "SSH_SOCK_OK"
+)" 2>&1 || true
+if grep -Fq "SSH_SOCK_OK" <<< "$SSH_TEST_OUT"; then
+    pass "SSH_AUTH_SOCK pins to \$HOME/.ssh/ssh_auth_sock across env-defaults.sh, lone .environment-variables, and lone .bashrc-addendum while preserving live custom sockets"
 else
-    fail "SSH_AUTH_SOCK symlink pinning" "Expected .environment-variables to pin SSH_AUTH_SOCK to ~/.ssh/ssh_auth_sock"
+    fail "SSH_AUTH_SOCK symlink pinning" "SSH_AUTH_SOCK checks failed: $SSH_TEST_OUT"
 fi
 
 if [ -n "${LSCOLORS:-}" ] && [ "${LSCOLORS:-}" = "exgxfxdxcxfxfxegedabagacad" ]; then

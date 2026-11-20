@@ -11,6 +11,7 @@ from ide_lib.constants import DEFAULT_THEME_HEX
 from ide_lib.tmux import tmux_out
 
 _THEME_KV_RE = re.compile(r'^([A-Z0-9_]+)="?(#[0-9A-Fa-f]{6})"?$')
+_PALETTE_CACHE: tuple[tuple[str, int, int, int], dict[str, str], dict[str, str]] | None = None
 
 
 def hex_to_fg(hex_code: str) -> str:
@@ -27,20 +28,31 @@ def hex_to_fg(hex_code: str) -> str:
 
 def load_active_palette() -> tuple[dict[str, str], dict[str, str]]:
     """Load `(hex_map, ansi_fg_map)` from `active-theme.theme`, defaulting to Solarized Dark."""
-    hex_map = dict(DEFAULT_THEME_HEX)
+    global _PALETTE_CACHE
     xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     active_file = os.path.join(xdg_cfg, "home-settings", "active-theme.theme")
     try:
-        with open(active_file, "r", encoding="utf-8") as fh:
-            for raw_line in fh:
-                m = _THEME_KV_RE.match(raw_line.strip())
-                if m and m.group(1) in hex_map:
-                    hex_map[m.group(1)] = m.group(2)
+        st = os.stat(active_file)
+        stat_key = (active_file, st.st_ino, st.st_mtime_ns, st.st_size)
     except OSError:
-        pass
+        stat_key = (active_file, -1, -1, -1)
+    if _PALETTE_CACHE is not None and _PALETTE_CACHE[0] == stat_key:
+        return (dict(_PALETTE_CACHE[1]), dict(_PALETTE_CACHE[2]))
+
+    hex_map = dict(DEFAULT_THEME_HEX)
+    if stat_key[1] >= 0:
+        try:
+            with open(active_file, "r", encoding="utf-8") as fh:
+                for raw_line in fh:
+                    m = _THEME_KV_RE.match(raw_line.strip())
+                    if m and m.group(1) in hex_map:
+                        hex_map[m.group(1)] = m.group(2)
+        except OSError:
+            pass
     esc_map = {k: hex_to_fg(v) for k, v in hex_map.items()}
     esc_map["RESET"] = "\033[0m"
-    return hex_map, esc_map
+    _PALETTE_CACHE = (stat_key, hex_map, esc_map)
+    return (dict(hex_map), dict(esc_map))
 
 
 def state_color(state: str, esc: dict[str, str]) -> str:

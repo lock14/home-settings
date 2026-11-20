@@ -14,8 +14,14 @@ from ide_lib.constants import (
     ROLE_PARK_VARS,
     TMUX_SEP,
     is_socket_path,
+    is_switcher_session_name,
     safe_getcwd,
     visible_width,
+)
+from ide_lib.dock import (
+    close_switcher_session,
+    pane_in_switcher_session,
+    undock_session_if_docked,
 )
 from ide_lib.fleet import (
     ack_ai_session,
@@ -37,16 +43,13 @@ from ide_lib.nvim_rpc import (
 )
 from ide_lib.tmux import (
     check_is_ide_session,
-    close_switcher_session,
     current_ide_session,
     get_ide_var,
     is_ssh_session,
-    is_switcher_session_name,
     missing_session_msg,
     normalize_pane_cwd,
     pane_exists,
     pane_has_child_procs,
-    pane_in_switcher_session,
     pane_in_win,
     pane_is_parked,
     resolve_main_win,
@@ -57,7 +60,6 @@ from ide_lib.tmux import (
     set_ide_var,
     set_ide_vars,
     tmux_out,
-    undock_session_if_docked,
 )
 
 
@@ -1848,6 +1850,7 @@ def launch_or_attach_workspace(
 
         run_tmux("select-window", "-t", main_win, ";", "select-pane", "-t", pane_ai)
     else:
+        undock_session_if_docked(session)
         ed_pane_existing = resolve_role_pane(session, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
         if pane_exists(ed_pane_existing):
             ensure_editor_nvim_running(ed_pane_existing, nvim_socket, sess=session)

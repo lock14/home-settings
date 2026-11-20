@@ -6,8 +6,8 @@
 #   - AI Agent CLI (@ide_role=ai): $IDE_AI_CLI (agy | claude | codex)
 #   - Main Editor (@ide_role=editor): $NVIM_IDE_SOCKET (autoread, mini.files)
 #   - Interactive Shell (@ide_role=term): Bottom full-width pane in --3pane
-# Domain modules live under bin/ide_lib/ (constants, hooks, git_info, tmux,
-# theme, nvim_rpc, fleet, layout, links, sessions, cli).
+# Domain modules live under bin/ide_lib/ (constants, hooks, git_info, proc,
+# tmux, dock, theme, nvim_rpc, fleet, layout, links, preview, switcher, sessions, cli).
 # ==============================================================================
 
 set -euo pipefail
