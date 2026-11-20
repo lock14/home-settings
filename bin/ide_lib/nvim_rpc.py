@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
 import subprocess
 import time
 
-from ide_lib.constants import TMUX_SEP, is_live_socket, is_socket_path
+from ide_lib.constants import TMUX_SEP, is_live_socket, is_socket_path, resolve_mise_tool_bin
+from ide_lib.proc import discover_pane_nvim_sockets
 from ide_lib.tmux import (
-    discover_pane_nvim_sockets,
     get_ide_var,
     resolve_role_pane,
     resolve_target_session,
@@ -22,73 +21,48 @@ from ide_lib.tmux import (
     tmux_out,
 )
 
-_NVIM_BIN_CACHE: str | None = None
-_NVIM_BIN_RESOLVED = False
+_NVIM_FALLBACK_CACHE: dict[str, str | None] = {}
 
 
-def _version_sort_key(bin_path: Path) -> tuple[int, ...]:
-    ver_str = bin_path.parent.parent.name
-    if ver_str == "latest":
-        return (999999,)
-    nums = [int(x) for x in re.findall(r"[0-9]+", ver_str)]
-    return tuple(nums) if nums else (0,)
+def _is_mise_shim_path(bin_path: str) -> bool:
+    if "/mise/shims/" in bin_path.replace("\\", "/"):
+        return True
+    try:
+        return os.path.basename(os.path.realpath(bin_path)) == "mise"
+    except OSError:
+        return False
 
 
 def resolve_nvim_bin() -> str | None:
     """Resolve direct Neovim binary path, bypassing Mise shim overhead when installed under `mise`."""
-    global _NVIM_BIN_CACHE, _NVIM_BIN_RESOLVED
-    if _NVIM_BIN_RESOLVED:
-        return _NVIM_BIN_CACHE
-    _NVIM_BIN_RESOLVED = True
-    cand = shutil.which("nvim")
-    if cand:
-        try:
-            real = os.path.realpath(cand)
-        except OSError:
-            real = cand
-        norm_cand = cand.replace("\\", "/")
-        if "/mise/shims/" in norm_cand or os.path.basename(real) == "mise":
-            mise_root = Path(cand).parent.parent
-            installs_dir = mise_root / "installs" / "neovim"
-            if installs_dir.is_dir():
-                bins = sorted(installs_dir.glob("*/bin/nvim"), key=_version_sort_key)
-                for b in reversed(bins):
-                    if b.is_file() and os.access(b, os.X_OK):
-                        _NVIM_BIN_CACHE = str(b)
-                        return _NVIM_BIN_CACHE
-            if shutil.which("mise"):
-                env = os.environ.copy()
-                if mise_root.is_dir() and "MISE_DATA_DIR" not in env:
-                    env["MISE_DATA_DIR"] = str(mise_root)
-                res = subprocess.run(
-                    ["mise", "which", "nvim"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    text=True,
-                    env=env,
-                    check=False,
-                )
-                if res.returncode == 0:
-                    p = res.stdout.strip()
-                    if p and os.path.isfile(p) and os.access(p, os.X_OK):
-                        _NVIM_BIN_CACHE = p
-                        return _NVIM_BIN_CACHE
-        _NVIM_BIN_CACHE = cand
-        return _NVIM_BIN_CACHE
+    cand = resolve_mise_tool_bin("nvim", install_dir_name="neovim")
+    if cand and not _is_mise_shim_path(cand):
+        return cand
+    cache_key = f"{os.environ.get('PATH', '')}\0{os.environ.get('MISE_DATA_DIR', '')}"
+    if cache_key in _NVIM_FALLBACK_CACHE:
+        return _NVIM_FALLBACK_CACHE[cache_key]
     if shutil.which("mise"):
+        env = os.environ.copy()
+        if cand and "MISE_DATA_DIR" not in env:
+            mise_root = os.path.dirname(os.path.dirname(os.path.abspath(cand)))
+            if os.path.isdir(mise_root):
+                env["MISE_DATA_DIR"] = mise_root
         res = subprocess.run(
             ["mise", "which", "nvim"],
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
+            env=env,
             check=False,
         )
         if res.returncode == 0:
             p = res.stdout.strip()
             if p and os.path.isfile(p) and os.access(p, os.X_OK):
-                _NVIM_BIN_CACHE = p
-                return _NVIM_BIN_CACHE
-    return None
+                _NVIM_FALLBACK_CACHE[cache_key] = p
+                return p
+    _NVIM_FALLBACK_CACHE[cache_key] = cand
+    return cand
 
 
 def resolve_ai_cmd(cli: str) -> str | None:

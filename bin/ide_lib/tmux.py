@@ -1,14 +1,11 @@
-"""Tmux IPC, exact session/pane targeting, SSH/display sync, clipboard, and process inspection."""
+"""Tmux IPC, exact session/pane targeting, SSH/display sync, browser opener, and clipboard."""
 
 from __future__ import annotations
 
-import getpass
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
-import stat
 import subprocess
 import sys
 
@@ -16,18 +13,65 @@ from ide_lib.constants import (
     TMUX_SEP,
     is_live_socket,
     is_socket_path,
+    is_switcher_session_name,
+    read_switcher_result,
+    resolve_mise_tool_bin,
     safe_getcwd,
     sanitize_http_url,
     sanitize_name_token,
+    write_switcher_result,
 )
 from ide_lib.hooks import sanitize_session_name
+from ide_lib.proc import (
+    discover_pane_nvim_sockets,
+    is_bare_shell_cmd,
+    pane_has_child_procs,
+    pane_tree_pids,
+    pids_with_children,
+)
+
+__all__ = [
+    "check_is_ide_session",
+    "copy_to_system_clipboard",
+    "current_ide_session",
+    "discover_display_env",
+    "discover_pane_nvim_sockets",
+    "get_ide_var",
+    "is_bare_shell_cmd",
+    "is_ide_session_meta",
+    "is_ssh_session",
+    "is_switcher_session_name",
+    "missing_session_msg",
+    "most_recent_client",
+    "normalize_pane_cwd",
+    "notify_session_editor_images",
+    "open_browser_url",
+    "pane_exists",
+    "pane_has_child_procs",
+    "pane_in_win",
+    "pane_is_parked",
+    "pane_tree_pids",
+    "paste_from_system_clipboard",
+    "pids_with_children",
+    "read_switcher_result",
+    "resolve_active_client",
+    "resolve_main_win",
+    "resolve_role_pane",
+    "resolve_switcher_context",
+    "resolve_target_session",
+    "run_tmux",
+    "session_exists",
+    "session_has_focused_client",
+    "set_allow_tmux_env_fallback",
+    "set_ide_var",
+    "set_ide_vars",
+    "tmux_out",
+    "window_exists",
+    "write_switcher_result",
+]
 
 _ALLOW_TMUX_ENV_FALLBACK = False
 _POPUP_SESS_RE = re.compile(r"^(ai|agy)-")
-_BARE_SHELL_CMD_RE = re.compile(
-    r"^-?(?:(?:ba|z|da|k|mk|a|tc|c|fi)?sh|nu|elvish|xonsh|pwsh)$",
-    re.IGNORECASE,
-)
 
 
 def set_allow_tmux_env_fallback(enabled: bool) -> None:
@@ -98,6 +142,23 @@ def check_is_ide_session(sess: str) -> bool:
     return is_ide_session_meta(parts[0], parts[1], parts[2], parts[3])
 
 
+def resolve_switcher_context(sw_sess: str) -> tuple[str, str, str]:
+    """Return `(docked_sess, outer_client, result_file)` for switcher session `sw_sess`."""
+    if not is_switcher_session_name(sw_sess):
+        return ("", "", "")
+    raw = tmux_out(
+        "display-message",
+        "-p",
+        "-t",
+        f"={sw_sess}:",
+        TMUX_SEP.join(["#{@ide_sw_docked_sess}", "#{@ide_sw_client}", "#{@ide_sw_result_file}"]),
+    )
+    if not raw or TMUX_SEP not in raw:
+        return ("", "", "")
+    ds, cl, rf = (raw.split(TMUX_SEP) + ["", "", ""])[:3]
+    return (ds.strip(), cl.strip(), rf.strip())
+
+
 def current_ide_session() -> str:
     """Resolve the caller's exact IDE session via `$TMUX_PANE` or `$TMUX` server PID & session ID."""
     tmux_env = os.environ.get("TMUX", "")
@@ -117,16 +178,28 @@ def current_ide_session() -> str:
         "-p",
         "-t",
         target,
-        TMUX_SEP.join(["#{pid}", "#{session_name}", "#{@ide_session}", "#{@ide_socket}", "#{@ide_main_win}"]),
+        TMUX_SEP.join([
+            "#{pid}",
+            "#{session_name}",
+            "#{@ide_session}",
+            "#{@ide_socket}",
+            "#{@ide_main_win}",
+            "#{@ide_owner_sess}",
+            "#{@ide_sw_docked_sess}",
+        ]),
     )
     if not found or TMUX_SEP not in found:
         return ""
-    fparts = (found.split(TMUX_SEP) + ["", "", "", "", ""])[:5]
-    pid, sess_name, ide_sess, ide_sock, ide_win = fparts[0], fparts[1], fparts[2], fparts[3], fparts[4]
+    fparts = (found.split(TMUX_SEP) + [""] * 7)[:7]
+    pid, sess_name, ide_sess, ide_sock, ide_win, owner_sess, sw_docked_sess = fparts
     if pid != server_pid:
         return ""
     if is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
         return sess_name
+    if is_switcher_session_name(sess_name):
+        for cand_s in (owner_sess.strip(), sw_docked_sess.strip()):
+            if cand_s and check_is_ide_session(cand_s):
+                return cand_s
     return ""
 
 
@@ -135,6 +208,9 @@ def resolve_target_session(arg: str = "") -> str:
     if arg.startswith("#{") and arg.endswith("}"):
         arg = ""
     if arg:
+        if is_switcher_session_name(arg):
+            docked_s, _, _ = resolve_switcher_context(arg)
+            return docked_s
         is_dir = os.path.isdir(arg)
         if not is_dir and sanitize_name_token(arg) == arg:
             return arg
@@ -239,29 +315,52 @@ def pane_in_win(pane: str, win: str) -> bool:
 
 
 def pane_is_parked(pane: str, win: str) -> bool:
-    """Return True if `pane` is alive in a hidden `_ide_park_*` window outside `win`."""
+    """Return True if `pane` is alive in a hidden `_ide_park_*` window outside `win` (never `ai-sw-*`)."""
     if not pane or not win:
         return False
-    info = tmux_out("display-message", "-p", "-t", pane, "#{pane_id}\t#{window_id}")
-    if "\t" not in info:
+    info = tmux_out(
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        TMUX_SEP.join(["#{pane_id}", "#{window_id}", "#{session_name}"]),
+    )
+    parts = info.split(TMUX_SEP)
+    if len(parts) < 2:
         return False
-    pid, wid = info.split("\t", 1)
-    return pid == pane and wid != win
+    pid, wid = parts[0], parts[1]
+    sname = parts[2] if len(parts) > 2 else ""
+    return pid == pane and wid != win and not is_switcher_session_name(sname)
 
 
 def resolve_main_win(sess: str, editor_pane: str = "", ai_pane: str = "", term_pane: str = "") -> str:
     """Locate and record the primary `ide` window ID for `sess`, skipping `_ide_park_*` windows."""
     main_win = get_ide_var(sess, "@ide_main_win", "IDE_MAIN_WIN")
     if window_exists(main_win):
-        wname = tmux_out("display-message", "-p", "-t", main_win, "#{window_name}")
-        if not wname.startswith("_ide_park_"):
+        info0 = tmux_out(
+            "display-message",
+            "-p",
+            "-t",
+            main_win,
+            TMUX_SEP.join(["#{window_name}", "#{session_name}"]),
+        )
+        wname0, sname0 = (info0.split(TMUX_SEP, 1) + [""])[:2]
+        if not wname0.startswith("_ide_park_") and (not sname0 or sname0 == sess):
             return main_win
     for p in (editor_pane, ai_pane, term_pane):
         if pane_exists(p):
-            info = tmux_out("display-message", "-p", "-t", p, "#{window_id}\t#{window_name}")
-            if "\t" in info:
-                wid, wname = info.split("\t", 1)
-                if wid and not wname.startswith("_ide_park_"):
+            info = tmux_out(
+                "display-message",
+                "-p",
+                "-t",
+                p,
+                TMUX_SEP.join(["#{window_id}", "#{window_name}", "#{session_name}"]),
+            )
+            parts = info.split(TMUX_SEP)
+            if len(parts) >= 2:
+                wid, wname = parts[0], parts[1]
+                sname = parts[2] if len(parts) > 2 else ""
+                if wid and not wname.startswith("_ide_park_") and (not sname or sname == sess):
                     set_ide_var(sess, "@ide_main_win", "IDE_MAIN_WIN", wid)
                     return wid
     win_lines = tmux_out("list-windows", "-t", f"={sess}", "-F", "#{window_id}\t#{window_name}").splitlines()
@@ -290,6 +389,13 @@ def resolve_role_pane(sess: str, role: str, opt_name: str, env_name: str) -> str
                 if prole == role:
                     pane = pid
                     break
+        if not pane and role == "ai":
+            docked_in = tmux_out("show-options", "-qv", "-t", f"={sess}:", "@ide_docked_in").strip()
+            if is_switcher_session_name(docked_in):
+                cand_dp = tmux_out("show-options", "-qv", "-t", f"={docked_in}:", "@ide_sw_docked_pane").strip()
+                cand_ds = tmux_out("show-options", "-qv", "-t", f"={docked_in}:", "@ide_sw_docked_sess").strip()
+                if cand_ds == sess and pane_exists(cand_dp):
+                    pane = cand_dp
         if pane:
             set_ide_var(sess, opt_name, env_name, pane)
     return pane
@@ -342,6 +448,11 @@ def session_has_focused_client(sess: str) -> bool:
     out = tmux_out("list-clients", "-t", f"={sess}", "-F", "#{client_flags}")
     if not out:
         return False
+    if is_switcher_session_name(sess):
+        outer_cl = tmux_out("show-options", "-qv", "-t", f"={sess}:", "@ide_sw_client").strip()
+        if outer_cl:
+            cflags = tmux_out("display-message", "-p", "-c", outer_cl, "#{client_flags}")
+            return "focused" in {tok.strip() for tok in cflags.split(",") if tok.strip()}
     for line in out.splitlines():
         flags = {tok.strip() for tok in line.split(",") if tok.strip()}
         if "focused" in flags:
@@ -349,10 +460,11 @@ def session_has_focused_client(sess: str) -> bool:
     return False
 
 
-def _notify_session_editor_images(sess: str) -> None:
+def notify_session_editor_images(sess: str) -> None:
+    """Trigger capability-gated `refresh_home_settings_images` on `sess`'s Neovim Editor asynchronously."""
     raw_sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
     sock = raw_sock or (f"{os.environ.get('XDG_RUNTIME_DIR') or '/tmp'}/nvim-ide-{sess}.sock" if sess else "")
-    nvim_bin = shutil.which("nvim")
+    nvim_bin = resolve_mise_tool_bin("nvim", install_dir_name="neovim")
     if not sock or not nvim_bin:
         return
     target_srv = ""
@@ -418,27 +530,7 @@ def _notify_session_editor_images(sess: str) -> None:
         pass
 
 
-def switch_or_attach_session(target_sess: str, origin_sess: str = "") -> int:
-    """Switch the active tmux client (or `exec` `attach-session` outside tmux) to `target_sess`."""
-    if not target_sess or not session_exists(target_sess):
-        return 1
-    run_tmux("set-option", "-q", "-u", "-t", f"={target_sess}:", "@ide_quit_err")
-    if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
-        ide_client = resolve_active_client(origin_sess)
-        if ide_client:
-            res = run_tmux("switch-client", "-c", ide_client, "-t", f"={target_sess}")
-            if res.returncode == 0:
-                _notify_session_editor_images(target_sess)
-                return 0
-        if os.environ.get("TMUX"):
-            res = run_tmux("switch-client", "-t", f"={target_sess}")
-            if res.returncode == 0:
-                _notify_session_editor_images(target_sess)
-            return 0
-    if os.environ.get("IDE_NO_ATTACH", "0") == "1" or not (sys.stdin.isatty() and sys.stdout.isatty()):
-        return 0
-    os.execvp("tmux", ["tmux", "attach-session", "-t", f"={target_sess}"])
-    return 0
+_notify_session_editor_images = notify_session_editor_images
 
 
 def _infer_env_session() -> str:
@@ -554,6 +646,8 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
     except AttributeError:
         uid = None
     if uid is not None:
+        from pathlib import Path
+
         run_dir = Path(f"/run/user/{uid}")
         if run_dir.is_dir():
             if not os.environ.get("WAYLAND_DISPLAY") and is_socket_path(run_dir / "wayland-0"):
@@ -584,7 +678,10 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
             run_tmux("load-buffer", "-", input_bytes=url.encode("utf-8"))
         if ssh_active:
             msg = f"Copied URL to clipboard (OSC 52): {url}"
-            if sess and session_exists(sess):
+            active_cl = resolve_active_client() if (os.environ.get("TMUX") or os.environ.get("IDE_CLIENT")) else ""
+            if active_cl and is_switcher_session_name(target_arg):
+                run_tmux("display-message", "-c", active_cl, "-d", "4000", msg)
+            elif sess and session_exists(sess):
                 run_tmux("display-message", "-d", "4000", "-t", f"={sess}:", msg)
             elif os.environ.get("TMUX_PANE"):
                 run_tmux("display-message", "-d", "4000", "-t", os.environ["TMUX_PANE"], msg)
@@ -730,472 +827,3 @@ def paste_from_system_clipboard(target_pane: str) -> None:
             if tmux_out("display-message", "-p", "-t", target_pane, "#{pane_in_mode}") == "1":
                 run_tmux("copy-mode", "-q", "-t", target_pane)
             run_tmux("paste-buffer", "-p", "-t", target_pane)
-
-
-def pids_with_children(pids: set[int]) -> set[int]:
-    """Return the subset of `pids` that currently own at least one live child process."""
-    if not pids:
-        return set()
-    found: set[int] = set()
-    my_pid = os.getpid()
-    if os.path.isfile(f"/proc/{my_pid}/task/{my_pid}/children"):
-        for pid in pids:
-            task_dir = f"/proc/{pid}/task"
-            try:
-                tids = os.listdir(task_dir)
-            except OSError:
-                continue
-            for tid in tids:
-                try:
-                    with open(f"{task_dir}/{tid}/children", "r", encoding="utf-8") as fh:
-                        if fh.read().strip():
-                            found.add(pid)
-                            break
-                except OSError:
-                    continue
-        return found
-
-    if os.path.isfile("/proc/stat"):
-        try:
-            for entry in os.listdir("/proc"):
-                if not entry.isdigit():
-                    continue
-                try:
-                    with open(f"/proc/{entry}/stat", "r", encoding="utf-8", errors="replace") as fh:
-                        stat_txt = fh.read()
-                except OSError:
-                    continue
-                rparen = stat_txt.rfind(")")
-                if rparen < 0:
-                    continue
-                fields = stat_txt[rparen + 2:].split(None, 2)
-                if len(fields) >= 2 and fields[1].isdigit():
-                    ppid = int(fields[1])
-                    if ppid in pids:
-                        found.add(ppid)
-                        if len(found) == len(pids):
-                            break
-            return found
-        except OSError:
-            pass
-
-    ps_bin = shutil.which("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
-    try:
-        res = subprocess.run(
-            [ps_bin, "-eo", "ppid="],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=2.0,
-            check=False,
-        )
-        if res.returncode == 0 and res.stdout:
-            for tok in res.stdout.split():
-                if tok.isdigit():
-                    ppid = int(tok)
-                    if ppid in pids:
-                        found.add(ppid)
-    except (OSError, subprocess.SubprocessError):
-        pass
-    return found
-
-
-def is_bare_shell_cmd(cmd: str) -> bool:
-    """Return True if `cmd` names an interactive shell rather than a direct foreground binary."""
-    s = os.path.basename(cmd.strip())
-    return not s or bool(_BARE_SHELL_CMD_RE.match(s))
-
-
-def pane_has_child_procs(pane_pid: str, pane_cmd: str = "") -> bool:
-    """Return True if an AI pane is running a foreground CLI (either via `exec` or child process)."""
-    p = pane_pid.strip()
-    if not p.isdigit():
-        return False
-    pid = int(p)
-    if pid <= 0:
-        return False
-    if pane_cmd.strip() and not is_bare_shell_cmd(pane_cmd):
-        return True
-    return pid in pids_with_children({pid})
-
-
-def _read_proc_state_and_ppid(pid: int) -> tuple[str, str, int]:
-    try:
-        with open(f"/proc/{pid}/stat", "r", encoding="utf-8", errors="replace") as fh:
-            stat_txt = fh.read()
-    except OSError:
-        return ("", "", 0)
-    lparen = stat_txt.find("(")
-    rparen = stat_txt.rfind(")")
-    if lparen < 0 or rparen < lparen:
-        return ("", "", 0)
-    comm = stat_txt[lparen + 1:rparen]
-    fields = stat_txt[rparen + 2:].split(None, 2)
-    if not fields:
-        return (comm, "", 0)
-    st_ch = fields[0]
-    ppid = int(fields[1]) if len(fields) >= 2 and fields[1].isdigit() else 0
-    return (comm, st_ch, ppid)
-
-
-def _pane_tree_snapshot(
-    pane_pid: str,
-    max_pids: int = 64,
-) -> tuple[list[int], dict[int, int], dict[int, str], dict[int, str]]:
-    p = pane_pid.strip()
-    if not p.isdigit():
-        return ([], {}, {}, {})
-    root = int(p)
-    if root <= 0:
-        return ([], {}, {}, {})
-    parent_by_pid: dict[int, int] = {}
-    state_by_pid: dict[int, str] = {}
-    comm_by_pid: dict[int, str] = {}
-    my_pid = os.getpid()
-    if os.path.isfile(f"/proc/{my_pid}/task/{my_pid}/children"):
-        order = [root]
-        seen = {root}
-        cm0, st0, _ = _read_proc_state_and_ppid(root)
-        if cm0:
-            comm_by_pid[root] = cm0
-        if st0:
-            state_by_pid[root] = st0
-        idx = 0
-        while idx < len(order) and len(order) < max_pids:
-            cur = order[idx]
-            idx += 1
-            task_dir = f"/proc/{cur}/task"
-            try:
-                tids = sorted(os.listdir(task_dir))
-            except OSError:
-                continue
-            for tid in tids:
-                try:
-                    with open(f"{task_dir}/{tid}/children", "r", encoding="utf-8") as fh:
-                        raw_children = fh.read().split()
-                except OSError:
-                    continue
-                for tok in raw_children:
-                    if tok.isdigit():
-                        cpid = int(tok)
-                        if cpid > 0 and cpid not in seen:
-                            seen.add(cpid)
-                            parent_by_pid[cpid] = cur
-                            cmc, stc, _ = _read_proc_state_and_ppid(cpid)
-                            if cmc:
-                                comm_by_pid[cpid] = cmc
-                            if stc:
-                                state_by_pid[cpid] = stc
-                            order.append(cpid)
-                            if len(order) >= max_pids:
-                                break
-                if len(order) >= max_pids:
-                    break
-        return (order, parent_by_pid, state_by_pid, comm_by_pid)
-
-    children_by_ppid: dict[int, list[int]] = {}
-    if os.path.isfile("/proc/stat"):
-        try:
-            for entry in os.listdir("/proc"):
-                if not entry.isdigit():
-                    continue
-                cpid = int(entry)
-                cm_ch, st_ch, ppid = _read_proc_state_and_ppid(cpid)
-                if cm_ch:
-                    comm_by_pid[cpid] = cm_ch
-                if st_ch:
-                    state_by_pid[cpid] = st_ch
-                if ppid > 0:
-                    children_by_ppid.setdefault(ppid, []).append(cpid)
-        except OSError:
-            children_by_ppid.clear()
-            state_by_pid.clear()
-            comm_by_pid.clear()
-
-    if not children_by_ppid:
-        ps_bin = shutil.which("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
-        try:
-            res = subprocess.run(
-                [ps_bin, "-eo", "pid=,ppid=,stat=,comm="],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                timeout=2.0,
-                check=False,
-            )
-            if res.returncode != 0 or not res.stdout:
-                res = subprocess.run(
-                    [ps_bin, "-eo", "pid=,ppid="],
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    text=True,
-                    timeout=2.0,
-                    check=False,
-                )
-            if res.returncode == 0 and res.stdout:
-                for line in res.stdout.splitlines():
-                    parts = line.split(None, 3)
-                    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-                        cpid = int(parts[0])
-                        ppid = int(parts[1])
-                        children_by_ppid.setdefault(ppid, []).append(cpid)
-                        if len(parts) >= 3:
-                            state_by_pid[cpid] = parts[2]
-                        if len(parts) >= 4:
-                            comm_by_pid[cpid] = os.path.basename(parts[3].strip())
-        except (OSError, subprocess.SubprocessError):
-            pass
-
-    order = [root]
-    seen = {root}
-    idx = 0
-    while idx < len(order) and len(order) < max_pids:
-        cur = order[idx]
-        idx += 1
-        for cpid in sorted(children_by_ppid.get(cur, ())):
-            if cpid > 0 and cpid not in seen:
-                seen.add(cpid)
-                parent_by_pid[cpid] = cur
-                order.append(cpid)
-                if len(order) >= max_pids:
-                    break
-    return (order, parent_by_pid, state_by_pid, comm_by_pid)
-
-
-def pane_tree_pids(pane_pid: str, max_pids: int = 64) -> list[int]:
-    """Return `[root_pid, ...]` in breadth-first descendant order for `pane_pid`."""
-    return _pane_tree_snapshot(pane_pid, max_pids=max_pids)[0]
-
-
-def _read_proc_nvim_env(pid: int) -> tuple[str, str, str]:
-    try:
-        with open(f"/proc/{pid}/environ", "rb") as fh:
-            raw = fh.read(262144)
-    except OSError:
-        return ("", "", "")
-    listen_addr = ""
-    xdg_rt = ""
-    tmpdir = ""
-    for entry in raw.split(b"\x00"):
-        if entry.startswith(b"NVIM_LISTEN_ADDRESS="):
-            listen_addr = entry[20:].decode("utf-8", errors="surrogateescape").strip()
-        elif entry.startswith(b"XDG_RUNTIME_DIR="):
-            xdg_rt = entry[16:].decode("utf-8", errors="surrogateescape").strip()
-        elif entry.startswith(b"TMPDIR="):
-            tmpdir = entry[7:].decode("utf-8", errors="surrogateescape").strip()
-    return (listen_addr, xdg_rt, tmpdir)
-
-
-def _read_proc_nvim_cmdline(pid: int) -> tuple[bool, list[str]]:
-    try:
-        with open(f"/proc/{pid}/cmdline", "rb") as fh:
-            raw = fh.read(65536)
-    except OSError:
-        return (False, [])
-    if not raw:
-        return (False, [])
-    args = [tok.decode("utf-8", errors="surrogateescape") for tok in raw.split(b"\x00") if tok]
-    is_headless = "--headless" in args
-    listen_paths: list[str] = []
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg == "--":
-            break
-        if arg == "--listen" and i + 1 < len(args):
-            val = args[i + 1].strip()
-            if val.startswith("/"):
-                listen_paths.append(val)
-            i += 2
-            continue
-        if arg.startswith("--listen="):
-            val = arg[9:].strip()
-            if val.startswith("/"):
-                listen_paths.append(val)
-        i += 1
-    return (is_headless, listen_paths)
-
-
-def _is_stopped_or_zombie_state(st: str) -> bool:
-    return bool(st) and st[0] in ("T", "t", "Z", "X")
-
-
-def _is_nvim_comm_name(comm: str) -> bool:
-    base = os.path.basename(comm)
-    return base == "nvim" or base.startswith("nvim.") or base.startswith("nvim-")
-
-
-def discover_pane_nvim_sockets(pane_pid: str, sock_hint: str = "") -> list[str]:
-    """Discover live ephemeral Neovim sockets belonging to processes inside `pane_pid`'s tree."""
-    raw_pids, parent_by_pid, state_by_pid, comm_by_pid = _pane_tree_snapshot(pane_pid)
-    if not raw_pids:
-        return []
-
-    cmdline_by_pid: dict[int, tuple[bool, list[str]]] = {}
-    ranked: list[tuple[int, int, int, int]] = []
-    for bfs_idx, cpid in enumerate(raw_pids):
-        if _is_stopped_or_zombie_state(state_by_pid.get(cpid, "")):
-            continue
-        stopped_anc = False
-        nested_under_nvim = False
-        imm_parent = parent_by_pid.get(cpid)
-        anc = imm_parent
-        seen_anc: set[int] = set()
-        while anc is not None and anc not in seen_anc:
-            seen_anc.add(anc)
-            if _is_stopped_or_zombie_state(state_by_pid.get(anc, "")):
-                stopped_anc = True
-            if anc != imm_parent and _is_nvim_comm_name(comm_by_pid.get(anc, "")):
-                nested_under_nvim = True
-                break
-            anc = parent_by_pid.get(anc)
-        if nested_under_nvim:
-            continue
-        is_headless, lpaths = _read_proc_nvim_cmdline(cpid)
-        cmdline_by_pid[cpid] = (is_headless, lpaths)
-        ranked.append((1 if is_headless else 0, 1 if stopped_anc else 0, bfs_idx, cpid))
-
-    if not ranked:
-        return []
-    ranked.sort()
-    pids = [item[3] for item in ranked]
-
-    try:
-        uid: int | None = os.getuid()
-    except AttributeError:
-        uid = None
-    try:
-        nvim_user = os.environ.get("USER", "").strip() or getpass.getuser()
-    except Exception:
-        nvim_user = ""
-
-    excl_abs = os.path.abspath(sock_hint) if sock_hint else ""
-    excl_real = os.path.realpath(sock_hint) if sock_hint else ""
-    excl_inode: tuple[int, int] | None = None
-    if sock_hint:
-        try:
-            hst = os.stat(sock_hint)
-            excl_inode = (hst.st_dev, hst.st_ino)
-        except OSError:
-            excl_inode = None
-    sock_dir = os.path.dirname(excl_abs) if excl_abs else ""
-    sock_real_dir = os.path.dirname(excl_real) if excl_real else ""
-    env_xdg_rt = os.environ.get("XDG_RUNTIME_DIR", "").strip()
-    env_tmp = os.environ.get("TMPDIR", "").strip()
-    darwin_tmp = ""
-    if hasattr(os, "confstr"):
-        try:
-            darwin_tmp = (os.confstr("CS_DARWIN_USER_TEMP_DIR") or "").strip()
-        except (ValueError, OSError):
-            darwin_tmp = ""
-    run_uid_dir = f"/run/user/{uid}" if uid is not None else ""
-
-    found: list[str] = []
-    seen_paths: set[str] = set()
-    seen_inodes: set[tuple[int, int]] = set()
-
-    def _accept(cand_raw: str) -> None:
-        if not cand_raw or ":" in os.path.basename(cand_raw):
-            return
-        cand_abs = os.path.abspath(cand_raw)
-        cand_real = os.path.realpath(cand_raw)
-        if cand_abs in (excl_abs, excl_real) or cand_real in (excl_abs, excl_real):
-            return
-        if cand_real in seen_paths or cand_abs in seen_paths:
-            return
-        try:
-            st = os.stat(cand_raw)
-        except OSError:
-            return
-        if not stat.S_ISSOCK(st.st_mode):
-            return
-        if uid is not None and st.st_uid != uid:
-            return
-        ino_key = (st.st_dev, st.st_ino)
-        if excl_inode is not None and ino_key == excl_inode:
-            return
-        if ino_key in seen_inodes:
-            return
-        if not is_live_socket(cand_raw):
-            return
-        seen_paths.add(cand_real)
-        seen_paths.add(cand_abs)
-        seen_inodes.add(ino_key)
-        found.append(cand_raw)
-
-    for cpid in pids:
-        _, cmd_lpaths = cmdline_by_pid.get(cpid, (False, []))
-        for lp in cmd_lpaths:
-            _accept(lp)
-        proc_listen, proc_xdg_rt, proc_tmp = _read_proc_nvim_env(cpid)
-        if proc_listen and proc_listen.startswith("/"):
-            _accept(proc_listen)
-
-        seen_rt: set[str] = set()
-        for rt_d in (proc_xdg_rt, sock_dir, sock_real_dir, env_xdg_rt, run_uid_dir):
-            if not rt_d:
-                continue
-            rt_real = os.path.realpath(rt_d)
-            if rt_real in seen_rt or not os.path.isdir(rt_d):
-                continue
-            seen_rt.add(rt_real)
-            try:
-                for p in sorted(Path(rt_d).glob(f"nvim.{cpid}.*")):
-                    _accept(str(p))
-            except OSError:
-                pass
-
-        seen_tmp: set[str] = set()
-        for tmp_d in (proc_tmp, sock_dir, sock_real_dir, env_tmp, darwin_tmp, "/tmp"):
-            if not tmp_d:
-                continue
-            tmp_real = os.path.realpath(tmp_d)
-            if tmp_real in seen_tmp or not os.path.isdir(tmp_d):
-                continue
-            seen_tmp.add(tmp_real)
-            try:
-                for p in sorted(Path(tmp_d).glob(f"nvim.{cpid}.*")):
-                    _accept(str(p))
-            except OSError:
-                pass
-            if nvim_user:
-                user_nvim_dir = Path(tmp_d) / f"nvim.{nvim_user}"
-                if user_nvim_dir.is_dir():
-                    for pat in (f"nvim.{cpid}.*", f"*/nvim.{cpid}.*"):
-                        try:
-                            for p in sorted(user_nvim_dir.glob(pat)):
-                                _accept(str(p))
-                        except OSError:
-                            pass
-
-    if not found and os.path.isfile("/proc/net/unix"):
-        by_pid: dict[int, list[str]] = {}
-        pid_set = set(pids)
-        try:
-            with open("/proc/net/unix", "r", encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    if "nvim." not in line:
-                        continue
-                    parts = line.split()
-                    if not parts:
-                        continue
-                    spath = parts[-1]
-                    if not spath.startswith("/"):
-                        continue
-                    bname = os.path.basename(spath)
-                    if bname.startswith("nvim."):
-                        bparts = bname.split(".")
-                        if len(bparts) >= 3 and bparts[1].isdigit():
-                            mpid = int(bparts[1])
-                            if mpid in pid_set:
-                                by_pid.setdefault(mpid, []).append(spath)
-        except OSError:
-            pass
-        for cpid in pids:
-            for spath in sorted(by_pid.get(cpid, ())):
-                _accept(spath)
-
-    return found

@@ -1,95 +1,150 @@
-"""Tabular fleet listings, live ANSI session preview, `fzf` workspace switcher, and directory launcher."""
+"""Tabular fleet listings, FIFO attention jump, workspace launcher, and `--sessions` entrypoint."""
 
 from __future__ import annotations
 
 import os
-import re
 import shlex
-import shutil
 import subprocess
 import sys
 
 from ide_lib.constants import (
-    _SGR_RE,
-    is_live_socket,
-    is_socket_path,
+    is_switcher_session_name,
     pad_visible,
+    resolve_mise_tool_bin,
     shorten_home,
     trunc_visible,
-    visible_width,
+)
+from ide_lib.dock import (
+    caller_switcher_session,
+    close_switcher_session,
+    dock_session_into_switcher,
+    switch_or_attach_session,
+    undock_switcher_session,
 )
 from ide_lib.fleet import ack_ai_session, classify_ide_fleet, refresh_fleet_topbar
-from ide_lib.hooks import (
-    collect_configured_workspace_roots,
-    resolve_workspace_target,
-    sanitize_session_name,
-    scandir_child_dirs,
+from ide_lib.hooks import collect_configured_workspace_roots, scandir_child_dirs
+from ide_lib.preview import (
+    _ansi_visible_width,
+    _carry_sgr_prefix,
+    _compute_fleet_columns,
+    _format_fleet_sessions_lines,
+    _resolve_fzf_wrap_config,
+    _resolve_preview_interval,
+    _select_preview_tail,
+    _wrapped_preview_rows,
+    compute_fleet_columns,
+    format_fleet_sessions_lines,
+    render_session_preview,
+)
+from ide_lib.switcher import (
+    _FZF_RESIZE_CAP_CACHE,
+    _POPUP_SESS_RE,
+    _fzf_supports_resize_bind,
+    build_sessions_fzf_args,
+    fzf_supports_resize_bind,
+    handle_switcher_op,
+    launch_picked_workspace,
+    maybe_reenter_in_tmux_popup,
+    OuterSwitcherSnapshot,
+    parse_fzf_session_output,
+    query_outer_switcher_snapshot,
+    run_interactive_switcher_session,
 )
 from ide_lib.theme import build_fzf_env, load_active_palette, state_color
 from ide_lib.tmux import (
     check_is_ide_session,
     current_ide_session,
-    pane_exists,
     resolve_active_client,
+    resolve_switcher_context,
     resolve_target_session,
     run_tmux,
     session_exists,
-    switch_or_attach_session,
     tmux_out,
 )
 
-_POPUP_SESS_RE = re.compile(r"^(ai|agy)-")
-_POPUP_FORWARD_ENV_VARS = (
-    "IDE_WORKSPACE_DIRS",
-    "IDE_LINK_RULES",
-    "IDE_FZF_BIN",
-    "IDE_ZOXIDE_BIN",
-    "_ZO_DATA_DIR",
-    "XDG_CONFIG_HOME",
-    "XDG_CACHE_HOME",
-    "XDG_DATA_HOME",
-)
+__all__ = [
+    "_FZF_RESIZE_CAP_CACHE",
+    "_ansi_visible_width",
+    "_carry_sgr_prefix",
+    "_collect_launcher_dirs",
+    "_compute_fleet_columns",
+    "_format_fleet_sessions_lines",
+    "_fzf_supports_resize_bind",
+    "_pick_workspace_directory",
+    "_resolve_fzf_wrap_config",
+    "_resolve_preview_interval",
+    "_select_preview_tail",
+    "_wrapped_preview_rows",
+    "build_sessions_lines",
+    "collect_launcher_dirs",
+    "handle_switcher_op",
+    "list_ide_fleet",
+    "next_attention",
+    "pick_workspace_directory",
+    "render_session_preview",
+    "run_new_workspace_picker",
+    "run_sessions_picker",
+]
+
+
+def _notify_tmux_or_stdout(msg: str, client_name: str = "", sess: str = "") -> None:
+    if client_name or os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+        cl = client_name or resolve_active_client(sess)
+        if cl:
+            run_tmux("display-message", "-c", cl, msg)
+        elif sess and session_exists(sess):
+            run_tmux("display-message", "-t", f"={sess}:", msg)
+        else:
+            run_tmux("display-message", msg)
+    else:
+        print(msg)
 
 
 def next_attention(target_arg: str) -> int:
     """Jump to the oldest IDE session awaiting AI attention (`ATTN` ahead of `DONE` in FIFO order)."""
-    resolved_arg = resolve_target_session(target_arg) if target_arg else ""
-    origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else current_ide_session()
+    sw_sess = caller_switcher_session(target_arg)
+    sw_client = ""
+    sw_res_file = ""
+    if sw_sess:
+        docked_s, sw_client, sw_res_file = resolve_switcher_context(sw_sess)
+        sw_origin = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_origin").strip()
+        origin_sess = sw_origin or docked_s
+    else:
+        resolved_arg = resolve_target_session(target_arg) if target_arg else ""
+        origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else current_ide_session()
     fleet = classify_ide_fleet(include_git=False, cur_sess=origin_sess)
     attn_entries = [e for e in fleet if bool(e["needs_attn"])]
     if not attn_entries:
         refresh_fleet_topbar()
-        if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
-            run_tmux("display-message", "No IDE agents waiting for attention.")
+        if sw_sess:
+            if sw_client:
+                run_tmux("display-message", "-c", sw_client, "No IDE agents waiting for attention.")
+            else:
+                run_tmux("display-message", "-t", f"={sw_sess}:", "No IDE agents waiting for attention.")
         else:
-            print("No IDE agents waiting for attention.")
+            _notify_tmux_or_stdout("No IDE agents waiting for attention.", sess=origin_sess)
         return 0
 
     from ide_lib.layout import toggle_main_pane
 
     oldest = str(attn_entries[0]["sess"])
+    if sw_sess:
+        close_switcher_session(
+            sw_sess,
+            action="switch",
+            target=oldest,
+            pressed="ctrl-a",
+            res_file_hint=sw_res_file,
+        )
+        if not sw_res_file:
+            toggle_main_pane("focus-ai", oldest)
+            refresh_fleet_topbar()
+            if sw_client:
+                run_tmux("switch-client", "-c", sw_client, "-t", f"={oldest}")
+        return 0
     toggle_main_pane("focus-ai", oldest)
     refresh_fleet_topbar()
     return switch_or_attach_session(oldest, origin_sess)
-
-
-def _compute_fleet_columns(
-    fleet: list[dict[str, object]],
-    min_sess_w: int,
-    max_sess_w: int,
-    max_cli_w: int,
-    max_git_w: int,
-) -> tuple[list[str], list[str], int, int, int, int]:
-    state_labels = [str(e.get("state_label") or e["state"]) for e in fleet]
-    git_labels = [
-        f"{e['git_branch']}{'*' if e['git_dirty'] else ''}" if e["git_branch"] != "-" else "-"
-        for e in fleet
-    ]
-    sess_w = max(min_sess_w, min(max_sess_w, max(visible_width(str(e["sess"])) for e in fleet)))
-    cli_w = max(5, min(max_cli_w, max(visible_width(str(e["ai_cli"])) for e in fleet)))
-    state_w = max(5, min(16, max(visible_width(lbl) for lbl in state_labels)))
-    git_w = max(6, min(max_git_w, max(visible_width(g) for g in git_labels)))
-    return state_labels, git_labels, sess_w, cli_w, state_w, git_w
 
 
 def list_ide_fleet(plain: bool = False) -> int:
@@ -108,7 +163,7 @@ def list_ide_fleet(plain: bool = False) -> int:
 
     use_color = sys.stdout.isatty() and not bool(os.environ.get("NO_COLOR"))
     _, esc = load_active_palette()
-    state_labels, git_labels, sess_w, cli_w, state_w, git_w = _compute_fleet_columns(
+    state_labels, git_labels, sess_w, cli_w, state_w, git_w = compute_fleet_columns(
         fleet, min_sess_w=7, max_sess_w=28, max_cli_w=12, max_git_w=28
     )
 
@@ -175,108 +230,7 @@ def build_sessions_lines(cur_sess: str = "") -> list[str]:
     if not fleet:
         return []
     _, esc = load_active_palette()
-    state_labels, git_labels, sess_w, cli_w, state_w, git_w = _compute_fleet_columns(
-        fleet, min_sess_w=8, max_sess_w=24, max_cli_w=10, max_git_w=24
-    )
-    rows: list[str] = []
-    for entry, st_lbl, git_lbl in zip(fleet, state_labels, git_labels):
-        sess = str(entry["sess"])
-        ai_cli = str(entry["ai_cli"])
-        state = str(entry["state"])
-        short_path = str(entry["short_path"])
-        is_cur = bool(entry["is_current"])
-        needs_attn = bool(entry["needs_attn"])
-        has_wt_warn = bool(entry.get("worktree_peers"))
-        attn_c = esc["GREEN"] if state == "DONE" else esc["ORANGE"]
-        s_pad = pad_visible(trunc_visible(sess, sess_w), sess_w)
-        c_pad = pad_visible(trunc_visible(ai_cli, cli_w), cli_w)
-        st_pad = pad_visible(trunc_visible(st_lbl, state_w), state_w)
-        g_pad = pad_visible(trunc_visible(git_lbl, git_w), git_w)
-        if is_cur:
-            marker = f"{esc['CYAN']}▸{esc['RESET']}"
-        elif needs_attn:
-            marker = f"{attn_c}󰂚{esc['RESET']}"
-        else:
-            marker = " "
-        c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
-        c_state = state_color(state, esc)
-        c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_lbl != "-" else esc["BASE01"])
-        wt_sfx = f" {esc['YELLOW']}!{esc['RESET']}" if has_wt_warn else ""
-        quit_sfx = f" {esc['ORANGE']}[unsaved]{esc['RESET']}" if entry.get("quit_err") else ""
-        display = (
-            f"{marker} {c_sess}{s_pad}{esc['RESET']}  "
-            f"{esc['BASE0']}{c_pad}{esc['RESET']}  "
-            f"{c_state}{st_pad}{esc['RESET']}  "
-            f"{c_git}{g_pad}{esc['RESET']}  "
-            f"{esc['BASE01']}{short_path}{esc['RESET']}{wt_sfx}{quit_sfx}"
-        )
-        rows.append(f"{sess}\t{display}")
-    return rows
-
-
-def render_session_preview(target_arg: str) -> int:
-    """Render live ANSI metadata and visible viewport preview for `target_arg`."""
-    sess = target_arg.strip()
-    if not sess or not session_exists(sess):
-        print("Session is no longer active.")
-        return 0
-    fleet = classify_ide_fleet(include_git=True, cur_sess=current_ide_session(), git_only_sess=sess)
-    entry = next((e for e in fleet if str(e["sess"]) == sess), None)
-    _, esc = load_active_palette()
-    c_rst = esc["RESET"]
-    if entry is None:
-        print(f"{esc['BLUE']}{sess}{c_rst}")
-        return 0
-
-    ai_cli = str(entry["ai_cli"])
-    state = str(entry["state"])
-    state_label = str(entry.get("state_label") or state)
-    ai_msg = str(entry.get("ai_msg") or "")
-    quit_err = str(entry.get("quit_err") or "")
-    ide_sock = str(entry.get("ide_sock") or "")
-    if quit_err:
-        from ide_lib.nvim_rpc import ensure_session_editor_socket, nvim_modified_buf_count, resolve_nvim_bin
-
-        if resolve_nvim_bin():
-            ide_sock = ensure_session_editor_socket(sess, ide_sock)
-            if ide_sock and is_live_socket(ide_sock) and nvim_modified_buf_count(ide_sock) == 0:
-                run_tmux("set-option", "-q", "-u", "-t", f"={sess}:", "@ide_quit_err")
-                quit_err = ""
-    short_path = str(entry["short_path"])
-    git_branch = str(entry["git_branch"])
-    git_detail = str(entry["git_detail"])
-    preview_pane = str(entry["preview_pane"])
-    active_role = str(entry["active_role"])
-    peers = [str(p) for p in (entry.get("worktree_peers") or [])]
-    c_state = state_color(state, esc)
-    c_git = esc["YELLOW"] if bool(entry["git_dirty"]) else (esc["GREEN"] if git_branch != "-" else esc["BASE01"])
-    rule = "─" * 56
-
-    print(f"{esc['BLUE']} {sess}{c_rst}  {esc['BASE01']}(focused: {active_role}){c_rst}")
-    print(f"{esc['BASE01']}Agent    :{c_rst} {esc['CYAN']}{ai_cli}{c_rst}  {esc['BASE01']}State:{c_rst} {c_state}{state_label}{c_rst}")
-    if ai_msg:
-        print(f"{esc['BASE01']}Message  :{c_rst} {esc['BASE1']}{ai_msg}{c_rst}")
-    print(f"{esc['BASE01']}Workspace:{c_rst} {esc['BASE0']}{short_path}{c_rst}")
-    print(f"{esc['BASE01']}Git      :{c_rst} {c_git}{git_detail}{c_rst}")
-    if quit_err:
-        print(f"{esc['BASE01']}Warning  :{c_rst} {esc['ORANGE']}{quit_err}{c_rst}")
-    if peers:
-        print(f"{esc['BASE01']}Warning  :{c_rst} {esc['YELLOW']}Shared worktree with {', '.join(peers)}{c_rst}")
-    print(f"{esc['BASE01']}{rule}{c_rst}")
-
-    if preview_pane and pane_exists(preview_pane):
-        cap = tmux_out("capture-pane", "-e", "-p", "-S", "-40", "-t", preview_pane)
-        cap_lines = cap.splitlines()
-        while cap_lines and not _SGR_RE.sub("", cap_lines[-1]).strip():
-            cap_lines.pop()
-        tail = cap_lines[-35:]
-        if tail:
-            print("\n".join(tail) + c_rst)
-        else:
-            print(f"{esc['BASE01']}(Viewport is empty){c_rst}")
-    else:
-        print(f"{esc['BASE01']}(No active pane in session){c_rst}")
-    return 0
+    return format_fleet_sessions_lines(fleet, esc)
 
 
 def _collect_launcher_dirs() -> list[str]:
@@ -287,7 +241,7 @@ def _collect_launcher_dirs() -> list[str]:
     hook_ws_roots, managed_parents, _ = collect_configured_workspace_roots(parent_cache=parent_cache)
     hook_ws_roots_set = set(hook_ws_roots)
 
-    zoxide_bin = os.environ.get("IDE_ZOXIDE_BIN") or shutil.which("zoxide")
+    zoxide_bin = resolve_mise_tool_bin("zoxide", env_override="IDE_ZOXIDE_BIN")
     if zoxide_bin:
         res = None
         try:
@@ -406,6 +360,7 @@ def _pick_workspace_directory(
         f"--border-label= Enter: launch workspace · {esc_hint} ",
         "--border-label-pos=bottom",
         f"--color=label:{hex_map['BASE01']}",
+        "--bind=alt-s:abort",
     ]
     proc = subprocess.run(
         dir_args,
@@ -424,82 +379,6 @@ def _pick_workspace_directory(
 pick_workspace_directory = _pick_workspace_directory
 
 
-def _launch_picked_workspace(
-    chosen_dir: str,
-    ide_self: str,
-    origin_sess: str = "",
-    layout_mode: str = "",
-    ai_cli: str = "",
-    ai_cli_from_flag: bool = False,
-    detach_only: bool = False,
-) -> int:
-    resolved_dir = resolve_workspace_target(chosen_dir) or os.path.abspath(chosen_dir)
-    target_sess = sanitize_session_name(resolved_dir)
-    launch_cmd = [ide_self, "--detach"]
-    if layout_mode == "2pane":
-        launch_cmd.append("--2pane")
-    if ai_cli_from_flag and ai_cli:
-        launch_cmd.extend(["--ai", ai_cli])
-    launch_cmd.append(resolved_dir)
-    child_env = os.environ.copy()
-    child_env["IDE_WORKSPACE_RESOLVED"] = "1"
-    launch_res = subprocess.run(
-        launch_cmd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        env=child_env,
-        check=False,
-    )
-    if detach_only:
-        return 0 if session_exists(target_sess) else launch_res.returncode
-    if session_exists(target_sess):
-        rc = switch_or_attach_session(target_sess, origin_sess)
-        ack_ai_session([target_sess], from_hook=True, refresh_always=False)
-        return rc
-    return launch_res.returncode
-
-
-def _build_popup_env(client_name: str, forward_ai_cli: bool = False) -> list[str]:
-    popup_env = ["IDE_IN_POPUP=1", f"IDE_CLIENT={shlex.quote(client_name)}"]
-    fwd_vars = (*_POPUP_FORWARD_ENV_VARS, "IDE_AI_CLI") if forward_ai_cli else _POPUP_FORWARD_ENV_VARS
-    for fwd_var in fwd_vars:
-        fwd_val = os.environ.get(fwd_var)
-        if fwd_val:
-            popup_env.append(f"{fwd_var}={shlex.quote(fwd_val)}")
-    return popup_env
-
-
-def _maybe_reenter_in_tmux_popup(
-    origin_sess: str,
-    cur_sess: str,
-    fzf_bin: str | None,
-    forward_ai_cli: bool,
-    inner_args: list[str],
-) -> int | None:
-    if not os.environ.get("TMUX") or os.environ.get("IDE_IN_POPUP") == "1" or os.environ.get("IDE_NO_POPUP") == "1":
-        return None
-    client_name = resolve_active_client(origin_sess or cur_sess)
-    raw_cur = (
-        tmux_out("display-message", "-p", "-c", client_name, "#{session_name}")
-        if client_name
-        else (origin_sess or tmux_out("display-message", "-p", "#{session_name}"))
-    )
-    if _POPUP_SESS_RE.match(raw_cur):
-        if client_name:
-            run_tmux("detach-client", "-t", client_name)
-        else:
-            run_tmux("detach-client")
-        return 0
-    if client_name and fzf_bin:
-        popup_env = _build_popup_env(client_name, forward_ai_cli=forward_ai_cli)
-        inner_cmd = " ".join([*popup_env, *inner_args])
-        pop_res = run_tmux("display-popup", "-c", client_name, "-E", "-w", "88%", "-h", "80%", inner_cmd)
-        if pop_res.returncode == 0 or not sys.stdin.isatty():
-            return 0 if pop_res.returncode in (0, 130) else pop_res.returncode
-    return None
-
-
 def run_new_workspace_picker(
     target_arg: str,
     ide_self: str,
@@ -513,7 +392,7 @@ def run_new_workspace_picker(
     resolved_arg = resolve_target_session(target_arg) if target_arg else ""
     origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
     cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
-    fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
+    fzf_bin = resolve_mise_tool_bin("fzf", env_override="IDE_FZF_BIN")
 
     if not detach_only and fzf_bin:
         inner_args = [shlex.quote(ide_self), "--new"]
@@ -523,7 +402,7 @@ def run_new_workspace_picker(
             inner_args.extend(["--ai", shlex.quote(ai_cli)])
         if cur_sess:
             inner_args.append(shlex.quote(cur_sess))
-        popup_rc = _maybe_reenter_in_tmux_popup(
+        popup_rc = maybe_reenter_in_tmux_popup(
             origin_sess, cur_sess, fzf_bin, forward_ai_cli=had_env_ai_cli, inner_args=inner_args
         )
         if popup_rc is not None:
@@ -545,7 +424,7 @@ def run_new_workspace_picker(
     chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=False)
     if not chosen_dir:
         return 0
-    return _launch_picked_workspace(
+    return launch_picked_workspace(
         chosen_dir,
         ide_self,
         origin_sess=origin_sess or cur_sess,
@@ -556,115 +435,254 @@ def run_new_workspace_picker(
     )
 
 
-def run_sessions_picker(target_arg: str, ide_self: str, had_env_ai_cli: bool = False) -> int:
-    """Open interactive `fzf` multi-session workspace switcher (`ide -s` / `ide --sessions`)."""
-    resolved_arg = resolve_target_session(target_arg) if target_arg else ""
-    origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
-    cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
-    fzf_bin = os.environ.get("IDE_FZF_BIN") or shutil.which("fzf")
+def _enter_switcher_new_mode(sw_sess: str) -> None:
+    """Undock `sw_sess` and zoom its left `fzf` pane into full-width `New IDE >` mode."""
+    undock_switcher_session(sw_sess)
+    run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_mode", "new")
+    if tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}") == "0":
+        run_tmux("resize-pane", "-Z", "-t", f"={sw_sess}:")
 
-    inner_args = [shlex.quote(ide_self), "--sessions"]
-    if cur_sess:
-        inner_args.append(shlex.quote(cur_sess))
-    popup_rc = _maybe_reenter_in_tmux_popup(
-        origin_sess, cur_sess, fzf_bin, forward_ai_cli=had_env_ai_cli, inner_args=inner_args
-    )
-    if popup_rc is not None:
-        return popup_rc
+
+def run_sessions_picker(
+    target_arg: str,
+    ide_self: str,
+    had_env_ai_cli: bool = False,
+    layout_mode: str = "",
+    ai_cli: str = "",
+    ai_cli_from_flag: bool = False,
+    detach_only: bool = False,
+) -> int:
+    """Open interactive `fzf` multi-session workspace switcher (`ide -s` / `ide --sessions`)."""
+    forward_ai = had_env_ai_cli or ai_cli_from_flag
+    fzf_bin = resolve_mise_tool_bin("fzf", env_override="IDE_FZF_BIN")
+    sw_sess = os.environ.get("IDE_SWITCHER_SESSION", "").strip()
+    sw_res_file = os.environ.get("IDE_SWITCHER_RESULT", "").strip()
+    in_switcher = bool(sw_sess and is_switcher_session_name(sw_sess))
+    start_alt_n = os.environ.pop("IDE_SW_START_ALT_N", "") == "1"
+
+    outer_snap: OuterSwitcherSnapshot | None = None
+    if not in_switcher and os.environ.get("IDE_IN_POPUP") != "1" and os.environ.get("IDE_NO_POPUP") != "1":
+        outer_snap = query_outer_switcher_snapshot(target_arg)
+        origin_sess = outer_snap.origin_sess
+        cur_sess = outer_snap.cur_sess
+        if os.environ.get("TMUX"):
+            client_name = outer_snap.client_name
+            if _POPUP_SESS_RE.match(outer_snap.raw_cur):
+                if client_name:
+                    run_tmux("detach-client", "-t", client_name)
+                else:
+                    run_tmux("detach-client")
+                return 0
+            if client_name and outer_snap.existing_sw:
+                close_switcher_session(outer_snap.existing_sw, action="none")
+                return 0
+            if client_name and fzf_bin:
+                if outer_snap.raw_ide_sessions:
+                    sw_rc = run_interactive_switcher_session(
+                        origin_sess=origin_sess,
+                        cur_sess=cur_sess,
+                        ide_self=ide_self,
+                        fzf_bin=fzf_bin,
+                        forward_ai_cli=forward_ai,
+                        snap=outer_snap,
+                        client_name=client_name,
+                        layout_mode=layout_mode,
+                        ai_cli=ai_cli,
+                        ai_cli_from_flag=ai_cli_from_flag,
+                    )
+                    if sw_rc is not None:
+                        return sw_rc
+                else:
+                    inner_args = [shlex.quote(ide_self), "--sessions"]
+                    if layout_mode == "2pane":
+                        inner_args.append("--2pane")
+                    if ai_cli_from_flag and ai_cli:
+                        inner_args.extend(["--ai", shlex.quote(ai_cli)])
+                    if detach_only:
+                        inner_args.append("--detach")
+                    if cur_sess:
+                        inner_args.append(shlex.quote(cur_sess))
+                    popup_rc = maybe_reenter_in_tmux_popup(
+                        origin_sess,
+                        cur_sess,
+                        fzf_bin,
+                        forward_ai_cli=forward_ai,
+                        inner_args=inner_args,
+                        client_name_hint=client_name,
+                    )
+                    if popup_rc is not None:
+                        return popup_rc
+        elif (
+            sys.stdin.isatty()
+            and sys.stdout.isatty()
+            and fzf_bin
+            and os.path.basename(fzf_bin) == "fzf"
+            and outer_snap.raw_ide_sessions
+        ):
+            sw_ext_rc = run_interactive_switcher_session(
+                origin_sess=origin_sess,
+                cur_sess=cur_sess,
+                ide_self=ide_self,
+                fzf_bin=fzf_bin,
+                forward_ai_cli=forward_ai,
+                snap=outer_snap,
+                client_name="",
+                layout_mode=layout_mode,
+                ai_cli=ai_cli,
+                ai_cli_from_flag=ai_cli_from_flag,
+            )
+            if sw_ext_rc is not None:
+                return sw_ext_rc
+    else:
+        resolved_arg = resolve_target_session(target_arg) if target_arg else ""
+        origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
+        cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
+
+    outer_client = outer_snap.client_name if outer_snap is not None else ""
 
     if not fzf_bin:
-        rows_plain = build_sessions_lines(cur_sess)
-        if not rows_plain:
-            if os.environ.get("TMUX"):
-                run_tmux("display-message", "No active IDE sessions.")
-            else:
-                print("No active IDE sessions.")
+        has_sessions = bool(outer_snap.raw_ide_sessions) if outer_snap is not None else bool(build_sessions_lines(cur_sess))
+        if not has_sessions:
+            _notify_tmux_or_stdout("No active IDE sessions.", client_name=outer_client, sess=origin_sess or cur_sess)
             return 0
         return list_ide_fleet(plain=False)
 
     hex_map, _ = load_active_palette()
     env = build_fzf_env(hex_map)
     is_interactive = (sys.stdin.isatty() and sys.stdout.isatty()) or os.environ.get("IDE_IN_POPUP") == "1"
-    initial_rows = build_sessions_lines(cur_sess)
-    if not initial_rows:
-        if not is_interactive:
-            if os.environ.get("TMUX"):
-                run_tmux("display-message", "No active IDE sessions.")
-            else:
-                print("No active IDE sessions.")
-            return 0
-        chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=False)
-        if not chosen_dir:
-            return 0
-        return _launch_picked_workspace(chosen_dir, ide_self, origin_sess=origin_sess or cur_sess)
 
-    self_q = shlex.quote(ide_self)
-    reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
-    quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{+1}})+reload({reload_cmd})"
-    ack_bind = f"ctrl-y:execute-silent({self_q} --ack-ai {{+1}})+reload({reload_cmd})"
-    open_pr_bind = f"ctrl-o:execute-silent({self_q} --open-pr {{1}})"
-    preview_cmd = f"{self_q} --session-preview {{1}}"
-    fzf_args = [
-        fzf_bin,
-        "--ansi",
-        "--delimiter=\t",
-        "--with-nth=2..",
-        "--multi",
-        "--layout=reverse",
-        "--info=inline-right",
-        "--prompt=IDE > ",
-        "--border=rounded",
-        "--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ",
-        "--border-label-pos=bottom",
-        f"--color=label:{hex_map['BASE01']}",
-        "--expect=ctrl-a,ctrl-e,ctrl-t,alt-n",
-        "--bind=alt-s:abort",
-        f"--bind=ctrl-r:reload({reload_cmd})",
-        f"--bind={ack_bind}",
-        f"--bind={open_pr_bind}",
-        f"--bind={quit_bind}",
-        f"--preview={preview_cmd}",
-        "--preview-window=right:56%:wrap",
-    ]
+    if start_alt_n and in_switcher:
+        _enter_switcher_new_mode(sw_sess)
+        chosen_dir0 = _pick_workspace_directory(fzf_bin, env, back_to_sessions=True)
+        if chosen_dir0:
+            close_switcher_session(
+                sw_sess, action="launch", target=chosen_dir0, pressed="alt-n", res_file_hint=sw_res_file
+            )
+            return 0
+        initial_rows: list[str] = []
+        first_iter = False
+    else:
+        if outer_snap is not None and not outer_snap.raw_ide_sessions:
+            initial_rows = []
+        else:
+            initial_rows = build_sessions_lines(cur_sess)
+        if not initial_rows:
+            if not is_interactive:
+                _notify_tmux_or_stdout("No active IDE sessions.", client_name=outer_client, sess=origin_sess or cur_sess)
+                return 0
+            if in_switcher:
+                _enter_switcher_new_mode(sw_sess)
+            chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=False)
+            if not chosen_dir:
+                if in_switcher:
+                    close_switcher_session(sw_sess, action="none", res_file_hint=sw_res_file)
+                return 0
+            if in_switcher:
+                close_switcher_session(
+                    sw_sess, action="launch", target=chosen_dir, pressed="alt-n", res_file_hint=sw_res_file
+                )
+                return 0
+            return launch_picked_workspace(
+                chosen_dir,
+                ide_self,
+                origin_sess=origin_sess or cur_sess,
+                layout_mode=layout_mode,
+                ai_cli=ai_cli,
+                ai_cli_from_flag=ai_cli_from_flag,
+                detach_only=detach_only,
+            )
+        first_iter = True
 
-    first_iter = True
+    supports_modern_binds = fzf_supports_resize_bind(fzf_bin)
+    pane_h = 32
+    if in_switcher:
+        pane_h_s = tmux_out(
+            "display-message",
+            "-p",
+            "-t",
+            os.environ.get("TMUX_PANE", f"={sw_sess}:"),
+            "#{pane_height}",
+        ).strip()
+        pane_h = int(pane_h_s) if pane_h_s.isdigit() and int(pane_h_s) > 0 else 32
+    fzf_args = build_sessions_fzf_args(
+        fzf_bin=fzf_bin,
+        ide_self=ide_self,
+        cur_sess=cur_sess,
+        hex_map=hex_map,
+        supports_modern_binds=supports_modern_binds,
+        sw_sess=sw_sess if in_switcher else "",
+        pane_h=pane_h,
+    )
+
     while True:
+        was_first = first_iter
         rows = initial_rows if first_iter else build_sessions_lines(cur_sess)
         first_iter = False
         if not rows:
-            if os.environ.get("TMUX"):
-                run_tmux("display-message", "No active IDE sessions.")
-            else:
-                print("No active IDE sessions.")
+            sw_cl = ""
+            if in_switcher:
+                _, sw_cl, _ = resolve_switcher_context(sw_sess)
+                close_switcher_session(sw_sess, action="none", res_file_hint=sw_res_file)
+            _notify_tmux_or_stdout(
+                "No active IDE sessions.",
+                client_name=sw_cl or outer_client,
+                sess=origin_sess or cur_sess,
+            )
             return 0
+
+        if in_switcher and not was_first:
+            run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_mode", "sessions")
+            if tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}") == "1":
+                run_tmux("resize-pane", "-Z", "-t", f"={sw_sess}:")
+            if rows:
+                dock_session_into_switcher(sw_sess, rows[0].split("\t", 1)[0].strip())
 
         proc = subprocess.run(
             fzf_args,
             input="\n".join(rows) + "\n",
             stdout=subprocess.PIPE,
             text=True,
-            env=env,
+            env={**env, "SHELL": "/bin/sh"},
             check=False,
         )
-        out_lines = proc.stdout.splitlines() if proc.stdout else []
-        first_key = out_lines[0].strip() if out_lines else ""
-        if proc.returncode not in (0, 1) or (proc.returncode == 1 and first_key != "alt-n") or not out_lines:
+        parsed = parse_fzf_session_output(proc.returncode, proc.stdout or "")
+        if parsed is None:
+            if in_switcher:
+                close_switcher_session(sw_sess, action="none", res_file_hint=sw_res_file)
             return 0
-        if first_key in ("", "enter", "ctrl-a", "ctrl-e", "ctrl-t", "alt-n"):
-            pressed = first_key
-            selected_line = out_lines[1] if len(out_lines) > 1 else ""
-        else:
-            pressed = ""
-            selected_line = out_lines[0]
+        pressed, selected_line = parsed
 
         if pressed == "alt-n":
+            if in_switcher:
+                _enter_switcher_new_mode(sw_sess)
             chosen_dir = _pick_workspace_directory(fzf_bin, env, back_to_sessions=True)
             if not chosen_dir:
                 continue
-            return _launch_picked_workspace(chosen_dir, ide_self, origin_sess=origin_sess or cur_sess)
+            if in_switcher:
+                close_switcher_session(
+                    sw_sess, action="launch", target=chosen_dir, pressed="alt-n", res_file_hint=sw_res_file
+                )
+                return 0
+            return launch_picked_workspace(
+                chosen_dir,
+                ide_self,
+                origin_sess=origin_sess or cur_sess,
+                layout_mode=layout_mode,
+                ai_cli=ai_cli,
+                ai_cli_from_flag=ai_cli_from_flag,
+                detach_only=detach_only,
+            )
 
         chosen_sess = selected_line.split("\t", 1)[0].strip()
         if not chosen_sess or not session_exists(chosen_sess):
+            if in_switcher:
+                close_switcher_session(sw_sess, action="none", res_file_hint=sw_res_file)
+            return 0
+
+        if in_switcher:
+            close_switcher_session(
+                sw_sess, action="switch", target=chosen_sess, pressed=pressed, res_file_hint=sw_res_file
+            )
             return 0
 
         if pressed in ("ctrl-a", "ctrl-e", "ctrl-t"):
