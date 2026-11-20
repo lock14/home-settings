@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import os
-import re
-import shutil
 import sys
 
-from ide_lib.constants import safe_getcwd, usage
+from ide_lib.constants import safe_getcwd, usage, which_executable
 
-_POS_LINE_RE = re.compile(r"^\+?[1-9][0-9]*$")
+
+def _is_pos_line_arg(raw: str) -> bool:
+    s = raw[1:] if raw.startswith("+") else raw
+    return bool(s) and s[0] != "0" and s.isdigit()
+
+
 _SINGLE_ARG_ACTIONS = frozenset({
     "--toggle",
     "--show-editor",
@@ -101,11 +104,11 @@ def _normalize_ai_cli(ai_cli: str, from_flag: bool) -> bool:
     if ai_cli == "openai":
         os.environ["IDE_AI_CLI"] = "codex"
         return True
-    if shutil.which(ai_cli) or (os.path.isfile(ai_cli) and os.access(ai_cli, os.X_OK)):
+    if which_executable(ai_cli) or (os.path.isfile(ai_cli) and os.access(ai_cli, os.X_OK)):
         os.environ["IDE_AI_CLI"] = ai_cli
         return True
     if not from_flag:
-        fb_cli = next((c for c in ("agy", "claude", "codex") if shutil.which(c)), "agy")
+        fb_cli = next((c for c in ("agy", "claude", "codex") if which_executable(c)), "agy")
         os.environ["IDE_AI_CLI"] = fb_cli
         return True
     print(
@@ -127,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["FORCE_HYPERLINK"] = "1"
     args = sys.argv[1:] if argv is None else list(argv)
 
-    if not shutil.which("tmux"):
+    if not which_executable("tmux"):
         if "--list" in args and "--plain" in args:
             return 0
         if not any(a in ("-h", "--help", "--keys", "--help-keys", "--monitor", "--top", "--btop") for a in args):
@@ -213,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
                     return 1
                 open_file = args[i + 1]
                 next_idx = i + 2
-            if next_idx < n and _POS_LINE_RE.match(args[next_idx]):
+            if next_idx < n and _is_pos_line_arg(args[next_idx]):
                 from ide_lib.tmux import session_exists
 
                 cand_line = args[next_idx]

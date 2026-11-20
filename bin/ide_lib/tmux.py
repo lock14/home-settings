@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
-import shlex
-import shutil
 import subprocess
 import sys
 
@@ -19,6 +16,7 @@ from ide_lib.constants import (
     safe_getcwd,
     sanitize_http_url,
     sanitize_name_token,
+    which_executable,
     write_switcher_result,
 )
 from ide_lib.hooks import sanitize_session_name
@@ -71,7 +69,10 @@ __all__ = [
 ]
 
 _ALLOW_TMUX_ENV_FALLBACK = False
-_POPUP_SESS_RE = re.compile(r"^(ai|agy)-")
+
+
+def _is_popup_session_name(sess_name: str) -> bool:
+    return sess_name.startswith(("ai-", "agy-"))
 
 
 def set_allow_tmux_env_fallback(enabled: bool) -> None:
@@ -120,14 +121,14 @@ def missing_session_msg(sess: str) -> str:
 
 def is_ide_session_meta(sess_name: str, ide_sess: str, ide_sock: str, ide_win: str) -> bool:
     """Return True when tmux session metadata marks a managed IDE workspace (never `ai-*`/`agy-*` popups)."""
-    if not sess_name or _POPUP_SESS_RE.match(sess_name):
+    if not sess_name or _is_popup_session_name(sess_name):
         return False
     return bool(ide_sess or ide_sock or ide_win or sess_name.startswith("ide-"))
 
 
 def check_is_ide_session(sess: str) -> bool:
     """Query tmux to confirm `sess` is a live `ide`-managed workspace session."""
-    if not sess or _POPUP_SESS_RE.match(sess):
+    if not sess or _is_popup_session_name(sess):
         return False
     info = tmux_out(
         "display-message",
@@ -511,7 +512,7 @@ def notify_session_editor_images(sess: str) -> None:
         "--remote-expr",
         expr,
     ]
-    timeout_bin = shutil.which("timeout")
+    timeout_bin = which_executable("timeout")
     if timeout_bin:
         cmd = [timeout_bin, "3", *cmd]
     env = os.environ.copy()
@@ -541,7 +542,7 @@ def _infer_env_session() -> str:
         parts = line.split(TMUX_SEP, 1)
         if len(parts) == 2 and parts[1].strip():
             cand = parts[1].strip()
-            if not _POPUP_SESS_RE.match(cand):
+            if not _is_popup_session_name(cand):
                 act = int(parts[0]) if parts[0].strip().isdigit() else 0
                 if act >= best_act:
                     best_act = act
@@ -598,7 +599,7 @@ def is_ssh_session(target_arg: str = "") -> bool:
     for var in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"):
         if os.environ.get(var):
             return True
-    if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or _ALLOW_TMUX_ENV_FALLBACK) and shutil.which("tmux"):
+    if (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or _ALLOW_TMUX_ENV_FALLBACK) and which_executable("tmux"):
         env_lines = _collect_tmux_env_lines(target_arg)
         seen_vars: set[str] = set()
         for line in env_lines:
@@ -625,7 +626,7 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
     if (
         not ignore_tmux_env
         and (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or _ALLOW_TMUX_ENV_FALLBACK)
-        and shutil.which("tmux")
+        and which_executable("tmux")
     ):
         env_lines = _collect_tmux_env_lines(target_arg)
         seen_vars: set[str] = set()
@@ -663,6 +664,8 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
 
 def open_browser_url(url: str, target_arg: str = "") -> bool:
     """Open a sanitized `http(s)://` URL in local browser or copy via OSC 52 over SSH."""
+    import shlex
+
     url = sanitize_http_url(url)
     if not url:
         return False
@@ -673,7 +676,7 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
     )
     has_tmux = bool(os.environ.get("TMUX")) or (bool(sess) and session_exists(sess))
     ssh_active = is_ssh_session(sess or target_arg)
-    if has_tmux and shutil.which("tmux"):
+    if has_tmux and which_executable("tmux"):
         if run_tmux("load-buffer", "-w", "-", input_bytes=url.encode("utf-8")).returncode != 0:
             run_tmux("load-buffer", "-", input_bytes=url.encode("utf-8"))
         if ssh_active:
@@ -690,7 +693,7 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
     ide_browser = (os.environ.get("IDE_BROWSER") or "").strip()
     if ide_browser:
         parts = [ide_browser] if (os.path.isfile(ide_browser) and os.access(ide_browser, os.X_OK)) else shlex.split(ide_browser)
-        if parts and (shutil.which(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
+        if parts and (which_executable(parts[0]) or (os.path.isfile(parts[0]) and os.access(parts[0], os.X_OK))):
             subprocess.Popen(
                 [*parts, url],
                 stdin=subprocess.DEVNULL,
@@ -701,7 +704,7 @@ def open_browser_url(url: str, target_arg: str = "") -> bool:
             return True
     has_display = not ssh_active and bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     for browser in (("xdg-open", "google-chrome") if has_display else ()) + (() if ssh_active else ("open",)):
-        if shutil.which(browser):
+        if which_executable(browser):
             subprocess.Popen(
                 [browser, url],
                 stdin=subprocess.DEVNULL,
@@ -737,15 +740,15 @@ def copy_to_system_clipboard(target_arg: str = "") -> None:
             pass
 
     try:
-        if shutil.which("tmux"):
+        if which_executable("tmux"):
             if run_tmux("load-buffer", "-w", tmp_path).returncode != 0:
                 run_tmux("load-buffer", tmp_path)
         if not is_ssh_session(target_arg):
             if os.environ.get("DISPLAY"):
-                if shutil.which("xsel"):
+                if which_executable("xsel"):
                     run_clip_in(["xsel", "-ip"])
                     run_clip_in(["xsel", "-ib"])
-                elif shutil.which("xclip"):
+                elif which_executable("xclip"):
                     for sel in ("primary", "clipboard"):
                         try:
                             with open(tmp_path, "rb") as fx:
@@ -758,10 +761,10 @@ def copy_to_system_clipboard(target_arg: str = "") -> None:
                                 )
                         except OSError:
                             pass
-            if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
+            if os.environ.get("WAYLAND_DISPLAY") and which_executable("wl-copy"):
                 run_clip_in(["wl-copy", "--primary"])
                 run_clip_in(["wl-copy"])
-            if shutil.which("pbcopy"):
+            if which_executable("pbcopy"):
                 run_clip_in(["pbcopy"])
     finally:
         try:
@@ -797,14 +800,14 @@ def paste_from_system_clipboard(target_pane: str) -> None:
 
     ssh_active = is_ssh_session(raw_target)
     has_display = bool(os.environ.get("DISPLAY"))
-    if ssh_active and shutil.which("tmux"):
+    if ssh_active and which_executable("tmux"):
         data = try_cmd(["tmux", "show-buffer"])
 
     if not ssh_active:
         if not data and has_display:
-            if shutil.which("xsel"):
+            if which_executable("xsel"):
                 data = try_cmd(["xsel", "-ob"]) or try_cmd(["xsel", "-op"])
-            if not data and shutil.which("xclip"):
+            if not data and which_executable("xclip"):
                 for args in (
                     ["xclip", "-selection", "clipboard", "-t", "UTF8_STRING", "-o"],
                     ["xclip", "-selection", "clipboard", "-o"],
@@ -814,14 +817,14 @@ def paste_from_system_clipboard(target_pane: str) -> None:
                     data = try_cmd(args)
                     if data:
                         break
-        if not data and os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
+        if not data and os.environ.get("WAYLAND_DISPLAY") and which_executable("wl-paste"):
             data = try_cmd(["wl-paste", "--no-newline"]) or try_cmd(["wl-paste", "--primary", "--no-newline"])
-        if not data and shutil.which("pbpaste"):
+        if not data and which_executable("pbpaste"):
             data = try_cmd(["pbpaste"])
-    if not data and shutil.which("tmux"):
+    if not data and which_executable("tmux"):
         data = try_cmd(["tmux", "show-buffer"])
 
-    if data and shutil.which("tmux"):
+    if data and which_executable("tmux"):
         run_tmux("load-buffer", "-", input_bytes=data)
         if target_pane:
             if tmux_out("display-message", "-p", "-t", target_pane, "#{pane_in_mode}") == "1":

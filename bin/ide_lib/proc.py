@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import stat
 import subprocess
 
-from ide_lib.constants import is_live_socket
+from ide_lib.constants import is_live_socket, which_executable
 
 _BARE_SHELL_CMD_RE = re.compile(
     r"^-?(?:(?:ba|z|da|k|mk|a|tc|c|fi)?sh|nu|elvish|xonsh|pwsh)$",
@@ -63,7 +62,7 @@ def pids_with_children(pids: set[int], *, force_ps: bool = False) -> set[int]:
         except OSError:
             pass
 
-    ps_bin = shutil.which("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
+    ps_bin = which_executable("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
     try:
         res = subprocess.run(
             [ps_bin, "-eo", "ppid="],
@@ -200,7 +199,7 @@ def _pane_tree_snapshot(
             comm_by_pid.clear()
 
     if not children_by_ppid:
-        ps_bin = shutil.which("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
+        ps_bin = which_executable("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
         try:
             res = subprocess.run(
                 [ps_bin, "-eo", "pid=,ppid=,stat=,comm="],
@@ -316,7 +315,7 @@ def _ps_batch_nvim_cmdlines(pids: list[int]) -> dict[int, tuple[bool, list[str]]
         return {}
     import shlex
 
-    ps_bin = shutil.which("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
+    ps_bin = which_executable("ps") or ("/bin/ps" if os.path.isfile("/bin/ps") else "ps")
     pid_csv = ",".join(str(p) for p in pids)
     try:
         res = subprocess.run(

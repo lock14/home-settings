@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 import shlex
-import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -17,19 +15,8 @@ from ide_lib.constants import (
     is_switcher_session_name,
     safe_getcwd,
     visible_width,
+    which_executable,
 )
-from ide_lib.dock import (
-    close_switcher_session,
-    pane_in_switcher_session,
-    undock_session_if_docked,
-)
-from ide_lib.fleet import (
-    ack_ai_session,
-    classify_ide_fleet,
-    list_ide_sessions_with_server_status,
-    refresh_fleet_topbar,
-)
-from ide_lib.hooks import resolve_workspace_target, sanitize_session_name
 from ide_lib.nvim_rpc import (
     ensure_editor_nvim_running,
     ensure_session_editor_socket,
@@ -614,6 +601,8 @@ def swap_ide_pane(raw_dir: str, target_arg: str) -> int:
 
     _parse_swap_snap(snap.stdout)
     if is_switcher_session_name(docked_in.strip()):
+        from ide_lib.dock import undock_session_if_docked
+
         undock_session_if_docked(sess, docked_in.strip())
         snap = _query_swap_snap()
         if snap.returncode == 0 and snap.stdout:
@@ -738,6 +727,8 @@ def _handle_switcher_pane_toggle(sw_sess: str, mode: str) -> int:
 
     if mode in ("editor", "focus-editor", "term", "focus-term"):
         if docked_sess and session_exists(docked_sess):
+            from ide_lib.dock import close_switcher_session
+
             pressed_key = "ctrl-e" if "editor" in mode else "ctrl-t"
             close_switcher_session(
                 sw_sess,
@@ -895,6 +886,8 @@ def toggle_main_pane(
     _parse_toggle_snap(snap.stdout)
     clean_docked_in = snap_docked_in.strip()
     if is_switcher_session_name(clean_docked_in):
+        from ide_lib.dock import pane_in_switcher_session, undock_session_if_docked
+
         if pane_in_switcher_session(clean_docked_in):
             return _handle_switcher_pane_toggle(clean_docked_in, mode)
         undock_session_if_docked(sess, clean_docked_in)
@@ -1179,6 +1172,8 @@ def toggle_main_pane(
 
     def _focus_ai_with_ack() -> None:
         if _needs_ai_ack_or_cleanup():
+            from ide_lib.fleet import ack_ai_session
+
             ack_ai_session(sess, from_hook=False, refresh_always=False, entering_ai=True)
         _focus_win_pane(ai_pane)
 
@@ -1305,6 +1300,8 @@ def toggle_main_pane(
 
     _flush_pending()
     if started_in_ai and not entered_ai and _needs_ai_ack_or_cleanup():
+        from ide_lib.fleet import ack_ai_session
+
         ack_ai_session(sess, from_hook=True, refresh_always=False)
     return 0
 
@@ -1412,6 +1409,11 @@ def _close_and_unlink_nvim_sockets(
 
 def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> int:
     """Safely terminate one or more IDE sessions, guarding against unsaved Neovim buffers unless forced."""
+    import signal
+
+    from ide_lib.dock import close_switcher_session, undock_session_if_docked
+    from ide_lib.fleet import classify_ide_fleet, refresh_fleet_topbar
+
     if isinstance(target_args, str):
         raw_targets = [target_args] if target_args else [""]
     else:
@@ -1603,6 +1605,8 @@ def cd_ide_workspace(raw_target: str, target_arg: str) -> int:
 
 def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
     """Reload tmux config/theme and heal Editor CWDs + themes over RPC without touching Shell panes."""
+    from ide_lib.fleet import list_ide_sessions_with_server_status, refresh_fleet_topbar
+
     raw_sessions, server_up = list_ide_sessions_with_server_status()
     if target_arg:
         if not server_up:
@@ -1642,7 +1646,7 @@ def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
             theme_bin = (
                 sib_theme
                 if (sib_theme and os.path.isfile(sib_theme) and os.access(sib_theme, os.X_OK))
-                else (shutil.which("theme") or "")
+                else (which_executable("theme") or "")
             )
             if theme_bin:
                 try:
@@ -1706,6 +1710,12 @@ def launch_or_attach_workspace(
     detach_mode: bool,
 ) -> int:
     """Create a new 2-pane or 3-pane IDE workspace session or re-attach to an existing one."""
+    import shutil
+
+    from ide_lib.dock import undock_session_if_docked
+    from ide_lib.fleet import refresh_fleet_topbar
+    from ide_lib.hooks import resolve_workspace_target, sanitize_session_name
+
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
     ide_ai_cli = os.environ["IDE_AI_CLI"]
     ide_notify_env = os.environ.get("IDE_NOTIFY", "")

@@ -247,14 +247,10 @@ from __future__ import annotations
 import os
 import sys
 
-sys.dont_write_bytecode = True
+if not getattr(sys, "pycache_prefix", None):
+    sys.dont_write_bytecode = True
 if sys.version_info < (3, 11) and sys.path:
     sys.path.pop(0)
-if os.environ.pop("IDE_CLOSE_FD9", "") == "1":
-    try:
-        os.close(9)
-    except OSError:
-        pass
 
 _raw_self = (
     os.environ.get("IDE_SELF")
@@ -282,12 +278,11 @@ if [ -z "${IDE_PY_BIN:-}" ]; then
         IDE_PY_BIN="python3"
     fi
 fi
-if [ -r /dev/fd/9 ] 9<<< "" 2>/dev/null; then
-    IDE_CLOSE_FD9=1 PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -S -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"
-else
-    IDE_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ide-py.XXXXXX")"
-    trap 'rm -rf "$IDE_TMP_DIR"' EXIT INT TERM
-    printf '%s\n' "$IDE_PY_SRC" > "$IDE_TMP_DIR/ide.py"
-    PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" "$IDE_PY_BIN" -S -B "$IDE_TMP_DIR/ide.py" "$@"
-    exit $?
+if [ -z "${PYTHONPYCACHEPREFIX:-}" ]; then
+    _ide_cache_base="${XDG_CACHE_HOME:-${HOME%/}/.cache}"
+    if [ -n "$_ide_cache_base" ]; then
+        export PYTHONPYCACHEPREFIX="${_ide_cache_base%/}/home-settings/pycache"
+    fi
+    unset _ide_cache_base
 fi
+PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -S -c "$IDE_PY_SRC" "$@"

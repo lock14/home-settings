@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 
@@ -15,18 +14,10 @@ from ide_lib.constants import (
     is_live_socket,
     is_switcher_session_name,
     safe_getcwd,
+    which_executable,
 )
-from ide_lib.dock import (
-    caller_switcher_session,
-    close_switcher_session,
-    pane_in_switcher_session,
-    switch_or_attach_session,
-    undock_switcher_session,
-)
-from ide_lib.fleet import ack_ai_session
 from ide_lib.git_info import locate_git_dirs
 from ide_lib.hooks import call_ide_hook
-from ide_lib.layout import cd_ide_workspace, toggle_main_pane, unpark_role_pane
 from ide_lib.nvim_rpc import (
     ensure_editor_nvim_running,
     ensure_session_editor_socket,
@@ -119,7 +110,7 @@ def _query_session_link_vars(sess: str, need_socket: bool = False) -> tuple[bool
 
 
 def _git_ls_files_unique_match(git_root: str, cand: str) -> str:
-    if not shutil.which("git"):
+    if not which_executable("git"):
         return ""
     suffix = "/" + cand
     for args in (
@@ -402,6 +393,9 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
 
 def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") -> int:
     """Open or preview `filepath` (at optional `line`) in the session's Main Neovim Editor via RPC."""
+    from ide_lib.dock import close_switcher_session, pane_in_switcher_session, undock_switcher_session
+    from ide_lib.layout import toggle_main_pane, unpark_role_pane
+
     sw_to_close = ""
     sw_client = ""
     sw_res_file = ""
@@ -523,6 +517,9 @@ def open_file_or_dir_target(fpath: str, line: str, target_arg: str) -> bool:
         open_in_editor(fpath, True, target_arg, line)
         return True
     if os.path.isdir(fpath):
+        from ide_lib.dock import caller_switcher_session, close_switcher_session, undock_switcher_session
+        from ide_lib.layout import cd_ide_workspace
+
         sw_sess = caller_switcher_session(target_arg)
         if sw_sess:
             docked_s, sw_cl, sw_rf = resolve_switcher_context(sw_sess)
@@ -560,7 +557,7 @@ def resolve_and_open_target(raw_target: str, cwd: str, target_arg: str, fallback
 
 
 def _resolve_capture_pane_targets(target_arg: str = "") -> list[list[str]]:
-    if not shutil.which("tmux"):
+    if not which_executable("tmux"):
         return []
     if not (os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg):
         return []
@@ -748,6 +745,9 @@ def recover_split_osc8_href(word: str, target_arg: str = "") -> str:
 
 def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True) -> bool:
     import urllib.parse
+
+    from ide_lib.dock import caller_switcher_session, close_switcher_session, undock_switcher_session
+    from ide_lib.layout import toggle_main_pane
 
     slug = urllib.parse.unquote(anchor.lstrip("#").strip()).lower()
     if not slug:
@@ -1033,6 +1033,10 @@ def send_to_ai(
     target_arg: str,
 ) -> int:
     """Stage context into the target AI Agent prompt via dedicated `_ide_send_<pid>` buffer without Enter."""
+    from ide_lib.dock import switch_or_attach_session
+    from ide_lib.fleet import ack_ai_session
+    from ide_lib.layout import toggle_main_pane, unpark_role_pane
+
     if not send_mode:
         print("Error: '--send' requires '--stdin', '--ref <PATH>', or '--text <TEXT>'.", file=sys.stderr)
         return 1

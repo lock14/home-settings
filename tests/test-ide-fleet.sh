@@ -503,8 +503,10 @@ tmp_root = tempfile.mkdtemp(prefix="ide-mod-lat.", dir=_short_tmp_base)
 try:
     sym_dir = os.path.join(tmp_root, "isolated_bin")
     run_dir = os.path.join(tmp_root, "run")
+    cache_dir = os.path.join(tmp_root, "cache")
     os.makedirs(sym_dir, mode=0o700)
     os.makedirs(run_dir, mode=0o700)
+    os.makedirs(cache_dir, mode=0o700)
     sym_ide = os.path.join(sym_dir, "ide")
     os.symlink(ide_entry, sym_ide)
 
@@ -516,8 +518,81 @@ try:
         "IDE_SESSION": "",
         "TMUX_TMPDIR": run_dir,
         "XDG_RUNTIME_DIR": run_dir,
+        "XDG_CACHE_HOME": cache_dir,
+        "PYTHONPYCACHEPREFIX": "",
         "IDE_KEYS_NO_WAIT": "1",
     }
+
+    # Verify Option A MsgPack-RPC codec, zero-subprocess AF_UNIX Neovim RPC fast-path, and XDG bytecode cache
+    from ide_lib.constants import which_executable
+    from ide_lib.nvim_rpc import (
+        _IncompleteMsgPack,
+        _NVIM_FALLBACK_CACHE,
+        _mp_decode,
+        _mp_encode_str,
+        nvim_remote_expr,
+        nvim_remote_send,
+    )
+
+    for _s_sample in ("", "ok", "x" * 40, "y" * 300):
+        _enc_b = _mp_encode_str(_s_sample)
+        _dec_v, _dec_pos = _mp_decode(memoryview(_enc_b), 0)
+        assert _dec_v == _s_sample and _dec_pos == len(_enc_b)
+    _trunc_caught = False
+    try:
+        _mp_decode(memoryview(_mp_encode_str("truncated")[:-2]), 0)
+    except _IncompleteMsgPack:
+        _trunc_caught = True
+    assert _trunc_caught is True
+
+    _real_nvim = which_executable("nvim")
+    if _real_nvim:
+        _rpc_sock = os.path.join(run_dir, "rpc-unit.sock")
+        _spy_log = os.path.join(run_dir, "spy-nvim.log")
+        _spy_bin_dir = os.path.join(tmp_root, "spy_bin")
+        os.makedirs(_spy_bin_dir, mode=0o700)
+        _spy_nvim = os.path.join(_spy_bin_dir, "nvim")
+        with open(_spy_nvim, "w", encoding="utf-8") as _sf:
+            _sf.write(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {_spy_log!r}\nexit 0\n")
+        os.chmod(_spy_nvim, 0o755)
+        _nv_srv = subprocess.Popen(
+            [_real_nvim, "--headless", "-u", "NONE", "-i", "NONE", "--listen", _rpc_sock],
+            env={**env, "NVIM_LOG_FILE": "/dev/null"},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            for _ in range(80):
+                if is_live_socket(_rpc_sock):
+                    break
+                time.sleep(0.025)
+            assert is_live_socket(_rpc_sock), "rpc-unit.sock did not become live"
+            _saved_p = os.environ.get("PATH", "")
+            try:
+                os.environ["PATH"] = f"{_spy_bin_dir}:{_saved_p}"
+                _MISE_TOOL_BIN_CACHE.clear()
+                _NVIM_FALLBACK_CACHE.clear()
+                assert nvim_remote_expr(_rpc_sock, "19 + 23") == "42"
+                assert not os.path.exists(_spy_log), "nvim_remote_expr spawned nvim subprocess instead of AF_UNIX MsgPack-RPC"
+                assert nvim_remote_send(_rpc_sock, "<C-\\><C-n><Cmd>qall!<CR>") is True
+                assert not os.path.exists(_spy_log), "nvim_remote_send spawned nvim subprocess instead of AF_UNIX MsgPack-RPC"
+            finally:
+                os.environ["PATH"] = _saved_p
+                _MISE_TOOL_BIN_CACHE.clear()
+                _NVIM_FALLBACK_CACHE.clear()
+            _nv_srv.wait(timeout=3.0)
+        finally:
+            if _nv_srv.poll() is None:
+                _nv_srv.terminate()
+                _nv_srv.wait(timeout=2.0)
+
+    # Trigger Python CLI path (--unknown-opt) and verify PYTHONPYCACHEPREFIX populates XDG cache, never bin/ide_lib/__pycache__
+    subprocess.run([ide_entry, "--help"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    _py_res = subprocess.run([ide_entry, "--definitely-unknown-flag"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert _py_res.returncode != 0
+    assert os.path.isdir(os.path.join(cache_dir, "home-settings", "pycache")), "expected XDG pycache dir to be populated"
+    assert not os.path.exists(os.path.join(ide_lib_dir, "__pycache__")), "bin/ide_lib/__pycache__ must never be created"
 
     checks = (
         (["--keys"], "IDE Workspace & Editor Keybindings"),

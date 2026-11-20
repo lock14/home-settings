@@ -143,6 +143,28 @@ def discover_nvim_sockets() -> list[Path]:
     return sockets
 
 
+def _try_nvim_socket_theme_reload(sock: Path, timeout: float = 1.5) -> bool:
+    """Evaluate `v:lua.apply_home_settings_theme()` directly over `AF_UNIX` MsgPack-RPC."""
+    import socket
+    import struct
+
+    expr_b = b"v:lua.apply_home_settings_theme()"
+    req = (
+        b"\x94\x00\x01\xa9nvim_eval\x91"
+        + struct.pack(">BB", 0xD9, len(expr_b))
+        + expr_b
+    )
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(timeout)
+            client.connect(str(sock))
+            client.sendall(req)
+            resp = client.recv(4096)
+            return bool(resp) and resp[0] == 0x94 and resp[1] == 0x01
+    except OSError:
+        return False
+
+
 def broadcast_live_reloads(theme: dict[str, str], state_dir: Path, repo_dir: Path) -> None:
     """Broadcast active palette updates to TTY OSC, Tmux, Neovim RPC, and OS terminals."""
     emit_live_osc_sequences(theme)
@@ -181,6 +203,8 @@ def broadcast_live_reloads(theme: dict[str, str], state_dir: Path, repo_dir: Pat
                     continue
                 st = sock.stat()
                 if stat.S_ISSOCK(st.st_mode) and st.st_uid == uid:
+                    if _try_nvim_socket_theme_reload(sock):
+                        continue
                     nvim_rpc_env = os.environ.copy()
                     nvim_rpc_env.setdefault("NVIM_LOG_FILE", "/dev/null")
                     subprocess.run(
