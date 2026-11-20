@@ -160,7 +160,9 @@ if { [ "$#" -eq 1 ] && [ "$1" = "--plain" ]; } || \
     unset _ide_lookup_path _ide_tmux_bin
 fi
 
-if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
+_ide_calibrate_path() {
+    [ "${IDE_STRICT_PATH:-0}" = "1" ] && return 0
+    local _ide_mise_dir _ide_shims _ide_inst_pfx _ide_rem _ide_new_path _ide_last_mise _ide_idx _ide_shims_added _ide_p _ide_cp
     if [ -n "${MISE_DATA_DIR:-}" ]; then
         _ide_mise_dir="$MISE_DATA_DIR"
     elif [ -n "${XDG_DATA_HOME:-}" ]; then
@@ -216,16 +218,15 @@ if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
             done
             [ "$_ide_shims_added" -eq 0 ] && _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
             export PATH="${HOME%/}/.local/bin:$_ide_new_path:/usr/local/bin:/usr/bin:/bin"
-            unset _ide_rem _ide_new_path _ide_last_mise _ide_idx _ide_shims_added _ide_p _ide_cp
             ;;
         *)
-            export PATH="$_ide_shims:${HOME%/}/.local/bin:$PATH:/usr/local/bin:/usr/bin:/bin"
+            export PATH="$_ide_shims:${HOME%/}/.local/bin${PATH:+:$PATH}:/usr/local/bin:/usr/bin:/bin"
             ;;
     esac
-    unset _ide_mise_dir _ide_shims _ide_inst_pfx
-fi
+}
 
 run_system_monitor() {
+    _ide_calibrate_path
     local mon=""
     for mon in btop htop top; do
         if command -v "$mon" >/dev/null 2>&1; then
@@ -274,17 +275,19 @@ else:
     from ide_lib.sessions import _collect_launcher_dirs, _pick_workspace_directory
 PY
 if [ -z "${IDE_PY_BIN:-}" ]; then
-    IDE_PY_BIN="python3"
     if [ -x /usr/bin/python3 ]; then
         IDE_PY_BIN="/usr/bin/python3"
+    else
+        _ide_calibrate_path
+        IDE_PY_BIN="python3"
     fi
 fi
 if [ -r /dev/fd/9 ] 9<<< "" 2>/dev/null; then
-    IDE_CLOSE_FD9=1 PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"
+    IDE_CLOSE_FD9=1 PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -S -B /dev/fd/9 "$@" 9<<< "$IDE_PY_SRC"
 else
     IDE_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ide-py.XXXXXX")"
     trap 'rm -rf "$IDE_TMP_DIR"' EXIT INT TERM
     printf '%s\n' "$IDE_PY_SRC" > "$IDE_TMP_DIR/ide.py"
-    PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" "$IDE_PY_BIN" -B "$IDE_TMP_DIR/ide.py" "$@"
+    PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" "$IDE_PY_BIN" -S -B "$IDE_TMP_DIR/ide.py" "$@"
     exit $?
 fi

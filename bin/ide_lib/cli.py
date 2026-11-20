@@ -29,6 +29,66 @@ _SINGLE_ARG_ACTIONS = frozenset({
 })
 
 
+_SYSTEM_BIN_DIRS = frozenset({
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/sbin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/bin",
+    "/sbin",
+    "/bin",
+})
+
+
+def _strip_trailing_slashes(p: str) -> str:
+    if not p or p == "/":
+        return p
+    stripped = p.rstrip("/")
+    return stripped if stripped else "/"
+
+
+def _calibrate_ide_path() -> None:
+    """Keep activated `mise/installs` ahead of `mise/shims` and `mise/shims` ahead of `/usr/bin`."""
+    if os.environ.get("IDE_STRICT_PATH", "0") == "1":
+        return
+    home = _strip_trailing_slashes(os.environ.get("HOME") or os.path.expanduser("~"))
+    mise_raw = os.environ.get("MISE_DATA_DIR") or ""
+    if mise_raw:
+        mise_dir = _strip_trailing_slashes(mise_raw)
+    else:
+        xdg_data = _strip_trailing_slashes(os.environ.get("XDG_DATA_HOME") or "")
+        mise_dir = f"{xdg_data}/mise" if xdg_data else f"{home}/.local/share/mise"
+    shims = f"{mise_dir}/shims"
+    inst_pfx = f"{mise_dir}/installs/"
+    raw_path = os.environ.get("PATH") or ""
+    framed = f":{raw_path}:"
+    if "/mise/installs/" in framed or inst_pfx in framed:
+        filtered: list[tuple[str, str]] = []
+        last_mise = 0
+        for raw_entry in raw_path.split(":"):
+            cp = _strip_trailing_slashes(raw_entry)
+            if not cp or cp == shims:
+                continue
+            filtered.append((raw_entry, cp))
+            cp_slash = f"{cp}/"
+            if "/mise/installs/" in cp_slash or cp_slash.startswith(inst_pfx):
+                last_mise = len(filtered)
+        new_parts: list[str] = []
+        shims_added = False
+        for idx, (raw_entry, cp) in enumerate(filtered, 1):
+            if not shims_added and idx > last_mise and cp in _SYSTEM_BIN_DIRS:
+                new_parts.append(shims)
+                shims_added = True
+            new_parts.append(raw_entry)
+        if not shims_added:
+            new_parts.append(shims)
+        os.environ["PATH"] = ":".join([f"{home}/.local/bin", *new_parts, "/usr/local/bin", "/usr/bin", "/bin"])
+    else:
+        mid = f":{raw_path}" if raw_path else ""
+        os.environ["PATH"] = f"{shims}:{home}/.local/bin{mid}:/usr/local/bin:/usr/bin:/bin"
+
+
 def _looks_like_json_obj(raw: str) -> bool:
     s = raw.strip()
     return len(s) >= 2 and s.startswith("{") and s.endswith("}")
@@ -59,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     """Parse CLI arguments and dispatch to the matching `ide_lib` domain handler."""
     raw_self = os.environ.pop("IDE_SELF", "")
     ide_self = os.path.abspath(raw_self) if raw_self else ""
+    _calibrate_ide_path()
     os.environ["FORCE_HYPERLINK"] = "1"
     args = sys.argv[1:] if argv is None else list(argv)
 
@@ -95,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
     agent_message = ""
     agent_json_args: list[str] = []
     ack_from_hook = False
+    preview_follow = False
+    switcher_op = ""
     end_of_opts = False
 
     i = 0
@@ -183,13 +246,37 @@ def main(argv: list[str] | None = None) -> int:
                 i += 2
             else:
                 i += 1
+        elif arg == "--follow":
+            preview_follow = True
+            i += 1
         elif arg == "--session-preview":
             action = "session-preview"
-            if i + 1 >= n:
+            j = i + 1
+            while j < n and args[j] == "--follow":
+                preview_follow = True
+                j += 1
+            if j < n and args[j] == "--":
+                j += 1
+            if j >= n:
                 print("Error: '--session-preview' requires a session name.", file=sys.stderr)
                 return 1
-            target_arg = args[i + 1]
-            i += 2
+            target_arg = args[j]
+            i = j + 1
+        elif arg.startswith("--session-preview="):
+            action = "session-preview"
+            target_arg = arg.split("=", 1)[1]
+            if not target_arg:
+                print("Error: '--session-preview' requires a session name.", file=sys.stderr)
+                return 1
+            i += 1
+        elif arg == "--switcher-op":
+            action = "switcher-op"
+            if i + 2 >= n:
+                print("Error: '--switcher-op' requires an operation and switcher session.", file=sys.stderr)
+                return 1
+            switcher_op = args[i + 1]
+            target_arg = args[i + 2]
+            i += 3
         elif arg == "--agent-state":
             action = "agent-state"
             if i + 1 >= n or args[i + 1].startswith("-"):
@@ -422,6 +509,10 @@ def main(argv: list[str] | None = None) -> int:
                 target_args.append(arg)
             i += 1
 
+    if preview_follow and action != "session-preview":
+        print("Error: '--follow' can only be used with '--session-preview'.", file=sys.stderr)
+        return 1
+
     if not _normalize_ai_cli(ai_cli, ai_cli_from_flag):
         return 1
     ai_cli = os.environ["IDE_AI_CLI"]
@@ -459,9 +550,10 @@ def main(argv: list[str] | None = None) -> int:
             print(str(entry["sess"]))
         return 0
 
-    if action in ("sessions", "new", "sessions-lines", "session-preview", "next-attention", "list"):
+    if action in ("sessions", "new", "sessions-lines", "session-preview", "switcher-op", "next-attention", "list"):
         from ide_lib.sessions import (
             build_sessions_lines,
+            handle_switcher_op,
             list_ide_fleet,
             next_attention,
             render_session_preview,
@@ -486,7 +578,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(row)
             return 0
         if action == "session-preview":
-            return render_session_preview(target_arg)
+            return render_session_preview(target_arg, follow=preview_follow)
+        if action == "switcher-op":
+            return handle_switcher_op(switcher_op, target_arg)
         if action == "next-attention":
             return next_attention(target_arg)
         return list_ide_fleet(plain=plain_list)

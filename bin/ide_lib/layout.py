@@ -37,13 +37,16 @@ from ide_lib.nvim_rpc import (
 )
 from ide_lib.tmux import (
     check_is_ide_session,
+    close_switcher_session,
     current_ide_session,
     get_ide_var,
     is_ssh_session,
+    is_switcher_session_name,
     missing_session_msg,
     normalize_pane_cwd,
     pane_exists,
     pane_has_child_procs,
+    pane_in_switcher_session,
     pane_in_win,
     pane_is_parked,
     resolve_main_win,
@@ -54,6 +57,7 @@ from ide_lib.tmux import (
     set_ide_var,
     set_ide_vars,
     tmux_out,
+    undock_session_if_docked,
 )
 
 
@@ -544,56 +548,74 @@ def swap_ide_pane(raw_dir: str, target_arg: str) -> int:
         print(f"Error: Invalid swap direction '{raw_dir}'. Expected: left, down, up, or right.", file=sys.stderr)
         return 1
 
+    if is_switcher_session_name(target_arg):
+        return 0
+
     sess = resolve_target_session(target_arg)
     if not sess:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    snap = run_tmux(
-        "display-message",
-        "-p",
-        "-t",
-        f"={sess}:",
-        TMUX_SEP.join([
-            "OPTS",
-            "#{@ide_editor_pane}",
-            "#{@ide_ai_pane}",
-            "#{@ide_term_pane}",
-            "#{@ide_main_win}",
-            "#{@ide_layout_mode}",
-        ]),
-        ";",
-        "list-panes",
-        "-s",
-        "-t",
-        f"={sess}:",
-        "-F",
-        TMUX_SEP.join([
-            "PANE",
-            "#{pane_id}",
-            "#{window_id}",
-            "#{window_name}",
-            "#{@ide_role}",
-            "#{pane_active}",
-            "#{window_zoomed_flag}",
-        ]),
-    )
+    def _query_swap_snap() -> subprocess.CompletedProcess:
+        return run_tmux(
+            "display-message",
+            "-p",
+            "-t",
+            f"={sess}:",
+            TMUX_SEP.join([
+                "OPTS",
+                "#{@ide_editor_pane}",
+                "#{@ide_ai_pane}",
+                "#{@ide_term_pane}",
+                "#{@ide_main_win}",
+                "#{@ide_layout_mode}",
+                "#{@ide_docked_in}",
+            ]),
+            ";",
+            "list-panes",
+            "-s",
+            "-t",
+            f"={sess}:",
+            "-F",
+            TMUX_SEP.join([
+                "PANE",
+                "#{pane_id}",
+                "#{window_id}",
+                "#{window_name}",
+                "#{@ide_role}",
+                "#{pane_active}",
+                "#{window_zoomed_flag}",
+            ]),
+        )
+
+    snap = _query_swap_snap()
     if snap.returncode != 0 or not snap.stdout:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    editor_pane = ai_pane = term_pane = main_win = layout_mode = ""
+    editor_pane = ai_pane = term_pane = main_win = layout_mode = docked_in = ""
     panes_by_id: dict[str, tuple[str, str, str, str, str]] = {}
     opts_pfx = f"OPTS{TMUX_SEP}"
     pane_pfx = f"PANE{TMUX_SEP}"
-    for line in snap.stdout.splitlines():
-        if line.startswith(opts_pfx):
-            op = (line.split(TMUX_SEP)[1:] + [""] * 5)[:5]
-            editor_pane, ai_pane, term_pane, main_win, layout_mode = op
-        elif line.startswith(pane_pfx):
-            pp = line.split(TMUX_SEP, 6)
-            if len(pp) >= 7:
-                panes_by_id[pp[1]] = (pp[2], pp[3], pp[4], pp[5], pp[6])
+
+    def _parse_swap_snap(raw_out: str) -> None:
+        nonlocal editor_pane, ai_pane, term_pane, main_win, layout_mode, docked_in
+        panes_by_id.clear()
+        for ln in raw_out.splitlines():
+            if ln.startswith(opts_pfx):
+                op = (ln.split(TMUX_SEP)[1:] + [""] * 6)[:6]
+                editor_pane, ai_pane, term_pane, main_win, layout_mode, docked_in = op
+            elif ln.startswith(pane_pfx):
+                pp = ln.split(TMUX_SEP, 6)
+                if len(pp) >= 7:
+                    panes_by_id[pp[1]] = (pp[2], pp[3], pp[4], pp[5], pp[6])
+
+    _parse_swap_snap(snap.stdout)
+    if is_switcher_session_name(docked_in.strip()):
+        undock_session_if_docked(sess, docked_in.strip())
+        snap = _query_swap_snap()
+        if snap.returncode == 0 and snap.stdout:
+            _parse_swap_snap(snap.stdout)
 
     def _resolve_swap_role(cur_p: str, role: str, opt_name: str, env_name: str, check_env: bool = True) -> str:
         if cur_p and cur_p in panes_by_id:
@@ -661,6 +683,75 @@ def swap_ide_pane(raw_dir: str, target_arg: str) -> int:
     return 0
 
 
+def _handle_switcher_pane_toggle(sw_sess: str, mode: str) -> int:
+    raw = tmux_out(
+        "display-message",
+        "-p",
+        "-t",
+        f"={sw_sess}:",
+        TMUX_SEP.join([
+            "#{@ide_switcher}",
+            "#{@ide_sw_fzf_pane}",
+            "#{@ide_sw_slot_pane}",
+            "#{@ide_sw_docked_pane}",
+            "#{@ide_sw_docked_sess}",
+            "#{@ide_sw_client}",
+            "#{@ide_sw_result_file}",
+            "#{pane_id}",
+            "#{window_id}",
+            "#{window_zoomed_flag}",
+            "#{@ide_sw_mode}",
+        ]),
+    )
+    if not raw or TMUX_SEP not in raw:
+        return 0
+    (
+        is_sw,
+        fzf_pane,
+        slot_pane,
+        docked_pane,
+        docked_sess,
+        sw_client,
+        res_file,
+        act_pane,
+        sw_win,
+        sw_zoom,
+        sw_mode,
+    ) = (p.strip() for p in (raw.split(TMUX_SEP) + [""] * 11)[:11])
+    if is_sw != "1" or sw_mode == "new":
+        return 0
+
+    if mode in ("toggle", "ai", "focus-ai"):
+        right_pane = docked_pane if pane_exists(docked_pane) else slot_pane
+        if mode == "focus-ai":
+            target_p = right_pane
+        else:
+            target_p = right_pane if act_pane == fzf_pane else fzf_pane
+        if target_p and sw_win and pane_exists(target_p):
+            if target_p == fzf_pane and sw_zoom == "1":
+                run_tmux("resize-pane", "-Z", "-t", sw_win)
+                sw_zoom = "0"
+            focus_pane_preserving_zoom(sw_win, target_p, cur_pane_hint=act_pane, was_zoomed_hint=sw_zoom or "0")
+        return 0
+
+    if mode in ("editor", "focus-editor", "term", "focus-term"):
+        if docked_sess and session_exists(docked_sess):
+            pressed_key = "ctrl-e" if "editor" in mode else "ctrl-t"
+            close_switcher_session(
+                sw_sess,
+                action="switch",
+                target=docked_sess,
+                pressed=pressed_key,
+                res_file_hint=res_file,
+            )
+            if not res_file and sw_client:
+                toggle_main_pane("focus-editor" if "editor" in mode else "focus-term", docked_sess)
+                run_tmux("switch-client", "-c", sw_client, "-t", f"={docked_sess}")
+        return 0
+
+    return 0
+
+
 def toggle_main_pane(
     mode: str,
     target_arg: str,
@@ -668,57 +759,64 @@ def toggle_main_pane(
     clear_quit_err: bool = True,
 ) -> int:
     """Focus, bounce back, unpark, or park `ai`, `editor`, or `term` panes in a single snapshot pass."""
+    if is_switcher_session_name(target_arg):
+        return _handle_switcher_pane_toggle(target_arg, mode)
+
     sess = resolve_target_session(target_arg)
     if not sess:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
 
-    snap = run_tmux(
-        "display-message",
-        "-p",
-        "-t",
-        f"={sess}:",
-        TMUX_SEP.join([
-            "OPTS",
-            "#{@ide_editor_pane}",
-            "#{@ide_ai_pane}",
-            "#{@ide_term_pane}",
-            "#{@ide_main_win}",
-            "#{@ide_layout_mode}",
-            "#{@ide_socket}",
-            "#{@ide_ai_cli}",
-            "#{@ide_initial_root}",
-            "#{@ide_workdir}",
-            "#{@ide_last_pane_id}",
-            "#{@ide_last_non_ai}",
-            "#{@ide_quit_err}",
-            "#{@ide_ai_state}",
-            "#{@ide_ai_attn}",
-            "#{@ide_ai_msg}",
-        ]),
-        ";",
-        "list-panes",
-        "-s",
-        "-t",
-        f"={sess}:",
-        "-F",
-        TMUX_SEP.join([
-            "PANE",
-            "#{pane_id}",
-            "#{window_id}",
-            "#{window_name}",
-            "#{@ide_role}",
-            "#{pane_left}",
-            "#{pane_top}",
-            "#{pane_active}",
-            "#{window_zoomed_flag}",
-            "#{@ide_last_pane}",
-            "#{pane_pid}",
-            "#{pane_current_command}",
-            "#{@ide_nvim_launch_ts}",
-            "#{pane_current_path}",
-        ]),
-    )
+    def _query_toggle_snap() -> subprocess.CompletedProcess:
+        return run_tmux(
+            "display-message",
+            "-p",
+            "-t",
+            f"={sess}:",
+            TMUX_SEP.join([
+                "OPTS",
+                "#{@ide_editor_pane}",
+                "#{@ide_ai_pane}",
+                "#{@ide_term_pane}",
+                "#{@ide_main_win}",
+                "#{@ide_layout_mode}",
+                "#{@ide_socket}",
+                "#{@ide_ai_cli}",
+                "#{@ide_initial_root}",
+                "#{@ide_workdir}",
+                "#{@ide_last_pane_id}",
+                "#{@ide_last_non_ai}",
+                "#{@ide_quit_err}",
+                "#{@ide_ai_state}",
+                "#{@ide_ai_attn}",
+                "#{@ide_ai_msg}",
+                "#{@ide_docked_in}",
+            ]),
+            ";",
+            "list-panes",
+            "-s",
+            "-t",
+            f"={sess}:",
+            "-F",
+            TMUX_SEP.join([
+                "PANE",
+                "#{pane_id}",
+                "#{window_id}",
+                "#{window_name}",
+                "#{@ide_role}",
+                "#{pane_left}",
+                "#{pane_top}",
+                "#{pane_active}",
+                "#{window_zoomed_flag}",
+                "#{@ide_last_pane}",
+                "#{pane_pid}",
+                "#{pane_current_command}",
+                "#{@ide_nvim_launch_ts}",
+                "#{pane_current_path}",
+            ]),
+        )
+
+    snap = _query_toggle_snap()
     if snap.returncode != 0 or not snap.stdout:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
@@ -739,50 +837,68 @@ def toggle_main_pane(
         snap_ai_state,
         snap_ai_attn,
         snap_ai_msg,
-    ) = ("",) * 15
+        snap_docked_in,
+    ) = ("",) * 16
     panes_by_id: dict[str, tuple[str, str, str, int, int, str, str, str, str, str, str, str]] = {}
     opts_pfx = f"OPTS{TMUX_SEP}"
     pane_pfx = f"PANE{TMUX_SEP}"
-    for line in snap.stdout.splitlines():
-        if line.startswith(opts_pfx):
-            op = (line.split(TMUX_SEP)[1:] + [""] * 15)[:15]
-            (
-                editor_pane,
-                ai_pane,
-                term_pane,
-                main_win,
-                layout_mode,
-                sock,
-                ai_cli,
-                init_root,
-                workdir_opt,
-                last_pane_id,
-                last_non_ai,
-                quit_err_cur,
-                snap_ai_state,
-                snap_ai_attn,
-                snap_ai_msg,
-            ) = op
-        elif line.startswith(pane_pfx):
-            pp = line.split(TMUX_SEP, 13)
-            if len(pp) >= 14:
-                try:
-                    panes_by_id[pp[1]] = (
-                        pp[2],
-                        pp[3],
-                        pp[4],
-                        int(pp[5]),
-                        int(pp[6]),
-                        pp[7],
-                        pp[8],
-                        pp[9],
-                        pp[10],
-                        pp[11],
-                        pp[12],
-                        pp[13],
-                    )
-                except ValueError:
-                    pass
+
+    def _parse_toggle_snap(raw_out: str) -> None:
+        nonlocal editor_pane, ai_pane, term_pane, main_win, layout_mode, sock, ai_cli
+        nonlocal init_root, workdir_opt, last_pane_id, last_non_ai, quit_err_cur
+        nonlocal snap_ai_state, snap_ai_attn, snap_ai_msg, snap_docked_in
+        panes_by_id.clear()
+        for ln in raw_out.splitlines():
+            if ln.startswith(opts_pfx):
+                op = (ln.split(TMUX_SEP)[1:] + [""] * 16)[:16]
+                (
+                    editor_pane,
+                    ai_pane,
+                    term_pane,
+                    main_win,
+                    layout_mode,
+                    sock,
+                    ai_cli,
+                    init_root,
+                    workdir_opt,
+                    last_pane_id,
+                    last_non_ai,
+                    quit_err_cur,
+                    snap_ai_state,
+                    snap_ai_attn,
+                    snap_ai_msg,
+                    snap_docked_in,
+                ) = op
+            elif ln.startswith(pane_pfx):
+                pp = ln.split(TMUX_SEP, 13)
+                if len(pp) >= 14:
+                    try:
+                        panes_by_id[pp[1]] = (
+                            pp[2],
+                            pp[3],
+                            pp[4],
+                            int(pp[5]),
+                            int(pp[6]),
+                            pp[7],
+                            pp[8],
+                            pp[9],
+                            pp[10],
+                            pp[11],
+                            pp[12],
+                            pp[13],
+                        )
+                    except ValueError:
+                        pass
+
+    _parse_toggle_snap(snap.stdout)
+    clean_docked_in = snap_docked_in.strip()
+    if is_switcher_session_name(clean_docked_in):
+        if pane_in_switcher_session(clean_docked_in):
+            return _handle_switcher_pane_toggle(clean_docked_in, mode)
+        undock_session_if_docked(sess, clean_docked_in)
+        snap = _query_toggle_snap()
+        if snap.returncode == 0 and snap.stdout:
+            _parse_toggle_snap(snap.stdout)
 
     snap_ai_state = snap_ai_state.strip().lower()
     snap_ai_attn = snap_ai_attn.strip()
@@ -919,7 +1035,11 @@ def toggle_main_pane(
             )
             if ai_pane:
                 ai_just_healed = True
-                run_tmux("set-option", "-p", "-t", ai_pane, "@ide_role", "ai")
+                run_tmux(
+                    "set-option", "-p", "-t", ai_pane, "@ide_role", "ai",
+                    ";",
+                    "set-option", "-p", "-t", ai_pane, "@ide_owner_sess", sess,
+                )
                 set_ide_vars(sess, [
                     ("@ide_ai_pane", "IDE_AI_PANE", ai_pane),
                     ("@ide_ai_parked", "IDE_AI_PARKED", "0"),
@@ -1304,13 +1424,21 @@ def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> i
     in_popup = os.environ.get("IDE_IN_POPUP") == "1"
     resolved_targets: list[tuple[str, str]] = []
     seen_sess: set[str] = set()
+    closed_switcher = False
     for raw in raw_targets:
+        if is_switcher_session_name(raw):
+            close_switcher_session(raw, action="none")
+            closed_switcher = True
+            continue
         sess = resolve_target_session(raw)
         dedup_key = sess or f"__empty_{raw}"
         if dedup_key in seen_sess:
             continue
         seen_sess.add(dedup_key)
         resolved_targets.append((raw, sess))
+
+    if closed_switcher and not resolved_targets:
+        return 0
 
     rc = 0
     to_kill: list[tuple[str, str]] = []
@@ -1354,6 +1482,9 @@ def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> i
     if not to_kill:
         return rc
 
+    for sess, _ in to_kill:
+        undock_session_if_docked(sess)
+
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
     for sess, sock in to_kill:
         _close_and_unlink_nvim_sockets(sess, sock, runtime_dir, max_polls=30, poll_step=0.1)
@@ -1364,8 +1495,21 @@ def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> i
             e for e in classify_ide_fleet(include_git=False, cur_sess="")
             if str(e["sess"]) not in killing_set
         ]
-        if other_ide:
-            next_sess = str(other_ide[0]["sess"])
+        next_sess = str(other_ide[0]["sess"]) if other_ide else ""
+        if not next_sess:
+            best_act = -1
+            for s_ln in tmux_out("list-sessions", "-F", "#{session_activity}\t#{session_name}").splitlines():
+                if "\t" not in s_ln:
+                    continue
+                s_act_raw, s_cand = s_ln.split("\t", 1)
+                s_cand = s_cand.strip()
+                if not s_cand or s_cand in killing_set or s_cand.startswith(("ai-", "agy-")):
+                    continue
+                s_act = int(s_act_raw.strip()) if s_act_raw.strip().isdigit() else 0
+                if s_act >= best_act:
+                    best_act = s_act
+                    next_sess = s_cand
+        if next_sess:
             for sess, _ in to_kill:
                 for cl in tmux_out("list-clients", "-t", f"={sess}", "-F", "#{client_name}").splitlines():
                     cl_s = cl.strip()
@@ -1685,6 +1829,8 @@ def launch_or_attach_workspace(
             "set-option", "-w", "-t", main_win, "allow-rename", "off",
             ";",
             "set-option", "-p", "-t", pane_ai, "@ide_role", "ai",
+            ";",
+            "set-option", "-p", "-t", pane_ai, "@ide_owner_sess", session,
             ";",
             "set-option", "-p", "-t", pane_editor, "@ide_role", "editor",
         ]

@@ -27,6 +27,7 @@ from ide_lib.tmux import (
     is_bare_shell_cmd,
     is_ide_session_meta,
     is_ssh_session,
+    is_switcher_session_name,
     missing_session_msg,
     open_browser_url,
     pane_has_child_procs,
@@ -66,85 +67,137 @@ def build_ai_state_option_cmds(
     ]
 
 
+_SESSION_FMT_FIELDS = (
+    "#{session_name}",
+    "#{session_activity}",
+    "#{session_last_attached}",
+    "#{session_attached}",
+    "#{@ide_session}",
+    "#{@ide_socket}",
+    "#{@ide_main_win}",
+    "#{@ide_ai_pane}",
+    "#{@ide_editor_pane}",
+    "#{@ide_ai_cli}",
+    "#{@ide_workdir}",
+    "#{@ide_initial_root}",
+    "#{@ide_ai_state}",
+    "#{@ide_ai_attn}",
+    "#{@ide_ai_attn_ts}",
+    "#{@ide_ai_state_ts}",
+    "#{@ide_ai_parked}",
+    "#{@ide_ai_msg}",
+    "#{@ide_quit_err}",
+)
+
+_PANE_FMT_FIELDS = (
+    "#{session_name}",
+    "#{window_id}",
+    "#{window_name}",
+    "#{pane_id}",
+    "#{pane_pid}",
+    "#{pane_active}",
+    "#{window_active}",
+    "#{window_zoomed_flag}",
+    "#{@ide_role}",
+    "#{pane_current_path}",
+    "#{pane_current_command}",
+    "#{window_activity}",
+    "#{@ide_sw_placeholder}",
+)
+
+
+def parse_ide_session_cols(cols: list[str]) -> dict[str, str] | None:
+    """Parse 19 `_SESSION_FMT_FIELDS` columns into an IDE session dict, or `None` if non-IDE."""
+    padded = (cols + [""] * 19)[:19]
+    (
+        sess_name,
+        activity,
+        last_attached,
+        attached,
+        ide_sess,
+        ide_sock,
+        ide_win,
+        ai_pane,
+        ed_pane,
+        ai_cli,
+        workdir,
+        init_root,
+        ai_state,
+        ai_attn,
+        ai_attn_ts,
+        ai_state_ts,
+        ai_parked,
+        ai_msg,
+        quit_err,
+    ) = padded
+    if not is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
+        return None
+    return {
+        "sess": sess_name,
+        "activity": activity,
+        "last_attached": last_attached,
+        "attached": attached,
+        "ide_sess": ide_sess,
+        "ide_sock": ide_sock,
+        "ide_win": ide_win,
+        "ai_pane": ai_pane,
+        "ed_pane": ed_pane,
+        "ai_cli": ai_cli or "agy",
+        "workdir": workdir or init_root,
+        "init_root": init_root or workdir,
+        "ai_state": ai_state,
+        "ai_attn": ai_attn,
+        "ai_attn_ts": ai_attn_ts,
+        "ai_state_ts": ai_state_ts,
+        "ai_parked": ai_parked,
+        "ai_msg": ai_msg,
+        "quit_err": quit_err,
+    }
+
+
 def list_ide_sessions_with_server_status() -> tuple[list[dict[str, str]], bool]:
     """Query tmux `list-sessions` once and return `(ide_session_dicts, server_is_up)`."""
-    res = run_tmux(
-        "list-sessions",
-        "-F",
-        TMUX_SEP.join([
-            "#{session_name}",
-            "#{session_activity}",
-            "#{session_last_attached}",
-            "#{session_attached}",
-            "#{@ide_session}",
-            "#{@ide_socket}",
-            "#{@ide_main_win}",
-            "#{@ide_ai_pane}",
-            "#{@ide_editor_pane}",
-            "#{@ide_ai_cli}",
-            "#{@ide_workdir}",
-            "#{@ide_initial_root}",
-            "#{@ide_ai_state}",
-            "#{@ide_ai_attn}",
-            "#{@ide_ai_attn_ts}",
-            "#{@ide_ai_state_ts}",
-            "#{@ide_ai_parked}",
-            "#{@ide_ai_msg}",
-            "#{@ide_quit_err}",
-        ]),
-    )
+    res = run_tmux("list-sessions", "-F", TMUX_SEP.join(_SESSION_FMT_FIELDS))
     if res.returncode != 0:
         return ([], False)
     if not res.stdout:
         return ([], True)
     items: list[dict[str, str]] = []
     for line in res.stdout.splitlines():
-        cols = (line.split(TMUX_SEP) + [""] * 19)[:19]
-        (
-            sess_name,
-            activity,
-            last_attached,
-            attached,
-            ide_sess,
-            ide_sock,
-            ide_win,
-            ai_pane,
-            ed_pane,
-            ai_cli,
-            workdir,
-            init_root,
-            ai_state,
-            ai_attn,
-            ai_attn_ts,
-            ai_state_ts,
-            ai_parked,
-            ai_msg,
-            quit_err,
-        ) = cols
-        if not is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
-            continue
-        items.append({
-            "sess": sess_name,
-            "activity": activity,
-            "last_attached": last_attached,
-            "attached": attached,
-            "ide_sess": ide_sess,
-            "ide_sock": ide_sock,
-            "ide_win": ide_win,
-            "ai_pane": ai_pane,
-            "ed_pane": ed_pane,
-            "ai_cli": ai_cli or "agy",
-            "workdir": workdir or init_root,
-            "init_root": init_root or workdir,
-            "ai_state": ai_state,
-            "ai_attn": ai_attn,
-            "ai_attn_ts": ai_attn_ts,
-            "ai_state_ts": ai_state_ts,
-            "ai_parked": ai_parked,
-            "ai_msg": ai_msg,
-            "quit_err": quit_err,
-        })
+        parsed = parse_ide_session_cols(line.split(TMUX_SEP))
+        if parsed is not None:
+            items.append(parsed)
     return (items, True)
+
+
+def query_fleet_snapshot() -> tuple[list[dict[str, str]], list[list[str]], bool]:
+    """Query `list-sessions` and `list-panes -a` in a single tmux IPC round-trip."""
+    res = run_tmux(
+        "list-sessions",
+        "-F",
+        TMUX_SEP.join(["SESS", *_SESSION_FMT_FIELDS]),
+        ";",
+        "list-panes",
+        "-a",
+        "-F",
+        TMUX_SEP.join(["PANE", *_PANE_FMT_FIELDS]),
+    )
+    if res.returncode != 0:
+        return ([], [], False)
+    if not res.stdout:
+        return ([], [], True)
+    sess_pfx = f"SESS{TMUX_SEP}"
+    pane_pfx = f"PANE{TMUX_SEP}"
+    items: list[dict[str, str]] = []
+    pane_rows: list[list[str]] = []
+    for line in res.stdout.splitlines():
+        if line.startswith(sess_pfx):
+            parsed = parse_ide_session_cols(line.split(TMUX_SEP)[1:])
+            if parsed is not None:
+                items.append(parsed)
+        elif line.startswith(pane_pfx):
+            pane_rows.append((line.split(TMUX_SEP)[1:] + [""] * 13)[:13])
+    return (items, pane_rows, True)
 
 
 def list_ide_sessions_raw() -> list[dict[str, str]]:
@@ -201,51 +254,47 @@ def classify_ide_fleet(
     cur_sess: str = "",
     git_only_sess: str = "",
     raw_sessions: list[dict[str, str]] | None = None,
+    panes_rows: list[list[str]] | None = None,
+    focused_sessions: set[str] | None = None,
+    precomputed_git: dict[str, tuple[str, bool, str, str, str]] | None = None,
 ) -> list[dict[str, object]]:
     """Classify and sort all active IDE sessions across the 5-tier urgency hierarchy."""
     if raw_sessions is None:
-        raw_sessions = list_ide_sessions_raw()
+        raw_sessions, snap_panes, _ = query_fleet_snapshot()
+        if panes_rows is None:
+            panes_rows = snap_panes
     if not raw_sessions:
         return []
 
-    panes_res = run_tmux(
-        "list-panes",
-        "-a",
-        "-F",
-        TMUX_SEP.join([
-            "#{session_name}",
-            "#{window_id}",
-            "#{window_name}",
-            "#{pane_id}",
-            "#{pane_pid}",
-            "#{pane_active}",
-            "#{window_active}",
-            "#{window_zoomed_flag}",
-            "#{@ide_role}",
-            "#{pane_current_path}",
-            "#{pane_current_command}",
-            "#{window_activity}",
-        ]),
-    )
-    panes_by_sess: dict[str, list[tuple[str, str, str, str, str, str, str, str, str, str, str]]] = {}
-    if panes_res.returncode == 0 and panes_res.stdout:
-        for line in panes_res.stdout.splitlines():
-            pcols = (line.split(TMUX_SEP) + [""] * 12)[:12]
-            panes_by_sess.setdefault(pcols[0], []).append(
-                (
-                    pcols[1],
-                    pcols[2],
-                    pcols[3],
-                    pcols[4],
-                    pcols[5],
-                    pcols[6],
-                    pcols[7],
-                    pcols[8],
-                    pcols[9],
-                    pcols[10],
-                    pcols[11],
-                )
-            )
+    if panes_rows is None:
+        panes_res = run_tmux("list-panes", "-a", "-F", TMUX_SEP.join(_PANE_FMT_FIELDS))
+        panes_rows = (
+            [(ln.split(TMUX_SEP) + [""] * 13)[:13] for ln in panes_res.stdout.splitlines()]
+            if (panes_res.returncode == 0 and panes_res.stdout)
+            else []
+        )
+
+    panes_by_sess: dict[str, list[tuple[str, str, str, str, str, str, str, str, str, str, str, str]]] = {}
+    panes_by_id: dict[str, tuple[str, str, str, str, str, str, str, str, str, str, str, str, str]] = {}
+    for pcols_raw in panes_rows:
+        pcols = (pcols_raw + [""] * 13)[:13]
+        row_tup = (
+            pcols[1],
+            pcols[2],
+            pcols[3],
+            pcols[4],
+            pcols[5],
+            pcols[6],
+            pcols[7],
+            pcols[8],
+            pcols[9],
+            pcols[10],
+            pcols[11],
+            pcols[12],
+        )
+        panes_by_sess.setdefault(pcols[0], []).append(row_tup)
+        if pcols[3]:
+            panes_by_id[pcols[3]] = (pcols[0], *row_tup)
 
     preview_pane_by_sess: dict[str, str] = {}
     active_role_by_sess: dict[str, str] = {}
@@ -256,6 +305,7 @@ def classify_ide_fleet(
     ed_cmd_by_sess: dict[str, str] = {}
     win_act_by_sess: dict[str, int] = {}
     ai_win_pane_focused_by_sess: dict[str, bool] = {}
+    ai_sw_focused_sess_by_sess: dict[str, str] = {}
 
     for item in raw_sessions:
         sess = item["sess"]
@@ -274,7 +324,7 @@ def classify_ide_fleet(
         fb_dir = ""
         max_win_act = 0
         ai_win_pane_focused = False
-        for wid, wname, pid, ppid, p_act, w_act, w_zoom, prole, ppath, pcmd, w_act_ts in spanes:
+        for wid, wname, pid, ppid, p_act, w_act, w_zoom, prole, ppath, pcmd, w_act_ts, sw_ph in spanes:
             if rec_ai and pid == rec_ai and not ai_pid_str:
                 ai_pid_str = ppid
                 ai_cmd_str = pcmd
@@ -284,6 +334,10 @@ def classify_ide_fleet(
             if w_act_ts.isdigit():
                 max_win_act = max(max_win_act, int(w_act_ts))
             if wname.startswith("_ide_park_"):
+                continue
+            if sw_ph == "1":
+                if w_act == "1" and p_act == "1":
+                    act_role = "ai"
                 continue
             if not first_vis_pane:
                 first_vis_pane = pid
@@ -300,20 +354,31 @@ def classify_ide_fleet(
                     ai_win_pane_focused = True
             if rec_ai and pid == rec_ai:
                 visible_ai = pid
+        if rec_ai and not ai_pid_str and rec_ai in panes_by_id:
+            d_sess, _, _, _, d_ppid, d_pact, d_wact, d_wzoom, d_prole, d_ppath, d_pcmd, _, _ = panes_by_id[rec_ai]
+            if is_switcher_session_name(d_sess):
+                ai_pid_str = d_ppid
+                ai_cmd_str = d_pcmd
+                if not fb_dir and d_ppath:
+                    fb_dir = d_ppath
+                if item.get("ai_parked") != "1":
+                    visible_ai = rec_ai
+                if d_wact == "1" and d_pact == "1" and not (d_wzoom == "1" and d_prole != "ai"):
+                    ai_sw_focused_sess_by_sess[sess] = d_sess
         if not ai_pid_str:
-            for _, _, _, ppid, _, _, _, prole, _, pcmd, _ in spanes:
+            for _, _, _, ppid, _, _, _, prole, _, pcmd, _, _ in spanes:
                 if prole == "ai":
                     ai_pid_str = ppid
                     ai_cmd_str = pcmd
                     break
         if not ed_pid_str:
-            for _, _, _, ppid, _, _, _, prole, _, pcmd, _ in spanes:
+            for _, _, _, ppid, _, _, _, prole, _, pcmd, _, _ in spanes:
                 if prole == "editor":
                     ed_pid_str = ppid
                     ed_cmd_str = pcmd
                     break
         if not visible_ai:
-            for _, wname, pid, _, _, _, _, prole, _, _, _ in spanes:
+            for _, wname, pid, _, _, _, _, prole, _, _, _, _ in spanes:
                 if wname.startswith("_ide_park_"):
                     continue
                 if prole == "ai":
@@ -334,19 +399,50 @@ def classify_ide_fleet(
     alive_child_pids = pids_with_children(set(ai_pid_by_sess.values()) | set(ed_pid_by_sess.values()))
     stale_cleanup_cmds: list[str] = []
     now_ts = time.time()
+    git_by_sess: dict[str, tuple[str, bool, str, str, str]] = {}
     if include_git:
         from ide_lib.git_info import git_summary, locate_git_dirs
+
+        wd_to_sessions: dict[str, list[str]] = {}
+        for item in raw_sessions:
+            s_name = item["sess"]
+            wd = item["workdir"] or fallback_dir_by_sess.get(s_name, "")
+            if precomputed_git is not None and s_name in precomputed_git:
+                git_by_sess[s_name] = precomputed_git[s_name]
+            elif not git_only_sess or s_name == git_only_sess:
+                wd_to_sessions.setdefault(wd, []).append(s_name)
+            else:
+                wt_r, _, _ = locate_git_dirs(wd)
+                git_by_sess[s_name] = ("-", False, "-", "", wt_r)
+        unique_wds = list(wd_to_sessions.keys())
+        if len(unique_wds) == 1:
+            wd0 = unique_wds[0]
+            res0 = git_summary(wd0)
+            for s_n in wd_to_sessions[wd0]:
+                git_by_sess[s_n] = res0
+        elif len(unique_wds) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=min(8, len(unique_wds))) as pool:
+                futs = [(w_d, pool.submit(git_summary, w_d)) for w_d in unique_wds]
+                for w_d, fut in futs:
+                    res_w = fut.result()
+                    for s_n in wd_to_sessions[w_d]:
+                        git_by_sess[s_n] = res_w
+
+    def _has_focused_client(target_s: str) -> bool:
+        if focused_sessions is not None:
+            return target_s in focused_sessions
+        return session_has_focused_client(target_s)
 
     fleet: list[dict[str, object]] = []
     for item in raw_sessions:
         sess = item["sess"]
         workdir = item["workdir"] or fallback_dir_by_sess.get(sess, "")
         if include_git:
-            if not git_only_sess or sess == git_only_sess:
-                git_branch, git_dirty, git_detail, git_pr_url, worktree_root = git_summary(workdir)
-            else:
-                worktree_root, _, _ = locate_git_dirs(workdir)
-                git_branch, git_dirty, git_detail, git_pr_url = ("-", False, "-", "")
+            git_branch, git_dirty, git_detail, git_pr_url, worktree_root = git_by_sess.get(
+                sess, ("-", False, "-", "", "")
+            )
         else:
             git_branch, git_dirty, git_detail, git_pr_url, worktree_root = ("-", False, "-", "", "")
 
@@ -392,11 +488,15 @@ def classify_ide_fleet(
                     stale_cleanup_cmds.append(";")
                 stale_cleanup_cmds.extend(build_ai_state_option_cmds(sess))
         else:
+            sw_foc_sess = ai_sw_focused_sess_by_sess.get(sess, "")
             ai_is_focused = (
-                item["attached"] not in ("", "0")
-                and item.get("ai_parked") != "1"
-                and ai_win_pane_focused_by_sess.get(sess, False)
-                and session_has_focused_client(sess)
+                (
+                    item["attached"] not in ("", "0")
+                    and item.get("ai_parked") != "1"
+                    and ai_win_pane_focused_by_sess.get(sess, False)
+                    and _has_focused_client(sess)
+                )
+                or (bool(sw_foc_sess) and _has_focused_client(sw_foc_sess))
                 if (raw_state == "done" and raw_attn == "1")
                 else False
             )
@@ -517,12 +617,58 @@ def classify_ide_fleet(
     return fleet
 
 
+def populate_fleet_git(fleet: list[dict[str, object]]) -> None:
+    """Populate `git_*`, `worktree_root`, and `worktree_peers` in place across `fleet` in parallel."""
+    if not fleet:
+        return
+    from ide_lib.git_info import git_summary
+
+    wd_to_entries: dict[str, list[dict[str, object]]] = {}
+    for entry in fleet:
+        wd_to_entries.setdefault(str(entry.get("workdir") or ""), []).append(entry)
+
+    git_by_wd: dict[str, tuple[str, bool, str, str, str]] = {}
+    unique_wds = list(wd_to_entries.keys())
+    if len(unique_wds) == 1:
+        git_by_wd[unique_wds[0]] = git_summary(unique_wds[0])
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=min(8, len(unique_wds))) as pool:
+            futs = [(w_d, pool.submit(git_summary, w_d)) for w_d in unique_wds]
+            for w_d, fut in futs:
+                git_by_wd[w_d] = fut.result()
+
+    by_worktree: dict[str, list[dict[str, object]]] = {}
+    for wd, entries in wd_to_entries.items():
+        gb, gd, gdet, gpr, wt_raw = git_by_wd[wd]
+        wt_real = os.path.realpath(wt_raw) if wt_raw else ""
+        for entry in entries:
+            entry["git_branch"] = gb
+            entry["git_dirty"] = gd
+            entry["git_detail"] = gdet
+            entry["git_pr_url"] = gpr
+            entry["worktree_root"] = wt_real
+            entry["worktree_peers"] = []
+            if wt_real:
+                by_worktree.setdefault(wt_real, []).append(entry)
+
+    for peers in by_worktree.values():
+        if len(peers) >= 2 and any(str(p["state"]) == "WORKING" for p in peers):
+            for entry in peers:
+                entry["worktree_peers"] = [str(p["sess"]) for p in peers if p is not entry]
+
+
 def refresh_fleet_topbar() -> int:
     """Recompute and publish `@ide_fleet_count`, `@ide_fleet_active`, and `@ide_attn_summary`."""
-    raw_sessions, server_up = list_ide_sessions_with_server_status()
+    raw_sessions, pane_rows, server_up = query_fleet_snapshot()
     if not server_up:
         return 0
-    fleet = classify_ide_fleet(include_git=False, cur_sess="", raw_sessions=raw_sessions) if raw_sessions else []
+    fleet = (
+        classify_ide_fleet(include_git=False, cur_sess="", raw_sessions=raw_sessions, panes_rows=pane_rows)
+        if raw_sessions
+        else []
+    )
     fleet_count = len(fleet)
     active_count = sum(1 for e in fleet if e["state"] == "WORKING")
     attn_summary = format_attn_summary(fleet)
@@ -584,12 +730,13 @@ def inspect_session_ai_view(sess: str, need_focus: bool = True) -> dict[str, obj
             "#{@ide_workdir}",
             "#{@ide_initial_root}",
             "#{@ide_ai_msg}",
+            "#{@ide_docked_in}",
         ]),
     )
     raw = (res.stdout or "").rstrip("\r\n") if res.returncode == 0 and isinstance(res.stdout, str) else ""
     if not raw or TMUX_SEP not in raw:
         return empty_view
-    parts = (raw.split(TMUX_SEP) + [""] * 21)[:21]
+    parts = (raw.split(TMUX_SEP) + [""] * 22)[:22]
     (
         sess_name,
         sess_attached,
@@ -612,6 +759,7 @@ def inspect_session_ai_view(sess: str, need_focus: bool = True) -> dict[str, obj
         raw_workdir,
         raw_init_root,
         ai_msg,
+        docked_in,
     ) = parts
     sess_name = sess_name.strip()
     sess_attached = sess_attached.strip()
@@ -634,6 +782,7 @@ def inspect_session_ai_view(sess: str, need_focus: bool = True) -> dict[str, obj
     workdir = raw_workdir.rstrip("\r\n")
     init_root = raw_init_root.rstrip("\r\n")
     ai_msg = ai_msg.strip()
+    docked_in = docked_in.strip()
     sess_exists = sess_name == sess
     is_ide = sess_exists and is_ide_session_meta(sess_name, ide_sess, ide_sock, main_win)
     geom_visible = (
@@ -644,10 +793,42 @@ def inspect_session_ai_view(sess: str, need_focus: bool = True) -> dict[str, obj
         and (not main_win or win_id == main_win)
         and ai_parked != "1"
         and not (zoomed == "1" and prole != "ai")
+        and not is_switcher_session_name(docked_in)
     )
     has_focus = session_has_focused_client(sess) if (need_focus and geom_visible) else False
     ai_visible = has_focus and geom_visible
     ai_focused = ai_visible and pane_active == "1" and prole == "ai"
+    if is_ide and is_switcher_session_name(docked_in):
+        sw_raw = tmux_out(
+            "display-message",
+            "-p",
+            "-t",
+            f"={docked_in}:",
+            TMUX_SEP.join([
+                "#{session_attached}",
+                "#{window_active}",
+                "#{window_zoomed_flag}",
+                "#{pane_active}",
+                "#{pane_id}",
+                "#{@ide_sw_docked_pane}",
+                "#{@ide_sw_docked_sess}",
+            ]),
+        )
+        if sw_raw and TMUX_SEP in sw_raw:
+            sw_att, sw_wact, sw_zoom, sw_pact, sw_pid, sw_dp, sw_ds = (
+                p.strip() for p in (sw_raw.split(TMUX_SEP) + [""] * 7)[:7]
+            )
+            sw_geom = (
+                sw_ds == sess
+                and bool(sw_dp)
+                and sw_att not in ("", "0")
+                and sw_wact == "1"
+                and not (sw_zoom == "1" and sw_pid != sw_dp)
+            )
+            if sw_geom:
+                sw_foc = session_has_focused_client(docked_in) if need_focus else False
+                ai_visible = ai_visible or sw_foc
+                ai_focused = ai_focused or (sw_foc and sw_pact == "1" and sw_pid == sw_dp)
     return {
         "exists": sess_exists,
         "is_ide": is_ide,

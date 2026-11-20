@@ -29,21 +29,27 @@ from ide_lib.nvim_rpc import (
     wait_for_editor_socket,
 )
 from ide_lib.tmux import (
+    caller_switcher_session,
+    close_switcher_session,
     current_ide_session,
     get_ide_var,
+    is_switcher_session_name,
     missing_session_msg,
     normalize_pane_cwd,
     open_browser_url,
     pane_exists,
     pane_has_child_procs,
+    pane_in_switcher_session,
     pane_is_parked,
     resolve_main_win,
     resolve_role_pane,
+    resolve_switcher_context,
     resolve_target_session,
     run_tmux,
     session_exists,
     switch_or_attach_session,
     tmux_out,
+    undock_switcher_session,
 )
 
 _RE_FILE_URI = re.compile(r"(file://[^()\s\]>\"'`\\]+(?:\([^()\s\]>\"'`\\]*\)[^()\s\]>\"'`\\]*)*)")
@@ -80,34 +86,35 @@ _MAX_WORKSPACE_SCAN_DIRS = 128
 _GIT_LS_TIMEOUT = 0.8
 
 
-def _query_session_link_vars(sess: str, need_socket: bool = False) -> tuple[bool, str, str, str]:
+def _query_session_link_vars(sess: str, need_socket: bool = False) -> tuple[bool, str, str, str, str]:
     if not sess:
-        return False, "", "", ""
+        return False, "", "", "", ""
     info = tmux_out(
         "display-message",
         "-p",
         "-t",
         f"={sess}:",
-        f"#{{session_name}}{TMUX_SEP}#{{@ide_workdir}}{TMUX_SEP}#{{@ide_initial_root}}{TMUX_SEP}#{{@ide_socket}}",
+        f"#{{session_name}}{TMUX_SEP}#{{@ide_workdir}}{TMUX_SEP}#{{@ide_initial_root}}{TMUX_SEP}#{{@ide_socket}}{TMUX_SEP}#{{@ide_docked_in}}",
     )
     if TMUX_SEP not in info:
         if not session_exists(sess):
-            return False, "", "", ""
+            return False, "", "", "", ""
         return (
             True,
             get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR"),
             get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"),
             get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET") if need_socket else "",
+            tmux_out("show-options", "-qv", "-t", f"={sess}:", "@ide_docked_in").strip(),
         )
     parts = info.split(TMUX_SEP)
-    _, workdir, init_root, sock = (parts + ["", "", "", ""])[:4]
+    _, workdir, init_root, sock, docked_in = (parts + ["", "", "", "", ""])[:5]
     if not workdir:
         workdir = get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
     if not init_root:
         init_root = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
     if need_socket and not sock:
         sock = get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
-    return True, workdir, init_root, sock
+    return True, workdir, init_root, sock, docked_in.strip()
 
 
 def _git_ls_files_unique_match(git_root: str, cand: str) -> str:
@@ -268,7 +275,7 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
         return cand if (os.path.isfile(cand) or os.path.isdir(cand)) else ""
 
     sess = resolve_target_session(target_arg) if (os.environ.get("TMUX") or target_arg) else ""
-    _, workdir, init_root, _ = _query_session_link_vars(sess)
+    _, workdir, init_root, _, _ = _query_session_link_vars(sess)
 
     direct = _direct_workspace_path(cand, cwd, workdir, init_root)
     if direct:
@@ -394,15 +401,37 @@ def resolve_workspace_file(cand: str, cwd: str, target_arg: str) -> str:
 
 def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") -> int:
     """Open or preview `filepath` (at optional `line`) in the session's Main Neovim Editor via RPC."""
+    sw_to_close = ""
+    sw_client = ""
+    sw_res_file = ""
+    if is_switcher_session_name(target_arg):
+        docked_s, sw_cl, sw_rf = resolve_switcher_context(target_arg)
+        if not docked_s:
+            return 0
+        sw_to_close = target_arg
+        sw_client = sw_cl
+        sw_res_file = sw_rf
+        target_arg = docked_s
+
     cwd = normalize_pane_cwd(safe_getcwd(), target_arg=target_arg)
     if filepath.startswith("~/"):
         filepath = os.path.expanduser(filepath)
 
     sess = resolve_target_session(target_arg)
-    sess_ok, workdir, init_root, sock = _query_session_link_vars(sess, need_socket=True)
+    sess_ok, workdir, init_root, sock, docked_in = _query_session_link_vars(sess, need_socket=True)
     if not sess_ok:
         print(f"Error: {missing_session_msg(sess)}", file=sys.stderr)
         return 1
+
+    if not sw_to_close and focus and is_switcher_session_name(docked_in) and pane_in_switcher_session(docked_in):
+        _, sw_cl2, sw_rf2 = resolve_switcher_context(docked_in)
+        sw_to_close = docked_in
+        sw_client = sw_cl2
+        sw_res_file = sw_rf2
+        target_arg = sess
+
+    if sw_to_close and focus:
+        undock_switcher_session(sw_to_close)
 
     direct_match = _direct_workspace_path(filepath, cwd, workdir, init_root)
     if direct_match:
@@ -472,7 +501,17 @@ def open_in_editor(filepath: str, focus: bool, target_arg: str, line: str = "") 
             or cwd
         )
         nvim_remote_file(sock, filepath, line, fallback_dir=ws_dir)
-    if not focus and pane_exists(prev_pane):
+    if focus and sw_to_close:
+        close_switcher_session(
+            sw_to_close,
+            action="switch",
+            target=sess,
+            pressed="",
+            res_file_hint=sw_res_file,
+        )
+        if not sw_res_file and sw_client:
+            run_tmux("switch-client", "-c", sw_client, "-t", f"={sess}")
+    elif not focus and pane_exists(prev_pane):
         run_tmux("select-pane", "-t", prev_pane)
     return 0
 
@@ -515,28 +554,67 @@ def _resolve_capture_pane_targets(target_arg: str = "") -> list[list[str]]:
         return []
     if target_arg and target_arg.startswith("%"):
         return [["-t", target_arg]]
+    sw_targets: list[list[str]] = []
+    if is_switcher_session_name(target_arg):
+        sw_rows = tmux_out(
+            "list-panes",
+            "-t",
+            f"={target_arg}:",
+            "-F",
+            "#{pane_active}\t#{pane_id}\t#{@ide_sw_role}\t#{@ide_sw_placeholder}",
+        ).splitlines()
+        sw_active: list[list[str]] = []
+        sw_other: list[list[str]] = []
+        for srow in sw_rows:
+            sparts = (srow.split("\t") + ["", "", "", ""])[:4]
+            s_act, s_pid, s_role, s_ph = sparts[0], sparts[1].strip(), sparts[2].strip(), sparts[3].strip()
+            if not s_pid or s_role == "list" or s_ph == "1":
+                continue
+            stgt = ["-t", s_pid]
+            if s_act == "1":
+                if stgt not in sw_active:
+                    sw_active.append(stgt)
+            elif stgt not in sw_other:
+                sw_other.append(stgt)
+        sw_targets = sw_active + sw_other
     sess = resolve_target_session(target_arg)
     if sess:
-        rows = tmux_out("list-panes", "-t", f"={sess}:", "-F", "#{pane_active}\t#{pane_id}").splitlines()
-        if rows:
-            active_targets: list[list[str]] = []
-            other_targets: list[list[str]] = []
-            for row in rows:
-                if "\t" not in row:
-                    continue
-                is_active, pid = row.split("\t", 1)
-                if not pid:
-                    continue
-                target = ["-t", pid]
-                if is_active == "1":
-                    if target not in active_targets:
-                        active_targets.append(target)
-                elif target not in other_targets:
-                    other_targets.append(target)
-            if active_targets or other_targets:
-                return active_targets + other_targets
+        rows = tmux_out(
+            "list-panes",
+            "-t",
+            f"={sess}:",
+            "-F",
+            "#{pane_active}\t#{pane_id}\t#{@ide_sw_placeholder}",
+        ).splitlines()
+        active_targets: list[list[str]] = []
+        other_targets: list[list[str]] = []
+        for row in rows:
+            if "\t" not in row:
+                continue
+            rparts = (row.split("\t") + ["", "", ""])[:3]
+            is_active, pid, r_ph = rparts[0], rparts[1].strip(), rparts[2].strip()
+            if not pid or r_ph == "1":
+                continue
+            target = ["-t", pid]
+            if is_active == "1":
+                if target not in sw_targets and target not in active_targets:
+                    active_targets.append(target)
+            elif target not in sw_targets and target not in other_targets:
+                other_targets.append(target)
+        docked_in = tmux_out("show-options", "-qv", "-t", f"={sess}:", "@ide_docked_in").strip()
+        if is_switcher_session_name(docked_in):
+            dp = tmux_out("show-options", "-qv", "-t", f"={docked_in}:", "@ide_sw_docked_pane").strip()
+            if dp:
+                dtgt = ["-t", dp]
+                if dtgt not in sw_targets and dtgt not in active_targets and dtgt not in other_targets:
+                    other_targets.insert(0, dtgt)
+        combined = sw_targets + active_targets + other_targets
+        if combined:
+            return combined
         if session_exists(sess):
             return [["-t", f"={sess}:"]]
+    if sw_targets:
+        return sw_targets
     if os.environ.get("TMUX_PANE"):
         return [["-t", os.environ["TMUX_PANE"]]]
     return []
@@ -662,11 +740,25 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
     slug = urllib.parse.unquote(anchor.lstrip("#").strip()).lower()
     if not slug:
         return False
+    sw_to_close = ""
+    sw_client = ""
+    sw_res_file = ""
+    cand_sw = caller_switcher_session(target_arg) if focus else ""
+    if cand_sw:
+        docked_s, sw_cl, sw_rf = resolve_switcher_context(cand_sw)
+        if not docked_s:
+            return False
+        sw_to_close = cand_sw
+        sw_client = sw_cl
+        sw_res_file = sw_rf
+        target_arg = docked_s
     sess = resolve_target_session(target_arg)
     if not sess or not session_exists(sess):
         return False
+    if sw_to_close and focus:
+        undock_switcher_session(sw_to_close)
     if focus:
-        toggle_main_pane("focus-editor", target_arg, skip_checktime=True)
+        toggle_main_pane("focus-editor", sess, skip_checktime=True)
     sock = (
         ensure_session_editor_socket(sess)
         if resolve_nvim_bin()
@@ -694,7 +786,18 @@ def _jump_nvim_markdown_anchor(anchor: str, target_arg: str, focus: bool = True)
         "return l end end; return 0 end)()"
     )
     out = nvim_remote_expr(sock, f'luaeval("{lua_expr.replace(chr(34), chr(92) + chr(34))}")')
-    return bool(out and out != "0")
+    jumped = bool(out and out != "0")
+    if jumped and focus and sw_to_close:
+        close_switcher_session(
+            sw_to_close,
+            action="switch",
+            target=sess,
+            pressed="",
+            res_file_hint=sw_res_file,
+        )
+        if not sw_res_file and sw_client:
+            run_tmux("switch-client", "-c", sw_client, "-t", f"={sess}")
+    return jumped
 
 
 def _open_osc8_href(href: str, word: str, cwd: str, target_arg: str) -> int | None:
@@ -960,9 +1063,10 @@ def send_to_ai(
         return 1
 
     eff_no_focus = False if switch_session else no_focus
+    in_sw_target = is_switcher_session_name(target_arg) and not switch_session
     prev_pane = tmux_out("display-message", "-p", "-t", f"={sess}:", "#{pane_id}") if eff_no_focus else ""
     if not eff_no_focus:
-        toggle_main_pane("focus-ai", sess)
+        toggle_main_pane("focus-ai", target_arg if in_sw_target else sess)
         ai_pane = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
     else:
         editor_pane = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")

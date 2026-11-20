@@ -6,7 +6,10 @@ import os
 import re
 import stat
 import sys
-from typing import TextIO
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import TextIO
 
 # Printable tab-framed field separator that survives tmux <= 3.4 utf8_stravis C0 octal escaping
 # as well as literal tab characters inside workspace directory paths.
@@ -242,3 +245,67 @@ def trunc_visible(text: str, max_w: int, suffix: str = "…") -> str:
         out.append(ch)
         used += cw
     return "".join(out) + suffix
+
+
+_MISE_TOOL_BIN_CACHE: dict[tuple[str, str, str], str | None] = {}
+_MISE_VER_NUM_RE = re.compile(r"[0-9]+")
+
+
+def _mise_ver_sort_key(ver_name: str) -> tuple[int, ...]:
+    if ver_name == "latest":
+        return (999999,)
+    nums = [int(x) for x in _MISE_VER_NUM_RE.findall(ver_name)]
+    return tuple(nums) if nums else (0,)
+
+
+def resolve_mise_tool_bin(
+    tool_name: str,
+    install_dir_name: str = "",
+    env_override: str = "",
+) -> str | None:
+    """Resolve `tool_name` on `PATH`, bypassing `mise/shims` overhead when installed under `mise/installs`."""
+    if env_override:
+        raw_ovr = (os.environ.get(env_override) or "").strip()
+        if raw_ovr:
+            return raw_ovr
+    cache_key = (
+        tool_name,
+        install_dir_name,
+        f"{os.environ.get('PATH', '')}\0{os.environ.get('MISE_DATA_DIR', '')}",
+    )
+    if cache_key in _MISE_TOOL_BIN_CACHE:
+        return _MISE_TOOL_BIN_CACHE[cache_key]
+    import shutil
+
+    cand = shutil.which(tool_name)
+    if cand:
+        try:
+            real = os.path.realpath(cand)
+        except OSError:
+            real = cand
+        norm_cand = cand.replace("\\", "/")
+        if "/mise/shims/" in norm_cand or os.path.basename(real) == "mise":
+            mise_root = os.path.dirname(os.path.dirname(os.path.abspath(cand)))
+            pkg_dir = os.path.join(mise_root, "installs", install_dir_name or tool_name)
+            if os.path.isdir(pkg_dir):
+                ver_dirs: list[tuple[tuple[int, ...], str]] = []
+                try:
+                    with os.scandir(pkg_dir) as it:
+                        for dent in it:
+                            try:
+                                if dent.is_dir():
+                                    ver_dirs.append((_mise_ver_sort_key(dent.name), dent.path))
+                            except OSError:
+                                pass
+                except OSError:
+                    pass
+                ver_dirs.sort(key=lambda x: x[0], reverse=True)
+                for _, vdir in ver_dirs:
+                    for sub in (os.path.join(vdir, "bin", tool_name), os.path.join(vdir, tool_name)):
+                        if os.path.isfile(sub) and os.access(sub, os.X_OK):
+                            _MISE_TOOL_BIN_CACHE[cache_key] = sub
+                            return sub
+        _MISE_TOOL_BIN_CACHE[cache_key] = cand
+        return cand
+    _MISE_TOOL_BIN_CACHE[cache_key] = None
+    return None
