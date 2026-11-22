@@ -14,10 +14,10 @@ echo "========================================"
 
 # Test 1: Module syntax check
 echo -e "\n[1/5] Checking module syntax..."
-assert_script_syntax "$SCRIPT_DIR/modules/10-dotfiles.sh" "modules/10-dotfiles.sh"
+assert_script_syntax "$SCRIPT_DIR/setup/modules/10-dotfiles.sh" "modules/10-dotfiles.sh"
 
 # The module runs below under a temporary $HOME, so it must never reach live tmux servers or IDE editors
-if ! grep -Eq '^[^#]*(tmux |luafile|--remote-expr|nvim-ide-)' "$SCRIPT_DIR/modules/10-dotfiles.sh"; then
+if ! grep -Eq '^[^#]*(tmux |luafile|--remote-expr|nvim-ide-)' "$SCRIPT_DIR/setup/modules/10-dotfiles.sh"; then
     pass "modules/10-dotfiles.sh never hot-reloads live tmux servers or Neovim IDE editors (hermetic under a temporary HOME)"
 else
     fail "modules/10-dotfiles.sh hermeticity" "Found tmux / luafile / --remote-expr / nvim-ide- socket calls that would mutate live sessions from tests"
@@ -27,7 +27,7 @@ fi
 echo -e "\n[2/5] Testing declarative dotfiles auto-discovery..."
 TEMP_HOME="$(make_sandbox_dir)"
 
-HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/setup/modules/10-dotfiles.sh" >/dev/null 2>&1
 
 expected_top_level=(
     ".environment-variables"
@@ -658,7 +658,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat function call rendering" "Expected Base0 emit_log call in bat output"
     fi
 
-    C_SAMPLE_OUT="$(bat_render -l c "$SCRIPT_DIR/sample-code/sample.c")"
+    C_SAMPLE_OUT="$(bat_render -l c "$SCRIPT_DIR/tests/fixtures/sample-code/sample.c")"
     if grep -Fq "${SOL_YELLOW}if" <<< "$C_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}return" <<< "$C_SAMPLE_OUT" && \
        grep -Fq "${SOL_YELLOW}switch" <<< "$C_SAMPLE_OUT" && \
@@ -755,7 +755,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat qualified function rendering" "Expected Base0 Grey std and Base0 move/for_each in bat output"
     fi
 
-    CPP_SAMPLE_OUT="$(bat_render -l cpp "$SCRIPT_DIR/sample-code/sample.cpp")"
+    CPP_SAMPLE_OUT="$(bat_render -l cpp "$SCRIPT_DIR/tests/fixtures/sample-code/sample.cpp")"
     if grep -Fq "${SOL_VIOLET}[[" <<< "$CPP_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}nodiscard" <<< "$CPP_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}]]" <<< "$CPP_SAMPLE_OUT" && \
@@ -771,7 +771,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.4 Diff Syntax Verification ---
-    DIFF_SAMPLE_OUT="$(bat_render -l diff "$SCRIPT_DIR/sample-code/sample.diff")"
+    DIFF_SAMPLE_OUT="$(bat_render -l diff "$SCRIPT_DIR/tests/fixtures/sample-code/sample.diff")"
     if grep -Fq "${SOL_BLUE}diff" <<< "$DIFF_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}a/src/service/cluster_manager.go" <<< "$DIFF_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}4b825dc" <<< "$DIFF_SAMPLE_OUT" && \
@@ -790,7 +790,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.5 Go Syntax Verification ---
-    GO_SAMPLE_OUT="$(bat_render -l go "$SCRIPT_DIR/sample-code/sample.go")"
+    GO_SAMPLE_OUT="$(bat_render -l go "$SCRIPT_DIR/tests/fixtures/sample-code/sample.go")"
     if grep -Fq "${SOL_GREEN}package" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}main" <<< "$GO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}import" <<< "$GO_SAMPLE_OUT" && \
@@ -825,7 +825,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.6 Java Syntax Verification ---
-    JAVA_SAMPLE_OUT="$(bat_render -l java "$SCRIPT_DIR/sample-code/sample.java")"
+    JAVA_SAMPLE_OUT="$(bat_render -l java "$SCRIPT_DIR/tests/fixtures/sample-code/sample.java")"
     if grep -Fq "${SOL_VIOLET}import" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}java" <<< "$JAVA_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}Instant" <<< "$JAVA_SAMPLE_OUT" && \
@@ -857,7 +857,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.7 Python Syntax Verification ---
-    PYTHON_SAMPLE_OUT="$(bat_render -l py "$SCRIPT_DIR/sample-code/sample.py")"
+    PYTHON_SAMPLE_OUT="$(bat_render -l py "$SCRIPT_DIR/tests/fixtures/sample-code/sample.py")"
     if grep -Fq "${SOL_VIOLET}from" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}asyncio" <<< "$PYTHON_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}typing" <<< "$PYTHON_SAMPLE_OUT" && \
@@ -902,7 +902,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.8 Rust Syntax Verification ---
-    RUST_SAMPLE_OUT="$(bat_render -l rs "$SCRIPT_DIR/sample-code/sample.rs")"
+    RUST_SAMPLE_OUT="$(bat_render -l rs "$SCRIPT_DIR/tests/fixtures/sample-code/sample.rs")"
     if grep -Fq "${SOL_VIOLET}use" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}std" <<< "$RUST_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}collections" <<< "$RUST_SAMPLE_OUT" && \
@@ -948,7 +948,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.9 Bash Syntax Verification ---
-    SH_SAMPLE_OUT="$(bat_render -l sh "$SCRIPT_DIR/sample-code/sample.sh")"
+    SH_SAMPLE_OUT="$(bat_render -l sh "$SCRIPT_DIR/tests/fixtures/sample-code/sample.sh")"
     if grep -Fq "${SOL_ORANGE}#!/bin/bash" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}set" <<< "$SH_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}SCRIPT_NAME" <<< "$SH_SAMPLE_OUT" && \
@@ -1004,7 +1004,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.10 SQL Syntax Verification ---
-    SQL_SAMPLE_OUT="$(bat_render -l sql "$SCRIPT_DIR/sample-code/sample.sql")"
+    SQL_SAMPLE_OUT="$(bat_render -l sql "$SCRIPT_DIR/tests/fixtures/sample-code/sample.sql")"
     if       grep -Fq "${SOL_GREEN}CREATE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}TABLE" <<< "$SQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}customer_accounts" <<< "$SQL_SAMPLE_OUT" && \
@@ -1062,7 +1062,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.11 Terraform / HCL Syntax Verification ---
-    TF_SAMPLE_OUT="$(bat_render -l tf "$SCRIPT_DIR/sample-code/sample.tf")"
+    TF_SAMPLE_OUT="$(bat_render -l tf "$SCRIPT_DIR/tests/fixtures/sample-code/sample.tf")"
     if       grep -Fq "${SOL_GREEN}terraform" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE0}required_providers" <<< "$TF_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}variable" <<< "$TF_SAMPLE_OUT" && \
@@ -1106,7 +1106,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.12 Markdown Syntax Verification ---
-    MD_SAMPLE_OUT="$(bat_render -l md "$SCRIPT_DIR/sample-code/sample.md")"
+    MD_SAMPLE_OUT="$(bat_render -l md "$SCRIPT_DIR/tests/fixtures/sample-code/sample.md")"
     if grep -Fq "${SOL_ORANGE}Workstation Architecture" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}1. Executive Summary" <<< "$MD_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}2.1 File System Topology" <<< "$MD_SAMPLE_OUT" && \
@@ -1148,7 +1148,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.13 TypeScript & JavaScript Syntax Verification ---
-    TS_SAMPLE_OUT="$(bat_render -l ts "$SCRIPT_DIR/sample-code/sample.ts")"
+    TS_SAMPLE_OUT="$(bat_render -l ts "$SCRIPT_DIR/tests/fixtures/sample-code/sample.ts")"
     if grep -Fq "${SOL_VIOLET}export" <<< "$TS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}enum" <<< "$TS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}type" <<< "$TS_SAMPLE_OUT" && \
@@ -1192,7 +1192,7 @@ if [ -n "$BAT_BIN" ]; then
         fail "bat TypeScript rendering" "Expected Converged Ergonomic Solarized TrueColor highlights in bat sample.ts output"
     fi
 
-    JS_SAMPLE_OUT="$(bat_render -l js "$SCRIPT_DIR/sample-code/sample.js")"
+    JS_SAMPLE_OUT="$(bat_render -l js "$SCRIPT_DIR/tests/fixtures/sample-code/sample.js")"
     if grep -Fq "${SOL_VIOLET}import" <<< "$JS_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}export" <<< "$JS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}class" <<< "$JS_SAMPLE_OUT" && \
@@ -1222,7 +1222,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.14 XML Syntax Verification ---
-    XML_SAMPLE_OUT="$(bat_render -l xml "$SCRIPT_DIR/sample-code/sample.xml")"
+    XML_SAMPLE_OUT="$(bat_render -l xml "$SCRIPT_DIR/tests/fixtures/sample-code/sample.xml")"
     if grep -Fq "${SOL_ORANGE}xml" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}xml-stylesheet" <<< "$XML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}deployment" <<< "$XML_SAMPLE_OUT" && \
@@ -1243,7 +1243,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.15 HTML Syntax Verification ---
-    HTML_SAMPLE_OUT="$(bat_render -l html "$SCRIPT_DIR/sample-code/sample.html")"
+    HTML_SAMPLE_OUT="$(bat_render -l html "$SCRIPT_DIR/tests/fixtures/sample-code/sample.html")"
     if grep -Fq "${SOL_ORANGE}DOCTYPE" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}html" <<< "$HTML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}header" <<< "$HTML_SAMPLE_OUT" && \
@@ -1267,7 +1267,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.16 JSON Syntax Verification ---
-    JSON_SAMPLE_OUT="$(bat_render -l json "$SCRIPT_DIR/sample-code/sample.json")"
+    JSON_SAMPLE_OUT="$(bat_render -l json "$SCRIPT_DIR/tests/fixtures/sample-code/sample.json")"
     if grep -Fq "${SOL_GREEN}\$schema" <<< "$JSON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}apiVersion" <<< "$JSON_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}metadata" <<< "$JSON_SAMPLE_OUT" && \
@@ -1285,7 +1285,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.17 YAML Syntax Verification ---
-    YAML_SAMPLE_OUT="$(bat_render -l yaml "$SCRIPT_DIR/sample-code/sample.yaml")"
+    YAML_SAMPLE_OUT="$(bat_render -l yaml "$SCRIPT_DIR/tests/fixtures/sample-code/sample.yaml")"
     if grep -Fq "${SOL_GREEN}apiVersion" <<< "$YAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}kind" <<< "$YAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}metadata" <<< "$YAML_SAMPLE_OUT" && \
@@ -1309,7 +1309,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.18 TOML Syntax Verification ---
-    TOML_SAMPLE_OUT="$(bat_render -l toml "$SCRIPT_DIR/sample-code/sample.toml")"
+    TOML_SAMPLE_OUT="$(bat_render -l toml "$SCRIPT_DIR/tests/fixtures/sample-code/sample.toml")"
     if grep -Fq "${SOL_BLUE}package" <<< "$TOML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}server" <<< "$TOML_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}rate_limits" <<< "$TOML_SAMPLE_OUT" && \
@@ -1335,7 +1335,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.19 CSS Syntax Verification ---
-    CSS_SAMPLE_OUT="$(bat_render -l css "$SCRIPT_DIR/sample-code/sample.css")"
+    CSS_SAMPLE_OUT="$(bat_render -l css "$SCRIPT_DIR/tests/fixtures/sample-code/sample.css")"
     if grep -Fq "${SOL_ORANGE}@layer" <<< "$CSS_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}@font-face" <<< "$CSS_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}@keyframes" <<< "$CSS_SAMPLE_OUT" && \
@@ -1372,7 +1372,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.20 Java Properties Syntax Verification ---
-    PROPERTIES_SAMPLE_OUT="$(bat_render -l properties "$SCRIPT_DIR/sample-code/sample.properties")"
+    PROPERTIES_SAMPLE_OUT="$(bat_render -l properties "$SCRIPT_DIR/tests/fixtures/sample-code/sample.properties")"
     if grep -Fq "${SOL_GREEN}spring.application.name" <<< "$PROPERTIES_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}server.port" <<< "$PROPERTIES_SAMPLE_OUT" && \
        grep -Fq "${SOL_MAGENTA}8080" <<< "$PROPERTIES_SAMPLE_OUT" && \
@@ -1391,7 +1391,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.21 Protocol Buffers (.proto) Syntax Verification ---
-    PROTO_SAMPLE_OUT="$(bat_render -l proto "$SCRIPT_DIR/sample-code/sample.proto")"
+    PROTO_SAMPLE_OUT="$(bat_render -l proto "$SCRIPT_DIR/tests/fixtures/sample-code/sample.proto")"
     if grep -Fq "${SOL_ORANGE}syntax" <<< "$PROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_CYAN}proto3" <<< "$PROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}package" <<< "$PROTO_SAMPLE_OUT" && \
@@ -1423,7 +1423,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.22 Protocol Buffers Text Format (.textproto) Syntax Verification ---
-    TEXTPROTO_SAMPLE_OUT="$(bat_render -l textproto "$SCRIPT_DIR/sample-code/sample.textproto")"
+    TEXTPROTO_SAMPLE_OUT="$(bat_render -l textproto "$SCRIPT_DIR/tests/fixtures/sample-code/sample.textproto")"
     if grep -Fq "${SOL_BLUE}recorded_at" <<< "$TEXTPROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}route_quotas" <<< "$TEXTPROTO_SAMPLE_OUT" && \
        grep -Fq "${SOL_BLUE}metrics" <<< "$TEXTPROTO_SAMPLE_OUT" && \
@@ -1449,7 +1449,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.23 Kotlin (.kt) Syntax Verification ---
-    KOTLIN_SAMPLE_OUT="$(bat_render -l kt "$SCRIPT_DIR/sample-code/sample.kt")"
+    KOTLIN_SAMPLE_OUT="$(bat_render -l kt "$SCRIPT_DIR/tests/fixtures/sample-code/sample.kt")"
     if grep -Fq "${SOL_VIOLET}@file:JvmName" <<< "$KOTLIN_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}@JvmInline" <<< "$KOTLIN_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}package" <<< "$KOTLIN_SAMPLE_OUT" && \
@@ -1493,7 +1493,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.24 Swift (.swift) Syntax Verification ---
-    SWIFT_SAMPLE_OUT="$(bat_render -l swift "$SCRIPT_DIR/sample-code/sample.swift")"
+    SWIFT_SAMPLE_OUT="$(bat_render -l swift "$SCRIPT_DIR/tests/fixtures/sample-code/sample.swift")"
     if grep -Fq "${SOL_ORANGE}#if" <<< "$SWIFT_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}canImport" <<< "$SWIFT_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}#else" <<< "$SWIFT_SAMPLE_OUT" && \
@@ -1538,7 +1538,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.25 Zig (.zig) Syntax Verification ---
-    ZIG_SAMPLE_OUT="$(bat_render -l zig "$SCRIPT_DIR/sample-code/sample.zig")"
+    ZIG_SAMPLE_OUT="$(bat_render -l zig "$SCRIPT_DIR/tests/fixtures/sample-code/sample.zig")"
     if grep -Fq "${SOL_VIOLET}std" <<< "$ZIG_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}@import" <<< "$ZIG_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}pub" <<< "$ZIG_SAMPLE_OUT" && \
@@ -1583,7 +1583,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.26 C# (.cs) Syntax Verification ---
-    CS_SAMPLE_OUT="$(bat_render -l cs "$SCRIPT_DIR/sample-code/sample.cs")"
+    CS_SAMPLE_OUT="$(bat_render -l cs "$SCRIPT_DIR/tests/fixtures/sample-code/sample.cs")"
     if grep -Fq "${SOL_VIOLET}using" <<< "$CS_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}namespace" <<< "$CS_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Core" <<< "$CS_SAMPLE_OUT" && \
@@ -1624,7 +1624,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.27 Scala 3 (.scala) Syntax Verification ---
-    SCALA_SAMPLE_OUT="$(bat_render -l scala "$SCRIPT_DIR/sample-code/sample.scala")"
+    SCALA_SAMPLE_OUT="$(bat_render -l scala "$SCRIPT_DIR/tests/fixtures/sample-code/sample.scala")"
     if grep -Fq "${SOL_GREEN}package" <<< "$SCALA_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}core" <<< "$SCALA_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$SCALA_SAMPLE_OUT" && \
@@ -1663,7 +1663,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.28 Ruby (.rb) Syntax Verification ---
-    RUBY_SAMPLE_OUT="$(bat_render -l rb "$SCRIPT_DIR/sample-code/sample.rb")"
+    RUBY_SAMPLE_OUT="$(bat_render -l rb "$SCRIPT_DIR/tests/fixtures/sample-code/sample.rb")"
     if grep -Fq "${SOL_VIOLET}require" <<< "$RUBY_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}module" <<< "$RUBY_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Telemetry" <<< "$RUBY_SAMPLE_OUT" && \
@@ -1701,7 +1701,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.29 GraphQL (.graphql) Syntax Verification ---
-    GRAPHQL_SAMPLE_OUT="$(bat_render -l graphql "$SCRIPT_DIR/sample-code/sample.graphql")"
+    GRAPHQL_SAMPLE_OUT="$(bat_render -l graphql "$SCRIPT_DIR/tests/fixtures/sample-code/sample.graphql")"
     if grep -Fq "${SOL_GREEN}schema" <<< "$GRAPHQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}scalar" <<< "$GRAPHQL_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}directive" <<< "$GRAPHQL_SAMPLE_OUT" && \
@@ -1740,8 +1740,8 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.30 Open-Source Bazel / Starlark (.bzl & BUILD.bazel) Syntax Verification ---
-    BZL_SAMPLE_OUT="$(bat_render -l bzl "$SCRIPT_DIR/sample-code/sample.bzl")"
-    BUILD_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/BUILD.bazel")"
+    BZL_SAMPLE_OUT="$(bat_render -l bzl "$SCRIPT_DIR/tests/fixtures/sample-code/sample.bzl")"
+    BUILD_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/BUILD.bazel")"
     if grep -Fq "${SOL_VIOLET}load" <<< "$BZL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}Open-source Bazel Starlark rules and macros for telemetry schema codegen." <<< "$BZL_SAMPLE_OUT" && \
        grep -Fq "${SOL_BASE01}Rule implementation generating C++ headers from telemetry schemas." <<< "$BZL_SAMPLE_OUT" && \
@@ -1779,7 +1779,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # --- 2.31 Open Policy Agent Rego (.rego) Syntax Verification ---
-    REGO_SAMPLE_OUT="$(bat_render -l rego "$SCRIPT_DIR/sample-code/sample.rego")"
+    REGO_SAMPLE_OUT="$(bat_render -l rego "$SCRIPT_DIR/tests/fixtures/sample-code/sample.rego")"
     if grep -Fq "${SOL_GREEN}package" <<< "$REGO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}telemetry" <<< "$REGO_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}authz" <<< "$REGO_SAMPLE_OUT" && \
@@ -1813,7 +1813,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.32 Lua (.lua) Converged Ergonomic Solarized Verification
-    LUA_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lua")"
+    LUA_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.lua")"
     if grep -Fq "${SOL_ORANGE}#!/usr/bin/env lua" <<< "$LUA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}local" <<< "$LUA_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}function" <<< "$LUA_SAMPLE_OUT" && \
@@ -1850,7 +1850,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.33 Dockerfile (sample.Dockerfile) Converged Ergonomic Solarized Verification
-    DOCKER_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.Dockerfile")"
+    DOCKER_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.Dockerfile")"
     if grep -Fq "${SOL_ORANGE}# syntax=docker/dockerfile:1" <<< "$DOCKER_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}FROM" <<< "$DOCKER_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}AS" <<< "$DOCKER_SAMPLE_OUT" && \
@@ -1879,7 +1879,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.34 Makefile (sample.mk) Converged Ergonomic Solarized Verification
-    MAKE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.mk")"
+    MAKE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.mk")"
     if grep -Fq "${SOL_VIOLET}-include" <<< "$MAKE_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}.PHONY" <<< "$MAKE_SAMPLE_OUT" && \
        grep -Fq "${SOL_GREEN}export" <<< "$MAKE_SAMPLE_OUT" && \
@@ -1903,7 +1903,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.35 Elixir (.ex) Converged Ergonomic Solarized Verification
-    ELIXIR_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.ex")"
+    ELIXIR_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.ex")"
     if grep -Fq "${SOL_GREEN}defmodule" <<< "$ELIXIR_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Core.Telemetry.Collector" <<< "$ELIXIR_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}use" <<< "$ELIXIR_SAMPLE_OUT" && \
@@ -1948,7 +1948,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.36 Haskell (.hs) Converged Ergonomic Solarized Verification
-    HASKELL_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.hs")"
+    HASKELL_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.hs")"
     if grep -Fq "${SOL_ORANGE}{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}" <<< "$HASKELL_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}module" <<< "$HASKELL_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Core.Telemetry" <<< "$HASKELL_SAMPLE_OUT" && \
@@ -1989,7 +1989,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.37 OCaml (.ml) Converged Ergonomic Solarized Verification
-    OCAML_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.ml")"
+    OCAML_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.ml")"
     if grep -Fq "${SOL_VIOLET}open" <<< "$OCAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}Printf" <<< "$OCAML_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}TELEMETRY" <<< "$OCAML_SAMPLE_OUT" && \
@@ -2031,7 +2031,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.38 Clojure (.clj) Converged Ergonomic Solarized Verification
-    CLOJURE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.clj")"
+    CLOJURE_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.clj")"
     if grep -Fq "${SOL_VIOLET}ns" <<< "$CLOJURE_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}core.telemetry.collector" <<< "$CLOJURE_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}:require" <<< "$CLOJURE_SAMPLE_OUT" && \
@@ -2069,7 +2069,7 @@ if [ -n "$BAT_BIN" ]; then
     fi
 
     # 2.39 Lean 4 (.lean) Converged Ergonomic Solarized Verification
-    LEAN_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/sample-code/sample.lean")"
+    LEAN_SAMPLE_OUT="$(bat_render "$SCRIPT_DIR/tests/fixtures/sample-code/sample.lean")"
     if grep -Fq "${SOL_ORANGE}#check" <<< "$LEAN_SAMPLE_OUT" && \
        grep -Fq "${SOL_ORANGE}#eval" <<< "$LEAN_SAMPLE_OUT" && \
        grep -Fq "${SOL_VIOLET}import" <<< "$LEAN_SAMPLE_OUT" && \
@@ -2129,7 +2129,7 @@ TEMP_HOME_BAK=$(mktemp -d)
 mkdir -p "$TEMP_HOME_BAK/.config/nvim"
 echo "custom config" > "$TEMP_HOME_BAK/.config/nvim/custom.txt"
 
-HOME="$TEMP_HOME_BAK" XDG_CONFIG_HOME="$TEMP_HOME_BAK/.config" XDG_CACHE_HOME="$TEMP_HOME_BAK/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+HOME="$TEMP_HOME_BAK" XDG_CONFIG_HOME="$TEMP_HOME_BAK/.config" XDG_CACHE_HOME="$TEMP_HOME_BAK/.cache" "$SCRIPT_DIR/setup/modules/10-dotfiles.sh" >/dev/null 2>&1
 
 if [ -L "$TEMP_HOME_BAK/.config/nvim" ]; then
     pass "Replaced physical nvim directory with symlink"
@@ -2294,7 +2294,7 @@ fi
 echo -e "\n[5/5] Testing dotfiles uninstallation..."
 echo "*.local" > "$TEMP_HOME/.config/git/ignore"
 echo "*.pbxproj binary" > "$TEMP_HOME/.config/git/attributes"
-HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
+HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" XDG_CACHE_HOME="$TEMP_HOME/.cache" "$SCRIPT_DIR/setup/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
 
 all_unlinked=true
 for df in "${expected_top_level[@]}"; do
@@ -2340,7 +2340,7 @@ fi
 
 # Verify modules/10-dotfiles.sh honors SKIP_ZSH, SKIP_BASH, and SKIP_COMPLETIONS selectively
 TEMP_SKIP_HOME=$(mktemp -d)
-SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=true HOME="$TEMP_SKIP_HOME" XDG_CONFIG_HOME="$TEMP_SKIP_HOME/.config" XDG_CACHE_HOME="$TEMP_SKIP_HOME/.cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=true HOME="$TEMP_SKIP_HOME" XDG_CONFIG_HOME="$TEMP_SKIP_HOME/.config" XDG_CACHE_HOME="$TEMP_SKIP_HOME/.cache" "$SCRIPT_DIR/setup/modules/10-dotfiles.sh" >/dev/null 2>&1
 if [ ! -e "$TEMP_SKIP_HOME/.zshrc-addendum" ] && \
    [ ! -e "$TEMP_SKIP_HOME/.zsh-functions" ] && \
    [ ! -e "$TEMP_SKIP_HOME/.p10k.zsh" ] && \
@@ -2361,19 +2361,19 @@ rm -rf "$TEMP_SKIP_HOME"
 # Verify modular dotfiles/.config/shell and dangling .config symlink pruning across 10-dotfiles.sh and 99-uninstall.sh
 TEMP_MOD_REPO="$(make_sandbox_dir)"
 TEMP_MOD_HOME="$(make_sandbox_home)"
-mkdir -p "$TEMP_MOD_REPO/modules" "$TEMP_MOD_REPO/dotfiles/.config/shell" "$TEMP_MOD_REPO/dotfiles/.config/nvim/lua/solarized"
-ln -s "$SCRIPT_DIR/lib" "$TEMP_MOD_REPO/lib"
-cp "$SCRIPT_DIR/modules/10-dotfiles.sh" "$SCRIPT_DIR/modules/99-uninstall.sh" "$TEMP_MOD_REPO/modules/"
-chmod +x "$TEMP_MOD_REPO/modules/10-dotfiles.sh" "$TEMP_MOD_REPO/modules/99-uninstall.sh"
+mkdir -p "$TEMP_MOD_REPO/setup/modules" "$TEMP_MOD_REPO/dotfiles/.config/shell" "$TEMP_MOD_REPO/dotfiles/.config/nvim/lua/solarized"
+ln -s "$SCRIPT_DIR/setup/lib" "$TEMP_MOD_REPO/setup/lib"
+cp "$SCRIPT_DIR/setup/modules/10-dotfiles.sh" "$SCRIPT_DIR/setup/modules/99-uninstall.sh" "$TEMP_MOD_REPO/setup/modules/"
+chmod +x "$TEMP_MOD_REPO/setup/modules/10-dotfiles.sh" "$TEMP_MOD_REPO/setup/modules/99-uninstall.sh"
 printf 'export _HS_MOD_SHELL_OK=1\n' > "$TEMP_MOD_REPO/dotfiles/.config/shell/env-defaults.sh"
 printf 'return {}\n' > "$TEMP_MOD_REPO/dotfiles/.config/nvim/lua/solarized/options.lua"
 ln -s "$TEMP_MOD_REPO/dotfiles/.config/retired-mod" "$TEMP_MOD_HOME/.config/retired-mod"
-HOME="$TEMP_MOD_HOME" XDG_CONFIG_HOME="$TEMP_MOD_HOME/.config" XDG_CACHE_HOME="$TEMP_MOD_HOME/.cache" "$TEMP_MOD_REPO/modules/10-dotfiles.sh" >/dev/null 2>&1
+HOME="$TEMP_MOD_HOME" XDG_CONFIG_HOME="$TEMP_MOD_HOME/.config" XDG_CACHE_HOME="$TEMP_MOD_HOME/.cache" "$TEMP_MOD_REPO/setup/modules/10-dotfiles.sh" >/dev/null 2>&1
 if [ -L "$TEMP_MOD_HOME/.config/shell" ] && \
    [ -f "$TEMP_MOD_HOME/.config/shell/env-defaults.sh" ] && \
    [ -f "$TEMP_MOD_HOME/.config/nvim/lua/solarized/options.lua" ] && \
    [ ! -L "$TEMP_MOD_HOME/.config/retired-mod" ]; then
-    HOME="$TEMP_MOD_HOME" XDG_CONFIG_HOME="$TEMP_MOD_HOME/.config" XDG_CACHE_HOME="$TEMP_MOD_HOME/.cache" "$TEMP_MOD_REPO/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
+    HOME="$TEMP_MOD_HOME" XDG_CONFIG_HOME="$TEMP_MOD_HOME/.config" XDG_CACHE_HOME="$TEMP_MOD_HOME/.cache" "$TEMP_MOD_REPO/setup/modules/99-uninstall.sh" dotfiles >/dev/null 2>&1
     if [ ! -L "$TEMP_MOD_HOME/.config/shell" ] && [ ! -L "$TEMP_MOD_HOME/.config/nvim" ]; then
         pass "modules/10-dotfiles.sh and modules/99-uninstall.sh mirror, prune dangling symlinks, and cleanly unlink modular .config/shell and .config/nvim/lua subtrees"
     else

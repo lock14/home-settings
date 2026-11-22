@@ -14,13 +14,13 @@ echo "========================================"
 
 # Test 1: Module and CLI script syntax check
 echo -e "\n[1/8] Checking module and bin syntax..."
-assert_script_syntax "$SCRIPT_DIR/modules/20-bin.sh" "modules/20-bin.sh"
+assert_script_syntax "$SCRIPT_DIR/setup/modules/20-bin.sh" "setup/modules/20-bin.sh"
 
 for f in "$SCRIPT_DIR"/bin/*; do
     [ -f "$f" ] && assert_script_syntax "$f" "$(basename "$f")"
 done
 
-for py_mod in "$SCRIPT_DIR"/bin/*_lib/*.py; do
+for py_mod in "$SCRIPT_DIR"/libexec/*_lib/*.py; do
     [ -f "$py_mod" ] && assert_script_syntax "$py_mod" "${py_mod#"$SCRIPT_DIR"/}"
 done
 
@@ -50,7 +50,7 @@ trap cleanup_test_bin EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 
-HOME="$TEMP_HOME" "$SCRIPT_DIR/modules/20-bin.sh" >/dev/null 2>&1
+HOME="$TEMP_HOME" "$SCRIPT_DIR/setup/modules/20-bin.sh" >/dev/null 2>&1
 
 for f in "$SCRIPT_DIR"/bin/*; do
     if [ -f "$f" ]; then
@@ -69,7 +69,7 @@ TEMP_SHIM_HOME=$(mktemp -d)
 (
     PATH="$TEMP_SHIM_DIR:$PATH"
     HOME="$TEMP_SHIM_HOME"
-    "$SCRIPT_DIR/modules/20-bin.sh" >/dev/null 2>&1
+    "$SCRIPT_DIR/setup/modules/20-bin.sh" >/dev/null 2>&1
 )
 
 assert_symlink "$TEMP_SHIM_HOME/.local/bin/fd" "$TEMP_SHIM_DIR/fdfind" "Created fd shim for fdfind"
@@ -79,7 +79,7 @@ rm -rf "$TEMP_SHIM_DIR" "$TEMP_SHIM_HOME"
 
 # Test 4: Uninstallation of binaries and shims
 echo -e "\n[4/8] Testing binaries uninstallation..."
-HOME="$TEMP_HOME" "$SCRIPT_DIR/modules/99-uninstall.sh" bin >/dev/null 2>&1
+HOME="$TEMP_HOME" "$SCRIPT_DIR/setup/modules/99-uninstall.sh" bin >/dev/null 2>&1
 
 all_bin_unlinked=true
 for f in "$SCRIPT_DIR"/bin/*; do
@@ -96,29 +96,27 @@ if [ "$all_bin_unlinked" = true ]; then
     pass "All managed user binaries successfully removed by uninstaller"
 fi
 
-# Verify modules/20-bin.sh and modules/99-uninstall.sh skip package subdirectories (bin/ide_lib, bin/theme_lib)
+# Verify setup/modules/20-bin.sh and setup/modules/99-uninstall.sh keep bin/ pure and ignore any non-file subdirectories
 TEMP_MOD_BIN_REPO="$(make_sandbox_dir)"
 TEMP_MOD_BIN_HOME="$(make_sandbox_dir)"
-mkdir -p "$TEMP_MOD_BIN_REPO/modules" "$TEMP_MOD_BIN_REPO/bin/ide_lib" "$TEMP_MOD_BIN_REPO/bin/theme_lib"
-ln -s "$SCRIPT_DIR/lib" "$TEMP_MOD_BIN_REPO/lib"
-cp "$SCRIPT_DIR/modules/20-bin.sh" "$SCRIPT_DIR/modules/99-uninstall.sh" "$TEMP_MOD_BIN_REPO/modules/"
-chmod +x "$TEMP_MOD_BIN_REPO/modules/20-bin.sh" "$TEMP_MOD_BIN_REPO/modules/99-uninstall.sh"
+mkdir -p "$TEMP_MOD_BIN_REPO/setup/modules" "$TEMP_MOD_BIN_REPO/bin/nested_dir"
+ln -s "$SCRIPT_DIR/setup/lib" "$TEMP_MOD_BIN_REPO/setup/lib"
+cp "$SCRIPT_DIR/setup/modules/20-bin.sh" "$SCRIPT_DIR/setup/modules/99-uninstall.sh" "$TEMP_MOD_BIN_REPO/setup/modules/"
+chmod +x "$TEMP_MOD_BIN_REPO/setup/modules/20-bin.sh" "$TEMP_MOD_BIN_REPO/setup/modules/99-uninstall.sh"
 write_mock_bin "$TEMP_MOD_BIN_REPO/bin" "ide" "exit 0"
 write_mock_bin "$TEMP_MOD_BIN_REPO/bin" "theme" "exit 0"
-printf '# internal pkg\n' > "$TEMP_MOD_BIN_REPO/bin/ide_lib/__init__.py"
-printf '# internal pkg\n' > "$TEMP_MOD_BIN_REPO/bin/theme_lib/__init__.py"
-HOME="$TEMP_MOD_BIN_HOME" "$TEMP_MOD_BIN_REPO/modules/20-bin.sh" >/dev/null 2>&1
+printf '# non-executable subdir file\n' > "$TEMP_MOD_BIN_REPO/bin/nested_dir/helper.txt"
+HOME="$TEMP_MOD_BIN_HOME" "$TEMP_MOD_BIN_REPO/setup/modules/20-bin.sh" >/dev/null 2>&1
 if [ -L "$TEMP_MOD_BIN_HOME/.local/bin/ide" ] && [ -L "$TEMP_MOD_BIN_HOME/.local/bin/theme" ] && \
-   [ ! -e "$TEMP_MOD_BIN_HOME/.local/bin/ide_lib" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/ide_lib" ] && \
-   [ ! -e "$TEMP_MOD_BIN_HOME/.local/bin/theme_lib" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/theme_lib" ]; then
-    HOME="$TEMP_MOD_BIN_HOME" "$TEMP_MOD_BIN_REPO/modules/99-uninstall.sh" bin >/dev/null 2>&1
+   [ ! -e "$TEMP_MOD_BIN_HOME/.local/bin/nested_dir" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/nested_dir" ]; then
+    HOME="$TEMP_MOD_BIN_HOME" "$TEMP_MOD_BIN_REPO/setup/modules/99-uninstall.sh" bin >/dev/null 2>&1
     if [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/ide" ] && [ ! -L "$TEMP_MOD_BIN_HOME/.local/bin/theme" ]; then
-        pass "modules/20-bin.sh and modules/99-uninstall.sh link and clean top-level executables while skipping bin/*_lib package subdirectories"
+        pass "setup/modules/20-bin.sh and setup/modules/99-uninstall.sh link and clean top-level executables while ignoring subdirectories"
     else
-        fail "modules/99-uninstall.sh with bin/*_lib" "Expected ide and theme symlinks to be removed"
+        fail "setup/modules/99-uninstall.sh bin cleanup" "Expected ide and theme symlinks to be removed"
     fi
 else
-    fail "modules/20-bin.sh with bin/*_lib" "Expected only regular bin/* executables linked without bin/*_lib directories"
+    fail "setup/modules/20-bin.sh bin linking" "Expected only regular bin/* executables linked without nested directories"
 fi
 
 # Test 5: bin/sum process substitution and whitespace-padded delimited columns
@@ -237,7 +235,7 @@ print("OK")
 PY
 )"
 IDE_KEYS_DEFS=0
-for _ide_src_f in "$SCRIPT_DIR/bin/ide" "$SCRIPT_DIR"/bin/ide_lib/*.py; do
+for _ide_src_f in "$SCRIPT_DIR/bin/ide" "$SCRIPT_DIR"/libexec/ide_lib/*.py; do
     [ -f "$_ide_src_f" ] || continue
     _cnt="$(grep -Ec '^[[:space:]]*(show_keys_cheatsheet\(\)[[:space:]]*\{|def[[:space:]]+show_keys_cheatsheet\()' "$_ide_src_f" || true)"
     IDE_KEYS_DEFS=$((IDE_KEYS_DEFS + _cnt))
@@ -650,8 +648,10 @@ import importlib, os, pkgutil, re, sys
 sys.dont_write_bytecode = True
 ide_file, deep_dir, wide_base = sys.argv[1], sys.argv[2], sys.argv[3]
 ide_bin_dir = os.path.dirname(os.path.abspath(ide_file))
-if ide_bin_dir not in sys.path:
-    sys.path.insert(0, ide_bin_dir)
+ide_libexec_dir = os.path.join(os.path.dirname(ide_bin_dir), "libexec")
+for _pdir in (ide_libexec_dir, ide_bin_dir):
+    if _pdir not in sys.path:
+        sys.path.insert(0, _pdir)
 dir128 = os.path.join(wide_base, "exact_128")
 for i in range(128):
     os.makedirs(os.path.join(dir128, f"sub_{i:03d}"), exist_ok=True)
@@ -660,7 +660,7 @@ with open(leaf128, "w", encoding="utf-8") as fh:
     fh.write("ok\n")
 
 resolve_fn = None
-ide_lib_dir = os.path.join(ide_bin_dir, "ide_lib")
+ide_lib_dir = os.path.join(ide_libexec_dir, "ide_lib")
 if os.path.isdir(ide_lib_dir):
     pkg = importlib.import_module("ide_lib")
     resolve_fn = getattr(pkg, "resolve_workspace_file", None)

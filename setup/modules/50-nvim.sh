@@ -5,12 +5,13 @@
 set -euo pipefail
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
+SETUP_DIR="$(cd "$MODULE_DIR/.." && pwd)"
+REPO_DIR="$(cd "$SETUP_DIR/.." && pwd)"
 
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/log.sh"
+. "$SETUP_DIR/lib/log.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/os.sh"
+. "$SETUP_DIR/lib/os.sh"
 
 DRY_RUN="${DRY_RUN:-false}"
 LOCKFILE="$REPO_DIR/dotfiles/.config/nvim/lazy-lock.json"

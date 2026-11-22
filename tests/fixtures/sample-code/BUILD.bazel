@@ -55,7 +55,7 @@ filegroup(
 proto_library(
     name = "telemetry_proto",
     srcs = ["sample.proto"],
-    strip_import_prefix = "/sample-code",
+    strip_import_prefix = "/tests/fixtures/sample-code",
 )
 
 telemetry_schema_library(

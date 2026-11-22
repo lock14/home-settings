@@ -89,7 +89,7 @@ sys.exit(run_gnome_helper_cli(sys.argv[2:]))
 PY
 
 run_gnome_helper() {
-    PYTHONSAFEPATH=1 "$PY_BIN" -B -c "$GNOME_HELPER_PY" "$SCRIPT_DIR" "$@"
+    PYTHONSAFEPATH=1 "$PY_BIN" -B -c "$GNOME_HELPER_PY" "$REPO_DIR/libexec" "$@"
 }
 
 THEME_BLOB_FILE="$(mktemp)"

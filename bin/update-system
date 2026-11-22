@@ -18,13 +18,13 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_PATH")" && pwd)"
 REPO_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/log.sh"
+. "$REPO_DIR/setup/lib/log.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/os.sh"
+. "$REPO_DIR/setup/lib/os.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/pkg.sh"
+. "$REPO_DIR/setup/lib/pkg.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/shell-env.sh"
+. "$REPO_DIR/setup/lib/shell-env.sh"
 
 # Configuration flags
 DRY_RUN=false

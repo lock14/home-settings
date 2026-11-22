@@ -232,7 +232,7 @@ exit 1
 EOF
 chmod +x "$MOCK_CURL_DIR/curl"
 
-if PATH="$MOCK_CURL_DIR:$PATH" HOME="$FAIL_FONT_HOME" XDG_DATA_HOME="$FAIL_FONT_HOME/.local/share" HOME_SETTINGS_FONT_CACHE="$FAIL_FONT_CACHE" "$SCRIPT_DIR/modules/30-fonts.sh" >/dev/null 2>&1; then
+if PATH="$MOCK_CURL_DIR:$PATH" HOME="$FAIL_FONT_HOME" XDG_DATA_HOME="$FAIL_FONT_HOME/.local/share" HOME_SETTINGS_FONT_CACHE="$FAIL_FONT_CACHE" "$SCRIPT_DIR/setup/modules/30-fonts.sh" >/dev/null 2>&1; then
     fail "modules/30-fonts.sh failure handling" "Expected non-zero exit when curl fails"
 else
     tmp_leftovers=("$FAIL_FONT_CACHE"/*.tmp*)
@@ -261,7 +261,7 @@ done
 exit 0
 EOF
 chmod +x "$TRUNC_FONT_BIN/curl"
-if PATH="$TRUNC_FONT_BIN:$PATH" HOME="$TRUNC_FONT_HOME" XDG_DATA_HOME="$TRUNC_FONT_HOME/.local/share" HOME_SETTINGS_FONT_CACHE="$TRUNC_FONT_CACHE" "$SCRIPT_DIR/modules/30-fonts.sh" >/dev/null 2>&1; then
+if PATH="$TRUNC_FONT_BIN:$PATH" HOME="$TRUNC_FONT_HOME" XDG_DATA_HOME="$TRUNC_FONT_HOME/.local/share" HOME_SETTINGS_FONT_CACHE="$TRUNC_FONT_CACHE" "$SCRIPT_DIR/setup/modules/30-fonts.sh" >/dev/null 2>&1; then
     fail "modules/30-fonts.sh truncated font check" "Expected non-zero exit when extracted font is smaller than MIN_FONT_BYTES"
 else
     pass "modules/30-fonts.sh exits non-zero when any font in FONTS is missing or smaller than MIN_FONT_BYTES after extraction"

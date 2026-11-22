@@ -120,7 +120,7 @@ cat << 'EOF' > "$MOCK_BIN/gh"
 exit 1
 EOF
 chmod +x "$MOCK_BIN/gh"
-if PATH="$MOCK_BIN:$PATH" SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=false "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1; then
+if PATH="$MOCK_BIN:$PATH" SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=false "$SCRIPT_DIR/setup/modules/60-shell.sh" >/dev/null 2>&1; then
     fail "modules/60-shell.sh failing CLI completion" "Expected non-zero exit when gh completion fails"
 else
     tmp_comp_left=("$TEMP_HOME/.zsh/completions"/_gh.tmp.*)
@@ -136,7 +136,7 @@ cat << 'EOF' > "$MOCK_BIN/gh"
 exit 0
 EOF
 chmod +x "$MOCK_BIN/gh"
-if PATH="$MOCK_BIN:$PATH" SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=false "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1; then
+if PATH="$MOCK_BIN:$PATH" SKIP_ZSH=true SKIP_BASH=true SKIP_COMPLETIONS=false "$SCRIPT_DIR/setup/modules/60-shell.sh" >/dev/null 2>&1; then
     fail "modules/60-shell.sh zero-byte CLI completion" "Expected non-zero exit when gh completion outputs 0 bytes"
 else
     tmp_comp_left=("$TEMP_HOME/.zsh/completions"/_gh.tmp.*)

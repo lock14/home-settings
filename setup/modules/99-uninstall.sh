@@ -4,16 +4,17 @@
 set -euo pipefail
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
+SETUP_DIR="$(cd "$MODULE_DIR/.." && pwd)"
+REPO_DIR="$(cd "$SETUP_DIR/.." && pwd)"
 
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/log.sh"
+. "$SETUP_DIR/lib/log.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/os.sh"
+. "$SETUP_DIR/lib/os.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/symlink.sh"
+. "$SETUP_DIR/lib/symlink.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/shell-env.sh"
+. "$SETUP_DIR/lib/shell-env.sh"
 
 OS="${OS:-$(detect_os)}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -72,7 +73,7 @@ uninstall_dotfiles() {
         unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/themes" "$xdg_config/ghostty"
     fi
 
-    # Remove # home-settings source blocks added to ~/.zshrc and ~/.bashrc by modules/60-shell.sh
+    # Remove # home-settings source blocks added to ~/.zshrc and ~/.bashrc by setup/modules/60-shell.sh
     remove_shell_rc_hook "$HOME/.zshrc" ".zshrc-addendum"
     remove_shell_rc_hook "$HOME/.bashrc" ".bashrc-addendum"
 
