@@ -16,6 +16,10 @@ M.parsers = {
 
 local css_pinned_rev = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032"
 local lean_pinned_rev = "916c44f4d89c970f66dd34a49e7ce848f4d29e72"
+M.pinned_revs = {
+    css = css_pinned_rev,
+    lean = lean_pinned_rev,
+}
 local lean_parser_spec = {
     install_info = {
         url = "https://github.com/Julian/tree-sitter-lean",

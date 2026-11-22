@@ -26,7 +26,7 @@ import time
 
 repo_dir = sys.argv[1]
 ide_entry = os.path.join(repo_dir, "bin", "ide")
-ide_lib_dir = os.path.join(repo_dir, "bin", "ide_lib")
+ide_lib_dir = os.path.join(repo_dir, "libexec", "ide_lib")
 
 # 1. Verify thin bootstrapper and expected cohesive domain modules
 with open(ide_entry, encoding="utf-8") as fh:
@@ -95,7 +95,7 @@ for mname in sorted(dag):
     _check_dag(mname, [])
 
 # 3. Direct in-process unit checks of reusable ide_lib domain functions (zero tmux subprocesses)
-sys.path.insert(0, os.path.join(repo_dir, "bin"))
+sys.path.insert(0, os.path.join(repo_dir, "libexec"))
 from ide_lib import TMUX_SEP, USAGE_TEXT
 from ide_lib.constants import is_live_socket, sanitize_agent_msg, sanitize_http_url, visible_width
 from ide_lib.fleet import format_attn_summary
@@ -639,6 +639,7 @@ subprocess.run(
         ),
         ide_entry,
     ],
+    env={k: v for k, v in os.environ.items() if k != "PYTHONPYCACHEPREFIX"},
     check=True,
 )
 assert not os.path.exists(os.path.join(ide_lib_dir, "__pycache__")), "bin/ide_lib/__pycache__ must not be created"
@@ -691,7 +692,7 @@ base_env = {}
 
 def run_cmd(args, env=None, input_text=None, check=True, cwd=None):
     e = dict(base_env if env is None else env)
-    return subprocess.run(
+    r = subprocess.run(
         args,
         input=input_text,
         stdout=subprocess.PIPE,
@@ -699,8 +700,16 @@ def run_cmd(args, env=None, input_text=None, check=True, cwd=None):
         text=True,
         env=e,
         cwd=cwd,
-        check=check,
+        check=False,
     )
+    if check and r.returncode != 0:
+        diag = ""
+        if args[:2] == ["tmux", "switch-client"]:
+            cl_diag = subprocess.run(["tmux", "list-clients", "-F", "#{client_name} sess=#{session_name} flags=#{client_flags}"], env={**base_env, "TMUX": ""}, capture_output=True, text=True).stdout
+            s_diag = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name} att=#{session_attached}"], env={**base_env, "TMUX": ""}, capture_output=True, text=True).stdout
+            diag = f" | clients={cl_diag!r} sessions={s_diag!r}"
+        raise RuntimeError(f"Command {args} failed rc={r.returncode} stderr={r.stderr!r} stdout={r.stdout!r}{diag}")
+    return r
 
 def tmux(*args, check=False):
     return run_cmd(["tmux", *args], env={**base_env, "TMUX": "", "TMUX_PANE": ""}, check=check)
@@ -1473,7 +1482,7 @@ try:
 
     # 8. Deterministic Hook-Only AI Lifecycle State, Zero Heuristic Invention, FIFO --next-attention, Parked AI Preservation, Stale-Hook SHELL Guard, and Top-Bar Width Invariance
     import glob as _glob
-    _ide_py_files = sorted(_glob.glob(os.path.join(repo_dir, "bin", "ide_lib", "*.py")))
+    _ide_py_files = sorted(_glob.glob(os.path.join(repo_dir, "libexec", "ide_lib", "*.py")))
     _combined_ide_src = "\n".join(
         open(p, encoding="utf-8").read() for p in [os.path.realpath(ide_bin), *_ide_py_files]
     )
@@ -2815,7 +2824,7 @@ try:
     # Ensure bin/ide uses printable/tab-based _TMUX_SEP and survives C0-octal-escaped tmux format output
     # even when @ide_workdir contains literal tab characters.
     ide_full_src = open(real_ide_path, encoding="utf-8").read()
-    constants_src = open(os.path.join(repo_dir, "bin", "ide_lib", "constants.py"), encoding="utf-8").read()
+    constants_src = open(os.path.join(repo_dir, "libexec", "ide_lib", "constants.py"), encoding="utf-8").read()
     assert '_TMUX_SEP = "\\t__IDE_SEP__\\t"' in constants_src, "missing printable/tab _TMUX_SEP delimiter in bin/ide_lib/constants.py"
     real_tmux_bin = shutil.which("tmux")
     assert real_tmux_bin, "tmux binary not found on PATH"
@@ -4669,7 +4678,7 @@ try:
             spaced_ide_bin = os.path.join(spaced_dir, "ide")
             shutil.copy2(ide_src, spaced_ide_bin)
             os.chmod(spaced_ide_bin, 0o755)
-            shutil.copytree(os.path.join(repo_dir, "bin", "ide_lib"), os.path.join(spaced_dir, "ide_lib"), dirs_exist_ok=True)
+            shutil.copytree(os.path.join(repo_dir, "libexec", "ide_lib"), os.path.join(os.path.dirname(spaced_dir), "libexec", "ide_lib"), dirs_exist_ok=True)
 
             # Corrupt int-alpha's @ide_ai_pane to point to gamma-ws's Editor pane: switcher must NOT steal gamma-ws's pane!
             gamma_ed_pane = ws_gamma["ed"]

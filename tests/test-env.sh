@@ -555,15 +555,15 @@ PY
             mkdir -p "$bash_stale_srv"
             timeout 5 nvim --headless --server "$bash_test_sock" --remote-expr "luaeval('(function() vim.fn.chdir(\"$bash_stale_srv\"); vim.env.PWD = \"$SCRIPT_DIR\" end)()')" </dev/null >/dev/null 2>&1 || true
             rmdir "$bash_stale_srv" 2>/dev/null || true
-            (cd "$SCRIPT_DIR/modules" && TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
+            (cd "$SCRIPT_DIR/setup/modules" && TMUX="" NVIM_IDE_SOCKET="$bash_test_sock" v +2 "00-packages.sh" >/dev/null 2>&1) || true
             bash_remote_state="$(timeout 5 nvim --headless --server "$bash_test_sock" --remote-expr 'expand("%:p") . "|" . line(".") . "|" . luaeval("(vim.uv or vim.loop).cwd() or \"nil\"")' </dev/null 2>/dev/null || true)"
             kill "$bash_nvim_pid" 2>/dev/null || true
             wait "$bash_nvim_pid" 2>/dev/null || true
             rm -f "$bash_test_sock"
-            if [ "$bash_remote_state" = "$SCRIPT_DIR/modules/00-packages.sh|2|$SCRIPT_DIR" ] && [[ "$ver_out" == NVIM* ]]; then
+            if [ "$bash_remote_state" = "$SCRIPT_DIR/setup/modules/00-packages.sh|2|$SCRIPT_DIR" ] && [[ "$ver_out" == NVIM* ]]; then
                 echo "PASS:Standalone .bashrc-addendum v() heals stale server CWD and resolves relative paths and +line arguments over RPC, and passes --version to local nvim"
             else
-                echo "FAIL:Standalone v() RPC:Expected '$SCRIPT_DIR/modules/00-packages.sh|2|$SCRIPT_DIR' and NVIM version, got state='$bash_remote_state' ver='$ver_out'"
+                echo "FAIL:Standalone v() RPC:Expected '$SCRIPT_DIR/setup/modules/00-packages.sh|2|$SCRIPT_DIR' and NVIM version, got state='$bash_remote_state' ver='$ver_out'"
             fi
         else
             kill "$bash_nvim_pid" 2>/dev/null || true
@@ -580,12 +580,12 @@ PY
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux -f /dev/null new-session -d -s bg_sess -c "$SCRIPT_DIR" "sleep 30"
             bg_pane="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux list-panes -t '=bg_sess:' -F '#{pane_id}' | head -n 1)"
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=bg_sess:' @ide_socket "$bg_nvim_sock"
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=bg_sess:' @ide_initial_root "$SCRIPT_DIR/modules"
+            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=bg_sess:' @ide_initial_root "$SCRIPT_DIR/setup/modules"
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux new-session -d -s fg_sess -c "/tmp" "sleep 30"
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=fg_sess:' @ide_socket "$multisess_dir/wrong-fg.sock"
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux set-option -t '=fg_sess:' @ide_initial_root "/tmp"
             tmux_env="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux display-message -p -t '=bg_sess:' '#{socket_path},#{pid},0')"
-            (cd "$SCRIPT_DIR/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
+            (cd "$SCRIPT_DIR/setup/modules" && TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="$tmux_env" TMUX_PANE="$bg_pane" NVIM_IDE_SOCKET="" IDE_SESSION="" v +3 "10-dotfiles.sh" >/dev/null 2>&1) || true
             bg_remote_state="$(timeout 5 nvim --headless --server "$bg_nvim_sock" --remote-expr 'expand("%:p") . "|" . line(".")' </dev/null 2>/dev/null || true)"
             ext_check_file="$multisess_dir/ext-check.txt"
             printf 'before_edit\n' > "$ext_check_file"
@@ -601,10 +601,10 @@ PY
             wait "$bg_nvim_pid" 2>/dev/null || true
             TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
-            if [ "$bg_remote_state" = "$SCRIPT_DIR/modules/10-dotfiles.sh|3" ] && [ "$bg_checktime_line" = "after_edit" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
+            if [ "$bg_remote_state" = "$SCRIPT_DIR/setup/modules/10-dotfiles.sh|3" ] && [ "$bg_checktime_line" = "after_edit" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/setup/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/setup/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
                 echo "PASS:Standalone .bashrc-addendum v() and icd() target caller TMUX_PANE or \$0 session ID, trigger checktime on external edits, and verify server PID in multi-session tmux"
             else
-                echo "FAIL:Standalone v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/modules/10-dotfiles.sh|3', 'after_edit', '$SCRIPT_DIR/modules', and 'rejected', got state='$bg_remote_state' checktime='$bg_checktime_line' pwd='$icd_reset_pwd' sid_pwd='$sid_reset_pwd' bad_pid='$bad_pid_target'"
+                echo "FAIL:Standalone v()/icd() multi-session targeting:Expected '$SCRIPT_DIR/setup/modules/10-dotfiles.sh|3', 'after_edit', '$SCRIPT_DIR/setup/modules', and 'rejected', got state='$bg_remote_state' checktime='$bg_checktime_line' pwd='$icd_reset_pwd' sid_pwd='$sid_reset_pwd' bad_pid='$bad_pid_target'"
             fi
         fi
     fi

@@ -49,11 +49,8 @@ cd home-settings
 # User-space installation (dotfiles, bin, fonts, tools, shell) without sudo
 make install
 
-# Full machine provisioning with native OS packages (requires sudo; alias: make setup)
+# Full machine provisioning with native OS packages (requires sudo)
 make system
-
-# Full turnkey bootstrap for a brand-new machine
-make bootstrap
 
 # Clean uninstallation of managed dotfiles, binaries, and fonts
 make uninstall
@@ -61,10 +58,10 @@ make uninstall
 # Run complete test suite (500+ tests across 10 modules)
 make test
 
-# Run ShellCheck, shell syntax, and documentation checks
+# Run ShellCheck, shell syntax, Python AST, and documentation checks
 make lint
 
-# Run both lint and test suites (alias: make all)
+# Run both lint and test suites
 make check
 
 # Display available Makefile targets (default when running bare make)
@@ -80,7 +77,7 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 ./setup.sh --system
 
 # User-space only (equivalent to make install)
-./setup.sh --dotfiles-only
+./setup.sh --user
 
 # Preview changes without modifying the system
 ./setup.sh --dry-run
@@ -93,9 +90,9 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 | Option | Default | Description |
 | :--- | :--- | :--- |
 | `(default)` | enabled | Full machine setup: native OS packages via `apt`, `dnf`, or `brew` plus user environment (requires `sudo`) |
-| `--dotfiles-only` | disabled | Configure user dotfiles, fonts, and tools only (no `sudo` required) |
+| `--user` | disabled | Configure user dotfiles, utilities, fonts, and tools only (no `sudo` required) |
+| `--dotfiles-only` | disabled | Alias for `--user` (user-space setup without OS package provisioning) |
 | `--system` | disabled | Full turnkey setup with native packages (alias for default) |
-| `--bootstrap` | disabled | Full new machine bootstrap (base packages, shell, tools, and dotfiles) |
 | `--system-only` | disabled | Provision OS packages and CLI runtimes only |
 | `--dry-run` | disabled | Preview actions without modifying the system |
 | `--uninstall` | disabled | Uninstall all managed dotfiles, fonts, and user binaries |
@@ -132,26 +129,32 @@ Run `./setup.sh` directly to pass granular component flags or preview changes in
 
 ## Architecture overview
 
-The repository is organized into a thin CLI orchestrator (`setup.sh`), stage-based provisioning modules (`modules/`) and shared shell libraries (`lib/`), declaratively mirrored user configurations (`dotfiles/`), standalone CLI utilities backed by modular Python packages (`bin/`), standalone syntax and color definitions (`syntaxes/` and `colors/`), and an automated verification suite (`tests/`):
+The repository separates user-facing entrypoints (`setup.sh` and `Makefile`), standalone executables (`bin/`) and their private Python domain packages (`libexec/`), installer stage runners and shell libraries (`setup/`), declaratively mirrored user configurations (`dotfiles/`), standalone syntax and color definitions (`syntaxes/` and `colors/`), architectural specifications (`docs/`), and an automated verification suite (`tests/`):
 
 ```text
 home-settings/
-├── setup.sh                         # Modular orchestrator CLI
-├── Makefile                         # Lifecycle targets (install, system, uninstall, test, lint)
+├── setup.sh                         # Zero-prerequisite provisioning CLI and remote bootstrapper
+├── Makefile                         # Declarative task runner (install, system, uninstall, lint, test, check)
 ├── .mise.toml                       # Mise polyglot toolchains (Java LTS, Node LTS, latest Go, Python, Rust, Lean 4, and Terraform)
-├── AGENTS.md                        # Architecture principles and agent directives
+├── AGENTS.md                        # Core architecture invariants and agent workflow guide
 │
-├── bin/                             # Standalone Unix utilities (symlinked to ~/.local/bin/)
+├── bin/                             # Pure standalone Unix utilities (symlinked 1:1 to ~/.local/bin/)
 │   ├── gen-passwd                   # Password generator with custom character sets
 │   ├── gnome-terminal-solarized     # GNOME Terminal TrueColor profile provisioner
 │   ├── ide                          # Tmux, Neovim, and AI Agent (agy, claude, codex) IDE workspace launcher
-│   ├── ide_lib/                     # Python domain package backing bin/ide (layout, fleet, tmux, git, RPC, links)
 │   ├── macos-terminal-solarized     # macOS Terminal.app TrueColor profile provisioner
 │   ├── repeat-until-success         # Command retry loop with configurable delay
 │   ├── sum                          # High-performance AWK number summation and stats
 │   ├── theme                        # Multi-theme color scheme manager with interactive fzf preview
-│   ├── theme_lib/                   # Python package backing bin/theme and terminal profile provisioners
 │   └── update-system                # Cross-platform system package, Snap, Flatpak, and toolchain updater
+│
+├── libexec/                         # Private Python 3.9+ packages backing bin/ utilities
+│   ├── ide_lib/                     # Domain package backing bin/ide (layout, fleet, tmux, git, RPC, links)
+│   └── theme_lib/                   # Domain package backing bin/theme and terminal profile provisioners
+│
+├── setup/                           # Provisioning engine internals
+│   ├── lib/                         # Shared installer Bash libraries (log, os, pkg, shell-env, symlink)
+│   └── modules/                     # Stage-based provisioning runners (00-packages.sh through 99-uninstall.sh)
 │
 ├── dotfiles/                        # Declarative mirror of $HOME (auto-discovered and linked)
 │   ├── .aliases                     # Full Git suite, CLI, and Terraform shortcuts (also auto-loads ~/.aliases.d/*.sh)
@@ -182,24 +185,6 @@ home-settings/
 │       ├── shell/                   # Modular Bash, Zsh, completion, and Powerlevel10k runtime scripts
 │       └── tealdeer/config.toml     # Tealdeer tldr cheatsheet viewer with TrueColor styling
 │
-├── lib/                             # Shared helper libraries
-│   ├── log.sh                       # Terminal logging, dry-run runner, and atomic file helpers
-│   ├── os.sh                        # Operating system, architecture, and PATH helpers
-│   ├── pkg.sh                       # Cross-platform native, Snap, and desktop package primitives
-│   ├── shell-env.sh                 # Shell RC hooks, Oh-My-Zsh sync, and Zsh completion generator
-│   └── symlink.sh                   # Safe atomic symlinking with directory backup support
-│
-├── modules/                         # Stage-based single-responsibility modules
-│   ├── 00-packages.sh               # System packages, database servers, and desktop apps
-│   ├── 10-dotfiles.sh               # Declarative dotfile auto-discovery and mirroring
-│   ├── 20-bin.sh                    # User binaries and Debian shims (fd, bat)
-│   ├── 30-fonts.sh                  # MesloLGS Nerd Font Mono (v3) downloader with disk cache
-│   ├── 40-mise.sh                   # Mise runtime manager and polyglot toolchains
-│   ├── 50-nvim.sh                   # Headless Neovim plugin lockfile reconciliation
-│   ├── 60-shell.sh                  # Oh-My-Zsh, plugins, shellrc hooks, completions
-│   ├── 70-terminal.sh               # Terminal emulator profile provisioning (GNOME Terminal and macOS)
-│   └── 99-uninstall.sh              # Clean uninstallation of managed components
-│
 ├── colors/                          # 24-bit TrueColor themes and terminal profiles
 │   ├── themes/*.theme                    # Canonical 16-slot palette definitions for all 17 built-in themes
 │   ├── *-TrueColor.tmTheme               # TextMate and bat TrueColor themes for all 17 built-in palettes
@@ -207,63 +192,28 @@ home-settings/
 │   └── gnome-terminal-solarized.dconf    # GNOME Terminal Solarized Dark dconf profile
 │
 ├── syntaxes/                        # Enhanced Sublime syntax packages for bat (37 languages)
-│   ├── Bash.sublime-syntax          # Bash and POSIX shell syntax
-│   ├── C.sublime-syntax             # Modern C23 syntax with granular declaration scopes
-│   ├── C++.sublime-syntax           # Modern C++20 and C++23 syntax with concept and template support
-│   ├── CSharp.sublime-syntax        # Modern C# 12 and 13 syntax (records, primary constructors, LINQ)
-│   ├── CSS.sublime-syntax           # Modern CSS3 and Container Queries syntax
-│   ├── Clojure.sublime-syntax       # Clojure syntax (namespaces, macros, protocols, keywords)
-│   ├── Diff.sublime-syntax          # Standalone Git and Unified Diff syntax for bat
-│   ├── Dockerfile.sublime-syntax    # Multi-stage Dockerfile and Containerfile syntax
-│   ├── Elixir.sublime-syntax        # Elixir syntax (GenServer, @spec, @doc, pipe operators, atoms)
-│   ├── Go.sublime-syntax            # Go syntax with calm Base0 qualifiers and struct tags
-│   ├── GraphQL.sublime-syntax       # Declarative GraphQL schema and query syntax
-│   ├── HTML.sublime-syntax          # HTML5 syntax with attribute-guarded script injections
-│   ├── Haskell.sublime-syntax       # GHC2021 Haskell syntax (pragmas, typeclasses, GADTs, do)
-│   ├── JSON.sublime-syntax          # JSON and JSONC declarative hierarchy syntax
-│   ├── Java.sublime-syntax          # Modern Java 25 LTS (records, pattern matching, annotations)
-│   ├── JavaProperties.sublime-syntax# Java .properties configuration syntax
-│   ├── Kotlin.sublime-syntax        # Modern Kotlin 2.x (value classes, coroutines, annotations)
-│   ├── Lean.sublime-syntax          # Lean 4 theorem prover and functional programming syntax
-│   ├── Lua.sublime-syntax           # Modern Lua 5.4 and LuaJIT syntax (<const>, metamethods)
-│   ├── Makefile.sublime-syntax      # GNU Make syntax (directives, targets, automatic variables)
-│   ├── Markdown.sublime-syntax      # Semantic Architecture Markdown syntax
-│   ├── OCaml.sublime-syntax         # OCaml 5 syntax (modules, functors, polymorphic variants)
-│   ├── Protobuf.sublime-syntax      # Protocol Buffers (.proto) schema syntax
-│   ├── ProtobufText.sublime-syntax  # Protocol Buffers Text Format (.textproto, .pbtxt) syntax
-│   ├── Python.sublime-syntax        # Modern Python 3.12+ syntax (type statements, match and case)
-│   ├── Rego.sublime-syntax          # Open Policy Agent (OPA Rego v1) policy syntax
-│   ├── Ruby.sublime-syntax          # Modern Ruby 3.3+ syntax (Data.define, pattern matching)
-│   ├── Rust.sublime-syntax          # Rust syntax with unified attributes and lifetimes
-│   ├── SQL.sublime-syntax           # ANSI, PostgreSQL, and MySQL declarative syntax
-│   ├── Scala.sublime-syntax         # Scala 3 LTS syntax (enums, given, using, extensions)
-│   ├── Starlark.sublime-syntax      # Open-source Bazel and Starlark (.bzl, BUILD.bazel) syntax
-│   ├── Swift.sublime-syntax         # Modern Swift 6 (actors, structured concurrency, directives)
-│   ├── TOML.sublime-syntax          # TOML syntax with Blue table headers and Green keys
-│   ├── Terraform.sublime-syntax     # Terraform and HCL2 infrastructure syntax
-│   ├── TypeScript.sublime-syntax    # TypeScript and JavaScript ES2024+ syntax
-│   ├── XML.sublime-syntax           # XML syntax with namespaces, directives, and CDATA
-│   └── Zig.sublime-syntax           # Modern Zig syntax (comptime, error sets, @builtins)
+│   └── *.sublime-syntax             # Self-contained grammars for C, C++, Go, Java, Python, Rust, SQL, and more
 │
-└── tests/                           # Automated test suites (500+ tests across 10 modules)
-    ├── test-helper.sh               # Shared assertion library (pass, fail, assert_*, test_summary)
-    ├── test-system-setup.sh         # Cross-platform CLI validation, bootstrap, and dry-run tests
-    ├── test-dotfiles.sh             # Declarative dotfiles auto-discovery, backup, and drop-ins
-    ├── test-bin.sh                  # User binaries symlinking, shims, and IDE workspace geometry
-    ├── test-theme.sh                # Multi-theme manager, palette contrast, and terminal profile tests
-    ├── test-ide-fleet.sh            # Multi-session IDE switcher, AI lifecycle, and context dispatch tests
-    ├── test-env.sh                  # Environment variables, TrueColor, and Bash tests
-    ├── test-zsh.zsh                 # Zsh aliases, functions, and live Git integration tests
-    ├── test-completions.sh          # Completion symlinks and generator tests
-    ├── test-vim.sh                  # Vim and Neovim configuration and snippet tests
-    └── test-fonts.sh                # Cross-platform font installation tests
+├── docs/                            # Deep architectural and style reference specifications
+│   ├── color-architecture.md        # Semantic color contract, design pillars, and syntax engine rules
+│   ├── ide-architecture.md          # Tmux, Neovim RPC, AI lifecycle state machine, and shell parity specs
+│   └── writing-style.md             # Diátaxis documentation structure and typography guidelines
+│
+└── tests/                           # Automated test suites, standalone runners, linters, and fixtures
+    ├── run.sh                       # Parallel and targeted test suite runner
+    ├── lint.sh                      # Shell syntax, ShellCheck, Python AST, and documentation linter
+    ├── test-helper.sh               # Shared assertion, sandbox, tmux, and headless Neovim library
+    ├── sync-treesitter.lua          # Headless Tree-sitter parser installer reading treesitter.lua
+    ├── lint/                        # Standalone Python 3.9+ documentation and AST linters
+    ├── fixtures/sample-code/        # Polyglot sample files for bat, Vim, and Neovim syntax tests
+    └── test-*.{sh,zsh}              # 10 domain test suites (500+ assertions)
 ```
 
 ## Integrated development environment and AI workspace
 
 The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim, and AI CLIs (`agy`, `claude`, and `codex`, selectable via `ide --agent <cli>` or `$IDE_AI_CLI`). Launch or reattach workspaces by directory path, active session name, or custom workspace shorthand (`ide [dir|name]`), or open the interactive workspace directory picker directly via `ide -n` (`ide --new`).
 
-- **Spatial window architecture**: Configured in `bin/ide`, `bin/ide_lib/`, and `dotfiles/.tmux.conf`:
+- **Spatial window architecture**: Configured in `bin/ide`, `libexec/ide_lib/`, and `dotfiles/.tmux.conf`:
   - **Single-window geometry**: Runs inside a single Tmux window (`ide`) using an AI-first inverted-T layout:
     - **3-pane layout**: Launched by default via `ide`, `ide3`, or `ide --3pane` with a top-left AI Agent (50%×75%, focused on launch), top-right Main Editor (50%×75%, single Neovim server), and full-width bottom Interactive Shell (100%×25%).
     - **2-pane layout**: Launched via `ide2` or `ide --2pane` with a side-by-side 50% AI Agent and 50% full-height Main Editor.
@@ -304,7 +254,7 @@ The repository provides a terminal-based IDE (`bin/ide`) combining Tmux, Neovim,
 
 - **LSP, Tree-sitter, and Neovim toolchains**:
   - **Native LSP**: Automatic language server provisioning via `.mise.toml` (for Python, TypeScript, JavaScript, Bash, YAML, JSON, and Lean 4 `leanls`) and `mason.nvim` with `nvim-lspconfig` (for C, C++, Rust, Go, Lua, Terraform, and Java `nvim-jdtls`). Buffers with an attached language server bind `gd` (go to definition), `gr` (find references), `K` (hover documentation), `Space rn` (rename symbol), `Space ca` (code action), and `Space d` (line diagnostics float). Java buffers (`ftplugin/java.lua`) isolate Eclipse JDTLS caches per root path hash (`<project>-<sha256>`), skip auto-starting JDTLS in Bazel-only workspaces (`WORKSPACE`, `WORKSPACE.bazel`, or `MODULE.bazel` without Maven or Gradle build files), and bind `Space jo` (organize imports), `Space jv` (extract variable), `Space jc` (extract constant), and `Space jm` (extract method).
-  - **Tree-sitter, Markdown, and inline images**: Solarized Dark syntax highlighting aligned with `bat`, pinned `nvim-treesitter` `main`-branch plugin synchronization (`lazy-lock.json` via `modules/50-nvim.sh`), live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks, and capability-gated Kitty Graphics inline image rendering (`snacks.image` with `ImageMagick` conversion, rendering Markdown images, `mini.files` previews, and image buffers on Ghostty and Kitty across standalone and `tmux` local or SSH sessions while remaining a silent no-op on other terminals).
+  - **Tree-sitter, Markdown, and inline images**: Solarized Dark syntax highlighting aligned with `bat`, pinned `nvim-treesitter` `main`-branch plugin synchronization (`lazy-lock.json` via `setup/modules/50-nvim.sh`), live in-buffer Markdown formatting (`Space m`) for headings, tables, callouts, checkboxes, and code blocks, and capability-gated Kitty Graphics inline image rendering (`snacks.image` with `ImageMagick` conversion, rendering Markdown images, `mini.files` previews, and image buffers on Ghostty and Kitty across standalone and `tmux` local or SSH sessions while remaining a silent no-op on other terminals).
   - **Telescope**: Fuzzy finders for files (`Space ff`), live grep (`Space fg`), open buffers (`Space fb`), and Git status (`Space gs`).
   - **Editor aliases**: `vi`, `vim`, and `v` launch `nvim` (with fallback to `vim`); inside an IDE session, `v [+line] [-c <cmd>] <file>` opens the file directly in the main Editor pane (automatically re-binding the Editor RPC socket if Neovim was restarted manually inside the Editor pane) while standalone flags such as `v -R` or `v -O` open locally.
 
@@ -513,7 +463,7 @@ The repository is structured for local customization without modifying tracked f
 notify = ["ide", "--agent-state", "done"]
 ```
   - `~/.config/zsh/p10k.local.zsh`: Local Powerlevel10k overrides sourced before prompt reload (such as custom folder markers or `POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN` for slow network mounts).
-- **Add a provisioning stage**: Drop a numbered script into `modules/` (such as `modules/80-custom.sh`).
+- **Add a provisioning stage**: Drop a numbered script into `setup/modules/` (such as `setup/modules/80-custom.sh`).
 
 ## Git and shell shortcuts
 
@@ -562,7 +512,7 @@ Shell aliases in `dotfiles/.aliases` and functions in `dotfiles/.zsh-functions` 
 
 ## Standalone utilities (`bin/`)
 
-Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by `modules/20-bin.sh`, while internal Python packages in `bin/ide_lib/` and `bin/theme_lib/` remain private to the repository. Every utility runs under `set -euo pipefail` and accepts `-h` or `--help` to display command-line usage:
+Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by `setup/modules/20-bin.sh`, while internal Python packages in `libexec/ide_lib/` and `libexec/theme_lib/` remain private to the repository. Every utility runs under `set -euo pipefail` and accepts `-h` or `--help` to display command-line usage:
 
 | Script | Key options and arguments | Description |
 | :--- | :--- | :--- |
@@ -577,11 +527,12 @@ Executable scripts in `bin/` are automatically symlinked into `~/.local/bin/` by
 
 ## Development and testing
 
-All scripts enforce `set -euo pipefail` for fail-fast safety. Run the full verification pipeline or target individual test suites through `make`:
+All scripts enforce `set -euo pipefail` for fail-fast safety. Run the full verification pipeline or target individual test suites through `make` or the standalone scripts in `tests/`:
 
 ```bash
 # Run full automated test suite (500+ tests across 10 test modules)
 make test
+./tests/run.sh
 
 # Run individual test suites
 make test-system-setup
@@ -595,8 +546,9 @@ make test-completions
 make test-vim
 make test-fonts
 
-# Run syntax, ShellCheck, and documentation lint validation
+# Run syntax, ShellCheck, Python AST, and documentation lint validation
 make lint
+./tests/lint.sh
 
 # Run both lint and test suites
 make check

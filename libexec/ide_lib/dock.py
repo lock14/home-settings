@@ -908,7 +908,11 @@ def cleanup_switcher_session(sw_sess: str) -> None:
             if sw_parts and sw_parts[0] == "1":
                 _, slot_pane, docked_pane, docked_sess, was_zoomed, zoomed_pane, sw_win, sw_zoom = sw_parts
                 if not docked_pane and not sw_owned_panes:
-                    if run_tmux(*unhook_cmds, ";", "kill-session", "-t", f"={sw_sess}").returncode == 0:
+                    empty_cmds: list[str] = [*unhook_cmds, ";"]
+                    if sw_zoom == "1" and sw_win:
+                        empty_cmds.extend(["resize-pane", "-Z", "-t", sw_win, ";"])
+                    empty_cmds.extend(["kill-session", "-t", f"={sw_sess}"])
+                    if run_tmux(*empty_cmds).returncode == 0:
                         fast_handled = True
                 elif docked_pane and slot_pane:
                     d_loc = pane_map.get(docked_pane)
@@ -964,6 +968,11 @@ def cleanup_switcher_session(sw_sess: str) -> None:
                                 ";",
                                 "join-pane", "-d", "-s", pid, "-t", f"={owner_s}:",
                             )
+                for zwin in tmux_out(
+                    "list-windows", "-t", f"={sw_sess}", "-F", "#{?window_zoomed_flag,#{window_id},}"
+                ).splitlines():
+                    if zwin.strip():
+                        run_tmux("resize-pane", "-Z", "-t", zwin.strip())
                 run_tmux("kill-session", "-t", f"={sw_sess}")
 
 

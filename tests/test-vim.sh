@@ -393,7 +393,7 @@ EOF
 VIM_BIN_DIR="$(dirname "$(command -v vim)")"
 HOME="$VIM_STANDALONE_TMP/home" XDG_CONFIG_HOME="$VIM_STANDALONE_TMP/home/.config" \
     HOME_SETTINGS_THEME_FILE="" HOME_SETTINGS_THEME="" COLORTERM=truecolor \
-    SAMPLE_PROPERTIES_PATH="$SCRIPT_DIR/sample-code/sample.properties" \
+    SAMPLE_PROPERTIES_PATH="$SCRIPT_DIR/tests/fixtures/sample-code/sample.properties" \
     VIM_STANDALONE_OUT="$VIM_STANDALONE_TMP/lifecycle.out" \
     PATH="$VIM_BIN_DIR:/usr/bin:/bin" \
     vim -u "$VIM_STANDALONE_TMP/.vimrc" -N -es -S "$VIM_STANDALONE_TMP/verify_theme_lifecycle.vim" </dev/null >/dev/null 2>&1 || true
@@ -566,7 +566,7 @@ rm -rf "$VIM_KEYMAP_TMP"
 
 # Test 5: Verify fallback Vim zero-external-dependency architecture
 echo -e "\n[5/6] Testing fallback Vim zero-external-dependency architecture..."
-if [ ! -f "$SCRIPT_DIR/modules/50-vim.sh" ] && ! grep -q 'modules/50-vim.sh' "$SCRIPT_DIR/setup.sh"; then
+if [ ! -f "$SCRIPT_DIR/setup/modules/50-vim.sh" ] && ! grep -q '50-vim.sh' "$SCRIPT_DIR/setup.sh"; then
     pass "setup.sh relies on declarative .vimrc without obsolete bundle provisioning"
 else
     fail "setup.sh vim bundles" "Unexpected legacy modules/50-vim.sh found in repository or setup.sh"
@@ -2079,7 +2079,7 @@ assert_suite("Neovim highlights Editor UI & Framing Architecture with Converged 
 })
 EOF
         NVIM_RESULTS=""
-        if NVIM_RESULTS="$(XDG_CONFIG_HOME="$TEMP_NVIM_XDG_CONFIG" run_nvim_headless -u "$NVIM_CONFIG" -c "edit $SCRIPT_DIR/sample-code/sample.c" -c "luafile $TEMP_NVIM_XDG_CONFIG/inspect.lua" 2>/dev/null)"; then
+        if NVIM_RESULTS="$(XDG_CONFIG_HOME="$TEMP_NVIM_XDG_CONFIG" run_nvim_headless -u "$NVIM_CONFIG" -c "edit $SCRIPT_DIR/tests/fixtures/sample-code/sample.c" -c "luafile $TEMP_NVIM_XDG_CONFIG/inspect.lua" 2>/dev/null)"; then
             :
         else
             fail "Neovim headless syntax & highlight inspection" "run_nvim_headless exited with non-zero status"
@@ -2104,7 +2104,7 @@ if ok and mf then
     fk("<leader>e")
     local b0 = (mf.get_explorer_state() or {}).branch or {}
     mf.close()
-    vim.cmd("edit " .. cwd .. "/modules/10-dotfiles.sh")
+    vim.cmd("edit " .. cwd .. "/bin/gen-passwd")
     local code_wrap = vim.wo.wrap
     fk("<leader>e")
     local st1 = mf.get_explorer_state() or {}
@@ -2154,10 +2154,10 @@ if ok and mf then
     fk("<leader>e")
     fk("<leader>e")
     local st_closed = mf.get_explorer_state()
-    vim.cmd("edit " .. cwd .. "/modules/unsaved-new.sh")
+    vim.cmd("edit " .. cwd .. "/bin/unsaved-new.sh")
     fk("<leader>e")
     local b2 = (mf.get_explorer_state() or {}).branch or {}
-    mf.set_branch({cwd, cwd .. "/modules"})
+    mf.set_branch({cwd, cwd .. "/bin"})
     mf.close()
     fk("<leader>E")
     local b3 = (mf.get_explorer_state() or {}).branch or {}
@@ -2172,16 +2172,16 @@ if ok and mf then
     local w2_imag = st_imag.windows and st_imag.windows[2] and vim.api.nvim_win_get_config(st_imag.windows[2].win_id) or {}
     mf.close()
     vim.fn.delete(tmpd, "rf")
-    local nav_ok = (r1 == r0 + 1 and r2 == r0 and (st_left.branch or {})[1] == cwd and st_left.depth_focus == 1 and (st_right.branch or {})[2] == cwd .. "/modules" and st_right.depth_focus == 2 and #(st_sleft.branch or {}) < #(st_right.branch or {}) and st_cr == nil and dbl_map_ok and st_dbl == nil and dbl_buf ~= cr_buf and dbl_buf:find("/modules/20-bin.sh", 1, true) ~= nil and st_sright == nil and cr_buf:find("/modules/", 1, true) ~= nil)
-    mf_ok = tostring(b0[1] == cwd and b1[1] == cwd .. "/modules" and st_closed == nil and b2[1] == cwd .. "/modules" and #b3 == 1 and b3[1] == cwd and nav_ok)
+    local nav_ok = (r1 == r0 + 1 and r2 == r0 and (st_left.branch or {})[1] == cwd and st_left.depth_focus == 1 and (st_right.branch or {})[2] == cwd .. "/bin" and st_right.depth_focus == 2 and #(st_sleft.branch or {}) < #(st_right.branch or {}) and st_cr == nil and dbl_map_ok and st_dbl == nil and dbl_buf ~= cr_buf and dbl_buf:find("/bin/ide", 1, true) ~= nil and st_sright == nil and cr_buf:find("/bin/", 1, true) ~= nil)
+    mf_ok = tostring(b0[1] == cwd and b1[1] == cwd .. "/bin" and st_closed == nil and b2[1] == cwd .. "/bin" and #b3 == 1 and b3[1] == cwd and nav_ok)
     mf_layout_ok = tostring(code_wrap == false and #(st1.windows or {}) == 2 and w1_cfg.col == 0 and w1_cfg.width == 35 and w2_cfg.col == 37 and (w2_cfg.col + w2_cfg.width + 2 == 80) and (w2_res.col + w2_res.width + 2 == 120) and (w2_imag.col + (w2_imag.width or 0) + 2 == 80) and wl_cfg.col == 0 and wl_cfg.width == 35 and wr_cfg.col == 0 and wr_cfg.width == 35)
 end
-vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
+vim.cmd("edit " .. vim.fn.getcwd() .. "/tests/fixtures/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 local md_so = vim.wo.scrolloff
-vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.go")
+vim.cmd("edit " .. vim.fn.getcwd() .. "/tests/fixtures/sample-code/sample.go")
 local go_so = vim.wo.scrolloff
-vim.cmd("edit " .. vim.fn.getcwd() .. "/sample-code/sample.md")
+vim.cmd("edit " .. vim.fn.getcwd() .. "/tests/fixtures/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and md_so == 0 and go_so == 8 and vim.wo.scrolloff == 0 and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
 local hex = function(n) return n and string.format("%06x", n) or "none" end
@@ -2309,15 +2309,15 @@ EOF
 ide_resolve_link() {
     case "$1" in
         //pkg/sample-code/sample.go:12)
-            printf 'file://%s/sample-code/sample.go#L12\n' "$2"
+            printf 'file://%s/tests/fixtures/sample-code/sample.go#L12\n' "$2"
             return 0
             ;;
         //pkg/sample-code:sample_target)
-            printf 'file://%s/sample-code/sample.go#L15\n' "$2"
+            printf 'file://%s/tests/fixtures/sample-code/sample.go#L15\n' "$2"
             return 0
             ;;
         //pkg/sample-code/...)
-            printf 'file://%s/sample-code/sample.go#L8\n' "$2"
+            printf 'file://%s/tests/fixtures/sample-code/sample.go#L8\n' "$2"
             return 0
             ;;
     esac
@@ -2350,7 +2350,7 @@ local lines = {
     "- [Automated Setup (`doom setup` — Diátaxis)](#automated-setup-doom-setup--diátaxis)",
     "- [Notes](#notes)",
     "- [Notes 2](#notes-1)",
-    "- [Sample Go File](sample-code/sample.go#L10)",
+    "- [Sample Go File](tests/fixtures/sample-code/sample.go#L10)",
     "",
     "```bash",
     "# Fenced code comment: Quick Start",
@@ -3953,7 +3953,7 @@ EOF
             HOME="$FAST_SYNC_HOME" \
             XDG_DATA_HOME="$FAST_SYNC_HOME/.local/share" \
             DRY_RUN=false \
-                /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1 || true
+                /bin/bash "$SCRIPT_DIR/setup/modules/50-nvim.sh" 2>&1 || true
         )"
         mkdir -p "$FAST_SYNC_HOME/.local/share/nvim/tree-sitter-swift"
         STALE_TS_RC=0
@@ -3961,7 +3961,7 @@ EOF
         HOME="$FAST_SYNC_HOME" \
         XDG_DATA_HOME="$FAST_SYNC_HOME/.local/share" \
         DRY_RUN=false \
-            /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" >/dev/null 2>&1 || STALE_TS_RC=$?
+            /bin/bash "$SCRIPT_DIR/setup/modules/50-nvim.sh" >/dev/null 2>&1 || STALE_TS_RC=$?
         if [[ "$FAST_SYNC_OUT" == *"Neovim plugins already match lazy-lock.json."* ]] && \
            [ "$STALE_TS_RC" -ne 0 ] && \
            [ ! -d "$FAST_SYNC_HOME/.local/share/nvim/tree-sitter-swift" ] && \

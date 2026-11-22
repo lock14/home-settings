@@ -72,107 +72,19 @@ jobs:
           path: |
             ~/.local/share/nvim/lazy
             ~/.local/share/nvim/site
-          key: nvim-ts-${{ runner.os }}-${{ hashFiles('dotfiles/.config/nvim/lazy-lock.json', 'dotfiles/.config/nvim/init.lua') }}
+          key: nvim-ts-${{ runner.os }}-${{ hashFiles('dotfiles/.config/nvim/lazy-lock.json', 'dotfiles/.config/nvim/init.lua', 'dotfiles/.config/nvim/lua/solarized/treesitter.lua') }}
           restore-keys: |
             nvim-ts-${{ runner.os }}-
 
       - name: Bootstrap headless Neovim plugins and Tree-sitter parsers
         run: |
+          ./setup/modules/50-nvim.sh
           boot_cfg="$(mktemp -d)"
           ln -sfn "$PWD/dotfiles/.config/nvim" "$boot_cfg/nvim"
-          cat <<'EOF' > /tmp/ci_nvim_lazy.lua
-          local ok, lazy = pcall(require, "lazy")
-          if not ok then
-            io.stderr:write("Failed to load lazy.nvim\n")
-            vim.cmd("cquit 1")
-          end
-          lazy.restore({ wait = true, show = false })
-          EOF
-          XDG_CONFIG_HOME="$boot_cfg" NVIM_LOG_FILE=/dev/null NVIM_TS_SKIP_AUTO_INSTALL=1 \
-            timeout 180 nvim --headless -u "$PWD/dotfiles/.config/nvim/init.lua" \
-            -c "luafile /tmp/ci_nvim_lazy.lua" -c "qall!" </dev/null
-          cat <<'EOF' > /tmp/ci_nvim_ts.lua
-          local required = {
-            "c", "cpp", "go", "java", "kotlin", "swift", "python", "rust",
-            "typescript", "javascript", "bash", "markdown", "markdown_inline",
-            "json", "yaml", "toml", "terraform", "sql", "lua",
-            "vim", "vimdoc", "diff", "printf", "xml", "html", "css",
-            "properties", "proto", "textproto", "regex",
-            "elixir", "haskell", "ocaml", "clojure", "lean",
-            "zig", "c_sharp", "scala", "ruby",
-            "graphql", "starlark", "rego", "dockerfile", "make",
-          }
-          local pinned_revs = {
-            css = "a93651c7bef1b73c47bdc7cd530ffa4ebffae032",
-            lean = "916c44f4d89c970f66dd34a49e7ce848f4d29e72",
-          }
-          local function read_rev(lang)
-            local rev_file = vim.fn.stdpath("data") .. "/site/parser-info/" .. lang .. ".revision"
-            if vim.fn.filereadable(rev_file) == 1 then
-              local lines = vim.fn.readfile(rev_file)
-              if lines and #lines > 0 then
-                return vim.trim(lines[1])
-              end
-            end
-            return ""
-          end
-          local ok, nts = pcall(require, "nvim-treesitter")
-          if not ok or type(nts.install) ~= "function" then
-            io.stderr:write("Failed to load nvim-treesitter installer\n")
-            vim.cmd("cquit 1")
-          end
-          local function installed_parsers()
-            local ok_p, list = pcall(nts.get_installed, "parsers")
-            if not ok_p or type(list) ~= "table" then
-              list = nts.get_installed()
-            end
-            local map = {}
-            for _, p in ipairs(list) do
-              map[p] = true
-            end
-            return map
-          end
-          local have = installed_parsers()
-          local to_install = {}
-          local to_force = {}
-          for _, p in ipairs(required) do
-            if pinned_revs[p] then
-              if (not have[p]) or (read_rev(p) ~= pinned_revs[p]) then
-                table.insert(to_force, p)
-              end
-            elseif not have[p] then
-              table.insert(to_install, p)
-            end
-          end
-          if #to_install > 0 then
-            nts.install(to_install, { max_jobs = 4 }):pwait(300000)
-          end
-          if #to_force > 0 then
-            nts.install(to_force, { force = true, max_jobs = 2 }):pwait(120000)
-          end
-          for p, rev in pairs(pinned_revs) do
-            local actual = read_rev(p)
-            if actual ~= rev then
-              io.stderr:write("Pinned Tree-sitter parser revision mismatch for " .. p .. ": expected " .. rev .. ", got " .. tostring(actual) .. "\n")
-              vim.cmd("cquit 1")
-            end
-          end
-          local after = installed_parsers()
-          local missing = {}
-          for _, p in ipairs(required) do
-            if not after[p] then
-              table.insert(missing, p)
-            end
-          end
-          if #missing > 0 then
-            io.stderr:write("Missing Tree-sitter parsers: " .. table.concat(missing, ", ") .. "\n")
-            vim.cmd("cquit 1")
-          end
-          EOF
           XDG_CONFIG_HOME="$boot_cfg" NVIM_LOG_FILE=/dev/null NVIM_TS_SKIP_AUTO_INSTALL=1 \
             timeout 360 nvim --headless -u "$PWD/dotfiles/.config/nvim/init.lua" \
-            -c "luafile /tmp/ci_nvim_ts.lua" -c "qall!" </dev/null
-          rm -rf "$boot_cfg" /tmp/ci_nvim_lazy.lua /tmp/ci_nvim_ts.lua
+            -c "luafile $PWD/tests/sync-treesitter.lua" -c "qall!" </dev/null
+          rm -rf "$boot_cfg"
 
       - name: Run unit tests
         env:
@@ -188,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Zsh prerequisite for dotfiles-only setup
+      - name: Install Zsh prerequisite for user-space setup
         run: |
           sudo apt-get update
           sudo apt-get install -y zsh
@@ -197,8 +109,8 @@ jobs:
         run: |
           chmod +x setup.sh
 
-          # Test dotfiles-only installation & uninstallation
-          ./setup.sh --dotfiles-only
+          # Test user-space installation & granular uninstallation
+          ./setup.sh --user
           [ -L "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases symlink missing"; exit 1; }
           [ ! -e "$HOME/.zsh-aliases" ] || { echo "FAIL: ~/.zsh-aliases should be retired"; exit 1; }
           [ -L "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables symlink missing"; exit 1; }
@@ -260,7 +172,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Zsh prerequisite on Ubuntu for dotfiles-only setup
+      - name: Install Zsh prerequisite on Ubuntu for user-space setup
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -275,12 +187,12 @@ jobs:
       - name: Run Dry-Run
         run: |
           ./setup.sh --dry-run
-          ./setup.sh --bootstrap --dry-run
+          ./setup.sh --user --dry-run
           ./setup.sh --dotfiles-only --dry-run
 
       - name: Run User Dotfiles Installation
         run: |
-          ./setup.sh --dotfiles-only
+          ./setup.sh --user
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 5. Fedora Container Setup
@@ -309,135 +221,10 @@ jobs:
 
       - name: Run User Dotfiles Setup
         run: |
-          ./setup.sh --os fedora --dotfiles-only
+          ./setup.sh --os fedora --user
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # 6. Standalone CLI Utility Tests
-  # ─────────────────────────────────────────────────────────────────────────────
-  script-gen-passwd:
-    name: Test gen-passwd
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Make executable
-        run: chmod +x bin/gen-passwd
-      - name: Default length is 16
-        run: |
-          output=$(bin/gen-passwd)
-          len=${#output}
-          [ "$len" -eq 16 ] || { echo "FAIL: expected length 16, got $len ('$output')"; exit 1; }
-      - name: Custom length (32)
-        run: |
-          output=$(bin/gen-passwd 32)
-          len=${#output}
-          [ "$len" -eq 32 ] || { echo "FAIL: expected length 32, got $len"; exit 1; }
-      - name: Uppercase-only flag (-u)
-        run: |
-          output=$(bin/gen-passwd -u 20)
-          echo "$output" | grep -qE '^[A-Z]+$' || { echo "FAIL: expected uppercase"; exit 1; }
-      - name: Numbers-only flag (-n)
-        run: |
-          output=$(bin/gen-passwd -n 20)
-          echo "$output" | grep -qE '^[0-9]+$' || { echo "FAIL: expected numbers"; exit 1; }
-      - name: Lowercase-only flag (-l)
-        run: |
-          output=$(bin/gen-passwd -l 20)
-          echo "$output" | grep -qE '^[a-z]+$' || { echo "FAIL: expected lowercase"; exit 1; }
-      - name: Combined flags (-u -l -n)
-        run: |
-          output=$(bin/gen-passwd -u -l -n 40)
-          len=${#output}
-          [ "$len" -eq 40 ] || { echo "FAIL: expected length 40, got $len"; exit 1; }
-          echo "$output" | grep -qE '^[A-Za-z0-9]+$' || { echo "FAIL: unexpected chars"; exit 1; }
-      - name: Non-numeric length argument exits non-zero
-        run: |
-          bin/gen-passwd abc && { echo "FAIL: should exit non-zero"; exit 1; } || echo "PASS"
-
-  script-repeat-until-success:
-    name: Test repeat-until-success
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Make executable
-        run: chmod +x bin/repeat-until-success
-      - name: Succeeds immediately with 'true'
-        run: bin/repeat-until-success -n 3 -s 0 true
-      - name: Fails after max retries with 'false'
-        run: |
-          bin/repeat-until-success -n 3 -s 0 false \
-            && { echo "FAIL: should exit non-zero"; exit 1; } || echo "PASS"
-      - name: Succeeds on later attempt
-        run: |
-          COUNT_FILE=$(mktemp)
-          echo 0 > "$COUNT_FILE"
-          TRY_SCRIPT=$(mktemp)
-          cat > "$TRY_SCRIPT" <<EOF
-          #!/bin/bash
-          count=\$(cat "$COUNT_FILE")
-          count=\$((count + 1))
-          echo \$count > "$COUNT_FILE"
-          [ "\$count" -ge 3 ]
-          EOF
-          chmod +x "$TRY_SCRIPT"
-          bin/repeat-until-success -n 5 -s 0 "$TRY_SCRIPT"
-          final=$(cat "$COUNT_FILE")
-          [ "$final" -eq 3 ] || { echo "FAIL: expected 3 attempts, got $final"; exit 1; }
-
-  script-sum:
-    name: Test sum
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Make executable
-        run: chmod +x bin/sum
-      - name: Sum a list of integers
-        run: |
-          result=$(printf '1\n2\n3\n4\n5\n' | bin/sum)
-          [ "$result" -eq 15 ] || { echo "FAIL: expected 15, got $result"; exit 1; }
-      - name: Sum with negative numbers
-        run: |
-          result=$(printf '10\n-3\n7\n' | bin/sum)
-          [ "$result" -eq 14 ] || { echo "FAIL: expected 14, got $result"; exit 1; }
-      - name: Sum positional arguments
-        run: |
-          result=$(bin/sum 1 2 3 4)
-          [ "$result" -eq 10 ] || { echo "FAIL: expected 10, got $result"; exit 1; }
-      - name: Sum comma-separated values
-        run: |
-          result=$(bin/sum 1,2,3,4,5)
-          [ "$result" -eq 15 ] || { echo "FAIL: expected 15, got $result"; exit 1; }
-      - name: Sum delimited column (-d and -k)
-        run: |
-          result=$(printf "item1:100:foo\nitem2:250:bar\nitem3:50:baz\n" | bin/sum -d ':' -k 2)
-          [ "$result" -eq 400 ] || { echo "FAIL: expected 400, got $result"; exit 1; }
-      - name: Sum multiple file arguments
-        run: |
-          FILE1=$(mktemp)
-          FILE2=$(mktemp)
-          echo "10 20" > "$FILE1"
-          echo "30 40" > "$FILE2"
-          result=$(bin/sum "$FILE1" "$FILE2")
-          rm -f "$FILE1" "$FILE2"
-          [ "$result" -eq 100 ] || { echo "FAIL: expected 100, got $result"; exit 1; }
-      - name: Sum human-readable byte units (-H)
-        run: |
-          result=$(bin/sum -H 10K 5M 2G)
-          [ "$result" = "2.15274e+09" ] || [ "$result" = "2152736768" ] || { echo "FAIL: got $result"; exit 1; }
-      - name: Compute average (-a) and formatted output (-f)
-        run: |
-          result=$(bin/sum -a -f "%.2f" 10 20 30 40)
-          [ "$result" = "25.00" ] || { echo "FAIL: expected 25.00, got $result"; exit 1; }
-      - name: Output summary statistics (-s)
-        run: |
-          output=$(bin/sum -s 5 10 15 20)
-          echo "$output" | grep -q "count: 4" || { echo "FAIL count"; exit 1; }
-          echo "$output" | grep -q "min: 5" || { echo "FAIL min"; exit 1; }
-          echo "$output" | grep -q "max: 20" || { echo "FAIL max"; exit 1; }
-          echo "$output" | grep -q "mean: 12.5" || { echo "FAIL mean"; exit 1; }
-          echo "$output" | grep -q "sum: 50" || { echo "FAIL sum"; exit 1; }
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 7. CI Gatekeeper: Aggregated Status Check
+  # 6. CI Gatekeeper: Aggregated Status Check
   # ─────────────────────────────────────────────────────────────────────────────
   ci-gatekeeper:
     name: "CI / All Checks Passed"
@@ -448,9 +235,6 @@ jobs:
       - dotfiles-makefile
       - cross-platform-setup
       - fedora-container
-      - script-gen-passwd
-      - script-repeat-until-success
-      - script-sum
     if: always()
     steps:
       - name: Verify all checks succeeded

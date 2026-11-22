@@ -4,12 +4,13 @@
 set -euo pipefail
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$MODULE_DIR/.." && pwd)"
+SETUP_DIR="$(cd "$MODULE_DIR/.." && pwd)"
+REPO_DIR="$(cd "$SETUP_DIR/.." && pwd)"
 
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/log.sh"
+. "$SETUP_DIR/lib/log.sh"
 # shellcheck source=/dev/null
-. "$REPO_DIR/lib/symlink.sh"
+. "$SETUP_DIR/lib/symlink.sh"
 
 DRY_RUN="${DRY_RUN:-false}"
 BIN_DIR="$REPO_DIR/bin"
@@ -21,7 +22,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "  [DryRun] Symlinking bin/* into $DEST_DIR"
 else
     mkdir -p "$DEST_DIR"
-    # Only regular top-level executables in bin/ are linked; package subdirs (bin/*_lib) stay internal.
+    # Only regular top-level executables in bin/ are linked; internal packages live in libexec/.
     for f in "$BIN_DIR"/*; do
         [ -f "$f" ] || continue
         chmod +x "$f"

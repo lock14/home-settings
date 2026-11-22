@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     ide_self = (
         os.path.abspath(raw_self)
         if raw_self
-        else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ide"))
+        else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bin", "ide"))
     )
     _calibrate_ide_path()
     os.environ["FORCE_HYPERLINK"] = "1"

@@ -6,7 +6,7 @@
 #   - AI Agent CLI (@ide_role=ai): $IDE_AI_CLI (agy | claude | codex)
 #   - Main Editor (@ide_role=editor): $NVIM_IDE_SOCKET (autoread, mini.files)
 #   - Interactive Shell (@ide_role=term): Bottom full-width pane in --3pane
-# Domain modules live under bin/ide_lib/ (constants, hooks, git_info, proc,
+# Domain modules live under libexec/ide_lib/ (constants, hooks, git_info, proc,
 # tmux, dock, theme, nvim_rpc, fleet, layout, links, preview, switcher, sessions, cli).
 # ==============================================================================
 
@@ -258,8 +258,10 @@ _raw_self = (
     or sys._getframe(0).f_code.co_filename
 )
 _bin_dir = os.path.dirname(os.path.realpath(_raw_self))
-if _bin_dir not in sys.path:
-    sys.path.insert(0, _bin_dir)
+_libexec_dir = os.path.join(os.path.dirname(_bin_dir), "libexec")
+for _pkg_dir in (_libexec_dir, _bin_dir):
+    if os.path.isdir(_pkg_dir) and _pkg_dir not in sys.path:
+        sys.path.insert(0, _pkg_dir)
 
 if __name__ == "__main__":
     from ide_lib.cli import main

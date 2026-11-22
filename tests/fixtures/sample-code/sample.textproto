@@ -1,5 +1,5 @@
 # =============================================================================
-# proto-file: sample-code/sample.proto
+# proto-file: tests/fixtures/sample-code/sample.proto
 # proto-message: telemetry.v1.TelemetryBatch
 #
 # Edge gateway telemetry payload demonstrating Protocol Buffers Text Format

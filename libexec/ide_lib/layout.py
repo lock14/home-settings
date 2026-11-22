@@ -1534,6 +1534,12 @@ def quit_ide(target_args: list[str] | str, force_quit: bool, is_kill: bool) -> i
 
     for sess in kill_order:
         for target_sess in (f"=ai-{sess}", f"=agy-{sess}", f"={sess}"):
+            for zwin in tmux_out(
+                "list-windows", "-t", target_sess, "-F", "#{?window_zoomed_flag,#{window_id},}"
+            ).splitlines():
+                zw = zwin.strip()
+                if zw:
+                    run_tmux("resize-pane", "-Z", "-t", zw)
             run_tmux("kill-session", "-t", target_sess)
 
     for sess, sock in to_kill:

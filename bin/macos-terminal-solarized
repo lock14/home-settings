@@ -86,7 +86,7 @@ sys.exit(run_macos_helper_cli(sys.argv[2:]))
 PY
 
 run_macos_helper() {
-    PYTHONSAFEPATH=1 "$PY_BIN" -B -c "$MACOS_HELPER_PY" "$SCRIPT_DIR" "$@"
+    PYTHONSAFEPATH=1 "$PY_BIN" -B -c "$MACOS_HELPER_PY" "$REPO_DIR/libexec" "$@"
 }
 
 PROFILE_NAME="$(run_macos_helper validate "$REPO_DIR" "$THEME_NAME" "$PREFS_PLIST" "$TERMINAL_FILE")"

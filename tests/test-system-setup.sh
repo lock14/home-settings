@@ -12,22 +12,24 @@ echo "Running System & Cross-Platform Engine Tests"
 echo "========================================"
 
 # Test 1: Script and module syntax checks
-echo -e "\n[1/6] Checking syntax of setup.sh, lib/*.sh, modules/*.sh, and bin/..."
+echo -e "\n[1/6] Checking syntax of setup.sh, setup/lib/*.sh, setup/modules/*.sh, tests/{run,lint}.sh, bin/, and libexec/..."
 assert_script_syntax "$SCRIPT_DIR/setup.sh" "setup.sh"
+assert_script_syntax "$SCRIPT_DIR/tests/run.sh" "tests/run.sh"
+assert_script_syntax "$SCRIPT_DIR/tests/lint.sh" "tests/lint.sh"
 
-for lib_f in "$SCRIPT_DIR"/lib/*.sh; do
-    [ -f "$lib_f" ] && assert_script_syntax "$lib_f" "lib/$(basename "$lib_f")"
+for lib_f in "$SCRIPT_DIR"/setup/lib/*.sh; do
+    [ -f "$lib_f" ] && assert_script_syntax "$lib_f" "setup/lib/$(basename "$lib_f")"
 done
 
 for f in "$SCRIPT_DIR"/bin/*; do
     [ -f "$f" ] && assert_script_syntax "$f" "$(basename "$f")"
 done
 
-for py_mod in "$SCRIPT_DIR"/bin/*_lib/*.py; do
+for py_mod in "$SCRIPT_DIR"/libexec/*_lib/*.py "$SCRIPT_DIR"/tests/lint/*.py; do
     [ -f "$py_mod" ] && assert_script_syntax "$py_mod" "${py_mod#"$SCRIPT_DIR"/}"
 done
 
-for m in "$SCRIPT_DIR"/modules/*.sh; do
+for m in "$SCRIPT_DIR"/setup/modules/*.sh; do
     [ -f "$m" ] && assert_script_syntax "$m" "$(basename "$m")"
 done
 
@@ -215,14 +217,14 @@ else
     fail "setup.sh macos with-chrome" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --bootstrap --dry-run 2>&1); then
-    if [[ "$output" == *"Mode      : BOOTSTRAP"* ]] && [[ "$output" == *"[DryRun]"* ]]; then
-        pass "setup.sh --bootstrap --dry-run works"
+if output=$("$SCRIPT_DIR/setup.sh" --user --dry-run 2>&1) && compat_out=$("$SCRIPT_DIR/setup.sh" --bootstrap --dry-run 2>&1); then
+    if [[ "$output" == *"Skipping System-Level Provisioning"* ]] && [[ "$output" == *"Running User Dotfiles"* ]] && [[ "$compat_out" == *"[DryRun]"* ]]; then
+        pass "setup.sh --user --dry-run skips system provisioning and --bootstrap alias remains compatible"
     else
-        fail "setup.sh bootstrap dry-run output" "Missing expected bootstrap markers: $output"
+        fail "setup.sh --user / --bootstrap dry-run output" "Unexpected output: $output / $compat_out"
     fi
 else
-    fail "setup.sh bootstrap dry-run" "Command failed: $output"
+    fail "setup.sh --user / --bootstrap dry-run" "Command failed: ${output:-}"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --dry-run 2>&1); then
@@ -305,7 +307,7 @@ else
 fi
 
 if command -v python3 >/dev/null 2>&1; then
-    chsh_check=$(HOME="$TEMP_SHELL_HOME" MOD_SH="$SCRIPT_DIR/modules/60-shell.sh" python3 -c '
+    chsh_check=$(HOME="$TEMP_SHELL_HOME" MOD_SH="$SCRIPT_DIR/setup/modules/60-shell.sh" python3 -c '
 import os, pty, subprocess
 def run_mod(skip_zsh):
     m, s = pty.openpty()
@@ -382,6 +384,13 @@ else
     fail "gen-passwd -s -n generation" "Generated unexpected characters: $passwd_sym_num"
 fi
 
+passwd_alnum=$("$SCRIPT_DIR/bin/gen-passwd" -u -l -n 40)
+if [ "${#passwd_alnum}" -eq 40 ] && [[ "$passwd_alnum" =~ ^[A-Za-z0-9]+$ ]]; then
+    pass "gen-passwd -u -l -n 40 generates 40-char alphanumeric strings"
+else
+    fail "gen-passwd -u -l -n 40 generation" "Generated unexpected characters or length: $passwd_alnum"
+fi
+
 if ! "$SCRIPT_DIR/bin/gen-passwd" 0 >/dev/null 2>&1; then
     pass "gen-passwd rejects non-positive length"
 else
@@ -413,6 +422,11 @@ fi
 
 printf '5' > "$TEMP_SUM_DIR/no_nl.txt"
 sum_delim_out=$("$SCRIPT_DIR/bin/sum" -d ',' '1,2,3' '4,5,6')
+sum_csv_pos_out=$("$SCRIPT_DIR/bin/sum" 1,2,3,4,5)
+sum_stats_out=$("$SCRIPT_DIR/bin/sum" -s 5 10 15 20)
+if [ "$sum_csv_pos_out" != "15" ] || ! grep -Fq "mean: 12.5" <<< "$sum_stats_out" || ! grep -Fq "sum: 50" <<< "$sum_stats_out"; then
+    fail "sum csv positional / summary stats" "Expected 15 and summary stats, got csv=$sum_csv_pos_out stats=$sum_stats_out"
+fi
 sum_col_delim_out=$("$SCRIPT_DIR/bin/sum" -d ':' -k 2 'a:10' 'b:20')
 sum_neg_out=$("$SCRIPT_DIR/bin/sum" -5 10)
 sum_flag_neg_out=$("$SCRIPT_DIR/bin/sum" -a -5 15)
@@ -470,7 +484,7 @@ else
 fi
 
 TEMP_DOC_DIR=$(mktemp -d)
-mkdir -p "$TEMP_DOC_DIR/.github/workflows" "$TEMP_DOC_DIR/bin" "$TEMP_DOC_DIR/sample-code" "$TEMP_DOC_DIR/dotfiles/.config/ghostty" "$TEMP_DOC_DIR/dotfiles/.config/nvim"
+mkdir -p "$TEMP_DOC_DIR/.github/workflows" "$TEMP_DOC_DIR/bin" "$TEMP_DOC_DIR/tests/fixtures/sample-code" "$TEMP_DOC_DIR/dotfiles/.config/ghostty" "$TEMP_DOC_DIR/dotfiles/.config/nvim"
 sample_user_path="/Users/""johndoe"
 sample_shortcode=":white_check_""mark:"
 sample_emoji=$(printf '\U0001f41b')
@@ -575,7 +589,7 @@ cat > "$TEMP_DOC_DIR/dotfiles/.config/nvim/init.lua" <<'EOF'
 vim.keymap.set("n", "<leader>zx", "<cmd>echo 1<CR>")
 EOF
 
-cat > "$TEMP_DOC_DIR/sample-code/sample.md" <<'EOF'
+cat > "$TEMP_DOC_DIR/tests/fixtures/sample-code/sample.md" <<'EOF'
 # Sample
 
 Clone https://github.com/example/home-settings and run:
@@ -853,8 +867,8 @@ while [ "$i" -lt 2500 ]; do
 done
 EOF
 chmod +x "$TEMP_THEME_SETUP_HOME/mock-bin/dconf" "$TEMP_THEME_SETUP_HOME/mock-bin/gsettings"
-term_persisted_macos="$(env -u HOME_SETTINGS_THEME DRY_RUN=true OS=macos HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/modules/70-terminal.sh" 2>&1 || true)"
-term_persisted_linux="$(env -u HOME_SETTINGS_THEME PATH="$TEMP_THEME_SETUP_HOME/mock-bin:$PATH" DRY_RUN=true OS=ubuntu DISPLAY=":99" HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/modules/70-terminal.sh" 2>&1 || true)"
+term_persisted_macos="$(env -u HOME_SETTINGS_THEME DRY_RUN=true OS=macos HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup/modules/70-terminal.sh" 2>&1 || true)"
+term_persisted_linux="$(env -u HOME_SETTINGS_THEME PATH="$TEMP_THEME_SETUP_HOME/mock-bin:$PATH" DRY_RUN=true OS=ubuntu DISPLAY=":99" HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup/modules/70-terminal.sh" 2>&1 || true)"
 if grep -Fq "Configure 'Nord' in Terminal.app Window Settings" <<< "$term_persisted_macos" && \
    grep -Fq "Apply Nord profile" <<< "$term_persisted_linux"; then
     pass "modules/70-terminal.sh honors persisted ~/.config/home-settings/theme on both macOS and Linux (including SIGPIPE-safe multi-kilobyte gsettings list-schemas output)"
@@ -886,7 +900,7 @@ promptinit
 prompt adam1
 # source $ZSH/oh-my-zsh.sh
 EOF
-zshrc_mig_out="$(PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/modules/60-shell.sh" 2>&1 || true)"
+zshrc_mig_out="$(PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/setup/modules/60-shell.sh" 2>&1 || true)"
 zshrc_baks=("$TEMP_ZSHRC_HOME"/.zshrc.bak.*)
 if [ "${#zshrc_baks[@]}" -eq 1 ] && [ -f "${zshrc_baks[0]}" ] && \
    grep -Fq "prompt adam1" "${zshrc_baks[0]}" && \
@@ -895,11 +909,11 @@ if [ "${#zshrc_baks[@]}" -eq 1 ] && [ -f "${zshrc_baks[0]}" ] && \
    grep -Fq 'source $ZSH/oh-my-zsh.sh' "$TEMP_ZSHRC_HOME/.zshrc" && \
    grep -Fq '[ -f ~/.zshrc-addendum ] && source ~/.zshrc-addendum' "$TEMP_ZSHRC_HOME/.zshrc"; then
     printf '\n# user-custom-marker\n' >> "$TEMP_ZSHRC_HOME/.zshrc"
-    PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1 || true
+    PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/setup/modules/60-shell.sh" >/dev/null 2>&1 || true
     zshrc_baks_after=("$TEMP_ZSHRC_HOME"/.zshrc.bak.*)
     if [ "${#zshrc_baks_after[@]}" -eq 1 ] && grep -Fq "# user-custom-marker" "$TEMP_ZSHRC_HOME/.zshrc"; then
         printf '[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"\n# cond-omz-marker\n' > "$TEMP_ZSHRC_HOME/.zshrc"
-        PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/modules/60-shell.sh" >/dev/null 2>&1 || true
+        PATH="$TEMP_ZSHRC_HOME/mock-bin:$PATH" HOME="$TEMP_ZSHRC_HOME" ZSH="$TEMP_ZSHRC_HOME/.oh-my-zsh" ZSH_CUSTOM="$TEMP_ZSHRC_HOME/.oh-my-zsh/custom" SKIP_ZSH=false SKIP_BASH=true SKIP_COMPLETIONS=true "$SCRIPT_DIR/setup/modules/60-shell.sh" >/dev/null 2>&1 || true
         zshrc_baks_cond=("$TEMP_ZSHRC_HOME"/.zshrc.bak.*)
         if [ "${#zshrc_baks_cond[@]}" -eq 1 ] && grep -Fq "# cond-omz-marker" "$TEMP_ZSHRC_HOME/.zshrc"; then
             pass "modules/60-shell.sh backs up non-Oh-My-Zsh ~/.zshrc to initialize Powerlevel10k template and preserves existing Oh-My-Zsh ~/.zshrc on re-run"
@@ -929,8 +943,8 @@ else
     fail "parse_subshell_results empty guard" "Expected parse_subshell_results to record a failure on 0 parsed lines"
 fi
 
-fed_amd64_out="$(OS=fedora ARCH=amd64 INSTALL_CHROME=true SKIP_PACKAGES=true SKIP_DB=true DRY_RUN=true "$SCRIPT_DIR/modules/00-packages.sh" 2>&1)"
-fed_arm64_out="$(OS=fedora ARCH=arm64 INSTALL_CHROME=true SKIP_PACKAGES=true SKIP_DB=true DRY_RUN=true "$SCRIPT_DIR/modules/00-packages.sh" 2>&1)"
+fed_amd64_out="$(OS=fedora ARCH=amd64 INSTALL_CHROME=true SKIP_PACKAGES=true SKIP_DB=true DRY_RUN=true "$SCRIPT_DIR/setup/modules/00-packages.sh" 2>&1)"
+fed_arm64_out="$(OS=fedora ARCH=arm64 INSTALL_CHROME=true SKIP_PACKAGES=true SKIP_DB=true DRY_RUN=true "$SCRIPT_DIR/setup/modules/00-packages.sh" 2>&1)"
 if [[ "$fed_amd64_out" == *"google-chrome-stable"* ]] && \
    [[ "$fed_arm64_out" == *"Notice: Google Chrome official rpm is amd64 only (current: arm64). Skipping."* ]] && \
    [[ "$fed_arm64_out" != *"google-chrome-stable"* ]]; then
@@ -948,7 +962,7 @@ for util in bash sh dirname basename mkdir rm ln cp mv cat grep tr wc readlink d
 done
 printf '#!/bin/sh\nexit 0\n' > "$MISE_FAIL_BIN/curl"
 chmod +x "$MISE_FAIL_BIN/curl"
-if PATH="$MISE_FAIL_BIN" HOME="$TEMP_THEME_SETUP_HOME" DRY_RUN=false "$SCRIPT_DIR/modules/40-mise.sh" >/dev/null 2>&1; then
+if PATH="$MISE_FAIL_BIN" HOME="$TEMP_THEME_SETUP_HOME" DRY_RUN=false "$SCRIPT_DIR/setup/modules/40-mise.sh" >/dev/null 2>&1; then
     fail "modules/40-mise.sh missing binary guard" "Expected non-zero exit when mise binary is not executable"
 else
     pass "modules/40-mise.sh exits non-zero when mise binary is not executable"
@@ -976,30 +990,30 @@ fi
 
 rm -rf "$TEMP_THEME_SETUP_HOME"
 
-# Verify lint_python_embeds and lint_documentation support modular bin/*_lib/*.py, Python-shebang bin/*, and dotfiles/.config/nvim/lua/**/*.lua
+# Verify lint_python_embeds and lint_documentation support modular libexec/*_lib/*.py, Python-shebang bin/*, and dotfiles/.config/nvim/lua/**/*.lua
 TEMP_MOD_LINT_BAD="$(make_sandbox_dir)"
-mkdir -p "$TEMP_MOD_LINT_BAD/bin/theme_lib"
-printf '%s\n' 'def bad_pkg_fn(x: int | None) -> str | None:' '    return None' > "$TEMP_MOD_LINT_BAD/bin/theme_lib/bad.py"
+mkdir -p "$TEMP_MOD_LINT_BAD/libexec/theme_lib"
+printf '%s\n' 'def bad_pkg_fn(x: int | None) -> str | None:' '    return None' > "$TEMP_MOD_LINT_BAD/libexec/theme_lib/bad.py"
 
 TEMP_MOD_SHEBANG_BAD="$(make_sandbox_dir)"
 mkdir -p "$TEMP_MOD_SHEBANG_BAD/bin"
 printf '%s\n' '#!/usr/bin/python3 -B' 'match 1:' '    case 1: pass' > "$TEMP_MOD_SHEBANG_BAD/bin/theme"
 
 TEMP_MOD_LINT_OK="$(make_sandbox_dir)"
-mkdir -p "$TEMP_MOD_LINT_OK/bin/ide_lib" "$TEMP_MOD_LINT_OK/bin/theme_lib" "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/lua/solarized" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty"
+mkdir -p "$TEMP_MOD_LINT_OK/bin" "$TEMP_MOD_LINT_OK/libexec/ide_lib" "$TEMP_MOD_LINT_OK/libexec/theme_lib" "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/lua/solarized" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty"
 printf '%s\n' '#!/usr/bin/python3 -B' 'from __future__ import annotations' 'from ide_lib.core import run' > "$TEMP_MOD_LINT_OK/bin/ide"
-printf '%s\n' 'from __future__ import annotations' 'def run(x: int | None = None) -> int:' '    return x or 0' > "$TEMP_MOD_LINT_OK/bin/ide_lib/core.py"
+printf '%s\n' 'from __future__ import annotations' 'def run(x: int | None = None) -> int:' '    return x or 0' > "$TEMP_MOD_LINT_OK/libexec/ide_lib/core.py"
 cat > "$TEMP_MOD_LINT_OK/bin/theme" <<'EOF'
 #!/usr/bin/env bash
 exec python3 -B -c "import sys" "$@"
 EOF
-cat > "$TEMP_MOD_LINT_OK/bin/theme_lib/cli.py" <<'EOF'
+cat > "$TEMP_MOD_LINT_OK/libexec/theme_lib/cli.py" <<'EOF'
 from __future__ import annotations
 USAGE_TEXT = """Usage: theme
   --list          List themes
 """
 EOF
-cat > "$TEMP_MOD_LINT_OK/bin/theme_lib/generators.py" <<'EOF'
+cat > "$TEMP_MOD_LINT_OK/libexec/theme_lib/generators.py" <<'EOF'
 from __future__ import annotations
 GHOSTTY_TEMPLATE = """
 keybind = ctrl+shift+d=new_split:auto
@@ -1050,9 +1064,9 @@ TEMP_LIB_SANDBOX="$(make_sandbox_dir)"
 lib_unit_ok="$(
     set -euo pipefail
     # shellcheck source=/dev/null
-    . "$SCRIPT_DIR/lib/log.sh"
+    . "$SCRIPT_DIR/setup/lib/log.sh"
     # shellcheck source=/dev/null
-    . "$SCRIPT_DIR/lib/os.sh"
+    . "$SCRIPT_DIR/setup/lib/os.sh"
     printf 'v1\n' > "$TEMP_LIB_SANDBOX/conf"
     b1="$(backup_existing_path "$TEMP_LIB_SANDBOX/conf")"
     printf 'v2\n' > "$TEMP_LIB_SANDBOX/conf"
@@ -1110,8 +1124,8 @@ for arg in "$@"; do
     esac
 done
 exit 0'
-nvim_missing_out="$(PATH="$NVIM_MISSING_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1)"
-nvim_old_out="$(PATH="$NVIM_OLD_MOCK_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/modules/50-nvim.sh" 2>&1)"
+nvim_missing_out="$(PATH="$NVIM_MISSING_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/setup/modules/50-nvim.sh" 2>&1)"
+nvim_old_out="$(PATH="$NVIM_OLD_MOCK_BIN" HOME="$TEMP_NVIM_STAGE_HOME/empty-home" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/empty-home/.local/share" DRY_RUN=false /bin/bash "$SCRIPT_DIR/setup/modules/50-nvim.sh" 2>&1)"
 if [[ "$nvim_dry_default" == *"[DryRun] Syncing Neovim plugins from lazy-lock.json"* ]] && \
    [[ "$nvim_dry_skipped" != *"Syncing Neovim plugins from lazy-lock.json"* ]] && \
    [ ! -e "$TEMP_NVIM_STAGE_HOME/.local" ] && \
@@ -1244,30 +1258,30 @@ ghostty_tier1_out="$(
     PATH="$GHOSTTY_MOCK_BIN" MOCK_APT_GHOSTTY=remote \
         GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
         DRY_RUN=false \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
 )"
 ghostty_deb_rolling_out="$(
     PATH="$GHOSTTY_MOCK_BIN" MOCK_APT_GHOSTTY=dpkg_only GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-rolling" \
         GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
         MOCK_LIBC_VER="2.43-7" MOCK_GTK_VER="4.22.4-1" DRY_RUN=false \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
 )"
 ghostty_deb_idempotent_out="$(
     PATH="$GHOSTTY_MOCK_BIN" MOCK_APT_GHOSTTY=dpkg_only MOCK_DPKG_GHOSTTY_VER="1.4.0-0~ppa2" \
         GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-rolling" \
         GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
         DRY_RUN=false \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
 )"
 ghostty_deb_mint24_out="$(
     PATH="$GHOSTTY_MOCK_BIN" GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-mint-noble" \
         GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
         DRY_RUN=false \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu arm64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu arm64' 2>&1
 )"
 ghostty_deb_arch_skip_out="$(
     PATH="$GHOSTTY_MOCK_BIN" GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-trixie" DRY_RUN=false \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu riscv64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu riscv64' 2>&1
 )"
 
 # Add mock snap that fails in live mode to verify automatic fallback to .deb
@@ -1276,13 +1290,13 @@ echo "[snap] $*"
 exit 1'
 ghostty_snap_dry_out="$(
     PATH="$GHOSTTY_MOCK_BIN" DRY_RUN=true \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
 )"
 ghostty_snap_fallback_out="$(
     PATH="$GHOSTTY_MOCK_BIN" GHOSTTY_OS_RELEASE="$GHOSTTY_MOCK_DATA/os-debian-rolling" \
         GHOSTTY_DEB_REPO_BASE="file://$GHOSTTY_MOCK_DATA" GHOSTTY_DEB_API_URL="file://$GHOSTTY_MOCK_DATA/releases.json" \
         DRY_RUN=false \
-        /bin/bash -c '. "'"$SCRIPT_DIR"'/lib/log.sh"; . "'"$SCRIPT_DIR"'/lib/os.sh"; . "'"$SCRIPT_DIR"'/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
+        /bin/bash -c '. "'"$SCRIPT_DIR"'/setup/lib/log.sh"; . "'"$SCRIPT_DIR"'/setup/lib/os.sh"; . "'"$SCRIPT_DIR"'/setup/lib/pkg.sh"; install_ghostty ubuntu amd64' 2>&1
 )"
 
 if [[ "$ghostty_tier1_out" == *"[apt-get] install -y ghostty"* ]] && \

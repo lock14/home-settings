@@ -174,7 +174,7 @@ fi
 rm -rf "$BAK_TEST_HOME"
 
 # Provision dotfiles into THEME_TEST_HOME and test switching across all 17 managed themes while preserving ~/.config/git/{ignore,attributes}
-HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/modules/10-dotfiles.sh" >/dev/null 2>&1
+HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/setup/modules/10-dotfiles.sh" >/dev/null 2>&1
 echo "*.swp" > "$THEME_TEST_Cfg/git/ignore"
 echo "*.lock linguist-generated" > "$THEME_TEST_Cfg/git/attributes"
 
@@ -262,7 +262,7 @@ import sys
 
 sys.dont_write_bytecode = True
 repo = pathlib.Path(sys.argv[1])
-sys.path.insert(0, str(repo / "bin"))
+sys.path.insert(0, str(repo / "libexec"))
 
 from theme_lib.palette import (
     CLASSIC_THEMES as classic,
@@ -655,7 +655,8 @@ sys.dont_write_bytecode = True
 theme_bin, ide_bin = sys.argv[1], sys.argv[2]
 slugs = sys.argv[3:]
 bin_dir = Path(theme_bin).resolve().parent
-sys.path.insert(0, str(bin_dir))
+libexec_dir = bin_dir.parent / "libexec"
+sys.path.insert(0, str(libexec_dir))
 
 from theme_lib.preview import visible_len as vlen
 
@@ -673,12 +674,12 @@ for slug in slugs:
     if not status_lines or vlen(status_lines[0]) != 72:
         raise SystemExit(f"{slug}: narrow status width != 72")
 
-# Verify status_click in bin/ide (+ bin/ide_lib/*.py) uses visible_width for 2-column holiday emoji and East Asian wide glyphs,
-# and bin/theme (+ bin/theme_lib/*.py) emits clickable range tags and discovers $XDG_RUNTIME_DIR/nvim-ide-*.sock while isolating THEME_NVIM_SOCKET_DIR
-ide_files = [Path(ide_bin)] + sorted(bin_dir.glob("ide_lib/*.py"))
+# Verify status_click in bin/ide (+ libexec/ide_lib/*.py) uses visible_width for 2-column holiday emoji and East Asian wide glyphs,
+# and bin/theme (+ libexec/theme_lib/*.py) emits clickable range tags and discovers $XDG_RUNTIME_DIR/nvim-ide-*.sock while isolating THEME_NVIM_SOCKET_DIR
+ide_files = [Path(ide_bin)] + sorted(libexec_dir.glob("ide_lib/*.py"))
 src = "\n".join(p.read_text(encoding="utf-8") for p in ide_files if p.is_file())
 assert "#{status-left}" in src and ("_visible_width(" in src or "visible_width(" in src)
-theme_files = [Path(theme_bin)] + sorted(bin_dir.glob("theme_lib/*.py"))
+theme_files = [Path(theme_bin)] + sorted(libexec_dir.glob("theme_lib/*.py"))
 theme_src = "\n".join(p.read_text(encoding="utf-8") for p in theme_files if p.is_file())
 assert 'range=user|tab_ai' in theme_src and 'range=user|tab_editor' in theme_src and 'range=user|tab_term' in theme_src and 'range=user|tab_zoom' in theme_src
 
