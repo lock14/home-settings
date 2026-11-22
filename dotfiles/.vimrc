@@ -1,6 +1,6 @@
 " =============================================================
 " Standalone Portable Vim Configuration (.vimrc)
-" Zero-dependency 17-theme Solarized engine & Neovim keymap parity
+" Zero-dependency built-in + custom theme engine & Neovim keymap parity
 " =============================================================
 
 " -------------------------------------------------------------
@@ -56,7 +56,7 @@ if !has('nvim')
 endif
 
 " -------------------------------------------------------------
-" 2. Palette Schema & 17 Built-in Theme Definitions
+" 2. Palette Schema & Built-in Theme Definitions
 " -------------------------------------------------------------
 let s:vimrc_repo_root = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
 
@@ -83,34 +83,43 @@ let s:all_color_keys = [
 
 let s:builtin_field_keys = ['THEME_LABEL', 'THEME_MODE', 'BAT_THEME_NAME'] + s:all_color_keys
 
+" BEGIN GENERATED BUILTIN THEMES
 let s:builtin_theme_order = [
     \ 'solarized-dark', 'solarized-light', 'catppuccin-mocha', 'catppuccin-latte',
-    \ 'gruvbox-dark', 'tokyonight-night', 'kanagawa-wave', 'nord', 'onedark',
-    \ 'new-years', 'valentines', 'st-patricks', 'easter',
-    \ 'independence-day', 'halloween', 'thanksgiving', 'christmas'
+    \ 'gruvbox-dark', 'gruvbox-light', 'rose-pine', 'rose-pine-dawn',
+    \ 'everforest-dark', 'tokyonight-night', 'kanagawa-wave', 'dracula',
+    \ 'nord', 'onedark', 'new-years', 'valentines',
+    \ 'st-patricks', 'easter', 'independence-day', 'halloween',
+    \ 'thanksgiving', 'christmas'
     \ ]
 
-" Compact 26-field built-in palette table (1:1 with colors/themes/*.theme for 2-file standalone servers):
+" Compact 26-field built-in palette table (1:1 with colors/themes/*.theme for standalone servers):
 " LABEL|MODE|BAT_THEME|B03|B02|B04|B01|B00|B0|B1|B2|B3|YEL|ORA|RED|MAG|VIO|BLU|CYA|GRN|MGRN|MRED|MYEL|MBLU|MMAG|MB1
 let s:builtin_themes = {
     \ 'solarized-dark':   'Solarized Dark|dark|Solarized-Dark-TrueColor|#002B36|#073642|#002731|#586E75|#657B83|#839496|#93A1A1|#EEE8D5|#FDF6E3|#B58900|#CB4B16|#DC322F|#D33682|#6C71C4|#268BD2|#2AA198|#859900|#274C25|#422D33|#364725|#0B4764|#3E2E4C|#2C4E56',
     \ 'solarized-light':  'Solarized Light|light|Solarized-Light-TrueColor|#FDF6E3|#EEE8D5|#E6DFCA|#93A1A1|#839496|#657B83|#586E75|#073642|#002B36|#B58900|#CB4B16|#DC322F|#D33682|#6C71C4|#268BD2|#2AA198|#859900|#E5ECD0|#F6D8D3|#F0E4C0|#D8E6EE|#F3D9E4|#E4DEC8',
-    \ 'catppuccin-mocha': 'Catppuccin Mocha|dark|Catppuccin-Mocha-TrueColor|#1E1E2E|#313244|#181825|#6C7086|#7F849C|#CDD6F4|#DCE0E8|#E6E9EF|#F5E0DC|#F9E2AF|#FAB387|#F38BA8|#F5C2E7|#CBA6F7|#89B4FA|#94E2D5|#A6E3A1|#283B37|#3E2939|#3E3B3B|#29384E|#3E3247|#35374B',
+    \ 'catppuccin-mocha': 'Catppuccin Mocha|dark|Catppuccin-Mocha-TrueColor|#1E1E2E|#313244|#181825|#6C7086|#7F849C|#CDD6F4|#DCE0E8|#E6E9EF|#EFF1F5|#F9E2AF|#FAB387|#F38BA8|#F5C2E7|#CBA6F7|#89B4FA|#94E2D5|#A6E3A1|#283B37|#3E2939|#3E3B3B|#29384E|#3E3247|#35374B',
     \ 'catppuccin-latte': 'Catppuccin Latte|light|Catppuccin-Latte-TrueColor|#EFF1F5|#CCD0DA|#E6E9EF|#686B7D|#5C5F77|#4C4F69|#383A50|#313244|#1E1E2E|#8F5902|#B34300|#D20F39|#A82B8A|#8839EF|#1E66F5|#0E7075|#2D761D|#DCEAD9|#F2D5DD|#EFE4D2|#D6E1F8|#F3DFEF|#D5D8E2',
-    \ 'gruvbox-dark':     'Gruvbox Dark|dark|Gruvbox-Dark-TrueColor|#282828|#3C3836|#1D2021|#928374|#A89984|#EBDBB2|#FBF1C7|#D5C4A1|#FBF1C7|#FABD2F|#FE8019|#FB4934|#D3869B|#B16286|#83A598|#8EC07C|#B8BB26|#3B3D24|#472825|#473F25|#2E3B36|#422E36|#45403D',
-    \ 'tokyonight-night': 'TokyoNight Night|dark|TokyoNight-Night-TrueColor|#1A1B26|#292E42|#16161E|#565F89|#737AA2|#C0CAF5|#D5DCF8|#E0AF68|#E2E8FF|#E0AF68|#FF9E64|#F7768E|#BB9AF7|#9D7CD8|#7AA2F7|#7DCFFF|#9ECE6A|#273832|#3B2430|#3B342C|#23344D|#342B44|#2F354D',
-    \ 'kanagawa-wave':    'Kanagawa Wave|dark|Kanagawa-Wave-TrueColor|#1F1F28|#2A2A37|#16161D|#7A7970|#939288|#DCD7BA|#EAE6D1|#E6C384|#F2EFE0|#E6C384|#FFA066|#E46876|#D27E99|#957FB8|#7E9CD8|#7AA89F|#98BB6C|#2B3328|#43242B|#49443C|#252535|#3A2836|#2D4F67',
-    \ 'nord':             'Nord|dark|Nord-TrueColor|#2E3440|#3B4252|#242933|#8492AC|#96A4BE|#D8DEE9|#E5E9F0|#ECEFF4|#ECEFF4|#EBCB8B|#D08770|#BF616A|#B48EAD|#5E81AC|#81A1C1|#88C0D0|#A3BE8C|#394548|#443943|#494647|#384354|#423F4E|#434C5E',
-    \ 'onedark':          'OneDark|dark|OneDark-TrueColor|#282C34|#31353F|#21252B|#5C6370|#7F848E|#ABB2BF|#C8CCD4|#E5C07B|#FFFFFF|#E5C07B|#D19A66|#E06C75|#C678DD|#B268CA|#61AFEF|#56B6C2|#98C379|#2E3E38|#3F2D34|#3E3A34|#283B4C|#3B2F44|#3E4451',
-    \ 'new-years':        "New Year's|dark|New-Years-TrueColor|#07081C|#14183D|#040510|#6872AA|#848FC7|#EEF1FF|#FFFFFF|#FFFDF2|#FFFFFF|#44FF77|#FF8024|#FF1744|#5C9DFF|#B388FF|#00F0FF|#FF66C4|#FFD700|#103B2B|#3B1026|#143D29|#063647|#1A294D|#24294D",
+    \ 'gruvbox-dark':     'Gruvbox Dark|dark|Gruvbox-Dark-TrueColor|#282828|#3C3836|#1D2021|#928374|#A89984|#EBDBB2|#F2E5BC|#FBF1C7|#F9F5D7|#FABD2F|#FE8019|#FB4934|#D3869B|#B16286|#83A598|#8EC07C|#B8BB26|#3B3D24|#472825|#473F25|#2E3B36|#422E36|#3D3C38',
+    \ 'gruvbox-light':    'Gruvbox Light|light|Gruvbox-Light-TrueColor|#FBF1C7|#EBDBB2|#F2E5BC|#6E6259|#5C524B|#3C3836|#282828|#1D2021|#141617|#986300|#AF3A03|#9D0006|#8F3F71|#6C469E|#076678|#2E7352|#5F6E00|#DCE5B2|#F2CEBE|#EAD7A4|#CDD9BA|#E8D1C4|#D9D0AC',
+    \ 'rose-pine':        'Rosé Pine|dark|Rose-Pine-TrueColor|#191724|#26233A|#13111C|#787394|#908CAA|#E0DEF4|#EAE8F8|#F2F0FB|#FAF8FF|#F6C177|#EA9A75|#EB6F92|#EB98C5|#C4A7E7|#67A8CE|#9CCFD8|#8AC79A|#2D3739|#3F2738|#453935|#2A3749|#433144|#3A3846',
+    \ 'rose-pine-dawn':   'Rosé Pine Dawn|light|Rose-Pine-Dawn-TrueColor|#FAF4ED|#EBE0D6|#F2E9E1|#736E8A|#645F7C|#575279|#413D5E|#2D2A45|#1F1D2E|#996012|#C0501E|#B4365A|#A63D7C|#7850A6|#246685|#1B7572|#337642|#D6E6D6|#F0D4D8|#EBDCC8|#D2DFE2|#EAD4DC|#DED6D6',
+    \ 'everforest-dark':  'Everforest Dark|dark|Everforest-Dark-TrueColor|#2D353B|#3A454A|#232A2E|#859289|#9DA9A0|#D3C6AA|#DFD4BC|#EAE2CF|#F3EFE3|#DBBC7F|#E69875|#E6686B|#D699B6|#AC8EC9|#78B4CE|#83C092|#9EC66E|#414F44|#4E3E44|#505049|#3D515B|#4F4954|#494E50',
+    \ 'tokyonight-night': 'TokyoNight Night|dark|TokyoNight-Night-TrueColor|#1A1B26|#292E42|#16161E|#565F89|#737AA2|#C0CAF5|#D5DCF8|#E2E8FF|#EEF2FF|#E0AF68|#FF9E64|#F7768E|#F287CB|#9D7CD8|#7AA2F7|#7DCFFF|#9ECE6A|#273832|#3B2430|#3B342C|#23344D|#453147|#2F354D',
+    \ 'kanagawa-wave':    'Kanagawa Wave|dark|Kanagawa-Wave-TrueColor|#1F1F28|#2A2A37|#16161D|#7A7970|#939288|#DCD7BA|#EAE6D1|#F2EFE0|#FAF8EE|#E6C384|#FFA066|#E46876|#D27E99|#957FB8|#7E9CD8|#7AA89F|#98BB6C|#2B3328|#43242B|#49443C|#252535|#3A2836|#2D4F67',
+    \ 'dracula':          'Dracula|dark|Dracula-TrueColor|#282A36|#383B4C|#21222C|#7A89B8|#94A3CC|#E8E8E2|#F2F2EC|#F8F8F2|#FFFFFF|#F1FA8C|#FFB86C|#FF5555|#FF79C6|#BD93F9|#66B2FF|#8BE9FD|#50FA7B|#2F5042|#4F323C|#505447|#364862|#533A53|#484A53',
+    \ 'nord':             'Nord|dark|Nord-TrueColor|#2E3440|#3B4252|#242933|#8492AC|#96A4BE|#D8DEE9|#E5E9F0|#ECEFF4|#F5F7FA|#EBCB8B|#D08770|#BF616A|#B48EAD|#5E81AC|#81A1C1|#88C0D0|#A3BE8C|#394548|#443943|#494647|#384354|#423F4E|#434C5E',
+    \ 'onedark':          'OneDark|dark|OneDark-TrueColor|#282C34|#31353F|#21252B|#5C6370|#7F848E|#ABB2BF|#C8CCD4|#DCE0E8|#F0F3F8|#E5C07B|#D19A66|#E06C75|#D877C8|#9F78E6|#61AFEF|#56B6C2|#98C379|#2E3E38|#3F2D34|#3E3A34|#283B4C|#4B3B52|#3E4451',
+    \ 'new-years':        "New Year's|dark|New-Years-TrueColor|#0C0C10|#1C1B22|#060608|#7E7A8C|#9E99AD|#F2EFE9|#F8F6F2|#FCFBF9|#FFFFFF|#44FF77|#FF8024|#FF1744|#5C9DFF|#B388FF|#00F0FF|#FF66C4|#FFD700|#143824|#3B1220|#163B26|#0C3440|#1D2845|#282630",
     \ 'valentines':       "Valentine's Day|dark|Valentines-TrueColor|#260715|#400D24|#18040D|#A65E7E|#C27898|#FFE8F2|#FFF5F9|#FFFDF9|#FFFFFF|#44F088|#FF8547|#FF1738|#66B2FF|#C77DFF|#FF6BB5|#2EE6C8|#FFD700|#143D31|#520A22|#19422D|#521B38|#332645|#4A1A30",
     \ 'st-patricks':      "St. Patrick's Day|dark|St-Patricks-TrueColor|#042210|#0A3B1E|#021509|#529E6E|#6BB887|#E6FAEC|#F5FFF8|#FFFDF0|#FFFFFF|#FF9100|#FF5722|#FF1744|#FF66B2|#B88CFF|#FFD700|#38E5FF|#00F556|#054A20|#451220|#38390E|#3B4B0D|#382E30|#1B4D2B",
     \ 'easter':           'Easter|light|Easter-TrueColor|#FDF7FF|#F0DCF8|#E4C8F0|#86659C|#6E4E85|#361E4A|#221033|#160822|#0C0312|#A87400|#E04F00|#D5001C|#008B8B|#7B1FA2|#C21878|#0070D6|#009E3D|#D4F5DF|#FAD2D8|#F5E4C3|#F5CFE8|#CEEFEB|#DEC9EC',
-    \ 'independence-day': 'Independence Day|dark|Independence-Day-TrueColor|#061436|#10275E|#030B20|#6588CC|#85A5E6|#F4F8FF|#FFFFFF|#FFF9E6|#FAFAFF|#2EE6A6|#FF7733|#FF1738|#5CE6FF|#9E8CFF|#38B6FF|#FF6B9E|#FFD700|#0E3B2C|#3D1228|#0E403E|#113864|#163F62|#233769',
+    \ 'independence-day': 'Independence Day|dark|Independence-Day-TrueColor|#061436|#10275E|#030B20|#6588CC|#85A5E6|#F4F8FF|#F8FBFF|#FCFDFF|#FFFFFF|#2EE6A6|#FF7733|#FF1738|#5CE6FF|#9E8CFF|#38B6FF|#FF6B9E|#FFD700|#0E3B2C|#3D1228|#0E403E|#113864|#163F62|#233769',
     \ 'halloween':        'Halloween|dark|Halloween-TrueColor|#160824|#281040|#0E0418|#7D5BA6|#9B78C4|#EDE2FA|#F8F2FF|#FFF8EB|#FFFFFF|#FFE000|#FF3B00|#FF1744|#FF5CCD|#C77DFF|#55FF47|#2EE6D6|#FF7518|#1B3D26|#440E26|#45331D|#243F2C|#451946|#33204A',
     \ 'thanksgiving':     'Thanksgiving|dark|Thanksgiving-TrueColor|#221107|#381C0C|#150A04|#9C7458|#B88E70|#F7E8D8|#FFF6EB|#FFFDF9|#FFFFFF|#FFD000|#FFA866|#FF1F2D|#FF6699|#C780FF|#FF7814|#38D9B8|#8CE645|#243D14|#4D1214|#4F3809|#4F260B|#4F2224|#472A1A',
-    \ 'christmas':        'Christmas|dark|Christmas-TrueColor|#062012|#0E3820|#03140B|#5C9E78|#78B894|#F0FAF4|#FFFFFF|#FFFDF7|#FAFAFF|#38E5FF|#FF7B24|#FF1738|#B8FF3D|#C788FF|#FFD700|#FF6B9E|#2EE66B|#0F4224|#3D1620|#0F3E3B|#3D4A0F|#2A471A|#234231'
+    \ 'christmas':        'Christmas|dark|Christmas-TrueColor|#062012|#0E3820|#03140B|#5C9E78|#78B894|#F0FAF4|#F7FDF9|#FCFEFD|#FFFFFF|#38E5FF|#FF7B24|#FF1738|#B8FF3D|#C788FF|#FFD700|#FF6B9E|#2EE66B|#0F4224|#3D1620|#0F3E3B|#3D4A0F|#2A471A|#234231'
     \ }
+" END GENERATED BUILTIN THEMES
 
 " -------------------------------------------------------------
 " 3. Theme Discovery, File Parsing & Palette Blending Helpers
@@ -411,14 +420,13 @@ function! s:ApplyUiHighlights(c) abort
     call s:Hi(['StatusLine', 'StatusLineTerm'], 'NONE', '14', '0', 'NONE', a:c['BASE1'], a:c['BASE02'])
     call s:Hi(['StatusLineNC', 'StatusLineTermNC', 'Folded', 'PmenuShadow', 'PmenuBorder', 'TabLine', 'TabLineFill'], 'NONE', '10', '0', 'NONE', a:c['BASE01'], a:c['BASE02'])
     call s:Hi(['NonText', 'SpecialKey', 'Conceal', 'Whitespace'], 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'], 'NONE')
-    call s:Hi(['CursorLine', 'CursorColumn', 'ColorColumn', 'PmenuSbar'], 'NONE', 'NONE', '0', 'NONE', 'NONE', a:c['BASE02'])
-    call s:Hi(['CursorLineNr', 'WildMenu', 'MatchParen', 'QuickFixLine', 'FloatTitle', 'PopupTitle'], 'bold', '14', '0', 'bold', a:c['BASE1'], a:c['BASE02'])
-    call s:Hi(['NormalFloat', 'Popup', 'PopupNotification', 'MessageWindow'], 'NONE', '12', '0', 'NONE', a:c['BASE0'], a:c['BASE04'])
+    call s:Hi(['CursorLine', 'CursorColumn', 'ColorColumn'], 'NONE', 'NONE', '0', 'NONE', 'NONE', a:c['BASE02'])
+    call s:Hi(['CursorLineNr', 'WildMenu', 'MatchParen', 'QuickFixLine', 'FloatTitle', 'PopupTitle', 'PmenuSel'], 'bold', '14', '0', 'bold', a:c['BASE1'], a:c['BASE02'])
+    call s:Hi(['NormalFloat', 'Popup', 'PopupNotification', 'MessageWindow', 'Pmenu'], 'NONE', '12', '0', 'NONE', a:c['BASE0'], a:c['BASE04'])
     call s:Hi(['FloatBorder', 'PopupBorder'], 'NONE', '10', '0', 'NONE', a:c['BASE01'], a:c['BASE04'])
     call s:Hi(['Visual'], 'reverse', 'NONE', '0', 'NONE', a:c['BASE1'], a:c['MIX_BASE1'])
     call s:Hi(['VisualNOS'], 'NONE', 'NONE', '0', 'NONE', a:c['BASE1'], a:c['MIX_BASE1'])
-    call s:Hi(['Pmenu'], 'NONE', '12', '0', 'NONE', a:c['BASE0'], a:c['BASE02'])
-    call s:Hi(['PmenuSel'], 'bold', '14', '10', 'bold', a:c['BASE1'], a:c['BASE01'])
+    call s:Hi(['PmenuSbar'], 'NONE', 'NONE', '0', 'NONE', 'NONE', a:c['BASE04'])
     call s:Hi(['PmenuThumb'], 'NONE', 'NONE', '10', 'NONE', 'NONE', a:c['BASE01'])
     call s:Hi(['TabLineSel'], 'bold', '14', 'NONE', 'bold', a:c['BASE1'], a:c['BASE03'])
     call s:Hi(['Search'], 'NONE', '0', '3', 'bold', a:c['BASE1'], a:c['MIX_YELLOW'])
@@ -560,6 +568,21 @@ endfunction
 " -------------------------------------------------------------
 " 5. Holiday Calendar & :Theme Command
 " -------------------------------------------------------------
+function! s:NthWeekdayOfMonth(year, mon, nth, dow) abort
+    let l:leap = (a:year % 4 == 0 && a:year % 100 != 0) || (a:year % 400 == 0)
+    let l:mdays = [31, l:leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    let l:max_d = l:mdays[a:mon - 1]
+    let l:t_tab = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+    let l:sy = a:mon < 3 ? (a:year - 1) : a:year
+    let l:sun0 = (l:sy + l:sy / 4 - l:sy / 100 + l:sy / 400 + l:t_tab[a:mon - 1] + 1) % 7
+    let l:mon0_first = (l:sun0 + 6) % 7
+    if a:nth == -1
+        let l:mon0_last = (l:mon0_first + l:max_d - 1) % 7
+        return l:max_d - ((l:mon0_last - a:dow + 7) % 7)
+    endif
+    return 1 + ((a:dow - l:mon0_first + 7) % 7) + (a:nth - 1) * 7
+endfunction
+
 function! s:HolidayScheduleForYear(year) abort
     let l:a = a:year % 19
     let l:b = a:year / 100
@@ -577,16 +600,18 @@ function! s:HolidayScheduleForYear(year) abort
     let l:ed = ((l:h + l:lv - 7 * l:m + 114) % 31) + 1
     let l:nov1_dow = (a:year + a:year / 4 - a:year / 100 + a:year / 400 + 3) % 7
     let l:td = 1 + ((4 - l:nov1_dow + 7) % 7) + 21
+" BEGIN GENERATED HOLIDAY SCHEDULE
     return [
-        \ [a:year * 10000 + 101,              'new-years'],
-        \ [a:year * 10000 + 214,              'valentines'],
-        \ [a:year * 10000 + 317,              'st-patricks'],
+        \ [a:year * 10000 + 101, 'new-years'],
+        \ [a:year * 10000 + 214, 'valentines'],
+        \ [a:year * 10000 + 317, 'st-patricks'],
         \ [a:year * 10000 + l:em * 100 + l:ed, 'easter'],
-        \ [a:year * 10000 + 704,              'independence-day'],
-        \ [a:year * 10000 + 1031,             'halloween'],
-        \ [a:year * 10000 + 1100 + l:td,      'thanksgiving'],
-        \ [a:year * 10000 + 1225,             'christmas']
+        \ [a:year * 10000 + 704, 'independence-day'],
+        \ [a:year * 10000 + 1031, 'halloween'],
+        \ [a:year * 10000 + 1100 + l:td, 'thanksgiving'],
+        \ [a:year * 10000 + 1225, 'christmas']
         \ ]
+" END GENERATED HOLIDAY SCHEDULE
 endfunction
 
 function! s:ResolveNearestHolidaySlug() abort
@@ -613,12 +638,15 @@ function! s:ResolveNearestHolidaySlug() abort
     let l:mo = str2nr(strpart(l:ds, 5, 2))
     let l:dy = str2nr(strpart(l:ds, 8, 2))
     let l:today_int = l:yr * 10000 + l:mo * 100 + l:dy
+    let l:best_date = 99999999
+    let l:best_slug = 'new-years'
     for l:item in s:HolidayScheduleForYear(l:yr) + s:HolidayScheduleForYear(l:yr + 1)
-        if l:item[0] >= l:today_int
-            return l:item[1]
+        if l:item[0] >= l:today_int && l:item[0] < l:best_date
+            let l:best_date = l:item[0]
+            let l:best_slug = l:item[1]
         endif
     endfor
-    return 'new-years'
+    return l:best_slug
 endfunction
 
 function! s:WriteFileAtomic(path, lines) abort
@@ -725,6 +753,17 @@ function! s:CompleteTheme(arg_lead, cmd_line, cursor_pos) abort
         let l:seen[l:slug] = 1
         call add(l:items, l:slug)
     endfor
+    let l:repo_themes_dir = s:vimrc_repo_root . '/colors/themes'
+    if isdirectory(l:repo_themes_dir)
+        for l:rf in sort(glob(l:repo_themes_dir . '/*.theme', 0, 1))
+            let l:rkv = s:ParseThemeFile(l:rf)
+            let l:rslug = s:NormSlug(get(l:rkv, 'THEME_ID', fnamemodify(l:rf, ':t:r')))
+            if l:rslug =~# '^[a-z0-9][a-z0-9-]*$' && !has_key(l:seen, l:rslug)
+                let l:seen[l:rslug] = 1
+                call add(l:items, l:rslug)
+            endif
+        endfor
+    endif
     let l:custom = []
     for l:udir in s:UserThemeDirs(l:cfg_home)
         if isdirectory(l:udir)

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: install system uninstall lint test test-system-setup test-dotfiles test-bin test-theme test-ide-fleet test-env test-zsh test-completions test-vim test-fonts check help
+.PHONY: install system uninstall sync-themes lint test test-system-setup test-dotfiles test-bin test-theme test-ide-fleet test-env test-zsh test-completions test-vim test-fonts check help
 
 ## install: Install dotfiles, bin utilities, fonts, plugins, and user tools (user-space, no sudo).
 install:
@@ -12,6 +12,10 @@ system:
 ## uninstall: Uninstall all managed dotfiles, fonts, and user tools.
 uninstall:
 	@./setup.sh --uninstall
+
+## sync-themes: Synchronize derived bat, btop, Ghostty, standalone Vim and Bash, and doc catalog files from colors/themes/*.theme.
+sync-themes:
+	@./bin/theme --sync-assets
 
 ## lint: Run syntax validation, ShellCheck, Python AST, and documentation hygiene checks.
 lint:

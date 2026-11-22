@@ -13,23 +13,7 @@ Neovim, Vim, Tmux, bat, delta, btop, tealdeer, fzf, eza, dircolors, and shells.
 When invoked with no arguments in an interactive terminal, opens an fzf picker.
 
 Managed Themes:
-  solarized-dark     Solarized Dark (default)
-  solarized-light    Solarized Light
-  catppuccin-mocha   Catppuccin Mocha
-  catppuccin-latte   Catppuccin Latte
-  gruvbox-dark       Gruvbox Dark
-  tokyonight-night   TokyoNight Night
-  kanagawa-wave      Kanagawa Wave
-  nord               Nord
-  onedark            OneDark
-  new-years          New Year's
-  valentines         Valentine's Day
-  st-patricks        St. Patrick's Day
-  easter             Easter
-  independence-day   Independence Day
-  halloween          Halloween
-  thanksgiving       Thanksgiving
-  christmas          Christmas
+{MANAGED_THEMES}
 
 Options:
   -s, --set <NAME>       Apply theme <NAME> across all managed tools
@@ -47,6 +31,27 @@ Options:
   -n, --dry-run [NAME]   Show files and targets that would be updated without modifying state
   -h, --help             Show this help message and exit
 """
+
+
+def build_usage_text(repo_dir: Path) -> str:
+    """Render CLI --help text with dynamically discovered built-in themes."""
+    from theme_lib.palette import discover_builtin_themes, ordered_theme_slugs
+
+    try:
+        builtin = discover_builtin_themes(repo_dir)
+    except ValueError:
+        builtin = {}
+    slugs = ordered_theme_slugs(builtin)
+    if slugs:
+        col_w = max(18, max(len(s) for s in slugs) + 2)
+        rows = [
+            f"  {s:<{col_w}} {builtin[s]['THEME_LABEL']}{' (default)' if s == 'solarized-dark' else ''}"
+            for s in slugs
+        ]
+        managed_block = "\n".join(rows)
+    else:
+        managed_block = "  solarized-dark     Solarized Dark (default)"
+    return USAGE_TEXT.replace("{MANAGED_THEMES}", managed_block)
 
 
 def _parse_flag_value(
@@ -98,10 +103,12 @@ def main(argv: list[str] | None = None) -> int:
         if not end_of_opts and arg == "--":
             end_of_opts = True
         elif not end_of_opts and arg in ("-h", "--help"):
-            print(USAGE_TEXT, end="")
+            print(build_usage_text(repo_dir), end="")
             return 0
         elif not end_of_opts and arg == "--sync-assets":
             action = "sync-assets"
+        elif not end_of_opts and arg == "--check-assets":
+            action = "check-assets"
         elif not end_of_opts and arg in ("-l", "--list"):
             action = "list"
         elif not end_of_opts and arg == "--plain":
@@ -180,27 +187,39 @@ def main(argv: list[str] | None = None) -> int:
         print(str(get_user_themes_dirs()[0]))
         return 0
 
-    if action == "sync-assets":
-        from theme_lib.reload import sync_managed_repo_assets
+    if action in ("sync-assets", "check-assets"):
+        from theme_lib.sync import sync_managed_repo_assets
 
-        sync_managed_repo_assets(repo_dir)
+        try:
+            drift = sync_managed_repo_assets(repo_dir, check_only=(action == "check-assets"))
+        except ValueError as err:
+            sys.stderr.write(f"theme: {err}\n")
+            return 1
+        if action == "check-assets" and drift:
+            for item in drift:
+                sys.stderr.write(f"theme: asset out of sync: {item}\n")
+            sys.stderr.write(
+                "theme: run './bin/theme --sync-assets' (or 'make sync-themes') to synchronize derived theme files\n"
+            )
+            return 1
         return 0
 
     from theme_lib.palette import (
         create_user_theme,
         discover_themes,
         get_current_theme_slug,
+        ordered_theme_slugs,
         resolve_nearest_holiday_slug,
     )
-
-    if resolve_holiday:
-        target_name = resolve_nearest_holiday_slug()
 
     try:
         themes = discover_themes(repo_dir)
     except ValueError as err:
         sys.stderr.write(f"theme: {err}\n")
         return 1
+
+    if resolve_holiday:
+        target_name = resolve_nearest_holiday_slug(themes=themes, repo_dir=repo_dir)
 
     current_slug = get_current_theme_slug(themes)
 
@@ -209,11 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if action == "list":
         if plain:
-            from theme_lib.palette import MANAGED_ORDER
-
-            ordered = [s for s in MANAGED_ORDER if s in themes]
-            ordered.extend(s for s in sorted(themes) if s not in ordered)
-            for slug in ordered:
+            for slug in ordered_theme_slugs(themes):
                 print(slug)
             return 0
         from theme_lib.preview import list_themes

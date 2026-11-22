@@ -86,4 +86,7 @@ python3 -B "$TESTS_DIR/lint/lint_python.py" "$REPO_DIR"
 echo "Checking documentation hygiene and links..."
 python3 -B "$TESTS_DIR/lint/lint_docs.py" "$REPO_DIR"
 
+echo "Checking derived theme assets and standalone fallback sync..."
+"$REPO_DIR/bin/theme" --check-assets
+
 echo "All lint checks passed."

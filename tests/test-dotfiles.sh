@@ -2275,26 +2275,13 @@ else
     fail "Stale working directory self-healing" "zsh='$zsh_stale_out' bash='$bash_stale_out'"
 fi
 
-# Verify all 17 managed themes have .tmTheme, btop, and Ghostty theme assets linked and valid
-managed_tmthemes=(
-    "Solarized-Dark-TrueColor.tmTheme"
-    "Solarized-Light-TrueColor.tmTheme"
-    "Catppuccin-Mocha-TrueColor.tmTheme"
-    "Catppuccin-Latte-TrueColor.tmTheme"
-    "Gruvbox-Dark-TrueColor.tmTheme"
-    "TokyoNight-Night-TrueColor.tmTheme"
-    "Kanagawa-Wave-TrueColor.tmTheme"
-    "Nord-TrueColor.tmTheme"
-    "OneDark-TrueColor.tmTheme"
-    "New-Years-TrueColor.tmTheme"
-    "Valentines-TrueColor.tmTheme"
-    "St-Patricks-TrueColor.tmTheme"
-    "Easter-TrueColor.tmTheme"
-    "Independence-Day-TrueColor.tmTheme"
-    "Halloween-TrueColor.tmTheme"
-    "Thanksgiving-TrueColor.tmTheme"
-    "Christmas-TrueColor.tmTheme"
-)
+# Verify all managed themes in colors/themes/*.theme have .tmTheme, btop, and Ghostty theme assets linked and valid
+managed_tmthemes=()
+for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
+    [ -f "$tf" ] || continue
+    tmt_base="$(awk -F'"' '/^BAT_THEME_NAME=/ {print $2; exit}' "$tf")"
+    managed_tmthemes+=("${tmt_base}.tmTheme")
+done
 all_tmthemes_ok=true
 for tmt in "${managed_tmthemes[@]}"; do
     if [ ! -L "$TEMP_HOME/.config/bat/themes/$tmt" ] || [ ! -f "$SCRIPT_DIR/colors/$tmt" ]; then
@@ -2303,7 +2290,7 @@ for tmt in "${managed_tmthemes[@]}"; do
     fi
 done
 if [ "$all_tmthemes_ok" = true ]; then
-    pass "All 17 managed bat .tmTheme files exist in colors/ and are symlinked into ~/.config/bat/themes/"
+    pass "All ${#managed_tmthemes[@]} managed bat .tmTheme files exist in colors/ and are symlinked into ~/.config/bat/themes/"
 fi
 
 # Test 5: Uninstallation of dotfiles (preserving local ~/.config/git/ignore and attributes)

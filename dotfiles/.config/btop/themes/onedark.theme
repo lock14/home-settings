@@ -64,7 +64,7 @@ theme[free_end]="#abb2bf"
 # Mem/Disk cached meter
 theme[cached_start]="#56b6c2"
 theme[cached_mid]="#61afef"
-theme[cached_end]="#b268ca"
+theme[cached_end]="#9f78e6"
 
 # Mem/Disk available meter
 theme[available_start]="#98c379"
@@ -79,7 +79,7 @@ theme[used_end]="#e06c75"
 # Download graph colors
 theme[download_start]="#56b6c2"
 theme[download_mid]="#61afef"
-theme[download_end]="#b268ca"
+theme[download_end]="#9f78e6"
 
 # Upload graph colors
 theme[upload_start]="#98c379"

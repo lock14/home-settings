@@ -106,7 +106,7 @@ check_option "toupper(synIDattr(hlID('Constant'), 'fg#', 'gui')) == '#D33682' &&
 check_option "toupper(synIDattr(hlID('Error'), 'fg#', 'gui')) == '#DC322F' && toupper(synIDattr(hlID('WarningMsg'), 'fg#', 'gui')) == '#B58900' && synIDattr(hlID('WarningMsg'), 'fg', 'cterm') == '3'" "Vim Error and WarningMsg mapped to Solarized Red (#DC322F) and Yellow (#B58900, converged with Neovim diagnostic ladder)"
 check_option "synIDattr(hlID('Normal'), 'fg', 'cterm') == '12' && empty(synIDattr(hlID('Normal'), 'bg', 'cterm')) && empty(synIDattr(hlID('LineNr'), 'bg', 'cterm')) && empty(synIDattr(hlID('VertSplit'), 'bg', 'cterm')) && empty(synIDattr(hlID('FoldColumn'), 'bg', 'cterm')) && empty(synIDattr(hlID('SignColumn'), 'bg', 'cterm')) && synIDattr(hlID('Conditional'), 'fg', 'cterm') == '3' && synIDattr(hlID('Type'), 'fg', 'cterm') == '2' && synIDattr(hlID('Function'), 'fg', 'cterm') == '4' && synIDattr(hlID('String'), 'fg', 'cterm') == '6' && synIDattr(hlID('Constant'), 'fg', 'cterm') == '5'" "Vim 16/256-color cterm fallback uses ctermbg=NONE on canvas/gutter/splits (zero ctermbg=8 collision) alongside TrueColor gui attributes"
 check_option "toupper(synIDattr(hlID('WildMenu'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('WildMenu'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('StatusLineTerm'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(hlID('Added'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('Changed'), 'fg#', 'gui')) == '#B58900' && toupper(synIDattr(hlID('Removed'), 'fg#', 'gui')) == '#DC322F'" "Vim WildMenu, StatusLineTerm, and Added/Changed/Removed groups mapped to Solarized Dark"
-check_option "toupper(synIDattr(hlID('Visual'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('Visual'), 'bg#', 'gui')) == '#2C4E56' && toupper(synIDattr(hlID('IncSearch'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('IncSearch'), 'bg#', 'gui')) == '#3E2E4C' && toupper(synIDattr(hlID('NormalFloat'), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('PopupTitle')), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(synIDtrans(hlID('PopupTitle')), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(synIDtrans(hlID('PmenuBorder')), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(hlID('FloatBorder'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('WinSeparator'), 'fg#', 'gui')) == '#586E75' && len(get(g:, 'terminal_ansi_colors', [])) == 16 && toupper(g:terminal_ansi_colors[9]) == '#CB4B16' && toupper(g:terminal_ansi_colors[13]) == '#6C71C4'" "Vim Visual (MIX_BASE1), IncSearch (MIX_MAGENTA), NormalFloat/Popup/PopupBorder/PopupTitle/PmenuBorder/PopupNotification/MessageWindow/FloatBorder (BASE04/BASE01), WinSeparator, and 16-slot g:terminal_ansi_colors match Neovim palette"
+check_option "toupper(synIDattr(hlID('Visual'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('Visual'), 'bg#', 'gui')) == '#2C4E56' && toupper(synIDattr(hlID('IncSearch'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('IncSearch'), 'bg#', 'gui')) == '#3E2E4C' && toupper(synIDattr(hlID('NormalFloat'), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(hlID('Pmenu'), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(hlID('PmenuSel'), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(hlID('PmenuSel'), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('PopupTitle')), 'fg#', 'gui')) == '#93A1A1' && toupper(synIDattr(synIDtrans(hlID('PopupTitle')), 'bg#', 'gui')) == '#073642' && toupper(synIDattr(synIDtrans(hlID('PmenuBorder')), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'fg#', 'gui')) == '#839496' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'bg#', 'gui')) == '#002731' && toupper(synIDattr(hlID('FloatBorder'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('WinSeparator'), 'fg#', 'gui')) == '#586E75' && len(get(g:, 'terminal_ansi_colors', [])) == 16 && toupper(g:terminal_ansi_colors[9]) == '#CB4B16' && toupper(g:terminal_ansi_colors[13]) == '#6C71C4'" "Vim Visual (MIX_BASE1), IncSearch (MIX_MAGENTA), NormalFloat/Pmenu/PmenuSel/Popup/PopupBorder/PopupTitle/PmenuBorder/PopupNotification/MessageWindow/FloatBorder (BASE04/BASE02/BASE01/BASE1), WinSeparator, and 16-slot g:terminal_ansi_colors match Neovim palette"
 check_option "toupper(synIDattr(hlID('protoRepeat'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('protoTodo'), 'fg#', 'gui')) == '#586E75' && toupper(synIDattr(hlID('pbtxtMessage'), 'fg#', 'gui')) == '#268BD2' && toupper(synIDattr(hlID('pbtxtField'), 'fg#', 'gui')) == '#859900' && toupper(synIDattr(hlID('pbtxtEnum'), 'fg#', 'gui')) == '#D33682' && toupper(synIDattr(hlID('pbtxtTodo'), 'fg#', 'gui')) == '#586E75'" "Vim Protocol Buffers (protoRepeat, protoTodo) and Textproto (pbtxtMessage, pbtxtField, pbtxtEnum, pbtxtTodo) fallback groups mapped to Solarized Dark"
 
 if ! grep -Fq 'ctermbg=8' "$SCRIPT_DIR/dotfiles/.vimrc"; then
@@ -156,7 +156,7 @@ else
 fi
 rm -rf "$VIM_SEC_TMP"
 
-# Test standalone 2-file .vimrc 1:1 embedded 17-theme parity, :Theme command + completion + switch-back + --holiday, FocusGained live reload, and filetype syntax overrides
+# Test standalone 2-file .vimrc 1:1 embedded built-in theme parity, :Theme command + completion + switch-back + --holiday, FocusGained live reload, and filetype syntax overrides
 VIM_STANDALONE_TMP="$(mktemp -d)"
 cp "$SCRIPT_DIR/dotfiles/.vimrc" "$VIM_STANDALONE_TMP/.vimrc"
 mkdir -p "$VIM_STANDALONE_TMP/home/.config/themes"
@@ -171,14 +171,18 @@ cat > "$VIM_STANDALONE_TMP/home/.config/themes/active-theme.theme" <<'EOF'
 THEME_ID="active-theme"
 EOF
 
-vim_17_fail=""
+vim_builtin_cnt=0
+vim_22_fail=""
 for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
+    vim_builtin_cnt=$(( vim_builtin_cnt + 1 ))
     t_id="$(awk -F'"' '/^THEME_ID=/ {print $2}' "$tf")"
     t_mode="$(awk -F'"' '/^THEME_MODE=/ {print $2}' "$tf")"
     t_bat="$(awk -F'"' '/^BAT_THEME_NAME=/ {print $2}' "$tf")"
     t_b03="$(awk -F'"' '/^BASE03=/ {print toupper($2)}' "$tf")"
+    t_b02="$(awk -F'"' '/^BASE02=/ {print toupper($2)}' "$tf")"
     t_b01="$(awk -F'"' '/^BASE01=/ {print toupper($2)}' "$tf")"
     t_b0="$(awk -F'"' '/^BASE0=/ {print toupper($2)}' "$tf")"
+    t_b1="$(awk -F'"' '/^BASE1=/ {print toupper($2)}' "$tf")"
     t_b04="$(awk -F'"' '/^BASE04=/ {print toupper($2)}' "$tf")"
     t_grn="$(awk -F'"' '/^GREEN=/ {print toupper($2)}' "$tf")"
     t_yel="$(awk -F'"' '/^YELLOW=/ {print toupper($2)}' "$tf")"
@@ -186,15 +190,15 @@ for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
     t_vio="$(awk -F'"' '/^VIOLET=/ {print toupper($2)}' "$tf")"
     if ! HOME="$VIM_STANDALONE_TMP/empty-home" XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME_FILE=/nonexistent HOME_SETTINGS_THEME="$t_id" COLORTERM=truecolor \
         vim -u "$VIM_STANDALONE_TMP/.vimrc" -N -es \
-        -c "if &background ==# '$t_mode' && \$BAT_THEME ==# '$t_bat' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) ==# '$t_b03' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) ==# '$t_b0' && toupper(synIDattr(hlID('NormalFloat'), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'fg#', 'gui')) ==# '$t_b01' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('PmenuBorder')), 'fg#', 'gui')) ==# '$t_b01' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) ==# '$t_grn' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) ==# '$t_yel' && toupper(g:terminal_ansi_colors[9]) ==# '$t_ora' && toupper(g:terminal_ansi_colors[13]) ==# '$t_vio' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
-        vim_17_fail="$t_id"
+        -c "if &background ==# '$t_mode' && \$BAT_THEME ==# '$t_bat' && toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) ==# '$t_b03' && toupper(synIDattr(hlID('Normal'), 'fg#', 'gui')) ==# '$t_b0' && toupper(synIDattr(hlID('NormalFloat'), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(hlID('Pmenu'), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(hlID('PmenuSel'), 'fg#', 'gui')) ==# '$t_b1' && toupper(synIDattr(hlID('PmenuSel'), 'bg#', 'gui')) ==# '$t_b02' && toupper(synIDattr(synIDtrans(hlID('Popup')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'fg#', 'gui')) ==# '$t_b01' && toupper(synIDattr(synIDtrans(hlID('PopupBorder')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('PmenuBorder')), 'fg#', 'gui')) ==# '$t_b01' && toupper(synIDattr(synIDtrans(hlID('PopupNotification')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(synIDtrans(hlID('MessageWindow')), 'bg#', 'gui')) ==# '$t_b04' && toupper(synIDattr(hlID('Statement'), 'fg#', 'gui')) ==# '$t_grn' && toupper(synIDattr(hlID('Conditional'), 'fg#', 'gui')) ==# '$t_yel' && toupper(g:terminal_ansi_colors[9]) ==# '$t_ora' && toupper(g:terminal_ansi_colors[13]) ==# '$t_vio' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1; then
+        vim_22_fail="$t_id"
         break
     fi
 done
-if [ -z "$vim_17_fail" ]; then
-    pass "Standalone copied .vimrc embeds all 17 built-in themes with 1:1 Normal/NormalFloat/Popup/PopupBorder/PmenuBorder/PopupNotification/MessageWindow/Statement/Conditional/BAT_THEME/terminal_ansi_colors parity"
+if [ -z "$vim_22_fail" ]; then
+    pass "Standalone copied .vimrc embeds all $vim_builtin_cnt built-in themes with 1:1 Normal/NormalFloat/Pmenu/PmenuSel/Popup/PopupBorder/PmenuBorder/PopupNotification/MessageWindow/Statement/Conditional/BAT_THEME/terminal_ansi_colors parity"
 else
-    fail "Standalone .vimrc 17-theme parity" "Mismatch on theme '$vim_17_fail'"
+    fail "Standalone .vimrc built-in theme parity" "Mismatch on theme '$vim_22_fail'"
 fi
 
 cat > "$VIM_STANDALONE_TMP/verify_theme_lifecycle.vim" <<'EOF'

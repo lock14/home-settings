@@ -2,7 +2,7 @@
 # ==============================================================================
 # bin/theme — Unified Multi-Theme Color Scheme Manager
 # ==============================================================================
-# Manages the 17 built-in TrueColor themes and user-defined custom themes across
+# Manages built-in TrueColor themes (colors/themes/*.theme) and custom user themes across
 # terminal emulators, Neovim, Vim, Tmux, bat, delta, btop, tealdeer, fzf, eza,
 # jq, less, dircolors, Powerlevel10k, Zsh, and Bash via libexec/theme_lib/*.py.
 #

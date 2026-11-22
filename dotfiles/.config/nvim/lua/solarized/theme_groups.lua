@@ -83,9 +83,9 @@ function M.build(colors)
         TabLineFill = { fg = colors.base0, bg = colors.base04 },
         TabLineSel = { fg = colors.base0, bg = colors.base03 },
         Pmenu = { fg = colors.base0, bg = colors.base04 },
-        PmenuSel = { fg = colors.base2, bg = colors.base01 },
+        PmenuSel = { fg = colors.base1, bg = colors.base02, bold = true },
         PmenuSbar = { bg = colors.base04 },
-        PmenuThumb = { bg = colors.base1 },
+        PmenuThumb = { bg = colors.base01 },
 
         -- Diagnostic signs and sp-only underlines without mutating syntax fg
         DiagnosticSignError = { fg = colors.red, bg = colors.base03 },

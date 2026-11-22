@@ -10,24 +10,24 @@
 			<key>settings</key>
 			<dict>
 				<key>background</key>
-				<string>#07081C</string>
+				<string>#0C0C10</string>
 				<key>caret</key>
-				<string>#EEF1FF</string>
+				<string>#F2EFE9</string>
 				<key>foreground</key>
-				<string>#EEF1FF</string>
+				<string>#F2EFE9</string>
 				<key>invisibles</key>
-				<string>#6872AA</string>
+				<string>#7E7A8C</string>
 				<key>lineHighlight</key>
-				<string>#14183D</string>
+				<string>#1C1B22</string>
 				<key>selection</key>
-				<string>#14183D</string>
+				<string>#1C1B22</string>
 				<key>gutter</key>
-				<string>#07081C</string>
+				<string>#0C0C10</string>
 				<key>gutterForeground</key>
-				<string>#6872AA</string>
+				<string>#7E7A8C</string>
 			</dict>
 		</dict>
-		<!-- Comments & Subtle Metadata (Solarized Base01 #6872AA) -->
+		<!-- Comments & Subtle Metadata (Solarized Base01 #7E7A8C) -->
 		<dict>
 			<key>name</key>
 			<string>Comments and Subtle Metadata</string>
@@ -38,7 +38,7 @@
 				<key>fontStyle</key>
 				<string></string>
 				<key>foreground</key>
-				<string>#6872AA</string>
+				<string>#7E7A8C</string>
 			</dict>
 		</dict>
 		<!-- Strings, Escapes & Format Placeholders (Solarized Cyan #FF66C4) -->
@@ -125,7 +125,7 @@
 				<string>#44FF77</string>
 			</dict>
 		</dict>
-		<!-- Monotone Canvas Ground: Custom Types, Invocations, Variables & Operators (Solarized Base0 #EEF1FF) -->
+		<!-- Monotone Canvas Ground: Custom Types, Invocations, Variables & Operators (Solarized Base0 #F2EFE9) -->
 		<dict>
 			<key>name</key>
 			<string>Monotone Canvas Ground (Types, Invocations, Variables, Operators)</string>
@@ -134,7 +134,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#EEF1FF</string>
+				<string>#F2EFE9</string>
 			</dict>
 		</dict>
 		<!-- Namespaces, Modules, Annotations, Decorators, Attributes & Imports (Solarized Violet #B388FF) -->
@@ -173,7 +173,7 @@
 				<string>#FF8024</string>
 			</dict>
 		</dict>
-		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #FFFFFF) -->
+		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #F8F6F2) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading 4 and Table Headers</string>
@@ -182,10 +182,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FFFFFF</string>
+				<string>#F8F6F2</string>
 			</dict>
 		</dict>
-		<!-- Markdown Bold (Solarized Base1 Bold #FFFFFF) -->
+		<!-- Markdown Bold (Solarized Base1 Bold #F8F6F2) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Bold</string>
@@ -196,7 +196,7 @@
 				<key>fontStyle</key>
 				<string>bold</string>
 				<key>foreground</key>
-				<string>#FFFFFF</string>
+				<string>#F8F6F2</string>
 			</dict>
 		</dict>
 		<!-- Markdown Italic (Solarized Base0 Italic) -->

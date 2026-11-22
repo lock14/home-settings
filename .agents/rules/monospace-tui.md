@@ -142,12 +142,12 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 *   **Reason**: Preserves zero-jitter monospace glyph widths and calm `60-30-10` Solarized luminance balance while
     retaining non-color glyph indicators (`▸`, `[LIVE]`, `[PREVIEW]`, `!`, `[unsaved]`) for accessibility (`§5.3`).
 
-### [OVERRIDE] §R3.2 17-theme 14-slot semantic palette with 4-tier color degradation
+### [OVERRIDE] §R3.2 multi-theme 14-slot semantic palette with 4-tier color degradation
 
 *   **Original**: | Primary | 75 (light blue) | 17 (dark blue) | fg #5fafff, bg #00005f |
 *   **Project rule**: All `bin/ide` and `tmux` colors derive from the active `home-settings` theme (`load_active_palette`
-    in `libexec/ide_lib/theme.py` and `generate_tmux_theme_text` in `libexec/theme_lib/generators.py`) across 17 built-in
-    themes and user `${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/themes/*.theme` files, degrading across four
+    in `libexec/ide_lib/theme.py` and `generate_tmux_theme_text` in `libexec/theme_lib/generators.py`) across built-in
+    themes (`colors/themes/*.theme`) and user `${XDG_CONFIG_HOME:-$HOME/.config}/home-settings/themes/*.theme` files, degrading across four
     capability tiers (`detect_color_tier` per `§5.6` and `§R7.1`): 24-bit TrueColor (`COLORTERM=truecolor|24bit` and
     modern TrueColor workstation `TERM` values `xterm-256color` / `tmux-256color`), 256-color (`COLORTERM=256color` or
     `TERM=screen-256color` / `rxvt-unicode-256color`), 16-color ANSI, and Monochrome / `NO_COLOR` (`TERM=dumb` SGR
@@ -182,7 +182,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 
 *   **Project rule**: On provisioned `home-settings` workstations (`MesloLGS Nerd Font Mono`), `tmux` and `bin/ide` use
     monotone Nerd Font PUA icons (``, `󰚩`, ``, ``, `󰂚`) and never emit fixed-bitmap color emojis in `solarized-dark`
-    or any of the 9 classic daily-driver themes (`AGENTS.md` Rule 61). Whenever `IDE_NERD_FONTS=0` (or `IDE_ASCII=1` or
+    or any classic daily-driver theme (`AGENTS.md` Rule 61). Whenever `IDE_NERD_FONTS=0` (or `IDE_ASCII=1` or
     `TERM=dumb`) is set (`use_nerd_fonts()` in `libexec/ide_lib/constants.py` and `bin/ide`), all `bin/ide` surfaces
     (`ide list`, `ide -s`, `ide _internal session-preview`, and `ide keys`) omit PUA codepoints and fall back to universal
     ASCII and standard Unicode markers (`▸`, `*`, `!`, `…`).

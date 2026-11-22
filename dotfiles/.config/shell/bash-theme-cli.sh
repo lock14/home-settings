@@ -1,7 +1,30 @@
 # Standalone Bash Color Theme CLI, Interactive Preview, Wrapper, & Tab Completion (Bash 3.2+ compatible)
-# Provides full 17-theme + custom user theme switching when bin/theme is absent, and wraps bin/theme when installed.
+# Provides full built-in + custom user theme switching when bin/theme is absent, and wraps bin/theme when installed.
 
-# Pure-Bash Gregorian Easter + 4th-Thursday Thanksgiving US holiday schedule (1:1 with bin/theme)
+_hs_bash_nth_weekday_num() {
+    local y="$1" m="$2" nth="$3" dow="$4"
+    local leap=0 max_d=31
+    (( (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0) )) && leap=1
+    case "$m" in
+        4|6|9|11) max_d=30 ;;
+        2) max_d=$(( 28 + leap )) ;;
+    esac
+    local -a t_tab=(0 3 2 5 0 3 5 1 4 6 2 4)
+    local sy="$y"
+    (( m < 3 )) && sy=$(( sy - 1 ))
+    local sun0_first=$(( (sy + sy / 4 - sy / 100 + sy / 400 + t_tab[m - 1] + 1) % 7 ))
+    local mon0_first=$(( (sun0_first + 6) % 7 ))
+    local day=1
+    if [ "$nth" -eq -1 ]; then
+        local mon0_last=$(( (mon0_first + max_d - 1) % 7 ))
+        day=$(( max_d - ((mon0_last - dow + 7) % 7) ))
+    else
+        day=$(( 1 + ((dow - mon0_first + 7) % 7) + (nth - 1) * 7 ))
+    fi
+    printf '%d' "$(( y * 10000 + m * 100 + day ))"
+}
+
+# Pure-Bash Gregorian Easter + movable/fixed US holiday schedule (1:1 with bin/theme)
 _hs_bash_nearest_holiday() {
     local ymd="${THEME_HOLIDAY_DATE:-}"
     ymd="${ymd#"${ymd%%[![:space:]]*}"}"
@@ -30,6 +53,7 @@ _hs_bash_nearest_holiday() {
         return 1
     fi
     local today_num=$(( yr * 10000 + mo * 100 + da )) cy
+    local best_num=99999999 best_slug="" cand_num=0
     for cy in "$yr" $((yr + 1)); do
         local ea=$(( cy % 19 )) eb=$(( cy / 100 )) ec=$(( cy % 100 ))
         local ed=$(( eb / 4 )) ee=$(( eb % 4 )) ef=$(( (eb + 8) / 25 ))
@@ -45,34 +69,53 @@ _hs_bash_nearest_holiday() {
         local tg_day=$(( 1 + ((4 - nov1_dow + 7) % 7) + 21 ))
         local tg_num=$(( cy * 10000 + 1100 + tg_day ))
 
-        if [ "$today_num" -le $(( cy * 10000 + 101 )) ]; then REPLY="new-years"; return 0; fi
-        if [ "$today_num" -le $(( cy * 10000 + 214 )) ]; then REPLY="valentines"; return 0; fi
-        if [ "$today_num" -le $(( cy * 10000 + 317 )) ]; then REPLY="st-patricks"; return 0; fi
-        if [ "$today_num" -le "$easter_num" ]; then REPLY="easter"; return 0; fi
-        if [ "$today_num" -le $(( cy * 10000 + 704 )) ]; then REPLY="independence-day"; return 0; fi
-        if [ "$today_num" -le $(( cy * 10000 + 1031 )) ]; then REPLY="halloween"; return 0; fi
-        if [ "$today_num" -le "$tg_num" ]; then REPLY="thanksgiving"; return 0; fi
-        if [ "$today_num" -le $(( cy * 10000 + 1225 )) ]; then REPLY="christmas"; return 0; fi
+# BEGIN GENERATED HOLIDAY SCHEDULE
+        cand_num=$(( cy * 10000 + 101 )); if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="new-years"; fi
+        cand_num=$(( cy * 10000 + 214 )); if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="valentines"; fi
+        cand_num=$(( cy * 10000 + 317 )); if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="st-patricks"; fi
+        cand_num=$easter_num; if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="easter"; fi
+        cand_num=$(( cy * 10000 + 704 )); if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="independence-day"; fi
+        cand_num=$(( cy * 10000 + 1031 )); if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="halloween"; fi
+        cand_num=$tg_num; if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="thanksgiving"; fi
+        cand_num=$(( cy * 10000 + 1225 )); if [ "$cand_num" -ge "$today_num" ] && [ "$cand_num" -lt "$best_num" ]; then best_num="$cand_num"; best_slug="christmas"; fi
+# END GENERATED HOLIDAY SCHEDULE
     done
-    REPLY="new-years"
+    REPLY="${best_slug:-new-years}"
     return 0
 }
 
 _hs_bash_collect_all_slugs() {
     _HS_ALL_SLUGS=("${_HS_BUILTIN_THEME_ORDER[@]}")
     _hs_bash_user_theme_dirs
-    local -a custom_slugs=() cands=()
+    local -a custom_slugs=() cands=() repo_cands=()
     local udir cand stem cid s d_idx dup had_fg=0 had_ng=0
     shopt -q failglob && had_fg=1
     shopt -q nullglob && had_ng=1
     shopt -u failglob
     shopt -s nullglob
+    if [ -n "${_HS_BASHRC_REPO_ROOT:-}" ] && [ -d "$_HS_BASHRC_REPO_ROOT/colors/themes" ]; then
+        repo_cands=("$_HS_BASHRC_REPO_ROOT/colors/themes"/*.theme)
+    fi
     for ((d_idx = 0; d_idx < ${#_HS_USER_DIRS[@]}; d_idx++)); do
         udir="${_HS_USER_DIRS[$d_idx]}"
         [ -d "$udir" ] && cands+=("$udir"/*.theme "$udir"/*.conf)
     done
     (( had_ng == 0 )) && shopt -u nullglob
     (( had_fg == 1 )) && shopt -s failglob
+    for cand in ${repo_cands[@]+"${repo_cands[@]}"}; do
+        [ -r "$cand" ] || continue
+        stem="${cand##*/}"
+        stem="${stem%.*}"
+        _hs_bash_parse_file "$cand" || continue
+        _hs_bash_norm_slug "${_HS_RAW_ID:-$stem}"
+        cid="$REPLY"
+        [[ "$cid" =~ ^[a-z0-9][a-z0-9-]*$ ]] || continue
+        dup=0
+        for s in "${_HS_ALL_SLUGS[@]}"; do
+            if [ "$s" = "$cid" ]; then dup=1; break; fi
+        done
+        [ "$dup" -eq 0 ] && _HS_ALL_SLUGS+=("$cid")
+    done
     for cand in ${cands[@]+"${cands[@]}"}; do
         [ -r "$cand" ] || continue
         stem="${cand##*/}"
@@ -382,7 +425,7 @@ _hs_bash_render_preview() {
     (
         _hs_bash_resolve_slug_to_raw "$slug" || { echo "Error: unknown theme '$slug'." >&2; exit 1; }
         _hs_bash_finalize_palette "$slug"
-        if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "linux" ]; then
+        if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "linux" ] || [ "${TERM:-}" = "dumb" ]; then
             printf 'Theme: %s (%s) [%s]\n  bg=%s surface=%s fg=%s comment=%s\n  green=%s yellow=%s blue=%s cyan=%s magenta=%s violet=%s orange=%s red=%s\n' \
                 "$_HS_C_LABEL" "$_HS_C_ID" "$_HS_C_MODE" "$_HS_C_B03" "$_HS_C_B02" "$_HS_C_B0" "$_HS_C_B01" \
                 "$_HS_C_GRN" "$_HS_C_YEL" "$_HS_C_BLU" "$_HS_C_CYA" "$_HS_C_MAG" "$_HS_C_VIO" "$_HS_C_ORA" "$_HS_C_RED"
@@ -439,11 +482,8 @@ _hs_bash_standalone_theme() {
         if [ "$end_opts" -eq 0 ]; then
             case "$1" in
                 -h|--help)
+                    printf 'Usage: theme [OPTIONS] [THEME_NAME]\n\nStandalone Bash color theme manager (%d built-in + custom ${XDG_CONFIG_HOME:-$HOME/.config}/themes/*.{theme,conf}).\n\n' "${#_HS_BUILTIN_THEME_ORDER[@]}"
                     cat <<'EOF'
-Usage: theme [OPTIONS] [THEME_NAME]
-
-Standalone Bash color theme manager (17 built-in + custom ${XDG_CONFIG_HOME:-$HOME/.config}/themes/*.{theme,conf}).
-
 Options:
   -s, --set <NAME>       Apply theme <NAME>
   --holiday              Apply nearest upcoming or active US Holiday theme
@@ -674,7 +714,10 @@ EOF
         if { [ -t 0 ] && [ -t 1 ]; } || [ "${THEME_FORCE_FZF:-0}" = "1" ]; then
             if command -v fzf >/dev/null 2>&1; then
                 _hs_bash_collect_all_slugs
-                local fzf_lines="" s act_tag src_kind disp_label strip
+                local fzf_lines="" s act_tag src_kind disp_label strip use_tc=1
+                if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "linux" ] || [ "${TERM:-}" = "dumb" ]; then
+                    use_tc=0
+                fi
                 for s in "${_HS_ALL_SLUGS[@]}"; do
                     _hs_bash_resolve_slug_to_raw "$s" || continue
                     src_kind="builtin"
@@ -682,32 +725,50 @@ EOF
                     _hs_bash_finalize_palette "$s"
                     act_tag="        "
                     [ "$s" = "$current_slug" ] && act_tag="(active)"
-                    _hs_bash_swatch_strip
-                    strip="$REPLY"
                     disp_label="$_HS_C_LABEL"
-                    if _hs_bash_holiday_icon "$s"; then
+                    if [ "${TERM:-}" != "dumb" ] && [ "${IDE_NERD_FONTS:-1}" != "0" ] && _hs_bash_holiday_icon "$s"; then
                         disp_label="$REPLY $disp_label"
                     fi
                     local row=""
-                    printf -v row '%-18s  %-8s  %-5s  %-7s  %s  %s\n' "$s" "$act_tag" "$_HS_C_MODE" "$src_kind" "$strip" "$disp_label"
+                    if [ "$use_tc" -eq 1 ]; then
+                        _hs_bash_swatch_strip
+                        strip="$REPLY"
+                        printf -v row '%-18s  %-8s  %-5s  %-7s  %s  %s\n' "$s" "$act_tag" "$_HS_C_MODE" "$src_kind" "$strip" "$disp_label"
+                    else
+                        printf -v row '%-18s  %-8s  %-5s  %-7s  %s\n' "$s" "$act_tag" "$_HS_C_MODE" "$src_kind" "$disp_label"
+                    fi
                     fzf_lines="${fzf_lines}${row}"
                 done
                 if ! _hs_bash_resolve_slug_to_raw "$current_slug"; then
                     _hs_bash_builtin_spec "solarized-dark" && _hs_bash_unpack_spec_to_raw "solarized-dark" "$REPLY"
                 fi
                 _hs_bash_finalize_palette "$current_slug"
-                local fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01},fg:${_HS_C_B0},header:${_HS_C_B01},border:${_HS_C_B01},separator:${_HS_C_B01},label:${_HS_C_B01},gutter:${_HS_C_B03},info:${_HS_C_YEL},pointer:${_HS_C_GRN},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU}"
+                local fzf_colors="--no-color"
+                if [ -n "${NO_COLOR:-}" ]; then
+                    fzf_colors="--no-color"
+                elif [ "${TERM:-}" = "dumb" ]; then
+                    fzf_colors="--color=bw"
+                elif [ "${TERM:-}" = "linux" ]; then
+                    fzf_colors="--color=16"
+                else
+                    fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01},fg:${_HS_C_B0},header:${_HS_C_B01},border:${_HS_C_B01},separator:${_HS_C_B01},label:${_HS_C_B01},gutter:${_HS_C_B03},info:${_HS_C_YEL},pointer:${_HS_C_GRN},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU}"
+                fi
+                local fzf_prev_win="--preview-window=right:60%:nowrap:noinfo" fzf_height="--height=80%"
+                if [[ "${COLUMNS:-}" =~ ^[0-9]+$ ]] && [ "${COLUMNS:-120}" -gt 0 ] && [ "${COLUMNS:-120}" -lt 90 ]; then
+                    fzf_prev_win="--preview-window=down:58%:nowrap:noinfo"
+                    fzf_height="--height=95%"
+                fi
                 local -a preview_args=()
                 if [ -n "${_HS_BASHRC_SELF_PATH:-}" ] && [ -r "$_HS_BASHRC_SELF_PATH" ]; then
                     local sq_bash="'${BASH//\'/\'\\\'\'}'"
                     local sq_self="'${_HS_BASHRC_SELF_PATH//\'/\'\\\'\'}'"
                     preview_args=(
                         "--preview=${sq_bash} -c '. \"\$1\" >/dev/null 2>&1 && _hs_bash_render_preview \"\$2\"' _ ${sq_self} {1}"
-                        "--preview-window=right:60%:nowrap:noinfo"
+                        "$fzf_prev_win"
                     )
                 fi
                 local picked="" fzf_rc=0
-                picked="$(printf '%s' "$fzf_lines" | fzf --ansi --no-multi --reverse --height=80% --border=rounded --prompt="Theme > " --header="Select a color theme (Enter to apply, Esc to cancel)" ${preview_args[@]+"${preview_args[@]}"} "$fzf_colors")" || fzf_rc=$?
+                picked="$(printf '%s' "$fzf_lines" | fzf --ansi --no-multi --reverse --no-scrollbar "$fzf_height" --border=rounded --prompt="Theme > " --header="Select a color theme (Enter: apply · Esc: cancel)" ${preview_args[@]+"${preview_args[@]}"} "$fzf_colors")" || fzf_rc=$?
                 if [ "$fzf_rc" -eq 130 ] || [ -z "$picked" ]; then
                     return 0
                 fi

@@ -307,6 +307,7 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    ! grep -Fq $'\033[' <<< "$(NO_COLOR=1 "$SCRIPT_DIR/bin/ide" keys)" && \
    ! grep -Fq "" <<< "$(IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" keys)" && \
    grep -Fq $'\033[1m' <<< "$(TERM=dumb "$SCRIPT_DIR/bin/ide" keys)" && \
+   grep -Fq $'\033[38;5;' <<< "$(TERM=screen-256color COLORTERM=256color "$SCRIPT_DIR/bin/ide" keys)" && \
    [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 30 ] && \
    [ "$(python3 -c 'import re,sys; print(max(len(re.sub(r"\x1b\[[0-9;]*m","",l)) for l in sys.stdin.read().splitlines()))' <<< "$IDE_KEYS_OUT")" -le 104 ] && \
    [ "$(printf '%s\n' "$IDE_KEYS_COMPACT_OUT" | wc -l | tr -d ' ')" -le 22 ] && \

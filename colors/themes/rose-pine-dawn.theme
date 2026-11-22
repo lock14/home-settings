@@ -1,0 +1,39 @@
+# Managed Theme: rose-pine-dawn
+THEME_ID="rose-pine-dawn"
+THEME_LABEL="Rosé Pine Dawn"
+THEME_DESCRIPTION="Warm Soho morning paper palette with botanical rose, pine, and iris"
+THEME_MODE="light"
+THEME_CATEGORY="classic"
+THEME_ORDER="80"
+BAT_THEME_NAME="Rose-Pine-Dawn-TrueColor"
+BTOP_THEME_NAME="rose_pine_dawn"
+GHOSTTY_THEME_NAME="Rose Pine Dawn"
+
+# Monotone Surface & Content Ramp
+BASE03="#FAF4ED"
+BASE02="#EBE0D6"
+BASE04="#F2E9E1"
+BASE01="#736E8A"
+BASE00="#645F7C"
+BASE0="#575279"
+BASE1="#413D5E"
+BASE2="#2D2A45"
+BASE3="#1F1D2E"
+
+# Semantic Accent Palette
+YELLOW="#996012"
+ORANGE="#C0501E"
+RED="#B4365A"
+MAGENTA="#A63D7C"
+VIOLET="#7850A6"
+BLUE="#246685"
+CYAN="#1B7572"
+GREEN="#337642"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#D6E6D6"
+MIX_RED="#F0D4D8"
+MIX_YELLOW="#EBDCC8"
+MIX_BLUE="#D2DFE2"
+MIX_MAGENTA="#EAD4DC"
+MIX_BASE1="#DED6D6"

@@ -8,6 +8,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/tests/test-helper.sh"
 
+if [ -z "${TERM:-}" ] || [ "${TERM:-}" = "dumb" ]; then
+    export TERM="xterm-256color"
+fi
+if [ -z "${COLORTERM:-}" ]; then
+    export COLORTERM="truecolor"
+fi
+
 echo "========================================"
 echo "Running Theme Manager & Palette Tests"
 echo "========================================"
@@ -74,40 +81,31 @@ else
     fail "bin/theme CLI validation" "Unexpected --help or error handling output"
 fi
 
-# Verify default --current and --list across all 17 built-in themes (9 classic + 8 US Holiday)
+# Verify default --current and --list across all built-in themes discovered from colors/themes/*.theme
 CUR_DEFAULT="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)"
 LIST_PLAIN="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --list --plain)"
 LIST_FULL="$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --list)"
-managed_themes=(
-    "solarized-dark"
-    "solarized-light"
-    "catppuccin-mocha"
-    "catppuccin-latte"
-    "gruvbox-dark"
-    "tokyonight-night"
-    "kanagawa-wave"
-    "nord"
-    "onedark"
-    "new-years"
-    "valentines"
-    "st-patricks"
-    "easter"
-    "independence-day"
-    "halloween"
-    "thanksgiving"
-    "christmas"
-)
+managed_themes=()
+for tf in "$SCRIPT_DIR"/colors/themes/*.theme; do
+    [ -f "$tf" ] || continue
+    tid="$(awk -F'"' '/^THEME_ID=/ {print $2; exit}' "$tf")"
+    [ -z "$tid" ] && tid="$(basename "${tf%.theme}")"
+    managed_themes+=("$tid")
+done
+managed_cnt="${#managed_themes[@]}"
 all_listed=true
 for t in "${managed_themes[@]}"; do
-    if ! grep -Fxq "$t" <<< "$LIST_PLAIN" || ! grep -Fq "$t" <<< "$LIST_FULL"; then
+    if ! grep -Fxq "$t" <<< "$LIST_PLAIN" || ! grep -Fq "$t" <<< "$LIST_FULL" || ! grep -Fq "$t" <<< "$THEME_HELP"; then
         all_listed=false
-        fail "bin/theme --list" "Missing managed theme '$t' in --list output"
+        fail "bin/theme --list" "Missing managed theme '$t' in --list or --help output"
     fi
 done
-if [ "$CUR_DEFAULT" = "solarized-dark" ] && [ "$all_listed" = true ] && grep -Fq "* solarized-dark" <<< "$LIST_FULL"; then
-    pass "bin/theme defaults to solarized-dark and lists all 17 built-in themes (9 classic + 8 US Holiday)"
+if [ "$CUR_DEFAULT" = "solarized-dark" ] && [ "$all_listed" = true ] && \
+   [ "$(printf '%s\n' "$LIST_PLAIN" | wc -l | tr -d ' ')" -eq "$managed_cnt" ] && \
+   grep -Fq "* solarized-dark" <<< "$LIST_FULL"; then
+    pass "bin/theme defaults to solarized-dark and dynamically lists all $managed_cnt built-in themes in --list and --help"
 else
-    fail "bin/theme default & list" "cur='$CUR_DEFAULT' all_listed='$all_listed'"
+    fail "bin/theme default & list" "cur='$CUR_DEFAULT' all_listed='$all_listed' cnt='$managed_cnt'"
 fi
 
 # Verify --holiday resolves nearest upcoming US Holiday (e.g. Oct 25 -> halloween, Nov 20 -> thanksgiving)
@@ -214,6 +212,7 @@ if grep -Fq "light = true" "$THEME_TEST_Cfg/git/config" && \
    grep -Fq 'proc_mem_bytes = true' "$THEME_TEST_Cfg/btop/btop.conf" && \
    grep -Fq 'theme = "Solarized Light"' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'cursor-text = #fdf6e3' "$SCRIPT_DIR/dotfiles/.config/ghostty/themes/Solarized Light" && \
+   grep -Fq 'cursor-text = #002b36' "$SCRIPT_DIR/dotfiles/.config/ghostty/themes/Solarized Dark" && \
    grep -Fq 'm/r:^_ide_park_,#W' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
    grep -Fq "r = 38, g = 139, b = 210" <<< "$(grep -A1 '\[style\.example_text\]' "$THEME_TEST_Cfg/tealdeer/config.toml")" && \
    grep -Fq "r = 42, g = 161, b = 152" <<< "$(grep -A1 '\[style\.example_code\]' "$THEME_TEST_Cfg/tealdeer/config.toml")"; then
@@ -246,12 +245,12 @@ if [ "$all_switches_ok" = true ] && \
    [ -d "$THEME_TEST_Cfg/git" ] && [ ! -L "$THEME_TEST_Cfg/git" ] && \
    [ "$(readlink "$THEME_TEST_Cfg/git/config")" = "$SCRIPT_DIR/dotfiles/.config/git/config" ] && \
    [ "$(cat "$THEME_TEST_Cfg/git/ignore")" = "*.swp" ]; then
-    pass "bin/theme switches cleanly across all 17 managed themes (dark & light), preserves ~/.config/git/{ignore,attributes}, and updates ghostty, btop, delta, tealdeer, tmux, and shell state without dirtying tracked dotfiles"
+    pass "bin/theme switches cleanly across all $managed_cnt managed themes (dark & light), preserves ~/.config/git/{ignore,attributes}, and updates ghostty, btop, delta, tealdeer, tmux, and shell state without dirtying tracked dotfiles"
 else
-    fail "bin/theme 17-theme cycle" "Failed switching or restoring symlinks"
+    fail "bin/theme managed-theme cycle" "Failed switching or restoring symlinks"
 fi
 
-# Verify monotonic luminance ramp, canvas & shelf contrast, and semantic utility separation across ALL 17 built-in themes
+# Verify monotonic luminance ramp, canvas & shelf contrast, and semantic utility separation across ALL built-in themes
 if python3 -B - "$SCRIPT_DIR" "$THEME_TEST_HOME" "$THEME_TEST_Cfg" "$THEME_TEST_Cache" <<'PY'; then
 from __future__ import annotations
 
@@ -265,12 +264,11 @@ repo = pathlib.Path(sys.argv[1])
 sys.path.insert(0, str(repo / "libexec"))
 
 from theme_lib.palette import (
-    CLASSIC_THEMES as classic,
-    HOLIDAY_THEMES as holidays,
     contrast_ratio as contrast,
+    discover_builtin_themes,
     hex_to_rgb,
     hue_difference as hue_diff,
-    parse_theme_file,
+    ordered_theme_slugs,
     relative_luminance,
     rgb_distance as rgb_dist,
 )
@@ -279,12 +277,16 @@ test_home = sys.argv[2]
 test_cfg = sys.argv[3]
 test_cache = sys.argv[4]
 
-accents = ["YELLOW", "ORANGE", "RED", "MAGENTA", "VIOLET", "BLUE", "CYAN", "GREEN"]
-ramp_keys = ["BASE03", "BASE02", "BASE01", "BASE00", "BASE0", "BASE1"]
+builtin_map = discover_builtin_themes(repo)
+ordered = ordered_theme_slugs(builtin_map)
+classic = [s for s in ordered if builtin_map[s].get("THEME_CATEGORY") == "classic"]
+holidays = [s for s in ordered if builtin_map[s].get("THEME_CATEGORY") == "holiday"]
 
-for slug in classic + holidays:
-    p = repo / "colors" / "themes" / f"{slug}.theme"
-    d = parse_theme_file(p, default_slug=slug, source="builtin")
+accents = ["YELLOW", "ORANGE", "RED", "MAGENTA", "VIOLET", "BLUE", "CYAN", "GREEN"]
+ramp_keys = ["BASE03", "BASE02", "BASE01", "BASE00", "BASE0", "BASE1", "BASE2", "BASE3"]
+
+for slug in ordered:
+    d = builtin_map[slug]
 
     is_light = d.get("THEME_MODE", "dark") == "light"
     lums = [relative_luminance(d[k]) for k in ramp_keys]
@@ -294,11 +296,24 @@ for slug in classic + holidays:
         if not is_light and not (lums[idx] < lums[idx + 1]):
             raise SystemExit(f"{slug}: non-monotonic dark ramp {ramp_keys[idx]} ({d[ramp_keys[idx]]}) -> {ramp_keys[idx+1]} ({d[ramp_keys[idx+1]]})")
 
+    if slug in classic:
+        for bk in ("BASE2", "BASE3"):
+            br, bg_c, bb = [x / 255.0 for x in hex_to_rgb(d[bk])]
+            chroma = max(br, bg_c, bb) - min(br, bg_c, bb)
+            if chroma > 0.26 or d[bk] in {d[a] for a in accents}:
+                raise SystemExit(f"{slug}: {bk} ({d[bk]}) has accent bleed or excess chroma ({chroma:.2f})")
+        mv_h = hue_diff(d["MAGENTA"], d["VIOLET"])
+        mv_d = rgb_dist(d["MAGENTA"], d["VIOLET"])
+        if mv_h < 10.0 or mv_d < 75.0:
+            raise SystemExit(f"{slug}: MAGENTA ({d['MAGENTA']}) vs VIOLET ({d['VIOLET']}) too close: dH={mv_h:.1f} dist={mv_d:.1f}")
+
+    if contrast(d["BASE1"], d["BASE02"]) < 4.3:
+        raise SystemExit(f"{slug}: PmenuSel BASE1 ({d['BASE1']}) vs BASE02 ({d['BASE02']}) contrast < 4.3")
     if contrast(d["BASE01"], d["BASE03"]) < 2.3 or contrast(d["BASE01"], d["BASE02"]) < 2.0:
         raise SystemExit(f"{slug}: BASE01 ({d['BASE01']}) contrast too low against BASE03/BASE02")
     if contrast(d["BASE00"], d["BASE02"]) < 2.5 or contrast(d["BASE00"], d["BASE03"]) < 2.9:
         raise SystemExit(f"{slug}: BASE00 ({d['BASE00']}) contrast too low against BASE02/BASE03")
-    if slug in ("nord", "catppuccin-latte") or slug in holidays:
+    if slug in ("nord", "catppuccin-latte", "gruvbox-light", "rose-pine-dawn", "dracula") or slug in holidays:
         for rk in ("BASE01", "BASE00", "BASE0", "BASE1"):
             if contrast(d[rk], d["BASE02"]) < 3.0 or contrast(d[rk], d["BASE03"]) < 3.0:
                 raise SystemExit(f"{slug}: {rk} ({d[rk]}) contrast < 3.0 against BASE02 ({d['BASE02']}) or BASE03 ({d['BASE03']})")
@@ -331,9 +346,10 @@ for slug in classic + holidays:
     if contrast(d["BASE0"], d["BASE03"]) < (7.0 if slug in holidays else 4.0):
         raise SystemExit(f"{slug}: BASE0 contrast against BASE03 too low")
 
+    is_hi_light = is_light and (slug in classic) and slug != "solarized-light"
     for i in range(len(accents)):
-        min_c = 3.0 if (slug in holidays or slug == "catppuccin-latte") else 2.8
-        min_shelf_c = 3.0 if slug == "catppuccin-latte" else 2.2
+        min_c = 3.0 if (slug in holidays or is_hi_light) else 2.8
+        min_shelf_c = 3.0 if is_hi_light else 2.2
         if contrast(d[accents[i]], d["BASE03"]) < min_c:
             raise SystemExit(f"{slug}: {accents[i]} ({d[accents[i]]}) contrast against BASE03 < {min_c}")
         if contrast(d[accents[i]], d["BASE02"]) < min_shelf_c:
@@ -377,9 +393,9 @@ tmux_txt = (cfg_root / "home-settings" / "tmux-theme.conf").read_text(encoding="
 if "unset _HS_PROMPT_OS_ICON" not in env_txt or "unset POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION" not in p10k_txt or " #S" not in tmux_txt:
     raise SystemExit("solarized-dark: failed to restore neutral OS/Tmux icons")
 PY
-    pass "All 17 built-in themes maintain monotonic BASE03..BASE1 luminance ramps, canvas & shelf contrast, strict semantic utility separation, opposing MIX_GREEN/MIX_RED diff polarity, and holiday prompt/Tmux emblems"
+    pass "All $managed_cnt built-in themes maintain monotonic BASE03..BASE3 luminance ramps, neutral ANSI white slots, MAGENTA/VIOLET separation, PmenuSel & shelf contrast, opposing MIX_GREEN/MIX_RED diff polarity, and holiday prompt/Tmux emblems"
 else
-    fail "17-theme monotonic ramp, contrast & semantic utility" "One or more themes violated ramp monotonicity, contrast, or diff polarity invariants"
+    fail "Built-in theme monotonic ramp, contrast & semantic utility" "One or more themes violated ramp monotonicity, contrast, or diff polarity invariants"
 fi
 
 # Verify custom user themes (--path, --create, --from, --force, apply custom theme, re-apply regeneration, and reject invalid hex)
@@ -493,7 +509,7 @@ else
 fi
 rm -rf "$MACOS_MOCK_HOME"
 
-# Verify dbus-run-session gnome-terminal-solarized across all 17 built-in themes, non-BMP emoji labels, .conf decoupled custom themes, and unknown theme rejection (H2/T3)
+# Verify dbus-run-session gnome-terminal-solarized across all 22 built-in themes, non-BMP emoji labels, .conf decoupled custom themes, and unknown theme rejection (H2/T3)
 if command -v dbus-run-session >/dev/null 2>&1 && command -v dconf >/dev/null 2>&1; then
     GT_TEST_HOME="$(mktemp -d)"
     mkdir -p "$GT_TEST_HOME/.config/themes" "$GT_TEST_HOME/run" "$GT_TEST_HOME/mock-bin"
@@ -538,9 +554,9 @@ fi
 EOF
     chmod +x "$GT_TEST_HOME/run-gt.sh"
     if PATH="$GT_TEST_HOME/mock-bin:$PATH" XDG_RUNTIME_DIR="$GT_TEST_HOME/run" HOME="$GT_TEST_HOME" XDG_CONFIG_HOME="$GT_TEST_HOME/.config" XDG_CACHE_HOME="$GT_TEST_HOME/.cache" dbus-run-session -- "$GT_TEST_HOME/run-gt.sh" "$SCRIPT_DIR" "${managed_themes[@]}" >/dev/null 2>&1; then
-        pass "bin/gnome-terminal-solarized writes valid GVariant dconf profiles across all 17 themes, apostrophe & non-BMP emoji labels, .conf custom themes, and rejects unknown themes"
+        pass "bin/gnome-terminal-solarized writes valid GVariant dconf profiles across all $managed_cnt themes, apostrophe & non-BMP emoji labels, .conf custom themes, and rejects unknown themes"
     else
-        fail "bin/gnome-terminal-solarized dbus-run-session" "Failed writing dconf profile across 17 themes, emoji/.conf custom themes, or rejecting unknown theme"
+        fail "bin/gnome-terminal-solarized dbus-run-session" "Failed writing dconf profile across built-in themes, emoji/.conf custom themes, or rejecting unknown theme"
     fi
     rm -rf "$GT_TEST_HOME"
 fi
@@ -566,15 +582,18 @@ cat >/dev/null
 printf '* gruvbox-dark  Gruvbox Dark  [dark]  Warm retro groove dark palette\n'
 SH
 chmod +x "$FZF_MOCK_BIN/fzf"
+gruvbox_pos="$(printf '%s\n' "$LIST_PLAIN" | awk '$0 == "gruvbox-dark" {print NR; exit}')"
 FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-120.log" COLUMNS=120 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
-FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-100.log" COLUMNS=100 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
-FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-80.log" COLUMNS=80 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
+FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-100.log" THEME_FZF_POS=1 COLUMNS=100 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
+FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-80.log" NO_COLOR=1 COLUMNS=80 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
 if [ "$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)" = "gruvbox-dark" ] && \
    grep -Fq -- "--preview {1}" "$FZF_MOCK_BIN/preview-120.log" && \
    grep -Fxq -- "--preview-window=right:60%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-120.log" && \
    grep -Fxq -- "--preview-window=right:56%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-100.log" && \
-   grep -Fxq -- "--preview-window=down:58%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-80.log"; then
-    pass "bin/theme (no args) launches responsive fzf picker (right:60% >=110, right:56% 90-109, down:58% <90 cols) and applies selected theme"
+   grep -Fxq -- "--bind=load:pos(${gruvbox_pos})" "$FZF_MOCK_BIN/preview-100.log" && \
+   grep -Fxq -- "--preview-window=down:58%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-80.log" && \
+   grep -Fxq -- "--no-color" "$FZF_MOCK_BIN/preview-80.log"; then
+    pass "bin/theme (no args) launches responsive fzf picker (right:60% >=110, right:56% 90-109, down:58% <90 cols, load:pos active preselect, NO_COLOR) and applies selected theme"
 else
     fail "bin/theme fzf picker" "Expected responsive preview-window tiers and gruvbox-dark selection"
 fi
@@ -638,7 +657,7 @@ if command -v tmux >/dev/null 2>&1; then
     rm -rf "$LIVE_TMUX_TMP"
 fi
 
-# Verify uniform preview card geometry across ALL 17 built-in themes (standalone 94 cols and narrow fzf 72 cols) and Tmux status-right client_width>=105 holiday guard
+# Verify uniform preview card geometry across ALL 22 built-in themes (standalone 94 cols and narrow fzf 72 cols), NO_COLOR/IDE_NERD_FONTS=0/CJK width math, and Tmux status-right client_width>=105 holiday guard
 HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set halloween --no-live >/dev/null 2>&1
 if grep -Fq '#{e|>=:#{client_width},105}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
    python3 -B - "$SCRIPT_DIR/bin/theme" "$SCRIPT_DIR/bin/ide" "${managed_themes[@]}" <<'PY'
@@ -660,6 +679,18 @@ libexec_dir = bin_dir.parent / "libexec"
 sys.path.insert(0, str(libexec_dir))
 
 from theme_lib.preview import visible_len as vlen
+
+assert vlen("漢A\u0301\t✨") == 9, f"CJK/combining/tab width mismatch: {vlen('漢A\u0301\t✨')}"
+
+nc_env = dict(os.environ)
+nc_env["NO_COLOR"] = "1"
+nc_out = subprocess.check_output([theme_bin, "--preview", "dracula"], env=nc_env, text=True)
+assert "\033[" not in nc_out and {vlen(ln) for ln in nc_out.splitlines()} == {94}, "NO_COLOR preview leaked ANSI or broke width"
+
+ascii_env = dict(os.environ)
+ascii_env["IDE_NERD_FONTS"] = "0"
+ascii_out = subprocess.check_output([theme_bin, "--preview", "rose-pine"], env=ascii_env, text=True)
+assert "" not in ascii_out and "\uE0B1" not in ascii_out and {vlen(ln) for ln in ascii_out.splitlines()} == {94}, "IDE_NERD_FONTS=0 preview leaked PUA or broke width"
 
 for slug in slugs:
     env = dict(os.environ)
@@ -748,9 +779,9 @@ if shutil.which("nvim"):
             s3.close()
 PY
 then
-    pass "bin/theme renders uniform rectangular preview cards across all 17 themes (standalone 94-col & narrow 72-col fzf), guards Tmux holiday badge with client_width>=105, isolates THEME_NVIM_SOCKET_DIR, and bin/ide status_click accounts for 2-cell holiday emojis"
+    pass "bin/theme renders uniform rectangular preview cards across all $managed_cnt themes (standalone 94-col, narrow 72-col fzf, NO_COLOR, IDE_NERD_FONTS=0, and CJK width), guards Tmux holiday badge with client_width>=105, isolates THEME_NVIM_SOCKET_DIR, and bin/ide status_click accounts for 2-cell holiday emojis"
 else
-    fail "bin/theme 17-theme preview geometry & Tmux status-bar holiday guards" "Preview card widths, client_width>=105 guard, THEME_NVIM_SOCKET_DIR isolation, or bin/ide status-left emoji width calculation failed"
+    fail "bin/theme preview geometry & Tmux status-bar holiday guards" "Preview card widths, NO_COLOR/ASCII fallbacks, client_width>=105 guard, THEME_NVIM_SOCKET_DIR isolation, or bin/ide status-left emoji width calculation failed"
 fi
 
 rm -rf "$THEME_TEST_HOME"
@@ -809,6 +840,96 @@ if [ "$shim_bypass_ok" = true ] && [ "$custom_hit_seen" = true ] && [ "$custom_p
     pass "bin/theme prefers /usr/bin/python3 -B over mise/shims/python3, honors THEME_PY_BIN, and isolates sys.path from CWD shadowing"
 else
     fail "bin/theme interpreter selection" "Expected /usr/bin/python3 shim bypass, THEME_PY_BIN override support, and CWD sys.path isolation (got '$custom_py_out')"
+fi
+
+# Verify single-source-of-truth lifecycle: adding ONE file in colors/themes/<slug>.theme updates runtime, --sync-assets, standalone .vimrc/Bash/Zsh, and docs, and deleting it prunes orphans
+SSOT_TMP="$(mktemp -d)"
+mkdir -p "$SSOT_TMP/bin" "$SSOT_TMP/dotfiles/.config" "$SSOT_TMP/docs" "$SSOT_TMP/home/.config"
+cp "$SCRIPT_DIR/bin/theme" "$SSOT_TMP/bin/theme"
+cp -R "$SCRIPT_DIR/libexec" "$SSOT_TMP/libexec"
+cp -R "$SCRIPT_DIR/colors" "$SSOT_TMP/colors"
+cp "$SCRIPT_DIR/dotfiles/.vimrc" "$SSOT_TMP/dotfiles/.vimrc"
+cp "$SCRIPT_DIR/dotfiles/.bashrc-addendum" "$SSOT_TMP/dotfiles/.bashrc-addendum"
+cp "$SCRIPT_DIR/dotfiles/.zsh-completions" "$SSOT_TMP/dotfiles/.zsh-completions"
+cp -R "$SCRIPT_DIR/dotfiles/.config/shell" "$SSOT_TMP/dotfiles/.config/shell"
+cp -R "$SCRIPT_DIR/dotfiles/.config/btop" "$SSOT_TMP/dotfiles/.config/btop"
+cp -R "$SCRIPT_DIR/dotfiles/.config/ghostty" "$SSOT_TMP/dotfiles/.config/ghostty"
+cp "$SCRIPT_DIR/README.md" "$SSOT_TMP/README.md"
+cp "$SCRIPT_DIR/docs/color-architecture.md" "$SSOT_TMP/docs/color-architecture.md"
+
+ssot_ok=true
+HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --check-assets >/dev/null 2>&1 || ssot_ok=false
+
+cat > "$SSOT_TMP/colors/themes/arctic-ember.theme" <<'EOF'
+THEME_LABEL="Arctic Émber"
+THEME_DESCRIPTION="Single-entry SSOT verification dark palette"
+THEME_MODE="dark"
+BASE03="#101622"
+BASE02="#1A2334"
+BASE01="#64748B"
+BASE00="#7C8EA6"
+BASE0="#CBD5E1"
+BASE1="#E2E8F0"
+BASE2="#F1F5F9"
+BASE3="#F8FAFC"
+YELLOW="#FACC15"
+ORANGE="#FB923C"
+RED="#F87171"
+MAGENTA="#F472B6"
+VIOLET="#A78BFA"
+BLUE="#38BDF8"
+CYAN="#2DD4BF"
+GREEN="#4ADE80"
+EOF
+
+# 1. Runtime discovery works BEFORE running --sync-assets
+ssot_pre_list="$(HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --list --plain)"
+ssot_pre_help="$(HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --help)"
+grep -Fxq "arctic-ember" <<< "$ssot_pre_list" || ssot_ok=false
+grep -Fq "arctic-ember" <<< "$ssot_pre_help" || ssot_ok=false
+
+# 2. --check-assets detects drift before sync, and passes after --sync-assets
+if HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --check-assets >/dev/null 2>&1; then
+    ssot_ok=false
+fi
+HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --sync-assets >/dev/null 2>&1 || ssot_ok=false
+HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --check-assets >/dev/null 2>&1 || ssot_ok=false
+
+# 3. Verify generated files (including ASCII Ghostty filename 'Arctic Ember'), docs, standalone Bash, and standalone Vim
+[ -f "$SSOT_TMP/colors/Arctic-Ember-TrueColor.tmTheme" ] || ssot_ok=false
+[ -f "$SSOT_TMP/dotfiles/.config/btop/themes/arctic_ember.theme" ] || ssot_ok=false
+[ -f "$SSOT_TMP/dotfiles/.config/ghostty/themes/Arctic Ember" ] || ssot_ok=false
+grep -Fq '`arctic-ember`' "$SSOT_TMP/README.md" || ssot_ok=false
+grep -Fq '`arctic-ember`' "$SSOT_TMP/docs/color-architecture.md" || ssot_ok=false
+grep -Fq 'arctic-ember' "$SSOT_TMP/dotfiles/.zsh-completions" || ssot_ok=false
+
+mkdir -p "$SSOT_TMP/isolated/.config"
+cp "$SSOT_TMP/dotfiles/.vimrc" "$SSOT_TMP/isolated/.vimrc"
+cp "$SSOT_TMP/dotfiles/.bashrc-addendum" "$SSOT_TMP/isolated/.bashrc-addendum"
+cp -R "$SSOT_TMP/dotfiles/.config/shell" "$SSOT_TMP/isolated/.config/shell"
+
+ssot_bash_bat="$(HOME="$SSOT_TMP/isolated/h" XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME="arctic-ember" COLORTERM=truecolor PATH="/usr/bin:/bin" bash -c "source '$SSOT_TMP/isolated/.bashrc-addendum' && printf '%s' \"\${BAT_THEME:-}\"")"
+[ "$ssot_bash_bat" = "Arctic-Ember-TrueColor" ] || ssot_ok=false
+
+if command -v vim >/dev/null 2>&1; then
+    HOME="$SSOT_TMP/isolated/h" XDG_CONFIG_HOME=/nonexistent HOME_SETTINGS_THEME_FILE=/nonexistent HOME_SETTINGS_THEME="arctic-ember" COLORTERM=truecolor \
+        vim -u "$SSOT_TMP/isolated/.vimrc" -N -es \
+        -c "if toupper(synIDattr(hlID('Normal'), 'bg#', 'gui')) ==# '#101622' && \$BAT_THEME ==# 'Arctic-Ember-TrueColor' | q | else | cquit 1 | endif" </dev/null >/dev/null 2>&1 || ssot_ok=false
+fi
+
+# 4. Deleting the .theme file and running --sync-assets prunes orphaned assets cleanly
+rm -f "$SSOT_TMP/colors/themes/arctic-ember.theme"
+HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --sync-assets >/dev/null 2>&1 || ssot_ok=false
+HOME="$SSOT_TMP/home" XDG_CONFIG_HOME="$SSOT_TMP/home/.config" "$SSOT_TMP/bin/theme" --check-assets >/dev/null 2>&1 || ssot_ok=false
+[ ! -e "$SSOT_TMP/colors/Arctic-Ember-TrueColor.tmTheme" ] || ssot_ok=false
+[ ! -e "$SSOT_TMP/dotfiles/.config/btop/themes/arctic_ember.theme" ] || ssot_ok=false
+[ ! -e "$SSOT_TMP/dotfiles/.config/ghostty/themes/Arctic Ember" ] || ssot_ok=false
+rm -rf "$SSOT_TMP"
+
+if [ "$ssot_ok" = true ]; then
+    pass "Single-entry theme lifecycle: adding or removing one colors/themes/<slug>.theme file updates runtime, --sync-assets, standalone .vimrc/Bash/Zsh, and docs cleanly"
+else
+    fail "Single-entry theme lifecycle" "SSOT runtime discovery, --check-assets/--sync-assets, standalone parity, or orphan pruning failed"
 fi
 
 test_summary
