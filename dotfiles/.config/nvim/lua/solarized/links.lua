@@ -274,7 +274,7 @@ end
 
 local function open_external_url(url, base_dir)
     if vim.env.TMUX and vim.env.TMUX ~= "" and ide_job_fn and vim.fn.executable(vim.fn.expand("$HOME/.local/bin/ide")) == 1 then
-        ide_job_fn("--open-link", url, url, base_dir)
+        ide_job_fn("_internal", "open-link", url, url, base_dir)
     elseif vim.ui and vim.ui.open then
         vim.ui.open(url)
     end

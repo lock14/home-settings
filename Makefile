@@ -7,7 +7,7 @@ install:
 
 ## system: Full machine provisioning with native OS packages (requires sudo).
 system:
-	@./setup.sh --system
+	@./setup.sh
 
 ## uninstall: Uninstall all managed dotfiles, fonts, and user tools.
 uninstall:

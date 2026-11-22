@@ -143,7 +143,7 @@ def launch_picked_workspace(
     if layout_mode == "2pane":
         launch_cmd.append("--2pane")
     if ai_cli_from_flag and ai_cli:
-        launch_cmd.extend(["--ai", ai_cli])
+        launch_cmd.extend(["--agent", ai_cli])
     launch_cmd.append(resolved_dir)
     child_env = os.environ.copy()
     for drop_k in ("IDE_IN_POPUP", "IDE_SWITCHER_SESSION", "IDE_SWITCHER_RESULT"):
@@ -458,14 +458,14 @@ def build_sessions_fzf_args(
 ) -> list[str]:
     """Construct `fzf` argument vector for single-pane or 2-pane `ai-sw-*` session switching."""
     self_q = shlex.quote(ide_self)
-    reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
-    quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{+1}})+reload({reload_cmd})"
+    reload_cmd = f"{self_q} _internal sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
+    quit_bind = f"ctrl-x:execute-silent({self_q} quit {{+1}})+reload({reload_cmd})"
     ctrl_r_bind = f"ctrl-r:reload({reload_cmd})"
     f5_bind = f"f5:reload({reload_cmd})"
-    ack_bind = f"ctrl-y:execute-silent({self_q} --ack-ai {{+1}})+reload({reload_cmd})"
-    open_pr_bind = f"ctrl-o:execute-silent({self_q} --open-pr {{1}})"
-    help_bind = f"f1:execute({self_q} --keys >/dev/tty </dev/tty)"
-    alt_qmark_bind = f"alt-?:execute({self_q} --keys >/dev/tty </dev/tty)"
+    ack_bind = f"ctrl-y:execute-silent({self_q} ack {{+1}})+reload({reload_cmd})"
+    open_pr_bind = f"ctrl-o:execute-silent({self_q} pr {{1}})"
+    help_bind = f"f1:execute({self_q} keys >/dev/tty </dev/tty)"
+    alt_qmark_bind = f"alt-?:execute({self_q} keys >/dev/tty </dev/tty)"
     if seed_sess and seed_file:
         seed_sess_q = shlex.quote(seed_sess)
         seed_q = shlex.quote(seed_file)
@@ -473,31 +473,31 @@ def build_sessions_fzf_args(
         seed_meta_q = shlex.quote(f"{seed_file}.meta.json")
         preview_cmd = (
             f"if [ {seed_sess_q} = {{1}} ] && mv -f {seed_q} {seed_used_q} 2>/dev/null; then "
-            f"cat {seed_used_q}; IDE_PREVIEW_SEEDED={seed_used_q} IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} --session-preview --follow -- {{1}}; "
+            f"cat {seed_used_q}; IDE_PREVIEW_SEEDED={seed_used_q} IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}; "
             f"fi; rm -f {seed_q} {seed_used_q} {seed_meta_q} 2>/dev/null || :; "
-            f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} --session-preview --follow -- {{1}}"
+            f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}"
         )
     else:
-        preview_cmd = f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} --session-preview --follow -- {{1}}"
+        preview_cmd = f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}"
 
     switcher_extra_binds: list[str] = []
     if sw_sess:
         sw_q = shlex.quote(sw_sess)
         meta_rows = min(7, max(4, pane_h // 4))
         preview_window_spec = f"down:{meta_rows}:wrap:noinfo"
-        switcher_extra_binds.append(f"--bind=alt-l:execute-silent({self_q} --switcher-op focus-ai {sw_q})")
+        switcher_extra_binds.append(f"--bind=alt-l:execute-silent({self_q} _internal switcher-op focus-ai {sw_q})")
         if supports_modern_binds:
-            switcher_extra_binds.append(f"--bind=zero:execute-silent({self_q} --switcher-op zero {sw_q})")
+            switcher_extra_binds.append(f"--bind=zero:execute-silent({self_q} _internal switcher-op zero {sw_q})")
         else:
             quit_bind = (
-                f"ctrl-x:execute-silent({self_q} --quit {{+1}}; "
-                f"{self_q} --switcher-op zero-check {sw_q})+reload({reload_cmd})"
+                f"ctrl-x:execute-silent({self_q} quit {{+1}}; "
+                f"{self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
             )
             ctrl_r_bind = (
-                f"ctrl-r:execute-silent({self_q} --switcher-op zero-check {sw_q})+reload({reload_cmd})"
+                f"ctrl-r:execute-silent({self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
             )
             f5_bind = (
-                f"f5:execute-silent({self_q} --switcher-op zero-check {sw_q})+reload({reload_cmd})"
+                f"f5:execute-silent({self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
             )
         resize_binds: list[str] = []
     else:
@@ -982,11 +982,11 @@ def run_interactive_switcher_session(
 
     self_q = shlex.quote(ide_self)
     sw_q = shlex.quote(sw_sess)
-    alt_n_parts = [self_q, "--sessions"]
+    alt_n_parts = [self_q, "switch"]
     if layout_mode == "2pane":
         alt_n_parts.append("--2pane")
     if ai_cli_from_flag and ai_cli:
-        alt_n_parts.extend(["--ai", shlex.quote(ai_cli)])
+        alt_n_parts.extend(["--agent", shlex.quote(ai_cli)])
     if cur_sess:
         alt_n_parts.append(shlex.quote(cur_sess))
     alt_n_cmd = " ".join(alt_n_parts)
@@ -1166,13 +1166,13 @@ def run_interactive_switcher_session(
             "#{&&:#{!=:#{@ide_sw_done},1},#{&&:#{!=:#{@ide_sw_mode},new},"
             "#{&&:#{!=:#{@ide_sw_docked_pane},},#{==:#{window_panes},1}}}}"
         )
-        focus_sh = f"{self_q} --switcher-op focus {sw_q} || true".replace("#", "##")
+        focus_sh = f"{self_q} _internal switcher-op focus {sw_q} || true".replace("#", "##")
         focus_run = f"run-shell -b {_tmux_dquote(focus_sh)}"
         focus_hook = f"if-shell -F {_tmux_dquote(focus_cond)} {_tmux_dquote(focus_run)}"
         dead_dock_hook = f"if-shell -F {_tmux_dquote(dead_dock_cond)} {_tmux_dquote(focus_run)}"
         cleanup_sh = (
             f"sleep 0.15; tmux has-session -t {shlex.quote('=' + sw_sess)} 2>/dev/null "
-            f"&& exec {self_q} --switcher-op cleanup {sw_q} || true"
+            f"&& exec {self_q} _internal switcher-op cleanup {sw_q} || true"
         ).replace("#", "##")
         cleanup_hook = f"run-shell -b {_tmux_dquote(cleanup_sh)}"
 

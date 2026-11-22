@@ -23,6 +23,7 @@ INSTALL_CHROME="${INSTALL_CHROME:-false}"
 INSTALL_APPS="${INSTALL_APPS:-false}"
 INSTALL_GHOSTTY="${INSTALL_GHOSTTY:-false}"
 IDE_NAME="${IDE_NAME:-none}"
+IDE_NAMES="${IDE_NAMES:-}"
 
 UBUNTU_CORE_PKGS=(
     git curl wget vim neovim tmux zsh fzf fontconfig dconf-cli
@@ -89,9 +90,15 @@ if [ "$INSTALL_CHROME" = true ]; then
     install_google_chrome "$OS" "$ARCH"
 fi
 
-if [ "$INSTALL_APPS" = true ] && [ "$IDE_NAME" != "none" ]; then
-    echo "  Installing developer desktop applications..."
-    install_desktop_ide "$OS" "$IDE_NAME"
+if [ "$INSTALL_APPS" = true ]; then
+    ide_list="${IDE_NAMES:-$IDE_NAME}"
+    if [ -n "$ide_list" ] && [ "$ide_list" != "none" ]; then
+        echo "  Installing developer desktop applications..."
+        IFS=',' read -r -a ide_targets <<< "$ide_list"
+        for ide_item in "${ide_targets[@]}"; do
+            [ -n "$ide_item" ] && [ "$ide_item" != "none" ] && install_desktop_ide "$OS" "$ide_item"
+        done
+    fi
 fi
 
 if [ "$INSTALL_GHOSTTY" = true ]; then

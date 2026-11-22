@@ -1061,7 +1061,7 @@ def send_to_ai(
     from ide_lib.layout import toggle_main_pane, unpark_role_pane
 
     if not send_mode:
-        print("Error: '--send' requires '--stdin', '--ref <PATH>', or '--text <TEXT>'.", file=sys.stderr)
+        print("Error: 'ide send' requires '--stdin', '--ref <PATH>', or '<TEXT>'.", file=sys.stderr)
         return 1
 
     origin_sess = current_ide_session() if os.environ.get("TMUX") else ""

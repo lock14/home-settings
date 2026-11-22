@@ -14,7 +14,7 @@ Layered package architecture (strictly acyclic bottom-to-top):
 - `links`: Bounded workspace file search, `file://`/`#anchor`/OSC 8 link router, and AI prompt context dispatch.
 - `preview`: Tab/CJK/emoji-aware `fzf` preview line-wrap model, SGR carry-over, and `--follow` streamer.
 - `switcher`: Single-round-trip `Alt+s` topology snapshot, FIFO Git feeder, and 2-pane `ai-sw-*` popup runner.
-- `sessions`: Tabular fleet views, FIFO attention jump, workspace directory picker, and `--sessions` entrypoint.
+- `sessions`: Tabular and JSON fleet views, FIFO attention jump, workspace directory picker, and `switch` entrypoint.
 - `cli`: Command-line flag parser and lazy subcommand dispatcher.
 """
 

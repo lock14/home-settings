@@ -63,10 +63,10 @@ fi
 # Terraform, Hybrid IDE, and utility shortcuts
 alias tf='terraform'
 alias ide2='ide --2pane'
-alias ide3='ide --3pane'
-alias idek='ide --kill'
-alias qide='ide --quit'
-alias quit='ide --quit'
+alias ide3='ide'
+alias idek='ide quit --force'
+alias qide='ide quit'
+alias quit='ide quit'
 alias ds='dust'
 alias update='update-system'
 if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then

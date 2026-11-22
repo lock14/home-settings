@@ -53,7 +53,7 @@ TEMP_HOME=$(mktemp -d)
 init_font_sandbox_env "$TEMP_HOME"
 
 # Run installer (fonts only)
-if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --user --skip tools,vim,nvim,zsh,bash,bin,completions,terminal 2>&1); then
     pass "setup.sh font installation succeeded on Linux"
 else
     fail "setup.sh font installation on Linux" "Failed: $output"
@@ -143,7 +143,7 @@ printf "stray-numbered-font" > "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Itali
 printf "legacy-romkatv-font" > "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf"
 ln -sfn "$TEMP_HOME/nonexistent-fontconfig" "$TEMP_HOME/.config/fontconfig"
 printf "stub" > "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf"
-if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --user --skip tools,vim,nvim,zsh,bash,bin,completions,terminal 2>&1); then
     nf_size=$(wc -c < "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" | tr -d ' ')
     if [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS-NF-Regular.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/1MesloLGS NF Italic.ttf" ] && [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGS NF Regular.ttf" ] && [ -e "$TEMP_HOME/.config/fontconfig" ] && [ "$nf_size" -gt 2500000 ]; then
         pass "Font setup removes conflicting MesloLGS-NF-*.ttf, stray numbered fonts, legacy MesloLGS NF, resolves broken fontconfig symlink, and installs valid MesloLGSNerdFontMono-Regular.ttf ($nf_size bytes)"
@@ -156,7 +156,7 @@ fi
 
 # Verify font inode preservation on repeated runs (prevents unlinking fonts out from under running terminal emulators)
 inode_before=$(stat -c '%i' "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" 2>/dev/null || stat -f '%i' "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf")
-if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --user --skip tools,vim,nvim,zsh,bash,bin,completions,terminal 2>&1); then
     inode_after=$(stat -c '%i' "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" 2>/dev/null || stat -f '%i' "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf")
     if [ "$inode_before" = "$inode_after" ]; then
         pass "Font setup preserves existing valid font file inode ($inode_before == $inode_after) without unlinking under running apps"
@@ -167,26 +167,26 @@ else
     fail "Font setup idempotency" "Third run failed: $output"
 fi
 
-# Verify --uninstall-fonts does not traverse ~/.config/fontconfig symlink and delete tracked repo file
+# Verify --uninstall=fonts does not traverse ~/.config/fontconfig symlink and delete tracked repo file
 rm -rf "$TEMP_HOME/.config/fontconfig"
 ln -sfn "$SCRIPT_DIR/dotfiles/.config/fontconfig" "$TEMP_HOME/.config/fontconfig"
-if output=$("$SCRIPT_DIR/setup.sh" --uninstall-fonts 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --uninstall=fonts 2>&1); then
     if [ -s "$SCRIPT_DIR/dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf" ] && \
        [ ! -L "$TEMP_HOME/.config/fontconfig" ] && \
        [ ! -e "$TEMP_HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ]; then
-        pass "setup.sh --uninstall-fonts unlinks ~/.config/fontconfig symlink without deleting tracked dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
+        pass "setup.sh --uninstall=fonts unlinks ~/.config/fontconfig symlink without deleting tracked dotfiles/.config/fontconfig/conf.d/10-meslo-nerd-font.conf"
     else
-        fail "setup.sh --uninstall-fonts symlink safety" "Tracked repo fontconfig file was deleted or symlink/fonts remained"
+        fail "setup.sh --uninstall=fonts symlink safety" "Tracked repo fontconfig file was deleted or symlink/fonts remained"
     fi
 else
-    fail "setup.sh --uninstall-fonts" "Uninstall command failed: $output"
+    fail "setup.sh --uninstall=fonts" "Uninstall command failed: $output"
 fi
 
 # Test 2: Font installation on macOS target
 echo -e "\n[2/2] Testing font installation on macOS target..."
 MAC_TEMP_HOME=$(mktemp -d)
 init_font_sandbox_env "$MAC_TEMP_HOME"
-if output=$("$SCRIPT_DIR/setup.sh" --os macos --dotfiles-only --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-bash --skip-bin --skip-completions --skip-terminal 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os macos --user --skip tools,vim,nvim,zsh,bash,bin,completions,terminal 2>&1); then
     pass "setup.sh font installation succeeded on macOS target"
 else
     fail "setup.sh font installation on macOS" "Failed: $output"

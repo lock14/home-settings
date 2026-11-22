@@ -45,43 +45,43 @@ DEFAULT_THEME_HEX: dict[str, str] = {
     "GREEN": "#859900",
 }
 
-USAGE_TEXT = """Usage: ide [OPTIONS] [DIRECTORY]
+USAGE_TEXT = """Usage:
+  ide [OPTIONS] [DIR | SESSION]
+  ide <COMMAND> [ARGS...]
 
-Launch or attach to a Solarized Dark Tmux + Neovim IDE workspace session.
+Launch or attach to a Solarized Dark Tmux + Neovim + AI IDE workspace, or manage active sessions.
 
-Options:
-  --3pane                  Launch default 3-pane layout (Top-Left 50%x75% AI, Top-Right 50%x75% Editor, Bottom 100%x25% Shell)
-  --2pane                  Launch 2-pane layout (Left 50%x100% AI, Right 50%x100% Editor)
-  --ai, --agent <CLI>      Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
-  --open <FILE> [LINE]     Open <FILE> in the Main Editor pane via RPC and focus Editor
-  --preview <FILE> [LINE]  Preview <FILE> in the Main Editor pane via RPC without changing focus
-  cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
-  -s, --sessions [SESSION] Open interactive multi-session IDE workspace switcher (Alt+s / Prefix+s)
-  -n, --new                Open interactive workspace directory picker to launch or switch to a session
-  --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in urgency and FIFO order (Alt+Shift+S / Prefix+S)
-  --agent-state <STATE> [--message <TEXT>] [SESSION] Record deterministic AI lifecycle state: running, approval, quota, done, or idle
-  --ack-ai [SESSION...]    Acknowledge AI attention across one or more IDE sessions
-  --open-pr [SESSION]      Open cached pull or merge request URL for an IDE session
-  --send <PAYLOAD> [SESSION] Dispatch context (--stdin, --ref <PATH>[:L1[-L2]], --text <TEXT>, --no-focus, --switch) to AI Agent
-  --toggle [SESSION]       Toggle focus between the AI Agent and the Text Editor (unparking if hidden)
-  --show-editor [SESSION]  Focus the Text Editor pane (unparking if hidden), or bounce back if already focused
-  --show-ai [SESSION]      Focus the AI Agent pane (unparking if hidden), or bounce back if already focused
-  --show-term [SESSION]    Focus the Interactive Shell pane (unparking if hidden), or bounce back if already focused
-  --toggle-editor [SESSION] Hide or reappear the Text Editor pane (Alt+Shift+E)
-  --toggle-ai [SESSION]    Hide or reappear the AI Agent pane
-  --toggle-term [SESSION]  Hide or reappear the Interactive Shell pane (Alt+Shift+T)
-  --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
-  --monitor, --top         Launch interactive system monitor with btop -> htop -> top fallback (Alt+m / Prefix+m)
-  --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / F1 / Prefix+?)
-  refresh, -r, --refresh [NAME] Refresh tmux top bar and Editor themes and CWDs across all (or target) IDE sessions (Prefix+r)
-  quit, -q, --quit [NAME...] Safely quit IDE session(s) NAME (checks for unsaved Neovim buffers first)
-  -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
-  --detach                 Create/update workspace session in background without attaching
-  kill, --kill [NAME...]   Force-quit IDE session(s) NAME without the unsaved-buffer check
-  --list [--plain]         List active IDE workspace sessions with agent CLI, state, VCS status, and directory
-  -h, --help               Show this help message and exit
+Launch Options:
+  --2pane                  Launch 2-pane side-by-side layout (default: 3-pane inverted-T)
+  --agent <CLI>            Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
+  -d, --detach             Create or update workspace session in background without attaching
+  -h, --help               Show help (pass after a command for command-specific help)
 
-Without NAME / SESSION, session commands act only on the ide session of the calling pane
+Workspace & Fleet Commands:
+  list [--plain | --json]  List active IDE sessions (status table, raw names, or JSON array)
+  switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+s)
+  new, -n [QUERY]          Open interactive workspace directory picker
+  next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+S)
+  cd [DIR | --reset]       Set working directory across Editor and Shell panes
+  refresh [SESSION]        Refresh Tmux chrome, Editor themes, and CWDs across IDE sessions
+  quit [-f | --force] [SESSION...]
+                           Safely close IDE session(s) after checking unsaved Neovim buffers
+
+Agent & Editor RPC Commands:
+  open [-p | --preview] <FILE>[:LINE] [SESSION]
+                           Open or focusless-preview a file in the Main Editor pane via RPC
+  send [--stdin | --ref <PATH>[:L1[-L2]] | --text <TEXT>] [--no-focus | --switch] [SESSION]
+                           Stage prompt context into an IDE session's AI Agent pane
+  state <STATE> [-m | --message <TEXT>] [SESSION]
+                           Record AI lifecycle state: running, approval, quota, done, or idle
+  ack [SESSION...]         Acknowledge AI attention across one or more IDE sessions
+  pr [SESSION]             Open cached pull or merge request URL for an IDE session
+
+Utilities:
+  keys                     Display interactive IDE keybinding cheatsheet (Alt+? / F1)
+  monitor                  Launch system monitor with btop, htop, or top fallback (Alt+m)
+
+Without SESSION, session commands act only on the ide session of the calling pane
 (outside tmux: the current directory's session), never on any other tmux session.
 
 Environment Variables:
@@ -92,6 +92,87 @@ Environment Variables:
   IDE_WORKSPACE_DIRS       Optional colon-separated workspace directories surfaced in launcher and completions
   IDE_LINK_RULES           Untracked Ctrl+click link, workspace, session-naming, notification, and VCS hooks (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
                            defining `ide_resolve_link`, `ide_session_name`, `ide_workspace_dirs`, `ide_resolve_workspace`, `ide_notify`, or `ide_vcs_summary`"""
+
+SUBCOMMAND_USAGE: dict[str, str] = {
+    "list": """Usage: ide list [--plain | --json]
+
+List active IDE workspace sessions in urgency order (ATTN, DONE, WORKING, QUOTA, IDLE, SHELL).
+
+Options:
+  --plain    Print session names only (one per line)
+  --json     Print machine-readable JSON array with keys:
+             session, agent, state, state_label, state_ts, needs_attention, attention_ts,
+             message, workdir, git_branch, git_dirty, git_detail, git_pr_url,
+             worktree_root, worktree_peers, active_role, attached, is_current, quit_error""",
+    "switch": """Usage: ide switch [OPTIONS] [SESSION]
+Alias: ide -s [SESSION]
+
+Open the interactive two-pane fzf IDE workspace switcher (opens 'ide new' if zero sessions exist).
+
+Options:
+  --2pane          Use 2-pane layout when launching a new workspace
+  --agent <CLI>    Select AI CLI (agy, claude, codex) when launching a new workspace
+  -d, --detach     Create new workspace in background without attaching""",
+    "new": """Usage: ide new [OPTIONS] [SESSION]
+Alias: ide -n [SESSION]
+
+Open the interactive fzf workspace directory picker across zoxide, workspace roots, and $HOME.
+
+Options:
+  --2pane          Launch selected workspace in 2-pane layout
+  --agent <CLI>    Select AI CLI (agy, claude, codex)
+  -d, --detach     Create workspace in background without attaching""",
+    "next": """Usage: ide next [SESSION]
+
+Jump to the oldest IDE session waiting for AI attention (ATTN blockers ahead of DONE in FIFO order).""",
+    "cd": """Usage: ide cd [DIR | --reset] [SESSION]
+
+Set the working directory across the session's Main Editor and Shell panes without restarting AI.
+Pass --reset or ~ to return to the session's initial launch root.""",
+    "refresh": """Usage: ide refresh [SESSION]
+
+Reload Tmux top bar and theme config, heal Editor RPC sockets and CWDs, and reload Neovim themes.""",
+    "quit": """Usage: ide quit [-f | --force] [SESSION...]
+
+Safely close one or more IDE sessions after checking Neovim for unsaved buffer modifications.
+
+Options:
+  -f, --force    Skip the unsaved-buffer check and terminate immediately""",
+    "open": """Usage: ide open [-p | --preview] <FILE>[:LINE] [+LINE] [SESSION]
+
+Open a file (at optional line number) in the session's Main Neovim Editor pane over MsgPack-RPC.
+
+Options:
+  -p, --preview  Preview the file in the Main Editor without changing active pane focus""",
+    "send": """Usage: ide send [SOURCE] [--no-focus | --switch] [SESSION]
+
+Stage prompt text or file references into the target IDE session's AI Agent prompt without submitting.
+
+Source Options:
+  --stdin                    Read payload from standard input
+  --ref <PATH>[:L1[-L2]]     Format a workspace-relative @file#L1-L2 reference
+  --text <TEXT>              Send literal text (or pass <TEXT> positionally)
+
+Focus Options:
+  --no-focus                 Keep current pane focus instead of focusing the AI pane
+  --switch                   Focus the target AI pane and switch client to SESSION""",
+    "state": """Usage: ide state <STATE> [-m | --message <TEXT>] [SESSION]
+
+Record deterministic AI lifecycle state: running, approval, quota, done, or idle.
+Reads optional hook JSON from non-TTY stdin or trailing '{...}' arguments.""",
+    "ack": """Usage: ide ack [SESSION...]
+
+Acknowledge AI attention across one or more IDE sessions (DONE transitions to IDLE; ATTN mutes alert).""",
+    "pr": """Usage: ide pr [SESSION]
+
+Open the cached pull or merge request deliverable URL for an IDE session.""",
+    "keys": """Usage: ide keys
+
+Display the 80x24-fitted Solarized Dark IDE keybinding cheatsheet.""",
+    "monitor": """Usage: ide monitor
+
+Launch an interactive system monitor with btop, htop, and top fallback.""",
+}
 
 _SGR_RE = re.compile(r"\x1b\[[0-9;:]*m")
 _ANSI_ESC_RE = re.compile(
@@ -250,7 +331,7 @@ def trunc_visible(text: str, max_w: int, suffix: str = "…") -> str:
 
 
 def is_switcher_session_name(sess: str) -> bool:
-    """Return True when `sess` names an ephemeral 2-pane `ide --sessions` switcher session (`ai-sw-*`)."""
+    """Return True when `sess` names an ephemeral 2-pane `ide switch` switcher session (`ai-sw-*`)."""
     return bool(sess) and sess.startswith(_SWITCHER_SESS_PREFIX)
 
 

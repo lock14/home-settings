@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 
-from ide_lib.constants import safe_getcwd, usage, which_executable
+from ide_lib.constants import SUBCOMMAND_USAGE, safe_getcwd, usage, which_executable
 
 
 def _is_pos_line_arg(raw: str) -> bool:
@@ -13,22 +13,21 @@ def _is_pos_line_arg(raw: str) -> bool:
     return bool(s) and s[0] != "0" and s.isdigit()
 
 
-_SINGLE_ARG_ACTIONS = frozenset({
-    "--toggle",
-    "--show-editor",
-    "--focus-editor",
-    "--focus-ai",
-    "--focus-term",
-    "--show-ai",
-    "--show-term",
-    "--toggle-editor",
-    "--toggle-ai",
-    "--toggle-term",
-    "--next-attention",
-    "--refresh-attn",
-    "--heal-socket",
-    "--run-ai-popup",
-    "--paste",
+_PUBLIC_SUBCOMMANDS = frozenset({
+    "list",
+    "switch",
+    "new",
+    "next",
+    "cd",
+    "refresh",
+    "quit",
+    "open",
+    "send",
+    "state",
+    "ack",
+    "pr",
+    "keys",
+    "monitor",
 })
 
 
@@ -118,6 +117,184 @@ def _normalize_ai_cli(ai_cli: str, from_flag: bool) -> bool:
     return False
 
 
+def _parse_open_link_args(rem: list[str]) -> tuple[str, str, str, str]:
+    link_href = ""
+    link_word = ""
+    link_cwd = ""
+    target_arg = ""
+    if (
+        len(rem) >= 3
+        and os.path.isdir(rem[2])
+        and (
+            len(rem) >= 4
+            or not (os.path.isabs(rem[1]) and os.path.isdir(rem[1]) and not os.path.isabs(rem[2]))
+        )
+    ):
+        link_href, link_word, link_cwd = rem[0], rem[1], rem[2]
+        if len(rem) >= 4:
+            target_arg = rem[3]
+    elif len(rem) >= 2 and os.path.isdir(rem[1]):
+        link_href, link_word, link_cwd = "", rem[0], rem[1]
+        if len(rem) >= 3:
+            target_arg = rem[2]
+    elif len(rem) >= 1 and os.path.isdir(rem[0]):
+        link_href, link_word, link_cwd = "", "", rem[0]
+        if len(rem) >= 2:
+            target_arg = rem[1]
+    else:
+        link_href = rem[0] if len(rem) >= 1 else ""
+        link_word = rem[1] if len(rem) >= 2 else ""
+        link_cwd = rem[2] if len(rem) >= 3 else ""
+        if len(rem) >= 4:
+            target_arg = rem[3]
+    return link_href, link_word, link_cwd, target_arg
+
+
+def _dispatch_internal(rem: list[str]) -> int:
+    """Dispatch private Tmux, Neovim, clipboard, and `fzf` UI callbacks (`ide _internal <op>`)."""
+    if not which_executable("tmux"):
+        print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
+        return 1
+    if not rem:
+        print("Error: 'ide _internal' requires an operation.", file=sys.stderr)
+        return 1
+
+    op = rem[0]
+    rest = rem[1:]
+
+    if op == "refresh-attn":
+        from ide_lib.fleet import refresh_fleet_topbar
+
+        return refresh_fleet_topbar()
+
+    if op == "ack-hook":
+        from ide_lib.fleet import ack_ai_session
+
+        return ack_ai_session(rest or "", from_hook=True, refresh_always=False)
+
+    if op == "sessions-lines":
+        from ide_lib.sessions import build_sessions_lines
+
+        for row in build_sessions_lines(rest[0] if rest else ""):
+            print(row)
+        return 0
+
+    if op == "session-preview":
+        from ide_lib.preview import render_session_preview
+
+        follow = False
+        j = 0
+        while j < len(rest):
+            if rest[j] == "--":
+                j += 1
+                break
+            if rest[j] == "--follow":
+                follow = True
+                j += 1
+                continue
+            if rest[j].startswith("-"):
+                print(f"Error: Unknown option '{rest[j]}' for 'ide _internal session-preview'.", file=sys.stderr)
+                return 1
+            break
+        if j >= len(rest):
+            print("Error: 'ide _internal session-preview' requires a session name.", file=sys.stderr)
+            return 1
+        return render_session_preview(rest[j], follow=follow)
+
+    if op == "switcher-op":
+        from ide_lib.switcher import handle_switcher_op
+
+        if len(rest) < 2:
+            print("Error: 'ide _internal switcher-op' requires an operation and switcher session.", file=sys.stderr)
+            return 1
+        return handle_switcher_op(rest[0], rest[1])
+
+    if op == "heal-socket":
+        from ide_lib.nvim_rpc import heal_target_session_socket
+
+        return heal_target_session_socket(rest[0] if rest else "")
+
+    if op in ("copy", "paste"):
+        from ide_lib.tmux import (
+            copy_to_system_clipboard,
+            discover_display_env,
+            paste_from_system_clipboard,
+            set_allow_tmux_env_fallback,
+        )
+
+        arg0 = rest[0] if rest else ""
+        set_allow_tmux_env_fallback(True)
+        discover_display_env(arg0)
+        if op == "copy":
+            copy_to_system_clipboard(arg0)
+        else:
+            paste_from_system_clipboard(arg0)
+        return 0
+
+    if op == "open-link":
+        from ide_lib.links import open_ide_link
+
+        link_href, link_word, link_cwd, target_arg = _parse_open_link_args(rest)
+        return open_ide_link(link_href, link_word, link_cwd, target_arg)
+
+    from ide_lib.layout import (
+        run_ai_popup,
+        status_click,
+        swap_ide_pane,
+        toggle_main_pane,
+    )
+
+    if op == "status-click":
+        x_val = rest[0] if len(rest) >= 1 else "0"
+        sess = rest[1] if len(rest) >= 2 else ""
+        return status_click(x_val, sess)
+
+    if op == "toggle":
+        return toggle_main_pane("toggle", rest[0] if rest else "")
+
+    if op in ("show", "focus", "park"):
+        if not rest or rest[0] not in ("ai", "editor", "term"):
+            print(f"Error: 'ide _internal {op}' requires a role (ai, editor, or term).", file=sys.stderr)
+            return 1
+        role = rest[0]
+        sess = rest[1] if len(rest) >= 2 else ""
+        if op == "show":
+            return toggle_main_pane(role, sess)
+        if op == "focus":
+            return toggle_main_pane(
+                f"focus-{role}", sess, skip_checktime=(os.environ.get("IDE_SKIP_CHECKTIME") == "1")
+            )
+        return toggle_main_pane(f"toggle-{role}", sess)
+
+    if op == "swap":
+        if not rest or rest[0].startswith("-"):
+            print("Error: 'ide _internal swap' requires a direction (left, down, up, or right).", file=sys.stderr)
+            return 1
+        sess = rest[1] if len(rest) >= 2 else ""
+        return swap_ide_pane(rest[0], sess)
+
+    if op == "ai-popup":
+        run_ai_popup(rest[0] if rest else "")
+        return 0
+
+    print(f"Error: Unknown internal operation '{op}'.", file=sys.stderr)
+    return 1
+
+
+def _extract_opt_value(args: list[str], idx: int, opt_name: str, hint: str) -> tuple[str | None, int]:
+    arg = args[idx]
+    if "=" in arg:
+        val = arg.split("=", 1)[1]
+        if not val:
+            print(f"Error: '{opt_name}' requires {hint}.", file=sys.stderr)
+            return None, idx
+        return val, idx + 1
+    if idx + 1 >= len(args) or not args[idx + 1] or args[idx + 1].startswith("-"):
+        print(f"Error: '{arg}' requires {hint}.", file=sys.stderr)
+        return None, idx
+    return args[idx + 1], idx + 2
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parse CLI arguments and dispatch to the matching `ide_lib` domain handler."""
     raw_self = os.environ.pop("IDE_SELF", "")
@@ -130,394 +307,85 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["FORCE_HYPERLINK"] = "1"
     args = sys.argv[1:] if argv is None else list(argv)
 
-    if not which_executable("tmux"):
-        if "--list" in args and "--plain" in args:
-            return 0
-        if not any(a in ("-h", "--help", "--keys", "--help-keys", "--monitor", "--top", "--btop") for a in args):
-            print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
-            return 1
+    if args and args[0] == "_internal":
+        return _dispatch_internal(args[1:])
 
     layout_mode = "3pane"
     action = "launch"
     detach_mode = os.environ.get("IDE_NO_ATTACH", "0") == "1"
-    force_quit = False
-    plain_list = False
     had_env_ai_cli = bool((os.environ.get("IDE_AI_CLI") or "").strip())
     ai_cli = os.environ.get("IDE_AI_CLI") or "agy"
     ai_cli_from_flag = False
-    target_arg = ""
-    target_args: list[str] = []
-    open_file = ""
-    open_line = ""
-    cd_target = ""
-    swap_dir = ""
-    status_click_x = ""
-    link_href = ""
-    link_word = ""
-    link_cwd = ""
-    send_mode = ""
-    send_payload = ""
-    send_no_focus = False
-    send_switch = False
-    agent_state_val = ""
-    agent_message = ""
-    agent_json_args: list[str] = []
-    ack_from_hook = False
-    preview_follow = False
-    switcher_op = ""
-    end_of_opts = False
+    want_help = False
 
+    # Parse leading launch options or identify the subcommand
     i = 0
     n = len(args)
+    end_of_opts = False
+    launch_targets: list[str] = []
+
     while i < n:
         arg = args[i]
         if end_of_opts:
-            if action == "send" and not send_mode:
-                send_mode = "text"
-                send_payload = arg
-            elif action == "agent-state" and _looks_like_json_obj(arg):
-                agent_json_args.append(arg)
-            else:
-                target_arg = arg
-                target_args.append(arg)
+            launch_targets.append(arg)
             i += 1
         elif arg == "--":
             end_of_opts = True
             i += 1
+        elif arg in ("-h", "--help"):
+            want_help = True
+            i += 1
         elif arg == "--2pane":
             layout_mode = "2pane"
             i += 1
-        elif arg == "--3pane":
-            layout_mode = "3pane"
-            i += 1
-        elif arg in ("--ai", "--agent"):
-            if i + 1 >= n or args[i + 1].startswith("-"):
-                print(f"Error: '{arg}' requires an argument (agy, claude, or codex).", file=sys.stderr)
+        elif arg == "--agent" or arg.startswith("--agent="):
+            val, next_i = _extract_opt_value(args, i, "--agent", "an argument (agy, claude, or codex)")
+            if val is None:
                 return 1
-            ai_cli = args[i + 1]
+            ai_cli = val
             ai_cli_from_flag = True
-            i += 2
-        elif arg.startswith(("--ai=", "--agent=")):
-            ai_cli = arg.split("=", 1)[1]
-            ai_cli_from_flag = True
-            i += 1
-        elif arg in ("--open", "--preview") or arg.startswith(("--open=", "--preview=")):
-            if "=" in arg:
-                opt_flag, open_file = arg.split("=", 1)
-                action = "open" if opt_flag == "--open" else "preview"
-                if not open_file:
-                    print(f"Error: '{opt_flag}' requires a file path.", file=sys.stderr)
-                    return 1
-                next_idx = i + 1
-            else:
-                action = "open" if arg == "--open" else "preview"
-                if i + 1 >= n:
-                    print(f"Error: '{arg}' requires a file path.", file=sys.stderr)
-                    return 1
-                open_file = args[i + 1]
-                next_idx = i + 2
-            if next_idx < n and _is_pos_line_arg(args[next_idx]):
-                from ide_lib.tmux import session_exists
-
-                cand_line = args[next_idx]
-                if cand_line.startswith("+") or next_idx + 1 < n or not session_exists(cand_line):
-                    open_line = cand_line.lstrip("+")
-                    next_idx += 1
-            i = next_idx
-        elif arg == "--cd" or (arg == "cd" and action == "launch"):
-            action = "cd"
-            if i + 1 < n:
-                cd_target = args[i + 1]
-                i += 2
-            else:
-                cd_target = safe_getcwd()
-                i += 1
-        elif arg in ("-s", "--sessions"):
-            action = "sessions"
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                i += 2
-            else:
-                i += 1
-        elif arg in ("-n", "--new"):
-            action = "new"
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                i += 2
-            else:
-                i += 1
-        elif arg == "--sessions-lines":
-            action = "sessions-lines"
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                i += 2
-            else:
-                i += 1
-        elif arg == "--follow":
-            preview_follow = True
-            i += 1
-        elif arg == "--session-preview":
-            action = "session-preview"
-            j = i + 1
-            while j < n and args[j] == "--follow":
-                preview_follow = True
-                j += 1
-            if j < n and args[j] == "--":
-                j += 1
-            if j >= n:
-                print("Error: '--session-preview' requires a session name.", file=sys.stderr)
-                return 1
-            target_arg = args[j]
-            i = j + 1
-        elif arg.startswith("--session-preview="):
-            action = "session-preview"
-            target_arg = arg.split("=", 1)[1]
-            if not target_arg:
-                print("Error: '--session-preview' requires a session name.", file=sys.stderr)
-                return 1
-            i += 1
-        elif arg == "--switcher-op":
-            action = "switcher-op"
-            if i + 2 >= n:
-                print("Error: '--switcher-op' requires an operation and switcher session.", file=sys.stderr)
-                return 1
-            switcher_op = args[i + 1]
-            target_arg = args[i + 2]
-            i += 3
-        elif arg == "--agent-state":
-            action = "agent-state"
-            if i + 1 >= n or args[i + 1].startswith("-"):
-                print("Error: '--agent-state' requires a state (running, approval, quota, done, or idle).", file=sys.stderr)
-                return 1
-            agent_state_val = args[i + 1]
-            if i + 2 < n and not args[i + 2].startswith("-"):
-                cand = args[i + 2]
-                if _looks_like_json_obj(cand):
-                    agent_json_args.append(cand)
-                else:
-                    target_arg = cand
-                    target_args.append(cand)
-                i += 3
-            else:
-                i += 2
-        elif arg.startswith("--agent-state="):
-            action = "agent-state"
-            agent_state_val = arg.split("=", 1)[1]
-            if not agent_state_val:
-                print("Error: '--agent-state' requires a state (running, approval, quota, done, or idle).", file=sys.stderr)
-                return 1
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                cand = args[i + 1]
-                if _looks_like_json_obj(cand):
-                    agent_json_args.append(cand)
-                else:
-                    target_arg = cand
-                    target_args.append(cand)
-                i += 2
-            else:
-                i += 1
-        elif arg == "--message":
-            if i + 1 >= n:
-                print("Error: '--message' requires a text string.", file=sys.stderr)
-                return 1
-            agent_message = args[i + 1]
-            i += 2
-        elif arg.startswith("--message="):
-            agent_message = arg.split("=", 1)[1]
-            i += 1
-        elif arg == "--hook":
-            ack_from_hook = True
-            i += 1
-        elif arg == "--ack-ai":
-            action = "ack-ai"
-            i += 1
-        elif arg == "--open-pr":
-            action = "open-pr"
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                target_args.append(args[i + 1])
-                i += 2
-            else:
-                i += 1
-        elif arg.startswith("--open-pr="):
-            action = "open-pr"
-            target_arg = arg.split("=", 1)[1]
-            if target_arg:
-                target_args.append(target_arg)
-            i += 1
-        elif arg == "--send":
-            action = "send"
-            i += 1
-        elif arg == "--stdin":
-            action = "send"
-            send_mode = "stdin"
-            i += 1
-        elif arg == "--ref":
-            if i + 1 >= n:
-                print("Error: '--ref' requires a file path.", file=sys.stderr)
-                return 1
-            action = "send"
-            send_mode = "ref"
-            send_payload = args[i + 1]
-            i += 2
-        elif arg.startswith("--ref="):
-            action = "send"
-            send_mode = "ref"
-            send_payload = arg.split("=", 1)[1]
-            i += 1
-        elif arg == "--text":
-            if i + 1 >= n:
-                print("Error: '--text' requires a text string.", file=sys.stderr)
-                return 1
-            action = "send"
-            send_mode = "text"
-            send_payload = args[i + 1]
-            i += 2
-        elif arg.startswith("--text="):
-            action = "send"
-            send_mode = "text"
-            send_payload = arg.split("=", 1)[1]
-            i += 1
-        elif arg == "--no-focus":
-            send_no_focus = True
-            send_switch = False
-            i += 1
-        elif arg == "--switch":
-            send_switch = True
-            send_no_focus = False
-            i += 1
-        elif arg in _SINGLE_ARG_ACTIONS:
-            action = arg[2:]
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                target_args.append(args[i + 1])
-                i += 2
-            else:
-                i += 1
-        elif arg in ("-r", "--refresh", "--reload") or (arg == "refresh" and action == "launch"):
-            action = "refresh"
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                target_args.append(args[i + 1])
-                i += 2
-            else:
-                i += 1
-        elif arg == "--kill" or (arg == "kill" and action == "launch"):
-            action = "kill"
-            i += 1
-        elif arg in ("-q", "--quit") or (arg == "quit" and action == "launch"):
-            action = "quit"
-            i += 1
-        elif arg == "--swap":
-            action = "swap"
-            if i + 1 >= n or args[i + 1].startswith("-"):
-                print("Error: '--swap' requires a direction (left, down, up, or right).", file=sys.stderr)
-                return 1
-            swap_dir = args[i + 1]
-            if i + 2 < n and not args[i + 2].startswith("-"):
-                target_arg = args[i + 2]
-                i += 3
-            else:
-                i += 2
-        elif arg.startswith("--swap="):
-            action = "swap"
-            swap_dir = arg.split("=", 1)[1]
-            if not swap_dir:
-                print("Error: '--swap' requires a direction (left, down, up, or right).", file=sys.stderr)
-                return 1
-            if i + 1 < n and not args[i + 1].startswith("-"):
-                target_arg = args[i + 1]
-                i += 2
-            else:
-                i += 1
-        elif arg in ("--keys", "--help-keys"):
-            action = "keys"
-            i += 1
-        elif arg in ("--monitor", "--top", "--btop"):
-            action = "monitor"
-            i += 1
-        elif arg == "--status-click":
-            action = "status-click"
-            status_click_x = args[i + 1] if i + 1 < n else "0"
-            target_arg = args[i + 2] if i + 2 < n else ""
-            i += 3 if i + 2 < n else (2 if i + 1 < n else 1)
-        elif arg == "--copy":
-            action = "copy"
-            i += 1
-        elif arg == "--open-link":
-            action = "open-link"
-            rem = args[i + 1:]
-            if (
-                len(rem) >= 3
-                and os.path.isdir(rem[2])
-                and (
-                    len(rem) >= 4
-                    or not (os.path.isabs(rem[1]) and os.path.isdir(rem[1]) and not os.path.isabs(rem[2]))
-                )
-            ):
-                link_href, link_word, link_cwd = rem[0], rem[1], rem[2]
-                if len(rem) >= 4:
-                    target_arg = rem[3]
-                    i += 5
-                else:
-                    i += 4
-            elif len(rem) >= 2 and os.path.isdir(rem[1]):
-                link_href, link_word, link_cwd = "", rem[0], rem[1]
-                if len(rem) >= 3:
-                    target_arg = rem[2]
-                    i += 4
-                else:
-                    i += 3
-            elif len(rem) >= 1 and os.path.isdir(rem[0]):
-                link_href, link_word, link_cwd = "", "", rem[0]
-                if len(rem) >= 2:
-                    target_arg = rem[1]
-                    i += 3
-                else:
-                    i += 2
-            else:
-                link_href = rem[0] if len(rem) >= 1 else ""
-                link_word = rem[1] if len(rem) >= 2 else ""
-                link_cwd = rem[2] if len(rem) >= 3 else ""
-                if len(rem) >= 4:
-                    target_arg = rem[3]
-                    i += 5
-                else:
-                    i += 1 + min(len(rem), 3)
-        elif arg in ("-f", "--force"):
-            force_quit = True
-            i += 1
-        elif arg == "--detach":
+            i = next_i
+        elif arg in ("-d", "--detach"):
             detach_mode = True
             i += 1
-        elif arg == "--list":
-            action = "list"
+        elif arg in ("-s", "switch") and not launch_targets:
+            action = "switch"
             i += 1
-        elif arg == "--plain":
-            plain_list = True
-            if action == "launch":
-                action = "list"
+            break
+        elif arg in ("-n", "new") and not launch_targets:
+            action = "new"
             i += 1
-        elif arg in ("-h", "--help"):
-            usage(sys.stdout)
-            return 0
+            break
+        elif arg in _PUBLIC_SUBCOMMANDS and not launch_targets:
+            action = arg
+            i += 1
+            break
         elif arg.startswith("-"):
-            print(f"Error: Unknown option '{arg}'", file=sys.stderr)
-            usage(sys.stderr)
+            print(f"Error: Unknown option '{arg}' (run 'ide --help' for usage).", file=sys.stderr)
             return 1
         else:
-            if action == "send" and not send_mode:
-                send_mode = "text"
-                send_payload = arg
-            elif action == "agent-state" and _looks_like_json_obj(arg):
-                agent_json_args.append(arg)
-            else:
-                target_arg = arg
-                target_args.append(arg)
+            launch_targets.append(arg)
             i += 1
 
-    if preview_follow and action != "session-preview":
-        print("Error: '--follow' can only be used with '--session-preview'.", file=sys.stderr)
+    sub_args = args[i:]
+
+    if not want_help:
+        for s_arg in sub_args:
+            if s_arg == "--":
+                break
+            if s_arg in ("-h", "--help"):
+                want_help = True
+                break
+
+    if want_help:
+        if action in SUBCOMMAND_USAGE:
+            print(SUBCOMMAND_USAGE[action])
+        else:
+            usage(sys.stdout)
+        return 0
+
+    if len(launch_targets) > 1:
+        print(f"Error: Unexpected extra argument '{launch_targets[1]}'.", file=sys.stderr)
         return 1
 
     if not _normalize_ai_cli(ai_cli, ai_cli_from_flag):
@@ -525,58 +393,88 @@ def main(argv: list[str] | None = None) -> int:
     ai_cli = os.environ["IDE_AI_CLI"]
 
     if action == "keys":
-        os.execvp("bash", ["bash", ide_self, "--keys"])
+        if sub_args:
+            print(f"Error: Unknown 'ide keys' argument '{sub_args[0]}'.", file=sys.stderr)
+            return 1
+        os.execvp("bash", ["bash", ide_self, "keys"])
+
     if action == "monitor":
-        os.execvp("bash", ["bash", ide_self, "--monitor"])
+        if sub_args:
+            print(f"Error: Unknown 'ide monitor' argument '{sub_args[0]}'.", file=sys.stderr)
+            return 1
+        os.execvp("bash", ["bash", ide_self, "monitor"])
 
-    if action in ("agent-state", "ack-ai", "open-pr", "refresh-attn"):
-        from ide_lib.fleet import (
-            ack_ai_session,
-            open_session_pr,
-            refresh_fleet_topbar,
-            set_agent_state,
-        )
+    if action == "list":
+        plain_list = False
+        json_list = False
+        for s_arg in sub_args:
+            if s_arg == "--plain":
+                plain_list = True
+            elif s_arg == "--json":
+                json_list = True
+            else:
+                print(f"Error: Unknown 'ide list' option '{s_arg}' (expected: --plain or --json).", file=sys.stderr)
+                return 1
+        if plain_list and json_list:
+            print("Error: '--plain' and '--json' cannot be combined.", file=sys.stderr)
+            return 1
+        if not which_executable("tmux"):
+            if json_list:
+                print("[]")
+                return 0
+            if plain_list:
+                return 0
+            print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
+            return 1
+        from ide_lib.sessions import list_ide_fleet
 
-        if action == "agent-state":
-            return set_agent_state(agent_state_val, target_arg, message=agent_message, json_args=agent_json_args)
-        if action == "ack-ai":
-            return ack_ai_session(
-                target_args or target_arg,
-                from_hook=ack_from_hook,
-                refresh_always=not ack_from_hook,
-            )
-        if action == "open-pr":
-            return open_session_pr(target_arg)
-        return refresh_fleet_topbar()
+        return list_ide_fleet(plain=plain_list, json_output=json_list)
 
-    if action == "list" and plain_list:
-        from ide_lib.fleet import classify_ide_fleet
-        from ide_lib.tmux import current_ide_session
+    if not which_executable("tmux"):
+        print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
+        return 1
 
-        for entry in classify_ide_fleet(include_git=False, cur_sess=current_ide_session()):
-            print(str(entry["sess"]))
-        return 0
+    if action in ("switch", "new"):
+        target_arg = ""
+        j = 0
+        sub_end = False
+        while j < len(sub_args):
+            s_arg = sub_args[j]
+            if sub_end:
+                if target_arg:
+                    print(f"Error: Unexpected extra argument '{s_arg}'.", file=sys.stderr)
+                    return 1
+                target_arg = s_arg
+                j += 1
+            elif s_arg == "--":
+                sub_end = True
+                j += 1
+            elif s_arg == "--2pane":
+                layout_mode = "2pane"
+                j += 1
+            elif s_arg == "--agent" or s_arg.startswith("--agent="):
+                val, next_j = _extract_opt_value(sub_args, j, "--agent", "an argument (agy, claude, or codex)")
+                if val is None or not _normalize_ai_cli(val, True):
+                    return 1
+                ai_cli = os.environ["IDE_AI_CLI"]
+                ai_cli_from_flag = True
+                j = next_j
+            elif s_arg in ("-d", "--detach"):
+                detach_mode = True
+                j += 1
+            elif s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide {action}' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                if target_arg:
+                    print(f"Error: Unexpected extra argument '{s_arg}'.", file=sys.stderr)
+                    return 1
+                target_arg = s_arg
+                j += 1
 
-    if action == "session-preview":
-        from ide_lib.preview import render_session_preview
+        from ide_lib.sessions import run_new_workspace_picker, run_sessions_picker
 
-        return render_session_preview(target_arg, follow=preview_follow)
-
-    if action == "switcher-op":
-        from ide_lib.switcher import handle_switcher_op
-
-        return handle_switcher_op(switcher_op, target_arg)
-
-    if action in ("sessions", "new", "sessions-lines", "next-attention", "list"):
-        from ide_lib.sessions import (
-            build_sessions_lines,
-            list_ide_fleet,
-            next_attention,
-            run_new_workspace_picker,
-            run_sessions_picker,
-        )
-
-        if action == "sessions":
+        if action == "switch":
             return run_sessions_picker(
                 target_arg,
                 ide_self,
@@ -586,103 +484,262 @@ def main(argv: list[str] | None = None) -> int:
                 ai_cli_from_flag=ai_cli_from_flag,
                 detach_only=detach_mode,
             )
-        if action == "new":
-            return run_new_workspace_picker(
-                target_arg,
-                ide_self,
-                layout_mode=layout_mode,
-                ai_cli=ai_cli,
-                ai_cli_from_flag=ai_cli_from_flag,
-                had_env_ai_cli=had_env_ai_cli,
-                detach_only=detach_mode,
-            )
-        if action == "sessions-lines":
-            for row in build_sessions_lines(target_arg):
-                print(row)
-            return 0
-        if action == "next-attention":
-            return next_attention(target_arg)
-        return list_ide_fleet(plain=plain_list)
+        return run_new_workspace_picker(
+            target_arg,
+            ide_self,
+            layout_mode=layout_mode,
+            ai_cli=ai_cli,
+            ai_cli_from_flag=ai_cli_from_flag,
+            had_env_ai_cli=had_env_ai_cli,
+            detach_only=detach_mode,
+        )
+
+    if action == "next":
+        if len(sub_args) > 1 or (sub_args and sub_args[0].startswith("-")):
+            bad = sub_args[0] if sub_args and sub_args[0].startswith("-") else sub_args[1]
+            print(f"Error: Unexpected 'ide next' argument '{bad}'.", file=sys.stderr)
+            return 1
+        from ide_lib.sessions import next_attention
+
+        return next_attention(sub_args[0] if sub_args else "")
+
+    if action == "cd":
+        cd_pos: list[str] = []
+        sub_end = False
+        for s_arg in sub_args:
+            if sub_end:
+                cd_pos.append(s_arg)
+            elif s_arg == "--":
+                sub_end = True
+            elif s_arg in ("--reset", "-"):
+                cd_pos.append(s_arg)
+            elif s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide cd' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                cd_pos.append(s_arg)
+        if len(cd_pos) > 2:
+            print(f"Error: Unexpected extra argument '{cd_pos[2]}'.", file=sys.stderr)
+            return 1
+        cd_target = cd_pos[0] if cd_pos else safe_getcwd()
+        cd_sess = cd_pos[1] if len(cd_pos) >= 2 else ""
+        from ide_lib.layout import cd_ide_workspace
+
+        return cd_ide_workspace(cd_target, cd_sess)
+
+    if action == "refresh":
+        pos = [a for a in sub_args if a != "--"]
+        if any(a.startswith("-") for a in pos) or len(pos) > 1:
+            bad = next((a for a in pos if a.startswith("-")), pos[1] if len(pos) > 1 else "")
+            print(f"Error: Unexpected 'ide refresh' argument '{bad}'.", file=sys.stderr)
+            return 1
+        from ide_lib.layout import refresh_ide_sessions
+
+        return refresh_ide_sessions(pos[0] if pos else "", ide_self)
+
+    if action == "quit":
+        force_quit = False
+        quit_targets: list[str] = []
+        sub_end = False
+        for s_arg in sub_args:
+            if sub_end:
+                quit_targets.append(s_arg)
+            elif s_arg == "--":
+                sub_end = True
+            elif s_arg in ("-f", "--force"):
+                force_quit = True
+            elif s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide quit' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                quit_targets.append(s_arg)
+        from ide_lib.layout import quit_ide
+
+        return quit_ide(quit_targets, force_quit, force_quit)
+
+    if action == "open":
+        focus_open = True
+        open_pos: list[str] = []
+        sub_end = False
+        for s_arg in sub_args:
+            if sub_end:
+                open_pos.append(s_arg)
+            elif s_arg == "--":
+                sub_end = True
+            elif s_arg in ("-p", "--preview") and not open_pos:
+                focus_open = False
+            elif s_arg.startswith("-") and not (open_pos and _is_pos_line_arg(s_arg)):
+                print(f"Error: Unknown 'ide open' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                open_pos.append(s_arg)
+        if not open_pos or not open_pos[0]:
+            print("Error: 'ide open' requires a file path.", file=sys.stderr)
+            return 1
+        open_file = open_pos[0]
+        open_line = ""
+        open_sess = ""
+        rest_open = open_pos[1:]
+        if rest_open and _is_pos_line_arg(rest_open[0]):
+            from ide_lib.tmux import session_exists
+
+            cand_line = rest_open[0]
+            if cand_line.startswith("+") or len(rest_open) >= 2 or not session_exists(cand_line):
+                open_line = cand_line.lstrip("+")
+                rest_open = rest_open[1:]
+        if len(rest_open) > 1:
+            print(f"Error: Unexpected extra argument '{rest_open[1]}'.", file=sys.stderr)
+            return 1
+        if rest_open:
+            open_sess = rest_open[0]
+        from ide_lib.links import open_in_editor
+
+        return open_in_editor(open_file, focus_open, open_sess, open_line)
 
     if action == "send":
+        send_mode = ""
+        send_payload = ""
+        send_no_focus = False
+        send_switch = False
+        send_pos: list[str] = []
+        j = 0
+        sub_end = False
+        while j < len(sub_args):
+            s_arg = sub_args[j]
+            if sub_end:
+                send_pos.append(s_arg)
+                j += 1
+            elif s_arg == "--":
+                sub_end = True
+                j += 1
+            elif s_arg == "--stdin":
+                send_mode = "stdin"
+                j += 1
+            elif s_arg == "--ref" or s_arg.startswith("--ref="):
+                if "=" in s_arg:
+                    send_payload = s_arg.split("=", 1)[1]
+                    j += 1
+                else:
+                    if j + 1 >= len(sub_args):
+                        print("Error: '--ref' requires a file path.", file=sys.stderr)
+                        return 1
+                    send_payload = sub_args[j + 1]
+                    j += 2
+                send_mode = "ref"
+            elif s_arg == "--text" or s_arg.startswith("--text="):
+                if "=" in s_arg:
+                    send_payload = s_arg.split("=", 1)[1]
+                    j += 1
+                else:
+                    if j + 1 >= len(sub_args):
+                        print("Error: '--text' requires a text string.", file=sys.stderr)
+                        return 1
+                    send_payload = sub_args[j + 1]
+                    j += 2
+                send_mode = "text"
+            elif s_arg == "--no-focus":
+                send_no_focus = True
+                send_switch = False
+                j += 1
+            elif s_arg == "--switch":
+                send_switch = True
+                send_no_focus = False
+                j += 1
+            elif s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide send' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                send_pos.append(s_arg)
+                j += 1
+        if not send_mode and send_pos:
+            send_mode = "text"
+            send_payload = send_pos.pop(0)
+        if len(send_pos) > 1:
+            print(f"Error: Unexpected extra argument '{send_pos[1]}'.", file=sys.stderr)
+            return 1
+        send_sess = send_pos[0] if send_pos else ""
         from ide_lib.links import send_to_ai
 
-        return send_to_ai(send_mode, send_payload, send_no_focus, send_switch, target_arg)
+        return send_to_ai(send_mode, send_payload, send_no_focus, send_switch, send_sess)
 
-    if action == "heal-socket":
-        from ide_lib.nvim_rpc import heal_target_session_socket
+    if action == "state":
+        agent_state_val = ""
+        agent_message = ""
+        agent_json_args: list[str] = []
+        state_sess = ""
+        j = 0
+        sub_end = False
+        while j < len(sub_args):
+            s_arg = sub_args[j]
+            if not sub_end and s_arg == "--":
+                sub_end = True
+                j += 1
+            elif not sub_end and (s_arg in ("-m", "--message") or s_arg.startswith("--message=")):
+                if "=" in s_arg:
+                    agent_message = s_arg.split("=", 1)[1]
+                    j += 1
+                else:
+                    if j + 1 >= len(sub_args):
+                        print("Error: '--message' requires a text string.", file=sys.stderr)
+                        return 1
+                    agent_message = sub_args[j + 1]
+                    j += 2
+            elif not sub_end and s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide state' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            elif not agent_state_val:
+                agent_state_val = s_arg
+                j += 1
+            elif _looks_like_json_obj(s_arg):
+                agent_json_args.append(s_arg)
+                j += 1
+            elif not state_sess:
+                state_sess = s_arg
+                j += 1
+            else:
+                print(f"Error: Unexpected extra argument '{s_arg}'.", file=sys.stderr)
+                return 1
+        if not agent_state_val:
+            print("Error: 'ide state' requires a state (running, approval, quota, done, or idle).", file=sys.stderr)
+            return 1
+        from ide_lib.fleet import set_agent_state
 
-        return heal_target_session_socket(target_arg)
+        return set_agent_state(agent_state_val, state_sess, message=agent_message, json_args=agent_json_args)
 
-    from ide_lib.tmux import (
-        copy_to_system_clipboard,
-        discover_display_env,
-        paste_from_system_clipboard,
-        set_allow_tmux_env_fallback,
-    )
+    if action == "ack":
+        ack_targets: list[str] = []
+        sub_end = False
+        for s_arg in sub_args:
+            if sub_end:
+                ack_targets.append(s_arg)
+            elif s_arg == "--":
+                sub_end = True
+            elif s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide ack' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                ack_targets.append(s_arg)
+        from ide_lib.fleet import ack_ai_session
 
-    if action in ("copy", "paste"):
-        set_allow_tmux_env_fallback(True)
+        return ack_ai_session(ack_targets or "", from_hook=False, refresh_always=True)
 
-    if action in ("copy", "paste"):
-        discover_display_env(target_arg)
-    elif action == "launch":
-        discover_display_env(target_arg, ignore_tmux_env=not bool(os.environ.get("TMUX")))
+    if action == "pr":
+        pr_pos = [a for a in sub_args if a != "--"]
+        if any(a.startswith("-") for a in pr_pos) or len(pr_pos) > 1:
+            bad = next((a for a in pr_pos if a.startswith("-")), pr_pos[1] if len(pr_pos) > 1 else "")
+            print(f"Error: Unexpected 'ide pr' argument '{bad}'.", file=sys.stderr)
+            return 1
+        from ide_lib.fleet import open_session_pr
 
-    if action == "copy":
-        copy_to_system_clipboard(target_arg)
-        return 0
-    if action == "paste":
-        paste_from_system_clipboard(target_arg)
-        return 0
-    if action in ("open-link", "open", "preview"):
-        from ide_lib.links import open_ide_link, open_in_editor
+        return open_session_pr(pr_pos[0] if pr_pos else "")
 
-        if action == "open-link":
-            return open_ide_link(link_href, link_word, link_cwd, target_arg)
-        return open_in_editor(open_file, action == "open", target_arg, open_line)
+    from ide_lib.layout import launch_or_attach_workspace
+    from ide_lib.tmux import discover_display_env
 
-    from ide_lib.layout import (
-        cd_ide_workspace,
-        launch_or_attach_workspace,
-        quit_ide,
-        refresh_ide_sessions,
-        run_ai_popup,
-        status_click,
-        swap_ide_pane,
-        toggle_main_pane,
-    )
-
-    if action == "status-click":
-        return status_click(status_click_x, target_arg)
-    if action == "refresh":
-        return refresh_ide_sessions(target_arg, ide_self)
-    if action == "cd":
-        return cd_ide_workspace(cd_target, target_arg)
-    if action == "toggle":
-        return toggle_main_pane("toggle", target_arg)
-    if action == "show-editor":
-        return toggle_main_pane("editor", target_arg)
-    if action in ("focus-editor", "focus-ai", "focus-term"):
-        return toggle_main_pane(action, target_arg, skip_checktime=(os.environ.get("IDE_SKIP_CHECKTIME") == "1"))
-    if action == "show-ai":
-        return toggle_main_pane("ai", target_arg)
-    if action == "show-term":
-        return toggle_main_pane("term", target_arg)
-    if action in ("toggle-editor", "toggle-ai", "toggle-term"):
-        return toggle_main_pane(action, target_arg)
-    if action == "swap":
-        return swap_ide_pane(swap_dir, target_arg)
-    if action == "run-ai-popup":
-        run_ai_popup(target_arg)
-        return 0
-    if action == "quit":
-        return quit_ide(target_args, force_quit, False)
-    if action == "kill":
-        return quit_ide(target_args, True, True)
-
+    launch_target = launch_targets[0] if launch_targets else ""
+    discover_display_env(launch_target, ignore_tmux_env=not bool(os.environ.get("TMUX")))
     return launch_or_attach_workspace(
-        target_arg=target_arg,
+        target_arg=launch_target,
         layout_mode=layout_mode,
         ai_cli_from_flag=ai_cli_from_flag,
         detach_mode=detach_mode,

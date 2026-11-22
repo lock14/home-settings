@@ -159,10 +159,7 @@ uninstall_fonts() {
 }
 
 case "$UNINSTALL_TARGET" in
-    dotfiles) uninstall_dotfiles ;;
-    bin)      uninstall_bin ;;
-    fonts)    uninstall_fonts ;;
-    all|*)
+    all|"")
         echo -e "\nUninstalling all home-settings components..."
         uninstall_dotfiles
         uninstall_bin
@@ -170,5 +167,26 @@ case "$UNINSTALL_TARGET" in
         echo -e "\n====================================================="
         echo " Uninstallation complete! "
         echo "====================================================="
+        ;;
+    *)
+        do_dotfiles=false
+        do_bin=false
+        do_fonts=false
+        IFS=',' read -r -a _u_items <<< "$UNINSTALL_TARGET"
+        for _u_tok in "${_u_items[@]}"; do
+            case "$_u_tok" in
+                dotfiles) do_dotfiles=true ;;
+                bin)      do_bin=true ;;
+                fonts)    do_fonts=true ;;
+                all)      do_dotfiles=true; do_bin=true; do_fonts=true ;;
+                *)
+                    echo "Error: Unknown uninstall target '$_u_tok' (expected: all, dotfiles, fonts, or bin)" >&2
+                    exit 1
+                    ;;
+            esac
+        done
+        if [ "$do_dotfiles" = true ]; then uninstall_dotfiles; fi
+        if [ "$do_bin" = true ]; then uninstall_bin; fi
+        if [ "$do_fonts" = true ]; then uninstall_fonts; fi
         ;;
 esac

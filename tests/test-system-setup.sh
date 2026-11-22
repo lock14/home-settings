@@ -48,10 +48,12 @@ fi
 
 assert_cmd_fails "setup.sh rejects invalid OS" "$SCRIPT_DIR/setup.sh" --os unsupported_distro
 assert_cmd_fails "setup.sh rejects missing OS argument" "$SCRIPT_DIR/setup.sh" --os
-assert_cmd_fails "setup.sh rejects invalid IDE" "$SCRIPT_DIR/setup.sh" --os ubuntu --ide invalid_ide
-assert_cmd_fails "setup.sh rejects missing IDE argument" "$SCRIPT_DIR/setup.sh" --os ubuntu --ide
+assert_cmd_fails "setup.sh rejects invalid GUI app" "$SCRIPT_DIR/setup.sh" --os ubuntu --gui invalid_ide
+assert_cmd_fails "setup.sh rejects empty --gui=" "$SCRIPT_DIR/setup.sh" --os ubuntu --gui=
 assert_cmd_fails "setup.sh rejects invalid DB engine" "$SCRIPT_DIR/setup.sh" --os ubuntu --db invalid_engine
 assert_cmd_fails "setup.sh rejects missing DB argument" "$SCRIPT_DIR/setup.sh" --os ubuntu --db
+assert_cmd_fails "setup.sh rejects invalid --skip stage" "$SCRIPT_DIR/setup.sh" --os ubuntu --skip bogus_stage
+assert_cmd_fails "setup.sh rejects retired legacy flags" "$SCRIPT_DIR/setup.sh" --dotfiles-only
 
 # Isolate HOME and XDG directories so setup.sh invocations never touch the caller's real $HOME
 TEMP_SETUP_HOME="$(make_sandbox_home)"
@@ -76,115 +78,111 @@ else
     fail "setup.sh ubuntu dry-run" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-postgres --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db postgres --dry-run 2>&1); then
     if [[ "$output" == *"postgresql postgresql-contrib"* ]]; then
-        pass "setup.sh --with-postgres provisions PostgreSQL server and contrib"
+        pass "setup.sh --db postgres provisions PostgreSQL server and contrib"
     else
-        fail "setup.sh with-postgres output" "Missing PostgreSQL server commands: $output"
+        fail "setup.sh --db postgres output" "Missing PostgreSQL server commands: $output"
     fi
 else
-    fail "setup.sh with-postgres" "Command failed: $output"
+    fail "setup.sh --db postgres" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-mariadb --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db mariadb --dry-run 2>&1); then
     if [[ "$output" == *"mariadb-server mariadb-client"* ]]; then
-        pass "setup.sh --with-mariadb provisions MariaDB server"
+        pass "setup.sh --db mariadb provisions MariaDB server"
     else
-        fail "setup.sh with-mariadb output" "Missing MariaDB server commands: $output"
+        fail "setup.sh --db mariadb output" "Missing MariaDB server commands: $output"
     fi
 else
-    fail "setup.sh with-mariadb" "Command failed: $output"
+    fail "setup.sh --db mariadb" "Command failed: $output"
 fi
 
-if out_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-postgres --with-mariadb --dry-run 2>&1) && \
-   out_my_pg=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-mariadb --with-postgres --dry-run 2>&1) && \
-   out_db_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db postgresql --with-mariadb --dry-run 2>&1) && \
-   out_dbeq_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db=postgresql --with-mariadb --dry-run 2>&1) && \
-   out_skip_pg=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-db --with-postgres --dry-run 2>&1); then
+if out_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db postgres,mariadb -n 2>&1) && \
+   out_my_pg=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db mariadb --db postgres --dry-run 2>&1) && \
+   out_dbeq_pg_my=$("$SCRIPT_DIR/setup.sh" --os ubuntu --db=postgres,mariadb --dry-run 2>&1) && \
+   out_skip_pg=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip db --db postgres --dry-run 2>&1); then
     if [[ "$out_pg_my" == *"Database  : Server: all"* ]] && \
        [[ "$out_pg_my" == *"postgresql postgresql-contrib"* ]] && \
        [[ "$out_pg_my" == *"mariadb-server mariadb-client"* ]] && \
        [[ "$out_my_pg" == *"Database  : Server: all"* ]] && \
        [[ "$out_my_pg" == *"postgresql postgresql-contrib"* ]] && \
        [[ "$out_my_pg" == *"mariadb-server mariadb-client"* ]] && \
-       [[ "$out_db_pg_my" == *"Database  : Server: all"* ]] && \
        [[ "$out_dbeq_pg_my" == *"Database  : Server: all"* ]] && \
        [[ "$out_skip_pg" == *"postgresql postgresql-contrib"* ]]; then
-        pass "setup.sh combines --with-postgres, --db[=]postgresql, and --with-mariadb into DB_CHOICE=all regardless of flag order and re-enables DB after --skip-db"
+        pass "setup.sh combines --db postgres,mariadb and repeated --db into DB_CHOICE=all and re-enables DB after --skip db"
     else
-        fail "setup.sh combined --with-postgres --with-mariadb" "Expected both PostgreSQL and MariaDB servers: $out_pg_my / $out_db_pg_my"
+        fail "setup.sh combined --db" "Expected both PostgreSQL and MariaDB servers: $out_pg_my"
     fi
 else
     fail "setup.sh combined DB flags" "Command failed"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-db --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip db --dry-run 2>&1); then
     if [[ "$output" != *"postgresql-client"* ]] && [[ "$output" != *"mariadb-client"* ]]; then
-        pass "setup.sh --skip-db skips all database clients and servers"
+        pass "setup.sh --skip db skips all database clients and servers"
     else
-        fail "setup.sh skip-db output" "Database packages should be skipped: $output"
+        fail "setup.sh --skip db output" "Database packages should be skipped: $output"
     fi
 else
-    fail "setup.sh skip-db" "Command failed: $output"
+    fail "setup.sh --skip db" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-terminal --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip terminal --dry-run 2>&1); then
     if [[ "$output" != *"Configuring GNOME Terminal"* ]]; then
-        pass "setup.sh --skip-terminal skips terminal profile configuration"
+        pass "setup.sh --skip terminal skips terminal profile configuration"
     else
-        fail "setup.sh skip-terminal output" "Terminal configuration should be skipped: $output"
+        fail "setup.sh --skip terminal output" "Terminal configuration should be skipped: $output"
     fi
 else
-    fail "setup.sh skip-terminal" "Command failed: $output"
+    fail "setup.sh --skip terminal" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide code --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os ubuntu --gui --dry-run 2>&1); then
     if [[ "$output" == *"google-chrome"* ]] && [[ "$output" == *"snap install code"* ]] && \
        { [[ "$output" == *"snap install ghostty"* ]] || [[ "$output" == *"apt-get install -y ghostty"* ]] || [[ "$output" == *"ghostty_latest_"*".deb"* ]]; }; then
-        pass "setup.sh --with-gui enables Chrome, Ghostty, and desktop applications"
+        pass "setup.sh --gui enables Chrome, Ghostty, and VS Code by default"
     else
-        fail "setup.sh with-gui dry-run output" "Missing expected GUI application commands: $output"
+        fail "setup.sh --gui dry-run output" "Missing expected GUI application commands: $output"
     fi
 else
-    fail "setup.sh with-gui dry-run" "Command failed: $output"
+    fail "setup.sh --gui dry-run" "Command failed: $output"
 fi
 
-if out_none=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide none --dry-run 2>&1) && \
-   out_gui_none=$("$SCRIPT_DIR/setup.sh" --os ubuntu --with-gui --ide none --dry-run 2>&1) && \
-   out_none_gui=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide none --with-gui --dry-run 2>&1) && \
-   out_code_skip=$("$SCRIPT_DIR/setup.sh" --os ubuntu --ide code --skip-apps --dry-run 2>&1) && \
-   out_skip_gui=$("$SCRIPT_DIR/setup.sh" --os ubuntu --skip-apps --with-gui --dry-run 2>&1); then
+if out_none=$("$SCRIPT_DIR/setup.sh" --os ubuntu --gui=none --dry-run 2>&1) && \
+   out_gui_subset=$("$SCRIPT_DIR/setup.sh" --os ubuntu --gui ghostty,chrome --dry-run 2>&1) && \
+   out_multi_ide=$("$SCRIPT_DIR/setup.sh" --os ubuntu --gui=code,intellij --dry-run 2>&1) && \
+   out_reset_none=$("$SCRIPT_DIR/setup.sh" --os ubuntu --gui --gui none --dry-run 2>&1); then
     if [[ "$out_none" != *"snap install code"* ]] && \
-       [[ "$out_gui_none" == *"google-chrome"* ]] && [[ "$out_gui_none" != *"snap install code"* ]] && \
-       [[ "$out_none_gui" == *"google-chrome"* ]] && [[ "$out_none_gui" != *"snap install code"* ]] && \
-       [[ "$out_code_skip" == *"IDE Choice: none"* ]] && [[ "$out_code_skip" != *"snap install code"* ]] && \
-       [[ "$out_skip_gui" == *"google-chrome"* ]] && [[ "$out_skip_gui" != *"snap install code"* ]]; then
-        pass "setup.sh --ide none and --skip-apps prevent VS Code installation across all flag orderings"
+       [[ "$out_gui_subset" == *"google-chrome"* ]] && [[ "$out_gui_subset" != *"snap install code"* ]] && \
+       [[ "$out_multi_ide" == *"IDE Choice: code,intellij"* ]] && [[ "$out_multi_ide" == *"snap install code"* ]] && [[ "$out_multi_ide" == *"intellij-idea-community"* ]] && \
+       [[ "$out_reset_none" == *"IDE Choice: none"* ]] && [[ "$out_reset_none" != *"google-chrome"* ]]; then
+        pass "setup.sh --gui supports explicit CSV subsets, multi-IDE installs (code,intellij), and --gui none resets"
     else
-        fail "setup.sh --ide none / --skip-apps" "Expected no VS Code installation when --ide none or --skip-apps is specified"
+        fail "setup.sh --gui CSV subsets" "Unexpected --gui subset behavior: subset='$out_gui_subset' multi='$out_multi_ide' reset='$out_reset_none'"
     fi
 else
-    fail "setup.sh --ide none dry-run" "Command failed"
+    fail "setup.sh --gui subset dry-run" "Command failed"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os macos --with-ghostty --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os macos --gui ghostty --dry-run 2>&1); then
     if [[ "$output" == *"brew install --cask ghostty"* ]]; then
-        pass "setup.sh --os macos --with-ghostty installs Ghostty cask"
+        pass "setup.sh --os macos --gui ghostty installs Ghostty cask"
     else
-        fail "setup.sh macos with-ghostty output" "Missing Ghostty cask: $output"
+        fail "setup.sh macos --gui ghostty output" "Missing Ghostty cask: $output"
     fi
 else
-    fail "setup.sh macos with-ghostty" "Command failed: $output"
+    fail "setup.sh macos --gui ghostty" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os fedora --with-ghostty --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os fedora --gui=ghostty --dry-run 2>&1); then
     if [[ "$output" == *"copr enable scottames/ghostty"* ]] && [[ "$output" == *"install ghostty"* ]]; then
-        pass "setup.sh --os fedora --with-ghostty enables COPR and installs Ghostty"
+        pass "setup.sh --os fedora --gui=ghostty enables COPR and installs Ghostty"
     else
-        fail "setup.sh fedora with-ghostty output" "Missing Ghostty Fedora commands: $output"
+        fail "setup.sh fedora --gui=ghostty output" "Missing Ghostty Fedora commands: $output"
     fi
 else
-    fail "setup.sh fedora with-ghostty" "Command failed: $output"
+    fail "setup.sh fedora --gui=ghostty" "Command failed: $output"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --os fedora --dry-run 2>&1); then
@@ -207,34 +205,24 @@ else
     fail "setup.sh macos dry-run" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --os macos --with-chrome --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --os macos --gui chrome --dry-run 2>&1); then
     if [[ "$output" == *"brew install --cask google-chrome"* ]]; then
-        pass "setup.sh --os macos --with-chrome installs Chrome cask"
+        pass "setup.sh --os macos --gui chrome installs Chrome cask"
     else
-        fail "setup.sh macos with-chrome output" "Missing Chrome cask: $output"
+        fail "setup.sh macos --gui chrome output" "Missing Chrome cask: $output"
     fi
 else
-    fail "setup.sh macos with-chrome" "Command failed: $output"
+    fail "setup.sh macos --gui chrome" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --user --dry-run 2>&1) && compat_out=$("$SCRIPT_DIR/setup.sh" --bootstrap --dry-run 2>&1); then
-    if [[ "$output" == *"Skipping System-Level Provisioning"* ]] && [[ "$output" == *"Running User Dotfiles"* ]] && [[ "$compat_out" == *"[DryRun]"* ]]; then
-        pass "setup.sh --user --dry-run skips system provisioning and --bootstrap alias remains compatible"
+if output=$("$SCRIPT_DIR/setup.sh" --user --dry-run 2>&1) && sys_only_out=$("$SCRIPT_DIR/setup.sh" --os ubuntu --system-only -n 2>&1); then
+    if [[ "$output" == *"Skipping System-Level Provisioning"* ]] && [[ "$output" == *"Running User Dotfiles"* ]] && [[ "$sys_only_out" == *"Running System-Level Provisioning"* ]] && [[ "$sys_only_out" != *"Running User Dotfiles"* ]]; then
+        pass "setup.sh --user skips system provisioning and --system-only -n skips user environment"
     else
-        fail "setup.sh --user / --bootstrap dry-run output" "Unexpected output: $output / $compat_out"
+        fail "setup.sh --user / --system-only dry-run output" "Unexpected output: $output / $sys_only_out"
     fi
 else
-    fail "setup.sh --user / --bootstrap dry-run" "Command failed: ${output:-}"
-fi
-
-if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --dry-run 2>&1); then
-    if [[ "$output" == *"Skipping System-Level Provisioning"* ]] && [[ "$output" == *"Running User Dotfiles"* ]]; then
-        pass "setup.sh --dotfiles-only skips system provisioning"
-    else
-        fail "setup.sh dotfiles-only output" "Unexpected output: $output"
-    fi
-else
-    fail "setup.sh dotfiles-only" "Command failed: $output"
+    fail "setup.sh --user / --system-only dry-run" "Command failed: ${output:-}"
 fi
 
 if output=$("$SCRIPT_DIR/setup.sh" --uninstall --dry-run 2>&1); then
@@ -247,14 +235,15 @@ else
     fail "setup.sh uninstall dry-run" "Command failed: $output"
 fi
 
-if output=$("$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1); then
-    if [[ "$output" == *"Removing managed dotfile symlinks"* ]] && [[ "$output" == *"Dotfile symlinks uninstalled"* ]]; then
-        pass "setup.sh --uninstall-dotfiles --dry-run works"
+if output=$("$SCRIPT_DIR/setup.sh" --uninstall=dotfiles --dry-run 2>&1) && combo_uninst=$("$SCRIPT_DIR/setup.sh" --uninstall dotfiles,bin -n 2>&1); then
+    if [[ "$output" == *"Removing managed dotfile symlinks"* ]] && [[ "$output" == *"Dotfile symlinks uninstalled"* ]] && \
+       [[ "$combo_uninst" == *"Dotfile symlinks uninstalled"* ]] && [[ "$combo_uninst" == *"User binaries uninstalled"* ]] && [[ "$combo_uninst" != *"MesloLGS Nerd Font Mono fonts uninstalled"* ]]; then
+        pass "setup.sh --uninstall=dotfiles and --uninstall dotfiles,bin -n work cleanly"
     else
-        fail "setup.sh uninstall-dotfiles dry-run output" "Missing expected output: $output"
+        fail "setup.sh --uninstall=dotfiles dry-run output" "Missing expected output: $output / $combo_uninst"
     fi
 else
-    fail "setup.sh uninstall-dotfiles dry-run" "Command failed: $output"
+    fail "setup.sh --uninstall=dotfiles dry-run" "Command failed: $output"
 fi
 
 if [ -z "$(ls -A "$TEMP_SETUP_HOME" 2>/dev/null)" ]; then
@@ -266,32 +255,32 @@ fi
 TEMP_UNINSTALL_HOME=$(mktemp -d)
 mkdir -p "$TEMP_UNINSTALL_HOME/.config/mise" "$TEMP_UNINSTALL_HOME/.config/bat/themes" "$TEMP_UNINSTALL_HOME/.config/bat/syntaxes"
 ln -s "$SCRIPT_DIR/.mise.toml" "$TEMP_UNINSTALL_HOME/.config/mise/config.toml"
-dry_out=$(HOME="$TEMP_UNINSTALL_HOME" XDG_CONFIG_HOME="$TEMP_UNINSTALL_HOME/.config" "$SCRIPT_DIR/setup.sh" --uninstall-dotfiles --dry-run 2>&1)
+dry_out=$(HOME="$TEMP_UNINSTALL_HOME" XDG_CONFIG_HOME="$TEMP_UNINSTALL_HOME/.config" "$SCRIPT_DIR/setup.sh" --uninstall=dotfiles --dry-run 2>&1)
 if [[ "$dry_out" == *"mise/config.toml"* ]] && [ -d "$TEMP_UNINSTALL_HOME/.config/bat/themes" ] && [ -d "$TEMP_UNINSTALL_HOME/.config/bat/syntaxes" ]; then
-    pass "setup.sh --uninstall-dotfiles --dry-run cleans ~/.config/mise/config.toml symlink without deleting bat dirs"
+    pass "setup.sh --uninstall=dotfiles --dry-run cleans ~/.config/mise/config.toml symlink without deleting bat dirs"
 else
-    fail "setup.sh uninstall-dotfiles mise cleanup" "Expected mise/config.toml in dry-run output and preserved bat dirs: $dry_out"
+    fail "setup.sh uninstall=dotfiles mise cleanup" "Expected mise/config.toml in dry-run output and preserved bat dirs: $dry_out"
 fi
 rm -rf "$TEMP_UNINSTALL_HOME"
 
-if output=$("$SCRIPT_DIR/setup.sh" --uninstall-bin --dry-run 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --uninstall=bin --dry-run 2>&1); then
     if [[ "$output" == *"Removing bin utilities"* ]] && [[ "$output" == *"User binaries uninstalled"* ]]; then
-        pass "setup.sh --uninstall-bin --dry-run works"
+        pass "setup.sh --uninstall=bin --dry-run works"
     else
-        fail "setup.sh uninstall-bin dry-run output" "Missing expected output: $output"
+        fail "setup.sh uninstall=bin dry-run output" "Missing expected output: $output"
     fi
 else
-    fail "setup.sh uninstall-bin dry-run" "Command failed: $output"
+    fail "setup.sh uninstall=bin dry-run" "Command failed: $output"
 fi
 
 TEMP_BIN_HOME=$(mktemp -d)
 mkdir -p "$TEMP_BIN_HOME/.local/bin"
 ln -s "/usr/bin/fdfind" "$TEMP_BIN_HOME/.local/bin/fd"
-bin_dry_out=$(HOME="$TEMP_BIN_HOME" "$SCRIPT_DIR/setup.sh" --uninstall-bin --dry-run 2>&1)
+bin_dry_out=$(HOME="$TEMP_BIN_HOME" "$SCRIPT_DIR/setup.sh" --uninstall=bin --dry-run 2>&1)
 if [[ "$bin_dry_out" == *".local/bin/fd"* ]]; then
-    pass "setup.sh --uninstall-bin cleans compatibility shims (fd/bat)"
+    pass "setup.sh --uninstall=bin cleans compatibility shims (fd/bat)"
 else
-    fail "setup.sh uninstall-bin shim cleanup" "Expected fd shim in dry-run output: $bin_dry_out"
+    fail "setup.sh uninstall=bin shim cleanup" "Expected fd shim in dry-run output: $bin_dry_out"
 fi
 rm -rf "$TEMP_BIN_HOME"
 
@@ -327,11 +316,11 @@ print("SKIP=" + ("chsh" if "chsh -s" in out_skip else "none") + "|NOSKIP=" + ("c
     fi
 fi
 
-HOME="$TEMP_SHELL_HOME" "$SCRIPT_DIR/setup.sh" --uninstall-dotfiles >/dev/null 2>&1 || true
+HOME="$TEMP_SHELL_HOME" "$SCRIPT_DIR/setup.sh" --uninstall=dotfiles >/dev/null 2>&1 || true
 if [ ! -d "$TEMP_SHELL_HOME/.oh-my-zsh/custom/plugins/fzf-zsh-plugin" ] && [ ! -d "$TEMP_SHELL_HOME/.vim/bundle" ]; then
-    pass "setup.sh --uninstall-dotfiles purges legacy fzf-zsh-plugin and .vim/bundle directories"
+    pass "setup.sh --uninstall=dotfiles purges legacy fzf-zsh-plugin and .vim/bundle directories"
 else
-    fail "setup.sh --uninstall-dotfiles legacy directory purge" "Expected legacy directories to be deleted"
+    fail "setup.sh --uninstall=dotfiles legacy directory purge" "Expected legacy directories to be deleted"
 fi
 rm -rf "$TEMP_SHELL_HOME"
 
@@ -829,10 +818,10 @@ rm -rf "$TEMP_OWN_HOME"
 
 # Test setup.sh --theme validation, --theme --dry-run guard, empty/flag injection guards, stage-10 application, and 70-terminal.sh persisted theme fallback
 TEMP_THEME_SETUP_HOME=$(mktemp -d)
-if HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme --dry-run >/dev/null 2>&1 || \
-   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme "" >/dev/null 2>&1 || \
-   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme="" >/dev/null 2>&1 || \
-   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" HOME_SETTINGS_THEME="--list" "$SCRIPT_DIR/setup.sh" --dry-run --dotfiles-only >/dev/null 2>&1; then
+if HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --user --theme --dry-run >/dev/null 2>&1 || \
+   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --user --theme "" >/dev/null 2>&1 || \
+   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --user --theme="" >/dev/null 2>&1 || \
+   HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" HOME_SETTINGS_THEME="--list" "$SCRIPT_DIR/setup.sh" --dry-run --user >/dev/null 2>&1; then
     fail "setup.sh --theme invalid/empty/flag guard" "Expected non-zero exit on --theme --dry-run, --theme '', --theme='', and HOME_SETTINGS_THEME=--list"
 elif [ -e "$TEMP_THEME_SETUP_HOME/.tmux.conf" ]; then
     fail "setup.sh --theme --dry-run no-mutation" "Expected zero dotfiles mutations when --theme guard rejects arguments"
@@ -840,19 +829,19 @@ else
     pass "setup.sh --theme rejects leading-dash flags, empty strings, and flag-like HOME_SETTINGS_THEME values without mutating HOME"
 fi
 
-if HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --dotfiles-only --theme nonexistent-theme-xyz >/dev/null 2>&1; then
+if HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" "$SCRIPT_DIR/setup.sh" --user --theme nonexistent-theme-xyz >/dev/null 2>&1; then
     fail "setup.sh --theme unknown validation" "Expected non-zero exit on unknown --theme value"
 else
     pass "setup.sh --theme validates theme existence upfront before running stages"
 fi
 
-if setup_theme_out=$(HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" XDG_CACHE_HOME="$TEMP_THEME_SETUP_HOME/.cache" THEME_UPDATE_TERMINAL_PROFILE=0 THEME_LIVE_NVIM=0 TMUX="" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal --theme nord 2>&1) && \
+if setup_theme_out=$(HOME="$TEMP_THEME_SETUP_HOME" XDG_CONFIG_HOME="$TEMP_THEME_SETUP_HOME/.config" XDG_CACHE_HOME="$TEMP_THEME_SETUP_HOME/.cache" THEME_UPDATE_TERMINAL_PROFILE=0 THEME_LIVE_NVIM=0 TMUX="" "$SCRIPT_DIR/setup.sh" --user --skip fonts,tools,vim,nvim,zsh,terminal --theme nord 2>&1) && \
    grep -Fq "Theme     : nord" <<< "$setup_theme_out" && \
    [ "$(cat "$TEMP_THEME_SETUP_HOME/.config/home-settings/theme" 2>/dev/null || true)" = "nord" ] && \
    grep -Fq 'THEME_ID="nord"' "$TEMP_THEME_SETUP_HOME/.config/home-settings/active-theme.theme"; then
-    pass "setup.sh --dotfiles-only --theme nord applies requested theme in stage 10 and displays Theme in summary banner"
+    pass "setup.sh --user --theme nord applies requested theme in stage 10 and displays Theme in summary banner"
 else
-    fail "setup.sh --dotfiles-only --theme nord" "Theme was not persisted or applied in stage 10: ${setup_theme_out:-}"
+    fail "setup.sh --user --theme nord" "Theme was not persisted or applied in stage 10: ${setup_theme_out:-}"
 fi
 
 mkdir -p "$TEMP_THEME_SETUP_HOME/mock-bin"
@@ -1100,10 +1089,10 @@ lib_unit_ok="$(
 )"
 assert_eq "OK" "$lib_unit_ok" "Shared lib/ helpers handle collision-free backups, transient retries, chained symlink resolution, and deduplicated PATH prepending"
 
-# Verify setup.sh Stage 50 (modules/50-nvim.sh) --dry-run, --skip-nvim, and missing/old nvim guards
+# Verify setup.sh Stage 50 (modules/50-nvim.sh) --dry-run, --skip nvim, and missing/old nvim guards
 TEMP_NVIM_STAGE_HOME="$(make_sandbox_dir)"
-nvim_dry_default="$(HOME="$TEMP_NVIM_STAGE_HOME" XDG_CONFIG_HOME="$TEMP_NVIM_STAGE_HOME/.config" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/.local/share" "$SCRIPT_DIR/setup.sh" --dotfiles-only --dry-run 2>&1)"
-nvim_dry_skipped="$(HOME="$TEMP_NVIM_STAGE_HOME" XDG_CONFIG_HOME="$TEMP_NVIM_STAGE_HOME/.config" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/.local/share" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-nvim --dry-run 2>&1)"
+nvim_dry_default="$(HOME="$TEMP_NVIM_STAGE_HOME" XDG_CONFIG_HOME="$TEMP_NVIM_STAGE_HOME/.config" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/.local/share" "$SCRIPT_DIR/setup.sh" --user --dry-run 2>&1)"
+nvim_dry_skipped="$(HOME="$TEMP_NVIM_STAGE_HOME" XDG_CONFIG_HOME="$TEMP_NVIM_STAGE_HOME/.config" XDG_DATA_HOME="$TEMP_NVIM_STAGE_HOME/.local/share" "$SCRIPT_DIR/setup.sh" --user --skip nvim --dry-run 2>&1)"
 NVIM_MISSING_BIN="$TEMP_NVIM_STAGE_HOME/missing-nvim-bin"
 NVIM_OLD_MOCK_BIN="$TEMP_NVIM_STAGE_HOME/old-nvim-bin"
 mkdir -p "$NVIM_MISSING_BIN" "$NVIM_OLD_MOCK_BIN"

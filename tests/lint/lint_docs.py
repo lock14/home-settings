@@ -743,6 +743,17 @@ def main(argv: list[str] | None = None) -> int:
                             errors.append(
                                 f'{readme_where}: {long_script} option "{flag}" missing from Standalone utilities table'
                             )
+                if long_script == "ide":
+                    for sub_m in re.finditer(
+                        r"^\s{2}([a-z][a-z0-9-]*)(?:,\s*-[A-Za-z]|\s|$)",
+                        usage_body,
+                        re.MULTILINE,
+                    ):
+                        subcmd = sub_m.group(1)
+                        if subcmd != "ide" and not re.search(rf"\b{re.escape(subcmd)}\b", row_text):
+                            errors.append(
+                                f'{readme_where}: ide subcommand "{subcmd}" missing from Standalone utilities table'
+                            )
                 if long_script == "update-system":
                     entry_usage_m = re.search(
                         r"usage\(\)\s*\{(.*?)^\}", entry_text, re.DOTALL | re.MULTILINE
@@ -922,9 +933,9 @@ def main(argv: list[str] | None = None) -> int:
             alt_shift_a_row = re.search(
                 r"^\|\s*`Alt\+Shift\+A`\s*\|.*$", readme_text, re.MULTILINE
             )
-            if not alt_shift_a_row or "--run-ai-popup" not in alt_shift_a_row.group(0):
+            if not alt_shift_a_row or "_internal ai-popup" not in alt_shift_a_row.group(0):
                 errors.append(
-                    f'{readme_where}: keybinding "Alt+Shift+A" table row must document "ide --run-ai-popup" floating popup target'
+                    f'{readme_where}: keybinding "Alt+Shift+A" table row must document "ide _internal ai-popup" floating popup target'
                 )
             prefix_b_row = re.search(
                 r"^\|\s*`Prefix \+ b`\s*\|.*$", readme_text, re.MULTILINE

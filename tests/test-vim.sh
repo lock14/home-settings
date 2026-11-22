@@ -629,11 +629,11 @@ if [ -f "$NVIM_CONFIG" ] && [ -d "$NVIM_LUA_DIR" ]; then
        grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-H>"' "${NVIM_LUA_FILES[@]}" && \
-       grep -q -- '--show-editor' "${NVIM_LUA_FILES[@]}" && \
-       grep -q -- '--show-term' "${NVIM_LUA_FILES[@]}" && \
-       grep -q -- '--toggle-editor' "${NVIM_LUA_FILES[@]}" && \
-       grep -q -- '--toggle-term' "${NVIM_LUA_FILES[@]}" && \
-       grep -q -- '--swap' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'tmux_ide_action("_internal", "show", "editor")' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'tmux_ide_action("_internal", "show", "term")' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'tmux_ide_action("_internal", "park", "editor")' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'tmux_ide_action("_internal", "park", "term")' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'tmux_ide_action("_internal", "swap"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'MiniFilesBorder' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'MiniFilesBufferCreate' "${NVIM_LUA_FILES[@]}" && \
        grep -Fq '<2-LeftMouse>' "${NVIM_LUA_FILES[@]}" && \
@@ -2638,7 +2638,7 @@ end
 -- 2. Normal-mode <leader>a stays 0ms focus toggle
 jobs = {}
 feed("<Space>a")
-local norm_a_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--toggle|fleet-sess")
+local norm_a_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|_internal|toggle|fleet-sess")
 
 -- 3. Named file buffer: Visual <leader>a (forward 2..4 & reverse 4..2) and Normal <leader>il
 local file_path = vim.fn.fnamemodify(test_dir .. "/sample.py", ":p")
@@ -2646,15 +2646,15 @@ vim.cmd("edit " .. vim.fn.fnameescape(file_path))
 jobs = {}
 feed("2GVjj<Space>a")
 local mode_after_vis = vim.fn.mode()
-local vis_fwd_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":2-4|fleet-sess" and mode_after_vis == "n")
+local vis_fwd_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":2-4|fleet-sess" and mode_after_vis == "n")
 
 jobs = {}
 feed("4GVkk<Space>a")
-local vis_rev_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":2-4|fleet-sess" and vim.fn.mode() == "n")
+local vis_rev_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":2-4|fleet-sess" and vim.fn.mode() == "n")
 
 jobs = {}
 feed("3G<Space>il")
-local il_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":3|fleet-sess")
+local il_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":3|fleet-sess")
 
 -- 4. <leader>id empty buffer notification vs sorted multi-severity diagnostics dispatch
 jobs = {}
@@ -2671,7 +2671,7 @@ vim.diagnostic.set(ns, 0, {
 jobs = {}
 feed("<Space>id")
 local id_expected_body = "- [ERROR] L1:2: bad symbol detail\n- [WARN] L4:5: unused value\n"
-local id_pop_ok = (#jobs == 1 and jobs[1]:find(ide_bin .. "|--send|--text|Diagnostics in ", 1, true) == 1 and jobs[1]:find(id_expected_body .. "|fleet-sess", 1, true) ~= nil)
+local id_pop_ok = (#jobs == 1 and jobs[1]:find(ide_bin .. "|send|--text|Diagnostics in ", 1, true) == 1 and jobs[1]:find(id_expected_body .. "|fleet-sess", 1, true) ~= nil)
 vim.diagnostic.reset(ns, 0)
 
 -- 5. Unnamed scratch buffer: Visual <leader>a sends selected text literal
@@ -2679,25 +2679,25 @@ vim.cmd("enew!")
 vim.api.nvim_buf_set_lines(0, 0, -1, false, { "first scratch", "second scratch", "third scratch" })
 jobs = {}
 feed("ggVj<Space>a")
-local vis_scratch_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--text|first scratch\nsecond scratch|fleet-sess" and vim.fn.mode() == "n")
+local vis_scratch_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--text|first scratch\nsecond scratch|fleet-sess" and vim.fn.mode() == "n")
 
 -- 6. <leader>s, <M-s>, <M-S>, and <leader>? popup commands
 jobs = {}
 vim.fn.maparg("<leader>s", "n", false, true).callback()
-local sess_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--sessions|fleet-sess")
+local sess_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|switch|fleet-sess")
 
 jobs = {}
 vim.fn.maparg("<M-s>", "n", false, true).callback()
-local sess_alt_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--sessions|fleet-sess")
+local sess_alt_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|switch|fleet-sess")
 local sess_popup_ok = sess_leader_ok and sess_alt_ok
 
 jobs = {}
 vim.fn.maparg("<M-S>", "n", false, true).callback()
-local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--next-attention|fleet-sess")
+local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|next|fleet-sess")
 
 jobs = {}
 vim.fn.maparg("<leader>?", "n", false, true).callback()
-local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|80|-h|24|" .. vim.fn.shellescape(ide_bin) .. " --keys")
+local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|80|-h|24|" .. vim.fn.shellescape(ide_bin) .. " keys")
 
 -- 7. Cross-session :IdeSend[!] [session] command (named buffer, range, bang --switch, default session, unnamed --stdin, and tab completion)
 local chan_sent = {}
@@ -2723,15 +2723,15 @@ vim.cmd("edit " .. vim.fn.fnameescape(file_path))
 vim.api.nvim_win_set_cursor(0, { 3, 0 })
 jobs = {}
 vim.cmd("IdeSend beta-ws")
-local idesend_norm_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":3|--no-focus|beta-ws")
+local idesend_norm_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":3|--no-focus|beta-ws")
 
 jobs = {}
 vim.cmd("2,4IdeSend! beta-ws")
-local idesend_bang_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":2-4|--switch|beta-ws")
+local idesend_bang_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":2-4|--switch|beta-ws")
 
 jobs = {}
 vim.cmd("IdeSend")
-local idesend_def_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--send|--ref|" .. file_path .. ":3|--no-focus|fleet-sess")
+local idesend_def_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":3|--no-focus|fleet-sess")
 
 vim.cmd("enew!")
 vim.api.nvim_buf_set_lines(0, 0, -1, false, { "scratch one", "scratch two", "scratch three" })
@@ -2741,7 +2741,7 @@ chan_closed = {}
 vim.cmd("1,2IdeSend beta-ws")
 local idesend_stdin_ok = (
     #jobs == 1
-    and jobs[1] == ide_bin .. "|--send|--stdin|--no-focus|beta-ws"
+    and jobs[1] == ide_bin .. "|send|--stdin|--no-focus|beta-ws"
     and #chan_sent == 1
     and chan_sent[1] == "1:scratch one\nscratch two"
     and #chan_closed == 1

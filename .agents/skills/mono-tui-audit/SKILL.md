@@ -27,8 +27,8 @@ Use this skill when auditing or reviewing `bin/ide`, `libexec/ide_lib/`, `libexe
 
 1. **Glyph, theme, and color capability degradation**:
    * Confirm zero decorative emojis appear in `solarized-dark` or any of the 9 classic daily-driver themes, and confirm
-     `IDE_NERD_FONTS=0` and `TERM=dumb` omit PUA icons cleanly across `ide --list`, `ide -s`, `ide --session-preview`,
-     and `ide --keys` (`[P1]`).
+     `IDE_NERD_FONTS=0` and `TERM=dumb` omit PUA icons cleanly across `ide list`, `ide -s`, `ide _internal session-preview`,
+     and `ide keys` (`[P1]`).
    * Confirm `load_active_palette()` (`libexec/ide_lib/theme.py`) and `show_keys_cheatsheet()` (`bin/ide`) honor
      `NO_COLOR`, `TERM=dumb` monochrome SGR attributes, 256-color, 16-color, and 24-bit TrueColor (`[OVERRIDE] §R3.2`,
      `§5.6`, and `§R7.1`), and pair every status color with a non-color text or symbol indicator (`§5.3`).
@@ -40,13 +40,13 @@ Use this skill when auditing or reviewing `bin/ide`, `libexec/ide_lib/`, `libexe
 3. **Width math, 80×24 responsiveness, and footer parity**:
    * Confirm `SIDE_BY_SIDE_MIN_COLS = 90` (`libexec/ide_lib/switcher.py`) stacks `ide -s` vertically below `90` columns
      (`[OVERRIDE] §1.6`), `format_sessions_footer_label` packs complete `" · "`-separated hints within the pane width
-     with zero mid-word clipping (`[OVERRIDE] §1.4 and §R4.11`), and `ide --keys` fits inside `-w 80 -h 24` (`<= 76`
+     with zero mid-word clipping (`[OVERRIDE] §1.4 and §R4.11`), and `ide keys` fits inside `-w 80 -h 24` (`<= 76`
      columns and `<= 22` lines, `[P2]`).
    * Confirm `visible_width`, `_expanded_cell_widths`, and `trunc_visible` (`…`, `[OVERRIDE] §R1.7`) preserve East
      Asian wide-char and tab alignment and append `\033[0m` on styled lines.
 4. **Keyboard layers, scroll smoothness, and zero-jank UI performance**:
    * Confirm zero root-table `Ctrl+h/j/k/l` bindings or focus-stealing `WheelUpPane` / `WheelDownPane` `select-pane`
-     calls exist in `dotfiles/.tmux.conf`, and confirm `F1` (`ide --keys`) and `F5` (`reload`) work alongside `Alt+?`
+     calls exist in `dotfiles/.tmux.conf`, and confirm `F1` (`ide keys`) and `F5` (`reload`) work alongside `Alt+?`
      and `Ctrl+r` inside `ide -s` (`[OVERRIDE] §2.2 and §2.8`).
    * Confirm `ide -s` browsing triggers zero `swap-pane` or `SIGWINCH`, lazy live docking preserves `copy-mode`
      `scroll_position` and zoomed Editor `winsaveview()`, and top `tmux` status chrome uses zero `#(...)` polling

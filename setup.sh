@@ -50,20 +50,22 @@ fi
 
 # Default configurations
 export ACTION="install"
+export UNINSTALL_TARGETS=""
 export IDE_NAME="none"
-export IDE_EXPLICIT=false
+export IDE_NAMES=""
 export TARGET_OS=""
 export DRY_RUN=false
 export DB_CHOICE="none"
 export SKIP_DB=false
 
-# Granular skip and feature flags
+# Stage skip and opt-in feature flags
 export SKIP_SYSTEM=false
 export SKIP_PACKAGES=false
 export INSTALL_CHROME=false
 export INSTALL_APPS=false
 export INSTALL_GHOSTTY=false
 export SKIP_USER=false
+export SKIP_DOTFILES=false
 export SKIP_FONTS=false
 export SKIP_TOOLS=false
 export SKIP_NVIM=false
@@ -78,59 +80,28 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Modular Cross-Platform Workstation Provisioner & Dotfiles Engine.
+Modular cross-platform workstation provisioner and dotfiles engine.
 
-Primary Workflows:
-  (default)               Full machine setup (native packages + user environment)
-  --user                  Configure user dotfiles, utilities, fonts, and tools only (no sudo required)
-  --dotfiles-only         Alias for --user (user-space setup without OS package provisioning)
-  --system                Full turnkey setup with native packages (alias for default)
-  --system-only           Provision OS packages and CLI runtimes only
-  --dry-run               Preview actions without modifying the system
-  --uninstall             Uninstall all managed dotfiles, fonts, and user binaries
+Workflows & Scope:
+  (default)               Provision native OS packages and user environment
+  --user                  Configure user dotfiles, MesloLGS Nerd Font Mono, and tools only (no sudo)
+  --system-only           Provision native OS packages and system runtimes only
+  --uninstall[=<target>]  Remove managed artifacts: all (default) or comma-separated
+                          dotfiles,fonts,bin
 
-Granular Uninstallation:
-  --uninstall-dotfiles    Remove managed dotfile symlinks only
-  --uninstall-fonts       Remove MesloLGS Nerd Font Mono fonts only
-  --uninstall-bin         Remove symlinked user utilities from ~/.local/bin only
-
-System & Package Options:
-  --os <distro>           Target OS override: ubuntu (Debian/apt), fedora (RHEL/dnf), macos (Homebrew)
-  --skip-system           Skip OS package updates and system provisioning
-  --skip-packages         Skip core system package manager installs
-
-Database Options (Client tools installed by default):
-  --db <engine>           Database server engine to install: postgres, mariadb, all, none (default: none)
-  --with-postgres, --with-postgresql
-                          Install PostgreSQL server & client tools
-  --with-mariadb          Install MariaDB server & client tools
-  --skip-db               Skip all database client and server installations
-
-GUI & Desktop Options (Optional, disabled by default):
-  --with-gui              Install all GUI desktop applications (Chrome, Ghostty, IDE/VS Code)
-  --with-ghostty          Install Ghostty terminal emulator
-  --skip-ghostty          Skip Ghostty terminal emulator installation
-  --with-chrome           Install Google Chrome
-  --skip-chrome           Skip Google Chrome installation
-  --with-apps             Install desktop apps (VS Code / IDE)
-  --skip-apps             Skip desktop apps installation (VS Code / IDE)
-  -i, --ide <name>        IDE to install: intellij, intellij-ultimate, code, none (default: none)
-
-User Environment Options:
+Platform & Component Options:
+  --os <distro>           Target OS override: ubuntu, fedora, or macos
+  --db <engine,...>       Database server daemons to install: postgres, mariadb, all, or none
+                          (default: none; client CLIs install unless 'db' is in --skip)
+  --gui[=<app,...>]       Optional desktop apps: all (default: ghostty,chrome,code) or
+                          comma-separated ghostty,chrome,code,intellij,intellij-ultimate,none
   --theme <name>          Initial color theme to apply (default: solarized-dark)
-  --skip-user             Skip user dotfiles and environment configuration
-  --skip-fonts            Skip MesloLGS Nerd Font Mono font installation
-  --skip-tools            Skip Mise polyglot toolchain runtime installation
-  --skip-nvim             Skip Neovim configuration and plugins
-  --skip-vim              Skip fallback Vim configuration (.vimrc)
-  --skip-zsh              Skip Zsh dotfiles, Oh-My-Zsh, plugins, and Powerlevel10k
-  --skip-bash             Skip Bash configuration and environment variables
-  --skip-bin              Skip ~/.local/bin user utilities synchronization
-  --skip-completions      Skip CLI tab completions generation
-  --skip-terminal         Skip terminal emulator profile configuration (GNOME Terminal & macOS Terminal.app)
+  --skip <stage,...>      Skip comma-separated provisioning stages:
+                          packages,db,dotfiles,bin,fonts,tools,nvim,vim,zsh,bash,completions,terminal
 
-General Options:
-  -h, --help              Show this help message
+Execution Options:
+  -n, --dry-run           Preview actions without modifying the system
+  -h, --help              Show this help message and exit
 EOF
 }
 
@@ -144,27 +115,226 @@ require_opt_arg() {
     fi
 }
 
-enable_default_apps_unless_explicit() {
-    if [ "$IDE_EXPLICIT" = false ]; then
-        IDE_NAME="code"
-        INSTALL_APPS=true
-    elif [ "$IDE_NAME" != "none" ]; then
-        INSTALL_APPS=true
-    fi
+append_csv_unique() {
+    local current="$1"
+    local item="$2"
+    case ",$current," in
+        *,"$item",*) printf '%s' "$current" ;;
+        ",,") printf '%s' "$item" ;;
+        *) printf '%s' "$current,$item" ;;
+    esac
 }
 
-merge_db_choice() {
-    local engine="$1"
-    SKIP_DB=false
-    case "$DB_CHOICE" in
-        none|"$engine") DB_CHOICE="$engine" ;;
-        *) DB_CHOICE="all" ;;
-    esac
+parse_db_list() {
+    local raw="$1" tok
+    local -a items=()
+    IFS=',' read -r -a items <<< "$raw"
+    [ "${#items[@]}" -gt 0 ] || {
+        echo "Error: --db requires at least one engine (postgres, mariadb, all, or none)" >&2
+        exit 1
+    }
+    for tok in "${items[@]}"; do
+        tok="${tok#"${tok%%[![:space:]]*}"}"
+        tok="${tok%"${tok##*[![:space:]]}"}"
+        case "$tok" in
+            none)
+                DB_CHOICE="none"
+                ;;
+            all)
+                SKIP_DB=false
+                DB_CHOICE="all"
+                ;;
+            postgres)
+                SKIP_DB=false
+                case "$DB_CHOICE" in
+                    none|postgres) DB_CHOICE="postgres" ;;
+                    *) DB_CHOICE="all" ;;
+                esac
+                ;;
+            mariadb)
+                SKIP_DB=false
+                case "$DB_CHOICE" in
+                    none|mariadb) DB_CHOICE="mariadb" ;;
+                    *) DB_CHOICE="all" ;;
+                esac
+                ;;
+            *)
+                echo "Error: '$tok' is not a supported --db engine (expected: postgres, mariadb, all, or none)" >&2
+                exit 1
+                ;;
+        esac
+    done
+}
+
+parse_gui_list() {
+    local raw="$1" tok
+    local -a items=()
+    IFS=',' read -r -a items <<< "$raw"
+    [ "${#items[@]}" -gt 0 ] || {
+        echo "Error: --gui requires an app list (all, none, ghostty, chrome, code, intellij, intellij-ultimate)" >&2
+        exit 1
+    }
+    for tok in "${items[@]}"; do
+        tok="${tok#"${tok%%[![:space:]]*}"}"
+        tok="${tok%"${tok##*[![:space:]]}"}"
+        case "$tok" in
+            none)
+                INSTALL_GHOSTTY=false
+                INSTALL_CHROME=false
+                INSTALL_APPS=false
+                IDE_NAMES=""
+                IDE_NAME="none"
+                ;;
+            all)
+                INSTALL_GHOSTTY=true
+                INSTALL_CHROME=true
+                INSTALL_APPS=true
+                if [ -z "$IDE_NAMES" ]; then
+                    IDE_NAMES="code"
+                    IDE_NAME="code"
+                fi
+                ;;
+            ghostty)
+                INSTALL_GHOSTTY=true
+                ;;
+            chrome)
+                INSTALL_CHROME=true
+                ;;
+            code|intellij|intellij-ultimate)
+                INSTALL_APPS=true
+                IDE_NAMES="$(append_csv_unique "$IDE_NAMES" "$tok")"
+                IDE_NAME="${IDE_NAMES%%,*}"
+                ;;
+            *)
+                echo "Error: '$tok' is not a supported --gui app (expected: all, none, ghostty, chrome, code, intellij, intellij-ultimate)" >&2
+                exit 1
+                ;;
+        esac
+    done
+}
+
+parse_skip_list() {
+    local raw="$1" tok
+    local -a items=()
+    IFS=',' read -r -a items <<< "$raw"
+    [ "${#items[@]}" -gt 0 ] || {
+        echo "Error: --skip requires one or more stage names" >&2
+        exit 1
+    }
+    for tok in "${items[@]}"; do
+        tok="${tok#"${tok%%[![:space:]]*}"}"
+        tok="${tok%"${tok##*[![:space:]]}"}"
+        case "$tok" in
+            packages)    SKIP_PACKAGES=true ;;
+            db)          SKIP_DB=true; DB_CHOICE="none" ;;
+            dotfiles)    SKIP_DOTFILES=true ;;
+            bin)         SKIP_BIN=true ;;
+            fonts)       SKIP_FONTS=true ;;
+            tools)       SKIP_TOOLS=true ;;
+            nvim)        SKIP_NVIM=true ;;
+            vim)         SKIP_VIM=true ;;
+            zsh)         SKIP_ZSH=true ;;
+            bash)        SKIP_BASH=true ;;
+            completions) SKIP_COMPLETIONS=true ;;
+            terminal)    SKIP_TERMINAL=true ;;
+            *)
+                echo "Error: Unknown --skip stage '$tok' (expected: packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal)" >&2
+                exit 1
+                ;;
+        esac
+    done
+}
+
+parse_uninstall_list() {
+    local raw="$1" tok
+    local -a items=()
+    IFS=',' read -r -a items <<< "$raw"
+    [ "${#items[@]}" -gt 0 ] || {
+        echo "Error: --uninstall requires a target (all, dotfiles, fonts, or bin)" >&2
+        exit 1
+    }
+    for tok in "${items[@]}"; do
+        tok="${tok#"${tok%%[![:space:]]*}"}"
+        tok="${tok%"${tok##*[![:space:]]}"}"
+        case "$tok" in
+            all)
+                UNINSTALL_TARGETS="all"
+                return 0
+                ;;
+            dotfiles|fonts|bin)
+                if [ "$UNINSTALL_TARGETS" != "all" ]; then
+                    UNINSTALL_TARGETS="$(append_csv_unique "$UNINSTALL_TARGETS" "$tok")"
+                fi
+                ;;
+            *)
+                echo "Error: Unknown --uninstall target '$tok' (expected: all, dotfiles, fonts, or bin)" >&2
+                exit 1
+                ;;
+        esac
+    done
 }
 
 # Parse CLI arguments
 while [ $# -gt 0 ]; do
     case "$1" in
+        --user)
+            SKIP_SYSTEM=true
+            shift
+            ;;
+        --system-only)
+            SKIP_USER=true
+            shift
+            ;;
+        --uninstall)
+            ACTION="uninstall"
+            if [ $# -ge 2 ] && [ -n "${2:-}" ] && [[ "${2:-}" != -* ]]; then
+                parse_uninstall_list "$2"
+                shift 2
+            else
+                UNINSTALL_TARGETS="all"
+                shift
+            fi
+            ;;
+        --uninstall=*)
+            ACTION="uninstall"
+            require_opt_arg "--uninstall" "${1#--uninstall=}" "a target (all, dotfiles, fonts, or bin)"
+            parse_uninstall_list "${1#--uninstall=}"
+            shift
+            ;;
+        --os)
+            require_opt_arg "--os" "${2:-}" "a distro (ubuntu, fedora, or macos)"
+            TARGET_OS="$2"
+            shift 2
+            ;;
+        --os=*)
+            require_opt_arg "--os" "${1#--os=}" "a distro (ubuntu, fedora, or macos)"
+            TARGET_OS="${1#--os=}"
+            shift
+            ;;
+        --db)
+            require_opt_arg "--db" "${2:-}" "an engine (postgres, mariadb, all, or none)"
+            parse_db_list "$2"
+            shift 2
+            ;;
+        --db=*)
+            require_opt_arg "--db" "${1#--db=}" "an engine (postgres, mariadb, all, or none)"
+            parse_db_list "${1#--db=}"
+            shift
+            ;;
+        --gui)
+            if [ $# -ge 2 ] && [ -n "${2:-}" ] && [[ "${2:-}" != -* ]]; then
+                parse_gui_list "$2"
+                shift 2
+            else
+                parse_gui_list "all"
+                shift
+            fi
+            ;;
+        --gui=*)
+            require_opt_arg "--gui" "${1#--gui=}" "an app list (all, none, ghostty, chrome, code, intellij, intellij-ultimate)"
+            parse_gui_list "${1#--gui=}"
+            shift
+            ;;
         --theme)
             require_opt_arg "--theme" "${2:-}" "a theme name (such as solarized-dark, catppuccin-mocha, nord)"
             export HOME_SETTINGS_THEME="$2"
@@ -175,99 +345,26 @@ while [ $# -gt 0 ]; do
             export HOME_SETTINGS_THEME="${1#--theme=}"
             shift
             ;;
-        --uninstall|--uninstall-dotfiles|--uninstall-fonts|--uninstall-bin)
-            ACTION="${1#--}"
+        --skip)
+            require_opt_arg "--skip" "${2:-}" "comma-separated stages (packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal)"
+            parse_skip_list "$2"
+            shift 2
+            ;;
+        --skip=*)
+            require_opt_arg "--skip" "${1#--skip=}" "comma-separated stages (packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal)"
+            parse_skip_list "${1#--skip=}"
             shift
             ;;
-        --system|--bootstrap)
-            SKIP_SYSTEM=false
-            SKIP_USER=false
-            shift
-            ;;
-        --user|--dotfiles-only|--skip-system)
-            SKIP_SYSTEM=true
-            shift
-            ;;
-        --system-only|--skip-user)
-            SKIP_USER=true
-            shift
-            ;;
-        --dry-run)
+        -n|--dry-run)
             DRY_RUN=true
             shift
             ;;
-        --os)
-            require_opt_arg "--os" "${2:-}" "an argument (such as ubuntu, fedora, or macos)"
-            TARGET_OS="$2"
-            shift 2
-            ;;
-        -i|--ide)
-            require_opt_arg "$1" "${2:-}" "an argument (such as intellij, intellij-ultimate, code, or none)"
-            IDE_NAME="$2"
-            IDE_EXPLICIT=true
-            if [ "$IDE_NAME" = "none" ]; then
-                INSTALL_APPS=false
-            else
-                INSTALL_APPS=true
-            fi
-            shift 2
-            ;;
-        --db)
-            require_opt_arg "--db" "${2:-}" "an argument (such as postgres, mariadb, all, or none)"
-            DB_CHOICE="$2"
-            [ "$DB_CHOICE" = "postgresql" ] && DB_CHOICE="postgres"
-            [ "$DB_CHOICE" != "none" ] && SKIP_DB=false
-            shift 2
-            ;;
-        --db=*)
-            require_opt_arg "--db" "${1#*=}" "an argument (such as postgres, mariadb, all, or none)"
-            DB_CHOICE="${1#*=}"
-            [ "$DB_CHOICE" = "postgresql" ] && DB_CHOICE="postgres"
-            [ "$DB_CHOICE" != "none" ] && SKIP_DB=false
-            shift
-            ;;
-        --with-postgres|--with-postgresql)
-            merge_db_choice "postgres"
-            shift
-            ;;
-        --with-mariadb)
-            merge_db_choice "mariadb"
-            shift
-            ;;
-        --skip-db)
-            SKIP_DB=true
-            DB_CHOICE="none"
-            shift
-            ;;
-        --with-gui)
-            INSTALL_CHROME=true
-            INSTALL_GHOSTTY=true
-            enable_default_apps_unless_explicit
-            shift
-            ;;
-        --with-ghostty)   INSTALL_GHOSTTY=true; shift ;;
-        --skip-ghostty)   INSTALL_GHOSTTY=false; shift ;;
-        --with-chrome)    INSTALL_CHROME=true; shift ;;
-        --skip-chrome)    INSTALL_CHROME=false; shift ;;
-        --with-apps)      enable_default_apps_unless_explicit; shift ;;
-        --skip-apps)      INSTALL_APPS=false; IDE_NAME="none"; IDE_EXPLICIT=true; shift ;;
-        --skip-packages)  SKIP_PACKAGES=true; shift ;;
-        --skip-fonts)     SKIP_FONTS=true; shift ;;
-        --skip-tools)     SKIP_TOOLS=true; shift ;;
-        --skip-nvim)      SKIP_NVIM=true; shift ;;
-        --skip-vim)       SKIP_VIM=true; shift ;;
-        --skip-zsh)       SKIP_ZSH=true; shift ;;
-        --skip-bash)      SKIP_BASH=true; shift ;;
-        --skip-bin)       SKIP_BIN=true; shift ;;
-        --skip-completions) SKIP_COMPLETIONS=true; shift ;;
-        --skip-terminal)  SKIP_TERMINAL=true; shift ;;
         -h|--help)
             usage
             exit 0
             ;;
         *)
-            echo "Error: Unknown option: $1" >&2
-            usage >&2
+            echo "Error: Unknown option '$1' (run '$(basename "$0") --help' for usage)." >&2
             exit 1
             ;;
     esac
@@ -287,34 +384,10 @@ ARCH="$(detect_arch)"
 export ARCH
 
 # Handle uninstallation actions
-if [ "$ACTION" != "install" ]; then
-    case "$ACTION" in
-        uninstall)          "$SCRIPT_DIR/setup/modules/99-uninstall.sh" all ;;
-        uninstall-dotfiles) "$SCRIPT_DIR/setup/modules/99-uninstall.sh" dotfiles ;;
-        uninstall-fonts)    "$SCRIPT_DIR/setup/modules/99-uninstall.sh" fonts ;;
-        uninstall-bin)      "$SCRIPT_DIR/setup/modules/99-uninstall.sh" bin ;;
-    esac
+if [ "$ACTION" = "uninstall" ]; then
+    "$SCRIPT_DIR/setup/modules/99-uninstall.sh" "${UNINSTALL_TARGETS:-all}"
     exit 0
 fi
-
-# Validate IDE
-case "$IDE_NAME" in
-    intellij|intellij-ultimate|code|none) ;;
-    *)
-        echo "Error: '$IDE_NAME' is not a supported IDE. Choose from: intellij, intellij-ultimate, code, none" >&2
-        exit 1
-        ;;
-esac
-
-# Validate Database Engine
-case "$DB_CHOICE" in
-    postgres|postgresql) DB_CHOICE="postgres" ;;
-    mariadb|all|none) ;;
-    *)
-        echo "Error: '$DB_CHOICE' is not a supported database engine. Choose from: postgres, mariadb, all, none" >&2
-        exit 1
-        ;;
-esac
 
 # Validate Color Theme (if explicitly specified via --theme or HOME_SETTINGS_THEME)
 if [ -n "${HOME_SETTINGS_THEME:-}" ]; then
@@ -332,7 +405,7 @@ echo "       Home-Settings Cross-Platform Setup            "
 echo "====================================================="
 echo "Target OS : $OS"
 echo "Arch      : $ARCH"
-echo "IDE Choice: $IDE_NAME"
+echo "IDE Choice: ${IDE_NAMES:-none}"
 echo "Database  : Server: $DB_CHOICE (Clients: $([ "$SKIP_DB" = true ] && echo "skipped" || echo "enabled"))"
 [ -n "${HOME_SETTINGS_THEME:-}" ] && echo "Theme     : $HOME_SETTINGS_THEME"
 [ "$DRY_RUN" = true ] && echo "Mode      : DRY RUN (preview only, no modifications)"
@@ -352,7 +425,7 @@ fi
 # 2. User-Level Configuration (Dotfiles, Fonts, Tools, Shell, Terminal)
 if [ "$SKIP_USER" = false ]; then
     echo -e "\n[2/2] Running User Dotfiles & Environment Setup..."
-    "$SCRIPT_DIR/setup/modules/10-dotfiles.sh"
+    [ "$SKIP_DOTFILES" = false ] && "$SCRIPT_DIR/setup/modules/10-dotfiles.sh"
     [ "$SKIP_BIN" = false ] && "$SCRIPT_DIR/setup/modules/20-bin.sh"
     [ "$SKIP_FONTS" = false ] && "$SCRIPT_DIR/setup/modules/30-fonts.sh"
     [ "$SKIP_TOOLS" = false ] && "$SCRIPT_DIR/setup/modules/40-mise.sh"

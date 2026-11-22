@@ -116,7 +116,7 @@ def missing_session_msg(sess: str) -> str:
     """Format a user-facing diagnostic for a missing or unspecified IDE session."""
     if sess:
         return f"No active IDE session named '{sess}'."
-    return "Not inside an ide session (pass a session name, such as 'ide --quit <dir>')."
+    return "Not inside an ide session (pass a session name, such as 'ide quit <session>')."
 
 
 def is_ide_session_meta(sess_name: str, ide_sess: str, ide_sock: str, ide_win: str) -> bool:

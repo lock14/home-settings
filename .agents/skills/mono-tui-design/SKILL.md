@@ -30,7 +30,7 @@ Always resolve rules in this order (higher overrides lower):
    * Map changes to `ide`'s `§11.1` operational cockpit top shelf (`dotfiles/.tmux.conf`), `§11.5` fuzzy finder and
      `Master-Detail` workspace switcher (`ide -s` in `libexec/ide_lib/switcher.py`, `sessions.py`, `preview.py`, and
      `dock.py`), `Expand-to-Focus` directory launcher (`Alt+n` `New IDE >`), or `80×24`-clamped modal overlays
-     (`ide --keys` in `bin/ide`).
+     (`ide keys` in `bin/ide`).
 2. **Apply project overrides, focus clarity, and glyph hygiene**:
    * Keep both main workspace and `ai-sw-*` switcher `pane-border-style`, `pane-active-border-style`, and
      `WinSeparator` calm in `BASE01` (`[OVERRIDE] §6.1`, avoiding two-tone `tmux` border seams), distinguishing active
@@ -43,14 +43,14 @@ Always resolve rules in this order (higher overrides lower):
      monochrome SGR attributes, and `NO_COLOR`.
 3. **Preserve keyboard layers and CUA dual-key discoverability**:
    * Never bind unmodified printable keys or root `Ctrl+h/j/k/l` in `dotfiles/.tmux.conf` (`[OVERRIDE] §2.2 and §2.8`).
-   * Keep `F1` (`ide --keys`) and `F5` (`reload`) bound alongside `Alt+?` and `Ctrl+r` inside `ide -s`, and keep
+   * Keep `F1` (`ide keys`) and `F5` (`reload`) bound alongside `Alt+?` and `Ctrl+r` inside `ide -s`, and keep
      `format_sessions_footer_label` width-fitted to the active pane so footer hints never clip mid-word
      (`[OVERRIDE] §1.4 and §R4.11`).
    * Synchronize any user-facing keybinding or CLI flag across both conceptual prose and reference tables in `README.md`.
 4. **Enforce defensive rendering, lazy docking, and 80×24 geometry**:
    * Gate two-pane side-by-side `ai-sw-*` layout on `sw_cols >= SIDE_BY_SIDE_MIN_COLS` (`90`, `[OVERRIDE] §1.6`),
      stacking vertically (`down:50%:wrap:noinfo`) on narrower terminals.
-   * Keep `ide --keys` within `<= 76` columns and `<= 22` lines inside `-w 80 -h 24` popups (`[P2]`).
+   * Keep `ide keys` within `<= 76` columns and `<= 22` lines inside `-w 80 -h 24` popups (`[P2]`).
    * Stream read-only ANSI previews during `fzf` browsing without `swap-pane` or `SIGWINCH`, lazily docking on
      `Alt+l`, `Alt+a`, or click and restoring `copy-mode` `scroll_position` and zoomed Editor `winsaveview()` on
      undock (`[P3]`).

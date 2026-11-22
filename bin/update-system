@@ -41,34 +41,47 @@ usage() {
     cat <<'EOF'
 Usage: update-system [OPTIONS]
 
-Cross-Platform System, Package, and Toolchain Maintenance Utility.
+Cross-platform system, package, and toolchain maintenance utility.
 
-Primary Workflows:
-  (default)            Update native OS packages, Snaps, and Flatpaks non-interactively
-  --all                Full sweep: OS packages, Snaps, Flatpaks, and developer toolchains
-  --system-only        Update only the native OS package manager (skip Snaps/Flatpaks)
-  -n, --dry-run        Preview all commands without modifying the system
-  -i, --interactive    Prompt for confirmation during package updates (disables auto -y)
-
-Component Toggles:
-  --skip-snaps              Skip Snap package refresh
-  --skip-snap               Alias for --skip-snaps
-  --skip-flatpak            Skip Flatpak updates
-  --with-dev, --dev, --tools  Include developer toolchains (mise, rustup, Oh-My-Zsh)
-  --no-cleanup              Skip package autoremove and cache cleaning phases
-  --macos-system            Run macOS Apple Software Update (macOS only)
-
-Advanced Options:
-  --os <distro>        Override OS detection: ubuntu, fedora, macos, arch
-  -y, --yes            Force non-interactive confirmation (default)
+Options:
+  --all                Include developer toolchains (mise, rustup, elan, Oh-My-Zsh, completions)
+  --system-only        Update only the native OS package manager (skip Snaps, Flatpaks, and toolchains)
+  --skip <target,...>  Skip comma-separated phases: snaps, flatpak, cleanup
+  --macos-system       Run macOS Apple Software Update (macOS only)
+  --os <distro>        Override OS detection: ubuntu, fedora, macos, or arch
+  -i, --interactive    Prompt for confirmation during package updates (default: non-interactive)
+  -n, --dry-run        Preview commands without modifying the system
   -h, --help           Display this help message and exit
 
 Examples:
-  update-system                      # Routine maintenance of OS + Snaps + Flatpaks
-  update-system --dry-run            # Preview actions without executing
-  update-system --all                # Update OS packages + Snaps + Flatpaks + dev tools
-  update-system --system-only        # Update only apt/dnf/brew packages
+  update-system                      # Update OS packages, Snaps, and Flatpaks
+  update-system --all                # Include Mise, Rustup, Elan, and Oh-My-Zsh toolchains
+  update-system --skip snaps,cleanup # Skip Snap refresh and autoremove phases
+  update-system -n                   # Preview actions without executing
 EOF
+}
+
+parse_skip_targets() {
+    local raw="$1" tok
+    local -a items=()
+    IFS=',' read -r -a items <<< "$raw"
+    if [ "${#items[@]}" -eq 0 ] || [ -z "$raw" ]; then
+        log_error "Option --skip requires one or more targets (snaps, flatpak, cleanup)"
+        exit 1
+    fi
+    for tok in "${items[@]}"; do
+        tok="${tok#"${tok%%[![:space:]]*}"}"
+        tok="${tok%"${tok##*[![:space:]]}"}"
+        case "$tok" in
+            snaps)   SKIP_SNAPS=true ;;
+            flatpak) SKIP_FLATPAK=true ;;
+            cleanup) DO_CLEANUP=false ;;
+            *)
+                log_error "Invalid --skip target '$tok' (expected: snaps, flatpak, cleanup)"
+                exit 1
+                ;;
+        esac
+    done
 }
 
 while [ $# -gt 0 ]; do
@@ -81,28 +94,8 @@ while [ $# -gt 0 ]; do
             DRY_RUN=true
             shift
             ;;
-        -y|--yes)
-            NON_INTERACTIVE=true
-            shift
-            ;;
         -i|--interactive)
             NON_INTERACTIVE=false
-            shift
-            ;;
-        --system-only)
-            SYSTEM_ONLY=true
-            shift
-            ;;
-        --skip-snaps|--skip-snap)
-            SKIP_SNAPS=true
-            shift
-            ;;
-        --skip-flatpak)
-            SKIP_FLATPAK=true
-            shift
-            ;;
-        --with-dev|--dev|--tools)
-            WITH_DEV=true
             shift
             ;;
         --all)
@@ -110,8 +103,21 @@ while [ $# -gt 0 ]; do
             SYSTEM_ONLY=false
             shift
             ;;
-        --no-cleanup)
-            DO_CLEANUP=false
+        --system-only)
+            SYSTEM_ONLY=true
+            WITH_DEV=false
+            shift
+            ;;
+        --skip)
+            if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
+                log_error "Option --skip requires comma-separated targets (snaps, flatpak, cleanup)"
+                exit 1
+            fi
+            parse_skip_targets "$2"
+            shift 2
+            ;;
+        --skip=*)
+            parse_skip_targets "${1#--skip=}"
             shift
             ;;
         --macos-system)
@@ -120,15 +126,22 @@ while [ $# -gt 0 ]; do
             ;;
         --os)
             if [ $# -lt 2 ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
-                log_error "Option --os requires an argument (such as ubuntu, fedora, macos, or arch)"
+                log_error "Option --os requires an argument (ubuntu, fedora, macos, or arch)"
                 exit 1
             fi
             TARGET_OS="$2"
             shift 2
             ;;
+        --os=*)
+            TARGET_OS="${1#--os=}"
+            if [ -z "$TARGET_OS" ]; then
+                log_error "Option --os requires an argument (ubuntu, fedora, macos, or arch)"
+                exit 1
+            fi
+            shift
+            ;;
         *)
-            log_error "Unknown option: $1"
-            usage >&2
+            log_error "Unknown option '$1' (run 'update-system --help' for usage)"
             exit 1
             ;;
     esac
