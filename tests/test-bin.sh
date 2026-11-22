@@ -203,7 +203,7 @@ def wait_noncanon(fd, deadline):
         time.sleep(0.005)
     return False
 
-for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x03", b"\x04"):
+for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x1bOP", b"\x1b[11~", b"\x03", b"\x04"):
     mfd, sfd = pty.openpty()
     proc = subprocess.Popen(
         [ide_bin, "--keys"],
@@ -266,7 +266,12 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
-   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 28 ] && \
+   grep -Fq "Alt+l / h (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   ! grep -Fq $'\033[' <<< "$(NO_COLOR=1 "$SCRIPT_DIR/bin/ide" --keys)" && \
+   ! grep -Fq "" <<< "$(IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" --keys)" && \
+   grep -Fq $'\033[1m' <<< "$(TERM=dumb "$SCRIPT_DIR/bin/ide" --keys)" && \
+   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 22 ] && \
+   [ "$(python3 -c 'import re,sys; print(max(len(re.sub(r"\x1b\[[0-9;]*m","",l)) for l in sys.stdin.read().splitlines()))' <<< "$IDE_KEYS_OUT")" -le 76 ] && \
    [ "$IDE_KEYS_DEFS" -eq 1 ] && \
    [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
     pass "bin/ide --keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including session switcher, Alt+Shift+S attention jump, focus, swap, resize, context dispatch, mini.files, Space m, jumplist, clipboard, and quit shortcuts) within popup height and drains multi-byte escape sequences on PTY"
@@ -1543,7 +1548,7 @@ LUA
             args_log="$(LC_ALL=C sort "$ARGS_LOG")"
             args_expected="$(printf '%s\n' "--cd $ARGS_DIR args-sess" "--quit" "--quit" "--quit --force args-sess" "--quit --force target-a target-b" "--quit args-sess" "--quit target-a target-b" "--swap left args-sess" "--toggle args-sess" "--toggle-editor args-sess" | LC_ALL=C sort)"
             popup_cmd="$(cat "$TEMP_HOME/popup_cmd.log" 2>/dev/null || true)"
-            popup_expected="tmux|display-popup|-t|%42|-E|-w|90|-h|30|'$ARGS_HOME/space home/.local/bin/ide' --keys"
+            popup_expected="tmux|display-popup|-t|%42|-E|-w|80|-h|24|'$ARGS_HOME/space home/.local/bin/ide' --keys"
             if [ "$args_log" = "$args_expected" ] && [ "$popup_cmd" = "$popup_expected" ]; then
                 echo "PASS:The Editor names its own session in every ide call (--quit [--force] NAME, --cd DIR NAME, --toggle NAME, --toggle-editor NAME, --swap DIR NAME), passes -t \$TMUX_PANE and shell-escaped path in open_ide_keys_popup, and omits session when \$IDE_SESSION is empty"
             else

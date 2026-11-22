@@ -574,37 +574,50 @@ def _resolve_capture_pane_targets(target_arg: str = "") -> list[list[str]]:
         ).splitlines()
         sw_active: list[list[str]] = []
         sw_other: list[list[str]] = []
+        sw_placeholder: list[list[str]] = []
         for srow in sw_rows:
             sparts = (srow.split("\t") + ["", "", "", ""])[:4]
             s_act, s_pid, s_role, s_ph = sparts[0], sparts[1].strip(), sparts[2].strip(), sparts[3].strip()
-            if not s_pid or s_role == "list" or s_ph == "1":
+            if not s_pid or s_role == "list":
                 continue
             stgt = ["-t", s_pid]
+            if s_ph == "1":
+                if stgt not in sw_placeholder:
+                    sw_placeholder.append(stgt)
+                continue
             if s_act == "1":
                 if stgt not in sw_active:
                     sw_active.append(stgt)
             elif stgt not in sw_other:
                 sw_other.append(stgt)
         sw_targets = sw_active + sw_other
+    else:
+        sw_placeholder = []
     sess = resolve_target_session(target_arg)
     if sess:
         rows = tmux_out(
             "list-panes",
+            "-s",
             "-t",
             f"={sess}:",
             "-F",
-            "#{pane_active}\t#{pane_id}\t#{@ide_sw_placeholder}",
+            "#{pane_active}\t#{pane_id}\t#{@ide_sw_placeholder}\t#{window_name}",
         ).splitlines()
         active_targets: list[list[str]] = []
         other_targets: list[list[str]] = []
+        parked_targets: list[list[str]] = []
         for row in rows:
             if "\t" not in row:
                 continue
-            rparts = (row.split("\t") + ["", "", ""])[:3]
-            is_active, pid, r_ph = rparts[0], rparts[1].strip(), rparts[2].strip()
+            rparts = (row.split("\t") + ["", "", "", ""])[:4]
+            is_active, pid, r_ph, r_wname = rparts[0], rparts[1].strip(), rparts[2].strip(), rparts[3].strip()
             if not pid or r_ph == "1":
                 continue
             target = ["-t", pid]
+            if r_wname.startswith("_ide_park_"):
+                if target not in sw_targets and target not in parked_targets:
+                    parked_targets.append(target)
+                continue
             if is_active == "1":
                 if target not in sw_targets and target not in active_targets:
                     active_targets.append(target)
@@ -617,13 +630,13 @@ def _resolve_capture_pane_targets(target_arg: str = "") -> list[list[str]]:
                 dtgt = ["-t", dp]
                 if dtgt not in sw_targets and dtgt not in active_targets and dtgt not in other_targets:
                     other_targets.insert(0, dtgt)
-        combined = sw_targets + active_targets + other_targets
+        combined = sw_targets + active_targets + other_targets + parked_targets + sw_placeholder
         if combined:
             return combined
         if session_exists(sess):
             return [["-t", f"={sess}:"]]
-    if sw_targets:
-        return sw_targets
+    if sw_targets or sw_placeholder:
+        return sw_targets + sw_placeholder
     if os.environ.get("TMUX_PANE"):
         return [["-t", os.environ["TMUX_PANE"]]]
     return []
@@ -860,6 +873,16 @@ def _normalize_clicked_word(word: str) -> str:
 
 def open_ide_link(href: str, word: str, cwd: str, target_arg: str) -> int:
     """Route `Ctrl+Click` or `Alt+Click` OSC 8 / plain-text token into Neovim or the browser."""
+    if is_switcher_session_name(target_arg):
+        dp_chk = tmux_out("show-options", "-qv", "-t", f"={target_arg}:", "@ide_sw_docked_pane").strip()
+        if not dp_chk:
+            sel_s = resolve_target_session(target_arg)
+            if sel_s:
+                cwd = (
+                    get_ide_var(sel_s, "@ide_workdir", "IDE_WORKDIR")
+                    or get_ide_var(sel_s, "@ide_initial_root", "IDE_INITIAL_ROOT")
+                    or cwd
+                )
     cwd = normalize_pane_cwd(cwd, target_arg=target_arg)
     if os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or target_arg:
         run_tmux("set-option", "-gq", "word-separators", TMUX_WORD_SEPS)

@@ -593,9 +593,9 @@ def call_vcs_summary_hook(workdir: str) -> tuple[str, bool, str, str] | None:
 
 
 def git_summary(workdir: str) -> tuple[str, bool, str, str, str]:
-    """Return `(branch_badge, is_dirty, detail, pr_url, worktree_root)` using single-fork Git status."""
+    """Return `(branch_badge, is_dirty, detail, pr_url, worktree_root)` using custom VCS hook or single-fork Git status."""
     if not workdir or not os.path.isdir(workdir):
-        return ("-", False, "not a git repository", "", "")
+        return ("-", False, "not a repository", "", "")
     custom_vcs = call_vcs_summary_hook(workdir)
     worktree_root, gitdir, commondir = locate_git_dirs(workdir)
     if custom_vcs is not None:
@@ -604,7 +604,7 @@ def git_summary(workdir: str) -> tuple[str, bool, str, str, str]:
     eff_gitdir = gitdir or (os.path.abspath(env_git_dir) if env_git_dir else "")
     eff_commondir = commondir or eff_gitdir
     if not shutil.which("git") or not eff_gitdir:
-        return ("-", False, "not a git repository", "", "")
+        return ("-", False, "not a repository", "", "")
     try:
         res = subprocess.run(
             ["git", "-C", workdir, "--no-optional-locks", "status", "--porcelain=v2", "--branch"],
@@ -618,7 +618,7 @@ def git_summary(workdir: str) -> tuple[str, bool, str, str, str]:
     except (OSError, subprocess.SubprocessError):
         return ("-", False, "unavailable", "", "")
     if res.returncode != 0 or not res.stdout:
-        return ("-", False, "not a git repository", "", "")
+        return ("-", False, "not a repository", "", "")
     branch = ""
     oid = ""
     upstream = ""

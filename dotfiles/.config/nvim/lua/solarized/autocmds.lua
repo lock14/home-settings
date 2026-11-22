@@ -133,6 +133,12 @@ function M.setup(opts)
             vim.opt_local.scrolloff = 0
             vim.w._hs_md_scrolloff = true
             local buf = (ev and ev.buf) or true
+            vim.keymap.set({ "n", "x" }, "j", function()
+                return vim.v.count == 0 and "gj" or "j"
+            end, { buffer = buf, expr = true, silent = true, desc = "Move down by screen line in soft-wrapped Markdown" })
+            vim.keymap.set({ "n", "x" }, "k", function()
+                return vim.v.count == 0 and "gk" or "k"
+            end, { buffer = buf, expr = true, silent = true, desc = "Move up by screen line in soft-wrapped Markdown" })
             vim.keymap.set("n", "<CR>", function()
                 if not (follow_editor_link and follow_editor_link(false, false)) then
                     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)

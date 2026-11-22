@@ -2,10 +2,11 @@
 
 This repository provides automated workstation provisioning, dotfiles, shell environments, and developer toolchains for modern Unix systems: Debian-based Linux (Ubuntu, Debian, Pop!_OS), RHEL-based Linux (Fedora, RHEL, CentOS Stream, Rocky Linux), and macOS.
 
-Any AI agent interacting with or modifying this repository must strictly adhere to the invariants below and consult the linked domain specifications in `docs/` when modifying syntax, themes, IDE internals, or documentation:
+Any AI agent interacting with or modifying this repository must strictly adhere to the invariants below and consult the linked domain specifications in `docs/` and `.agents/` when modifying syntax, themes, IDE internals, TUI surfaces, or documentation:
 
 - [Visual precision and semantic color architecture](docs/color-architecture.md): Solarized Dark 14-slot specification, 17-theme rules, universal semantic color contract, Pillars I–IX, and Tree-sitter and Sublime syntax rules.
-- [IDE workspace, multiplexer, and portable shell architecture](docs/ide-architecture.md): Single-window Tmux geometry, exact session targeting, single-server Neovim MsgPack-RPC, `Alt+s` live switcher docking, hook-only AI state machine, OSC 8 and OSC 52 routing, and portable `.vimrc` and `.bashrc-addendum` contracts.
+- [IDE workspace, multiplexer, and portable shell architecture](docs/ide-architecture.md): Single-window Tmux geometry, exact session targeting, single-server Neovim MsgPack-RPC, `Alt+s` lazy switcher docking and scroll preservation, hook-only AI state machine, OSC 8 and OSC 52 routing, and portable `.vimrc` and `.bashrc-addendum` contracts.
+- [Monospace TUI design standard and project rules](.agents/rules/monospace-tui.md): `mono-tui v0.2.5` responsive `90`-column versus `80×24` layout breakpoints, width-fitted `fzf` command bars, calm `BASE01` borders with `[PREVIEW]` versus `[LIVE]` badges, 4-tier color capability degradation, and Nerd Font ASCII fallback (paired with [mono-tui-design](.agents/skills/mono-tui-design/SKILL.md) and [mono-tui-audit](.agents/skills/mono-tui-audit/SKILL.md)).
 - [Documentation architecture and technical writing style](docs/writing-style.md): Diátaxis macro-to-micro hierarchy, dual representation rule, non-accretion rule, Google and Butterick typography rules, and PR and commit conventions.
 
 ## 1. Non-negotiable core invariants and guardrails
@@ -41,6 +42,7 @@ Any AI agent interacting with or modifying this repository must strictly adhere 
 | Neovim, Tree-sitter, and Vim | `dotfiles/.config/nvim/` (`init.lua`, `lua/solarized/*.lua`, `queries/`, `after/queries/`) and `dotfiles/.vimrc` | `${XDG_CONFIG_HOME:-$HOME/.config}/nvim/` and `$HOME/.vimrc` | `tests/test-vim.sh`, `tests/test-dotfiles.sh` |
 | Themes, terminal profiles, and `bat` grammars | `colors/themes/*.theme`, `colors/*.tmTheme`, `colors/gnome-terminal-solarized.dconf`, `colors/Solarized-Dark.terminal`, `syntaxes/*.sublime-syntax` | `${XDG_CONFIG_HOME:-$HOME/.config}/bat/`, `dconf`, `Terminal.app` | `tests/test-theme.sh`, `tests/test-dotfiles.sh`, `tests/test-env.sh` |
 | Polyglot toolchains and fonts | `.mise.toml` and `setup/modules/{30-fonts,40-mise}.sh` | `${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml` and XDG or macOS fonts | `tests/test-system-setup.sh`, `tests/test-fonts.sh` |
+| Monospace TUI rules and skills | `.agents/rules/monospace-tui.md`, `.agents/skills/mono-tui-design/`, `.agents/skills/mono-tui-audit/` | Scoped agent rules and `mono-tui v0.2.5` reference library governing `bin/ide`, `libexec/ide_lib/`, `libexec/theme_lib/generators.py`, `dotfiles/.tmux.conf`, and `lua/solarized/ide.lua` | `tests/test-ide-fleet.sh`, `tests/test-bin.sh`, `tests/lint/lint_docs.py` |
 | Test runners, static linters, and fixtures | `tests/run.sh`, `tests/lint.sh`, `tests/test-helper.sh`, `tests/lint/*.py`, `tests/fixtures/sample-code/*` | Verification and CI harness | All `tests/test-*.{sh,zsh}` |
 
 ## 3. Step-by-step task recipes for agents
@@ -53,7 +55,7 @@ Follow these workflows when extending toolchains, CLI options, dotfiles, utiliti
 - **Adding a managed dotfile**: Place the file or directory in `dotfiles/` (auto-mirrored by `setup/modules/10-dotfiles.sh` and unlinked by `setup/modules/99-uninstall.sh`), add assertions in `tests/test-dotfiles.sh`, and run `make check`.
 - **Adding a standalone CLI utility**: Place an executable script (`#!/bin/bash` and `set -euo pipefail`, supporting `-h` and `--help`) in `bin/` (internal Python modules belong in `libexec/`), document it in `README.md`, add tests in `tests/test-bin.sh`, and run `make check`.
 - **Adding a provisioning stage**: Create `setup/modules/<NN>-<feature>.sh` sourcing helpers from `$SETUP_DIR/lib/`, honor `DRY_RUN`, `OS`, and `ARCH`, wire it into `setup.sh`, and add tests in `tests/test-system-setup.sh`.
-- **Updating documentation**: Follow [docs/writing-style.md](docs/writing-style.md), update both conceptual prose and reference tables in `README.md` (and `AGENTS.md` or `docs/*.md` for internal architecture), and verify with `./tests/lint.sh`.
+- **Updating documentation**: Follow [docs/writing-style.md](docs/writing-style.md), update both conceptual prose and reference tables in `README.md` (and `AGENTS.md`, `docs/*.md`, or `.agents/` for internal architecture), and verify with `./tests/lint.sh`.
 
 ## 4. Anti-patterns and common traps
 
@@ -74,7 +76,7 @@ Before concluding any task:
    ```bash
    make lint
    ```
-   Executes `./tests/lint.sh` (`zsh -n`, `bash -n`, parallel `shellcheck`, `tests/lint/lint_python.py`, and `tests/lint/lint_docs.py` across `README.md`, `AGENTS.md`, `docs/*.md`, and `tests/fixtures/sample-code/sample.md`).
+   Executes `./tests/lint.sh` (`zsh -n`, `bash -n`, parallel `shellcheck`, `tests/lint/lint_python.py`, and `tests/lint/lint_docs.py` across `README.md`, `AGENTS.md`, `docs/*.md`, `.agents/`, and `tests/fixtures/sample-code/sample.md`).
 
 2. **Run the automated test suite**:
    ```bash
@@ -83,4 +85,4 @@ Before concluding any task:
    Executes `./tests/run.sh` across all 10 suites (`system-setup`, `dotfiles`, `bin`, `theme`, `ide-fleet`, `env`, `zsh`, `completions`, `vim`, and `fonts`; pass a suite name such as `./tests/run.sh vim` during targeted iteration).
 
 3. **Verify path hygiene and agent rule budget**:
-   Inspect `git diff` to ensure zero personal paths or untracked artifacts were introduced, and keep `AGENTS.md` concise (<24 KB) by placing deep subsystem prose in `docs/*.md`.
+   Inspect `git diff` to ensure zero personal paths or untracked artifacts were introduced, and keep `AGENTS.md` concise (<24 KB) by placing deep subsystem prose in `docs/*.md` and `.agents/`.
