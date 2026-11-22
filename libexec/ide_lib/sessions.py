@@ -1,4 +1,4 @@
-"""Tabular fleet listings, FIFO attention jump, workspace launcher, and `--sessions` entrypoint."""
+"""Tabular and JSON fleet listings, FIFO attention jump, workspace launcher, and `switch` entrypoint."""
 
 from __future__ import annotations
 
@@ -151,8 +151,8 @@ def next_attention(target_arg: str) -> int:
     return switch_or_attach_session(oldest, origin_sess)
 
 
-def list_ide_fleet(plain: bool = False) -> int:
-    """Print active IDE sessions in urgency order (plain session names or aligned status table)."""
+def list_ide_fleet(plain: bool = False, json_output: bool = False) -> int:
+    """Print active IDE sessions in urgency order (plain names, JSON array, or aligned status table)."""
     cur_sess = current_ide_session()
     if plain:
         fleet_plain = classify_ide_fleet(include_git=False, cur_sess=cur_sess)
@@ -161,6 +161,36 @@ def list_ide_fleet(plain: bool = False) -> int:
         return 0
 
     fleet = classify_ide_fleet(include_git=True, cur_sess=cur_sess)
+    if json_output:
+        import json
+
+        payload = [
+            {
+                "session": str(e["sess"]),
+                "agent": str(e["ai_cli"]),
+                "state": str(e["state"]),
+                "state_label": str(e["state_label"]),
+                "state_ts": float(e["state_ts"]),
+                "needs_attention": bool(e["needs_attn"]),
+                "attention_ts": float(e["attn_ts"]),
+                "message": str(e["ai_msg"]),
+                "workdir": str(e["workdir"]),
+                "git_branch": str(e["git_branch"]),
+                "git_dirty": bool(e["git_dirty"]),
+                "git_detail": str(e["git_detail"]),
+                "git_pr_url": str(e["git_pr_url"]),
+                "worktree_root": str(e["worktree_root"]),
+                "worktree_peers": list(e.get("worktree_peers") or []),
+                "active_role": str(e["active_role"]),
+                "attached": bool(e["attached"]),
+                "is_current": bool(e["is_current"]),
+                "quit_error": str(e["quit_err"]),
+            }
+            for e in fleet
+        ]
+        print(json.dumps(payload, indent=2))
+        return 0
+
     if not fleet:
         print("No active IDE sessions.")
         return 0
@@ -223,7 +253,7 @@ def list_ide_fleet(plain: bool = False) -> int:
 
 
 def build_sessions_lines(cur_sess: str = "") -> list[str]:
-    """Build `<session>\\t<ansi_display>` rows for `fzf` `--sessions`."""
+    """Build `<session>\\t<ansi_display>` rows for `fzf` `ide switch`."""
     if cur_sess and not session_exists(cur_sess):
         cur_sess = ""
     if not cur_sess:
@@ -404,18 +434,18 @@ def run_new_workspace_picker(
     had_env_ai_cli: bool = False,
     detach_only: bool = False,
 ) -> int:
-    """Open interactive `New IDE >` workspace directory picker (`ide -n` / `ide --new`)."""
+    """Open interactive `New IDE >` workspace directory picker (`ide -n` or `ide new`)."""
     resolved_arg = resolve_target_session(target_arg) if target_arg else ""
     origin_sess = resolved_arg if (resolved_arg and session_exists(resolved_arg)) else ""
     cur_sess = origin_sess if (origin_sess and check_is_ide_session(origin_sess)) else current_ide_session()
     fzf_bin = resolve_mise_tool_bin("fzf", env_override="IDE_FZF_BIN")
 
     if not detach_only and fzf_bin:
-        inner_args = [shlex.quote(ide_self), "--new"]
+        inner_args = [shlex.quote(ide_self), "new"]
         if layout_mode == "2pane":
             inner_args.append("--2pane")
         if ai_cli_from_flag and ai_cli:
-            inner_args.extend(["--ai", shlex.quote(ai_cli)])
+            inner_args.extend(["--agent", shlex.quote(ai_cli)])
         if cur_sess:
             inner_args.append(shlex.quote(cur_sess))
         popup_rc = maybe_reenter_in_tmux_popup(
@@ -425,14 +455,14 @@ def run_new_workspace_picker(
             return popup_rc
 
     if not fzf_bin:
-        print("Error: 'fzf' is required for 'ide --new'.", file=sys.stderr)
+        print("Error: 'fzf' is required for 'ide new'.", file=sys.stderr)
         return 1
     if not (
         (sys.stdin.isatty() and sys.stdout.isatty())
         or os.environ.get("IDE_IN_POPUP") == "1"
         or bool(os.environ.get("IDE_FZF_BIN"))
     ):
-        print("Error: 'ide --new' requires an interactive terminal.", file=sys.stderr)
+        print("Error: 'ide new' requires an interactive terminal.", file=sys.stderr)
         return 1
 
     hex_map, _ = load_active_palette()
@@ -468,7 +498,7 @@ def run_sessions_picker(
     ai_cli_from_flag: bool = False,
     detach_only: bool = False,
 ) -> int:
-    """Open interactive `fzf` multi-session workspace switcher (`ide -s` / `ide --sessions`)."""
+    """Open interactive `fzf` multi-session workspace switcher (`ide -s` or `ide switch`)."""
     forward_ai = had_env_ai_cli or ai_cli_from_flag
     fzf_bin = resolve_mise_tool_bin("fzf", env_override="IDE_FZF_BIN")
     sw_sess = os.environ.get("IDE_SWITCHER_SESSION", "").strip()
@@ -508,11 +538,11 @@ def run_sessions_picker(
                     )
                     if sw_rc is not None:
                         return sw_rc
-                inner_args = [shlex.quote(ide_self), "--sessions"]
+                inner_args = [shlex.quote(ide_self), "switch"]
                 if layout_mode == "2pane":
                     inner_args.append("--2pane")
                 if ai_cli_from_flag and ai_cli:
-                    inner_args.extend(["--ai", shlex.quote(ai_cli)])
+                    inner_args.extend(["--agent", shlex.quote(ai_cli)])
                 if detach_only:
                     inner_args.append("--detach")
                 if cur_sess:

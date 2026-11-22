@@ -186,7 +186,7 @@ v() {
 
     if [ "$can_heal" = "1" ] && [ -n "$sock" ] && [ ! -S "$sock" ]; then
         if [ "$local_only" = "0" ] || [ "$is_editor_pane" = "1" ]; then
-            "$ide_bin" --heal-socket >/dev/null 2>&1 || true
+            "$ide_bin" _internal heal-socket >/dev/null 2>&1 || true
         fi
     fi
 
@@ -203,7 +203,7 @@ v() {
                 rpc_ready=1
             elif [ "$rpc_rc" != "124" ] && [ "$rpc_rc" != "137" ]; then
                 rm -f "$sock" 2>/dev/null || true
-                if [ "$can_heal" = "1" ] && "$ide_bin" --heal-socket >/dev/null 2>&1 && [ -S "$sock" ]; then
+                if [ "$can_heal" = "1" ] && "$ide_bin" _internal heal-socket >/dev/null 2>&1 && [ -S "$sock" ]; then
                     rpc_rc=0
                     if [ "$has_timeout" = "1" ]; then
                         timeout 3 nvim --headless --server "$sock" --remote-expr "$rpc_check_expr" >/dev/null 2>&1 || rpc_rc=$?
@@ -240,7 +240,7 @@ v() {
                     local cur_pane="${TMUX_PANE:-}"
                     if [ -z "$pane" ] || [ "$cur_pane" != "$pane" ]; then
                         if [ -n "$ide_bin" ]; then
-                            IDE_SKIP_CHECKTIME=1 "$ide_bin" --focus-editor >/dev/null 2>&1 || true
+                            IDE_SKIP_CHECKTIME=1 "$ide_bin" _internal focus editor >/dev/null 2>&1 || true
                         elif [ -n "$pane" ]; then
                             tmux select-window -t "$pane" 2>/dev/null || true
                             tmux select-pane -t "$pane" 2>/dev/null || true
@@ -329,7 +329,7 @@ icd() {
     fi
 
     if [ -n "${TMUX:-}" ] && [ -x "$ide_bin" ]; then
-        IDE_CD_SKIP_SHELL=1 "$ide_bin" --cd "$PWD"
+        IDE_CD_SKIP_SHELL=1 "$ide_bin" cd "$PWD"
     fi
 }
 

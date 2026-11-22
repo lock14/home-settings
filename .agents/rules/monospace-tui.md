@@ -36,15 +36,15 @@ archetypes:
     operational cockpit header (`status-position top` with `Focused Surface` `▸` role pills for `AI`, `Editor`, and
     `Shell`, inline mode-contextual `PREFIX` and `COPY` key hints, and clickable urgent attention and fleet counters)
     framing non-overlapping Level 1 panes for the AI Agent CLI, `§11.4` Neovim `Editor`, and interactive `Shell` in
-    single-window Inverted-T (`--3pane`) or side-by-side (`--2pane`) geometry.
-*   **Multi-session workspace switcher** (`ide -s` or `ide --sessions` in `libexec/ide_lib/switcher.py`, `sessions.py`,
+    single-window Inverted-T (3-pane default) or side-by-side (`--2pane`) geometry.
+*   **Multi-session workspace switcher** (`ide -s` or `ide switch` in `libexec/ide_lib/switcher.py`, `sessions.py`,
     `preview.py`, and `dock.py`): `§11.5` fuzzy finder paired with a responsive `Master-Detail` split view
     (`§12.4` search-act and `§12.3` monitor-respond workflows). On terminals at or above `90` columns, the left pane
     renders the urgency-ordered `fzf` session list above a live-streaming workspace metadata card while the right pane
     streams a read-only ANSI viewport preview (`[PREVIEW]`) with zero `swap-pane` or `SIGWINCH`, lazily docking the
     live `@ide_ai_pane` (`[LIVE]`) on demand when focused via `Alt+l`, `Alt+a`, or mouse click and undocking on
     `Alt+h`. Pressing `Alt+n` enters an `Expand-to-Focus` full-pane directory picker (`New IDE >`).
-*   **Keybinding cheatsheet and fleet status table** (`ide --keys` in `bin/ide` and `ide --list` in
+*   **Keybinding cheatsheet and fleet status table** (`ide keys` in `bin/ide` and `ide list` in
     `libexec/ide_lib/sessions.py`): Contextual two-column modal overlay (`Alt+?`, `Space ?`, `Prefix + ?`, or `F1`)
     fitted within `80×24` dimensions, and `§R4.6` aligned fleet table pairing status colors with non-color markers
     (`▸` active, `󰂚` or `!` attention, `[unsaved]` dirty guard).
@@ -93,7 +93,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 *   **Original**: | Compact | 40–79 | Region A collapses; Region C hidden or stacked below B; footer reduces to single row |
 *   **Project rule**: `SIDE_BY_SIDE_MIN_COLS = 90` in `libexec/ide_lib/switcher.py` gates the two-pane side-by-side
     `ai-sw-*` switcher (`sw_cols >= 90`). When the popup or terminal width is below `90` columns (including `80×24`
-    minimum viable terminals, `§1.5`), `ide --sessions` automatically falls back to the stacked vertical single-pane
+    minimum viable terminals, `§1.5`), `ide switch` automatically falls back to the stacked vertical single-pane
     `fzf` layout (`--preview-window=down:50%:wrap:noinfo`), giving the 5-column session table full horizontal width.
 *   **Reason**: Splitting `56%` right below `90` columns leaves fewer than `38` columns for the 5-column `fzf` fleet
     table (`SESSION`, `AGENT`, `STATE`, `BRANCH`, `WORKSPACE`), whereas stacking preserves complete column legibility
@@ -122,7 +122,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
     (`§11.5` fuzzy layer), all printable characters feed the `fzf` filter, `Tab` toggles multi-session selection
     (`--multi`) for batch `Ctrl+y` acknowledgment and `Ctrl+x` quit while `Alt+l` and `Alt+h` switch focus between the
     list and live AI pane, `F5` and `Ctrl+r` reload the fleet list, and `F1` and `Alt+?` open the contextual keybinding
-    cheatsheet (`ide --keys`, which closes on `q`, `Q`, `Esc`, `?`, `Alt+?`, `F1`, `Space`, or `Enter`).
+    cheatsheet (`ide keys`, which closes on `q`, `Q`, `Esc`, `?`, `Alt+?`, `F1`, `Space`, or `Enter`).
 *   **Reason**: Prevents root-table `tmux` bindings from hijacking shell Readline, Neovim, or AI CLI keys while
     supporting multi-session batch triage in `fzf`.
 
@@ -179,7 +179,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
     monotone Nerd Font PUA icons (``, `󰚩`, ``, ``, `󰂚`) and never emit fixed-bitmap color emojis in `solarized-dark`
     or any of the 9 classic daily-driver themes (`AGENTS.md` Rule 61). Whenever `IDE_NERD_FONTS=0` (or `IDE_ASCII=1` or
     `TERM=dumb`) is set (`use_nerd_fonts()` in `libexec/ide_lib/constants.py` and `bin/ide`), all `bin/ide` surfaces
-    (`ide --list`, `ide -s`, `ide --session-preview`, and `ide --keys`) omit PUA codepoints and fall back to universal
+    (`ide list`, `ide -s`, `ide _internal session-preview`, and `ide keys`) omit PUA codepoints and fall back to universal
     ASCII and standard Unicode markers (`▸`, `*`, `!`, `…`).
 *   **Reason**: Preserves crisp monotone iconography on configured workstations while guaranteeing zero tofu (`□`) when
     inspecting sessions from unprovisioned remote or fallback terminals.
@@ -189,7 +189,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 *   **Project rule**: All column alignment, truncation, preview tail fitting, and footer packing in `libexec/ide_lib/` must
     measure visible cell widths via `visible_width` (`constants.py`) and `_expanded_cell_widths` (`preview.py`),
     accounting for ANSI escapes, tabs, combining marks, and 2-cell CJK / wide glyphs, terminate styled lines with
-    `\033[0m`, and clamp popups (`ide --keys` at `80×24` max `76×22` inner body; `ide -s` stacked below `90` cols) so
+    `\033[0m`, and clamp popups (`ide keys` at `80×24` max `76×22` inner body; `ide -s` stacked below `90` cols) so
     `80×24` terminals never wrap borders or clip critical controls (`§1.5`).
 *   **Reason**: Prevents right-edge wrap corruption, CJK and tab bottom-line clipping in `fzf` previews, and modal
     overflow on compact terminals.
@@ -207,9 +207,9 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 
 ### [P4] non-TTY, missing-fzf, and basic terminal graceful fallback
 
-*   **Project rule**: When `fzf` is unavailable, `ide --sessions` degrades cleanly to `list_ide_fleet` (`ide --list`)
-    or prints `No active IDE sessions.` when empty; when non-interactive, `ide --keys` prints the cheatsheet directly
-    to `stdout` without blocking on `stty` raw key reads; when `btop` is absent, `ide --monitor` falls back to `htop`
+*   **Project rule**: When `fzf` is unavailable, `ide switch` degrades cleanly to `list_ide_fleet` (`ide list`)
+    or prints `No active IDE sessions.` when empty; when non-interactive, `ide keys` prints the cheatsheet directly
+    to `stdout` without blocking on `stty` raw key reads; when `btop` is absent, `ide monitor` falls back to `htop`
     and `top`.
 *   **Reason**: Keeps every `ide` subcommand deterministic and scriptable across minimal containers, CI runners, and
     non-interactive shells.

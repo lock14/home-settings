@@ -1181,7 +1181,7 @@ def set_agent_state(
     state = raw_state.strip().lower()
     if state not in ("running", "approval", "quota", "done", "idle"):
         print(
-            f"Error: Invalid '--agent-state' value '{raw_state}'. Expected: running, approval, quota, done, or idle.",
+            f"Error: Invalid 'ide state' value '{raw_state}'. Expected: running, approval, quota, done, or idle.",
             file=sys.stderr,
         )
         return 1

@@ -935,7 +935,7 @@ def dock_session_into_switcher(
 
 
 def switcher_owner_alive(sw_sess: str) -> bool:
-    """Return True if the outer `ide --sessions` owner process for `sw_sess` is still alive."""
+    """Return True if the outer `ide switch` owner process for `sw_sess` is still alive."""
     if not is_switcher_session_name(sw_sess):
         return False
     raw_pid = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_owner_pid").strip()

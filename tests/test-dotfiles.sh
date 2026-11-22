@@ -108,12 +108,12 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n M-a' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-e' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-t' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-E.*--toggle-editor' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-T.*--toggle-term' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-H.*--swap left' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-J.*--swap down' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-K.*--swap up' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-L.*--swap right' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-E.*_internal park editor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-T.*_internal park term' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-H.*_internal swap left' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-J.*_internal swap down' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-K.*_internal swap up' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-L.*_internal swap right' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -g @ide_is_editor' "$TEMP_HOME/.tmux.conf" && \
    [ "$(grep -c '#{E:@ide_is_editor}' "$TEMP_HOME/.tmux.conf")" -ge 6 ] && \
    [ "$(grep -c 'm/ri:\^g?(view' "$TEMP_HOME/.tmux.conf")" -eq 1 ] && \
@@ -134,21 +134,20 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'range=user|attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|fleet' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|help' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -T copy-mode-vi a.*--send --stdin' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -T copy-mode-vi a.*ide send --stdin' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -g status-right-length 160' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-s if-shell' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind s if-shell' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-S.*--next-attention' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind S.*--next-attention' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'IDE_CLIENT=#{q:client_name}.*--sessions #{q:session_name}' "$TEMP_HOME/.tmux.conf" && \
-   grep -q -- '--sessions' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-m.*--monitor' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind m.*--monitor' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-?.*--keys' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind ?.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-S.* next ' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind S.* next ' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'IDE_CLIENT=#{q:client_name}.* switch #{q:session_name}' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-m.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind m.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-?.*ide keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind ?.*ide keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q '^unbind -n WheelUpStatus$' "$TEMP_HOME/.tmux.conf" && \
    grep -q '^unbind -n WheelDownStatus$' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n MouseDown1StatusLeft.*--sessions.*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n MouseDown1StatusLeft.* switch .*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|tab_editor' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'range=user|tab_term' "$TEMP_HOME/.tmux.conf" && \
@@ -157,15 +156,15 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n DoubleClick1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n TripleClick1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusRight.*mouse_status_range},attn' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'mouse_status_range},fleet.*--sessions.*--keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'mouse_status_range},fleet.*switch.*ide keys' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown3Status display-menu' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'set-hook -g pane-focus-in "if-shell -F .*--ack-ai --hook' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'set-hook -g client-session-changed "if-shell -F .*--ack-ai --hook' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g pane-focus-in "if-shell -F .*_internal ack-hook' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g client-session-changed "if-shell -F .*_internal ack-hook' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g client-attached.*@ide_socket.*refresh_home_settings_images' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g client-detached.*@ide_socket.*refresh_home_settings_images' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'set-hook -g session-created.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'set-hook -g session-closed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'set-hook -g session-renamed.*--refresh-attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g session-created.*_internal refresh-attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g session-closed.*_internal refresh-attn' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g session-renamed.*_internal refresh-attn' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_AI_CLI' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_NOTIFY' "$TEMP_HOME/.tmux.conf" && \
    grep -q ':focus:title' "$TEMP_HOME/.tmux.conf" && \

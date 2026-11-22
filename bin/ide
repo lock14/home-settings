@@ -9,43 +9,43 @@ fi
 
 show_usage() {
     cat <<'EOF'
-Usage: ide [OPTIONS] [DIRECTORY]
+Usage:
+  ide [OPTIONS] [DIR | SESSION]
+  ide <COMMAND> [ARGS...]
 
-Launch or attach to a Solarized Dark Tmux + Neovim IDE workspace session.
+Launch or attach to a Solarized Dark Tmux + Neovim + AI IDE workspace, or manage active sessions.
 
-Options:
-  --3pane                  Launch default 3-pane layout (Top-Left 50%x75% AI, Top-Right 50%x75% Editor, Bottom 100%x25% Shell)
-  --2pane                  Launch 2-pane layout (Left 50%x100% AI, Right 50%x100% Editor)
-  --ai, --agent <CLI>      Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
-  --open <FILE> [LINE]     Open <FILE> in the Main Editor pane via RPC and focus Editor
-  --preview <FILE> [LINE]  Preview <FILE> in the Main Editor pane via RPC without changing focus
-  cd, --cd [DIR]           Dive into <DIR> (or --reset / ~ for initial root), setting Working Directory across Editor and Shell
-  -s, --sessions [SESSION] Open interactive multi-session IDE workspace switcher (Alt+s / Prefix+s)
-  -n, --new                Open interactive workspace directory picker to launch or switch to a session
-  --next-attention [SESSION] Jump to oldest IDE session waiting for AI attention in urgency and FIFO order (Alt+Shift+S / Prefix+S)
-  --agent-state <STATE> [--message <TEXT>] [SESSION] Record deterministic AI lifecycle state: running, approval, quota, done, or idle
-  --ack-ai [SESSION...]    Acknowledge AI attention across one or more IDE sessions
-  --open-pr [SESSION]      Open cached pull or merge request URL for an IDE session
-  --send <PAYLOAD> [SESSION] Dispatch context (--stdin, --ref <PATH>[:L1[-L2]], --text <TEXT>, --no-focus, --switch) to AI Agent
-  --toggle [SESSION]       Toggle focus between the AI Agent and the Text Editor (unparking if hidden)
-  --show-editor [SESSION]  Focus the Text Editor pane (unparking if hidden), or bounce back if already focused
-  --show-ai [SESSION]      Focus the AI Agent pane (unparking if hidden), or bounce back if already focused
-  --show-term [SESSION]    Focus the Interactive Shell pane (unparking if hidden), or bounce back if already focused
-  --toggle-editor [SESSION] Hide or reappear the Text Editor pane (Alt+Shift+E)
-  --toggle-ai [SESSION]    Hide or reappear the AI Agent pane
-  --toggle-term [SESSION]  Hide or reappear the Interactive Shell pane (Alt+Shift+T)
-  --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
-  --monitor, --top         Launch interactive system monitor with btop -> htop -> top fallback (Alt+m / Prefix+m)
-  --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / F1 / Prefix+?)
-  refresh, -r, --refresh [NAME] Refresh tmux top bar and Editor themes and CWDs across all (or target) IDE sessions (Prefix+r)
-  quit, -q, --quit [NAME...] Safely quit IDE session(s) NAME (checks for unsaved Neovim buffers first)
-  -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
-  --detach                 Create/update workspace session in background without attaching
-  kill, --kill [NAME...]   Force-quit IDE session(s) NAME without the unsaved-buffer check
-  --list [--plain]         List active IDE workspace sessions with agent CLI, state, VCS status, and directory
-  -h, --help               Show this help message and exit
+Launch Options:
+  --2pane                  Launch 2-pane side-by-side layout (default: 3-pane inverted-T)
+  --agent <CLI>            Select AI CLI agent: agy (default), claude, or codex (overrides $IDE_AI_CLI)
+  -d, --detach             Create or update workspace session in background without attaching
+  -h, --help               Show help (pass after a command for command-specific help)
 
-Without NAME / SESSION, session commands act only on the ide session of the calling pane
+Workspace & Fleet Commands:
+  list [--plain | --json]  List active IDE sessions (status table, raw names, or JSON array)
+  switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+s)
+  new, -n [QUERY]          Open interactive workspace directory picker
+  next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+S)
+  cd [DIR | --reset]       Set working directory across Editor and Shell panes
+  refresh [SESSION]        Refresh Tmux chrome, Editor themes, and CWDs across IDE sessions
+  quit [-f | --force] [SESSION...]
+                           Safely close IDE session(s) after checking unsaved Neovim buffers
+
+Agent & Editor RPC Commands:
+  open [-p | --preview] <FILE>[:LINE] [SESSION]
+                           Open or focusless-preview a file in the Main Editor pane via RPC
+  send [--stdin | --ref <PATH>[:L1[-L2]] | --text <TEXT>] [--no-focus | --switch] [SESSION]
+                           Stage prompt context into an IDE session's AI Agent pane
+  state <STATE> [-m | --message <TEXT>] [SESSION]
+                           Record AI lifecycle state: running, approval, quota, done, or idle
+  ack [SESSION...]         Acknowledge AI attention across one or more IDE sessions
+  pr [SESSION]             Open cached pull or merge request URL for an IDE session
+
+Utilities:
+  keys                     Display interactive IDE keybinding cheatsheet (Alt+? / F1)
+  monitor                  Launch system monitor with btop, htop, or top fallback (Alt+m)
+
+Without SESSION, session commands act only on the ide session of the calling pane
 (outside tmux: the current directory's session), never on any other tmux session.
 
 Environment Variables:
@@ -141,24 +141,21 @@ if [ "$#" -eq 1 ]; then
             show_usage
             exit 0
             ;;
-        --keys|--help-keys)
+        keys)
             show_keys_cheatsheet
             exit 0
             ;;
     esac
 fi
 
-if { [ "$#" -eq 1 ] && [ "$1" = "--plain" ]; } || \
-   { [ "$#" -eq 2 ] && { { [ "$1" = "--list" ] && [ "$2" = "--plain" ]; } || { [ "$1" = "--plain" ] && [ "$2" = "--list" ]; }; }; }; then
+if [ "$#" -eq 2 ] && [ "$1" = "list" ] && { [ "$2" = "--plain" ] || [ "$2" = "--json" ]; }; then
     _ide_lookup_path="$PATH"
     if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
         _ide_lookup_path="$PATH:${HOME%/}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
     fi
     _ide_tmux_bin="$(PATH="$_ide_lookup_path" command -v tmux 2>/dev/null || true)"
-    if [ -z "$_ide_tmux_bin" ]; then
-        exit 0
-    fi
-    if ! "$_ide_tmux_bin" list-sessions -F '#{session_name}' >/dev/null 2>&1; then
+    if [ -z "$_ide_tmux_bin" ] || ! "$_ide_tmux_bin" list-sessions -F '#{session_name}' >/dev/null 2>&1; then
+        [ "$2" = "--json" ] && printf '[]\n'
         exit 0
     fi
     unset _ide_lookup_path _ide_tmux_bin
@@ -241,7 +238,7 @@ run_system_monitor() {
     exit 1
 }
 
-if [ "$#" -eq 1 ] && { [ "$1" = "--monitor" ] || [ "$1" = "--top" ] || [ "$1" = "--btop" ]; }; then
+if [ "$#" -eq 1 ] && [ "$1" = "monitor" ]; then
     run_system_monitor
 fi
 

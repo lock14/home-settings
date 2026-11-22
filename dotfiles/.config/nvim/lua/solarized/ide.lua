@@ -64,11 +64,11 @@ local function send_visual_to_ai()
     end
     if is_file_buf then
         local buf_path = vim.fn.fnamemodify(buf_name, ":p")
-        M.ide_job("--send", "--ref", string.format("%s:%d-%d", buf_path, l1, l2))
+        M.ide_job("send", "--ref", string.format("%s:%d-%d", buf_path, l1, l2))
     elseif region_lines then
         local text = table.concat(region_lines, "\n")
         if text ~= "" then
-            M.ide_job("--send", "--text", text)
+            M.ide_job("send", "--text", text)
         end
     end
 end
@@ -80,11 +80,11 @@ local function send_line_to_ai()
     local buf_name = vim.api.nvim_buf_get_name(0)
     if vim.bo.buftype == "" and buf_name ~= "" then
         local buf_path = vim.fn.fnamemodify(buf_name, ":p")
-        M.ide_job("--send", "--ref", string.format("%s:%d", buf_path, vim.fn.line(".")))
+        M.ide_job("send", "--ref", string.format("%s:%d", buf_path, vim.fn.line(".")))
     else
         local line_text = vim.api.nvim_get_current_line()
         if line_text ~= "" then
-            M.ide_job("--send", "--text", line_text)
+            M.ide_job("send", "--text", line_text)
         end
     end
 end
@@ -118,7 +118,7 @@ local function send_diagnostics_to_ai()
         local msg = tostring(d.message or ""):gsub("%s*\n%s*", " ")
         table.insert(out, string.format("- [%s] L%d:%d: %s", sev, (d.lnum or 0) + 1, (d.col or 0) + 1, msg))
     end
-    M.ide_job("--send", "--text", table.concat(out, "\n") .. "\n")
+    M.ide_job("send", "--text", table.concat(out, "\n") .. "\n")
 end
 
 local function open_ide_keys_popup()
@@ -134,7 +134,7 @@ local function open_ide_keys_popup()
             "80",
             "-h",
             "24",
-            vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys",
+            vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " keys",
         })
         vim.fn.jobstart(cmd, { detach = true })
     end
@@ -188,12 +188,12 @@ local function quit_ide_or_nvim(force, target_sessions)
         end
         if #targets == 0 then
             if force then
-                M.ide_job("--quit", "--force")
+                M.ide_job("quit", "--force")
             else
-                M.ide_job("--quit")
+                M.ide_job("quit")
             end
         else
-            local cmd = { vim.fn.expand("$HOME/.local/bin/ide"), "--quit" }
+            local cmd = { vim.fn.expand("$HOME/.local/bin/ide"), "quit" }
             if force then
                 table.insert(cmd, "--force")
             end
@@ -212,7 +212,7 @@ local function complete_ide_sessions(arg_lead)
     if vim.fn.executable(ide_bin) ~= 1 then
         return {}
     end
-    local lines = vim.fn.systemlist({ ide_bin, "--list", "--plain" })
+    local lines = vim.fn.systemlist({ ide_bin, "list", "--plain" })
     if vim.v.shell_error ~= 0 then
         return {}
     end
@@ -249,7 +249,7 @@ local function run_ide_cd(opts)
     end
     pcall(vim.cmd, "cd " .. vim.fn.fnameescape(resolved))
     if vim.env.TMUX then
-        M.ide_job("--cd", resolved)
+        M.ide_job("cd", resolved)
     end
 end
 
@@ -270,7 +270,7 @@ local function run_ide_send(opts)
     if vim.bo.buftype == "" and buf_name ~= "" then
         local buf_path = vim.fn.fnamemodify(buf_name, ":p")
         local ref = has_range and string.format("%s:%d-%d", buf_path, l1, l2) or string.format("%s:%d", buf_path, l1)
-        local cmd = { ide_bin, "--send", "--ref", ref, mode_flag }
+        local cmd = { ide_bin, "send", "--ref", ref, mode_flag }
         if target ~= "" then
             table.insert(cmd, target)
         end
@@ -281,7 +281,7 @@ local function run_ide_send(opts)
         if text == "" then
             return
         end
-        local cmd = { ide_bin, "--send", "--stdin", mode_flag }
+        local cmd = { ide_bin, "send", "--stdin", mode_flag }
         if target ~= "" then
             table.insert(cmd, target)
         end
@@ -514,7 +514,7 @@ local function maybe_bind_editor_ide_socket()
                     end
                     local ide_bin = resolve_ide_bin()
                     if ide_bin then
-                        local hcmd = { ide_bin, "--heal-socket" }
+                        local hcmd = { ide_bin, "_internal", "heal-socket" }
                         if ide_sess ~= "" then
                             table.insert(hcmd, ide_sess)
                         end
@@ -610,26 +610,26 @@ function M.setup()
     end
 
     -- Role focus, visibility parking, directional swaps, fleet switcher, and context dispatch
-    map("n", "<leader>a", tmux_ide_action("--toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })
+    map("n", "<leader>a", tmux_ide_action("_internal", "toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })
     map("x", "<leader>a", send_visual_to_ai, { desc = "Send Visual Selection Reference to AI Agent" })
     map("n", "<leader>il", send_line_to_ai, { desc = "Send Current Line Reference to AI Agent" })
     map("n", "<leader>id", send_diagnostics_to_ai, { desc = "Send Buffer Diagnostics to AI Agent" })
 
-    map({ "n", "i", "v", "t" }, "<M-a>", tmux_ide_action("--toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })
-    map({ "n", "i", "v", "t" }, "<M-e>", tmux_ide_action("--show-editor"), { desc = "Focus Editor Pane (or bounce back)" })
-    map({ "n", "i", "v", "t" }, "<M-t>", tmux_ide_action("--show-term"), { desc = "Toggle Focus: Shell <-> Editor Pane" })
-    map({ "n", "i", "v", "t" }, "<M-E>", tmux_ide_action("--toggle-editor"), { desc = "Toggle Editor Pane Visibility" })
-    map({ "n", "i", "v", "t" }, "<M-T>", tmux_ide_action("--toggle-term"), { desc = "Toggle Shell Pane Visibility" })
+    map({ "n", "i", "v", "t" }, "<M-a>", tmux_ide_action("_internal", "toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })
+    map({ "n", "i", "v", "t" }, "<M-e>", tmux_ide_action("_internal", "show", "editor"), { desc = "Focus Editor Pane (or bounce back)" })
+    map({ "n", "i", "v", "t" }, "<M-t>", tmux_ide_action("_internal", "show", "term"), { desc = "Toggle Focus: Shell <-> Editor Pane" })
+    map({ "n", "i", "v", "t" }, "<M-E>", tmux_ide_action("_internal", "park", "editor"), { desc = "Toggle Editor Pane Visibility" })
+    map({ "n", "i", "v", "t" }, "<M-T>", tmux_ide_action("_internal", "park", "term"), { desc = "Toggle Shell Pane Visibility" })
 
-    map({ "n", "i", "v", "t" }, "<M-H>", tmux_ide_action("--swap", "left"), { desc = "Swap Active Pane Left" })
-    map({ "n", "i", "v", "t" }, "<M-J>", tmux_ide_action("--swap", "down"), { desc = "Swap Active Pane Down" })
-    map({ "n", "i", "v", "t" }, "<M-K>", tmux_ide_action("--swap", "up"), { desc = "Swap Active Pane Up" })
-    map({ "n", "i", "v", "t" }, "<M-L>", tmux_ide_action("--swap", "right"), { desc = "Swap Active Pane Right" })
+    map({ "n", "i", "v", "t" }, "<M-H>", tmux_ide_action("_internal", "swap", "left"), { desc = "Swap Active Pane Left" })
+    map({ "n", "i", "v", "t" }, "<M-J>", tmux_ide_action("_internal", "swap", "down"), { desc = "Swap Active Pane Down" })
+    map({ "n", "i", "v", "t" }, "<M-K>", tmux_ide_action("_internal", "swap", "up"), { desc = "Swap Active Pane Up" })
+    map({ "n", "i", "v", "t" }, "<M-L>", tmux_ide_action("_internal", "swap", "right"), { desc = "Swap Active Pane Right" })
 
-    local open_ide_sessions_popup = tmux_ide_action("--sessions")
+    local open_ide_sessions_popup = tmux_ide_action("switch")
     map("n", "<leader>s", open_ide_sessions_popup, { desc = "Switch IDE Workspace Session" })
     map({ "n", "i", "v", "t" }, "<M-s>", open_ide_sessions_popup, { desc = "Switch IDE Workspace Session" })
-    map({ "n", "i", "v", "t" }, "<M-S>", tmux_ide_action("--next-attention"), { desc = "Jump to Next Attention AI Agent" })
+    map({ "n", "i", "v", "t" }, "<M-S>", tmux_ide_action("next"), { desc = "Jump to Next Attention AI Agent" })
 
     map("n", "<leader>?", open_ide_keys_popup, { desc = "Open IDE Keybinding Cheatsheet" })
     map({ "n", "i", "v", "t" }, "<M-?>", open_ide_keys_popup, { desc = "Open IDE Keybinding Cheatsheet" })

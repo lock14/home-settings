@@ -46,10 +46,10 @@ export XDG_DATA_HOME="$TEMP_HOME/.local/share"
 unset ELAN_HOME
 
 # Run setup (dotfiles only)
-if output=$("$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
+if output=$("$SCRIPT_DIR/setup.sh" --user --skip fonts,tools,vim,nvim,zsh,terminal 2>&1); then
     :
 else
-    fail "setup.sh dotfiles-only" "Execution failed: $output"
+    fail "setup.sh user-only" "Execution failed: $output"
 fi
 
 if [ -L "$TEMP_HOME/.zsh-completions" ]; then
@@ -94,7 +94,7 @@ fi
 EOF
 chmod +x "$MOCK_BIN/gh" "$MOCK_BIN/elan"
 
-if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
+if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --user --skip fonts,tools,vim,nvim,zsh,terminal 2>&1); then
     :
 else
     fail "setup.sh completions generation" "Execution failed: $output"
@@ -108,7 +108,7 @@ else
 fi
 
 # Idempotency check
-if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
+if output=$(PATH="$MOCK_BIN:$PATH" "$SCRIPT_DIR/setup.sh" --user --skip fonts,tools,vim,nvim,zsh,terminal 2>&1); then
     pass "setup.sh completions are idempotent"
 else
     fail "setup.sh idempotency" "Second run failed: $output"
@@ -201,7 +201,7 @@ cat << 'EOF' > "$SHIMS_DIR/tree-sitter"
 EOF
 chmod +x "$ELAN_BIN_DIR/elan" "$SHIMS_DIR"/*
 
-if shims_out=$(env -u ELAN_HOME HOME="$SHIMS_HOME" XDG_CONFIG_HOME="$SHIMS_HOME/.config" XDG_CACHE_HOME="$SHIMS_HOME/.cache" XDG_DATA_HOME="$SHIMS_HOME/.local/share" PATH="/usr/bin:/bin" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
+if shims_out=$(env -u ELAN_HOME HOME="$SHIMS_HOME" XDG_CONFIG_HOME="$SHIMS_HOME/.config" XDG_CACHE_HOME="$SHIMS_HOME/.cache" XDG_DATA_HOME="$SHIMS_HOME/.local/share" PATH="/usr/bin:/bin" "$SCRIPT_DIR/setup.sh" --user --skip fonts,tools,vim,nvim,zsh,terminal 2>&1); then
     missing_comp=""
     for expected_comp in _elan _mise _delta _bat _yq _glow _rustup _cargo _tree-sitter; do
         if [ ! -s "$SHIMS_HOME/.zsh/completions/$expected_comp" ]; then
@@ -229,7 +229,7 @@ printf '#!/bin/sh\necho "Usage: sccs delta"\nexit 0\n' > "$SHIMS_DIR/delta"
 printf '#!/bin/sh\necho "mise ERROR Config files are not trusted" >&2\nexit 1\n' > "$SHIMS_DIR/gh"
 printf '#!/bin/sh\necho "mise ERROR No version is set for shim: elan" >&2\nexit 1\n' > "$ELAN_BIN_DIR/elan"
 chmod +x "$SHIMS_DIR/rustc" "$SHIMS_DIR/bat" "$SHIMS_DIR/yq" "$SHIMS_DIR/delta" "$SHIMS_DIR/gh" "$ELAN_BIN_DIR/elan"
-if skip_tools_out=$(env -u ELAN_HOME HOME="$SHIMS_HOME" XDG_CONFIG_HOME="$SHIMS_HOME/.config" XDG_CACHE_HOME="$SHIMS_HOME/.cache" XDG_DATA_HOME="$SHIMS_HOME/.local/share" PATH="/usr/bin:/bin" "$SCRIPT_DIR/setup.sh" --dotfiles-only --skip-fonts --skip-tools --skip-vim --skip-nvim --skip-zsh --skip-terminal 2>&1); then
+if skip_tools_out=$(env -u ELAN_HOME HOME="$SHIMS_HOME" XDG_CONFIG_HOME="$SHIMS_HOME/.config" XDG_CACHE_HOME="$SHIMS_HOME/.cache" XDG_DATA_HOME="$SHIMS_HOME/.local/share" PATH="/usr/bin:/bin" "$SCRIPT_DIR/setup.sh" --user --skip fonts,tools,vim,nvim,zsh,terminal 2>&1); then
     leftover_tmp=("$SHIMS_HOME/.zsh/completions"/*.tmp.*)
     if [ ! -e "${leftover_tmp[0]}" ] && [ ! -e "$rustc_marker" ] && grep -Fq "_bat()" "$SHIMS_HOME/.zsh/completions/_bat" && grep -Fq "_yq()" "$SHIMS_HOME/.zsh/completions/_yq" && grep -Fq "_delta()" "$SHIMS_HOME/.zsh/completions/_delta" && grep -Fq "shim elan" "$SHIMS_HOME/.zsh/completions/_elan" && grep -Fq "_cargo()" "$SHIMS_HOME/.zsh/completions/_cargo"; then
         pass "modules/60-shell.sh under --skip-tools tolerates older distro bat/yq, non-completion stdout, and failing gh/elan/rustc shims (with MISE_NOT_FOUND_AUTO_INSTALL=false) without aborting or clobbering prior completions"
@@ -253,7 +253,7 @@ MOCK_IDE_HOME="$(mktemp -d)"
 mkdir -p "$MOCK_IDE_HOME/.local/bin"
 cat << 'EOF' > "$MOCK_IDE_HOME/.local/bin/ide"
 #!/bin/sh
-if [ "$1" = "--list" ] && [ "$2" = "--plain" ]; then
+if [ "$1" = "list" ] && [ "$2" = "--plain" ]; then
     printf "alpha-ws\nbeta-ws\n"
     exit 0
 fi
@@ -306,67 +306,61 @@ run_case() {
 }
 
 out_opts="$(run_case ide --)"
-[[ ",$out_opts," == *",--new,"* && ",$out_opts," == *",-n,"* && ",$out_opts," == *",--sessions,"* && ",$out_opts," == *",--send,"* && ",$out_opts," == *",--list,"* && ",$out_opts," == *",--next-attention,"* && ",$out_opts," == *",--agent-state,"* && ",$out_opts," == *",--message,"* && ",$out_opts," == *",--ack-ai,"* && ",$out_opts," == *",--open-pr,"* && ",$out_opts," == *",--switch,"* && ",$out_opts," != *",--on-bell,"* ]] || { print -u2 "bad opts: $out_opts"; exit 1; }
+[[ ",$out_opts," == *",--2pane,"* && ",$out_opts," == *",--agent,"* && ",$out_opts," == *",--detach,"* && ",$out_opts," == *",-s,"* && ",$out_opts," == *",-n,"* && ",$out_opts," != *",_internal,"* && ",$out_opts," != *",--sessions,"* ]] || { print -u2 "bad root opts: $out_opts"; exit 1; }
 
 out_new_pos="$(run_case ide -n "")"
 [[ "$out_new_pos" == "" ]] || { print -u2 "bad -n pos: $out_new_pos"; exit 1; }
 
-out_new_long_pos="$(run_case ide --new "")"
-[[ "$out_new_long_pos" == "" ]] || { print -u2 "bad --new pos: $out_new_long_pos"; exit 1; }
+out_new_sub_pos="$(run_case ide new "")"
+[[ "$out_new_sub_pos" == "" ]] || { print -u2 "bad new pos: $out_new_sub_pos"; exit 1; }
 
 out_new_flags="$(run_case ide -n --)"
-[[ ",$out_new_flags," == *",--2pane,"* && ",$out_new_flags," == *",--ai,"* ]] || { print -u2 "bad -n flags: $out_new_flags"; exit 1; }
+[[ ",$out_new_flags," == *",--2pane,"* && ",$out_new_flags," == *",--agent,"* ]] || { print -u2 "bad -n flags: $out_new_flags"; exit 1; }
 
-out_ai="$(run_case ide --ai "")"
-[[ "$out_ai" == "agy,claude,codex" ]] || { print -u2 "bad --ai: $out_ai"; exit 1; }
+out_ai="$(run_case ide --agent "")"
+[[ "$out_ai" == "agy,claude,codex" ]] || { print -u2 "bad --agent: $out_ai"; exit 1; }
 
-out_swap="$(run_case ide --swap "")"
-[[ "$out_swap" == "left,down,up,right" ]] || { print -u2 "bad --swap: $out_swap"; exit 1; }
-
-out_list="$(run_case ide --list "")"
-[[ "$out_list" == "--plain" ]] || { print -u2 "bad --list: $out_list"; exit 1; }
+out_list="$(run_case ide list "")"
+[[ ",$out_list," == *",--plain,"* && ",$out_list," == *",--json,"* ]] || { print -u2 "bad list: $out_list"; exit 1; }
 
 out_sess="$(run_case ide -s "")"
 [[ "$out_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad -s: $out_sess"; exit 1; }
 
-out_next_attn="$(run_case ide --next-attention "")"
-[[ "$out_next_attn" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --next-attention: $out_next_attn"; exit 1; }
+out_switch="$(run_case ide switch "")"
+[[ "$out_switch" == "alpha-ws,beta-ws" ]] || { print -u2 "bad switch: $out_switch"; exit 1; }
 
-out_agent_state="$(run_case ide --agent-state "")"
-[[ "$out_agent_state" == "running,approval,quota,done,idle" ]] || { print -u2 "bad --agent-state: $out_agent_state"; exit 1; }
+out_next_attn="$(run_case ide next "")"
+[[ "$out_next_attn" == "alpha-ws,beta-ws" ]] || { print -u2 "bad next: $out_next_attn"; exit 1; }
 
-out_agent_state_eq="$(run_case ide --agent-state=)"
-[[ "$out_agent_state_eq" == "running,approval,quota,done,idle" ]] || { print -u2 "bad --agent-state=: $out_agent_state_eq"; exit 1; }
+out_agent_state="$(run_case ide state "")"
+[[ "$out_agent_state" == "running,approval,quota,done,idle" ]] || { print -u2 "bad state: $out_agent_state"; exit 1; }
 
-out_agent_state_sess="$(run_case ide --agent-state quota "")"
-[[ "$out_agent_state_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --agent-state sess: $out_agent_state_sess"; exit 1; }
+out_agent_state_sess="$(run_case ide state quota "")"
+[[ "$out_agent_state_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad state sess: $out_agent_state_sess"; exit 1; }
 
-out_agent_msg_val="$(run_case ide --agent-state done --message "")"
-[[ "$out_agent_msg_val" == "" ]] || { print -u2 "bad --agent-state --message val: $out_agent_msg_val"; exit 1; }
+out_agent_msg_val="$(run_case ide state done --message "")"
+[[ "$out_agent_msg_val" == "" ]] || { print -u2 "bad state --message val: $out_agent_msg_val"; exit 1; }
 
-out_agent_msg_sess="$(run_case ide --agent-state done --message "all green" "")"
-[[ "$out_agent_msg_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --agent-state --message sess: $out_agent_msg_sess"; exit 1; }
+out_agent_msg_sess="$(run_case ide state done --message "all green" "")"
+[[ "$out_agent_msg_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad state --message sess: $out_agent_msg_sess"; exit 1; }
 
-out_ack_ai="$(run_case ide --ack-ai "")"
-[[ "$out_ack_ai" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --ack-ai: $out_ack_ai"; exit 1; }
+out_ack_ai="$(run_case ide ack "")"
+[[ "$out_ack_ai" == "alpha-ws,beta-ws" ]] || { print -u2 "bad ack: $out_ack_ai"; exit 1; }
 
-out_ack_ai_multi="$(run_case ide --ack-ai alpha-ws "")"
-[[ "$out_ack_ai_multi" == "beta-ws" ]] || { print -u2 "bad --ack-ai multi: $out_ack_ai_multi"; exit 1; }
+out_ack_ai_multi="$(run_case ide ack alpha-ws "")"
+[[ "$out_ack_ai_multi" == "beta-ws" ]] || { print -u2 "bad ack multi: $out_ack_ai_multi"; exit 1; }
 
-out_open_pr="$(run_case ide --open-pr "")"
-[[ "$out_open_pr" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open-pr: $out_open_pr"; exit 1; }
+out_open_pr="$(run_case ide pr "")"
+[[ "$out_open_pr" == "alpha-ws,beta-ws" ]] || { print -u2 "bad pr: $out_open_pr"; exit 1; }
 
-out_quit="$(run_case ide --quit "")"
-[[ "$out_quit" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --quit: $out_quit"; exit 1; }
-
-out_quit_multi="$(run_case ide --quit alpha-ws "")"
-[[ "$out_quit_multi" == "beta-ws" ]] || { print -u2 "bad --quit multi: $out_quit_multi"; exit 1; }
+out_quit="$(run_case ide quit "")"
+[[ "$out_quit" == "alpha-ws,beta-ws" ]] || { print -u2 "bad ide quit: $out_quit"; exit 1; }
 
 out_sub_quit_multi="$(run_case ide quit alpha-ws "")"
 [[ "$out_sub_quit_multi" == "beta-ws" ]] || { print -u2 "bad ide quit multi: $out_sub_quit_multi"; exit 1; }
 
-out_sub_kill_multi="$(run_case ide kill alpha-ws "")"
-[[ "$out_sub_kill_multi" == "beta-ws" ]] || { print -u2 "bad ide kill multi: $out_sub_kill_multi"; exit 1; }
+out_sub_quit_force_multi="$(run_case ide quit --force alpha-ws "")"
+[[ "$out_sub_quit_force_multi" == "beta-ws" ]] || { print -u2 "bad ide quit --force multi: $out_sub_quit_force_multi"; exit 1; }
 
 out_qide="$(run_case qide "")"
 [[ "$out_qide" == "alpha-ws,beta-ws" ]] || { print -u2 "bad qide: $out_qide"; exit 1; }
@@ -380,53 +374,53 @@ out_quit_alias_multi="$(run_case quit alpha-ws "")"
 out_idek_multi="$(run_case idek alpha-ws "")"
 [[ "$out_idek_multi" == "beta-ws" ]] || { print -u2 "bad idek multi: $out_idek_multi"; exit 1; }
 
-out_open="$(run_case ide --open "")"
-[[ "$out_open" == "_FILES_any" ]] || { print -u2 "bad --open: $out_open"; exit 1; }
+out_open="$(run_case ide open "")"
+[[ "$out_open" == "_FILES_any" ]] || { print -u2 "bad open: $out_open"; exit 1; }
 
-out_preview="$(run_case ide --preview "")"
-[[ "$out_preview" == "_FILES_any" ]] || { print -u2 "bad --preview: $out_preview"; exit 1; }
+out_preview="$(run_case ide open --preview "")"
+[[ "$out_preview" == "_FILES_any" ]] || { print -u2 "bad open --preview: $out_preview"; exit 1; }
 
-out_open_sess="$(run_case ide --open src/app.py "")"
-[[ "$out_open_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open file sess: $out_open_sess"; exit 1; }
+out_open_sess="$(run_case ide open src/app.py "")"
+[[ "$out_open_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad open file sess: $out_open_sess"; exit 1; }
 
-out_open_line_sess="$(run_case ide --open src/app.py 42 "")"
-[[ "$out_open_line_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open file line sess: $out_open_line_sess"; exit 1; }
+out_open_line_sess="$(run_case ide open src/app.py 42 "")"
+[[ "$out_open_line_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad open file line sess: $out_open_line_sess"; exit 1; }
 
-out_open_plus_sess="$(run_case ide --open src/app.py +42 "")"
-[[ "$out_open_plus_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --open file +line sess: $out_open_plus_sess"; exit 1; }
+out_open_plus_sess="$(run_case ide open src/app.py +42 "")"
+[[ "$out_open_plus_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad open file +line sess: $out_open_plus_sess"; exit 1; }
 
-out_preview_line_sess="$(run_case ide --preview src/app.py 42 "")"
-[[ "$out_preview_line_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --preview file line sess: $out_preview_line_sess"; exit 1; }
+out_preview_line_sess="$(run_case ide open -p src/app.py 42 "")"
+[[ "$out_preview_line_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad open -p file line sess: $out_preview_line_sess"; exit 1; }
 
-out_preview_plus_sess="$(run_case ide --preview src/app.py +42 "")"
-[[ "$out_preview_plus_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --preview file +line sess: $out_preview_plus_sess"; exit 1; }
+out_preview_plus_sess="$(run_case ide open --preview src/app.py +42 "")"
+[[ "$out_preview_plus_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad open --preview file +line sess: $out_preview_plus_sess"; exit 1; }
 
-out_cd="$(run_case ide --cd "")"
-[[ "$out_cd" == "_FILES_-/" ]] || { print -u2 "bad --cd: $out_cd"; exit 1; }
+out_cd="$(run_case ide cd "")"
+[[ "$out_cd" == "_FILES_-/" ]] || { print -u2 "bad cd: $out_cd"; exit 1; }
 
-out_send_sub="$(run_case ide --send "")"
-[[ "$out_send_sub" == "--stdin,--ref,--text,--no-focus,--switch" ]] || { print -u2 "bad --send subflags: $out_send_sub"; exit 1; }
+out_send_sub="$(run_case ide send "")"
+[[ ",$out_send_sub," == *",--stdin,"* && ",$out_send_sub," == *",--ref,"* && ",$out_send_sub," == *",--text,"* && ",$out_send_sub," == *",--no-focus,"* && ",$out_send_sub," == *",--switch,"* ]] || { print -u2 "bad send subflags: $out_send_sub"; exit 1; }
 
-out_send_switch_sess="$(run_case ide --send --switch --ref src/app.py "")"
-[[ "$out_send_switch_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --switch --ref sess: $out_send_switch_sess"; exit 1; }
+out_send_switch_sess="$(run_case ide send --switch --ref src/app.py "")"
+[[ "$out_send_switch_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad send --switch --ref sess: $out_send_switch_sess"; exit 1; }
 
-out_send_stdin="$(run_case ide --send --stdin "")"
-[[ "$out_send_stdin" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --stdin: $out_send_stdin"; exit 1; }
+out_send_stdin="$(run_case ide send --stdin "")"
+[[ "$out_send_stdin" == "alpha-ws,beta-ws" ]] || { print -u2 "bad send --stdin: $out_send_stdin"; exit 1; }
 
-out_send_ref="$(run_case ide --send --ref "")"
-[[ "$out_send_ref" == "_FILES_any" ]] || { print -u2 "bad --send --ref: $out_send_ref"; exit 1; }
+out_send_ref="$(run_case ide send --ref "")"
+[[ "$out_send_ref" == "_FILES_any" ]] || { print -u2 "bad send --ref: $out_send_ref"; exit 1; }
 
-out_send_ref_sess="$(run_case ide --send --ref src/app.py "")"
-[[ "$out_send_ref_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --ref sess: $out_send_ref_sess"; exit 1; }
+out_send_ref_sess="$(run_case ide send --ref src/app.py "")"
+[[ "$out_send_ref_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad send --ref sess: $out_send_ref_sess"; exit 1; }
 
-out_send_text_val="$(run_case ide --send --text "")"
-[[ "$out_send_text_val" == "" ]] || { print -u2 "bad --send --text arg: $out_send_text_val"; exit 1; }
+out_send_text_val="$(run_case ide send --text "")"
+[[ "$out_send_text_val" == "" ]] || { print -u2 "bad send --text arg: $out_send_text_val"; exit 1; }
 
-out_send_text_sess="$(run_case ide --send --text "hello" "")"
-[[ "$out_send_text_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad --send --text sess: $out_send_text_sess"; exit 1; }
+out_send_text_sess="$(run_case ide send --text "hello" "")"
+[[ "$out_send_text_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad send --text sess: $out_send_text_sess"; exit 1; }
 
 out_root="$(run_case ide "")"
-[[ ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",kill,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
+[[ ",$out_root," == *",list,"* && ",$out_root," == *",switch,"* && ",$out_root," == *",open,"* && ",$out_root," == *",send,"* && ",$out_root," == *",state,"* && ",$out_root," == *",cd,"* && ",$out_root," == *",quit,"* && ",$out_root," == *",alpha-ws,"* && ",$out_root," == *",_FILES_-/,"* ]] || { print -u2 "bad root: $out_root"; exit 1; }
 
 mkdir -p "$HOME/.config/ide" "$HOME/ext1/gamma-ext" "$HOME/ext1/alpha-ws" "$HOME/ext1/colon:ws" "$HOME/ext1/space ws" "$HOME/ext2/delta-ext"
 touch "$HOME/ext2/not-a-dir.txt"
@@ -446,20 +440,21 @@ out_ws_quit="$(run_case quit "")"
 out_ws_idek="$(run_case idek "")"
 out_ws_sess="$(run_case ide -s "")"
 out_ws_sess2="$(run_case ide -s alpha-ws "")"
-out_ws_pr="$(run_case ide --open-pr "")"
+out_ws_pr="$(run_case ide pr "")"
 out_ws_new="$(run_case ide -n "")"
-out_ws_keys="$(run_case ide --keys "")"
-out_ws_mon="$(run_case ide --monitor "")"
-out_ws_lplain="$(run_case ide --list --plain "")"
+out_ws_keys="$(run_case ide keys "")"
+out_ws_mon="$(run_case ide monitor "")"
+out_ws_lplain="$(run_case ide list --plain "")"
+out_ws_ljson="$(run_case ide list --json "")"
 out_ws_cd3="$(run_case ide cd subdir "")"
 out_ws_after_pos="$(run_case ide alpha-ws "")"
 out_ws_slash="$(run_case ide sub/path)"
 out_ws_dot="$(run_case ide ./sub)"
 [[ ! -s "$WS_HOOK_LOG" ]] || { print -u2 "ide_workspace_dirs invoked eagerly outside launch-target position"; exit 1; }
-for non_launch in "$out_ws_qide" "$out_ws_quit" "$out_ws_idek" "$out_ws_sess" "$out_ws_sess2" "$out_ws_pr" "$out_ws_new" "$out_ws_keys" "$out_ws_mon" "$out_ws_lplain" "$out_ws_cd3" "$out_ws_after_pos" "$out_ws_slash" "$out_ws_dot"; do
+for non_launch in "$out_ws_qide" "$out_ws_quit" "$out_ws_idek" "$out_ws_sess" "$out_ws_sess2" "$out_ws_pr" "$out_ws_new" "$out_ws_keys" "$out_ws_mon" "$out_ws_lplain" "$out_ws_ljson" "$out_ws_cd3" "$out_ws_after_pos" "$out_ws_slash" "$out_ws_dot"; do
     [[ ",$non_launch," != *",gamma-ext,"* && ",$non_launch," != *",delta-ext,"* ]] || { print -u2 "workspace leaked into non-launch completion: $non_launch"; exit 1; }
 done
-[[ "$out_ws_keys" == "" && "$out_ws_mon" == "" && "$out_ws_lplain" == "" && "$out_ws_after_pos" == "" && "$out_ws_cd3" == "alpha-ws,beta-ws" ]] || { print -u2 "bad non-launch completion outputs: keys=$out_ws_keys mon=$out_ws_mon lplain=$out_ws_lplain after=$out_ws_after_pos cd3=$out_ws_cd3"; exit 1; }
+[[ "$out_ws_keys" == "" && "$out_ws_mon" == "" && "$out_ws_lplain" == "" && "$out_ws_ljson" == "" && "$out_ws_after_pos" == "" && "$out_ws_cd3" == "alpha-ws,beta-ws" ]] || { print -u2 "bad non-launch completion outputs: keys=$out_ws_keys mon=$out_ws_mon lplain=$out_ws_lplain ljson=$out_ws_ljson after=$out_ws_after_pos cd3=$out_ws_cd3"; exit 1; }
 
 out_ws_ide="$(run_case ide "")"
 [[ -s "$WS_HOOK_LOG" ]] || { print -u2 "ide_workspace_dirs not invoked at ide launch position"; exit 1; }
@@ -481,7 +476,7 @@ out_ws_2p="$(run_case ide --2pane "")"
 EOF
 
 if ide_comp_err="$(HOME="$MOCK_IDE_HOME" XDG_CONFIG_HOME="$MOCK_IDE_HOME/.config" zsh -f "$MOCK_IDE_HOME/test-ide-comp.zsh" "$SCRIPT_DIR/dotfiles/.zsh-completions" 2>&1)" && [ -z "$ide_comp_err" ]; then
-    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek/quit and completes -n/--new, flags, --ai, --swap, --list --plain, --open/--preview [line] [session], --send subflags, file/dir paths, live IDE sessions, and lazy ide_workspace_dirs / IDE_WORKSPACE_DIRS basenames strictly at launch positions"
+    pass "_ide Zsh completion registers ide/ide2/ide3/qide/idek/quit and completes subcommands, launch flags, list --plain/--json, open [-p] [line] [session], send subflags, state enums, file/dir paths, live IDE sessions, and lazy ide_workspace_dirs / IDE_WORKSPACE_DIRS basenames strictly at launch positions"
 else
     fail "_ide Zsh completion" "Unexpected _ide completion behavior: $ide_comp_err"
 fi
@@ -688,7 +683,7 @@ open(os.path.join(home, "envs/prod/prod vars.tfvars"), "w").close()
 os.makedirs(os.path.join(home, ".local/bin"), exist_ok=True)
 ide_mock = os.path.join(home, ".local/bin/ide")
 with open(ide_mock, "w", encoding="utf-8") as fh:
-    fh.write('#!/bin/sh\nif [ "${1:-}" = "--list" ] && [ "${2:-}" = "--plain" ]; then\n    printf "alpha-ws\\nbeta-ws\\n"\nfi\n')
+    fh.write('#!/bin/sh\nif [ "${1:-}" = "list" ] && [ "${2:-}" = "--plain" ]; then\n    printf "alpha-ws\\nbeta-ws\\n"\nfi\n')
 os.chmod(ide_mock, 0o755)
 
 # Simulate Oh-My-Zsh plugins/terraform autoloaded completion + matcher-list prior to sourcing .zsh-completions
@@ -734,11 +729,11 @@ checks = [
     ("tf -chdir=envs/prod plan -var-file=prod\t", "tf -chdir=envs/prod plan -var-file=prod\\ vars.tfvars {m}"),
     ("tf -chdir=envs/prod plan -var-file=vars\t", "tf -chdir=envs/prod plan -var-file=vars_sub/{m}"),
     ("tfp -o\t", "tfp -out={m}"),
-    ("ide --ai=cl\t", "ide --ai=claude {m}"),
-    ("ide --agent-state=qu\t", "ide --agent-state=quota {m}"),
-    ("ide --swap=ri\t", "ide --swap=right {m}"),
-    ("ide --open=dir=1/ma\t", "ide --open=dir=1/main.tf {m}"),
-    ("ide --open-pr=al\t", "ide --open-pr=alpha-ws {m}"),
+    ("ide --agent=cl\t", "ide --agent=claude {m}"),
+    ("ide state qu\t", "ide state quota {m}"),
+    ("ide send --ref=dir=1/ma\t", "ide send --ref=dir=1/main.tf {m}"),
+    ("ide open dir=1/ma\t", "ide open dir=1/main.tf {m}"),
+    ("ide pr al\t", "ide pr alpha-ws {m}"),
 ]
 
 rx_buf = ""
@@ -874,13 +869,12 @@ _files() { OFFERED+=("_FILES_"); }
 source "$1"
 run_comp() { local fn="$1"; shift; OFFERED=(); words=("$@"); CURRENT=${#words}; "$fn"; }
 run_comp _ide ide --
-run_comp _ide ide --ai ""
-run_comp _ide ide --swap ""
-run_comp _ide ide --list ""
-run_comp _ide ide --agent-state ""
-run_comp _ide ide --open ""
-run_comp _ide ide --cd ""
-run_comp _ide ide --send ""
+run_comp _ide ide --agent ""
+run_comp _ide ide list ""
+run_comp _ide ide state ""
+run_comp _ide ide open ""
+run_comp _ide ide cd ""
+run_comp _ide ide send ""
 run_comp _theme theme --
 run_comp _theme theme -
 [[ ! -s "$2" ]] || { print -u2 "ide invoked eagerly on flag/static completion"; exit 1; }
