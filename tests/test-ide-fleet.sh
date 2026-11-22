@@ -3999,7 +3999,9 @@ try:
                 ws_dyn["ai"],
                 "-c",
                 ws_dyn["dir"],
-                "/bin/sh -c 'printf \"REAL_FZF_DYNAMIC_UPDATE_OK\\n\"; sleep 300'",
+                "python3",
+                "-c",
+                "import time; print('REAL_FZF_DYNAMIC_UPDATE_OK', flush=True); time.sleep(300)",
                 check=True,
             )
             run_cmd(
@@ -4485,7 +4487,8 @@ try:
             )
             os.write(client_mfd, b"\x1bl")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == sw_sess_x,
+                lambda: tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == sw_sess_x
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_x}:", "#{pane_id}") == ws_int_beta["ai"],
                 timeout=3.0,
             )
             # Kill docked int-beta AI pane while embedded -> switcher survives (`Subcase B` respawns slot_pane) and heals cleanly!
@@ -5530,15 +5533,43 @@ try:
             assert not any(0xE000 <= ord(ch) <= 0xF8FF or ord(ch) >= 0xF0000 for ch in mt_bfmt), (
                 f"IDE_NERD_FONTS=0 leaked PUA glyphs into switcher border: {mt_bfmt!r}"
             )
+            # Pressing F1 inside 2-pane `ai-sw-*` zooms the left pane across the full modal to render the spacious cheatsheet, then unzooms on `q`!
+            mt_fzf_p = tmux_out("show-options", "-qv", "-t", f"={sw_sess_mt}:", "@ide_sw_fzf_pane").strip()
+            os.write(client_mfd, b"\x1bOP")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_mt}:", "#{window_zoomed_flag}").strip() == "1"
+                and "Acknowledge AI attention" in tmux_out("capture-pane", "-p", "-t", mt_fzf_p),
+                timeout=3.0,
+            ), f"F1 inside ai-sw-* did not zoom fzf pane and render spacious cheatsheet: {tmux_out('capture-pane', '-p', '-t', mt_fzf_p)!r}"
+            os.write(client_mfd, b"q")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_mt}:", "#{window_zoomed_flag}").strip() == "0"
+                and "IDE >" in tmux_out("capture-pane", "-p", "-t", mt_fzf_p),
+                timeout=3.0,
+            ), "closing F1 cheatsheet inside ai-sw-* did not restore unzoomed 2-pane switcher"
             os.write(client_mfd, b"\x1bs")
             assert sw_proc.wait(timeout=5.0) == 0
             sw_proc = None
 
-            # Shrink PTY to 80x24 temporarily and confirm `run_interactive_switcher_session` returns `None` (`< 90` cols -> stacked fallback)
+            # Shrink PTY to 80x24 temporarily and confirm `display-keys-ide` clamps without `height too large` AND `run_interactive_switcher_session` returns `None` (`< 90` cols -> stacked fallback)
             fcntl.ioctl(client_mfd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
             assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-c", client_name, "#{client_width}").strip() == "80",
                 timeout=3.0,
+            )
+            keys_80_proc = subprocess.Popen(
+                ["tmux", "display-keys-ide"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=sw_env,
+            )
+            time.sleep(0.15)
+            os.write(client_mfd, b"q")
+            _, keys_80_err = keys_80_proc.communicate(timeout=3.0)
+            assert keys_80_proc.returncode == 0 and keys_80_err == "", (
+                f"display-keys-ide failed on 80x24 client: rc={keys_80_proc.returncode} err={keys_80_err!r}"
             )
             saved_env = os.environ.copy()
             try:
@@ -5773,6 +5804,135 @@ try:
                     check=False,
                 )
             run_cmd([ide_bin, "quit", "--force", "int-alpha", "int-beta", "subb-ws", "subc-ws", "twopane-altn-ws"], env={**base_env, "TMUX": ""}, check=False)
+
+    # (21) Responsive TUI surfaces (80x24 / 100 / 160 status bar, ide list TTY truncation, ide new narrow footer, agy Stop payloads & switcher label state)
+    import signal
+    from ide_lib.fleet import _parse_hook_metadata, format_switcher_pane_label
+    from ide_lib.sessions import _format_new_picker_footer
+    from ide_lib.constants import visible_width as _vw_chk
+
+    nt_cancel, msg_cancel = _parse_hook_metadata('{"terminationReason":"USER_CANCELED","fullyIdle":true}', [])
+    assert nt_cancel == "user_canceled" and msg_cancel == "", f"unexpected agy cancel parse: {(nt_cancel, msg_cancel)}"
+    nt_err, msg_err = _parse_hook_metadata('{"terminationReason":"ERROR","error":"Rate limit reached"}', [])
+    assert msg_err == "Rate limit reached", f"unexpected agy error parse: {(nt_err, msg_err)}"
+    assert format_switcher_pane_label("ws-a", "agy", "WORKING") == "ws-a · agy · WORKING"
+    assert format_switcher_pane_label("ws-a", "agy", "-") == "ws-a · agy"
+    assert _format_new_picker_footer(120, True) == " Enter: launch workspace · Esc: back to sessions "
+    assert _format_new_picker_footer(44, True) == " Enter: launch · Esc: back "
+    assert _vw_chk(_format_new_picker_footer(28, False)) <= 24
+
+    resp_ws = os.path.join(root, "deeply-nested-workspace-parent", "another-long-segment", "resp-svc")
+    os.makedirs(resp_ws, exist_ok=True)
+    run_cmd([ide_bin, "--detach", resp_ws], env={**base_env, "TMUX": ""}, check=True)
+    try:
+        # agy USER_CANCELED on `ide state done` downgrades to IDLE instead of queuing DONE attention
+        run_cmd([ide_bin, "state", "running", "resp-svc"], env={**base_env, "TMUX": ""}, check=True)
+        p_canc = subprocess.run(
+            [ide_bin, "state", "done", "resp-svc"],
+            input='{"terminationReason":"USER_CANCELED"}\n',
+            text=True,
+            env={**base_env, "TMUX": ""},
+            capture_output=True,
+            check=True,
+        )
+        assert p_canc.returncode == 0
+        assert tmux_out("show-options", "-qv", "-t", "=resp-svc:", "@ide_ai_state") == "idle"
+        assert tmux_out("show-options", "-qv", "-t", "=resp-svc:", "@ide_ai_attn") == "0"
+
+        piped_list = run_cmd([ide_bin, "list"], env={**base_env, "TMUX": ""}, check=True).stdout
+        narrow_list = run_cmd([ide_bin, "list"], env={**base_env, "TMUX": "", "IDE_LIST_COLUMNS": "76"}, check=True).stdout
+        assert "deeply-nested-workspace-parent/another-long-segment/resp-svc" in piped_list, f"piped ide list should not truncate: {piped_list!r}"
+        for n_ln in narrow_list.splitlines():
+            assert _vw_chk(n_ln) <= 76, f"IDE_LIST_COLUMNS=76 overflowed ({_vw_chk(n_ln)} cols): {n_ln!r}"
+        assert any("/resp-svc" in n_ln and "…" in n_ln for n_ln in narrow_list.splitlines()), f"expected preserved /resp-svc basename tail: {narrow_list!r}"
+
+        # Verify 80x24 vs 100x30 client_width status bar tiers on attached PTY client
+        r_mfd, r_sfd = pty.openpty()
+        fcntl.ioctl(r_sfd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        r_proc = subprocess.Popen(
+            ["tmux", "attach-session", "-t", "=resp-svc"],
+            stdin=r_sfd,
+            stdout=r_sfd,
+            stderr=r_sfd,
+            env={**base_env, "TMUX": "", "TMUX_PANE": ""},
+            close_fds=True,
+            preexec_fn=lambda sfd=r_sfd: set_ctty(sfd),
+        )
+        os.close(r_sfd)
+        def _drain_r_pty():
+            while select.select([r_mfd], [], [], 0)[0]:
+                try:
+                    if not os.read(r_mfd, 4096):
+                        break
+                except OSError:
+                    break
+        try:
+            cl80 = ""
+            for _ in range(40):
+                _drain_r_pty()
+                cl80 = tmux_out("list-clients", "-t", "=resp-svc", "-F", "#{client_name} #{client_width}").strip()
+                if cl80.endswith(" 80"):
+                    break
+                time.sleep(0.05)
+            assert cl80.endswith(" 80"), f"expected 80-col client on resp-svc, got {cl80!r}"
+            cl80_name = cl80.split()[0]
+            wcur_80 = strip_tags(tmux_out("display-message", "-p", "-c", cl80_name, "-t", "=resp-svc:ide", "#{E:window-status-current-format}"))
+            sleft_80 = strip_tags(tmux_out("display-message", "-p", "-c", cl80_name, "-t", "=resp-svc:ide", "#{E:status-left}"))
+            sright_80 = strip_tags(tmux_out("display-message", "-p", "-c", cl80_name, "-t", "=resp-svc:ide", "#{E:status-right}"))
+            assert "(Alt+a)" not in wcur_80 and "(Alt+e)" not in wcur_80 and "(Alt+s)" not in sright_80 and "Help" not in sright_80, (
+                f"80-col status bar failed to condense hints: wcur={wcur_80!r} sright={sright_80!r}"
+            )
+            assert _vw_chk(sleft_80) + _vw_chk(wcur_80) + _vw_chk(sright_80) <= 80, (
+                f"80-col status bar overflowed 80 cols: {_vw_chk(sleft_80) + _vw_chk(wcur_80) + _vw_chk(sright_80)}"
+            )
+            fcntl.ioctl(r_mfd, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
+            os.kill(r_proc.pid, signal.SIGWINCH)
+            for _ in range(40):
+                _drain_r_pty()
+                if tmux_out("display-message", "-p", "-c", cl80_name, "#{client_width}").strip() == "100":
+                    break
+                time.sleep(0.05)
+            wcur_100 = strip_tags(tmux_out("display-message", "-p", "-c", cl80_name, "-t", "=resp-svc:ide", "#{E:window-status-current-format}"))
+            sright_100 = strip_tags(tmux_out("display-message", "-p", "-c", cl80_name, "-t", "=resp-svc:ide", "#{E:status-right}"))
+            assert "(Alt+a)" in wcur_100 and "(Alt+e)" in wcur_100 and "(Alt+s)" not in sright_100 and "Help" not in sright_100, (
+                f"100-col status bar expected full role tabs + compact right shelf: wcur={wcur_100!r} sright={sright_100!r}"
+            )
+
+            # Verify self-session @ide_attn_summary is suppressed in status-right of the active session
+            # AND client-focus-in (\x1b[I) auto-acknowledges background done when returning OS focus to AI pane!
+            os.write(r_mfd, b"\x1b[O")
+            for _ in range(30):
+                _drain_r_pty()
+                if "focused" not in tmux_out("display-message", "-p", "-c", cl80_name, "#{client_flags}"):
+                    break
+                time.sleep(0.03)
+            tmux("select-pane", "-t", "=resp-svc:ide.1", check=True)
+            run_cmd([ide_bin, "state", "done", "resp-svc"], env={**base_env, "TMUX": ""}, check=True)
+            assert tmux_out("show-options", "-qv", "-t", "=resp-svc:", "@ide_ai_attn") == "1"
+            assert tmux_out("show-options", "-gqv", "@ide_attn_summary") == "resp-svc"
+            sright_self_attn = strip_tags(tmux_out("display-message", "-p", "-c", cl80_name, "-t", "=resp-svc:ide", "#{E:status-right}"))
+            assert "resp-svc" not in sright_self_attn, f"active session status-right should not show self alert: {sright_self_attn!r}"
+            os.write(r_mfd, b"\x1b[I")
+            for _ in range(40):
+                _drain_r_pty()
+                if tmux_out("show-options", "-gqv", "@ide_attn_summary") == "":
+                    break
+                time.sleep(0.05)
+            assert tmux_out("show-options", "-qv", "-t", "=resp-svc:", "@ide_ai_attn") in ("", "0") and tmux_out("show-options", "-gqv", "@ide_attn_summary") == "", (
+                "client-focus-in (\\x1b[I) did not auto-acknowledge background done on active AI pane!"
+            )
+        finally:
+            try:
+                os.close(r_mfd)
+            except OSError:
+                pass
+            r_proc.terminate()
+            try:
+                r_proc.wait(timeout=2.0)
+            except Exception:
+                r_proc.kill()
+    finally:
+        run_cmd([ide_bin, "quit", "--force", "resp-svc"], env={**base_env, "TMUX": ""}, check=False)
 
     print("ALL_FLEET_OK")
 finally:

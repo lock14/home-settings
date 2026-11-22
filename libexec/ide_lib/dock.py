@@ -193,7 +193,12 @@ def _restore_zoomed_editor_view(sess: str, saved_view: str, sock_hint: str = "")
         lua_restore = (
             "(function(s) local ok, v = pcall(vim.fn.json_decode, s); "
             "if ok and type(v) == 'table' then pcall(vim.fn.winrestview, v); "
-            "vim.defer_fn(function() pcall(vim.fn.winrestview, v) end, 40) end; "
+            "local g = vim.api.nvim_create_augroup('IdeRestoreZoomView', { clear = true }); "
+            "vim.api.nvim_create_autocmd('VimResized', { group = g, once = true, "
+            "callback = function() pcall(vim.fn.winrestview, v) end }); "
+            "vim.defer_fn(function() pcall(vim.fn.winrestview, v) end, 40); "
+            "vim.defer_fn(function() pcall(vim.api.nvim_del_augroup_by_name, 'IdeRestoreZoomView'); "
+            "pcall(vim.fn.winrestview, v) end, 300) end; "
             "return '1' end)(_A)"
         )
         nvim_remote_expr(sock, f"luaeval({json.dumps(lua_restore)}, {json.dumps(saved_view)})")

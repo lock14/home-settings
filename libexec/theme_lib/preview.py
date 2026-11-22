@@ -55,10 +55,47 @@ def visible_len(text: str) -> int:
     return total
 
 
+def _char_width(ch: str) -> int:
+    cp = ord(ch)
+    return 2 if (0x1F300 <= cp <= 0x1FAFF or ch == "✨") else 1
+
+
+def trunc_ansi_line(text: str, max_cols: int) -> str:
+    """Truncate ANSI SGR text to `max_cols` visible cells, appending `…` when clipped."""
+    if max_cols <= 0:
+        return ""
+    if visible_len(text) <= max_cols:
+        return text
+    if max_cols == 1:
+        return "…"
+    limit = max_cols - 1
+    out: list[str] = []
+    vis = 0
+    idx = 0
+    n = len(text)
+    while idx < n:
+        if text[idx] == "\033":
+            m = ANSI_SGR_RE.match(text, idx)
+            if m:
+                out.append(m.group(0))
+                idx = m.end()
+                continue
+        cw = _char_width(text[idx])
+        if vis + cw > limit:
+            break
+        out.append(text[idx])
+        vis += cw
+        idx += 1
+    out.append("…")
+    return "".join(out)
+
+
 def pad_preview_line(content: str, bg_code: str, width: int, left_pad: int = 2) -> str:
-    """Pad a TrueColor preview row to an exact rectangular display column width."""
+    """Pad or truncate a TrueColor preview row to an exact rectangular display column width."""
     rst = "\033[0m"
-    prefix = f"{bg_code}{' ' * left_pad}{content}{bg_code}"
+    eff_pad = min(left_pad, max(0, width - 1))
+    clipped = trunc_ansi_line(content, max(1, width - eff_pad))
+    prefix = f"{bg_code}{' ' * eff_pad}{clipped}{bg_code}"
     rem = max(0, width - visible_len(prefix))
     return f"{prefix}{' ' * rem}{rst}"
 
@@ -84,9 +121,14 @@ def render_preview(theme: dict[str, str]) -> int:
     fzf_lines = os.environ.get("FZF_PREVIEW_LINES", "").strip()
     in_fzf = bool(fzf_cols and fzf_lines)
 
-    try:
-        width = max(60, int(fzf_cols)) if fzf_cols else 94
-    except ValueError:
+    if fzf_cols:
+        try:
+            width = max(44, int(fzf_cols))
+        except ValueError:
+            width = 94
+    elif sys.stdout.isatty():
+        width = max(44, min(94, shutil.get_terminal_size((94, 30)).columns))
+    else:
         width = 94
     try:
         target_height = max(24, int(fzf_lines)) if fzf_lines else 0
@@ -115,7 +157,7 @@ def render_preview(theme: dict[str, str]) -> int:
     session_icon = hmeta["icon"] if hmeta else ""
     prompt_icon = hmeta["icon"] if hmeta else ""
 
-    rule_width = max(40, min(width - 4, 88))
+    rule_width = max(20, min(width - 4, 88))
     lines: list[str] = []
     if hmeta:
         lines.append(pad_preview_line(f"{c_ylw}{hmeta['banner']}", b02, width))
@@ -135,8 +177,12 @@ def render_preview(theme: dict[str, str]) -> int:
         f"{fg_esc(theme[k])}██ {c_b0}{k.lower()}:{theme[k]}"
         for k in ("BASE03", "BASE02", "BASE01", "BASE00", "BASE0", "BASE1", "BASE2", "BASE3")
     ]
-    lines.append(pad_preview_line("  ".join(mono_row[:4]), b03, width, left_pad=4))
-    lines.append(pad_preview_line("  ".join(mono_row[4:]), b03, width, left_pad=4))
+    if width >= 82:
+        lines.append(pad_preview_line("  ".join(mono_row[:4]), b03, width, left_pad=4))
+        lines.append(pad_preview_line("  ".join(mono_row[4:]), b03, width, left_pad=4))
+    else:
+        for idx in range(0, len(mono_row), 2):
+            lines.append(pad_preview_line("   ".join(mono_row[idx : idx + 2]), b03, width, left_pad=4))
 
     lines.append(pad_preview_line(f"{c_blu}Semantic Accent Architecture:", b03, width))
     roles = [
@@ -149,19 +195,37 @@ def render_preview(theme: dict[str, str]) -> int:
         ("CYAN", "strings / escapes"),
         ("GREEN", "keywords / types"),
     ]
-    for i in range(0, len(roles), 2):
-        k1, r1 = roles[i]
-        k2, r2 = roles[i + 1]
-        col1 = f"{fg_esc(theme[k1])}██ {c_b1}{k1:<7} {c_b01}{theme[k1]} {c_b0}({r1:<18})"
-        col2 = f"{fg_esc(theme[k2])}██ {c_b1}{k2:<7} {c_b01}{theme[k2]} {c_b0}({r2})"
-        lines.append(pad_preview_line(f"{col1}   {col2}", b03, width, left_pad=4))
+    if width >= 84:
+        for i in range(0, len(roles), 2):
+            k1, r1 = roles[i]
+            k2, r2 = roles[i + 1]
+            col1 = f"{fg_esc(theme[k1])}██ {c_b1}{k1:<7} {c_b01}{theme[k1]} {c_b0}({r1:<18})"
+            col2 = f"{fg_esc(theme[k2])}██ {c_b1}{k2:<7} {c_b01}{theme[k2]} {c_b0}({r2})"
+            lines.append(pad_preview_line(f"{col1}   {col2}", b03, width, left_pad=4))
+    elif width >= 60:
+        for i in range(0, len(roles), 2):
+            k1, _ = roles[i]
+            k2, _ = roles[i + 1]
+            col1 = f"{fg_esc(theme[k1])}██ {c_b1}{k1:<7} {c_b01}{theme[k1]}"
+            col2 = f"{fg_esc(theme[k2])}██ {c_b1}{k2:<7} {c_b01}{theme[k2]}"
+            lines.append(pad_preview_line(f"{col1}   {col2}", b03, width, left_pad=4))
+    else:
+        for k_acc, r_acc in roles:
+            lines.append(
+                pad_preview_line(
+                    f"{fg_esc(theme[k_acc])}██ {c_b1}{k_acc:<7} {c_b01}{theme[k_acc]} {c_b0}({r_acc})",
+                    b03,
+                    width,
+                    left_pad=4,
+                )
+            )
 
     lines.append(pad_preview_line(f"{c_b01}{'─' * rule_width}", b03, width))
     lines.append(pad_preview_line(f"{c_blu}Converged Semantic Code Preview:", b03, width))
-    if hmeta and width < 88:
+    if width < 88:
         status_preview_line = (
             f"{c_blu}{session_icon} ide {c_b00}\uE0B1 {c_cyn}▸ 󰚩 agy {c_b01}· {c_b0} Editor {c_b01}· {c_b0} Shell"
-            f"  {c_b00}\uE0B3 {c_ylw}{hmeta['badge']}"
+            + (f"  {c_b00}\uE0B3 {c_ylw}{hmeta['badge']}" if (hmeta and width >= 64) else "")
         )
     else:
         status_preview_line = (
@@ -192,6 +256,7 @@ def render_preview(theme: dict[str, str]) -> int:
                 f"{c_b0}{prompt_icon} {c_b01}\uE0B1 {c_blu}~/home-settings {c_b01}\uE0B1 {c_grn} main ✔ {c_grn}❯ {c_grn}theme {c_cyn}{theme['THEME_ID']}",
                 b03,
                 width,
+                left_pad=2,
             ),
         ]
     )
@@ -211,6 +276,14 @@ def list_themes(
 ) -> int:
     """List all managed and user-defined themes with active marker and optional swatches."""
     use_color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    raw_list_cols = os.environ.get("THEME_LIST_COLUMNS", "").strip()
+    if raw_list_cols.isdigit() and int(raw_list_cols) > 0:
+        tty_cols = int(raw_list_cols)
+    elif sys.stdout.isatty():
+        tty_cols = shutil.get_terminal_size((120, 40)).columns
+    else:
+        tty_cols = 0
+
     for slug in ordered_theme_slugs(themes):
         if plain:
             print(slug)
@@ -219,14 +292,20 @@ def list_themes(
         marker = "*" if slug == current_slug else " "
         hmeta = HOLIDAY_META.get(slug)
         display_label = f"{hmeta['icon']} {t['THEME_LABEL']}" if hmeta else t["THEME_LABEL"]
-        if use_color:
+        tail_text = f"{display_label} — {t['THEME_DESCRIPTION']}"
+        show_strip = use_color and (tty_cols == 0 or tty_cols >= 68)
+        prefix_w = 2 + 18 + 1 + 5 + 2 + 7 + 2 + (22 if show_strip else 0)
+        if tty_cols > 0:
+            rem_w = max(8, tty_cols - prefix_w)
+            tail_text = trunc_ansi_line(tail_text, rem_w)
+        if show_strip:
             strip = format_swatch_strip(t)
             print(
-                f"{marker} {slug:<18} {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {strip}  {display_label} — {t['THEME_DESCRIPTION']}"
+                f"{marker} {slug:<18} {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {strip}  {tail_text}"
             )
         else:
             print(
-                f"{marker} {slug:<18} {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {display_label} — {t['THEME_DESCRIPTION']}"
+                f"{marker} {slug:<18} {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {tail_text}"
             )
     return 0
 
@@ -245,6 +324,12 @@ def run_fzf_picker(
         rc = list_themes(themes, current_slug)
         return 130 if (in_wrapper and rc == 0) else rc
 
+    raw_cols = os.environ.get("COLUMNS", "").strip()
+    if raw_cols.isdigit() and int(raw_cols) > 0:
+        term_cols = int(raw_cols)
+    else:
+        term_cols = shutil.get_terminal_size((120, 40)).columns
+
     lines: list[str] = []
     for slug in ordered_theme_slugs(themes):
         t = themes[slug]
@@ -252,7 +337,26 @@ def run_fzf_picker(
         strip = format_swatch_strip(t)
         hmeta = HOLIDAY_META.get(slug)
         display_label = f"{hmeta['icon']} {t['THEME_LABEL']}" if hmeta else t["THEME_LABEL"]
-        lines.append(f"{slug:<18}  {active_tag}  {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {strip}  {display_label}")
+        if term_cols < 76:
+            lines.append(f"{slug:<18}  {active_tag}  {strip}  {display_label}")
+        else:
+            lines.append(f"{slug:<18}  {active_tag}  {t['THEME_MODE']:<5}  {t['SOURCE']:<7}  {strip}  {display_label}")
+
+    if term_cols < 90:
+        height_arg = "--height=95%"
+        preview_win = "--preview-window=down:58%:nowrap:noinfo"
+    elif term_cols < 110:
+        height_arg = "--height=90%"
+        preview_win = "--preview-window=right:56%:nowrap:noinfo"
+    else:
+        height_arg = "--height=80%"
+        preview_win = "--preview-window=right:60%:nowrap:noinfo"
+
+    header_arg = (
+        "--header=Enter: apply · Esc: cancel"
+        if term_cols < 68
+        else "--header=Select a color theme (Enter to apply, Esc to cancel)"
+    )
 
     fzf_colors = build_fzf_color_opts(themes[current_slug], include_layout=False)
     self_bin = str(repo_dir / "bin" / "theme")
@@ -263,12 +367,12 @@ def run_fzf_picker(
         "--no-multi",
         "--reverse",
         "--no-scrollbar",
-        "--height=80%",
+        height_arg,
         "--border=rounded",
         "--prompt=Theme > ",
-        "--header=Select a color theme (Enter to apply, Esc to cancel)",
+        header_arg,
         f"--preview={preview_cmd}",
-        "--preview-window=right:60%:nowrap:noinfo",
+        preview_win,
         fzf_colors,
     ]
     proc = subprocess.run(cmd, input="\n".join(lines) + "\n", text=True, capture_output=True, check=False)

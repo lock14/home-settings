@@ -41,6 +41,32 @@ from ide_lib.tmux import (
 _HOOK_NOTIF_TYPE_RE = re.compile(r'"(?:notification_type|type)"\s*:\s*"([^"\\]+)"')
 
 
+def map_raw_ai_state_badge(raw_state: str, raw_attn: str) -> str:
+    """Map raw `@ide_ai_state` and `@ide_ai_attn` values to the canonical fleet badge."""
+    st = raw_state.strip().lower()
+    attn = raw_attn.strip()
+    if st == "approval" or (attn == "1" and st != "done"):
+        return "ATTN"
+    if st == "quota":
+        return "QUOTA"
+    if st == "running":
+        return "WORKING"
+    if st == "done":
+        return "DONE"
+    if st == "idle":
+        return "IDLE"
+    return ""
+
+
+def format_switcher_pane_label(sess: str, ai_cli: str, state: str = "") -> str:
+    """Format the right-pane `Alt+s` header `<sess> · <ai_cli>[ · <STATE>]`."""
+    cli_lbl = ai_cli or "AI"
+    st_lbl = state.strip()
+    if st_lbl and st_lbl != "-":
+        return f"{sess} · {cli_lbl} · {st_lbl}"
+    return f"{sess} · {cli_lbl}"
+
+
 def build_ai_state_option_cmds(
     sess: str,
     state: str = "",
@@ -659,6 +685,7 @@ def populate_fleet_git(fleet: list[dict[str, object]]) -> None:
 def refresh_fleet_topbar(notify_switchers: bool = False) -> int:
     """Recompute and publish `@ide_fleet_count`, `@ide_fleet_active`, and `@ide_attn_summary`."""
     sw_fzf_candidates: list[str] = []
+    sw_label_targets: list[tuple[str, str, str]] = []
     if notify_switchers:
         res = run_tmux(
             "list-sessions",
@@ -670,6 +697,9 @@ def refresh_fleet_topbar(notify_switchers: bool = False) -> int:
                 "#{@ide_sw_done}",
                 "#{@ide_sw_mode}",
                 "#{@ide_sw_fzf_pane}",
+                "#{@ide_sw_docked_sess}",
+                "#{@ide_sw_selected_sess}",
+                "#{@ide_sw_label}",
             ]),
             ";",
             "list-panes",
@@ -686,7 +716,7 @@ def refresh_fleet_topbar(notify_switchers: bool = False) -> int:
         pane_pfx = f"PANE{TMUX_SEP}"
         for line in (res.stdout or "").splitlines():
             if line.startswith(sess_pfx):
-                cols = (line.split(TMUX_SEP)[1:] + [""] * 23)[:23]
+                cols = (line.split(TMUX_SEP)[1:] + [""] * 26)[:26]
                 parsed = parse_ide_session_cols(cols[:19])
                 if parsed is not None:
                     raw_sessions.append(parsed)
@@ -694,6 +724,11 @@ def refresh_fleet_topbar(notify_switchers: bool = False) -> int:
                     fp = cols[22].strip()
                     if fp:
                         sw_panes_raw.append(fp)
+                    sw_name = cols[0].strip()
+                    sw_tgt = cols[23].strip() or cols[24].strip()
+                    sw_cur_lbl = cols[25].strip()
+                    if sw_name and sw_tgt:
+                        sw_label_targets.append((sw_name, sw_tgt, sw_cur_lbl))
             elif line.startswith(pane_pfx):
                 pane_rows.append((line.split(TMUX_SEP)[1:] + [""] * 13)[:13])
         if sw_panes_raw:
@@ -722,6 +757,21 @@ def refresh_fleet_topbar(notify_switchers: bool = False) -> int:
         ";",
         "refresh-client", "-S",
     ]
+    if sw_label_targets and fleet:
+        entry_by_sess = {str(e["sess"]): e for e in fleet}
+        for sw_name, sw_tgt, sw_cur_lbl in sw_label_targets:
+            if "in other switcher" in sw_cur_lbl:
+                continue
+            tgt_entry = entry_by_sess.get(sw_tgt)
+            if tgt_entry is None:
+                continue
+            next_lbl = format_switcher_pane_label(
+                sw_tgt,
+                str(tgt_entry["ai_cli"]),
+                str(tgt_entry["state"]),
+            )
+            if next_lbl != sw_cur_lbl:
+                cmds.extend([";", "set-option", "-q", "-t", f"={sw_name}:", "@ide_sw_label", next_lbl])
     for fp in sw_fzf_candidates:
         cmds.extend([";", "send-keys", "-t", fp, "F12"])
     run_tmux(*cmds)
@@ -954,8 +1004,12 @@ def _parse_hook_metadata(stdin_raw: str, json_args: list[str]) -> tuple[str, str
                 nt = obj.get("notification_type") or obj.get("type") or ""
                 if isinstance(nt, str) and nt.strip():
                     notif_type = nt.strip().lower()
+                else:
+                    tr = obj.get("terminationReason") or ""
+                    if isinstance(tr, str) and tr.strip().upper() == "USER_CANCELED":
+                        notif_type = "user_canceled"
             if not msg:
-                for k in ("message", "last-assistant-message", "last_assistant_message", "summary", "title"):
+                for k in ("message", "last-assistant-message", "last_assistant_message", "summary", "title", "error"):
                     val = obj.get(k)
                     if isinstance(val, str) and val.strip():
                         cleaned = " ".join(val.split())
@@ -965,6 +1019,8 @@ def _parse_hook_metadata(stdin_raw: str, json_args: list[str]) -> tuple[str, str
             m_nt = _HOOK_NOTIF_TYPE_RE.search(s)
             if m_nt and m_nt.group(1).strip():
                 notif_type = m_nt.group(1).strip().lower()
+            elif '"terminationReason"' in s and "USER_CANCELED" in s:
+                notif_type = "user_canceled"
     return (notif_type, msg)
 
 
@@ -1189,6 +1245,8 @@ def set_agent_state(
     notif_type, meta_msg = _parse_hook_metadata(stdin_raw, json_args or [])
     if notif_type == "idle_prompt":
         return 0
+    if state == "done" and notif_type == "user_canceled":
+        state = "idle"
 
     if target_arg:
         sess = resolve_target_session(target_arg)

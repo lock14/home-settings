@@ -77,6 +77,11 @@ uninstall_dotfiles() {
     remove_shell_rc_hook "$HOME/.zshrc" ".zshrc-addendum"
     remove_shell_rc_hook "$HOME/.bashrc" ".bashrc-addendum"
 
+    # Remove managed AI CLI lifecycle hooks (agy, claude, codex) while preserving user settings
+    if [ -f "$MODULE_DIR/75-ai-hooks.sh" ]; then
+        bash "$MODULE_DIR/75-ai-hooks.sh" --uninstall
+    fi
+
     # Clean up empty bat directories, generated theme state, and legacy plugin directories
     if [ "$DRY_RUN" = false ]; then
         rmdir "$xdg_config/bat/syntaxes" "$xdg_config/bat/themes" "$xdg_config/bat" 2>/dev/null || true

@@ -1,12 +1,12 @@
 ---
 trigger: glob
-globs: bin/ide, libexec/ide_lib/**/*.py, libexec/theme_lib/generators.py, dotfiles/.tmux.conf, dotfiles/.config/nvim/lua/solarized/ide.lua
+globs: bin/ide, libexec/ide_lib/**/*.py, libexec/theme_lib/{generators,preview}.py, dotfiles/.tmux.conf, dotfiles/.config/nvim/lua/solarized/{ide,plugins}.lua
 ---
 
 # Monospace TUI design standard and project rules
 
 When designing, implementing, refactoring, or reviewing terminal UI surfaces in `bin/ide`, `libexec/ide_lib/`,
-`libexec/theme_lib/generators.py`, `dotfiles/.tmux.conf`, or `dotfiles/.config/nvim/lua/solarized/ide.lua`, follow the
+`libexec/theme_lib/{generators,preview}.py`, `dotfiles/.tmux.conf`, or `dotfiles/.config/nvim/lua/solarized/{ide,plugins}.lua`, follow the
 embedded Monospace Design TUI (`mono-tui v0.2.5`) specification alongside the project overrides and conventions
 declared in this file.
 
@@ -46,7 +46,8 @@ archetypes:
     `Alt+h`. Pressing `Alt+n` enters an `Expand-to-Focus` full-pane directory picker (`New IDE >`).
 *   **Keybinding cheatsheet and fleet status table** (`ide keys` in `bin/ide` and `ide list` in
     `libexec/ide_lib/sessions.py`): Contextual two-column modal overlay (`Alt+?`, `Space ?`, `Prefix + ?`, or `F1`)
-    fitted within `80×24` dimensions, and `§R4.6` aligned fleet table pairing status colors with non-color markers
+    rendering a spacious `108×34` (`<= 104×30` inner) sheet on standard and wide canvases with automatic `80×24`
+    (`<= 76×22`) compact fallback, and `§R4.6` aligned fleet table pairing status colors with non-color markers
     (`▸` active, `󰂚` or `!` attention, `[unsaved]` dirty guard).
 
 ## Project overrides and conventions
@@ -91,25 +92,29 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 ### [OVERRIDE] §1.6 90-column side-by-side split breakpoint for the workspace switcher
 
 *   **Original**: | Compact | 40–79 | Region A collapses; Region C hidden or stacked below B; footer reduces to single row |
-*   **Project rule**: `SIDE_BY_SIDE_MIN_COLS = 90` in `libexec/ide_lib/switcher.py` gates the two-pane side-by-side
-    `ai-sw-*` switcher (`sw_cols >= 90`). When the popup or terminal width is below `90` columns (including `80×24`
-    minimum viable terminals, `§1.5`), `ide switch` automatically falls back to the stacked vertical single-pane
-    `fzf` layout (`--preview-window=down:50%:wrap:noinfo`), giving the 5-column session table full horizontal width.
-*   **Reason**: Splitting `56%` right below `90` columns leaves fewer than `38` columns for the 5-column `fzf` fleet
-    table (`SESSION`, `AGENT`, `STATE`, `BRANCH`, `WORKSPACE`), whereas stacking preserves complete column legibility
-    at `80×24`.
+*   **Project rule**: `SIDE_BY_SIDE_MIN_COLS = 90` in `libexec/ide_lib/switcher.py` and `run_fzf_picker` in
+    `libexec/theme_lib/preview.py` gate two-pane side-by-side layouts on `>= 90` columns. Below `90` columns (including
+    `80×24` minimum viable terminals, `§1.5`, and `50%` split panes), `ide switch` (`down:50%:wrap:noinfo`) and
+    `bin/theme` (`down:58%:nowrap:noinfo`) automatically stack their preview pane below the `fzf` list. Inside Neovim
+    (`dotfiles/.config/nvim/lua/solarized/plugins.lua`), Telescope uses `layout_strategy = "flex"` (`flip_columns = 110`)
+    to stack file paths and code previews vertically inside narrow Editor splits, while `mini.files` scales `width_focus`
+    below `80` columns so split Editor panes retain their right-hand preview window down to `42` columns.
+*   **Reason**: Side-by-side horizontal splits below `90`–`110` columns crush multi-column tables, file paths, and code
+    previews into `< 38` columns, whereas vertical stacking and proportional split scaling preserve full legibility.
 
 ### [OVERRIDE] §1.4 and §R4.11 top-bar mode hints and middle-dot-separated width-fitted fzf footers
 
 *   **Original**: Format: `F1 Help  F5 Refresh  / Filter  q Quit` — key name followed by action label, separated by 2+ spaces. (CUA §1 function key area, Norton Commander F-key bar)
 *   **Project rule**: In the main `ide` workspace, persistent bottom rows belong exclusively to inner applications
     (Powerlevel10k shell prompt and Neovim statusline), so workspace-level `PREFIX`, `COPY`, fleet, and `Help (Alt+?)`
-    discoverability lives in the 1-row top `tmux` status shelf (`dotfiles/.tmux.conf`, `AGENTS.md` Pillar VIII). Inside
-    `fzf` pickers (`libexec/ide_lib/switcher.py` and `sessions.py`), `format_sessions_footer_label` renders a bottom
-    `--border-label` joining prioritized `Key: action` pairs with middle-dot separators (`" · "`, `U+00B7`) fitted to
-    the exact pane width so narrow splits never clip an action mid-word.
-*   **Reason**: Preserves zero-clutter bottom statuslines for shells and Neovim while keeping `fzf` command bars
-    self-teaching and truncation-safe across all pane widths.
+    discoverability lives in the 1-row top `tmux` status shelf (`dotfiles/.tmux.conf` and `libexec/theme_lib/generators.py`,
+    `AGENTS.md` Pillar VIII), scaling across `client_width >= 120` (full key hints), `105` (secondary SSH and subdir
+    badges), and `95` (`80×24` compact role tabs and `[a]`, `[E]`, `[T]` parked markers). Inside `fzf` pickers
+    (`libexec/ide_lib/switcher.py` and `sessions.py`), `format_sessions_footer_label` and `_format_new_picker_footer`
+    render bottom `--border-label` hints joined with middle-dot separators (`" · "`, `U+00B7`) fitted to the exact pane
+    width so narrow splits never clip an action mid-word.
+*   **Reason**: Preserves zero-clutter bottom statuslines for shells and Neovim while keeping top-bar chrome and `fzf`
+    command bars self-teaching and truncation-safe across all terminal widths.
 
 ### [OVERRIDE] §2.2 and §2.8 4-layer spatial Alt navigation, fzf Tab multi-select, and fuzzy input
 
@@ -184,15 +189,18 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 *   **Reason**: Preserves crisp monotone iconography on configured workstations while guaranteeing zero tofu (`□`) when
     inspecting sessions from unprovisioned remote or fallback terminals.
 
-### [P2] ANSI-safe East Asian and tab-aware cell width math and 80×24 clamping
+### [P2] ANSI-safe East Asian and tab-aware cell width math and responsive popup clamping
 
-*   **Project rule**: All column alignment, truncation, preview tail fitting, and footer packing in `libexec/ide_lib/` must
-    measure visible cell widths via `visible_width` (`constants.py`) and `_expanded_cell_widths` (`preview.py`),
-    accounting for ANSI escapes, tabs, combining marks, and 2-cell CJK / wide glyphs, terminate styled lines with
-    `\033[0m`, and clamp popups (`ide keys` at `80×24` max `76×22` inner body; `ide -s` stacked below `90` cols) so
-    `80×24` terminals never wrap borders or clip critical controls (`§1.5`).
-*   **Reason**: Prevents right-edge wrap corruption, CJK and tab bottom-line clipping in `fzf` previews, and modal
-    overflow on compact terminals.
+*   **Project rule**: All column alignment, truncation, preview tail fitting, and footer packing in `libexec/ide_lib/` and
+    `libexec/theme_lib/preview.py` must measure visible cell widths via `visible_width` (`constants.py`),
+    `_expanded_cell_widths` (`ide_lib/preview.py`), and `visible_len` (`theme_lib/preview.py`), accounting for ANSI
+    escapes, tabs, combining marks, and 2-cell CJK or wide glyphs, terminate styled lines with `\033[0m`, fit interactive
+    TTY table and preview outputs (`ide list`, `theme --list`, and strictly rectangular `theme --preview` cards) to the
+    active viewport while leaving piped non-TTY output untruncated, and clamp popups (`ide keys` at `108×34` max `104×30`
+    inner body on `>= 108×34` canvases, clamping and adapting to `<= 76×22` on `80×24` terminals; `ide -s` and `bin/theme`
+    stacked below `90` cols) so `80×24` terminals and split panes never wrap borders or clip critical controls (`§1.5`).
+*   **Reason**: Prevents right-edge wrap corruption, CJK and tab bottom-line clipping in `fzf` previews, and modal or
+    table overflow on compact terminals and `50%` split panes.
 
 ### [P3] zero-polling tmux status chrome, lazy live AI docking, and cached previews
 

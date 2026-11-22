@@ -29,8 +29,8 @@ Always resolve rules in this order (higher overrides lower):
 1. **Identify the screen and workflow archetype**:
    * Map changes to `ide`'s `§11.1` operational cockpit top shelf (`dotfiles/.tmux.conf`), `§11.5` fuzzy finder and
      `Master-Detail` workspace switcher (`ide -s` in `libexec/ide_lib/switcher.py`, `sessions.py`, `preview.py`, and
-     `dock.py`), `Expand-to-Focus` directory launcher (`Alt+n` `New IDE >`), or `80×24`-clamped modal overlays
-     (`ide keys` in `bin/ide`).
+     `dock.py`), `Expand-to-Focus` directory launcher (`Alt+n` `New IDE >`), or responsive `108×34` / `80×24` modal
+     overlays (`ide keys` in `bin/ide`).
 2. **Apply project overrides, focus clarity, and glyph hygiene**:
    * Keep both main workspace and `ai-sw-*` switcher `pane-border-style`, `pane-active-border-style`, and
      `WinSeparator` calm in `BASE01` (`[OVERRIDE] §6.1`, avoiding two-tone `tmux` border seams), distinguishing active
@@ -48,9 +48,14 @@ Always resolve rules in this order (higher overrides lower):
      (`[OVERRIDE] §1.4 and §R4.11`).
    * Synchronize any user-facing keybinding or CLI flag across both conceptual prose and reference tables in `README.md`.
 4. **Enforce defensive rendering, lazy docking, and 80×24 geometry**:
-   * Gate two-pane side-by-side `ai-sw-*` layout on `sw_cols >= SIDE_BY_SIDE_MIN_COLS` (`90`, `[OVERRIDE] §1.6`),
-     stacking vertically (`down:50%:wrap:noinfo`) on narrower terminals.
-   * Keep `ide keys` within `<= 76` columns and `<= 22` lines inside `-w 80 -h 24` popups (`[P2]`).
+   * Gate two-pane side-by-side `ai-sw-*` (`libexec/ide_lib/switcher.py`) and `bin/theme` (`libexec/theme_lib/preview.py`)
+     layouts on `90` columns (`[OVERRIDE] §1.6`), stacking vertically on narrower viewports, flipping Neovim Telescope
+     (`layout_strategy = "flex"`) below `110` columns, and scaling `mini.files` below `80` columns so split panes keep
+     their preview windows.
+   * Keep `ide keys` within `<= 104` columns and `<= 30` lines inside `108×34` popups on standard canvases while
+     degrading to `<= 76` columns and `<= 22` lines on `80×24` terminals, scale the top `tmux` status bar across `120`,
+     `105`, and `95`-column tiers, and fit interactive `ide list`, `ide new`, and `theme --list` / `--preview` outputs
+     to the active TTY width without truncating piped output (`[P2]`).
    * Stream read-only ANSI previews during `fzf` browsing without `swap-pane` or `SIGWINCH`, lazily docking on
      `Alt+l`, `Alt+a`, or click and restoring `copy-mode` `scroll_position` and zoomed Editor `winsaveview()` on
      undock (`[P3]`).

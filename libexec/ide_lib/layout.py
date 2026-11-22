@@ -1344,14 +1344,28 @@ def status_click(x_str: str, target_arg: str) -> int:
         "-p",
         "-t",
         f"={sess}:",
-        TMUX_SEP.join(["#{@ide_role}", "#{@ide_ai_cli}", "#{window_zoomed_flag}", "#{status-left}", "#{window_name}"]),
+        TMUX_SEP.join([
+            "#{@ide_role}",
+            "#{@ide_ai_cli}",
+            "#{window_zoomed_flag}",
+            "#{status-left}",
+            "#{window_name}",
+            "#{client_width}",
+            "#{@ide_ai_parked}",
+            "#{@ide_ed_parked}",
+            "#{@ide_term_parked}",
+        ]),
     )
-    parts = (info.split(TMUX_SEP) + ["", "", "", "", ""])[:5]
+    parts = (info.split(TMUX_SEP) + [""] * 9)[:9]
     role = parts[0]
     ai_cli = parts[1] or "AI"
     zoomed = parts[2] == "1"
     status_left_raw = parts[3]
     win_name = parts[4]
+    cw_raw = parts[5].strip()
+    ai_parked = parts[6].strip() == "1"
+    ed_parked = parts[7].strip() == "1"
+    term_parked = parts[8].strip() == "1"
     if win_name and win_name != "ide":
         return 0
 
@@ -1364,16 +1378,28 @@ def status_click(x_str: str, target_arg: str) -> int:
     if rel < 0:
         return 0
 
-    ai_w = 1 + (2 if role == "ai" else 0) + 2 + visible_width(ai_cli) + 8
-    ed_w = (2 if role == "editor" else 0) + 16
-    term_w = (2 if role == "term" else 0) + 16
+    compact_tabs = cw_raw.isdigit() and 0 < int(cw_raw) < 95
+    if compact_tabs:
+        ai_sfx = 4 if (role != "ai" and ai_parked) else 0
+        ed_sfx = 4 if (role != "editor" and ed_parked) else 0
+        term_sfx = 5 if (role != "term" and term_parked) else 1
+        zoom_w = 7
+    else:
+        ai_sfx = 8
+        ed_sfx = 8
+        term_sfx = 9
+        zoom_w = 15
+
+    ai_w = 1 + (2 if role == "ai" else 0) + 2 + visible_width(ai_cli) + ai_sfx
+    ed_w = (2 if role == "editor" else 0) + 8 + ed_sfx
+    term_w = (2 if role == "term" else 0) + 7 + term_sfx
 
     ed_start = ai_w + 3
     ed_end = ed_start + ed_w
     term_start = ed_end + 3
     term_end = term_start + term_w
     zoom_start = term_end + 2
-    zoom_end = zoom_start + 15
+    zoom_end = zoom_start + zoom_w
 
     if 0 <= rel < ai_w:
         return toggle_main_pane("ai", sess)
