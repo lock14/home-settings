@@ -1,0 +1,39 @@
+# Managed Theme: dracula
+THEME_ID="dracula"
+THEME_LABEL="Dracula"
+THEME_DESCRIPTION="High-contrast gothic dark palette with vibrant neon pastels"
+THEME_MODE="dark"
+THEME_CATEGORY="classic"
+THEME_ORDER="120"
+BAT_THEME_NAME="Dracula-TrueColor"
+BTOP_THEME_NAME="dracula"
+GHOSTTY_THEME_NAME="Dracula"
+
+# Monotone Surface & Content Ramp
+BASE03="#282A36"
+BASE02="#383B4C"
+BASE04="#21222C"
+BASE01="#7A89B8"
+BASE00="#94A3CC"
+BASE0="#E8E8E2"
+BASE1="#F2F2EC"
+BASE2="#F8F8F2"
+BASE3="#FFFFFF"
+
+# Semantic Accent Palette
+YELLOW="#F1FA8C"
+ORANGE="#FFB86C"
+RED="#FF5555"
+MAGENTA="#FF79C6"
+VIOLET="#BD93F9"
+BLUE="#66B2FF"
+CYAN="#8BE9FD"
+GREEN="#50FA7B"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#2F5042"
+MIX_RED="#4F323C"
+MIX_YELLOW="#505447"
+MIX_BLUE="#364862"
+MIX_MAGENTA="#533A53"
+MIX_BASE1="#484A53"

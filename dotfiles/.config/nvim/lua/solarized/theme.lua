@@ -1,4 +1,4 @@
--- Dynamic 17-theme + custom user palette resolver, terminal ANSI calibration, and live RPC reload.
+-- Dynamic built-in (colors/themes/*.theme) + custom user palette resolver, terminal ANSI calibration, and live RPC reload.
 -- Note: module name avoids `solarized.palette` and `solarized.highlights` owned by maxmx03/solarized.nvim.
 
 local theme_groups = require("solarized.theme_groups")
@@ -59,13 +59,6 @@ local default_solarized_light_palette = {
     mix_base1 = "#E4DEC8",
 }
 
-local builtin_theme_slugs = {
-    "solarized-dark", "solarized-light", "catppuccin-mocha", "catppuccin-latte",
-    "gruvbox-dark", "tokyonight-night", "kanagawa-wave", "nord", "onedark",
-    "new-years", "valentines", "st-patricks", "easter",
-    "independence-day", "halloween", "thanksgiving", "christmas",
-}
-
 local theme_key_map = {
     BASE03 = "base03",
     BASE02 = "base02",
@@ -98,18 +91,31 @@ local function config_home()
         or (vim.fn.expand("$HOME") .. "/.config")
 end
 
-local function theme_search_dirs(cfg_home)
+local function builtin_theme_dirs()
     local cfg_real = ((vim.uv or vim.loop).fs_realpath(vim.fn.stdpath("config"))) or vim.fn.stdpath("config")
+    local dirs = {}
+    if repo_root ~= "" then
+        table.insert(dirs, repo_root .. "/colors/themes")
+    end
+    table.insert(dirs, cfg_real .. "/../../../colors/themes")
+    return dirs
+end
+
+local function user_theme_dirs(cfg_home)
     local dirs = {}
     if vim.env.HOME_SETTINGS_USER_THEMES_DIR and vim.env.HOME_SETTINGS_USER_THEMES_DIR ~= "" then
         table.insert(dirs, vim.env.HOME_SETTINGS_USER_THEMES_DIR)
     end
     table.insert(dirs, cfg_home .. "/themes")
     table.insert(dirs, cfg_home .. "/home-settings/themes")
-    if repo_root ~= "" then
-        table.insert(dirs, repo_root .. "/colors/themes")
+    return dirs
+end
+
+local function theme_search_dirs(cfg_home)
+    local dirs = user_theme_dirs(cfg_home)
+    for _, bdir in ipairs(builtin_theme_dirs()) do
+        table.insert(dirs, bdir)
     end
-    table.insert(dirs, cfg_real .. "/../../../colors/themes")
     return dirs
 end
 
@@ -305,11 +311,46 @@ local function complete_theme_names(arg_lead)
             table.insert(items, name)
         end
     end
-    for _, slug in ipairs(builtin_theme_slugs) do
-        add_item(slug)
+    local builtin_entries = {}
+    local seen_builtin = {}
+    for _, bdir in ipairs(builtin_theme_dirs()) do
+        for _, f in ipairs(vim.fn.glob(bdir .. "/*.theme", false, true)) do
+            local stem = vim.fn.fnamemodify(f, ":t:r")
+            local kv = parse_theme_file_kv(f)
+            local slug = vim.trim(kv.THEME_ID or stem):lower():gsub("_", "-")
+            if slug ~= "" and not seen_builtin[slug] then
+                seen_builtin[slug] = true
+                local cat = vim.trim(kv.THEME_CATEGORY or ""):lower()
+                if cat == "" then
+                    cat = (kv.HOLIDAY_DATE and kv.HOLIDAY_DATE ~= "") and "holiday" or "classic"
+                end
+                local ord = tonumber(kv.THEME_ORDER or "") or 9999
+                table.insert(builtin_entries, {
+                    slug = slug,
+                    cat_rank = (cat == "holiday") and 1 or 0,
+                    ord = ord,
+                })
+            end
+        end
+    end
+    table.sort(builtin_entries, function(a, b)
+        if a.cat_rank ~= b.cat_rank then
+            return a.cat_rank < b.cat_rank
+        end
+        if a.ord ~= b.ord then
+            return a.ord < b.ord
+        end
+        return a.slug < b.slug
+    end)
+    if #builtin_entries == 0 then
+        add_item("solarized-dark")
+    else
+        for _, entry in ipairs(builtin_entries) do
+            add_item(entry.slug)
+        end
     end
     local custom = {}
-    for _, dir in ipairs(theme_search_dirs(cfg_home)) do
+    for _, dir in ipairs(user_theme_dirs(cfg_home)) do
         local files = vim.list_extend(
             vim.fn.glob(dir .. "/*.theme", false, true),
             vim.fn.glob(dir .. "/*.conf", false, true)

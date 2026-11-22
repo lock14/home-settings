@@ -1,4 +1,4 @@
-# Bash 17-Theme + Custom-Theme Palette Engine & State Synchronizer (Bash 3.2+ compatible)
+# Bash Built-in + Custom-Theme Palette Engine & State Synchronizer (Bash 3.2+ compatible)
 # Provides zero-fork palette parsing, hex blending, TrueColor/ANSI LS_COLORS compilation,
 # Readline active-region synchronization, and cross-pane theme state tracking.
 
@@ -6,13 +6,6 @@
 # Directories Blue (34), Symlinks Cyan (36), Executables unbolded Green (32),
 # Archives Orange (91), Media Violet (95), Crypto/Keys Magenta (35), Text/Code Base0 (00), Temp/Logs Base01 (90)
 _HS_ANSI_LS_COLORS="rs=0:di=34:ln=36:mh=00:pi=33:so=35:do=35:bd=35:cd=35:or=31:mi=31:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;40:st=37;44:ex=32:*.tar=91:*.tgz=91:*.arc=91:*.arj=91:*.taz=91:*.lha=91:*.lz4=91:*.lzh=91:*.lzma=91:*.tlz=91:*.txz=91:*.tzo=91:*.t7z=91:*.zip=91:*.z=91:*.dz=91:*.gz=91:*.lrz=91:*.lz=91:*.lzo=91:*.xz=91:*.zst=91:*.tzst=91:*.bz2=91:*.bz=91:*.tbz=91:*.tbz2=91:*.tz=91:*.deb=91:*.rpm=91:*.jar=91:*.war=91:*.ear=91:*.sar=91:*.rar=91:*.7z=91:*.cab=91:*.dmg=91:*.iso=91:*.apk=91:*.gem=91:*.msi=91:*.xpi=91:*.jpg=95:*.jpeg=95:*.gif=95:*.bmp=95:*.pbm=95:*.pgm=95:*.ppm=95:*.tga=95:*.xbm=95:*.xpm=95:*.tif=95:*.tiff=95:*.png=95:*.svg=95:*.svgz=95:*.webp=95:*.mov=95:*.mpg=95:*.mpeg=95:*.mkv=95:*.webm=95:*.mp4=95:*.m4v=95:*.avi=95:*.flv=95:*.wmv=95:*.aac=95:*.flac=95:*.m4a=95:*.mid=95:*.midi=95:*.mka=95:*.mp3=95:*.ogg=95:*.wav=95:*.key=35:*.pem=35:*.crt=35:*.cer=35:*.gpg=35:*.pgp=35:*.asc=35:*.3des=35:*.aes=35:*.enc=35:*.txt=00:*.md=00:*.mkd=00:*.markdown=00:*.json=00:*.yaml=00:*.yml=00:*.toml=00:*.xml=00:*.html=00:*.css=00:*.properties=00:*.proto=00:*.textproto=00:*.pbtxt=00:*.textpb=00:*.prototxt=00:*.sh=00:*.bash=00:*.zsh=00:*.py=00:*.go=00:*.rs=00:*.c=00:*.cc=00:*.cpp=00:*.h=00:*.hpp=00:*.java=00:*.js=00:*.ts=00:*.sql=00:*.tf=00:*.kt=00:*.kts=00:*.swift=00:*.zig=00:*.cs=00:*.scala=00:*.sc=00:*.rb=00:*.graphql=00:*.graphqls=00:*.gql=00:*.bzl=00:*.bazel=00:*.rego=00:*.lua=00:*.mk=00:*.ex=00:*.exs=00:*.hs=00:*.lean=00:*.ml=00:*.mli=00:*.clj=00:*.cljs=00:*.cljc=00:*.edn=00:*.diff=00:*.patch=00:*.bak=90:*.old=90:*.orig=90:*.swp=90:*.swo=90:*.log=90:"
-
-_HS_BUILTIN_THEME_ORDER=(
-    solarized-dark solarized-light catppuccin-mocha catppuccin-latte
-    gruvbox-dark tokyonight-night kanagawa-wave nord onedark
-    new-years valentines st-patricks easter
-    independence-day halloween thanksgiving christmas
-)
 
 _hs_bash_is_truecolor() {
     [ "${TERM:-}" != "linux" ] && { [ "${COLORTERM:-}" = "truecolor" ] || [ "${COLORTERM:-}" = "24bit" ]; }
@@ -46,6 +39,16 @@ _hs_bash_norm_slug() {
     REPLY="$out"
 }
 
+# BEGIN GENERATED BUILTIN THEMES
+_HS_BUILTIN_THEME_ORDER=(
+    solarized-dark solarized-light catppuccin-mocha catppuccin-latte
+    gruvbox-dark gruvbox-light rose-pine rose-pine-dawn
+    everforest-dark tokyonight-night kanagawa-wave dracula
+    nord onedark new-years valentines
+    st-patricks easter independence-day halloween
+    thanksgiving christmas
+)
+
 # Compact 26-field built-in palette lookup (1:1 with colors/themes/*.theme):
 # LABEL|MODE|BAT_THEME|B03|B02|B04|B01|B00|B0|B1|B2|B3|YEL|ORA|RED|MAG|VIO|BLU|CYA|GRN|MGRN|MRED|MYEL|MBLU|MMAG|MB1
 _hs_bash_builtin_spec() {
@@ -53,27 +56,32 @@ _hs_bash_builtin_spec() {
     case "${1:-}" in
         solarized-dark)   REPLY="Solarized Dark|dark|Solarized-Dark-TrueColor|#002B36|#073642|#002731|#586E75|#657B83|#839496|#93A1A1|#EEE8D5|#FDF6E3|#B58900|#CB4B16|#DC322F|#D33682|#6C71C4|#268BD2|#2AA198|#859900|#274C25|#422D33|#364725|#0B4764|#3E2E4C|#2C4E56" ;;
         solarized-light)  REPLY="Solarized Light|light|Solarized-Light-TrueColor|#FDF6E3|#EEE8D5|#E6DFCA|#93A1A1|#839496|#657B83|#586E75|#073642|#002B36|#B58900|#CB4B16|#DC322F|#D33682|#6C71C4|#268BD2|#2AA198|#859900|#E5ECD0|#F6D8D3|#F0E4C0|#D8E6EE|#F3D9E4|#E4DEC8" ;;
-        catppuccin-mocha) REPLY="Catppuccin Mocha|dark|Catppuccin-Mocha-TrueColor|#1E1E2E|#313244|#181825|#6C7086|#7F849C|#CDD6F4|#DCE0E8|#E6E9EF|#F5E0DC|#F9E2AF|#FAB387|#F38BA8|#F5C2E7|#CBA6F7|#89B4FA|#94E2D5|#A6E3A1|#283B37|#3E2939|#3E3B3B|#29384E|#3E3247|#35374B" ;;
+        catppuccin-mocha) REPLY="Catppuccin Mocha|dark|Catppuccin-Mocha-TrueColor|#1E1E2E|#313244|#181825|#6C7086|#7F849C|#CDD6F4|#DCE0E8|#E6E9EF|#EFF1F5|#F9E2AF|#FAB387|#F38BA8|#F5C2E7|#CBA6F7|#89B4FA|#94E2D5|#A6E3A1|#283B37|#3E2939|#3E3B3B|#29384E|#3E3247|#35374B" ;;
         catppuccin-latte) REPLY="Catppuccin Latte|light|Catppuccin-Latte-TrueColor|#EFF1F5|#CCD0DA|#E6E9EF|#686B7D|#5C5F77|#4C4F69|#383A50|#313244|#1E1E2E|#8F5902|#B34300|#D20F39|#A82B8A|#8839EF|#1E66F5|#0E7075|#2D761D|#DCEAD9|#F2D5DD|#EFE4D2|#D6E1F8|#F3DFEF|#D5D8E2" ;;
-        gruvbox-dark)     REPLY="Gruvbox Dark|dark|Gruvbox-Dark-TrueColor|#282828|#3C3836|#1D2021|#928374|#A89984|#EBDBB2|#FBF1C7|#D5C4A1|#FBF1C7|#FABD2F|#FE8019|#FB4934|#D3869B|#B16286|#83A598|#8EC07C|#B8BB26|#3B3D24|#472825|#473F25|#2E3B36|#422E36|#45403D" ;;
-        tokyonight-night) REPLY="TokyoNight Night|dark|TokyoNight-Night-TrueColor|#1A1B26|#292E42|#16161E|#565F89|#737AA2|#C0CAF5|#D5DCF8|#E0AF68|#E2E8FF|#E0AF68|#FF9E64|#F7768E|#BB9AF7|#9D7CD8|#7AA2F7|#7DCFFF|#9ECE6A|#273832|#3B2430|#3B342C|#23344D|#342B44|#2F354D" ;;
-        kanagawa-wave)    REPLY="Kanagawa Wave|dark|Kanagawa-Wave-TrueColor|#1F1F28|#2A2A37|#16161D|#7A7970|#939288|#DCD7BA|#EAE6D1|#E6C384|#F2EFE0|#E6C384|#FFA066|#E46876|#D27E99|#957FB8|#7E9CD8|#7AA89F|#98BB6C|#2B3328|#43242B|#49443C|#252535|#3A2836|#2D4F67" ;;
-        nord)             REPLY="Nord|dark|Nord-TrueColor|#2E3440|#3B4252|#242933|#8492AC|#96A4BE|#D8DEE9|#E5E9F0|#ECEFF4|#ECEFF4|#EBCB8B|#D08770|#BF616A|#B48EAD|#5E81AC|#81A1C1|#88C0D0|#A3BE8C|#394548|#443943|#494647|#384354|#423F4E|#434C5E" ;;
-        onedark)          REPLY="OneDark|dark|OneDark-TrueColor|#282C34|#31353F|#21252B|#5C6370|#7F848E|#ABB2BF|#C8CCD4|#E5C07B|#FFFFFF|#E5C07B|#D19A66|#E06C75|#C678DD|#B268CA|#61AFEF|#56B6C2|#98C379|#2E3E38|#3F2D34|#3E3A34|#283B4C|#3B2F44|#3E4451" ;;
-        new-years)        REPLY="New Year's|dark|New-Years-TrueColor|#07081C|#14183D|#040510|#6872AA|#848FC7|#EEF1FF|#FFFFFF|#FFFDF2|#FFFFFF|#44FF77|#FF8024|#FF1744|#5C9DFF|#B388FF|#00F0FF|#FF66C4|#FFD700|#103B2B|#3B1026|#143D29|#063647|#1A294D|#24294D" ;;
+        gruvbox-dark)     REPLY="Gruvbox Dark|dark|Gruvbox-Dark-TrueColor|#282828|#3C3836|#1D2021|#928374|#A89984|#EBDBB2|#F2E5BC|#FBF1C7|#F9F5D7|#FABD2F|#FE8019|#FB4934|#D3869B|#B16286|#83A598|#8EC07C|#B8BB26|#3B3D24|#472825|#473F25|#2E3B36|#422E36|#3D3C38" ;;
+        gruvbox-light)    REPLY="Gruvbox Light|light|Gruvbox-Light-TrueColor|#FBF1C7|#EBDBB2|#F2E5BC|#6E6259|#5C524B|#3C3836|#282828|#1D2021|#141617|#986300|#AF3A03|#9D0006|#8F3F71|#6C469E|#076678|#2E7352|#5F6E00|#DCE5B2|#F2CEBE|#EAD7A4|#CDD9BA|#E8D1C4|#D9D0AC" ;;
+        rose-pine)        REPLY="Rosé Pine|dark|Rose-Pine-TrueColor|#191724|#26233A|#13111C|#787394|#908CAA|#E0DEF4|#EAE8F8|#F2F0FB|#FAF8FF|#F6C177|#EA9A75|#EB6F92|#EB98C5|#C4A7E7|#67A8CE|#9CCFD8|#8AC79A|#2D3739|#3F2738|#453935|#2A3749|#433144|#3A3846" ;;
+        rose-pine-dawn)   REPLY="Rosé Pine Dawn|light|Rose-Pine-Dawn-TrueColor|#FAF4ED|#EBE0D6|#F2E9E1|#736E8A|#645F7C|#575279|#413D5E|#2D2A45|#1F1D2E|#996012|#C0501E|#B4365A|#A63D7C|#7850A6|#246685|#1B7572|#337642|#D6E6D6|#F0D4D8|#EBDCC8|#D2DFE2|#EAD4DC|#DED6D6" ;;
+        everforest-dark)  REPLY="Everforest Dark|dark|Everforest-Dark-TrueColor|#2D353B|#3A454A|#232A2E|#859289|#9DA9A0|#D3C6AA|#DFD4BC|#EAE2CF|#F3EFE3|#DBBC7F|#E69875|#E6686B|#D699B6|#AC8EC9|#78B4CE|#83C092|#9EC66E|#414F44|#4E3E44|#505049|#3D515B|#4F4954|#494E50" ;;
+        tokyonight-night) REPLY="TokyoNight Night|dark|TokyoNight-Night-TrueColor|#1A1B26|#292E42|#16161E|#565F89|#737AA2|#C0CAF5|#D5DCF8|#E2E8FF|#EEF2FF|#E0AF68|#FF9E64|#F7768E|#F287CB|#9D7CD8|#7AA2F7|#7DCFFF|#9ECE6A|#273832|#3B2430|#3B342C|#23344D|#453147|#2F354D" ;;
+        kanagawa-wave)    REPLY="Kanagawa Wave|dark|Kanagawa-Wave-TrueColor|#1F1F28|#2A2A37|#16161D|#7A7970|#939288|#DCD7BA|#EAE6D1|#F2EFE0|#FAF8EE|#E6C384|#FFA066|#E46876|#D27E99|#957FB8|#7E9CD8|#7AA89F|#98BB6C|#2B3328|#43242B|#49443C|#252535|#3A2836|#2D4F67" ;;
+        dracula)          REPLY="Dracula|dark|Dracula-TrueColor|#282A36|#383B4C|#21222C|#7A89B8|#94A3CC|#E8E8E2|#F2F2EC|#F8F8F2|#FFFFFF|#F1FA8C|#FFB86C|#FF5555|#FF79C6|#BD93F9|#66B2FF|#8BE9FD|#50FA7B|#2F5042|#4F323C|#505447|#364862|#533A53|#484A53" ;;
+        nord)             REPLY="Nord|dark|Nord-TrueColor|#2E3440|#3B4252|#242933|#8492AC|#96A4BE|#D8DEE9|#E5E9F0|#ECEFF4|#F5F7FA|#EBCB8B|#D08770|#BF616A|#B48EAD|#5E81AC|#81A1C1|#88C0D0|#A3BE8C|#394548|#443943|#494647|#384354|#423F4E|#434C5E" ;;
+        onedark)          REPLY="OneDark|dark|OneDark-TrueColor|#282C34|#31353F|#21252B|#5C6370|#7F848E|#ABB2BF|#C8CCD4|#DCE0E8|#F0F3F8|#E5C07B|#D19A66|#E06C75|#D877C8|#9F78E6|#61AFEF|#56B6C2|#98C379|#2E3E38|#3F2D34|#3E3A34|#283B4C|#4B3B52|#3E4451" ;;
+        new-years)        REPLY="New Year's|dark|New-Years-TrueColor|#0C0C10|#1C1B22|#060608|#7E7A8C|#9E99AD|#F2EFE9|#F8F6F2|#FCFBF9|#FFFFFF|#44FF77|#FF8024|#FF1744|#5C9DFF|#B388FF|#00F0FF|#FF66C4|#FFD700|#143824|#3B1220|#163B26|#0C3440|#1D2845|#282630" ;;
         valentines)       REPLY="Valentine's Day|dark|Valentines-TrueColor|#260715|#400D24|#18040D|#A65E7E|#C27898|#FFE8F2|#FFF5F9|#FFFDF9|#FFFFFF|#44F088|#FF8547|#FF1738|#66B2FF|#C77DFF|#FF6BB5|#2EE6C8|#FFD700|#143D31|#520A22|#19422D|#521B38|#332645|#4A1A30" ;;
         st-patricks)      REPLY="St. Patrick's Day|dark|St-Patricks-TrueColor|#042210|#0A3B1E|#021509|#529E6E|#6BB887|#E6FAEC|#F5FFF8|#FFFDF0|#FFFFFF|#FF9100|#FF5722|#FF1744|#FF66B2|#B88CFF|#FFD700|#38E5FF|#00F556|#054A20|#451220|#38390E|#3B4B0D|#382E30|#1B4D2B" ;;
         easter)           REPLY="Easter|light|Easter-TrueColor|#FDF7FF|#F0DCF8|#E4C8F0|#86659C|#6E4E85|#361E4A|#221033|#160822|#0C0312|#A87400|#E04F00|#D5001C|#008B8B|#7B1FA2|#C21878|#0070D6|#009E3D|#D4F5DF|#FAD2D8|#F5E4C3|#F5CFE8|#CEEFEB|#DEC9EC" ;;
-        independence-day) REPLY="Independence Day|dark|Independence-Day-TrueColor|#061436|#10275E|#030B20|#6588CC|#85A5E6|#F4F8FF|#FFFFFF|#FFF9E6|#FAFAFF|#2EE6A6|#FF7733|#FF1738|#5CE6FF|#9E8CFF|#38B6FF|#FF6B9E|#FFD700|#0E3B2C|#3D1228|#0E403E|#113864|#163F62|#233769" ;;
+        independence-day) REPLY="Independence Day|dark|Independence-Day-TrueColor|#061436|#10275E|#030B20|#6588CC|#85A5E6|#F4F8FF|#F8FBFF|#FCFDFF|#FFFFFF|#2EE6A6|#FF7733|#FF1738|#5CE6FF|#9E8CFF|#38B6FF|#FF6B9E|#FFD700|#0E3B2C|#3D1228|#0E403E|#113864|#163F62|#233769" ;;
         halloween)        REPLY="Halloween|dark|Halloween-TrueColor|#160824|#281040|#0E0418|#7D5BA6|#9B78C4|#EDE2FA|#F8F2FF|#FFF8EB|#FFFFFF|#FFE000|#FF3B00|#FF1744|#FF5CCD|#C77DFF|#55FF47|#2EE6D6|#FF7518|#1B3D26|#440E26|#45331D|#243F2C|#451946|#33204A" ;;
         thanksgiving)     REPLY="Thanksgiving|dark|Thanksgiving-TrueColor|#221107|#381C0C|#150A04|#9C7458|#B88E70|#F7E8D8|#FFF6EB|#FFFDF9|#FFFFFF|#FFD000|#FFA866|#FF1F2D|#FF6699|#C780FF|#FF7814|#38D9B8|#8CE645|#243D14|#4D1214|#4F3809|#4F260B|#4F2224|#472A1A" ;;
-        christmas)        REPLY="Christmas|dark|Christmas-TrueColor|#062012|#0E3820|#03140B|#5C9E78|#78B894|#F0FAF4|#FFFFFF|#FFFDF7|#FAFAFF|#38E5FF|#FF7B24|#FF1738|#B8FF3D|#C788FF|#FFD700|#FF6B9E|#2EE66B|#0F4224|#3D1620|#0F3E3B|#3D4A0F|#2A471A|#234231" ;;
-        *)                return 1 ;;
+        christmas)        REPLY="Christmas|dark|Christmas-TrueColor|#062012|#0E3820|#03140B|#5C9E78|#78B894|#F0FAF4|#F7FDF9|#FCFEFD|#FFFFFF|#38E5FF|#FF7B24|#FF1738|#B8FF3D|#C788FF|#FFD700|#FF6B9E|#2EE66B|#0F4224|#3D1620|#0F3E3B|#3D4A0F|#2A471A|#234231" ;;
+        *) return 1 ;;
     esac
     return 0
 }
 
-_hs_bash_holiday_icon() {
+_hs_bash_builtin_holiday_icon() {
     REPLY=""
     case "${1:-}" in
         new-years)        REPLY="🥂" ;;
@@ -84,9 +92,38 @@ _hs_bash_holiday_icon() {
         halloween)        REPLY="🎃" ;;
         thanksgiving)     REPLY="🦃" ;;
         christmas)        REPLY="🎄" ;;
-        *)                return 1 ;;
+        *) return 1 ;;
     esac
     return 0
+}
+# END GENERATED BUILTIN THEMES
+
+_hs_bash_holiday_icon() {
+    if _hs_bash_builtin_holiday_icon "${1:-}"; then
+        return 0
+    fi
+    if [ -n "${_HS_BASHRC_REPO_ROOT:-}" ] && [ -r "$_HS_BASHRC_REPO_ROOT/colors/themes/${1:-}.theme" ]; then
+        local line="" v="" q=""
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            case "$line" in
+                HOLIDAY_ICON=*)
+                    v="${line#HOLIDAY_ICON=}"
+                    if [ "${#v}" -ge 2 ] && { [[ "$v" == \"*\" ]] || [[ "$v" == \'*\' ]]; }; then
+                        q="${v:0:1}"
+                        v="${v:1:${#v}-2}"
+                        : "$q"
+                    fi
+                    if [ -n "$v" ]; then
+                        REPLY="$v"
+                        return 0
+                    fi
+                    ;;
+            esac
+        done < "$_HS_BASHRC_REPO_ROOT/colors/themes/${1:-}.theme"
+    fi
+    REPLY=""
+    return 1
 }
 
 _hs_bash_blend_hex() {

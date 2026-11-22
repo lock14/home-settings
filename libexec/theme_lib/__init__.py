@@ -1,15 +1,11 @@
-"""Unified multi-theme palette, config generation, and live-reload package."""
+"""Unified multi-theme palette, config generation, sync, and live-reload package."""
 
 from __future__ import annotations
 
 __all__ = [
     "ALL_COLOR_KEYS",
     "ANSI_ROLE_ORDER",
-    "CLASSIC_THEMES",
     "CORE_COLOR_KEYS",
-    "HOLIDAY_META",
-    "HOLIDAY_THEMES",
-    "MANAGED_ORDER",
     "SOLARIZED_DARK_DEFAULTS",
     "SOLARIZED_LIGHT_DEFAULTS",
     "USAGE_TEXT",
@@ -18,11 +14,14 @@ __all__ = [
     "blend_hex",
     "broadcast_live_reloads",
     "build_fzf_color_opts",
+    "build_usage_text",
     "compile_truecolor_ls_colors",
     "compute_easter_date",
+    "compute_nth_weekday_date",
     "compute_thanksgiving_date",
     "contrast_ratio",
     "create_user_theme",
+    "discover_builtin_themes",
     "discover_nvim_sockets",
     "discover_themes",
     "emit_live_osc_sequences",
@@ -40,6 +39,7 @@ __all__ = [
     "generate_tmux_theme_text",
     "generate_zsh_theme_text",
     "get_current_theme_slug",
+    "get_holiday_meta",
     "get_holiday_schedule_for_year",
     "get_user_themes_dirs",
     "get_xdg_config_home",
@@ -47,10 +47,12 @@ __all__ = [
     "hue_difference",
     "list_themes",
     "main",
+    "ordered_theme_slugs",
     "parse_theme_file",
     "parse_theme_kv",
     "relative_luminance",
     "render_preview",
+    "resolve_holiday_rule_date",
     "resolve_nearest_holiday_slug",
     "resolve_single_theme",
     "rgb_distance",
@@ -59,10 +61,12 @@ __all__ = [
     "slug_to_label",
     "sync_managed_repo_assets",
     "sync_symlink",
+    "theme_sort_key",
 ]
 
 _MODULE_EXPORTS: dict[str, str] = {
     "USAGE_TEXT": "cli",
+    "build_usage_text": "cli",
     "main": "cli",
     "build_fzf_color_opts": "generators",
     "compile_truecolor_ls_colors": "generators",
@@ -86,8 +90,8 @@ _MODULE_EXPORTS: dict[str, str] = {
     "broadcast_live_reloads": "reload",
     "discover_nvim_sockets": "reload",
     "emit_live_osc_sequences": "reload",
-    "sync_managed_repo_assets": "reload",
     "sync_symlink": "reload",
+    "sync_managed_repo_assets": "sync",
 }
 
 

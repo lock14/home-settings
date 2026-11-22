@@ -1105,7 +1105,9 @@ EOF
         echo "FAIL:Bash theme() wrapper:Unexpected state ($bash_theme_out)"
     fi
 
-    # Test portable copied .bashrc-addendum + .config/shell modules: 1:1 17-theme parity without repo/bin/theme, plus graceful lone-file fallback
+    # Test portable copied .bashrc-addendum + .config/shell modules: 1:1 built-in theme parity without repo/bin/theme, plus graceful lone-file fallback
+    builtin_theme_cnt="$(find "$SCRIPT_DIR/colors/themes" -maxdepth 1 -name '*.theme' | wc -l | tr -d ' ')"
+    builtin_plus_custom_cnt=$(( builtin_theme_cnt + 1 ))
     TWOFILE_DIR="$STANDALONE_HOME/twofile-isolated"
     BAREFILE_DIR="$STANDALONE_HOME/barefile-isolated"
     mkdir -p "$TWOFILE_DIR/.config" "$BAREFILE_DIR"
@@ -1144,9 +1146,9 @@ EOF
         fi
     done
     if [ -z "$bash_17_fail" ]; then
-        echo "PASS:Standalone copied .bashrc-addendum embeds all 17 built-in themes with 1:1 BAT_THEME, FZF_DEFAULT_OPTS, TrueColor LS_COLORS, and PS1 parity"
+        echo "PASS:Standalone copied .bashrc-addendum embeds all $builtin_theme_cnt built-in themes with 1:1 BAT_THEME, FZF_DEFAULT_OPTS, TrueColor LS_COLORS, and PS1 parity"
     else
-        echo "FAIL:Standalone .bashrc-addendum 17-theme parity:Mismatch on $bash_17_fail"
+        echo "FAIL:Standalone .bashrc-addendum built-in theme parity:Mismatch on $bash_17_fail"
     fi
 
     # Test HOME_SETTINGS_THEME_FILE / BAT_THEME_NAME injection safety, unquoted #RRGGBB values, subshell isolation, and bidirectional TrueColor LS_COLORS guard
@@ -1371,7 +1373,7 @@ INNER2
         bash4_hits=1
     fi
     if [ "$bash4_hits" -eq 0 ] && \
-       [[ "$sa_theme_out" == *"CNT=18/17|FG=1|CUR=nord/nord/nord|NONTTY=1|BAD=1/1|TFO=aurora-borealis/nord:<unset>|BB=https://stash.example.com/projects/CORE_PLAT/repos/gateway/pull-requests/42|VIMSYNC=gruvbox-dark:Gruvbox-Dark-TrueColor|STALESYNC=catppuccin-mocha:Catppuccin-Mocha-TrueColor|CREATE=remote-berry:Remote-Berry-TrueColor:1|FZF=kanagawa-wave|LEAP=st-patricks|TG=thanksgiving:🦃|NY=new-years:🥂|BADCAL=1/1|RO=1/1/0/new-years|"* ]] && \
+       [[ "$sa_theme_out" == *"CNT=${builtin_plus_custom_cnt}/${builtin_theme_cnt}|FG=1|CUR=nord/nord/nord|NONTTY=1|BAD=1/1|TFO=aurora-borealis/nord:<unset>|BB=https://stash.example.com/projects/CORE_PLAT/repos/gateway/pull-requests/42|VIMSYNC=gruvbox-dark:Gruvbox-Dark-TrueColor|STALESYNC=catppuccin-mocha:Catppuccin-Mocha-TrueColor|CREATE=remote-berry:Remote-Berry-TrueColor:1|FZF=kanagawa-wave|LEAP=st-patricks|TG=thanksgiving:🦃|NY=new-years:🥂|BADCAL=1/1|RO=1/1/0/new-years|"* ]] && \
        [[ "$fzf_prev_content" == *"Nord (nord)"* ]] && \
        [[ "$sa_theme_out" != *"PARTIAL=PARTIAL_CORRUPT"* ]] && \
        [[ "$sa_theme_out" == *"LS1="*"di=38;2;91;192;190:"* ]] && \
@@ -1379,7 +1381,7 @@ INNER2
        [[ "$sa_theme_out" == *"48;2;34;51;68m"* ]] && \
        [[ "$sa_theme_out" == *"COMP=aurora-borealis|"* ]] && \
        [[ "$sa_theme_out" == *"RESET=<unset>/"*"di=34:"* ]]; then
-        echo "PASS:Standalone theme() manages all 17 built-in + custom themes (--create/--from/--force, fzf --preview, non-TTY list), syncs cross-pane with Vim :Theme, reloads same-second edits, guards partial/read-only writes, and resets cleanly"
+        echo "PASS:Standalone theme() manages all $builtin_theme_cnt built-in + custom themes (--create/--from/--force, fzf --preview, non-TTY list), syncs cross-pane with Vim :Theme, reloads same-second edits, guards partial/read-only writes, and resets cleanly"
     else
         echo "FAIL:Standalone theme() fallback & cross-pane sync:bash4=$bash4_hits out='$sa_theme_out' fzf_prev='$fzf_prev_content'"
     fi

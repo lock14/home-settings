@@ -77,7 +77,7 @@
 				<string>#7DCFFF</string>
 			</dict>
 		</dict>
-		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #BB9AF7) -->
+		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #F287CB) -->
 		<dict>
 			<key>name</key>
 			<string>Numbers, Constants, Literals, Sentinels, and Regular Expressions</string>
@@ -86,7 +86,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#BB9AF7</string>
+				<string>#F287CB</string>
 			</dict>
 		</dict>
 		<!-- Structural Scaffolding, Declarations & Primitive Types (Solarized Green #9ECE6A) -->

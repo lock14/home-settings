@@ -77,7 +77,7 @@
 				<string>#56B6C2</string>
 			</dict>
 		</dict>
-		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #C678DD) -->
+		<!-- Numbers, Constants, Literals, Sentinels & Receivers (Solarized Magenta #D877C8) -->
 		<dict>
 			<key>name</key>
 			<string>Numbers, Constants, Literals, Sentinels, and Regular Expressions</string>
@@ -86,7 +86,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#C678DD</string>
+				<string>#D877C8</string>
 			</dict>
 		</dict>
 		<!-- Structural Scaffolding, Declarations & Primitive Types (Solarized Green #98C379) -->
@@ -137,7 +137,7 @@
 				<string>#ABB2BF</string>
 			</dict>
 		</dict>
-		<!-- Namespaces, Modules, Annotations, Decorators, Attributes & Imports (Solarized Violet #B268CA) -->
+		<!-- Namespaces, Modules, Annotations, Decorators, Attributes & Imports (Solarized Violet #9F78E6) -->
 		<dict>
 			<key>name</key>
 			<string>Namespaces, Modules, Annotations, Decorators, Attributes, and Imports</string>
@@ -146,7 +146,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#B268CA</string>
+				<string>#9F78E6</string>
 			</dict>
 		</dict>
 		<!-- Function & Routine Declarations, Section Headers & Diff Ranges (Solarized Blue #61AFEF) -->

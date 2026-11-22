@@ -1,4 +1,4 @@
-"""Palette schema, color contrast math, holiday calendar, and theme discovery."""
+"""Palette schema, color contrast math, holiday calendar, and dynamic theme discovery."""
 
 from __future__ import annotations
 
@@ -8,34 +8,10 @@ from pathlib import Path
 import re
 import sys
 from typing import TYPE_CHECKING
+import unicodedata
 
 if TYPE_CHECKING:
     import datetime
-
-CLASSIC_THEMES = [
-    "solarized-dark",
-    "solarized-light",
-    "catppuccin-mocha",
-    "catppuccin-latte",
-    "gruvbox-dark",
-    "tokyonight-night",
-    "kanagawa-wave",
-    "nord",
-    "onedark",
-]
-
-HOLIDAY_THEMES = [
-    "new-years",
-    "valentines",
-    "st-patricks",
-    "easter",
-    "independence-day",
-    "halloween",
-    "thanksgiving",
-    "christmas",
-]
-
-MANAGED_ORDER = CLASSIC_THEMES + HOLIDAY_THEMES
 
 CORE_COLOR_KEYS = [
     "BASE03",
@@ -92,6 +68,8 @@ SOLARIZED_DARK_DEFAULTS: dict[str, str] = {
     "THEME_LABEL": "Solarized Dark",
     "THEME_DESCRIPTION": "Ethan Schoonover precision CIELAB dark palette",
     "THEME_MODE": "dark",
+    "THEME_CATEGORY": "classic",
+    "THEME_ORDER": "10",
     "BAT_THEME_NAME": "Solarized-Dark-TrueColor",
     "BTOP_THEME_NAME": "solarized_dark",
     "GHOSTTY_THEME_NAME": "Solarized Dark",
@@ -126,6 +104,8 @@ SOLARIZED_LIGHT_DEFAULTS: dict[str, str] = {
     "THEME_LABEL": "Solarized Light",
     "THEME_DESCRIPTION": "Ethan Schoonover precision CIELAB light palette",
     "THEME_MODE": "light",
+    "THEME_CATEGORY": "classic",
+    "THEME_ORDER": "20",
     "BAT_THEME_NAME": "Solarized-Light-TrueColor",
     "BTOP_THEME_NAME": "solarized_light",
     "GHOSTTY_THEME_NAME": "Solarized Light",
@@ -149,49 +129,47 @@ SOLARIZED_LIGHT_DEFAULTS: dict[str, str] = {
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+FIXED_MMDD_RE = re.compile(r"^(\d{2})-(\d{2})$")
+NTH_WEEKDAY_RE = re.compile(r"^nth-weekday:(\d{2}):(-?\d+):([0-6])$")
 
-HOLIDAY_META: dict[str, dict[str, str]] = {
-    "new-years": {
-        "icon": "🥂",
-        "badge": "🥂 🎆 New Year's",
-        "banner": "🥂 🎆 🍾  HAPPY NEW YEAR — MIDNIGHT CHAMPAGNE & FIREWORKS  🍾 🎆 🥂",
-    },
-    "valentines": {
-        "icon": "💘",
-        "badge": "💘 🌹 Valentine's",
-        "banner": "💘 🌹 💝  HAPPY VALENTINE'S DAY — VELVET ROSE & CHAMPAGNE  💝 🌹 💘",
-    },
-    "st-patricks": {
-        "icon": "🍀",
-        "badge": "🍀 🪙 St. Patrick's",
-        "banner": "🍀 🪙 🍺  HAPPY ST. PATRICK'S DAY — SHAMROCK & POT OF GOLD  🍺 🪙 🍀",
-    },
-    "easter": {
-        "icon": "🐣",
-        "badge": "🐣 🌷 Easter",
-        "banner": "🐣 🌷 🥚  HAPPY EASTER — SPRING MEADOW & PASTEL BLOSSOMS   🥚 🌷 🐣",
-    },
-    "independence-day": {
-        "icon": "🎆",
-        "badge": "🎆 🗽 4th of July",
-        "banner": "🎆 🗽 🦅  HAPPY 4TH OF JULY — STARS, STRIPES & FIREWORKS   🦅 🗽 🎆",
-    },
-    "halloween": {
-        "icon": "🎃",
-        "badge": "🎃 👻 Halloween",
-        "banner": "🎃 👻 🦇  HAPPY HALLOWEEN — JACK-O'-LANTERN & ECTOPLASM    🦇 👻 🎃",
-    },
-    "thanksgiving": {
-        "icon": "🦃",
-        "badge": "🦃 🍂 Thanksgiving",
-        "banner": "🦃 🍂 🥧  HAPPY THANKSGIVING — AUTUMN HARVEST & HEARTH     🥧 🍂 🦃",
-    },
-    "christmas": {
-        "icon": "🎄",
-        "badge": "🎄 🎅 Christmas",
-        "banner": "🎄 🎅 🎁  MERRY CHRISTMAS — EVERGREEN, HOLLY & ORNAMENTS   🎁 🎅 🎄",
-    },
-}
+
+def _default_repo_dir() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _ascii_ghostty_name(label: str) -> str:
+    """Normalize a display label into an ASCII-safe cross-platform Ghostty theme filename."""
+    decomposed = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"['\".]+", "", decomposed)
+    return re.sub(r"\s+", " ", cleaned).strip() or "Custom Theme"
+
+
+def theme_sort_key(theme: dict[str, str]) -> tuple[int, int, int, str]:
+    """Return canonical sort key: built-in classic, built-in holiday, then custom user themes."""
+    src_rank = 0 if theme.get("SOURCE") == "builtin" else 1
+    cat = theme.get("THEME_CATEGORY", "classic" if src_rank == 0 else "user")
+    cat_rank = 0 if cat == "classic" else (1 if cat == "holiday" else 2)
+    try:
+        order_num = int(theme.get("THEME_ORDER", "9999"))
+    except ValueError:
+        order_num = 9999
+    return (src_rank, cat_rank, order_num, theme["THEME_ID"])
+
+
+def ordered_theme_slugs(themes: dict[str, dict[str, str]]) -> list[str]:
+    """Return theme slugs sorted by canonical category, order, and identifier."""
+    return [slug for slug, _ in sorted(themes.items(), key=lambda kv: theme_sort_key(kv[1]))]
+
+
+def get_holiday_meta(theme: dict[str, str]) -> dict[str, str] | None:
+    """Return holiday icon, badge, and banner metadata when defined on a theme."""
+    icon = theme.get("HOLIDAY_ICON", "").strip()
+    if not icon:
+        return None
+    label = theme["THEME_LABEL"]
+    badge = theme.get("HOLIDAY_BADGE", "").strip() or f"{icon} {label}"
+    banner = theme.get("HOLIDAY_BANNER", "").strip() or f"{icon}  {label.upper()}  {icon}"
+    return {"icon": icon, "badge": badge, "banner": banner}
 
 
 def compute_easter_date(year: int) -> datetime.date:
@@ -224,32 +202,90 @@ def compute_thanksgiving_date(year: int) -> datetime.date:
     return datetime.date(year, 11, 1 + offset + 21)
 
 
-def get_holiday_schedule_for_year(year: int) -> list[tuple[datetime.date, str]]:
-    """Return the chronological US holiday theme schedule for the given year."""
+def compute_nth_weekday_date(year: int, month: int, nth: int, weekday: int) -> datetime.date:
+    """Return the nth (1..5 or -1 for last) weekday (0=Mon..6=Sun) in a given month."""
+    import calendar
     import datetime
 
-    return [
-        (datetime.date(year, 1, 1), "new-years"),
-        (datetime.date(year, 2, 14), "valentines"),
-        (datetime.date(year, 3, 17), "st-patricks"),
-        (compute_easter_date(year), "easter"),
-        (datetime.date(year, 7, 4), "independence-day"),
-        (datetime.date(year, 10, 31), "halloween"),
-        (compute_thanksgiving_date(year), "thanksgiving"),
-        (datetime.date(year, 12, 25), "christmas"),
-    ]
+    if nth == -1:
+        last_day = calendar.monthrange(year, month)[1]
+        last_dt = datetime.date(year, month, last_day)
+        offset = (last_dt.weekday() - weekday) % 7
+        return datetime.date(year, month, last_day - offset)
+    if nth < 1 or nth > 5:
+        raise ValueError(f"Invalid nth weekday occurrence '{nth}' (expected 1..5 or -1)")
+    first_dt = datetime.date(year, month, 1)
+    offset = (weekday - first_dt.weekday()) % 7
+    day = 1 + offset + (nth - 1) * 7
+    return datetime.date(year, month, day)
 
 
-def resolve_nearest_holiday_slug(today: datetime.date | None = None) -> str:
-    """Resolve the active or nearest upcoming US holiday theme slug."""
+def resolve_holiday_rule_date(rule: str, year: int) -> datetime.date:
+    """Evaluate a HOLIDAY_DATE rule ('MM-DD', 'easter', 'thanksgiving', or 'nth-weekday:MM:N:DOW')."""
+    import calendar
+    import datetime
+
+    cleaned = rule.strip().lower()
+    if cleaned == "easter":
+        return compute_easter_date(year)
+    if cleaned == "thanksgiving":
+        return compute_thanksgiving_date(year)
+    m_fixed = FIXED_MMDD_RE.match(cleaned)
+    if m_fixed:
+        month = int(m_fixed.group(1))
+        day = int(m_fixed.group(2))
+        if month == 2 and day == 29 and not calendar.isleap(year):
+            day = 28
+        return datetime.date(year, month, day)
+    m_nth = NTH_WEEKDAY_RE.match(cleaned)
+    if m_nth:
+        return compute_nth_weekday_date(
+            year,
+            int(m_nth.group(1)),
+            int(m_nth.group(2)),
+            int(m_nth.group(3)),
+        )
+    raise ValueError(
+        f"Invalid HOLIDAY_DATE '{rule}' (expected MM-DD, easter, thanksgiving, or nth-weekday:MM:N:DOW)"
+    )
+
+
+def get_holiday_schedule_for_year(
+    year: int,
+    themes: dict[str, dict[str, str]] | None = None,
+    repo_dir: Path | None = None,
+) -> list[tuple[datetime.date, str]]:
+    """Return the chronological holiday theme schedule discovered from theme definitions."""
+    active_themes = themes if themes is not None else discover_themes(repo_dir or _default_repo_dir())
+    schedule: list[tuple[datetime.date, str]] = []
+    for slug in ordered_theme_slugs(active_themes):
+        t = active_themes[slug]
+        rule = t.get("HOLIDAY_DATE", "").strip()
+        if rule:
+            schedule.append((resolve_holiday_rule_date(rule, year), slug))
+    schedule.sort(key=lambda pair: (pair[0], pair[1]))
+    return schedule
+
+
+def resolve_nearest_holiday_slug(
+    today: datetime.date | None = None,
+    themes: dict[str, dict[str, str]] | None = None,
+    repo_dir: Path | None = None,
+) -> str:
+    """Resolve the active or nearest upcoming holiday theme slug."""
     import datetime
 
     if today is None:
         override = os.environ.get("THEME_HOLIDAY_DATE", "").strip()
         today = datetime.date.fromisoformat(override) if override else datetime.date.today()
-    candidates = get_holiday_schedule_for_year(today.year) + get_holiday_schedule_for_year(today.year + 1)
+    active_themes = themes if themes is not None else discover_themes(repo_dir or _default_repo_dir())
+    candidates = get_holiday_schedule_for_year(today.year, active_themes) + get_holiday_schedule_for_year(
+        today.year + 1, active_themes
+    )
+    if not candidates:
+        return "solarized-dark"
     upcoming = sorted((d, slug) for d, slug in candidates if d >= today)
-    return upcoming[0][1]
+    return upcoming[0][1] if upcoming else candidates[0][1]
 
 
 def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
@@ -399,11 +435,40 @@ def _build_normalized_theme(
     label = raw.get("THEME_LABEL", "").strip() or slug_to_label(slug)
     desc = raw.get("THEME_DESCRIPTION", f"Custom {mode} color theme ({label})").strip()
 
+    holiday_date = raw.get("HOLIDAY_DATE", "").strip().lower()
+    if holiday_date:
+        resolve_holiday_rule_date(holiday_date, 2026)
+
+    category = raw.get("THEME_CATEGORY", "").strip().lower()
+    if not category:
+        if holiday_date:
+            category = "holiday"
+        elif source == "builtin":
+            category = "classic"
+        else:
+            category = "user"
+    if category not in ("classic", "holiday", "user"):
+        raise ValueError(
+            f"{origin_label}: invalid THEME_CATEGORY '{category}' (expected 'classic', 'holiday', or 'user')"
+        )
+
+    raw_order = raw.get("THEME_ORDER", "9999").strip()
+    try:
+        order_int = int(raw_order)
+    except ValueError as exc:
+        raise ValueError(f"{origin_label}: invalid integer THEME_ORDER '{raw_order}'") from exc
+
     theme: dict[str, str] = {
         "THEME_ID": slug,
         "THEME_LABEL": label,
         "THEME_DESCRIPTION": desc,
         "THEME_MODE": mode,
+        "THEME_CATEGORY": category,
+        "THEME_ORDER": str(order_int),
+        "HOLIDAY_DATE": holiday_date,
+        "HOLIDAY_ICON": raw.get("HOLIDAY_ICON", "").strip(),
+        "HOLIDAY_BADGE": raw.get("HOLIDAY_BADGE", "").strip(),
+        "HOLIDAY_BANNER": raw.get("HOLIDAY_BANNER", "").strip(),
         "SOURCE": source,
         "PATH": origin_label,
     }
@@ -435,7 +500,7 @@ def _build_normalized_theme(
     snake_slug = re.sub(r"[^a-z0-9]+", "_", slug).strip("_")
     theme["BAT_THEME_NAME"] = raw.get("BAT_THEME_NAME", f"{pascal_slug}-TrueColor").strip()
     theme["BTOP_THEME_NAME"] = raw.get("BTOP_THEME_NAME", snake_slug).strip()
-    theme["GHOSTTY_THEME_NAME"] = raw.get("GHOSTTY_THEME_NAME", label).strip()
+    theme["GHOSTTY_THEME_NAME"] = raw.get("GHOSTTY_THEME_NAME", _ascii_ghostty_name(label)).strip()
     return theme
 
 
@@ -454,21 +519,22 @@ def parse_theme_file(
     )
 
 
-def discover_themes(repo_dir: Path) -> dict[str, dict[str, str]]:
-    """Discover all built-in repository themes and user-defined custom themes."""
-    themes: dict[str, dict[str, str]] = {}
+def discover_builtin_themes(repo_dir: Path) -> dict[str, dict[str, str]]:
+    """Discover and sort all built-in repository themes directly from colors/themes/*.theme."""
+    raw_builtin: dict[str, dict[str, str]] = {}
     managed_dir = repo_dir / "colors" / "themes"
-    for slug in MANAGED_ORDER:
-        p = managed_dir / f"{slug}.theme"
-        if p.is_file():
-            themes[slug] = parse_theme_file(p, default_slug=slug, source="builtin")
-
     if managed_dir.is_dir():
         for p in sorted(managed_dir.glob("*.theme")):
-            slug = p.stem.lower()
-            if slug not in themes:
-                themes[slug] = parse_theme_file(p, default_slug=slug, source="builtin")
+            if not p.is_file():
+                continue
+            t = parse_theme_file(p, default_slug=p.stem.lower(), source="builtin")
+            raw_builtin[t["THEME_ID"]] = t
+    return {slug: raw_builtin[slug] for slug in ordered_theme_slugs(raw_builtin)}
 
+
+def discover_themes(repo_dir: Path) -> dict[str, dict[str, str]]:
+    """Discover all built-in repository themes and user-defined custom themes in canonical order."""
+    themes = discover_builtin_themes(repo_dir)
     for udir in get_user_themes_dirs():
         if not udir.is_dir():
             continue
@@ -478,8 +544,7 @@ def discover_themes(repo_dir: Path) -> dict[str, dict[str, str]]:
                 continue
             t = parse_theme_file(p, default_slug=p.stem.lower(), source="user")
             themes[t["THEME_ID"]] = t
-
-    return themes
+    return {slug: themes[slug] for slug in ordered_theme_slugs(themes)}
 
 
 def resolve_single_theme(repo_dir: Path, raw_name: str) -> dict[str, str]:
@@ -521,11 +586,21 @@ def resolve_single_theme(repo_dir: Path, raw_name: str) -> dict[str, str]:
                 break
 
     if parsed is None:
-        builtin_cand = repo_dir / "colors" / "themes" / f"{slug}.theme"
+        managed_dir = repo_dir / "colors" / "themes"
+        builtin_cand = managed_dir / f"{slug}.theme"
         if builtin_cand.is_file():
             parsed = parse_theme_kv(builtin_cand, strict_lines=False)
             origin = str(builtin_cand)
             source = "builtin"
+        elif managed_dir.is_dir():
+            for cand in sorted(managed_dir.glob("*.theme")):
+                kv = parse_theme_kv(cand, strict_lines=False)
+                cand_id = kv.get("THEME_ID", cand.stem).strip().lower().replace("_", "-")
+                if cand_id == slug:
+                    parsed = kv
+                    origin = str(cand)
+                    source = "builtin"
+                    break
 
     if parsed is None:
         active_snap = get_xdg_config_home() / "home-settings" / "active-theme.theme"
@@ -592,6 +667,7 @@ def create_user_theme(
     label = slug_to_label(slug)
     pascal_slug = "-".join(part.capitalize() for part in slug.split("-") if part)
     snake_slug = slug.replace("-", "_")
+    ghostty_name = _ascii_ghostty_name(label)
     content = f"""# Custom User Theme: {slug} (based on {base['THEME_ID']})
 THEME_ID="{slug}"
 THEME_LABEL="{label}"
@@ -599,7 +675,7 @@ THEME_DESCRIPTION="Custom {base['THEME_MODE']} theme based on {base['THEME_LABEL
 THEME_MODE="{base['THEME_MODE']}"
 BAT_THEME_NAME="{pascal_slug}-TrueColor"
 BTOP_THEME_NAME="{snake_slug}"
-GHOSTTY_THEME_NAME="{label}"
+GHOSTTY_THEME_NAME="{ghostty_name}"
 
 # Monotone Surface & Content Ramp
 BASE03="{base['BASE03']}"

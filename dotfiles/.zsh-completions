@@ -60,7 +60,20 @@ _theme() {
     if [ -n "$theme_bin" ]; then
         themes=(${(f)"$("$theme_bin" --list --plain 2>/dev/null)"})
     else
-        themes=(solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark tokyonight-night kanagawa-wave nord onedark new-years valentines st-patricks easter independence-day halloween thanksgiving christmas)
+        local _hs_comp_repo="${${(%):-%x}:A:h:h}"
+        if [[ -d "$_hs_comp_repo/colors/themes" ]]; then
+            local _hs_ucfg="${XDG_CONFIG_HOME:-$HOME/.config}/themes"
+            themes=(
+                "$_hs_comp_repo/colors/themes"/*.theme(N:t:r)
+                "$_hs_ucfg"/*.theme(N:t:r)
+                "$_hs_ucfg"/*.conf(N:t:r)
+            )
+            themes=(${(u)themes:#active-theme})
+        else
+# BEGIN GENERATED BUILTIN THEMES
+        themes=(solarized-dark solarized-light catppuccin-mocha catppuccin-latte gruvbox-dark gruvbox-light rose-pine rose-pine-dawn everforest-dark tokyonight-night kanagawa-wave dracula nord onedark new-years valentines st-patricks easter independence-day halloween thanksgiving christmas)
+# END GENERATED BUILTIN THEMES
+        fi
     fi
     if [[ "${words[CURRENT]:-}" == (--set=*|--preview=*|--env=*|--from=*|--dry-run=*) ]]; then
         (( ${+compstate} && $+builtins[compset] )) && compset -P 1 '*=' || true

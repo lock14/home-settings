@@ -1,0 +1,39 @@
+# Managed Theme: everforest-dark
+THEME_ID="everforest-dark"
+THEME_LABEL="Everforest Dark"
+THEME_DESCRIPTION="Low-contrast warm forest dark palette engineered for eye comfort"
+THEME_MODE="dark"
+THEME_CATEGORY="classic"
+THEME_ORDER="90"
+BAT_THEME_NAME="Everforest-Dark-TrueColor"
+BTOP_THEME_NAME="everforest_dark"
+GHOSTTY_THEME_NAME="Everforest Dark"
+
+# Monotone Surface & Content Ramp
+BASE03="#2D353B"
+BASE02="#3A454A"
+BASE04="#232A2E"
+BASE01="#859289"
+BASE00="#9DA9A0"
+BASE0="#D3C6AA"
+BASE1="#DFD4BC"
+BASE2="#EAE2CF"
+BASE3="#F3EFE3"
+
+# Semantic Accent Palette
+YELLOW="#DBBC7F"
+ORANGE="#E69875"
+RED="#E6686B"
+MAGENTA="#D699B6"
+VIOLET="#AC8EC9"
+BLUE="#78B4CE"
+CYAN="#83C092"
+GREEN="#9EC66E"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#414F44"
+MIX_RED="#4E3E44"
+MIX_YELLOW="#505049"
+MIX_BLUE="#3D515B"
+MIX_MAGENTA="#4F4954"
+MIX_BASE1="#494E50"

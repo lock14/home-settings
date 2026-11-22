@@ -2,49 +2,49 @@
 # Matches the 16-color semantic palette architecture
 
 # Main background, empty for terminal default, need to be empty if you want transparent background
-theme[main_bg]="#07081c"
+theme[main_bg]="#0c0c10"
 
 # Main text color
-theme[main_fg]="#eef1ff"
+theme[main_fg]="#f2efe9"
 
 # Title color for boxes
-theme[title]="#ffffff"
+theme[title]="#f8f6f2"
 
 # Highlight color for keyboard shortcuts
 theme[hi_fg]="#44ff77"
 
 # Background color of selected item in processes box
-theme[selected_bg]="#14183d"
+theme[selected_bg]="#1c1b22"
 
 # Foreground color of selected item in processes box
-theme[selected_fg]="#ffffff"
+theme[selected_fg]="#f8f6f2"
 
 # Color of inactive/disabled text
-theme[inactive_fg]="#6872aa"
+theme[inactive_fg]="#7e7a8c"
 
 # Color of text appearing on top of graphs, such as uptime and current network graph scaling
-theme[graph_text]="#848fc7"
+theme[graph_text]="#9e99ad"
 
 # Background color of the percentage meters
-theme[meter_bg]="#14183d"
+theme[meter_bg]="#1c1b22"
 
 # Misc colors for processes box including mini cpu graphs, details memory graph and details status text
 theme[proc_misc]="#ffd700"
 
 # Cpu box outline color
-theme[cpu_box]="#6872aa"
+theme[cpu_box]="#7e7a8c"
 
 # Memory/disks box outline color
-theme[mem_box]="#6872aa"
+theme[mem_box]="#7e7a8c"
 
 # Net up/down box outline color
-theme[net_box]="#6872aa"
+theme[net_box]="#7e7a8c"
 
 # Processes box outline color
-theme[proc_box]="#6872aa"
+theme[proc_box]="#7e7a8c"
 
 # Box divider line and small boxes line color
-theme[div_line]="#6872aa"
+theme[div_line]="#7e7a8c"
 
 # Temperature graph colors
 theme[temp_start]="#ffd700"
@@ -57,9 +57,9 @@ theme[cpu_mid]="#ff66c4"
 theme[cpu_end]="#00f0ff"
 
 # Mem/Disk free meter
-theme[free_start]="#6872aa"
-theme[free_mid]="#848fc7"
-theme[free_end]="#eef1ff"
+theme[free_start]="#7e7a8c"
+theme[free_mid]="#9e99ad"
+theme[free_end]="#f2efe9"
 
 # Mem/Disk cached meter
 theme[cached_start]="#ff66c4"

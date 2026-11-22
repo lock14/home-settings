@@ -27,11 +27,10 @@ from theme_lib.generators import (
     generate_zsh_theme_text,
 )
 from theme_lib.palette import (
-    MANAGED_ORDER,
     ansi_palette_hex_list,
-    discover_themes,
     get_xdg_config_home,
 )
+from theme_lib.sync import sync_managed_repo_assets
 
 
 def sync_symlink(src_path: Path, dst_path: Path) -> None:
@@ -50,29 +49,14 @@ def sync_symlink(src_path: Path, dst_path: Path) -> None:
     dst_path.symlink_to(src_path)
 
 
-def sync_managed_repo_assets(repo_dir: Path) -> None:
-    """Regenerate tracked bat .tmTheme, btop, and Ghostty theme files from colors/themes/."""
-    base_tmtheme = (repo_dir / "colors" / "Solarized-Dark-TrueColor.tmTheme").read_text(encoding="utf-8")
-    themes = discover_themes(repo_dir)
-    for slug in MANAGED_ORDER:
-        if slug == "solarized-dark":
-            continue
-        t = themes[slug]
-        tm_path = repo_dir / "colors" / f"{t['BAT_THEME_NAME']}.tmTheme"
-        tm_path.write_text(generate_tmtheme_text(base_tmtheme, t), encoding="utf-8")
-
-        btop_path = repo_dir / "dotfiles" / ".config" / "btop" / "themes" / f"{t['BTOP_THEME_NAME']}.theme"
-        btop_path.write_text(generate_btop_theme_text(t), encoding="utf-8")
-
-        ghostty_path = repo_dir / "dotfiles" / ".config" / "ghostty" / "themes" / t["GHOSTTY_THEME_NAME"]
-        ghostty_path.write_text(generate_ghostty_theme_text(t), encoding="utf-8")
-
-
 def emit_live_osc_sequences(theme: dict[str, str]) -> None:
     """Emit live OSC 10, 11, 12, and OSC 4 palette escape sequences to active TTY."""
     if not (sys.stdout.isatty() or os.environ.get("THEME_FORCE_OSC") == "1"):
         return
     if os.environ.get("NO_COLOR"):
+        return
+    term_lc = (os.environ.get("TERM") or "").strip().lower()
+    if term_lc in ("dumb", "linux"):
         return
     in_tmux = bool(os.environ.get("TMUX"))
     seqs = [
@@ -182,6 +166,7 @@ def broadcast_live_reloads(theme: dict[str, str], state_dir: Path, repo_dir: Pat
             fzf_str = build_fzf_color_opts(theme, include_layout=True)
             for k, v in (
                 ("HOME_SETTINGS_THEME", theme["THEME_ID"]),
+                ("HOME_SETTINGS_THEME_MODE", theme["THEME_MODE"]),
                 ("BAT_THEME", theme["BAT_THEME_NAME"]),
                 ("FZF_DEFAULT_OPTS", fzf_str),
             ):

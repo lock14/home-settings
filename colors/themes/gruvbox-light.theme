@@ -1,0 +1,39 @@
+# Managed Theme: gruvbox-light
+THEME_ID="gruvbox-light"
+THEME_LABEL="Gruvbox Light"
+THEME_DESCRIPTION="Retro groove warm cream daylight palette with earthy contrast"
+THEME_MODE="light"
+THEME_CATEGORY="classic"
+THEME_ORDER="60"
+BAT_THEME_NAME="Gruvbox-Light-TrueColor"
+BTOP_THEME_NAME="gruvbox_light"
+GHOSTTY_THEME_NAME="Gruvbox Light"
+
+# Monotone Surface & Content Ramp
+BASE03="#FBF1C7"
+BASE02="#EBDBB2"
+BASE04="#F2E5BC"
+BASE01="#6E6259"
+BASE00="#5C524B"
+BASE0="#3C3836"
+BASE1="#282828"
+BASE2="#1D2021"
+BASE3="#141617"
+
+# Semantic Accent Palette
+YELLOW="#986300"
+ORANGE="#AF3A03"
+RED="#9D0006"
+MAGENTA="#8F3F71"
+VIOLET="#6C469E"
+BLUE="#076678"
+CYAN="#2E7352"
+GREEN="#5F6E00"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#DCE5B2"
+MIX_RED="#F2CEBE"
+MIX_YELLOW="#EAD7A4"
+MIX_BLUE="#CDD9BA"
+MIX_MAGENTA="#E8D1C4"
+MIX_BASE1="#D9D0AC"

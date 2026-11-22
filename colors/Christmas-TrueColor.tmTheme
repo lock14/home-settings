@@ -173,7 +173,7 @@
 				<string>#FF7B24</string>
 			</dict>
 		</dict>
-		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #FFFFFF) -->
+		<!-- Markdown Heading 4 & Table Headers (Solarized Base1 #F7FDF9) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Heading 4 and Table Headers</string>
@@ -182,10 +182,10 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#FFFFFF</string>
+				<string>#F7FDF9</string>
 			</dict>
 		</dict>
-		<!-- Markdown Bold (Solarized Base1 Bold #FFFFFF) -->
+		<!-- Markdown Bold (Solarized Base1 Bold #F7FDF9) -->
 		<dict>
 			<key>name</key>
 			<string>Markdown Bold</string>
@@ -196,7 +196,7 @@
 				<key>fontStyle</key>
 				<string>bold</string>
 				<key>foreground</key>
-				<string>#FFFFFF</string>
+				<string>#F7FDF9</string>
 			</dict>
 		</dict>
 		<!-- Markdown Italic (Solarized Base0 Italic) -->

@@ -26,7 +26,7 @@ Use this skill when auditing or reviewing `bin/ide`, `libexec/ide_lib/`, `libexe
 ## Step-by-step audit checklist
 
 1. **Glyph, theme, and color capability degradation**:
-   * Confirm zero decorative emojis appear in `solarized-dark` or any of the 9 classic daily-driver themes, and confirm
+   * Confirm zero decorative emojis appear in `solarized-dark` or any classic daily-driver theme, and confirm
      `IDE_NERD_FONTS=0` and `TERM=dumb` omit PUA icons cleanly across `ide list`, `ide -s`, `ide _internal session-preview`,
      and `ide keys` (`[P1]`).
    * Confirm `load_active_palette()` (`libexec/ide_lib/theme.py`) and `show_keys_cheatsheet()` (`bin/ide`) honor

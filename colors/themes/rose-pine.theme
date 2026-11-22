@@ -1,0 +1,39 @@
+# Managed Theme: rose-pine
+THEME_ID="rose-pine"
+THEME_LABEL="Rosé Pine"
+THEME_DESCRIPTION="Soho midnight pine palette with muted rose, iris, and seafoam accents"
+THEME_MODE="dark"
+THEME_CATEGORY="classic"
+THEME_ORDER="70"
+BAT_THEME_NAME="Rose-Pine-TrueColor"
+BTOP_THEME_NAME="rose_pine"
+GHOSTTY_THEME_NAME="Rose Pine"
+
+# Monotone Surface & Content Ramp
+BASE03="#191724"
+BASE02="#26233A"
+BASE04="#13111C"
+BASE01="#787394"
+BASE00="#908CAA"
+BASE0="#E0DEF4"
+BASE1="#EAE8F8"
+BASE2="#F2F0FB"
+BASE3="#FAF8FF"
+
+# Semantic Accent Palette
+YELLOW="#F6C177"
+ORANGE="#EA9A75"
+RED="#EB6F92"
+MAGENTA="#EB98C5"
+VIOLET="#C4A7E7"
+BLUE="#67A8CE"
+CYAN="#9CCFD8"
+GREEN="#8AC79A"
+
+# Diff & Search Surface Tints
+MIX_GREEN="#2D3739"
+MIX_RED="#3F2738"
+MIX_YELLOW="#453935"
+MIX_BLUE="#2A3749"
+MIX_MAGENTA="#433144"
+MIX_BASE1="#3A3846"

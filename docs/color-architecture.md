@@ -1,8 +1,10 @@
 # Visual precision and semantic color architecture
 
-All UI components across terminal emulators, shell prompts, file viewers, and editors adhere to Ethan Schoonover's Solarized Dark specification by default in 24-bit TrueColor (`COLORTERM=truecolor`), while the unified 14-slot semantic role architecture (`base03` through `red`) powers all 17 built-in themes via `bin/theme` and `libexec/theme_lib/`.
+All UI components across terminal emulators, shell prompts, file viewers, and editors adhere to Ethan Schoonover's Solarized Dark specification by default in 24-bit TrueColor (`COLORTERM=truecolor`), while the unified 14-slot semantic role architecture (`base03` through `red`) powers all built-in and custom user themes via `bin/theme` and `libexec/theme_lib/`.
 
-The 9 classic daily-driver themes (`solarized-dark`, `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `tokyonight-night`, `kanagawa-wave`, `nord`, and `onedark`) preserve strict physical hue-to-slot alignment. The 8 US Holiday themes (`new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`) keep the same AST token partitioning and pairwise semantic separation—guaranteeing `GREEN` valid commands, `YELLOW` control flow, and `RED` errors never collide and `MIX_GREEN` and `MIX_RED` retain green versus red diff polarity—while intentionally remapping high-visibility foreground slots and prompt or Tmux emblems to each holiday's signature colors.
+<!-- BEGIN GENERATED THEME CATALOG -->
+The 14 classic daily-driver themes (`solarized-dark`, `solarized-light`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `gruvbox-light`, `rose-pine`, `rose-pine-dawn`, `everforest-dark`, `tokyonight-night`, `kanagawa-wave`, `dracula`, `nord`, and `onedark`) preserve strict physical hue-to-slot alignment and strictly monotonic `base03` through `base3` neutral ramps. The 8 US Holiday themes (`new-years`, `valentines`, `st-patricks`, `easter`, `independence-day`, `halloween`, `thanksgiving`, and `christmas`) keep the same AST token partitioning and pairwise semantic separation—guaranteeing `GREEN` valid commands, `YELLOW` control flow, and `RED` errors never collide and `MIX_GREEN` and `MIX_RED` retain green versus red diff polarity—while intentionally remapping high-visibility foreground slots and prompt or Tmux emblems to each holiday's signature colors.
+<!-- END GENERATED THEME CATALOG -->
 
 ## Solarized Dark 14-slot palette roles
 
