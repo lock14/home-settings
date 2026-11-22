@@ -122,6 +122,9 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q '@ide_tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_tab_ed' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_tab_term' "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq '#{e|>=:#{client_width},95}' "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq '#{e|>=:#{client_width},105}' "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq '#{e|>=:#{client_width},120}' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_ed_parked' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_term_parked' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q 'alert-bell' "$TEMP_HOME/.tmux.conf" && \
@@ -143,8 +146,10 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'IDE_CLIENT=#{q:client_name}.* switch #{q:session_name}' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-m.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind m.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-?.*ide keys' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind ?.*ide keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'command-alias\[101\] display-keys-ide=' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'display-popup -E -w 108 -h 34 "\$HOME/.local/bin/ide keys"' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-? display-keys-ide' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind ? display-keys-ide' "$TEMP_HOME/.tmux.conf" && \
    grep -q '^unbind -n WheelUpStatus$' "$TEMP_HOME/.tmux.conf" && \
    grep -q '^unbind -n WheelDownStatus$' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusLeft.* switch .*choose-tree -Zs' "$TEMP_HOME/.tmux.conf" && \
@@ -156,10 +161,11 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -n DoubleClick1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n TripleClick1Status.*mouse_status_range},tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown1StatusRight.*mouse_status_range},attn' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'mouse_status_range},fleet.*switch.*ide keys' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'mouse_status_range},fleet.*switch.*display-keys-ide' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDown3Status display-menu' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g pane-focus-in "if-shell -F .*_internal ack-hook' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g client-session-changed "if-shell -F .*_internal ack-hook' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set-hook -g client-focus-in "if-shell -F .*_internal ack-hook' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g client-attached.*@ide_socket.*refresh_home_settings_images' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g client-detached.*@ide_socket.*refresh_home_settings_images' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set-hook -g session-created.*_internal refresh-attn' "$TEMP_HOME/.tmux.conf" && \
@@ -217,6 +223,8 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 1
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 0
         eval_sright_idle_fleet="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
+        tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_attn_summary "cfg_test"
+        eval_sright_self_attn="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_attn_summary "alpha-ws +1"
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_count 3
         tmux -L "$TMUX_TEST_SOCK" set-option -g @ide_fleet_active 2
@@ -287,6 +295,7 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "range=user|help]#[fg=#839496,bg=#073642,nobold]󰋖 Help (Alt+?) " <<< "$eval_sright_root" && \
            ! grep -Fq "(Alt+s)" <<< "$eval_sright_root" && \
            grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 1 · 0 active (Alt+s)" <<< "$eval_sright_idle_fleet" && \
+           ! grep -Fq "range=user|attn" <<< "$eval_sright_self_attn" && \
            grep -Fq "range=user|attn]#[fg=#CB4B16,bg=#073642,nobold]󰂚 alpha-ws +1 " <<< "$eval_sright_fleet" && \
            grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]2 active#[fg=#839496,bg=#073642,nobold] (Alt+s)" <<< "$eval_sright_fleet" && \
            ! grep -Fq "subdir" <<< "$eval_sright_root" && \

@@ -38,12 +38,15 @@ Use this skill when auditing or reviewing `bin/ide`, `libexec/ide_lib/`, `libexe
      render explicit `[PREVIEW]` versus `▸ ... [LIVE]` left-aligned top-border titles (`[OVERRIDE] §6.1`, `§6.3`,
      `§6.6`, and `patterns.md` `Focused Surface`).
 3. **Width math, 80×24 responsiveness, and footer parity**:
-   * Confirm `SIDE_BY_SIDE_MIN_COLS = 90` (`libexec/ide_lib/switcher.py`) stacks `ide -s` vertically below `90` columns
-     (`[OVERRIDE] §1.6`), `format_sessions_footer_label` packs complete `" · "`-separated hints within the pane width
-     with zero mid-word clipping (`[OVERRIDE] §1.4 and §R4.11`), and `ide keys` fits inside `-w 80 -h 24` (`<= 76`
-     columns and `<= 22` lines, `[P2]`).
-   * Confirm `visible_width`, `_expanded_cell_widths`, and `trunc_visible` (`…`, `[OVERRIDE] §R1.7`) preserve East
-     Asian wide-char and tab alignment and append `\033[0m` on styled lines.
+   * Confirm `SIDE_BY_SIDE_MIN_COLS = 90` (`libexec/ide_lib/switcher.py`) and `run_fzf_picker` (`libexec/theme_lib/preview.py`)
+     stack vertically below `90` columns (`[OVERRIDE] §1.6`), `format_sessions_footer_label` and `_format_new_picker_footer`
+     pack complete `" · "`-separated hints within the pane width with zero mid-word clipping (`[OVERRIDE] §1.4 and §R4.11`),
+     top `tmux` chrome scales cleanly across `120`, `105`, and `95`-column tiers, Neovim Telescope (`flex`) and `mini.files`
+     adapt inside narrow split panes, and `ide keys` fits inside `108×34` (`<= 104` columns and `<= 30` lines) while
+     degrading cleanly to `<= 76×22` on `80×24` viewports (`[P2]`).
+   * Confirm `visible_width`, `_expanded_cell_widths`, `trunc_visible`, and `trunc_ansi_line` (`…`, `[OVERRIDE] §R1.7`)
+     preserve East Asian wide-char and tab alignment, keep `theme --preview` strictly rectangular (`visible_len == width`),
+     and append `\033[0m` on styled lines while leaving piped CLI outputs untruncated.
 4. **Keyboard layers, scroll smoothness, and zero-jank UI performance**:
    * Confirm zero root-table `Ctrl+h/j/k/l` bindings or focus-stealing `WheelUpPane` / `WheelDownPane` `select-pane`
      calls exist in `dotfiles/.tmux.conf`, and confirm `F1` (`ide keys`) and `F5` (`reload`) work alongside `Alt+?`

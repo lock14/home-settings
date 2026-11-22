@@ -1302,4 +1302,98 @@ else
     fail "install_ghostty ubuntu 3-tier provisioning" "tier1='$ghostty_tier1_out' rolling='$ghostty_deb_rolling_out' idem='$ghostty_deb_idempotent_out' mint24='$ghostty_deb_mint24_out' arch='$ghostty_deb_arch_skip_out' snap_dry='$ghostty_snap_dry_out' snap_fb='$ghostty_snap_fallback_out'"
 fi
 
+# Test 7: Managed AI CLI lifecycle hooks (setup/modules/75-ai-hooks.sh & --skip hooks)
+HOOKS_HOME="$(make_sandbox_home)"
+skip_hooks_out="$(HOME="$HOOKS_HOME" "$SCRIPT_DIR/setup.sh" --os ubuntu --user --skip dotfiles,bin,fonts,tools,nvim,terminal,hooks --dry-run 2>&1)"
+mkdir -p "$HOOKS_HOME/.gemini/config" "$HOOKS_HOME/.claude" "$HOOKS_HOME/.codex"
+cat > "$HOOKS_HOME/.gemini/config/hooks.json" <<'EOF'
+{
+  "custom-lint": {
+    "enabled": true
+  }
+}
+EOF
+cat > "$HOOKS_HOME/.claude/settings.json" <<'EOF'
+{
+  "model": "opus",
+  "permissions": {
+    "allow": ["Bash(ls)"]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {"type": "command", "command": "ide --agent-state done"},
+          {"type": "command", "command": "echo custom-stop"}
+        ]
+      }
+    ]
+  }
+}
+EOF
+cat > "$HOOKS_HOME/.codex/config.toml" <<'EOF'
+model = "o3"
+notify = ["ide", "--agent-state", "done"]
+
+[projects."/tmp/sandbox-repo"]
+trust_level = "trusted"
+EOF
+hooks_dry_out="$(HOME="$HOOKS_HOME" DRY_RUN=true bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" 2>&1)"
+dry_untouched=false
+if grep -Fq -- "--agent-state" "$HOOKS_HOME/.claude/settings.json" && \
+   grep -Fq -- "--agent-state" "$HOOKS_HOME/.codex/config.toml" && \
+   ! grep -Fq "ide-state" "$HOOKS_HOME/.gemini/config/hooks.json"; then
+    dry_untouched=true
+fi
+HOME="$HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" >/dev/null
+HOME="$HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" >/dev/null
+hooks_merged_ok=false
+if python3 -B - "$HOOKS_HOME" <<'PY'; then
+import json, os, sys
+h = sys.argv[1]
+agy = json.load(open(os.path.join(h, ".gemini/config/hooks.json"), encoding="utf-8"))
+assert "custom-lint" in agy and "ide-state" in agy, agy
+for ev in ("SessionStart", "PreInvocation", "PreToolUse", "PostToolUse", "Stop"):
+    assert ev in agy["ide-state"], f"missing {ev} in agy hooks"
+cl = json.load(open(os.path.join(h, ".claude/settings.json"), encoding="utf-8"))
+assert cl["model"] == "opus" and cl["permissions"]["allow"] == ["Bash(ls)"], cl
+cl_raw = json.dumps(cl)
+assert "--agent-state" not in cl_raw and "echo custom-stop" in cl_raw and "ide state done" in cl_raw, cl_raw
+for ev in ("SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "Stop"):
+    assert ev in cl["hooks"], f"missing {ev} in claude hooks"
+cx = open(os.path.join(h, ".codex/config.toml"), encoding="utf-8").read()
+assert '--agent-state' not in cx and 'notify = ["ide", "state", "done"]' in cx, cx
+assert cx.index('notify = ["ide", "state", "done"]') < cx.index('[projects."/tmp/sandbox-repo"]'), cx
+assert 'model = "o3"' in cx and 'trust_level = "trusted"' in cx, cx
+PY
+    hooks_merged_ok=true
+fi
+HOME="$HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" --uninstall >/dev/null
+hooks_uninstalled_ok=false
+if python3 -B - "$HOOKS_HOME" <<'PY'; then
+import json, os, sys
+h = sys.argv[1]
+agy = json.load(open(os.path.join(h, ".gemini/config/hooks.json"), encoding="utf-8"))
+assert "custom-lint" in agy and "ide-state" not in agy, agy
+cl = json.load(open(os.path.join(h, ".claude/settings.json"), encoding="utf-8"))
+assert cl["model"] == "opus" and "echo custom-stop" in json.dumps(cl) and "ide state" not in json.dumps(cl), cl
+cx = open(os.path.join(h, ".codex/config.toml"), encoding="utf-8").read()
+assert "ide" not in cx and 'model = "o3"' in cx and '[projects."/tmp/sandbox-repo"]' in cx, cx
+PY
+    hooks_uninstalled_ok=true
+fi
+CLEAN_HOOKS_HOME="$(make_sandbox_home)"
+HOME="$CLEAN_HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" >/dev/null
+HOME="$CLEAN_HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" --uninstall >/dev/null
+if [[ "$skip_hooks_out" != *"Configuring AI CLI lifecycle hooks"* ]] && \
+   [[ "$hooks_dry_out" == *"[DryRun]"* ]] && [ "$dry_untouched" = true ] && \
+   [ "$hooks_merged_ok" = true ] && [ "$hooks_uninstalled_ok" = true ] && \
+   [ ! -e "$CLEAN_HOOKS_HOME/.gemini/config/hooks.json" ] && \
+   [ ! -e "$CLEAN_HOOKS_HOME/.claude/settings.json" ] && \
+   [ ! -e "$CLEAN_HOOKS_HOME/.codex/config.toml" ]; then
+    pass "setup/modules/75-ai-hooks.sh (--skip hooks) idempotently merges, migrates legacy --agent-state, and cleanly uninstalls agy, claude, and codex lifecycle hooks while preserving user settings"
+else
+    fail "setup/modules/75-ai-hooks.sh lifecycle hooks" "skip='$skip_hooks_out' dry=$dry_untouched merged=$hooks_merged_ok uninst=$hooks_uninstalled_ok"
+fi
+
 test_summary

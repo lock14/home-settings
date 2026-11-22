@@ -61,7 +61,8 @@ EOF
 
 show_keys_cheatsheet() {
     local c_orange="" c_blue="" c_cyan="" c_base0="" c_base01="" c_reset=""
-    local meta_lc title_pfx=" " hdr_pad="                "
+    local meta_lc title_pfx=" " hdr_pad="                " hdr_pad_wide="                                           "
+    local use_compact=0 rows="" cols="" stty_sz="" sw_unzoom=0
     meta_lc="$(printf '%s|%s|%s|%s' "${TERM:-}" "${COLORTERM:-}" "${IDE_NERD_FONTS:-}" "${IDE_ASCII:-}" | tr '[:upper:]' '[:lower:]')"
     IFS='|' read -r term_lc ct_lc nf_lc asc_lc <<< "$meta_lc"
     if [ -n "${NO_COLOR:-}" ]; then
@@ -81,78 +82,154 @@ show_keys_cheatsheet() {
         c_orange=$'\033[91m'; c_blue=$'\033[34m'; c_cyan=$'\033[36m'; c_base0=$'\033[37m'; c_base01=$'\033[90m'; c_reset=$'\033[0m'
     fi
     case "|$term_lc|$asc_lc|$nf_lc|" in
-        *"|dumb|"*|*"|1|"*|*"|true|"*|*"|0|"*|*"|off|"*|*"|false|"*|*"|no|"*|*"|ascii|"*) title_pfx=""; hdr_pad="                  " ;;
+        *"|dumb|"*|*"|1|"*|*"|true|"*|*"|0|"*|*"|off|"*|*"|false|"*|*"|no|"*|*"|ascii|"*) title_pfx=""; hdr_pad="                  "; hdr_pad_wide="                                             " ;;
     esac
-
-    printf ' %s%sIDE Workspace & Editor Keybindings%s%s[q / Esc / F1 to close]%s\n' "$c_orange" "$title_pfx" "$c_base01" "$hdr_pad" "$c_reset"
-    printf ' %s── %sPANES & LAYOUT %s────────────────────  ── %sSESSIONS & WORKSPACE %s──────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
-    printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
-        "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Ed/Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_reset" \
-        "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move pane focus" "$c_cyan" "Alt+l / h (Alt+s)" "$c_base0" "Dock / undock AI" "$c_reset" \
-        "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "C-y/o/M-n (Alt+s)" "$c_base0" "Ack, PR, or new WS" "$c_reset" \
-        "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI" "$c_reset" \
-        "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide/show Editor" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open sys monitor" "$c_reset" \
-        "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide/show Shell" "$c_cyan" "Click top bar" "$c_base0" "Focus, Help, menu" "$c_reset" \
-        "$c_cyan" "Alt+z | Pfx+|/-" "$c_base0" "Zoom | split pane" "$c_cyan" "v <f> / icd [dir]" "$c_base0" "Edit / workspace cd" "$c_reset" \
-        "$c_cyan" "Prefix + b / r" "$c_base0" "Top bar / refresh" "$c_cyan" ":Q / Alt+q / M-Q" "$c_base0" "Quit / force-quit" "$c_reset"
-    printf ' %s── %sEDITOR (Space = Leader) %s───────────  ── %sCLIPBOARD, LINKS & HELP %s───────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
-    printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
-        "$c_cyan" "Space ff / fg" "$c_base0" "Find file / grep" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select & copy text" "$c_reset" \
-        "$c_cyan" "Space gs" "$c_base0" "Review Git status" "$c_cyan" "Alt+c / Alt+v" "$c_base0" "Copy+clear / paste" "$c_reset" \
-        "$c_cyan" "Space m" "$c_base0" "Markdown preview" "$c_cyan" "Ctrl/Alt+Click" "$c_base0" "Open link / LSP def" "$c_reset" \
-        "$c_cyan" "H / L  (Normal)" "$c_base0" "Prev/next buffer" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back/forward" "$c_reset" \
-        "$c_cyan" "Ctrl+h/j/k/l" "$c_base0" "Editor split nav" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
-    printf ' %s── %sFILE TREE (mini.files) %s────────────  ── %sSEND TO AI PROMPT %s─────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
-    printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
-        "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files" "$c_cyan" "Space a  (Visual)" "$c_base0" "Send selected lines" "$c_reset" \
-        "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent / open" "$c_cyan" "Space il (Normal)" "$c_base0" "Send current line" "$c_reset" \
-        "$c_cyan" "Enter  (in tree)" "$c_base0" "Open file / dir" "$c_cyan" "Space id (Normal)" "$c_base0" "Send diagnostics" "$c_reset" \
-        "$c_cyan" "=      (in tree)" "$c_base0" "Apply file edits" "$c_cyan" ":IdeSend[!] [ws]" "$c_base0" "Stage to other WS" "$c_reset" \
-        "$c_cyan" "g? / q (in tree)" "$c_base0" "Help / close tree" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send copy selection" "$c_reset"
-
+    if [ -t 0 ] && [ -t 1 ] && [ "${IDE_KEYS_NO_WAIT:-0}" != "1" ] && [ -n "${IDE_SWITCHER_SESSION:-}" ]; then
+        local sw_z=""
+        IFS=' ' read -r sw_z rows cols <<< "$(tmux display-message -p -t "=${IDE_SWITCHER_SESSION}:" '#{window_zoomed_flag} #{window_height} #{window_width}' 2>/dev/null || true)"
+        if [ "$sw_z" = "0" ]; then
+            tmux resize-pane -Z -t "=${IDE_SWITCHER_SESSION}:" >/dev/null 2>&1 && sw_unzoom=1 || true
+            case "$rows" in ''|*[!0-9]*) ;; *) [ "$rows" -gt 1 ] && rows=$((rows - 1)) ;; esac
+        fi
+    fi
+    case "${IDE_KEYS_STYLE:-}" in
+        compact|COMPACT) use_compact=1 ;;
+        spacious|SPACIOUS|wide|WIDE) use_compact=0 ;;
+        *)
+            [ -z "$cols" ] && [ -t 1 ] && stty_sz="$(stty size 2>/dev/null || true)"
+            [ -n "$stty_sz" ] && read -r rows cols <<< "$stty_sz"
+            [ -z "$rows" ] && rows="${LINES:-}"; [ -z "$cols" ] && cols="${COLUMNS:-}"
+            case "$rows" in ''|*[!0-9]*) rows="" ;; esac
+            case "$cols" in ''|*[!0-9]*) cols="" ;; esac
+            if { [ -n "$cols" ] && [ "$cols" -gt 0 ] && [ "$cols" -lt 104 ]; } || { [ -n "$rows" ] && [ "$rows" -gt 0 ] && [ "$rows" -lt 30 ]; }; then use_compact=1; fi
+            ;;
+    esac
+    if [ "$use_compact" -eq 1 ]; then
+        printf ' %s%sIDE Workspace & Editor Keybindings%s%s[q / Esc / F1 to close]%s\n' "$c_orange" "$title_pfx" "$c_base01" "$hdr_pad" "$c_reset"
+        printf ' %s── %sPANES & LAYOUT %s────────────────────  ── %sSESSIONS & SWITCHER %s───────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
+        printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
+            "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Ed/Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_reset" \
+            "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move pane focus" "$c_cyan" "Alt+l / h (Alt+s)" "$c_base0" "Dock / undock AI" "$c_reset" \
+            "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "C-y/o/M-n (Alt+s)" "$c_base0" "Ack, PR, or new WS" "$c_reset" \
+            "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI" "$c_reset" \
+            "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide/show Editor" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open sys monitor" "$c_reset" \
+            "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide/show Shell" "$c_cyan" "Click top bar" "$c_base0" "Focus, Help, menu" "$c_reset" \
+            "$c_cyan" "Alt+z | Pfx+|/-" "$c_base0" "Zoom | split pane" "$c_cyan" "v <f> / icd [dir]" "$c_base0" "Edit / workspace cd" "$c_reset" \
+            "$c_cyan" "Prefix + b / r" "$c_base0" "Top bar / refresh" "$c_cyan" ":Q / Alt+q / M-Q" "$c_base0" "Quit / force-quit" "$c_reset"
+        printf ' %s── %sEDITOR (Space = Leader) %s───────────  ── %sCLIPBOARD, LINKS & HELP %s───────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
+        printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
+            "$c_cyan" "Space ff / fg" "$c_base0" "Find file / grep" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select & copy text" "$c_reset" \
+            "$c_cyan" "Space gs" "$c_base0" "Review Git status" "$c_cyan" "Alt+c / Alt+v" "$c_base0" "Copy+clear / paste" "$c_reset" \
+            "$c_cyan" "Space m" "$c_base0" "Markdown preview" "$c_cyan" "Ctrl/Alt+Click" "$c_base0" "Open link / LSP def" "$c_reset" \
+            "$c_cyan" "H / L  (Normal)" "$c_base0" "Prev/next buffer" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back/forward" "$c_reset" \
+            "$c_cyan" "Ctrl+h/j/k/l" "$c_base0" "Editor split nav" "$c_cyan" "Alt+? / Prefix+?" "$c_base0" "This key cheatsheet" "$c_reset"
+        printf ' %s── %sFILE TREE (mini.files) %s────────────  ── %sSEND TO AI PROMPT %s─────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
+        printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
+            "$c_cyan" "Space e / Space E" "$c_base0" "Open mini.files" "$c_cyan" "Space a  (Visual)" "$c_base0" "Send selected lines" "$c_reset" \
+            "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent / open" "$c_cyan" "Space il (Normal)" "$c_base0" "Send current line" "$c_reset" \
+            "$c_cyan" "Enter  (in tree)" "$c_base0" "Open file / dir" "$c_cyan" "Space id (Normal)" "$c_base0" "Send diagnostics" "$c_reset" \
+            "$c_cyan" "=      (in tree)" "$c_base0" "Apply file edits" "$c_cyan" ":IdeSend[!] [ws]" "$c_base0" "Stage to other WS" "$c_reset" \
+            "$c_cyan" "g? / q (in tree)" "$c_base0" "Help / close tree" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send copy selection" "$c_reset"
+    else
+        printf '\n  %s%sIDE Workspace & Editor Keybindings%s%s[q / Esc / F1 to close]%s\n\n' "$c_orange" "$title_pfx" "$c_base01" "$hdr_pad_wide" "$c_reset"
+        printf '  %s── %sPANES & LAYOUT %s───────────────────────────────    ── %sSESSIONS & SWITCHER %s──────────────────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
+        printf '  %s%-19s%s  %-28s    %s%-19s%s  %s%s\n' \
+            "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI, Editor, or Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Open session switcher" "$c_reset" \
+            "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus between panes" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI session" "$c_reset" \
+            "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "Alt+l / h (Alt+s)" "$c_base0" "Dock or undock live AI" "$c_reset" \
+            "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane or drag border" "$c_cyan" "Ctrl+y    (Alt+s)" "$c_base0" "Acknowledge AI attention" "$c_reset" \
+            "$c_cyan" "Alt+Shift+E" "$c_base0" "Hide or show Editor pane" "$c_cyan" "Ctrl+o    (Alt+s)" "$c_base0" "Open session PR in browser" "$c_reset" \
+            "$c_cyan" "Alt+Shift+T" "$c_base0" "Hide or show Shell pane" "$c_cyan" "Alt+n     (Alt+s)" "$c_base0" "Launch new IDE workspace" "$c_reset" \
+            "$c_cyan" "Alt+z" "$c_base0" "Zoom active pane full-screen" "$c_cyan" "Ctrl+x    (Alt+s)" "$c_base0" "Close selected workspace" "$c_reset" \
+            "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane right or below" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open system monitor popup" "$c_reset" \
+            "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_cyan" "v <file> / icd" "$c_base0" "Edit file or workspace cd" "$c_reset" \
+            "$c_cyan" "Prefix + r" "$c_base0" "Refresh sessions and themes" "$c_cyan" ":Q / Alt+q / M-Q" "$c_base0" "Quit or force-quit session" "$c_reset"
+        printf '\n  %s── %sEDITOR (Space = Leader) %s──────────────────────    ── %sCLIPBOARD, LINKS & HELP %s──────────────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
+        printf '  %s%-19s%s  %-28s    %s%-19s%s  %s%s\n' \
+            "$c_cyan" "Space ff / fb" "$c_base0" "Find files or open buffers" "$c_cyan" "Mouse drag / 2x" "$c_base0" "Select and copy text" "$c_reset" \
+            "$c_cyan" "Space fg" "$c_base0" "Live grep across workspace" "$c_cyan" "Alt+c / Alt+v" "$c_base0" "Copy selection or paste" "$c_reset" \
+            "$c_cyan" "Space gs" "$c_base0" "Review Git modified files" "$c_cyan" "Ctrl / Alt+Click" "$c_base0" "Open link or LSP definition" "$c_reset" \
+            "$c_cyan" "Space m" "$c_base0" "Toggle Markdown preview" "$c_cyan" "Mouse4/5 or C-o/i" "$c_base0" "Jump back or forward" "$c_reset" \
+            "$c_cyan" "H / L  (Normal)" "$c_base0" "Previous or next buffer" "$c_cyan" "Click top bar" "$c_base0" "Switch role, WS, or menu" "$c_reset" \
+            "$c_cyan" "Ctrl+h / j / k / l" "$c_base0" "Navigate Editor splits" "$c_cyan" "Alt+? / F1 / Pfx+?" "$c_base0" "Open this keybinding guide" "$c_reset"
+        printf '\n  %s── %sFILE TREE (mini.files) %s───────────────────────    ── %sSEND TO AI PROMPT %s────────────────────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
+        printf '  %s%-19s%s  %-28s    %s%-19s%s  %s%s\n' \
+            "$c_cyan" "Space e" "$c_base0" "Open tree at current file" "$c_cyan" "Space a  (Visual)" "$c_base0" "Send selected lines to AI" "$c_reset" \
+            "$c_cyan" "Space E" "$c_base0" "Open tree at workspace root" "$c_cyan" "Space il (Normal)" "$c_base0" "Send current line reference" "$c_reset" \
+            "$c_cyan" "h/l or Left/Right" "$c_base0" "Parent dir or open entry" "$c_cyan" "Space id (Normal)" "$c_base0" "Send buffer LSP diagnostics" "$c_reset" \
+            "$c_cyan" "Enter  (in tree)" "$c_base0" "Confirm and open entry" "$c_cyan" ":IdeSend [session]" "$c_base0" "Stage buffer or range to WS" "$c_reset" \
+            "$c_cyan" "=      (in tree)" "$c_base0" "Apply pending file edits" "$c_cyan" ":IdeSend! [sess]" "$c_base0" "Stage and switch to target" "$c_reset" \
+            "$c_cyan" "g? / q (in tree)" "$c_base0" "Tree help or close explorer" "$c_cyan" "a   (copy-mode)" "$c_base0" "Send tmux selection to AI" "$c_reset"
+    fi
     if [ -t 0 ] && [ -t 1 ] && [ "${IDE_KEYS_NO_WAIT:-0}" != "1" ]; then
-        local saved_tty="" key="" rest=""
-        saved_tty="$(stty -g 2>/dev/null || true)"
-        trap '[ -n "${saved_tty:-}" ] && stty "$saved_tty" 2>/dev/null || true; exit 0' EXIT INT TERM
+        local key="" rest=""
+        _ide_keys_saved_tty="$(stty -g 2>/dev/null || true)"
+        _ide_keys_sw_unzoom="$sw_unzoom"
+        trap '[ -n "${_ide_keys_saved_tty:-}" ] && stty "$_ide_keys_saved_tty" 2>/dev/null || true; [ "${_ide_keys_sw_unzoom:-0}" -eq 1 ] && tmux resize-pane -Z -t "=${IDE_SWITCHER_SESSION}:" >/dev/null 2>&1 || true; exit 0' EXIT INT TERM
         stty intr undef eof undef -echo 2>/dev/null || true
         while IFS= read -r -s -n 1 key; do
             if [ "$key" = $'\x1b' ]; then
-                rest=""
-                IFS= read -r -s -n 5 -t 0.02 rest || true
-                case "$rest" in
-                    ""|"?"|"OP"|"[11~"|"[[A")
-                        break
-                        ;;
-                esac
+                rest=""; IFS= read -r -s -n 5 -t 0.02 rest || true
+                case "$rest" in ""|"?"|"OP"|"[11~"|"[[A") break ;; esac
                 continue
             fi
-            case "$key" in
-                q|Q|\?|" "|""|$'\r'|$'\n'|$'\x03'|$'\x04')
-                    break
-                    ;;
-            esac
+            case "$key" in q|Q|\?|" "|""|$'\r'|$'\n'|$'\x03'|$'\x04') break ;; esac
         done
     fi
 }
 
+_ide_calibrate_path() {
+    [ "${IDE_STRICT_PATH:-0}" = "1" ] && return 0
+    local _ide_mise_dir _ide_shims _ide_inst_pfx _ide_rem _ide_new_path="" _ide_last_mise=0 _ide_idx=0 _ide_shims_added=0 _ide_p _ide_cp _ide_pass
+    if [ -n "${MISE_DATA_DIR:-}" ]; then _ide_mise_dir="$MISE_DATA_DIR"
+    elif [ -n "${XDG_DATA_HOME:-}" ]; then _ide_mise_dir="${XDG_DATA_HOME%/}/mise"
+    else _ide_mise_dir="${HOME%/}/.local/share/mise"; fi
+    while [ "$_ide_mise_dir" != "/" ] && [ "${_ide_mise_dir%/}" != "$_ide_mise_dir" ]; do _ide_mise_dir="${_ide_mise_dir%/}"; done
+    _ide_shims="$_ide_mise_dir/shims"; _ide_inst_pfx="$_ide_mise_dir/installs/"
+    case ":$PATH:" in
+        */mise/installs/*|*"$_ide_inst_pfx"*)
+            for _ide_pass in 1 2; do
+                _ide_rem="${PATH}:"; _ide_idx=0
+                while [ -n "$_ide_rem" ]; do
+                    _ide_p="${_ide_rem%%:*}"; _ide_rem="${_ide_rem#*:}"; _ide_cp="$_ide_p"
+                    while [ "$_ide_cp" != "/" ] && [ "${_ide_cp%/}" != "$_ide_cp" ]; do _ide_cp="${_ide_cp%/}"; done
+                    [ -z "$_ide_cp" ] || [ "$_ide_cp" = "$_ide_shims" ] && continue
+                    _ide_idx=$((_ide_idx + 1))
+                    if [ "$_ide_pass" -eq 1 ]; then
+                        case "$_ide_cp/" in */mise/installs/*|"$_ide_inst_pfx"*) _ide_last_mise="$_ide_idx" ;; esac
+                    else
+                        if [ "$_ide_shims_added" -eq 0 ] && [ "$_ide_idx" -gt "$_ide_last_mise" ]; then
+                            case "$_ide_cp" in /opt/homebrew/bin|/opt/homebrew/sbin|/usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin)
+                                _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"; _ide_shims_added=1 ;;
+                            esac
+                        fi
+                        _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_p"
+                    fi
+                done
+            done
+            [ "$_ide_shims_added" -eq 0 ] && _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
+            export PATH="${HOME%/}/.local/bin:$_ide_new_path:/usr/local/bin:/usr/bin:/bin" ;;
+        *) export PATH="$_ide_shims:${HOME%/}/.local/bin${PATH:+:$PATH}:/usr/local/bin:/usr/bin:/bin" ;;
+    esac
+}
+
+run_system_monitor() {
+    _ide_calibrate_path
+    local mon=""
+    for mon in btop htop top; do command -v "$mon" >/dev/null 2>&1 && exec "$mon"; done
+    echo "Error: Neither 'btop', 'htop', nor 'top' is installed." >&2
+    exit 1
+}
+
 if [ "$#" -eq 1 ]; then
     case "$1" in
-        -h|--help)
-            show_usage
-            exit 0
-            ;;
-        keys)
-            show_keys_cheatsheet
-            exit 0
-            ;;
+        -h|--help) show_usage; exit 0 ;;
+        keys) show_keys_cheatsheet; exit 0 ;;
+        monitor) run_system_monitor ;;
     esac
-fi
-
-if [ "$#" -eq 2 ] && [ "$1" = "list" ] && { [ "$2" = "--plain" ] || [ "$2" = "--json" ]; }; then
+elif [ "$#" -eq 2 ] && [ "$1" = "list" ] && { [ "$2" = "--plain" ] || [ "$2" = "--json" ]; }; then
     _ide_lookup_path="$PATH"
-    if [ "${IDE_STRICT_PATH:-0}" != "1" ]; then
-        _ide_lookup_path="$PATH:${HOME%/}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-    fi
+    [ "${IDE_STRICT_PATH:-0}" != "1" ] && _ide_lookup_path="$PATH:${HOME%/}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
     _ide_tmux_bin="$(PATH="$_ide_lookup_path" command -v tmux 2>/dev/null || true)"
     if [ -z "$_ide_tmux_bin" ] || ! "$_ide_tmux_bin" list-sessions -F '#{session_name}' >/dev/null 2>&1; then
         [ "$2" = "--json" ] && printf '[]\n'
@@ -161,112 +238,21 @@ if [ "$#" -eq 2 ] && [ "$1" = "list" ] && { [ "$2" = "--plain" ] || [ "$2" = "--
     unset _ide_lookup_path _ide_tmux_bin
 fi
 
-_ide_calibrate_path() {
-    [ "${IDE_STRICT_PATH:-0}" = "1" ] && return 0
-    local _ide_mise_dir _ide_shims _ide_inst_pfx _ide_rem _ide_new_path _ide_last_mise _ide_idx _ide_shims_added _ide_p _ide_cp
-    if [ -n "${MISE_DATA_DIR:-}" ]; then
-        _ide_mise_dir="$MISE_DATA_DIR"
-    elif [ -n "${XDG_DATA_HOME:-}" ]; then
-        _ide_mise_dir="${XDG_DATA_HOME%/}/mise"
-    else
-        _ide_mise_dir="${HOME%/}/.local/share/mise"
-    fi
-    while [ "$_ide_mise_dir" != "/" ] && [ "${_ide_mise_dir%/}" != "$_ide_mise_dir" ]; do
-        _ide_mise_dir="${_ide_mise_dir%/}"
-    done
-    _ide_shims="$_ide_mise_dir/shims"
-    _ide_inst_pfx="$_ide_mise_dir/installs/"
-    case ":$PATH:" in
-        */mise/installs/*|*"$_ide_inst_pfx"*)
-            _ide_rem="${PATH}:"
-            _ide_new_path=""
-            _ide_last_mise=0
-            _ide_idx=0
-            while [ -n "$_ide_rem" ]; do
-                _ide_p="${_ide_rem%%:*}"
-                _ide_rem="${_ide_rem#*:}"
-                _ide_cp="$_ide_p"
-                while [ "$_ide_cp" != "/" ] && [ "${_ide_cp%/}" != "$_ide_cp" ]; do
-                    _ide_cp="${_ide_cp%/}"
-                done
-                [ -z "$_ide_cp" ] || [ "$_ide_cp" = "$_ide_shims" ] && continue
-                _ide_idx=$((_ide_idx + 1))
-                case "$_ide_cp/" in
-                    */mise/installs/*|"$_ide_inst_pfx"*) _ide_last_mise="$_ide_idx" ;;
-                esac
-            done
-            _ide_rem="${PATH}:"
-            _ide_idx=0
-            _ide_shims_added=0
-            while [ -n "$_ide_rem" ]; do
-                _ide_p="${_ide_rem%%:*}"
-                _ide_rem="${_ide_rem#*:}"
-                _ide_cp="$_ide_p"
-                while [ "$_ide_cp" != "/" ] && [ "${_ide_cp%/}" != "$_ide_cp" ]; do
-                    _ide_cp="${_ide_cp%/}"
-                done
-                [ -z "$_ide_cp" ] || [ "$_ide_cp" = "$_ide_shims" ] && continue
-                _ide_idx=$((_ide_idx + 1))
-                if [ "$_ide_shims_added" -eq 0 ] && [ "$_ide_idx" -gt "$_ide_last_mise" ]; then
-                    case "$_ide_cp" in
-                        /opt/homebrew/bin|/opt/homebrew/sbin|/usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin)
-                            _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
-                            _ide_shims_added=1
-                            ;;
-                    esac
-                fi
-                _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_p"
-            done
-            [ "$_ide_shims_added" -eq 0 ] && _ide_new_path="${_ide_new_path:+$_ide_new_path:}$_ide_shims"
-            export PATH="${HOME%/}/.local/bin:$_ide_new_path:/usr/local/bin:/usr/bin:/bin"
-            ;;
-        *)
-            export PATH="$_ide_shims:${HOME%/}/.local/bin${PATH:+:$PATH}:/usr/local/bin:/usr/bin:/bin"
-            ;;
-    esac
-}
-
-run_system_monitor() {
-    _ide_calibrate_path
-    local mon=""
-    for mon in btop htop top; do
-        if command -v "$mon" >/dev/null 2>&1; then
-            exec "$mon"
-        fi
-    done
-    echo "Error: Neither 'btop', 'htop', nor 'top' is installed." >&2
-    exit 1
-}
-
-if [ "$#" -eq 1 ] && [ "$1" = "monitor" ]; then
-    run_system_monitor
-fi
-
 IFS= read -r -d '' IDE_PY_SRC <<'PY' || true
 from __future__ import annotations
-
-import os
-import sys
-
+import os, sys
 if not getattr(sys, "pycache_prefix", None):
     sys.dont_write_bytecode = True
 if sys.version_info < (3, 11) and sys.path:
     sys.path.pop(0)
-
-_raw_self = (
-    os.environ.get("IDE_SELF")
-    or globals().get("__file__")
-    or sys._getframe(0).f_code.co_filename
-)
+_raw_self = os.environ.get("IDE_SELF") or globals().get("__file__") or sys._getframe(0).f_code.co_filename
 _bin_dir = os.path.dirname(os.path.realpath(_raw_self))
 _libexec_dir = os.path.join(os.path.dirname(_bin_dir), "libexec")
 for _pkg_dir in (_libexec_dir, _bin_dir):
     if os.path.isdir(_pkg_dir) and _pkg_dir not in sys.path:
         sys.path.insert(0, _pkg_dir)
-
 if __name__ == "__main__":
     from ide_lib.cli import main
-
     sys.exit(main())
 else:
     from ide_lib.links import resolve_workspace_file
@@ -274,18 +260,12 @@ else:
     from ide_lib.sessions import _collect_launcher_dirs, _pick_workspace_directory
 PY
 if [ -z "${IDE_PY_BIN:-}" ]; then
-    if [ -x /usr/bin/python3 ]; then
-        IDE_PY_BIN="/usr/bin/python3"
-    else
-        _ide_calibrate_path
-        IDE_PY_BIN="python3"
-    fi
+    if [ -x /usr/bin/python3 ]; then IDE_PY_BIN="/usr/bin/python3"
+    else _ide_calibrate_path; IDE_PY_BIN="python3"; fi
 fi
 if [ -z "${PYTHONPYCACHEPREFIX:-}" ]; then
     _ide_cache_base="${XDG_CACHE_HOME:-${HOME%/}/.cache}"
-    if [ -n "$_ide_cache_base" ]; then
-        export PYTHONPYCACHEPREFIX="${_ide_cache_base%/}/home-settings/pycache"
-    fi
+    [ -n "$_ide_cache_base" ] && export PYTHONPYCACHEPREFIX="${_ide_cache_base%/}/home-settings/pycache"
     unset _ide_cache_base
 fi
 PYTHONSAFEPATH=1 IDE_SELF="${BASH_SOURCE[0]}" exec "$IDE_PY_BIN" -S -c "$IDE_PY_SRC" "$@"

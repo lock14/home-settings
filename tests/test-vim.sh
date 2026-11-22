@@ -625,6 +625,8 @@ if [ -f "$NVIM_CONFIG" ] && [ -d "$NVIM_LUA_DIR" ]; then
        grep -q 'map("n", "L", "<cmd>bnext<CR>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'move_selection_next' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'move_selection_previous' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'layout_strategy = "flex"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'flip_columns = 110' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-a>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "${NVIM_LUA_FILES[@]}" && \
@@ -2115,8 +2117,15 @@ if ok and mf then
     vim.cmd("doautocmd VimResized")
     local st_res = mf.get_explorer_state() or {}
     local w2_res = st_res.windows and st_res.windows[2] and vim.api.nvim_win_get_config(st_res.windows[2].win_id) or {}
+    vim.o.columns = 60
+    vim.cmd("doautocmd VimResized")
+    local st_60 = mf.get_explorer_state() or {}
+    local w1_60 = st_60.windows and st_60.windows[1] and vim.api.nvim_win_get_config(st_60.windows[1].win_id) or {}
+    local w2_60 = st_60.windows and st_60.windows[2] and vim.api.nvim_win_get_config(st_60.windows[2].win_id) or {}
     vim.o.columns = 80
     vim.cmd("doautocmd VimResized")
+    local st_80_back = mf.get_explorer_state() or {}
+    local w1_80_back = st_80_back.windows and st_80_back.windows[1] and vim.api.nvim_win_get_config(st_80_back.windows[1].win_id) or {}
     local r0 = vim.api.nvim_win_get_cursor(0)[1]
     fk("<Down>")
     local r1 = vim.api.nvim_win_get_cursor(0)[1]
@@ -2174,7 +2183,7 @@ if ok and mf then
     vim.fn.delete(tmpd, "rf")
     local nav_ok = (r1 == r0 + 1 and r2 == r0 and (st_left.branch or {})[1] == cwd and st_left.depth_focus == 1 and (st_right.branch or {})[2] == cwd .. "/bin" and st_right.depth_focus == 2 and #(st_sleft.branch or {}) < #(st_right.branch or {}) and st_cr == nil and dbl_map_ok and st_dbl == nil and dbl_buf ~= cr_buf and dbl_buf:find("/bin/ide", 1, true) ~= nil and st_sright == nil and cr_buf:find("/bin/", 1, true) ~= nil)
     mf_ok = tostring(b0[1] == cwd and b1[1] == cwd .. "/bin" and st_closed == nil and b2[1] == cwd .. "/bin" and #b3 == 1 and b3[1] == cwd and nav_ok)
-    mf_layout_ok = tostring(code_wrap == false and #(st1.windows or {}) == 2 and w1_cfg.col == 0 and w1_cfg.width == 35 and w2_cfg.col == 37 and (w2_cfg.col + w2_cfg.width + 2 == 80) and (w2_res.col + w2_res.width + 2 == 120) and (w2_imag.col + (w2_imag.width or 0) + 2 == 80) and wl_cfg.col == 0 and wl_cfg.width == 35 and wr_cfg.col == 0 and wr_cfg.width == 35)
+    mf_layout_ok = tostring(code_wrap == false and #(st1.windows or {}) == 2 and w1_cfg.col == 0 and w1_cfg.width == 35 and w2_cfg.col == 37 and (w2_cfg.col + w2_cfg.width + 2 == 80) and (w2_res.col + w2_res.width + 2 == 120) and #(st_60.windows or {}) == 2 and (w1_60.width or 99) < 35 and (w2_60.col + (w2_60.width or 0) + 2 == 60) and w1_80_back.width == 35 and (w2_imag.col + (w2_imag.width or 0) + 2 == 80) and wl_cfg.col == 0 and wl_cfg.width == 35 and wr_cfg.col == 0 and wr_cfg.width == 35)
 end
 vim.cmd("edit " .. vim.fn.getcwd() .. "/tests/fixtures/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
@@ -2697,7 +2706,13 @@ local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|next|fleet-sess")
 
 jobs = {}
 vim.fn.maparg("<leader>?", "n", false, true).callback()
-local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|80|-h|24|" .. vim.fn.shellescape(ide_bin) .. " keys")
+local keys_popup_ok = (
+    #jobs == 1
+    and jobs[1]:find("^tmux|if%-shell|%-t|%%42|%-F|#{e|>=:#{client_width},108}|") ~= nil
+    and jobs[1]:find("-E -w 108 -h 34", 1, true) ~= nil
+    and jobs[1]:find("-E -w 100% -h 100%", 1, true) ~= nil
+    and jobs[1]:find(vim.fn.shellescape(ide_bin) .. " keys", 1, true) ~= nil
+)
 
 -- 7. Cross-session :IdeSend[!] [session] command (named buffer, range, bang --switch, default session, unnamed --stdin, and tab completion)
 local chan_sent = {}

@@ -190,7 +190,14 @@ local function telescope_plugin_spec()
         },
         opts = {
             defaults = {
-                layout_strategy = "horizontal",
+                layout_strategy = "flex",
+                layout_config = {
+                    width = 0.94,
+                    height = 0.90,
+                    horizontal = { preview_width = 0.55 },
+                    vertical = { preview_height = 0.50, mirror = false },
+                    flex = { flip_columns = 110 },
+                },
                 mappings = {
                     i = {
                         ["<C-j>"] = "move_selection_next",
@@ -216,18 +223,54 @@ local function mini_plugin_spec()
             require("mini.comment").setup()
             require("mini.surround").setup()
             require("mini.icons").setup()
+            local function mini_files_window_widths()
+                local cols = vim.o.columns
+                if cols >= 80 then
+                    return 35, 25
+                end
+                local wf = math.max(18, math.min(35, math.floor(cols * 0.42)))
+                local wp = math.max(15, math.min(25, cols - wf - 6))
+                return wf, wp
+            end
+            local init_wf, init_wp = mini_files_window_widths()
             require("mini.files").setup({
                 windows = {
                     max_number = 2,
                     preview = true,
-                    width_focus = 35,
+                    width_focus = init_wf,
                     width_nofocus = 15,
-                    width_preview = 25,
+                    width_preview = init_wp,
                 },
             })
             local mf = require("mini.files")
+            local mf_group = vim.api.nvim_create_augroup("SolarizedMiniFilesWindow", { clear = true })
+            local last_wf, last_wp = init_wf, init_wp
+            local function sync_mini_files_widths()
+                local wf, wp = mini_files_window_widths()
+                local changed = (wf ~= last_wf or wp ~= last_wp)
+                last_wf, last_wp = wf, wp
+                if mf.config and mf.config.windows then
+                    mf.config.windows.width_focus = wf
+                    mf.config.windows.width_preview = wp
+                end
+                if changed then
+                    local st = mf.get_explorer_state()
+                    if st and st.windows and #st.windows > 0 then
+                        mf.refresh({ windows = { width_focus = wf, width_preview = wp } })
+                    end
+                end
+            end
             vim.api.nvim_create_autocmd("User", {
-                group = vim.api.nvim_create_augroup("SolarizedMiniFilesWindow", { clear = true }),
+                group = mf_group,
+                pattern = "MiniFilesExplorerOpen",
+                callback = sync_mini_files_widths,
+            })
+            vim.api.nvim_create_autocmd("VimResized", {
+                group = mf_group,
+                callback = sync_mini_files_widths,
+            })
+            vim.api.nvim_create_autocmd("User", {
+                group = mf_group,
                 pattern = "MiniFilesWindowUpdate",
                 callback = function(args)
                     local st = mf.get_explorer_state()

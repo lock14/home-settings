@@ -35,6 +35,7 @@ from ide_lib.fleet import (
     _SESSION_FMT_FIELDS,
     ack_ai_session,
     classify_ide_fleet,
+    format_switcher_pane_label,
     list_ide_sessions_with_server_status,
     parse_ide_session_cols,
     populate_fleet_git,
@@ -332,6 +333,8 @@ def handle_switcher_op(op: str, sw_sess: str) -> int:
                     )
                     if dp and target_p == dp and ds:
                         ack_ai_session([ds], from_hook=True, refresh_always=True, entering_ai=True)
+                elif dp and not pane_exists(dp):
+                    undock_switcher_session(sw_sess)
         return 0
     if norm_op == "focus":
         raw_foc = tmux_out(
@@ -942,7 +945,9 @@ def run_interactive_switcher_session(
             snap.sess_panes,
         )
         init_ai_cli = init_meta["ai_cli"] or "AI"
-        init_label = busy_init_label or f"{initial_top} · {init_ai_cli}"
+        init_label = busy_init_label or format_switcher_pane_label(
+            initial_top, init_ai_cli, str(initial_entry["state"])
+        )
 
     seeded_sess = initial_top if (initial_top and not initial_entry.get("quit_err")) else ""
     left_pane_w = max(36, sw_cols - int(sw_cols * 0.56) - 1)
@@ -964,6 +969,7 @@ def run_interactive_switcher_session(
         "-e", "IDE_IN_POPUP=1",
         "-e", f"IDE_SWITCHER_SESSION={sw_sess}",
         "-e", f"IDE_SWITCHER_RESULT={res_file}",
+        "-e", f"IDE_SESSIONS_PANE_W={left_pane_w}",
     ]
     if client_name:
         env_flags.extend(["-e", f"IDE_CLIENT={client_name}"])
@@ -1006,11 +1012,11 @@ def run_interactive_switcher_session(
     border_fmt = (
         f"#{{?#{{==:#{{@ide_sw_role}},list}},"
         f"#{{?#{{==:#{{@ide_sw_mode}},new}},"
-        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]New Workspace #[fg={hex_map['BASE01']}#,nobold](Enter: launch · Esc: back) ,"
-        f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold](Alt+l: interact) ,"
-        f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions (Alt+h: list) }}}},"
-        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold](Alt+h: list · Alt+s: close) ,"
-        f"#[fg={hex_map['BASE0']}#,nobold]  {ai_ico}#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold][PREVIEW] (Alt+l / click: interact) }}}}"
+        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]New Workspace #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},48}},(Enter: launch · Esc: back) ,}},"
+        f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},44}},(Alt+l: interact) ,}},"
+        f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions #{{?#{{e|>=:#{{pane_width}},40}},(Alt+h: list) ,}}}}}},"
+        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},64}},(Alt+h: list · Alt+s: close) ,(Alt+h) }},"
+        f"#[fg={hex_map['BASE0']}#,nobold]  {ai_ico}#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold][PREVIEW] #{{?#{{e|>=:#{{pane_width}},64}},(Alt+l / click: interact) ,(Alt+l) }}}}}}"
     )
 
     cancel_ev = threading.Event()
@@ -1085,7 +1091,7 @@ def run_interactive_switcher_session(
             if cancel_ev.is_set() or not _fifo_reader_alive(wfd):
                 return
             _write_seed_artifacts()
-            rows_list = format_fleet_sessions_lines(fleet, esc)
+            rows_list = format_fleet_sessions_lines(fleet, esc, pane_w=left_pane_w)
             payload = ("\n".join(rows_list) + "\n").encode("utf-8") if rows_list else b""
             view = memoryview(payload)
             sent = 0
@@ -1129,7 +1135,7 @@ def run_interactive_switcher_session(
         else:
             populate_fleet_git(fleet)
             _write_seed_artifacts()
-            initial_rows = format_fleet_sessions_lines(fleet, esc)
+            initial_rows = format_fleet_sessions_lines(fleet, esc, pane_w=left_pane_w)
             if not initial_rows:
                 return None
             with open(in_file, "w", encoding="utf-8") as inf:

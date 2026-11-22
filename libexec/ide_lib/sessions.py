@@ -15,6 +15,7 @@ from ide_lib.constants import (
     shorten_home,
     trunc_visible,
     use_nerd_fonts,
+    visible_width,
 )
 from ide_lib.dock import (
     caller_switcher_session,
@@ -201,27 +202,62 @@ def list_ide_fleet(plain: bool = False, json_output: bool = False) -> int:
     cur_glyph = "▸" if nf else "*"
     attn_glyph = "󰂚" if nf else "!"
     _, esc = load_active_palette()
-    state_labels, git_labels, sess_w, cli_w, state_w, git_w = compute_fleet_columns(
-        fleet, min_sess_w=7, max_sess_w=28, max_cli_w=12, max_git_w=28
-    )
+    raw_cols = os.environ.get("IDE_LIST_COLUMNS", "").strip()
+    if raw_cols.isdigit() and int(raw_cols) > 0:
+        tty_cols = int(raw_cols)
+    elif sys.stdout.isatty():
+        tty_cols = shutil.get_terminal_size((120, 40)).columns
+    else:
+        tty_cols = 0
 
+    if 0 < tty_cols < 90:
+        max_sess_w, max_cli_w, max_git_w = 18, 10, 16
+    elif 90 <= tty_cols < 100:
+        max_sess_w, max_cli_w, max_git_w = 22, 11, 20
+    else:
+        max_sess_w, max_cli_w, max_git_w = 28, 12, 28
+
+    state_labels, git_labels, sess_w, cli_w, state_w, git_w = compute_fleet_columns(
+        fleet, min_sess_w=7, max_sess_w=max_sess_w, max_cli_w=max_cli_w, max_git_w=max_git_w
+    )
+    prefix_cols = 2 + sess_w + 2 + cli_w + 2 + state_w + 2 + git_w + 2
+
+    def _fit_ws_path(path_text: str, extra_sfx: int = 0) -> str:
+        if tty_cols <= 0:
+            return path_text
+        budget = max(8, tty_cols - prefix_cols - extra_sfx)
+        if visible_width(path_text) <= budget:
+            return path_text
+        base = os.path.basename(path_text.rstrip("/"))
+        if base and "/" in path_text.strip("/"):
+            tail = f"/{base}"
+            tail_w = visible_width(tail)
+            if tail_w + 2 <= budget:
+                head_budget = budget - tail_w - 1
+                head = trunc_visible(path_text[: max(1, len(path_text) - len(tail))], head_budget + 1).rstrip("…")
+                cand = f"{head}…{tail}"
+                if visible_width(cand) <= budget:
+                    return cand
+        return trunc_visible(path_text, budget)
+
+    ws_hdr = trunc_visible("WORKSPACE", max(4, tty_cols - prefix_cols)) if tty_cols > 0 else "WORKSPACE"
     if use_color:
         c_hdr = esc["BASE01"]
         c_rst = esc["RESET"]
         print(
-            f"  {c_hdr}{'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  WORKSPACE{c_rst}"
+            f"  {c_hdr}{'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  {ws_hdr}{c_rst}"
         )
     else:
-        print(f"  {'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  WORKSPACE")
+        print(f"  {'SESSION':<{sess_w}}  {'AGENT':<{cli_w}}  {'STATE':<{state_w}}  {'BRANCH':<{git_w}}  {ws_hdr}")
 
     for entry, st_lbl, git_lbl in zip(fleet, state_labels, git_labels):
         sess = str(entry["sess"])
         ai_cli = str(entry["ai_cli"])
         state = str(entry["state"])
-        short_path = str(entry["short_path"])
         is_cur = bool(entry["is_current"])
         needs_attn = bool(entry["needs_attn"])
         has_wt_warn = bool(entry.get("worktree_peers"))
+        short_path = _fit_ws_path(str(entry["short_path"]), extra_sfx=2 if has_wt_warn else 0)
         s_pad = pad_visible(trunc_visible(sess, sess_w), sess_w)
         c_pad = pad_visible(trunc_visible(ai_cli, cli_w), cli_w)
         st_pad = pad_visible(trunc_visible(st_lbl, state_w), state_w)
@@ -268,7 +304,9 @@ def build_sessions_lines(cur_sess: str = "") -> list[str]:
     if not fleet:
         return []
     _, esc = load_active_palette()
-    return format_fleet_sessions_lines(fleet, esc)
+    raw_pw = os.environ.get("IDE_SESSIONS_PANE_W", "").strip()
+    pane_w = int(raw_pw) if raw_pw.isdigit() and int(raw_pw) > 0 else 0
+    return format_fleet_sessions_lines(fleet, esc, pane_w=pane_w)
 
 
 def _collect_launcher_dirs() -> list[str]:
@@ -374,6 +412,22 @@ def _collect_launcher_dirs() -> list[str]:
 collect_launcher_dirs = _collect_launcher_dirs
 
 
+def _format_new_picker_footer(cols: int, back_to_sessions: bool) -> str:
+    """Pack bottom `--border-label` hints for `New IDE >` within `cols` without mid-word clipping."""
+    full_esc = "Esc: back to sessions" if back_to_sessions else "Esc: cancel"
+    short_esc = "Esc: back" if back_to_sessions else "Esc: cancel"
+    candidates = (
+        f" Enter: launch workspace · {full_esc} ",
+        f" Enter: launch · {short_esc} ",
+        " Enter · Esc ",
+    )
+    budget = max(8, cols - 4) if cols > 0 else 120
+    for cand in candidates:
+        if visible_width(cand) <= budget:
+            return cand
+    return f" {trunc_visible('Enter · Esc', max(1, budget - 2))} "
+
+
 def _pick_workspace_directory(
     fzf_bin: str,
     env: dict[str, str],
@@ -385,7 +439,9 @@ def _pick_workspace_directory(
         return ""
     hex_map, esc = load_active_palette()
     rows = [f"{d}\x1f{esc['BLUE']}{shorten_home(d)}{esc['RESET']}" for d in dirs]
-    esc_hint = "Esc: back to sessions" if back_to_sessions else "Esc: cancel"
+    raw_w = (env.get("FZF_COLUMNS") or env.get("COLUMNS") or os.environ.get("COLUMNS") or "").strip()
+    picker_cols = int(raw_w) if raw_w.isdigit() and int(raw_w) > 0 else shutil.get_terminal_size((120, 40)).columns
+    footer_lbl = _format_new_picker_footer(picker_cols, back_to_sessions=back_to_sessions)
     color_label_args = (
         []
         if detect_color_tier() in ("nocolor", "mono", "16color")
@@ -403,7 +459,7 @@ def _pick_workspace_directory(
         "--info=inline-right",
         "--prompt=New IDE > ",
         "--border=rounded",
-        f"--border-label= Enter: launch workspace · {esc_hint} ",
+        f"--border-label={footer_lbl}",
         "--border-label-pos=bottom",
         *color_label_args,
         "--bind=alt-s:abort",

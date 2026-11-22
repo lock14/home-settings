@@ -75,6 +75,7 @@ export SKIP_BASH=false
 export SKIP_BIN=false
 export SKIP_COMPLETIONS=false
 export SKIP_TERMINAL=false
+export SKIP_HOOKS=false
 
 usage() {
     cat <<EOF
@@ -97,7 +98,7 @@ Platform & Component Options:
                           comma-separated ghostty,chrome,code,intellij,intellij-ultimate,none
   --theme <name>          Initial color theme to apply (default: solarized-dark)
   --skip <stage,...>      Skip comma-separated provisioning stages:
-                          packages,db,dotfiles,bin,fonts,tools,nvim,vim,zsh,bash,completions,terminal
+                          packages,db,dotfiles,bin,fonts,tools,nvim,vim,zsh,bash,completions,terminal,hooks
 
 Execution Options:
   -n, --dry-run           Preview actions without modifying the system
@@ -237,8 +238,9 @@ parse_skip_list() {
             bash)        SKIP_BASH=true ;;
             completions) SKIP_COMPLETIONS=true ;;
             terminal)    SKIP_TERMINAL=true ;;
+            hooks)       SKIP_HOOKS=true ;;
             *)
-                echo "Error: Unknown --skip stage '$tok' (expected: packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal)" >&2
+                echo "Error: Unknown --skip stage '$tok' (expected: packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal, hooks)" >&2
                 exit 1
                 ;;
         esac
@@ -346,12 +348,12 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --skip)
-            require_opt_arg "--skip" "${2:-}" "comma-separated stages (packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal)"
+            require_opt_arg "--skip" "${2:-}" "comma-separated stages (packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal, hooks)"
             parse_skip_list "$2"
             shift 2
             ;;
         --skip=*)
-            require_opt_arg "--skip" "${1#--skip=}" "comma-separated stages (packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal)"
+            require_opt_arg "--skip" "${1#--skip=}" "comma-separated stages (packages, db, dotfiles, bin, fonts, tools, nvim, vim, zsh, bash, completions, terminal, hooks)"
             parse_skip_list "${1#--skip=}"
             shift
             ;;
@@ -436,6 +438,7 @@ if [ "$SKIP_USER" = false ]; then
     [ "$SKIP_NVIM" = false ] && "$SCRIPT_DIR/setup/modules/50-nvim.sh"
     "$SCRIPT_DIR/setup/modules/60-shell.sh"
     [ "$SKIP_TERMINAL" = false ] && "$SCRIPT_DIR/setup/modules/70-terminal.sh"
+    [ "$SKIP_HOOKS" = false ] && "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh"
 fi
 
 echo -e "\n====================================================="

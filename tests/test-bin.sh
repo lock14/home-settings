@@ -189,9 +189,10 @@ else
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" keys)"
+IDE_KEYS_COMPACT_OUT="$(COLUMNS=78 LINES=22 "$SCRIPT_DIR/bin/ide" keys)"
 IDE_KEYS_COMPOUND_OUT="$("$SCRIPT_DIR/bin/ide" --2pane keys)"
 IDE_KEYS_PTY_OK="$(python3 - "$SCRIPT_DIR/bin/ide" <<'PY'
-import fcntl, os, pty, select, subprocess, sys, termios, time
+import fcntl, os, pty, re, select, struct, subprocess, sys, termios, time
 ide_bin = sys.argv[1]
 def set_ctty(sfd):
     os.setsid()
@@ -207,6 +208,32 @@ def wait_noncanon(fd, deadline):
         time.sleep(0.005)
     return False
 
+for winsz, expect_marker in (
+    (struct.pack("HHHH", 34, 108, 0, 0), b"Acknowledge AI attention"),
+    (struct.pack("HHHH", 24, 80, 0, 0), b"C-y/o/M-n (Alt+s)"),
+):
+    mfd, sfd = pty.openpty()
+    fcntl.ioctl(sfd, termios.TIOCSWINSZ, winsz)
+    proc = subprocess.Popen(
+        [ide_bin, "keys"],
+        stdin=sfd, stdout=sfd, stderr=sfd, close_fds=True,
+        preexec_fn=lambda sfd=sfd: set_ctty(sfd),
+    )
+    os.close(sfd)
+    out = b""
+    deadline = time.monotonic() + 2.0
+    while b"a   (copy-mode)" not in out and time.monotonic() < deadline:
+        r, _, _ = select.select([mfd], [], [], 0.05)
+        if r:
+            out += os.read(mfd, 4096)
+    wait_noncanon(mfd, deadline)
+    os.write(mfd, b"q")
+    proc.wait(timeout=2.0)
+    os.close(mfd)
+    if expect_marker not in out:
+        print(f"FAIL:missing_{expect_marker.decode()}")
+        sys.exit(0)
+
 for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x1bOP", b"\x1b[11~", b"\x03", b"\x04"):
     mfd, sfd = pty.openpty()
     proc = subprocess.Popen(
@@ -217,7 +244,7 @@ for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x1bOP", b
     os.close(sfd)
     out = b""
     deadline = time.monotonic() + 2.0
-    while b"This key cheatsheet" not in out and time.monotonic() < deadline:
+    while b"a   (copy-mode)" not in out and time.monotonic() < deadline:
         r, _, _ = select.select([mfd], [], [], 0.05)
         if r:
             out += os.read(mfd, 4096)
@@ -252,10 +279,15 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    ! "$SCRIPT_DIR/bin/ide" --agent invalid-agent keys >/dev/null 2>&1 && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+s / Prefix+s" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "C-y/o/M-n (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq ":IdeSend[!] [ws]" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "C-y/o/M-n (Alt+s)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
-   grep -Fq ":IdeSend[!] [ws]" <<< "${IDE_KEYS_OUT#*SEND TO AI PROMPT}" && \
+   grep -Fq "Ctrl+y    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Ctrl+o    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+n     (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Ctrl+x    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Prefix + | / -" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq ":IdeSend [session]" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq ":IdeSend! [sess]" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Ctrl+y    (Alt+s)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
+   grep -Fq ":IdeSend [session]" <<< "${IDE_KEYS_OUT#*SEND TO AI PROMPT}" && \
    grep -Fq "Alt+Shift+S" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+m / Prefix+m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Click top bar" <<< "$IDE_KEYS_OUT" && \
@@ -269,16 +301,19 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+? / F1 / Pfx+?" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+l / h (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "C-y/o/M-n (Alt+s)" <<< "$IDE_KEYS_COMPACT_OUT" && \
    ! grep -Fq $'\033[' <<< "$(NO_COLOR=1 "$SCRIPT_DIR/bin/ide" keys)" && \
    ! grep -Fq "" <<< "$(IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" keys)" && \
    grep -Fq $'\033[1m' <<< "$(TERM=dumb "$SCRIPT_DIR/bin/ide" keys)" && \
-   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 22 ] && \
-   [ "$(python3 -c 'import re,sys; print(max(len(re.sub(r"\x1b\[[0-9;]*m","",l)) for l in sys.stdin.read().splitlines()))' <<< "$IDE_KEYS_OUT")" -le 76 ] && \
+   [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 30 ] && \
+   [ "$(python3 -c 'import re,sys; print(max(len(re.sub(r"\x1b\[[0-9;]*m","",l)) for l in sys.stdin.read().splitlines()))' <<< "$IDE_KEYS_OUT")" -le 104 ] && \
+   [ "$(printf '%s\n' "$IDE_KEYS_COMPACT_OUT" | wc -l | tr -d ' ')" -le 22 ] && \
+   [ "$(python3 -c 'import re,sys; print(max(len(re.sub(r"\x1b\[[0-9;]*m","",l)) for l in sys.stdin.read().splitlines()))' <<< "$IDE_KEYS_COMPACT_OUT")" -le 76 ] && \
    [ "$IDE_KEYS_DEFS" -eq 1 ] && \
    [ "$IDE_KEYS_PTY_OK" = "OK" ]; then
-    pass "bin/ide keys renders the single-source-of-truth Solarized Dark 2-column keybinding cheatsheet (including session switcher, Alt+Shift+S attention jump, focus, swap, resize, context dispatch, mini.files, Space m, jumplist, clipboard, and quit shortcuts) within popup height and drains multi-byte escape sequences on PTY"
+    pass "bin/ide keys renders responsive 108x34 spacious (<=104x30) and 80x24 compact (<=76x22) Solarized Dark 2-column keybinding cheatsheets and drains multi-byte escape sequences on PTY"
 else
     fail "bin/ide keys" "Missing expected keybinding sections, duplicate show_keys_cheatsheet() ($IDE_KEYS_DEFS), line overflow, or PTY key handling failed ($IDE_KEYS_PTY_OK)"
 fi
@@ -1554,8 +1589,11 @@ LUA
             args_log="$(LC_ALL=C sort "$ARGS_LOG")"
             args_expected="$(printf '%s\n' "_internal park editor args-sess" "_internal swap left args-sess" "_internal toggle args-sess" "cd $ARGS_DIR args-sess" "quit" "quit" "quit --force args-sess" "quit --force target-a target-b" "quit args-sess" "quit target-a target-b" | LC_ALL=C sort)"
             popup_cmd="$(cat "$TEMP_HOME/popup_cmd.log" 2>/dev/null || true)"
-            popup_expected="tmux|display-popup|-t|%42|-E|-w|80|-h|24|'$ARGS_HOME/space home/.local/bin/ide' keys"
-            if [ "$args_log" = "$args_expected" ] && [ "$popup_cmd" = "$popup_expected" ]; then
+            if [ "$args_log" = "$args_expected" ] && \
+               [[ "$popup_cmd" == "tmux|if-shell|-t|%42|-F|#{e|>=:#{client_width},108}|"* ]] && \
+               grep -Fq -- "-E -w 108 -h 34" <<< "$popup_cmd" && \
+               grep -Fq -- "-E -w 100% -h 100%" <<< "$popup_cmd" && \
+               grep -Fq -- "'$ARGS_HOME/space home/.local/bin/ide' keys" <<< "$popup_cmd"; then
                 echo "PASS:The Editor names its own session in every ide call (quit [--force] NAME, cd DIR NAME, _internal toggle NAME, _internal park editor NAME, _internal swap DIR NAME), passes -t \$TMUX_PANE and shell-escaped path in open_ide_keys_popup, and omits session when \$IDE_SESSION is empty"
             else
                 echo "FAIL:Editor ide call arguments:Expected: $(tr '\n' '|' <<< "$args_expected") got: $(tr '\n' '|' <<< "$args_log") popup=$popup_cmd"

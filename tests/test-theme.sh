@@ -557,25 +557,26 @@ else
 fi
 rm -f "$THEME_TEST_Cfg/themes/broken-hex.theme"
 
-# Verify interactive fzf picker when invoked with no arguments
+# Verify interactive fzf picker when invoked with no arguments (including responsive preview-window tiers across 120, 100, and 80 cols)
 FZF_MOCK_BIN="$(mktemp -d)"
 cat > "$FZF_MOCK_BIN/fzf" <<'SH'
 #!/usr/bin/env bash
-for arg in "$@"; do
-    if [[ "$arg" == --preview=* ]]; then
-        echo "$arg" > "$FZF_MOCK_LOG"
-    fi
-done
+printf '%s\n' "$@" > "$FZF_MOCK_LOG"
 cat >/dev/null
 printf '* gruvbox-dark  Gruvbox Dark  [dark]  Warm retro groove dark palette\n'
 SH
 chmod +x "$FZF_MOCK_BIN/fzf"
-FZF_MOCK_LOG="$FZF_MOCK_BIN/preview.log" THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
+FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-120.log" COLUMNS=120 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
+FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-100.log" COLUMNS=100 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
+FZF_MOCK_LOG="$FZF_MOCK_BIN/preview-80.log" COLUMNS=80 THEME_FORCE_FZF=1 PATH="$FZF_MOCK_BIN:$PATH" HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --no-live >/dev/null 2>&1
 if [ "$(HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" "$SCRIPT_DIR/bin/theme" --current)" = "gruvbox-dark" ] && \
-   grep -Fq -- "--preview {1}" "$FZF_MOCK_BIN/preview.log"; then
-    pass "bin/theme (no args) launches interactive fzf picker with live '--preview {1}' and applies selected theme"
+   grep -Fq -- "--preview {1}" "$FZF_MOCK_BIN/preview-120.log" && \
+   grep -Fxq -- "--preview-window=right:60%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-120.log" && \
+   grep -Fxq -- "--preview-window=right:56%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-100.log" && \
+   grep -Fxq -- "--preview-window=down:58%:nowrap:noinfo" "$FZF_MOCK_BIN/preview-80.log"; then
+    pass "bin/theme (no args) launches responsive fzf picker (right:60% >=110, right:56% 90-109, down:58% <90 cols) and applies selected theme"
 else
-    fail "bin/theme fzf picker" "Expected gruvbox-dark to be applied via fzf picker"
+    fail "bin/theme fzf picker" "Expected responsive preview-window tiers and gruvbox-dark selection"
 fi
 rm -rf "$FZF_MOCK_BIN"
 
@@ -639,7 +640,7 @@ fi
 
 # Verify uniform preview card geometry across ALL 17 built-in themes (standalone 94 cols and narrow fzf 72 cols) and Tmux status-right client_width>=105 holiday guard
 HOME="$THEME_TEST_HOME" XDG_CONFIG_HOME="$THEME_TEST_Cfg" XDG_CACHE_HOME="$THEME_TEST_Cache" "$SCRIPT_DIR/bin/theme" --set halloween --no-live >/dev/null 2>&1
-if grep -Fq '#{>=:#{client_width},105}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
+if grep -Fq '#{e|>=:#{client_width},105}' "$THEME_TEST_Cfg/home-settings/tmux-theme.conf" && \
    python3 -B - "$SCRIPT_DIR/bin/theme" "$SCRIPT_DIR/bin/ide" "${managed_themes[@]}" <<'PY'
 from __future__ import annotations
 
@@ -671,8 +672,19 @@ for slug in slugs:
     env["FZF_PREVIEW_LINES"] = "30"
     out_narrow = subprocess.check_output([theme_bin, "--preview", slug], env=env, text=True).splitlines()
     status_lines = [line for line in out_narrow if "Editor" in line]
-    if not status_lines or vlen(status_lines[0]) != 72:
-        raise SystemExit(f"{slug}: narrow status width != 72")
+    if not status_lines or {vlen(line) for line in out_narrow} != {72}:
+        raise SystemExit(f"{slug}: narrow preview rows != 72: { {vlen(line) for line in out_narrow} }")
+    env["FZF_PREVIEW_COLUMNS"] = "52"
+    env["FZF_PREVIEW_LINES"] = "34"
+    out_compact = subprocess.check_output([theme_bin, "--preview", slug], env=env, text=True).splitlines()
+    if {vlen(line) for line in out_compact} != {52}:
+        raise SystemExit(f"{slug}: compact 52-col preview rows != 52: { {vlen(line) for line in out_compact} }")
+
+list_env = dict(os.environ)
+list_env["THEME_LIST_COLUMNS"] = "74"
+list_narrow = subprocess.check_output([theme_bin, "--list"], env=list_env, text=True).splitlines()
+if not list_narrow or any(vlen(ln) > 74 for ln in list_narrow) or not any("…" in ln for ln in list_narrow):
+    raise SystemExit(f"THEME_LIST_COLUMNS=74 failed to clamp list rows: {[vlen(ln) for ln in list_narrow]}")
 
 # Verify status_click in bin/ide (+ libexec/ide_lib/*.py) uses visible_width for 2-column holiday emoji and East Asian wide glyphs,
 # and bin/theme (+ libexec/theme_lib/*.py) emits clickable range tags and discovers $XDG_RUNTIME_DIR/nvim-ide-*.sock while isolating THEME_NVIM_SOCKET_DIR

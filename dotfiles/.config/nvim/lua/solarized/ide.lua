@@ -121,20 +121,42 @@ local function send_diagnostics_to_ai()
     M.ide_job("send", "--text", table.concat(out, "\n") .. "\n")
 end
 
+local function tmux_dquote(s)
+    return '"'
+        .. tostring(s):gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("%$", "\\$"):gsub("#", "##")
+        .. '"'
+end
+
 local function open_ide_keys_popup()
     if vim.env.TMUX then
-        local cmd = { "tmux", "display-popup" }
-        if (vim.env.TMUX_PANE or "") ~= "" then
+        local pane = vim.env.TMUX_PANE or ""
+        local t_flag = (pane ~= "") and ("-t " .. tmux_dquote(pane) .. " ") or ""
+        local sh_cmd = vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " keys"
+        local sh_q = tmux_dquote(sh_cmd)
+        local p_wide_tall = "display-popup " .. t_flag .. "-E -w 108 -h 34 " .. sh_q
+        local p_wide_fit = "display-popup " .. t_flag .. "-E -w 108 -h 100% " .. sh_q
+        local p_fit_tall = "display-popup " .. t_flag .. "-E -w 100% -h 34 " .. sh_q
+        local p_fit_fit = "display-popup " .. t_flag .. "-E -w 100% -h 100% " .. sh_q
+        local cmd = { "tmux", "if-shell" }
+        if pane ~= "" then
             table.insert(cmd, "-t")
-            table.insert(cmd, vim.env.TMUX_PANE)
+            table.insert(cmd, pane)
         end
         vim.list_extend(cmd, {
-            "-E",
-            "-w",
-            "80",
-            "-h",
-            "24",
-            vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " keys",
+            "-F",
+            "#{e|>=:#{client_width},108}",
+            string.format(
+                'if-shell %s-F "#{e|>=:#{client_height},34}" %s %s',
+                t_flag,
+                tmux_dquote(p_wide_tall),
+                tmux_dquote(p_wide_fit)
+            ),
+            string.format(
+                'if-shell %s-F "#{e|>=:#{client_height},34}" %s %s',
+                t_flag,
+                tmux_dquote(p_fit_tall),
+                tmux_dquote(p_fit_fit)
+            ),
         })
         vim.fn.jobstart(cmd, { detach = true })
     end

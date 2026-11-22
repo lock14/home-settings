@@ -23,7 +23,13 @@ from ide_lib.constants import (
     visible_width,
 )
 from ide_lib.dock import select_dockable_ai_pane, undock_switcher_session
-from ide_lib.fleet import classify_ide_fleet, query_fleet_snapshot
+from ide_lib.fleet import (
+    classify_ide_fleet,
+    format_switcher_pane_label,
+    map_raw_ai_state_badge,
+    query_fleet_snapshot,
+)
+from ide_lib.proc import is_bare_shell_cmd
 from ide_lib.theme import load_active_palette, state_color
 from ide_lib.tmux import run_tmux, session_exists, tmux_out
 
@@ -54,12 +60,22 @@ def compute_fleet_columns(
 _compute_fleet_columns = compute_fleet_columns
 
 
-def format_fleet_sessions_lines(fleet: list[dict[str, object]], esc: dict[str, str]) -> list[str]:
+def format_fleet_sessions_lines(
+    fleet: list[dict[str, object]],
+    esc: dict[str, str],
+    pane_w: int = 0,
+) -> list[str]:
     """Format `<session>\\t<ansi_display>` rows across `fleet` for `fzf`."""
     if not fleet:
         return []
+    if 0 < pane_w < 68:
+        max_sess_w, max_cli_w, max_git_w = 16, 8, 14
+    elif 68 <= pane_w < 84:
+        max_sess_w, max_cli_w, max_git_w = 20, 9, 18
+    else:
+        max_sess_w, max_cli_w, max_git_w = 24, 10, 24
     state_labels, git_labels, sess_w, cli_w, state_w, git_w = compute_fleet_columns(
-        fleet, min_sess_w=8, max_sess_w=24, max_cli_w=10, max_git_w=24
+        fleet, min_sess_w=8, max_sess_w=max_sess_w, max_cli_w=max_cli_w, max_git_w=max_git_w
     )
     nf = use_nerd_fonts()
     cur_glyph = "▸" if nf else "*"
@@ -877,6 +893,8 @@ def sync_switcher_slot_preview(
             "#{@ide_ai_pane}",
             "#{@ide_ai_cli}",
             "#{@ide_ai_parked}",
+            "#{@ide_ai_state}",
+            "#{@ide_ai_attn}",
         ]),
         ";",
         "list-panes",
@@ -896,6 +914,7 @@ def sync_switcher_slot_preview(
             "#{pane_width}",
             "#{pane_height}",
             "#{window_name}",
+            "#{pane_current_command}",
         ]),
     )
     if snap.returncode != 0 or not snap.stdout:
@@ -907,6 +926,7 @@ def sync_switcher_slot_preview(
     sw_parts: list[str] = []
     sess_parts: list[str] = []
     panes_by_id: dict[str, tuple[str, str, str, str, str, str, str]] = {}
+    pane_cmd_by_id: dict[str, str] = {}
     sess_panes: dict[str, list[tuple[str, str, str]]] = {}
     slot_geom: dict[str, tuple[str, int, int, str]] = {}
     first_vis_pane = ""
@@ -915,13 +935,14 @@ def sync_switcher_slot_preview(
         if ln.startswith(sw_pfx):
             sw_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 7)[:7]]
         elif ln.startswith(sess_pfx):
-            sess_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 4)[:4]]
+            sess_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 6)[:6]]
         elif ln.startswith(pane_pfx):
-            pc = [p.strip() for x in (ln.split(TMUX_SEP)[1:] + [""] * 12)[:12] for p in (x,)]
+            pc = [p.strip() for x in (ln.split(TMUX_SEP)[1:] + [""] * 13)[:13] for p in (x,)]
             pid = pc[0]
             if not pid:
                 continue
             panes_by_id[pid] = (pc[1], pc[2], pc[3], pc[4], pc[5], pc[6], pc[7])
+            pane_cmd_by_id[pid] = pc[12]
             sess_panes.setdefault(pc[1], []).append((pid, pc[5], pc[7]))
             pw = int(pc[9]) if pc[9].isdigit() else 0
             ph = int(pc[10]) if pc[10].isdigit() else 0
@@ -947,13 +968,18 @@ def sync_switcher_slot_preview(
 
     if not sess_parts or sess_parts[0] != sess:
         return (True, last_slot_payload)
-    _, rec_ai, ai_cli_raw, ai_parked = sess_parts
+    _, rec_ai, ai_cli_raw, ai_parked, raw_ai_state, raw_ai_attn = sess_parts
     ai_cli = ai_cli_raw or "agy"
     cand_ai, healed_ai = select_dockable_ai_pane(sess, rec_ai, panes_by_id, sess_panes)
     busy_other = False
     if rec_ai and rec_ai in panes_by_id and is_switcher_session_name(panes_by_id[rec_ai][0]) and panes_by_id[rec_ai][0] != sw_sess:
         busy_other = True
-    label = f"{sess} · (in other switcher)" if busy_other else f"{sess} · {ai_cli}"
+    eff_ai_pane = cand_ai or (rec_ai if rec_ai in pane_cmd_by_id else "")
+    ai_cmd = pane_cmd_by_id.get(eff_ai_pane, "")
+    state_badge = map_raw_ai_state_badge(raw_ai_state, raw_ai_attn)
+    if not state_badge and eff_ai_pane and is_bare_shell_cmd(ai_cmd):
+        state_badge = "SHELL"
+    label = f"{sess} · (in other switcher)" if busy_other else format_switcher_pane_label(sess, ai_cli, state_badge)
 
     opt_cmds: list[str] = []
     if healed_ai and cand_ai:
