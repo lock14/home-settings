@@ -12,18 +12,20 @@ import sys
 import time
 
 from ide_lib.constants import (
+    TMUX_SEP,
     _ANSI_ESC_RE,
     _SGR_RE,
     is_live_socket,
     is_switcher_session_name,
     pad_visible,
     trunc_visible,
+    use_nerd_fonts,
     visible_width,
 )
-from ide_lib.dock import dock_session_into_switcher, undock_switcher_session
+from ide_lib.dock import select_dockable_ai_pane, undock_switcher_session
 from ide_lib.fleet import classify_ide_fleet, query_fleet_snapshot
 from ide_lib.theme import load_active_palette, state_color
-from ide_lib.tmux import run_tmux, session_exists
+from ide_lib.tmux import run_tmux, session_exists, tmux_out
 
 _DEFAULT_PREVIEW_INTERVAL = 0.2
 _ENTRY_PPID = os.getppid()
@@ -59,6 +61,9 @@ def format_fleet_sessions_lines(fleet: list[dict[str, object]], esc: dict[str, s
     state_labels, git_labels, sess_w, cli_w, state_w, git_w = compute_fleet_columns(
         fleet, min_sess_w=8, max_sess_w=24, max_cli_w=10, max_git_w=24
     )
+    nf = use_nerd_fonts()
+    cur_glyph = "▸" if nf else "*"
+    attn_glyph = "󰂚" if nf else "!"
     rows: list[str] = []
     for entry, st_lbl, git_lbl in zip(fleet, state_labels, git_labels):
         sess = str(entry["sess"])
@@ -74,9 +79,9 @@ def format_fleet_sessions_lines(fleet: list[dict[str, object]], esc: dict[str, s
         st_pad = pad_visible(trunc_visible(st_lbl, state_w), state_w)
         g_pad = pad_visible(trunc_visible(git_lbl, git_w), git_w)
         if is_cur:
-            marker = f"{esc['CYAN']}▸{esc['RESET']}"
+            marker = f"{esc['CYAN']}{cur_glyph}{esc['RESET']}"
         elif needs_attn:
-            marker = f"{attn_c}󰂚{esc['RESET']}"
+            marker = f"{attn_c}{attn_glyph}{esc['RESET']}"
         else:
             marker = " "
         c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
@@ -111,6 +116,7 @@ class _PreviewCache:
         self.last_vcs_mono: float = 0.0
         self.last_quit_mono: float = 0.0
         self.last_raw_quit_err: str = ""
+        self.last_state: str = ""
 
 
 def _expanded_cell_widths(text: str, tabstop: int = 8) -> list[int]:
@@ -381,6 +387,7 @@ def _select_preview_tail(
     header_lines: list[str],
     preview_lines: int,
     preview_cols: int,
+    wrap_sign_w_override: int | None = None,
 ) -> list[str]:
     """Select the bottommost non-blank viewport lines fitting inside `preview_lines`."""
     cap_lines = list(raw_lines)
@@ -393,6 +400,8 @@ def _select_preview_tail(
         start_idx = len(cap_lines) - len(tail)
     else:
         sign_w, ts = _resolve_fzf_wrap_config()
+        if wrap_sign_w_override is not None:
+            sign_w = wrap_sign_w_override
         hdr_rows = sum(_wrapped_preview_rows(hl, preview_cols, wrap_sign_w=sign_w, tabstop=ts) for hl in header_lines)
         avail_rows = max(1, preview_lines - hdr_rows)
         picked_rev: list[str] = []
@@ -449,15 +458,16 @@ def format_session_preview_header(
     c_rst = esc["RESET"]
     c_state = state_color(state, esc)
     c_git = esc["YELLOW"] if git_dirty else (esc["GREEN"] if git_branch != "-" else esc["BASE01"])
+    ws_hdr = f" {sess}" if use_nerd_fonts() else sess
     out_lines = [
-        f"{esc['BLUE']} {sess}{c_rst}  {esc['BASE01']}(focused: {active_role}){c_rst}",
+        f"{esc['BLUE']}{ws_hdr}{c_rst}  {esc['BASE01']}(focused: {active_role}){c_rst}",
         f"{esc['BASE01']}Agent    :{c_rst} {esc['CYAN']}{ai_cli}{c_rst}  {esc['BASE01']}State:{c_rst} {c_state}{state_label}{c_rst}",
     ]
     if ai_msg:
         out_lines.append(f"{esc['BASE01']}Message  :{c_rst} {esc['BASE1']}{ai_msg}{c_rst}")
     out_lines.extend([
         f"{esc['BASE01']}Workspace:{c_rst} {esc['BASE0']}{short_path}{c_rst}",
-        f"{esc['BASE01']}Git      :{c_rst} {c_git}{git_detail}{c_rst}",
+        f"{esc['BASE01']}VCS      :{c_rst} {c_git}{git_detail}{c_rst}",
     ])
     if quit_err:
         out_lines.append(f"{esc['BASE01']}Warning  :{c_rst} {esc['ORANGE']}{quit_err}{c_rst}")
@@ -505,7 +515,11 @@ def _build_session_preview_frame(
     _, esc = load_active_palette()
     c_rst = esc["RESET"]
     if entry is None:
+        if cache is not None:
+            cache.last_state = ""
         return (f"{esc['BLUE']}{sess}{c_rst}", True)
+    if cache is not None:
+        cache.last_state = str(entry["state"])
 
     if cache is None:
         git_branch = str(entry["git_branch"])
@@ -779,6 +793,228 @@ class PipeHangupWatcher:
         self._poller = None
 
 
+def write_slot_tty_viewport(
+    slot_tty: str,
+    slot_w: int,
+    slot_h: int,
+    preview_pane: str,
+    esc: dict[str, str],
+    last_payload: str = "",
+) -> str:
+    """Capture `preview_pane` and write a deduplicated ANSI frame directly into `slot_tty`."""
+    if not slot_tty or slot_w <= 0 or slot_h <= 0:
+        return last_payload
+    c_rst = esc["RESET"]
+    cap_start = f"-{max(40, slot_h + 20)}"
+    cap_res = run_tmux("capture-pane", "-e", "-p", "-S", cap_start, "-t", preview_pane) if preview_pane else None
+    if cap_res is not None and cap_res.returncode == 0:
+        raw_cap = cap_res.stdout if isinstance(cap_res.stdout, str) else ""
+        cap_raw_lines = [ln.rstrip("\r") for ln in raw_cap.rstrip("\n").split("\n")] if raw_cap else []
+        tail = _select_preview_tail(cap_raw_lines, [], slot_h, slot_w, wrap_sign_w_override=0)
+        body = ("\r\n".join(tail) + c_rst) if tail else f"{esc['BASE01']}(Viewport is empty){c_rst}"
+    else:
+        body = f"{esc['BASE01']}(No active pane in session){c_rst}"
+    if body == last_payload:
+        return last_payload
+    payload = ("\x1b[?25l\x1b[H\x1b[2J" + body).encode("utf-8", errors="replace")
+    fd = -1
+    try:
+        fd = os.open(slot_tty, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
+        view = memoryview(payload)
+        sent = 0
+        total = len(payload)
+        while sent < total:
+            try:
+                written = os.write(fd, view[sent:])
+                if written <= 0:
+                    break
+                sent += written
+            except BlockingIOError:
+                select.select([], [fd], [], 0.03)
+    except OSError:
+        return last_payload
+    finally:
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+    return body
+
+
+def sync_switcher_slot_preview(
+    sw_sess: str,
+    sess: str,
+    esc: dict[str, str] | None = None,
+    last_slot_payload: str = "",
+) -> tuple[bool, str]:
+    """Sync `@ide_sw_selected_sess` / `@ide_sw_label` and stream read-only ANSI viewport to `slot_pane` when undocked."""
+    if not sw_sess or not is_switcher_session_name(sw_sess):
+        return (False, last_slot_payload)
+    snap = run_tmux(
+        "display-message",
+        "-p",
+        "-t",
+        f"={sw_sess}:",
+        TMUX_SEP.join([
+            "SW",
+            "#{@ide_switcher}",
+            "#{@ide_sw_mode}",
+            "#{@ide_sw_docked_pane}",
+            "#{@ide_sw_docked_sess}",
+            "#{@ide_sw_slot_pane}",
+            "#{@ide_sw_selected_sess}",
+            "#{@ide_sw_label}",
+        ]),
+        ";",
+        "display-message",
+        "-p",
+        "-t",
+        f"={sess}:",
+        TMUX_SEP.join([
+            "SESS",
+            "#{session_name}",
+            "#{@ide_ai_pane}",
+            "#{@ide_ai_cli}",
+            "#{@ide_ai_parked}",
+        ]),
+        ";",
+        "list-panes",
+        "-a",
+        "-F",
+        TMUX_SEP.join([
+            "PANE",
+            "#{pane_id}",
+            "#{session_name}",
+            "#{window_id}",
+            "#{pane_active}",
+            "#{window_zoomed_flag}",
+            "#{@ide_role}",
+            "#{@ide_sw_docked_by}",
+            "#{@ide_sw_placeholder}",
+            "#{pane_tty}",
+            "#{pane_width}",
+            "#{pane_height}",
+            "#{window_name}",
+        ]),
+    )
+    if snap.returncode != 0 or not snap.stdout:
+        return (False, last_slot_payload)
+
+    sw_pfx = f"SW{TMUX_SEP}"
+    sess_pfx = f"SESS{TMUX_SEP}"
+    pane_pfx = f"PANE{TMUX_SEP}"
+    sw_parts: list[str] = []
+    sess_parts: list[str] = []
+    panes_by_id: dict[str, tuple[str, str, str, str, str, str, str]] = {}
+    sess_panes: dict[str, list[tuple[str, str, str]]] = {}
+    slot_geom: dict[str, tuple[str, int, int, str]] = {}
+    first_vis_pane = ""
+    active_vis_pane = ""
+    for ln in snap.stdout.splitlines():
+        if ln.startswith(sw_pfx):
+            sw_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 7)[:7]]
+        elif ln.startswith(sess_pfx):
+            sess_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 4)[:4]]
+        elif ln.startswith(pane_pfx):
+            pc = [p.strip() for x in (ln.split(TMUX_SEP)[1:] + [""] * 12)[:12] for p in (x,)]
+            pid = pc[0]
+            if not pid:
+                continue
+            panes_by_id[pid] = (pc[1], pc[2], pc[3], pc[4], pc[5], pc[6], pc[7])
+            sess_panes.setdefault(pc[1], []).append((pid, pc[5], pc[7]))
+            pw = int(pc[9]) if pc[9].isdigit() else 0
+            ph = int(pc[10]) if pc[10].isdigit() else 0
+            slot_geom[pid] = (pc[8], pw, ph, pc[7])
+            if pc[1] == sess and pc[7] != "1" and not pc[11].startswith("_ide_park_"):
+                if not first_vis_pane:
+                    first_vis_pane = pid
+                if pc[3] == "1":
+                    active_vis_pane = pid
+
+    if not sw_parts or sw_parts[0] != "1":
+        return (False, last_slot_payload)
+    _, sw_mode, docked_p, docked_s, slot_p, cur_sel_s, cur_label = sw_parts
+    if sw_mode == "new":
+        return (True, last_slot_payload)
+
+    if docked_p and (docked_p not in panes_by_id or (docked_s and docked_s != sess)):
+        undock_switcher_session(sw_sess)
+        slot_p = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_slot_pane").strip()
+        docked_p = ""
+        docked_s = ""
+        last_slot_payload = ""
+
+    if not sess_parts or sess_parts[0] != sess:
+        return (True, last_slot_payload)
+    _, rec_ai, ai_cli_raw, ai_parked = sess_parts
+    ai_cli = ai_cli_raw or "agy"
+    cand_ai, healed_ai = select_dockable_ai_pane(sess, rec_ai, panes_by_id, sess_panes)
+    busy_other = False
+    if rec_ai and rec_ai in panes_by_id and is_switcher_session_name(panes_by_id[rec_ai][0]) and panes_by_id[rec_ai][0] != sw_sess:
+        busy_other = True
+    label = f"{sess} · (in other switcher)" if busy_other else f"{sess} · {ai_cli}"
+
+    opt_cmds: list[str] = []
+    if healed_ai and cand_ai:
+        opt_cmds.extend([
+            "set-option", "-q", "-t", f"={sess}:", "@ide_ai_pane", cand_ai,
+            ";",
+            "set-environment", "-t", f"={sess}", "IDE_AI_PANE", cand_ai,
+        ])
+    if cur_sel_s != sess:
+        if opt_cmds:
+            opt_cmds.append(";")
+        opt_cmds.extend(["set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_selected_sess", sess])
+    if cur_label != label:
+        if opt_cmds:
+            opt_cmds.append(";")
+        opt_cmds.extend(["set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_label", label])
+    if opt_cmds:
+        run_tmux(*opt_cmds)
+
+    if docked_p and docked_s == sess:
+        return (True, last_slot_payload)
+
+    if not slot_p:
+        return (True, last_slot_payload)
+    if slot_p not in slot_geom:
+        s_info = tmux_out(
+            "display-message",
+            "-p",
+            "-t",
+            slot_p,
+            TMUX_SEP.join(["#{pane_tty}", "#{pane_width}", "#{pane_height}", "#{@ide_sw_placeholder}"]),
+        )
+        if not s_info or TMUX_SEP not in s_info:
+            return (True, last_slot_payload)
+        stty, sw_s, sh_s, sph = (p.strip() for p in (s_info.split(TMUX_SEP) + ["", "", "", ""])[:4])
+        slot_geom[slot_p] = (stty, int(sw_s) if sw_s.isdigit() else 0, int(sh_s) if sh_s.isdigit() else 0, sph)
+
+    slot_tty, slot_w, slot_h, is_ph = slot_geom[slot_p]
+    if is_ph != "1" or not slot_tty or slot_w <= 0 or slot_h <= 0:
+        return (True, last_slot_payload)
+
+    if esc is None:
+        _, esc = load_active_palette()
+    preview_pane = ""
+    if cand_ai:
+        preview_pane = cand_ai
+    elif rec_ai and rec_ai in panes_by_id and panes_by_id[rec_ai][0] in (sess, sw_sess):
+        preview_pane = rec_ai
+    else:
+        preview_pane = active_vis_pane or first_vis_pane
+    new_payload = write_slot_tty_viewport(
+        slot_tty=slot_tty,
+        slot_w=slot_w,
+        slot_h=slot_h,
+        preview_pane=preview_pane,
+        esc=esc,
+        last_payload=last_slot_payload,
+    )
+    return (True, new_payload)
+
+
 def render_session_preview(
     target_arg: str,
     follow: bool = False,
@@ -788,6 +1024,7 @@ def render_session_preview(
     """Render ANSI metadata and viewport preview for `target_arg` (one-shot or streaming `--follow`)."""
     sw_sess = os.environ.get("IDE_SWITCHER_SESSION", "").strip()
     seeded_path = os.environ.pop("IDE_PREVIEW_SEEDED", "").strip()
+    while_working_only = os.environ.pop("IDE_PREVIEW_WHILE_WORKING", "").strip() == "1"
     has_sw_name = bool(sw_sess and is_switcher_session_name(sw_sess))
     sess = target_arg.strip()
     if not sess:
@@ -804,9 +1041,7 @@ def render_session_preview(
         out_fd = None
     if not follow:
         if in_switcher:
-            in_switcher = session_exists(sw_sess)
-            if in_switcher:
-                dock_session_into_switcher(sw_sess, sess)
+            in_switcher, _ = sync_switcher_slot_preview(sw_sess, sess)
         frame, _ = _build_session_preview_frame(sess, header_only=in_switcher)
         try:
             _write_stdout_frame(frame + "\n", out_fd)
@@ -844,6 +1079,7 @@ def render_session_preview(
                     with open(meta_path, "r", encoding="utf-8") as mfh:
                         mdata = json.loads(mfh.read())
                     if isinstance(mdata, dict):
+                        cache.last_state = str(mdata.get("state") or "")
                         cache.workdir = str(mdata.get("workdir") or "")
                         cache.git_branch = str(mdata.get("git_branch") or "-")
                         cache.git_dirty = bool(mdata.get("git_dirty"))
@@ -886,9 +1122,9 @@ def render_session_preview(
             return True
         return False
 
+    last_slot_payload = ""
     if in_switcher and seeded_frame is None and not _preview_cancelled():
-        if not dock_session_into_switcher(sw_sess, sess, cancel_check=_preview_cancelled):
-            in_switcher = session_exists(sw_sess)
+        in_switcher, last_slot_payload = sync_switcher_slot_preview(sw_sess, sess)
 
     clear_seq = "\x1b[H\x1b[2J" if sys.stdout.isatty() else "\x1b[2J"
     last_frame: str | None = seeded_frame
@@ -900,14 +1136,20 @@ def render_session_preview(
                 break
             if skip_first_build:
                 skip_first_build = False
-                should_stop = False
+                should_stop = bool(while_working_only and cache.last_state and cache.last_state != "WORKING")
             else:
+                if in_switcher:
+                    in_switcher, last_slot_payload = sync_switcher_slot_preview(
+                        sw_sess, sess, last_slot_payload=last_slot_payload
+                    )
                 frame, should_stop = _build_session_preview_frame(
                     sess,
                     cache=cache,
                     vcs_interval=vcs_interval,
                     header_only=in_switcher,
                 )
+                if while_working_only and cache.last_state != "WORKING":
+                    should_stop = True
                 if last_frame is None:
                     _write_stdout_frame(frame + "\n", out_fd)
                     last_frame = frame

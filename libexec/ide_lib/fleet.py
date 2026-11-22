@@ -656,11 +656,54 @@ def populate_fleet_git(fleet: list[dict[str, object]]) -> None:
                 entry["worktree_peers"] = [str(p["sess"]) for p in peers if p is not entry]
 
 
-def refresh_fleet_topbar() -> int:
+def refresh_fleet_topbar(notify_switchers: bool = False) -> int:
     """Recompute and publish `@ide_fleet_count`, `@ide_fleet_active`, and `@ide_attn_summary`."""
-    raw_sessions, pane_rows, server_up = query_fleet_snapshot()
-    if not server_up:
-        return 0
+    sw_fzf_candidates: list[str] = []
+    if notify_switchers:
+        res = run_tmux(
+            "list-sessions",
+            "-F",
+            TMUX_SEP.join([
+                "SESS",
+                *_SESSION_FMT_FIELDS,
+                "#{@ide_switcher}",
+                "#{@ide_sw_done}",
+                "#{@ide_sw_mode}",
+                "#{@ide_sw_fzf_pane}",
+            ]),
+            ";",
+            "list-panes",
+            "-a",
+            "-F",
+            TMUX_SEP.join(["PANE", *_PANE_FMT_FIELDS]),
+        )
+        if res.returncode != 0:
+            return 0
+        raw_sessions: list[dict[str, str]] = []
+        pane_rows: list[list[str]] = []
+        sw_panes_raw: list[str] = []
+        sess_pfx = f"SESS{TMUX_SEP}"
+        pane_pfx = f"PANE{TMUX_SEP}"
+        for line in (res.stdout or "").splitlines():
+            if line.startswith(sess_pfx):
+                cols = (line.split(TMUX_SEP)[1:] + [""] * 23)[:23]
+                parsed = parse_ide_session_cols(cols[:19])
+                if parsed is not None:
+                    raw_sessions.append(parsed)
+                elif cols[19].strip() == "1" and cols[20].strip() != "1" and cols[21].strip() != "new":
+                    fp = cols[22].strip()
+                    if fp:
+                        sw_panes_raw.append(fp)
+            elif line.startswith(pane_pfx):
+                pane_rows.append((line.split(TMUX_SEP)[1:] + [""] * 13)[:13])
+        if sw_panes_raw:
+            live_pane_ids = {pr[3] for pr in pane_rows if len(pr) > 3 and pr[3]}
+            sw_fzf_candidates = [fp for fp in sw_panes_raw if fp in live_pane_ids]
+    else:
+        raw_sessions, pane_rows, server_up = query_fleet_snapshot()
+        if not server_up:
+            return 0
+
     fleet = (
         classify_ide_fleet(include_git=False, cur_sess="", raw_sessions=raw_sessions, panes_rows=pane_rows)
         if raw_sessions
@@ -670,7 +713,7 @@ def refresh_fleet_topbar() -> int:
     active_count = sum(1 for e in fleet if e["state"] == "WORKING")
     attn_summary = format_attn_summary(fleet)
 
-    run_tmux(
+    cmds: list[str] = [
         "set-option", "-gq", "@ide_fleet_count", str(fleet_count),
         ";",
         "set-option", "-gq", "@ide_fleet_active", str(active_count),
@@ -678,7 +721,10 @@ def refresh_fleet_topbar() -> int:
         "set-option", "-gq", "@ide_attn_summary", attn_summary,
         ";",
         "refresh-client", "-S",
-    )
+    ]
+    for fp in sw_fzf_candidates:
+        cmds.extend([";", "send-keys", "-t", fp, "F12"])
+    run_tmux(*cmds)
     return 0
 
 
@@ -1209,7 +1255,7 @@ def set_agent_state(
             )
         )
 
-    refresh_fleet_topbar()
+    refresh_fleet_topbar(notify_switchers=True)
     if next_attn == "1" and state in ("approval", "done") and (prev_state != state or prev_attn != "1"):
         _dispatch_agent_notification(
             state,
@@ -1314,7 +1360,7 @@ def ack_ai_session(
     if batch_cmds:
         run_tmux(*batch_cmds)
     if should_refresh:
-        refresh_fleet_topbar()
+        refresh_fleet_topbar(notify_switchers=True)
     return 0
 
 

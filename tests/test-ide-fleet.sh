@@ -773,7 +773,6 @@ try:
         "_ZO_DATA_DIR": os.path.join(thome, "zoxide"),
         "TERM": "xterm-256color",
         "LANG": _utf8_lang,
-        "NO_COLOR": "1",
     }
 
     # 1. Server-down safety for --list, --list --plain, --sessions, and --send error paths
@@ -1090,10 +1089,10 @@ try:
     prev_beta_parked = run_cmd([ide_bin, "--session-preview", "beta-ws"], env=sess_env("alpha-ws"), check=True).stdout
     assert "BETA_EDITOR_VISIBLE_LINE" in prev_beta_parked and "BETA_AI_READY" not in prev_beta_parked, f"parked _ide_park_ai leaked into preview: {prev_beta_parked}"
 
-    # Non-git preview uses calm BASE01 (#586E75 -> 88;110;117), never Green (#859900 -> 133;153;0)
+    # Non-VCS preview uses calm BASE01 (#586E75 -> 88;110;117), never Green (#859900 -> 133;153;0)
     prev_gamma = run_cmd([ide_bin, "--session-preview", "gamma-ws"], env={**sess_env("alpha-ws"), "NO_COLOR": ""}, check=True).stdout
-    git_line_gamma = next((ln for ln in prev_gamma.splitlines() if "Git      :" in ln), "")
-    assert "not a git repository" in git_line_gamma and "38;2;88;110;117mnot a git repository" in git_line_gamma, f"non-git line wrong color: {git_line_gamma!r}"
+    git_line_gamma = next((ln for ln in prev_gamma.splitlines() if "VCS      :" in ln), "")
+    assert "not a repository" in git_line_gamma and "38;2;88;110;117mnot a repository" in git_line_gamma, f"non-repo line wrong color: {git_line_gamma!r}"
     prev_missing = run_cmd([ide_bin, "--session-preview", "no-such-ws"], env=sess_env("alpha-ws"), check=True).stdout
     assert "Session is no longer active." in prev_missing
 
@@ -1361,8 +1360,10 @@ try:
     tmux("set-environment", "-g", "IDE_FZF_BIN", mock_fzf, check=True)
     tmux("set-environment", "-g", "MOCK_FZF_KEY", "", check=True)
     tmux("set-environment", "-g", "MOCK_FZF_TARGET", "beta-ws", check=True)
-    if os.path.exists(popup_env_log):
+    try:
         os.unlink(popup_env_log)
+    except FileNotFoundError:
+        pass
     os.write(client2_mfd, b"\x1bs")
     assert wait_until(lambda: (drain_pty_both() or tmux_out("display-message", "-p", "-t", client2_name, "#{session_name}") == "beta-ws")), "Alt+s on client2 did not switch client2 to beta-ws"
     time.sleep(0.2)
@@ -1413,10 +1414,16 @@ try:
     assert (
         "--border=rounded" in rel_fzf_args
         and "--border-label-pos=bottom" in rel_fzf_args
-        and "--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close " in rel_fzf_args
+        and "--border-label= Enter: switch · Alt+l: AI · C-y: ack · Alt+s: close " in rel_fzf_args
         and "--color=label:#586E75" in rel_fzf_args
+        and "border:#586E75,separator:#586E75" in rel_fzf_args
+        and "spinner:#2AA198" in rel_fzf_args
+        and "--bind=f12:refresh-preview" in rel_fzf_args
+        and "--bind=f5:" in rel_fzf_args
+        and "--bind=f1:execute(" in rel_fzf_args
+        and "--bind=alt-?:execute(" in rel_fzf_args
         and "--header=" not in rel_fzf_args
-    ), f"expected bottom border-label in fzf args: {rel_fzf_args}"
+    ), f"expected width-fitted 2-pane bottom border-label and F1/F5 binds in fzf args: {rel_fzf_args}"
 
     # Verify session_last_attached promotes recently visited gamma-ws above beta-ws
     beta_max_ts = max(
@@ -2062,8 +2069,10 @@ try:
 
     # 9. Five-Tier Urgency Hierarchy, Elapsed State Age, OS Focus & Notifications, Multi-Ack, PR Badges, Worktree Collision Guard, Cross-Session --send --switch, and Alt+n Launcher
     # Restore direct ide symlink (removing the step 8i ack wrapper)
-    if os.path.exists(ide_bin) or os.path.islink(ide_bin):
+    try:
         os.unlink(ide_bin)
+    except FileNotFoundError:
+        pass
     os.symlink(real_ide_path, ide_bin)
 
     ws_delta = make_ws("delta-ws", ai_cmd="sleep 300", ai_cli="claude", git_branch="feat/cache", in_home=True)
@@ -2465,15 +2474,15 @@ try:
             "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
             "args = ' '.join(sys.argv[1:])\n"
             "if step == 0:\n"
-            "    assert 'ctrl-y:execute-silent' in args and 'ctrl-o:execute-silent' in args and 'alt-n' in args, f'missing triage/launcher binds: {args}'\n"
-            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
+            "    assert 'ctrl-y:execute-silent' in args and 'ctrl-o:execute-silent' in args and 'alt-n' in args and '--bind=f1:execute(' in args and '--bind=f5:' in args, f'missing triage/launcher/CUA binds: {args}'\n"
+            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r/F5: reload · F1: help · Alt+s: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
             "    print('alt-n')\n"
             "    print(lines[0])\n"
             "elif step == 1:\n"
-            "    assert '--prompt=New IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args and '--color=label:#586E75' in args and '--header=' not in args, f'expected New IDE prompt and bottom border-label on step 1: {args}'\n"
+            "    assert '--prompt=New IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args and '--color=label:#586E75' in args and 'border:#586E75' in args and '--header=' not in args, f'expected New IDE prompt and bottom border-label on step 1: {args}'\n"
             "    sys.exit(130)\n"
             "elif step == 2:\n"
-            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ' in args, f'Esc from Alt+n did not return to session list: {args}'\n"
+            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r/F5: reload · F1: help · Alt+s: close ' in args, f'Esc from Alt+n did not return to session list: {args}'\n"
             "    print('alt-n')\n"
             "elif step == 3:\n"
             "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args, f'expected bottom border-label on step 3: {args}'\n"
@@ -2490,6 +2499,7 @@ try:
             "IDE_FZF_BIN": altn_fzf,
             "IDE_ZOXIDE_BIN": mock_zoxide,
             "IDE_CLIENT": client_name,
+            "COLUMNS": "160",
         },
         check=True,
     )
@@ -3339,11 +3349,34 @@ try:
             os.chmod(script_p, 0o755)
             return script_p
 
+        def _safe_unlink(sock_p: str) -> None:
+            try:
+                os.unlink(sock_p)
+            except FileNotFoundError:
+                pass
+
+        def _bind_dead_unix_sock(sock_p: str) -> None:
+            for _ in range(20):
+                _safe_unlink(sock_p)
+                s = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
+                try:
+                    s.bind(sock_p)
+                    return
+                except OSError:
+                    time.sleep(0.02)
+                finally:
+                    s.close()
+            _safe_unlink(sock_p)
+            s = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
+            try:
+                s.bind(sock_p)
+            finally:
+                s.close()
+
         tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
         tmux("respawn-pane", "-k", "-t", ws_heal["tm"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
         tmux("respawn-pane", "-k", "-t", ws_heal["ai"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
-        if os.path.exists(heal_sock):
-            os.unlink(heal_sock)
+        _safe_unlink(heal_sock)
 
         adhoc_pane = tmux_out("split-window", "-h", "-P", "-F", "#{pane_id}", "-t", ws_heal["tm"], "-c", ws_heal["dir"], "exec /bin/sh")
         tm_launcher = _write_nvim_launcher("tm", extra_env={"NVIM_IDE_SOCKET": heal_sock})
@@ -3415,8 +3448,7 @@ try:
 
         # 5. Nested `:!nvim` (e.g. `:!git commit`, where $NVIM is unset) inside `nvim --clean` must NEVER claim @ide_socket
         tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
-        if os.path.exists(heal_sock):
-            os.unlink(heal_sock)
+        _safe_unlink(heal_sock)
         ed_pid_bang = tmux_out("display-message", "-p", "-t", ws_heal["ed"], "#{pane_pid}")
         tmux(
             "send-keys",
@@ -3528,8 +3560,7 @@ try:
 
         if shutil.which("bash"):
             tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec bash --norc --noprofile -i", check=True)
-            if os.path.exists(heal_sock):
-                os.unlink(heal_sock)
+            _safe_unlink(heal_sock)
             ed_pid_cz = tmux_out("display-message", "-p", "-t", ws_heal["ed"], "#{pane_pid}")
             tmux("send-keys", "-t", ws_heal["ed"], " nvim --clean -c 'let g:cz_ord = 1'", "C-m", check=True)
             assert wait_until(
@@ -3561,12 +3592,8 @@ try:
 
         # Bare-shell relaunch (`--preview`) and closed-split heal (`--open-link` + dead stale socket) must wait for socket & open target line
         tmux("respawn-pane", "-k", "-t", ws_heal["ed"], "-c", ws_heal["dir"], "exec /bin/sh", check=True)
-        if os.path.exists(heal_sock):
-            os.unlink(heal_sock)
         tmux("set-option", "-t", "=heal-ws:", "@ide_quit_err", "Stale quit warning", check=True)
-        dead_s3 = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
-        dead_s3.bind(heal_sock)
-        dead_s3.close()
+        _bind_dead_unix_sock(heal_sock)
         run_cmd([ide_bin, "--sessions-lines", "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
         assert tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_quit_err") == "", (
             "classify_ide_fleet failed to clear @ide_quit_err when Editor exited leaving a dead stale socket"
@@ -3579,11 +3606,7 @@ try:
 
         cur_ed_p = tmux_out("show-options", "-qv", "-t", "=heal-ws:", "@ide_editor_pane")
         tmux("kill-pane", "-t", cur_ed_p, check=True)
-        if os.path.exists(heal_sock):
-            os.unlink(heal_sock)
-        dead_s4 = _hsock.socket(_hsock.AF_UNIX, _hsock.SOCK_STREAM)
-        dead_s4.bind(heal_sock)
-        dead_s4.close()
+        _bind_dead_unix_sock(heal_sock)
         run_cmd([ide_bin, "--open-link", "", "dotfiles/.tmux.conf:41", ws_heal["dir"], "heal-ws"], env={**base_env, "TMUX": ""}, check=True)
         assert wait_until(
             lambda: nvim_expr_eq(heal_sock, "fnamemodify(bufname('%'), ':p') . ':' . line('.')", f"{os.path.realpath(heal_tmux_conf)}:41"),
@@ -4159,27 +4182,29 @@ try:
             sw_sess = wait_until(
                 lambda: (
                     s
-                    if (s := _active_sw_sess())
-                    and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == s
-                    and "int-alpha" in tmux_out("capture-pane", "-p", "-t", f"={s}:")
+                    if (s := _sw_ready())
+                    and tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_selected_sess").strip() == "int-alpha"
+                    and (sp0 := tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_slot_pane").strip())
+                    and "LIVE_AGENT_READY:alpha" in tmux_out("capture-pane", "-p", "-t", sp0)
                     else ""
                 ),
                 timeout=4.0,
             )
-            assert sw_sess, f"2-pane switcher ai-sw-* did not open and dock int-alpha AI pane: sessions={tmux_out('list-sessions')}"
+            assert sw_sess, f"2-pane switcher ai-sw-* did not open and render int-alpha preview: sessions={tmux_out('list-sessions')}"
 
             fzf_p = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_fzf_pane").strip()
             slot_p = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_slot_pane").strip()
             assert fzf_p and slot_p, f"missing switcher pane options: fzf={fzf_p!r} slot={slot_p!r}"
             sw_panes = tmux_out("list-panes", "-t", f"={sw_sess}:", "-F", "#{pane_id}").splitlines()
-            assert sw_panes == [fzf_p, ws_int_alpha["ai"]], f"expected [fzf_p, int-alpha ai] in {sw_sess}, got {sw_panes}"
-
-            # Placeholder holds int-alpha's exact custom width (`orig_alpha_w`) in int-alpha's main window
-            ph_sess, ph_w_s = (
-                tmux_out("display-message", "-p", "-t", slot_p, "#{session_name}\t#{pane_width}").split("\t") + ["", ""]
+            assert sw_panes == [fzf_p, slot_p], (
+                f"expected lazy preview [fzf_p, slot_p] in {sw_sess} before Alt+l, got {sw_panes}"
+            )
+            # Home AI pane stays completely untouched in int-alpha during lazy browsing (zero swap-pane / zero SIGWINCH)
+            home_ai_sess, home_ai_w_s = (
+                tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}\t#{pane_width}").split("\t") + ["", ""]
             )[:2]
-            assert ph_sess == "int-alpha" and int(ph_w_s or "0") == orig_alpha_w, (
-                f"placeholder did not preserve int-alpha geometry: sess={ph_sess!r} w={ph_w_s!r} expected={orig_alpha_w}"
+            assert home_ai_sess == "int-alpha" and int(home_ai_w_s or "0") == orig_alpha_w, (
+                f"lazy switcher unexpectedly mutated home int-alpha AI pane: sess={home_ai_sess!r} w={home_ai_w_s!r} expected={orig_alpha_w}"
             )
 
             # Left fzf preview renders compact metadata card (`header_only`) without duplicating LIVE_AGENT_READY viewport body
@@ -4191,22 +4216,37 @@ try:
                 timeout=3.0,
             ), f"left fzf pane did not render header-only metadata card: {tmux_out('capture-pane', '-p', '-t', fzf_p)!r}"
 
-            # `ide --list --plain` excludes `ai-sw-*` and keeps `int-alpha` classified as DONE (never SHELL) while docked!
-            list_while_docked = run_cmd([ide_bin, "--list"], env={**base_env, "TMUX": ""}, check=True).stdout
-            assert sw_sess not in list_while_docked, f"ephemeral {sw_sess} leaked into ide --list: {list_while_docked}"
-            alpha_row_docked = next((ln for ln in list_while_docked.splitlines() if "int-alpha" in ln), "")
-            assert "DONE" in alpha_row_docked and "SHELL" not in alpha_row_docked, (
-                f"docked int-alpha misclassified in ide --list: {alpha_row_docked!r}"
+            # `ide --list --plain` excludes `ai-sw-*` and keeps `int-alpha` classified as DONE (never SHELL)!
+            list_while_open = run_cmd([ide_bin, "--list"], env={**base_env, "TMUX": ""}, check=True).stdout
+            assert sw_sess not in list_while_open, f"ephemeral {sw_sess} leaked into ide --list: {list_while_open}"
+            alpha_row_open = next((ln for ln in list_while_open.splitlines() if "int-alpha" in ln), "")
+            assert "DONE" in alpha_row_open and "SHELL" not in alpha_row_open, (
+                f"int-alpha misclassified in ide --list while switcher open: {alpha_row_open!r}"
             )
 
-            # 12b. Press Alt+l (`\x1bl`) on real PTY to focus right live AI pane, interact directly, and verify auto-ack!
+            # 12b. Press Alt+l (`\x1bl`) on real PTY to lazily dock & focus right live AI pane, interact directly, and verify auto-ack!
             os.write(client_mfd, b"\x1bl")
             assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{pane_id}") == ws_int_alpha["ai"]
+                and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess
                 and tmux_out("show-options", "-qv", "-t", "=int-alpha:", "@ide_ai_state") == "idle"
                 and tmux_out("show-options", "-qv", "-t", "=int-alpha:", "@ide_ai_attn") == "0",
                 timeout=3.0,
-            ), "Alt+l inside 2-pane switcher did not focus embedded AI pane and auto-acknowledge DONE -> IDLE"
+            ), "Alt+l inside 2-pane switcher did not lazily dock & focus AI pane and auto-acknowledge DONE -> IDLE"
+
+            # While docked, placeholder `slot_p` holds int-alpha's exact custom width (`orig_alpha_w`) in int-alpha's main window
+            ph_sess, ph_w_s = (
+                tmux_out("display-message", "-p", "-t", slot_p, "#{session_name}\t#{pane_width}").split("\t") + ["", ""]
+            )[:2]
+            assert ph_sess == "int-alpha" and int(ph_w_s or "0") == orig_alpha_w, (
+                f"placeholder did not preserve int-alpha geometry while docked: sess={ph_sess!r} w={ph_w_s!r} expected={orig_alpha_w}"
+            )
+            list_while_docked = run_cmd([ide_bin, "--list"], env={**base_env, "TMUX": ""}, check=True).stdout
+            assert sw_sess not in list_while_docked, f"ephemeral {sw_sess} leaked into ide --list: {list_while_docked}"
+            alpha_row_docked = next((ln for ln in list_while_docked.splitlines() if "int-alpha" in ln), "")
+            assert "IDLE" in alpha_row_docked and "SHELL" not in alpha_row_docked, (
+                f"docked int-alpha misclassified in ide --list: {alpha_row_docked!r}"
+            )
 
             os.write(client_mfd, b"HELLO_EMBEDDED_AI_1\r")
             assert wait_until(
@@ -4231,33 +4271,35 @@ try:
                 timeout=3.0,
             ), "ide --send inside switcher did not deliver payload to embedded AI pane"
 
-            # Press Alt+h (`\x1bh`) to return to left `fzf` session list and confirm auto-reload updates DONE -> IDLE
+            # Press Alt+h (`\x1bh`) to return to left `fzf` session list -> undocks AI pane back to int-alpha and reloads IDLE!
             os.write(client_mfd, b"\x1bh")
             assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{pane_id}") == fzf_p
-                and "IDLE" in tmux_out("capture-pane", "-p", "-t", fzf_p),
+                and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == "int-alpha"
+                and "IDLE" in tmux_out("capture-pane", "-p", "-t", fzf_p)
+                and "AGENT_ACK:alpha:SENT_IN_SWITCHER" in tmux_out("capture-pane", "-p", "-t", slot_p),
                 timeout=3.0,
-            ), f"Alt+h did not return to fzf list and reload IDLE state: {tmux_out('capture-pane', '-p', '-t', fzf_p)!r}"
+            ), f"Alt+h did not undock AI pane, return to fzf list, and reload IDLE state: {tmux_out('capture-pane', '-p', '-t', fzf_p)!r}"
+            restored_alpha_w = int(tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{pane_width}") or "0")
+            assert restored_alpha_w == orig_alpha_w, f"int-alpha custom width lost on Alt+h undock: {restored_alpha_w} != {orig_alpha_w}"
 
             # 12c. Scroll in `fzf` to `int-beta` (whose AI pane was parked in `_ide_park_ai`), interact with it, and scroll back!
-            # Type filter `int-beta` so selection deterministically lands on `int-beta` regardless of fleet order
+            # Type filter `int-beta` -> previews `LIVE_AGENT_READY:beta` on `slot_p` while `ws_int_beta["ai"]` stays parked in `int-beta`!
             os.write(client_mfd, b"int-beta")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == sw_sess
-                and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == "int-alpha",
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_selected_sess").strip() == "int-beta"
+                and "LIVE_AGENT_READY:beta" in tmux_out("capture-pane", "-p", "-t", slot_p)
+                and tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == "int-beta",
                 timeout=3.0,
-            ), "filtering to int-beta did not undock int-alpha and dock int-beta's parked AI pane"
+            ), "filtering to int-beta did not render parked int-beta AI preview without docking"
 
-            # Verify int-alpha's AI pane returned to its exact custom width `orig_alpha_w`!
-            restored_alpha_w = int(tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{pane_width}") or "0")
-            assert restored_alpha_w == orig_alpha_w, f"int-alpha custom width lost on undock: {restored_alpha_w} != {orig_alpha_w}"
-
-            # Bounce into int-beta's embedded AI pane via Alt+a (`\x1ba`), type live prompt, and bounce back via Alt+a!
+            # Bounce into int-beta's AI pane via Alt+a (`\x1ba`) -> lazily docks parked AI pane, type live prompt, and bounce back via Alt+a!
             os.write(client_mfd, b"\x1ba")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{pane_id}") == ws_int_beta["ai"],
+                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{pane_id}") == ws_int_beta["ai"]
+                and tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == sw_sess,
                 timeout=3.0,
-            ), "Alt+a did not focus right embedded AI pane"
+            ), "Alt+a did not lazily dock and focus right AI pane for parked int-beta"
             os.write(client_mfd, b"BETA_LIVE_TURN\r")
             assert wait_until(
                 lambda: "AGENT_ACK:beta:BETA_LIVE_TURN" in tmux_out("capture-pane", "-p", "-t", ws_int_beta["ai"]),
@@ -4266,19 +4308,20 @@ try:
 
             os.write(client_mfd, b"\x1ba")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{pane_id}") == fzf_p,
-                timeout=3.0,
-            ), "Alt+a did not bounce back from embedded AI pane to fzf list"
-
-            # Clear filter (`Ctrl+u`) to return to top row and confirm int-beta's AI pane returns to `_ide_park_ai` (`@ide_ai_parked == 1`)!
-            os.write(client_mfd, b"\x15int-alpha")
-            assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess
+                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{pane_id}") == fzf_p
                 and tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == "int-beta"
                 and tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{window_name}").startswith("_ide_park_"),
                 timeout=3.0,
-            ), "scrolling off int-beta did not restore its AI pane back into _ide_park_ai"
+            ), "Alt+a did not bounce back and undock int-beta AI pane into _ide_park_ai"
             assert tmux_out("show-options", "-qv", "-t", "=int-beta:", "@ide_ai_parked") == "1"
+
+            # Clear filter (`Ctrl+u`) to return to `int-alpha` preview
+            os.write(client_mfd, b"\x15int-alpha")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_selected_sess").strip() == "int-alpha"
+                and "LIVE_AGENT_READY:alpha" in tmux_out("capture-pane", "-p", "-t", slot_p),
+                timeout=3.0,
+            ), "scrolling back to int-alpha did not refresh slot_p preview"
 
             # 12d. Focus INSIDE the embedded right AI pane and press Alt+s (`\x1bs`) to close the popup cleanly!
             os.write(client_mfd, b"\x1bl")
@@ -4295,7 +4338,8 @@ try:
             assert int(tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{pane_width}") or "0") == orig_alpha_w
             assert tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "int-alpha"
 
-            # Zoom int-alpha's Editor pane, open switcher, and close via duplicate `ide --sessions` toggle (`find_switcher_for_client`);
+            # Zoom int-alpha's Editor pane, open switcher, verify lazy browsing NEVER unzooms Editor,
+            # then dock via Alt+l and close via duplicate `ide --sessions` toggle (`find_switcher_for_client`);
             # confirm zoomed state (`window_zoomed_flag == 1` on Editor) is restored on undock!
             tmux("select-pane", "-t", ws_int_alpha["ed"], check=True)
             tmux("resize-pane", "-Z", "-t", ws_int_alpha["ed"], check=True)
@@ -4312,9 +4356,17 @@ try:
             assert sw_sess_z, "switcher did not open for zoom test"
             os.write(client_mfd, b"int-alpha")
             assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_z}:", "@ide_sw_selected_sess").strip() == "int-alpha",
+                timeout=3.0,
+            )
+            assert tmux_out("display-message", "-p", "-t", ws_int_alpha["ed"], "#{window_zoomed_flag}") == "1", (
+                "lazy browsing inside switcher unexpectedly unzoomed home Editor window"
+            )
+            os.write(client_mfd, b"\x1bl")
+            assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_z,
                 timeout=3.0,
-            ), "switcher did not dock zoomed int-alpha AI pane"
+            ), "Alt+l inside switcher did not dock zoomed int-alpha AI pane"
             # Invoking `ide --sessions` again for the same client toggles the active switcher closed cleanly!
             run_cmd([ide_bin, "--sessions", "int-alpha"], env=sw_env, check=True)
             assert sw_proc.wait(timeout=5.0) == 0
@@ -4325,7 +4377,7 @@ try:
             )
             tmux("resize-pane", "-Z", "-t", ws_int_alpha["ed"], check=True)
 
-            # 12e. Alt+e jump-out AND Ctrl+Click (`--open-link`) file:line jump-out from embedded AI pane
+            # 12e. Alt+e jump-out AND Ctrl+Click (`--open-link`) file:line jump-out from undocked preview pane
             sw_proc = subprocess.Popen(
                 [ide_bin, "--sessions", "int-alpha"],
                 stdin=subprocess.DEVNULL,
@@ -4338,10 +4390,10 @@ try:
             assert sw_sess_e
             os.write(client_mfd, b"int-beta")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == sw_sess_e,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_e}:", "@ide_sw_selected_sess").strip() == "int-beta",
                 timeout=3.0,
             )
-            # Press Alt+e (`\x1be`) while inside switcher -> closes popup, switches outer client to int-beta, focuses Editor!
+            # Press Alt+e (`\x1be`) while inside undocked switcher -> closes popup, switches outer client to int-beta, focuses Editor!
             os.write(client_mfd, b"\x1be")
             assert sw_proc.wait(timeout=5.0) == 0
             sw_proc = None
@@ -4351,7 +4403,7 @@ try:
                 timeout=3.0,
             ), "Alt+e inside switcher did not switch outer client to int-beta Editor"
 
-            # Ctrl+Click (`--open-link`) on a file:line inside the switcher's embedded AI pane opens file:line in target Editor & switches!
+            # Ctrl+Click (`--open-link`) on a file:line inside the switcher's undocked preview pane opens file:line in target Editor & switches!
             if shutil.which("nvim"):
                 click_target_py = os.path.join(ws_int_alpha["dir"], "clicked_mod.py")
                 with open(click_target_py, "w", encoding="utf-8") as cfh:
@@ -4388,12 +4440,12 @@ try:
                 assert sw_sess_lk
                 os.write(client_mfd, b"int-alpha")
                 assert wait_until(
-                    lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_lk,
+                    lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_lk}:", "@ide_sw_selected_sess").strip() == "int-alpha",
                     timeout=3.0,
                 )
                 run_cmd(
-                    [ide_bin, "--open-link", "", "clicked_mod.py:4", ws_int_alpha["dir"], sw_sess_lk],
-                    env=sess_env("int-alpha", ws_int_alpha["ai"]),
+                    [ide_bin, "--open-link", "", "clicked_mod.py:4", ws_int_beta["dir"], sw_sess_lk],
+                    env=sess_env("int-beta", ws_int_beta["ed"]),
                     check=True,
                 )
                 assert sw_proc.wait(timeout=5.0) == 0
@@ -4418,16 +4470,27 @@ try:
             assert sw_sess_x
             os.write(client_mfd, b"int-beta")
             assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_x}:", "@ide_sw_selected_sess").strip() == "int-beta",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1bl")
+            assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", ws_int_beta["ai"], "#{session_name}") == sw_sess_x,
                 timeout=3.0,
             )
-            # Kill docked int-beta AI pane while embedded -> switcher survives and heals cleanly when scrolling back to int-alpha!
+            # Kill docked int-beta AI pane while embedded -> switcher survives (`Subcase B` respawns slot_pane) and heals cleanly!
             tmux("kill-pane", "-t", ws_int_beta["ai"], check=True)
+            assert wait_until(
+                lambda: len(tmux_out("list-panes", "-t", f"={sw_sess_x}:", "-F", "#{pane_id}").splitlines()) == 2,
+                timeout=3.0,
+            ), "Subcase B did not respawn right placeholder slot_pane after docked AI pane exited"
             os.write(client_mfd, b"\x15int-alpha")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_x,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_x}:", "@ide_sw_selected_sess").strip() == "int-alpha"
+                and (sp_x := tmux_out("show-options", "-qv", "-t", f"={sw_sess_x}:", "@ide_sw_slot_pane").strip())
+                and "LIVE_AGENT_READY:alpha" in tmux_out("capture-pane", "-p", "-t", sp_x),
                 timeout=3.0,
-            ), "switcher did not recover after docked int-beta AI pane exited"
+            ), "switcher did not recover preview after docked int-beta AI pane exited"
             # Quit clean `int-beta` via Ctrl+x (`\x18`) inside switcher -> int-beta terminates while switcher stays open!
             os.write(client_mfd, b"\x15int-beta")
             time.sleep(0.15)
@@ -4443,7 +4506,7 @@ try:
             # 12g. Adversarial switcher regressions:
             # - Alt+h / Alt+l non-wrapping boundaries + Alt+z -> Alt+a unzoom
             # - Alt+n (`New IDE >`) focus/zoom shielding against Alt+a / Alt+l / Alt+h + Esc round-trip
-            # - Wrapped URL Ctrl+Click (`--open-link`) inside embedded AI pane
+            # - Wrapped URL Ctrl+Click (`--open-link`) inside switcher preview pane
             # - `v`-style `ide --focus-editor` from docked `$TMUX_PANE` (no session arg) closing switcher & jumping to Editor
             # - `Alt+Shift+S` (`--next-attention`) inside switcher switching OUTER client (never nesting inside popup)
             tmux(
@@ -4470,11 +4533,11 @@ try:
             fzf_adv = tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_fzf_pane").strip()
             os.write(client_mfd, b"int-alpha")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_adv,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_selected_sess").strip() == "int-alpha",
                 timeout=3.0,
             )
 
-            # Wrapped URL tail click inside embedded AI pane stitches across lines and opens browser
+            # Wrapped URL tail click inside switcher (even while undocked!) stitches across lines and opens browser
             run_cmd(
                 [ide_bin, "--open-link", "", "seg-two-leaf", ws_int_alpha["dir"], sw_sess_adv],
                 env={**sess_env("int-alpha", ws_int_alpha["ai"]), "IDE_BROWSER": mock_browser},
@@ -4485,9 +4548,9 @@ try:
                 and "https://example.com/switcher-wrapped-path/seg-one-seg-two-leaf"
                 in open(browser_log, encoding="utf-8").read(),
                 timeout=3.0,
-            ), f"wrapped URL inside embedded AI pane failed to open: {open(browser_log, encoding='utf-8').read()!r}"
+            ), f"wrapped URL inside switcher failed to open: {open(browser_log, encoding='utf-8').read()!r}"
 
-            # Alt+h at left edge stays on fzf_adv; Alt+l moves right; second Alt+l stays on AI pane; Alt+z -> Alt+a unzooms back to list
+            # Alt+h at left edge stays on fzf_adv; Alt+l lazily docks & moves right; second Alt+l stays on AI pane; Alt+z -> Alt+a unzooms & undocks back to list
             os.write(client_mfd, b"\x1bh")
             time.sleep(0.15)
             assert tmux_out("display-message", "-p", "-t", f"={sw_sess_adv}:", "#{pane_id}") == fzf_adv, (
@@ -4511,9 +4574,10 @@ try:
             os.write(client_mfd, b"\x1ba")
             assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_adv}:", "#{pane_id}") == fzf_adv
-                and tmux_out("display-message", "-p", "-t", f"={sw_sess_adv}:", "#{window_zoomed_flag}") == "0",
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_adv}:", "#{window_zoomed_flag}") == "0"
+                and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == "int-alpha",
                 timeout=3.0,
-            ), "Alt+a from zoomed embedded AI pane did not unzoom back to 2-pane session list"
+            ), "Alt+a from zoomed embedded AI pane did not unzoom and undock back to 2-pane session list"
 
             # Alt+n (`New IDE >`) zooms fzf_adv, ignores Alt+a / Alt+l / Alt+h, and Esc returns to 2-pane sessions mode
             os.write(client_mfd, b"\x1bn")
@@ -4541,6 +4605,11 @@ try:
                 timeout=3.0,
             ), "Esc from Alt+n did not restore 2-pane switcher session list"
             os.write(client_mfd, b"int-alpha")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_selected_sess").strip() == "int-alpha",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1bl")
             assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_adv,
                 timeout=3.0,
@@ -4643,7 +4712,8 @@ try:
                 assert sw_ext, "outside-tmux ide -s did not spawn 2-pane ai-sw-* session"
                 os.write(ext_mfd, b"int-alpha")
                 assert wait_until(
-                    lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_ext,
+                    lambda: tmux_out("show-options", "-qv", "-t", f"={sw_ext}:", "@ide_sw_selected_sess").strip() == "int-alpha"
+                    and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == "int-alpha",
                     timeout=3.0,
                 )
                 os.write(ext_mfd, b"\r")
@@ -4695,17 +4765,17 @@ try:
             sw_sess_seed = wait_until(_sw_ready, timeout=4.0)
             assert sw_sess_seed
             fzf_seed = tmux_out("show-options", "-qv", "-t", f"={sw_sess_seed}:", "@ide_sw_fzf_pane").strip()
-            top_docked = wait_until(
-                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_seed}:", "@ide_sw_docked_sess").strip(),
+            top_selected = wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_seed}:", "@ide_sw_selected_sess").strip(),
                 timeout=3.0,
             )
-            assert top_docked, "seeded switcher failed to dock initial top session"
+            assert top_selected, "seeded switcher failed to set initial @ide_sw_selected_sess"
             assert wait_until(
-                lambda: "Workspace:" in (c := tmux_out("capture-pane", "-p", "-t", fzf_seed)) and "Git      :" in c,
+                lambda: "Workspace:" in (c := tmux_out("capture-pane", "-p", "-t", fzf_seed)) and "VCS      :" in c,
                 timeout=3.0,
-            ), f"seeded switcher preview card did not render Workspace/Git lines: {tmux_out('capture-pane', '-p', '-t', fzf_seed)!r}"
+            ), f"seeded switcher preview card did not render Workspace/VCS lines: {tmux_out('capture-pane', '-p', '-t', fzf_seed)!r}"
             run_cmd(
-                [ide_bin, "--agent-state", "approval", "--message", "Seeded live update", top_docked],
+                [ide_bin, "--agent-state", "approval", "--message", "Seeded live update", top_selected],
                 env=sw_env,
                 check=True,
             )
@@ -4724,10 +4794,10 @@ try:
                 lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_seed}:", "#{pane_id}").strip() == fzf_seed,
                 timeout=3.0,
             )
-            # Filter to `int-alpha` -> must heal `ws_int_alpha['ai']` without stealing `gamma_ed_pane`!
+            # Filter to `int-alpha` -> must heal `@ide_ai_pane` to `ws_int_alpha['ai']` without stealing `gamma_ed_pane`!
             os.write(client_mfd, b"int-alpha")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}").strip() == sw_sess_seed,
+                lambda: tmux_out("show-options", "-qv", "-t", "=int-alpha:", "@ide_ai_pane").strip() == ws_int_alpha["ai"],
                 timeout=3.0,
             ), "stale cross-session @ide_ai_pane was not healed to int-alpha's own AI pane"
             assert tmux_out("display-message", "-p", "-t", gamma_ed_pane, "#{session_name}").strip() == "gamma-ws", (
@@ -4736,7 +4806,7 @@ try:
             assert tmux_out("display-message", "-p", "-t", gamma_ed_pane, "#{@ide_owner_sess}").strip() == "", (
                 "switcher corrupted foreign gamma-ws Editor pane @ide_owner_sess"
             )
-            run_cmd([ide_bin, "--agent-state", "idle", top_docked], env=sw_env, check=True)
+            run_cmd([ide_bin, "--agent-state", "idle", top_selected], env=sw_env, check=True)
             os.write(client_mfd, b"\x1bs")
             assert sw_proc.wait(timeout=5.0) == 0
             sw_proc = None
@@ -4762,12 +4832,13 @@ try:
             assert sw_sess_aiz
             os.write(client_mfd, b"int-alpha")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_aiz,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_aiz}:", "@ide_sw_selected_sess").strip() == "int-alpha",
                 timeout=3.0,
             )
             os.write(client_mfd, b"\x1bl")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_aiz}:", "#{pane_id}") == ws_int_alpha["ai"],
+                lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_aiz}:", "#{pane_id}") == ws_int_alpha["ai"]
+                and tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_aiz,
                 timeout=3.0,
             )
             os.write(client_mfd, b"\x1bz")
@@ -4786,7 +4857,7 @@ try:
             ), "closing switcher after zooming already-zoomed home AI pane failed to restore home AI zoom"
             tmux("resize-pane", "-Z", "-t", ws_int_alpha["ai"], check=True)
 
-            # Directory Ctrl+Click (`--open-link` on `sub`) inside switcher dives @ide_workdir, closes switcher, and switches outer client
+            # Directory Ctrl+Click (`--open-link` on `sub`) inside undocked switcher dives @ide_workdir, closes switcher, and switches outer client
             tmux("switch-client", "-c", client_name, "-t", "=gamma-ws", check=True)
             sw_proc = subprocess.Popen(
                 [ide_bin, "--sessions", "gamma-ws"],
@@ -4800,12 +4871,12 @@ try:
             assert sw_sess_dir
             os.write(client_mfd, b"int-alpha")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_dir,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_dir}:", "@ide_sw_selected_sess").strip() == "int-alpha",
                 timeout=3.0,
             )
             run_cmd(
-                [ide_bin, "--open-link", "", "sub", ws_int_alpha["dir"], sw_sess_dir],
-                env={**sess_env("int-alpha", ws_int_alpha["ai"]), "IDE_CD_SKIP_SHELL": "1"},
+                [ide_bin, "--open-link", "", "sub", ws_gamma["dir"], sw_sess_dir],
+                env={**sess_env("gamma-ws", ws_gamma["ed"]), "IDE_CD_SKIP_SHELL": "1"},
                 check=True,
             )
             assert sw_proc.wait(timeout=5.0) == 0
@@ -4851,32 +4922,39 @@ try:
             assert sw_sess_pk
             os.write(client_mfd, b"subb-ws")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_subb["ai"], "#{session_name}") == sw_sess_pk,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_pk}:", "@ide_sw_selected_sess").strip() == "subb-ws",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1bl")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_subb["ai"], "#{session_name}") == sw_sess_pk
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_pk}:", "#{pane_id}") == ws_subb["ai"],
                 timeout=3.0,
             )
             # swap-pane unzoomed subb-ws's main window; killing subb-ws AI while docked must restore subb-ws Editor zoom on undock!
             assert tmux_out("display-message", "-p", "-t", ws_subb["ed"], "#{window_zoomed_flag}") == "0"
             tmux("kill-pane", "-t", ws_subb["ai"], check=True)
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_subb["ed"], "#{window_zoomed_flag}") == "1",
+                timeout=3.0,
+            ), "killing docked unparked AI pane failed to restore home Editor zoom on subb-ws"
             os.write(client_mfd, b"\x15gamma-ws")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_gamma["ai"], "#{session_name}") == sw_sess_pk,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_pk}:", "@ide_sw_selected_sess").strip() == "gamma-ws",
                 timeout=3.0,
             )
-            assert tmux_out("display-message", "-p", "-t", ws_subb["ed"], "#{window_zoomed_flag}") == "1", (
-                "killing docked unparked AI pane failed to restore home Editor zoom on subb-ws"
+            os.write(client_mfd, b"\x1bl")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_gamma["ai"], "#{session_name}") == sw_sess_pk
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_pk}:", "#{pane_id}") == ws_gamma["ai"],
+                timeout=3.0,
             )
             tmux("kill-pane", "-t", ws_gamma["ai"], check=True)
-            os.write(client_mfd, b"\x15int-alpha")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_int_alpha["ai"], "#{session_name}") == sw_sess_pk,
+                lambda: tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_parked") == "0"
+                and tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") == "0",
                 timeout=3.0,
-            )
-            assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_parked") == "0", (
-                "killing docked parked AI pane failed to reset @ide_ai_parked=0"
-            )
-            assert tmux_out("show-options", "-qv", "-t", "=gamma-ws:", "@ide_ai_attn") == "0", (
-                "killing docked parked AI pane failed to clear @ide_ai_attn"
-            )
+            ), "killing docked parked AI pane failed to reset @ide_ai_parked=0 and @ide_ai_attn=0"
             assert tmux_out("display-message", "-p", "-t", ws_gamma["ed"], "#{window_zoomed_flag}") == "1", (
                 "killing docked parked AI pane lost home Editor zoom on gamma-ws"
             )
@@ -4886,7 +4964,8 @@ try:
             run_cmd([ide_bin, "--kill", "subb-ws"], env={**base_env, "TMUX": ""}, check=False)
 
             # 12k. Subcase C live-AI preservation when placeholder `slot_pane` is killed externally while home session lives,
-            # concurrent 2-client `Alt+s` contention (server-scoped flock preventing double-docking / pane theft),
+            # concurrent 2-client `Alt+l` contention (server-scoped flock preventing double-docking / pane theft),
+            # scroll & cursor preservation across both lazy browse and live docking, immediate 3-line mouse wheel scrolling,
             # non-POSIX `$SHELL` resilience in single-pane `fzf`, and `--2pane --ai` forwarding across `ide -s` `Alt+n`!
             ws_subc = make_ws(
                 "subc-ws",
@@ -4911,7 +4990,13 @@ try:
             assert sw_sess_subc
             os.write(client_mfd, b"subc-ws")
             assert wait_until(
-                lambda: tmux_out("display-message", "-p", "-t", ws_subc["ai"], "#{session_name}") == sw_sess_subc,
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_subc}:", "@ide_sw_selected_sess").strip() == "subc-ws",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1bl")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_subc["ai"], "#{session_name}") == sw_sess_subc
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_subc}:", "#{pane_id}") == ws_subc["ai"],
                 timeout=3.0,
             )
             subc_slot = tmux_out("show-options", "-qv", "-t", f"={sw_sess_subc}:", "@ide_sw_slot_pane").strip()
@@ -4933,7 +5018,7 @@ try:
                 timeout=3.0,
             ), "Subcase C killed the user's live AI agent process instead of preserving it!"
 
-            # Concurrent 2-client `Alt+s` contention on the same urgent workspace (`subc-ws`)
+            # Concurrent 2-client `Alt+l` contention on the same urgent workspace (`subc-ws`)
             run_cmd(
                 [ide_bin, "--agent-state", "approval", "--message", "Contested blocker", "subc-ws"],
                 env=sess_env("subc-ws", ws_subc["ai"]),
@@ -5008,16 +5093,29 @@ try:
                         == 2
                         and all(
                             tmux_out("display-message", "-p", "-t", f"={s}:", "#{session_attached}").strip() not in ("", "0")
+                            and tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_selected_sess").strip() == "subc-ws"
                             for s in sws
                         )
                         else []
                     ),
                     timeout=4.0,
                 )
-                assert len(both_sw) == 2, f"expected 2 concurrent ai-sw-* sessions, got {both_sw}"
-                # Verify subc-ws AI pane is docked in AT MOST ONE switcher (never stolen into the second, zero foreign placeholders)
-                ai_holder = tmux_out("display-message", "-p", "-t", ws_subc["ai"], "#{session_name}").strip()
+                assert len(both_sw) == 2, f"expected 2 concurrent ai-sw-* sessions on subc-ws, got {both_sw}"
+                # Both clients press Alt+l simultaneously -> flock ensures subc-ws AI pane docks in AT MOST ONE switcher!
+                os.write(client_mfd, b"\x1bl")
+                os.write(c2_mfd, b"\x1bl")
+                ai_holder = wait_until(
+                    lambda: (
+                        h
+                        if (h := tmux_out("display-message", "-p", "-t", ws_subc["ai"], "#{session_name}").strip()) in both_sw
+                        else ""
+                    ),
+                    timeout=3.0,
+                )
                 assert ai_holder in both_sw, f"expected subc-ws AI pane in one of {both_sw}, got {ai_holder!r}"
+                time.sleep(0.15)
+                ai_holder = tmux_out("display-message", "-p", "-t", ws_subc["ai"], "#{session_name}").strip()
+                assert ai_holder in both_sw, f"subc-ws AI pane did not stay docked in one switcher: {ai_holder!r}"
                 other_sw = both_sw[1] if both_sw[0] == ai_holder else both_sw[0]
                 other_panes = tmux_out("list-panes", "-t", f"={other_sw}:", "-F", "#{pane_id}\t#{@ide_sw_placeholder}").splitlines()
                 assert len(other_panes) == 2 and any(ln.endswith("\t1") for ln in other_panes), (
@@ -5065,6 +5163,468 @@ try:
                     pass
             tmux("switch-client", "-c", client_name, "-t", "=int-alpha", check=True)
             run_cmd([ide_bin, "--kill", "subc-ws"], env={**base_env, "TMUX": ""}, check=False)
+
+            # 12l. Scroll & cursor preservation across session switching (zero SIGWINCH + copy-mode scroll_position + zoomed Editor view)
+            # AND immediate 3-line non-focus-stealing mouse wheel scrolling!
+            winch_cnt_file = os.path.join(root, "scroll_winch.cnt")
+            scroll_ai_py = os.path.join(root, "scroll_ai.py")
+            with open(scroll_ai_py, "w", encoding="utf-8") as saf:
+                saf.write(
+                    "import signal, time\n"
+                    f"cnt_p = {winch_cnt_file!r}\n"
+                    "n = 0\n"
+                    "open(cnt_p, 'w').write('0')\n"
+                    "def _on_w(sig, frm):\n"
+                    "    global n\n"
+                    "    n += 1\n"
+                    "    open(cnt_p, 'w').write(str(n))\n"
+                    "signal.signal(signal.SIGWINCH, _on_w)\n"
+                    "for i in range(1, 121):\n"
+                    "    print(f'SCROLL_LINE_{i:03d}', flush=True)\n"
+                    "while True:\n"
+                    "    time.sleep(1)\n"
+                )
+            scroll_nvim_sock = os.path.join(xdg_run, "nvim-ide-scroll-ws.sock")
+            scroll_txt = os.path.join(root, "scroll_doc.txt")
+            with open(scroll_txt, "w", encoding="utf-8") as stf:
+                stf.write("".join(f"doc line {i}\n" for i in range(1, 301)))
+            ed_scroll_cmd = (
+                f"nvim --clean --listen {shlex.quote(scroll_nvim_sock)} {shlex.quote(scroll_txt)}"
+                if shutil.which("nvim")
+                else "exec sleep 300"
+            )
+            ws_scroll = make_ws(
+                "scroll-ws",
+                ai_cmd=f"python3 -B {shlex.quote(scroll_ai_py)}",
+                ed_cmd=ed_scroll_cmd,
+                ai_cli="claude",
+            )
+            if shutil.which("nvim"):
+                tmux("set-option", "-q", "-t", "=scroll-ws:", "@ide_socket", scroll_nvim_sock, check=True)
+            assert wait_until(
+                lambda: "SCROLL_LINE_120" in tmux_out("capture-pane", "-p", "-t", ws_scroll["ai"]),
+                timeout=3.0,
+            )
+            # Visit `scroll-ws` on the live 160x48 client first (modeling switching away and back between active sessions),
+            # enter copy-mode at scroll_position=40, zoom Editor at topline=150/lnum=160, and record baseline SIGWINCH count!
+            tmux("switch-client", "-c", client_name, "-t", "=scroll-ws", check=True)
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", "=scroll-ws:", "#{window_height}").strip() == "47",
+                timeout=3.0,
+            )
+            tmux("copy-mode", "-t", ws_scroll["ai"], check=True)
+            tmux("send-keys", "-X", "-t", ws_scroll["ai"], "-N", "40", "scroll-up", check=True)
+            assert tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{scroll_position}").strip() == "40"
+            orig_topline = ""
+            if shutil.which("nvim"):
+                assert wait_until(lambda: nvim_expr_eq(scroll_nvim_sock, "line('$')", "300"), timeout=4.0), (
+                    "scroll_doc.txt did not finish loading 300 lines in scroll-ws nvim"
+                )
+                tmux("select-pane", "-t", ws_scroll["ed"], check=True)
+                tmux("resize-pane", "-Z", "-t", ws_scroll["ed"], check=True)
+                time.sleep(0.08)
+                subprocess.run(
+                    [
+                        "nvim",
+                        "--headless",
+                        "--server",
+                        scroll_nvim_sock,
+                        "--remote-expr",
+                        "execute(\"call winrestview({'topline': 150, 'lnum': 160, 'col': 0})\")",
+                    ],
+                    env=base_env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=3,
+                    check=True,
+                )
+                orig_topline = "150:160"
+                assert wait_until(
+                    lambda: nvim_expr_eq(
+                        scroll_nvim_sock,
+                        "get(winsaveview(), 'topline', 0) . ':' . line('.')",
+                        orig_topline,
+                    ),
+                    timeout=2.0,
+                ), "failed to position zoomed scroll-ws Editor at topline=150, lnum=160"
+
+            # A) Switch away to `int-alpha`, open `Alt+s`, browse to `scroll-ws`, and press Enter to switch back
+            # -> ZERO new SIGWINCH signals, scroll_position==40, and zoomed Editor view intact!
+            tmux("switch-client", "-c", client_name, "-t", "=int-alpha", check=True)
+            time.sleep(0.1)
+            baseline_winch = open(winch_cnt_file, encoding="utf-8").read().strip()
+            sw_proc = subprocess.Popen(
+                [ide_bin, "--sessions", "int-alpha"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=sw_env,
+            )
+            sw_sess_scr = wait_until(_sw_ready, timeout=4.0)
+            assert sw_sess_scr
+            os.write(client_mfd, b"scroll-ws")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_scr}:", "@ide_sw_selected_sess").strip() == "scroll-ws",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\r")
+            assert sw_proc.wait(timeout=5.0) == 0
+            sw_proc = None
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", client_name, "#{session_name}") == "scroll-ws",
+                timeout=3.0,
+            )
+            after_switch_winch = open(winch_cnt_file, encoding="utf-8").read().strip()
+            assert after_switch_winch == baseline_winch, (
+                f"lazy switcher browse/switch fired SIGWINCH on scroll-ws AI pane: {baseline_winch!r} -> {after_switch_winch!r}"
+            )
+            assert tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}").strip() == "1\t40", (
+                "lazy switcher browse/switch lost copy-mode scroll_position=40"
+            )
+            if orig_topline:
+                assert tmux_out("display-message", "-p", "-t", ws_scroll["ed"], "#{window_zoomed_flag}").strip() == "1"
+                assert nvim_expr_eq(scroll_nvim_sock, "winsaveview().topline . ':' . line('.')", orig_topline), (
+                    "lazy switcher browse/switch shifted zoomed Editor topline/cursor"
+                )
+
+            # B) Dock `scroll-ws` via `Alt+l` (`swap-pane -d` across geometry difference!) and undock via `Alt+h` + `Alt+s`
+            # -> BOTH `scroll_position == 40` AND zoomed Editor `topline:lnum` are saved & restored!
+            tmux("switch-client", "-c", client_name, "-t", "=int-alpha", check=True)
+            sw_proc = subprocess.Popen(
+                [ide_bin, "--sessions", "int-alpha"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=sw_env,
+            )
+            sw_sess_scr2 = wait_until(_sw_ready, timeout=4.0)
+            assert sw_sess_scr2
+            os.write(client_mfd, b"scroll-ws")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_scr2}:", "@ide_sw_selected_sess").strip() == "scroll-ws",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1bl")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{session_name}") == sw_sess_scr2
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_scr2}:", "#{pane_id}") == ws_scroll["ai"]
+                and tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{scroll_position}").strip() == "40",
+                timeout=3.0,
+            ), "docking scroll-ws via Alt+l failed to focus AI pane and preserve copy-mode scroll_position=40"
+            os.write(client_mfd, b"\x1bh")
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{session_name}") == "scroll-ws",
+                timeout=3.0,
+            ), (
+                "Alt+h from docked copy-mode AI pane did not undock back to scroll-ws: "
+                + repr(tmux_out("display-message", "-p", "-t", f"={sw_sess_scr2}:", "#{pane_id}\t#{@ide_sw_docked_pane}"))
+            )
+            os.write(client_mfd, b"\x1bs")
+            assert sw_proc.wait(timeout=5.0) == 0
+            sw_proc = None
+            assert tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}").strip() == "1\t40", (
+                "undocking scroll-ws lost copy-mode scroll_position=40"
+            )
+            if orig_topline:
+                assert tmux_out("display-message", "-p", "-t", ws_scroll["ed"], "#{window_zoomed_flag}").strip() == "1"
+                assert wait_until(
+                    lambda: nvim_expr_eq(
+                        scroll_nvim_sock,
+                        "get(winsaveview(), 'topline', 0) . ':' . line('.')",
+                        orig_topline,
+                    ),
+                    timeout=2.0,
+                ), "undocking scroll-ws failed to restore zoomed Editor topline/cursor"
+            tmux("send-keys", "-X", "-t", ws_scroll["ai"], "cancel", check=False)
+            if orig_topline:
+                tmux("resize-pane", "-Z", "-t", ws_scroll["ed"], check=False)
+
+            # C) Hover mouse wheel scrolling (`WheelUpPane` / `WheelDownPane` from `dotfiles/.tmux.conf`):
+            # immediate 3-line step on tick 1 (`scroll_position == 3`), auto-cancel at 0, and ZERO focus theft!
+            tmux("source-file", os.path.join(repo_dir, "dotfiles", ".tmux.conf"), check=True)
+            tmux("switch-client", "-c", client_name, "-t", "=scroll-ws", check=True)
+            tmux("select-pane", "-t", ws_scroll["ed"], check=True)
+            ai_left_s, ai_top_s = (
+                tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_left}\t#{pane_top}").split("\t") + ["0", "0"]
+            )[:2]
+            wheel_col = int(ai_left_s or "0") + 3
+            wheel_row = int(ai_top_s or "0") + 3  # +1 status bar +1 1-based SGR row +1 inside pane
+            os.write(client_mfd, f"\x1b[<64;{wheel_col};{wheel_row}M".encode("ascii"))
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}").strip() == "1\t3",
+                timeout=3.0,
+            ), (
+                "first WheelUpPane tick did not immediately scroll 3 lines: "
+                + repr(tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}"))
+            )
+            os.write(client_mfd, f"\x1b[<64;{wheel_col};{wheel_row}M".encode("ascii"))
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}").strip() == "1\t6",
+                timeout=3.0,
+            ), "second hover WheelUpPane tick over unfocused AI pane did not advance scroll_position to 6"
+            assert tmux_out("display-message", "-p", "-t", "=scroll-ws:", "#{pane_id}").strip() == ws_scroll["ed"], (
+                "hover WheelUpPane over unfocused AI pane stole active keyboard focus from Editor!"
+            )
+            os.write(client_mfd, f"\x1b[<65;{wheel_col};{wheel_row}M".encode("ascii"))
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}").strip() == "1\t3",
+                timeout=3.0,
+            ), "first hover WheelDownPane tick did not step scroll_position from 6 to 3"
+            os.write(client_mfd, f"\x1b[<65;{wheel_col};{wheel_row}M".encode("ascii"))
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-t", ws_scroll["ai"], "#{pane_in_mode}\t#{scroll_position}").strip() == "0",
+                timeout=3.0,
+            ), "WheelDownPane back to bottom did not auto-cancel copy-mode"
+            assert tmux_out("display-message", "-p", "-t", "=scroll-ws:", "#{pane_id}").strip() == ws_scroll["ed"], (
+                "hover WheelDownPane over unfocused AI pane stole active keyboard focus from Editor!"
+            )
+
+            if shutil.which("nvim") and os.path.exists(scroll_nvim_sock):
+                subprocess.run(
+                    ["nvim", "--headless", "--server", scroll_nvim_sock, "--remote-send", "<C-\\><C-n><Cmd>qall!<CR>"],
+                    env=base_env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=2,
+                    check=False,
+                )
+            tmux("switch-client", "-c", client_name, "-t", "=int-alpha", check=True)
+            run_cmd([ide_bin, "--kill", "scroll-ws"], env={**base_env, "TMUX": ""}, check=False)
+
+            # 12m. mono-tui v0.2.5 ergonomics: width-fitted footer packing, 90-col responsive split/stack breakpoint,
+            # Focused Surface [PREVIEW]/[LIVE] border states, and 4-tier color + Nerd Font degradation!
+            sys.path.insert(0, os.path.join(repo_dir, "libexec"))
+            from ide_lib.constants import use_nerd_fonts, visible_width
+            from ide_lib.preview import format_fleet_sessions_lines, format_session_preview_header
+            from ide_lib.switcher import (
+                SIDE_BY_SIDE_MIN_COLS,
+                build_sessions_fzf_args,
+                format_sessions_footer_label,
+                query_outer_switcher_snapshot,
+                run_interactive_switcher_session,
+            )
+            from ide_lib.theme import build_fzf_env, detect_color_tier, load_active_palette
+
+            assert SIDE_BY_SIDE_MIN_COLS == 90
+            lbl_narrow = format_sessions_footer_label(pane_w=58, in_two_pane=True)
+            assert visible_width(lbl_narrow) <= 54, f"narrow footer overflowed budget: {lbl_narrow!r}"
+            assert "Enter: switch" in lbl_narrow and "Alt+l: AI" in lbl_narrow and "Alt+s: close" in lbl_narrow
+            for tok in lbl_narrow.strip().split(" · "):
+                assert ":" in tok, f"clipped token in narrow footer: {lbl_narrow!r}"
+
+            hm_saved_env = os.environ.copy()
+            try:
+                os.environ.clear()
+                os.environ.update(base_env)
+                hm_test, _ = load_active_palette()
+                args_80 = build_sessions_fzf_args(
+                    fzf_bin="fzf",
+                    ide_self=ide_bin,
+                    cur_sess="int-alpha",
+                    hex_map=hm_test,
+                    supports_modern_binds=True,
+                    sw_sess="",
+                    pane_h=24,
+                    pane_w=80,
+                )
+                args_120 = build_sessions_fzf_args(
+                    fzf_bin="fzf",
+                    ide_self=ide_bin,
+                    cur_sess="int-alpha",
+                    hex_map=hm_test,
+                    supports_modern_binds=True,
+                    sw_sess="",
+                    pane_h=36,
+                    pane_w=120,
+                )
+                assert "--preview-window=down:50%:wrap:noinfo" in args_80, f"80-col fzf did not stack preview vertically: {args_80}"
+                assert "--preview-window=right:56%:wrap:noinfo" in args_120, f"120-col fzf did not split preview right: {args_120}"
+                assert any("spinner:#2AA198" in a for a in args_120), f"expected CYAN spinner for WORKING state, got {args_120}"
+                os.environ["NO_MOTION"] = "1"
+                args_nomotion = build_sessions_fzf_args(
+                    fzf_bin="fzf",
+                    ide_self=ide_bin,
+                    cur_sess="int-alpha",
+                    hex_map=hm_test,
+                    supports_modern_binds=True,
+                )
+                assert any("spinner:#002B36" in a for a in args_nomotion), (
+                    f"NO_MOTION=1 did not mask spinner to BASE03: {args_nomotion}"
+                )
+            finally:
+                os.environ.clear()
+                os.environ.update(hm_saved_env)
+
+            # Verify state-driven IDE_PREVIEW_WHILE_WORKING=1:
+            # - exits immediately on non-WORKING sessions (zero idle spinner/polling)
+            # - stays streaming while WORKING, and auto-exits when transitioning out of WORKING!
+            t0_idle_prev = time.monotonic()
+            r_idle_prev = run_cmd(
+                [ide_bin, "--session-preview", "--follow", "int-alpha"],
+                env={**sw_env, "IDE_PREVIEW_WHILE_WORKING": "1"},
+                check=True,
+            )
+            assert (time.monotonic() - t0_idle_prev) < 1.0 and "Workspace:" in r_idle_prev.stdout, (
+                f"IDE_PREVIEW_WHILE_WORKING=1 hung on IDLE session: {r_idle_prev.stdout!r}"
+            )
+            run_cmd([ide_bin, "--agent-state", "running", "int-alpha"], env=sw_env, check=True)
+            wk_prev_proc = subprocess.Popen(
+                [ide_bin, "--session-preview", "--follow", "int-alpha"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={**sw_env, "IDE_PREVIEW_WHILE_WORKING": "1", "IDE_PREVIEW_INTERVAL": "0.06"},
+            )
+            try:
+                time.sleep(0.22)
+                assert wk_prev_proc.poll() is None, "IDE_PREVIEW_WHILE_WORKING=1 exited prematurely while session was WORKING"
+                run_cmd([ide_bin, "--agent-state", "idle", "int-alpha"], env=sw_env, check=True)
+                wk_out, wk_err = wk_prev_proc.communicate(timeout=2.0)
+                assert wk_prev_proc.returncode == 0 and wk_err == "" and "IDLE" in wk_out, (
+                    f"IDE_PREVIEW_WHILE_WORKING=1 did not emit final state and auto-exit when leaving WORKING: rc={wk_prev_proc.returncode} out={wk_out!r}"
+                )
+            finally:
+                if wk_prev_proc.poll() is None:
+                    wk_prev_proc.kill()
+
+            # Verify live `ai-sw-*` window exposes `[PREVIEW]` vs `[LIVE]` with calm `BASE01` borders, and `< 90` cols returns `None`!
+            sw_proc = subprocess.Popen(
+                [ide_bin, "--sessions", "int-alpha"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={**sw_env, "IDE_NERD_FONTS": "0"},
+            )
+            sw_sess_mt = wait_until(_sw_ready, timeout=4.0)
+            assert sw_sess_mt
+            mt_bfmt = tmux_out("show-options", "-wv", "-t", f"={sw_sess_mt}:sessions", "pane-border-format")
+            mt_act_b = tmux_out("show-options", "-wv", "-t", f"={sw_sess_mt}:sessions", "pane-active-border-style")
+            assert "[PREVIEW]" in mt_bfmt and "[LIVE]" in mt_bfmt, f"missing [PREVIEW]/[LIVE] in pane-border-format: {mt_bfmt!r}"
+            assert hm_test["BASE01"].lower() in mt_act_b.lower(), f"expected calm BASE01 active border in switcher, got {mt_act_b!r}"
+            assert not any(0xE000 <= ord(ch) <= 0xF8FF or ord(ch) >= 0xF0000 for ch in mt_bfmt), (
+                f"IDE_NERD_FONTS=0 leaked PUA glyphs into switcher border: {mt_bfmt!r}"
+            )
+            os.write(client_mfd, b"\x1bs")
+            assert sw_proc.wait(timeout=5.0) == 0
+            sw_proc = None
+
+            # Shrink PTY to 80x24 temporarily and confirm `run_interactive_switcher_session` returns `None` (`< 90` cols -> stacked fallback)
+            fcntl.ioctl(client_mfd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+            assert wait_until(
+                lambda: tmux_out("display-message", "-p", "-c", client_name, "#{client_width}").strip() == "80",
+                timeout=3.0,
+            )
+            saved_env = os.environ.copy()
+            try:
+                os.environ.update({**sw_env, "IDE_IN_POPUP": "1"})
+                snap_80 = query_outer_switcher_snapshot("int-alpha")
+                assert snap_80.client_w == 80
+                rc_80 = run_interactive_switcher_session(
+                    origin_sess="int-alpha",
+                    cur_sess="int-alpha",
+                    ide_self=ide_bin,
+                    fzf_bin=real_fzf_bin,
+                    forward_ai_cli=False,
+                    snap=snap_80,
+                    client_name=client_name,
+                )
+                assert rc_80 is None, f"expected None (< 90 cols fallback) on 80x24 client, got {rc_80!r}"
+            finally:
+                os.environ.clear()
+                os.environ.update(saved_env)
+                fcntl.ioctl(client_mfd, termios.TIOCSWINSZ, struct.pack("HHHH", 48, 160, 0, 0))
+                wait_until(
+                    lambda: tmux_out("display-message", "-p", "-c", client_name, "#{client_width}").strip() == "160",
+                    timeout=3.0,
+                )
+
+            # Verify 4-tier color degradation + ASCII glyph fallback on synthetic fleet row & preview header
+            sample_fleet = [
+                {
+                    "sess": "int-alpha",
+                    "ai_cli": "claude",
+                    "state": "ATTN",
+                    "state_age_s": 120,
+                    "needs_attn": True,
+                    "is_current": True,
+                    "git_branch": "main",
+                    "git_dirty": True,
+                    "git_detail": "2 modified",
+                    "pr_label": "main@42",
+                    "short_path": "~/ws/alpha",
+                    "workdir": ws_int_alpha["dir"],
+                    "worktree_peers": ["int-beta"],
+                    "active_role": "ai",
+                    "ai_msg": "Approve command",
+                    "msg": "Approve command",
+                    "quit_err": "",
+                }
+            ]
+            for env_patch, exp_tier, check_fn in [
+                (
+                    {"NO_COLOR": "1", "COLORTERM": "truecolor", "TERM": "xterm-256color", "IDE_NERD_FONTS": "1"},
+                    "nocolor",
+                    lambda line_s, hdr_s, nf_v: ("\x1b[" not in line_s and "\x1b[" not in hdr_s and nf_v is True),
+                ),
+                (
+                    {"NO_COLOR": "", "COLORTERM": "", "TERM": "dumb", "IDE_NERD_FONTS": ""},
+                    "mono",
+                    lambda line_s, hdr_s, nf_v: (
+                        "\x1b[38;" not in line_s
+                        and ("\x1b[1m" in line_s or "\x1b[2m" in line_s)
+                        and nf_v is False
+                        and not any(0xE000 <= ord(ch) <= 0xF8FF or ord(ch) >= 0xF0000 for ch in line_s + hdr_s)
+                    ),
+                ),
+                (
+                    {"NO_COLOR": "", "COLORTERM": "", "TERM": "screen-256color", "IDE_NERD_FONTS": "0"},
+                    "256color",
+                    lambda line_s, hdr_s, nf_v: (
+                        "\x1b[38;5;" in line_s
+                        and "\x1b[38;2;" not in line_s
+                        and nf_v is False
+                        and not any(0xE000 <= ord(ch) <= 0xF8FF or ord(ch) >= 0xF0000 for ch in line_s + hdr_s)
+                    ),
+                ),
+                (
+                    {"NO_COLOR": "", "COLORTERM": "256color", "TERM": "xterm-256color", "IDE_NERD_FONTS": "1"},
+                    "256color",
+                    lambda line_s, hdr_s, nf_v: ("\x1b[38;5;" in line_s and "\x1b[38;2;" not in line_s and nf_v is True),
+                ),
+                (
+                    {"NO_COLOR": "", "COLORTERM": "", "TERM": "xterm", "IDE_NERD_FONTS": "1"},
+                    "16color",
+                    lambda line_s, hdr_s, nf_v: ("\x1b[" in line_s and "\x1b[38;" not in line_s and nf_v is True),
+                ),
+            ]:
+                saved_e = os.environ.copy()
+                try:
+                    os.environ.clear()
+                    os.environ.update({**base_env, **env_patch})
+                    if env_patch["NO_COLOR"] == "":
+                        os.environ.pop("NO_COLOR", None)
+                    got_tier = detect_color_tier()
+                    assert got_tier == exp_tier, f"expected tier {exp_tier!r} for {env_patch}, got {got_tier!r}"
+                    _, tier_esc = load_active_palette()
+                    fzf_opts_t = build_fzf_env(hm_test).get("FZF_DEFAULT_OPTS", "")
+                    if exp_tier == "nocolor":
+                        assert fzf_opts_t.startswith("--no-color "), f"expected --no-color FZF_DEFAULT_OPTS, got {fzf_opts_t!r}"
+                    elif exp_tier == "mono":
+                        assert fzf_opts_t.startswith("--color=bw "), f"expected --color=bw FZF_DEFAULT_OPTS, got {fzf_opts_t!r}"
+                    row_s = "\n".join(format_fleet_sessions_lines(sample_fleet, tier_esc))
+                    hdr_s = "\n".join(
+                        format_session_preview_header(sample_fleet[0], tier_esc, "main", True, "2 modified", "", ["int-beta"])
+                    )
+                    assert check_fn(row_s, hdr_s, use_nerd_fonts()), (
+                        f"tier {exp_tier} degradation failed: row={row_s!r} hdr={hdr_s!r}"
+                    )
+                finally:
+                    os.environ.clear()
+                    os.environ.update(saved_e)
 
             # Verify `ide --2pane --ai codex -s` forwards `--2pane` and `--ai codex` when launching a workspace via `Alt+n`!
             twopane_ws_dir = os.path.join(thome, "twopane-altn-ws")
@@ -5241,7 +5801,7 @@ finally:
 PY
     )" || true
     if grep -Fq "ALL_FLEET_OK" <<< "$FLEET_TEST_OUT"; then
-        pass "bin/ide multi-session workspace switcher (--list [--plain], -s/--sessions popup & fzf ctrl-a/e/t/ctrl-x/alt-s, --session-preview), deterministic hook-only AI lifecycle (--agent-state, FIFO --next-attention, Alt+Shift+S, stale-hook SHELL guard, parked AI preservation, zero-shift top-bar tinting), and context dispatch (--send)"
+        pass "bin/ide multi-session workspace switcher (--list [--plain], lazy-docking -s/--sessions popup & fzf ctrl-a/e/t/ctrl-x/alt-s/F1/F5, --session-preview, scroll & cursor preservation, 90-col & 4-tier mono-tui degradation), deterministic hook-only AI lifecycle (--agent-state, FIFO --next-attention, Alt+Shift+S, stale-hook SHELL guard, parked AI preservation, zero-shift top-bar tinting), and context dispatch (--send)"
     else
         fail "bin/ide multi-session workspace switcher & lifecycle suite" "Suite failed: $FLEET_TEST_OUT"
     fi

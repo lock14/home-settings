@@ -131,9 +131,9 @@ local function open_ide_keys_popup()
         vim.list_extend(cmd, {
             "-E",
             "-w",
-            "90",
+            "80",
             "-h",
-            "30",
+            "24",
             vim.fn.shellescape(vim.fn.expand("$HOME/.local/bin/ide")) .. " --keys",
         })
         vim.fn.jobstart(cmd, { detach = true })

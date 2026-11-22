@@ -168,10 +168,58 @@ def with_switcher_lock(sw_sess: str = "", sock_hint: str = "") -> Iterator[list[
 _with_switcher_lock = with_switcher_lock
 
 
-def build_clear_switcher_dock_opts(sw_sess: str) -> list[str]:
-    """Build chained `set-option` arguments resetting all `@ide_sw_docked_*` metadata on `sw_sess`."""
+def _save_zoomed_editor_view(ide_sock: str) -> str:
+    if not ide_sock:
+        return ""
+    from ide_lib.constants import is_live_socket
+    from ide_lib.nvim_rpc import nvim_remote_expr
+
+    if not is_live_socket(ide_sock):
+        return ""
+    raw = nvim_remote_expr(ide_sock, "json_encode(winsaveview())")
+    return raw if raw.startswith("{") else ""
+
+
+def _restore_zoomed_editor_view(sess: str, saved_view: str, sock_hint: str = "") -> None:
+    if not saved_view or not saved_view.startswith("{"):
+        return
+    import json
+
+    from ide_lib.constants import is_live_socket
+    from ide_lib.nvim_rpc import nvim_remote_expr
+
+    sock = sock_hint or get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+    if sock and is_live_socket(sock):
+        lua_restore = (
+            "(function(s) local ok, v = pcall(vim.fn.json_decode, s); "
+            "if ok and type(v) == 'table' then pcall(vim.fn.winrestview, v); "
+            "vim.defer_fn(function() pcall(vim.fn.winrestview, v) end, 40) end; "
+            "return '1' end)(_A)"
+        )
+        nvim_remote_expr(sock, f"luaeval({json.dumps(lua_restore)}, {json.dumps(saved_view)})")
+
+
+def _restore_copy_scroll_pos(pane_id: str, want_pos: str) -> None:
+    if not pane_id or not want_pos.isdigit() or int(want_pos) <= 0:
+        return
+    st = tmux_out("display-message", "-p", "-t", pane_id, "#{pane_in_mode}\t#{scroll_position}")
+    if "\t" not in st:
+        return
+    in_m, cur_sp_s = st.split("\t", 1)
+    if in_m.strip() != "1":
+        return
+    cur_sp = int(cur_sp_s.strip()) if cur_sp_s.strip().isdigit() else 0
+    delta = int(want_pos) - cur_sp
+    if delta > 0:
+        run_tmux("send-keys", "-X", "-t", pane_id, "-N", str(delta), "scroll-up")
+    elif delta < 0:
+        run_tmux("send-keys", "-X", "-t", pane_id, "-N", str(-delta), "scroll-down")
+
+
+def build_clear_switcher_dock_opts(sw_sess: str, clear_label: bool = False) -> list[str]:
+    """Build chained `set-option` arguments resetting `@ide_sw_docked_*` metadata on `sw_sess`."""
     target = f"={sw_sess}:"
-    return [
+    cmds = [
         "set-option", "-q", "-t", target, "@ide_sw_docked_pane", "",
         ";",
         "set-option", "-q", "-t", target, "@ide_sw_docked_sess", "",
@@ -180,8 +228,13 @@ def build_clear_switcher_dock_opts(sw_sess: str) -> list[str]:
         ";",
         "set-option", "-q", "-t", target, "@ide_sw_zoomed_pane", "",
         ";",
-        "set-option", "-q", "-t", target, "@ide_sw_label", "",
+        "set-option", "-q", "-t", target, "@ide_sw_copy_pos", "",
+        ";",
+        "set-option", "-q", "-t", target, "@ide_sw_ed_view", "",
     ]
+    if clear_label:
+        cmds.extend([";", "set-option", "-q", "-t", target, "@ide_sw_label", ""])
+    return cmds
 
 
 def build_dock_swap_cmds(
@@ -193,6 +246,8 @@ def build_dock_swap_cmds(
     was_zoomed: bool,
     zoomed_pane: str,
     healed_ai: bool = False,
+    copy_pos: str = "",
+    ed_view: str = "",
 ) -> list[str]:
     """Build atomic `swap-pane -d` and metadata option sequence docking `target_pane` into `sw_sess`."""
     cmds: list[str] = []
@@ -216,9 +271,15 @@ def build_dock_swap_cmds(
         ";",
         "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_docked_sess", target_sess,
         ";",
+        "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_selected_sess", target_sess,
+        ";",
         "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_was_zoomed", "1" if was_zoomed else "0",
         ";",
         "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_zoomed_pane", zoomed_pane,
+        ";",
+        "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_copy_pos", copy_pos,
+        ";",
+        "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_ed_view", ed_view,
         ";",
         "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_label", label,
     ])
@@ -297,12 +358,12 @@ def caller_switcher_session(target_arg: str = "") -> str:
                 "-p",
                 "-t",
                 tmux_pane,
-                TMUX_SEP.join(["#{pid}", "#{session_name}", "#{@ide_sw_docked_sess}"]),
+                TMUX_SEP.join(["#{pid}", "#{session_name}", "#{@ide_sw_docked_sess}", "#{@ide_sw_selected_sess}"]),
             )
             if info and TMUX_SEP in info:
-                pid, sname, docked_s = (p.strip() for p in (info.split(TMUX_SEP) + ["", "", ""])[:3])
+                pid, sname, docked_s, sel_s = (p.strip() for p in (info.split(TMUX_SEP) + ["", "", "", ""])[:4])
                 if pid == parts[-2] and is_switcher_session_name(sname):
-                    if not target_arg or resolve_target_session(target_arg) == docked_s:
+                    if not target_arg or resolve_target_session(target_arg) in (docked_s, sel_s):
                         return sname
     if not target_arg:
         ide_cl = os.environ.get("IDE_CLIENT", "").strip()
@@ -348,35 +409,56 @@ def undock_switcher_session(sw_sess: str, _locked: bool = False) -> str:
             "#{@ide_sw_docked_sess}",
             "#{@ide_sw_was_zoomed}",
             "#{@ide_sw_zoomed_pane}",
+            "#{@ide_sw_copy_pos}",
+            "#{@ide_sw_ed_view}",
             "#{window_id}",
             "#{window_zoomed_flag}",
         ]),
     )
     if not info or TMUX_SEP not in info:
         return ""
-    parts = (info.split(TMUX_SEP) + [""] * 9)[:9]
-    is_sw, fzf_pane, slot_pane, docked_pane, docked_sess, was_zoomed, zoomed_pane, sw_win, sw_zoom = (
-        p.strip() for p in parts
-    )
+    parts = (info.split(TMUX_SEP) + [""] * 11)[:11]
+    (
+        is_sw,
+        fzf_pane,
+        slot_pane,
+        docked_pane,
+        docked_sess,
+        was_zoomed,
+        zoomed_pane,
+        saved_copy_pos,
+        saved_ed_view,
+        sw_win,
+        sw_zoom,
+    ) = (p.strip() for p in parts)
     if is_sw != "1" or not docked_pane:
         return ""
 
     pane_loc: dict[str, tuple[str, str]] = {}
+    pane_copy: dict[str, tuple[str, str]] = {}
     sess_pane_counts: dict[str, int] = {}
     for line in tmux_out(
         "list-panes",
         "-a",
         "-F",
-        TMUX_SEP.join(["#{pane_id}", "#{session_name}", "#{window_id}"]),
+        TMUX_SEP.join(["#{pane_id}", "#{session_name}", "#{window_id}", "#{pane_in_mode}", "#{scroll_position}"]),
     ).splitlines():
         lp = line.split(TMUX_SEP)
         if len(lp) >= 3:
             pane_loc[lp[0]] = (lp[1], lp[2])
+            if len(lp) >= 5:
+                pane_copy[lp[0]] = (lp[3].strip(), lp[4].strip())
             sess_pane_counts[lp[1]] = sess_pane_counts.get(lp[1], 0) + 1
 
     docked_loc = pane_loc.get(docked_pane)
     slot_loc = pane_loc.get(slot_pane) if slot_pane else None
     clear_sw_opts = build_clear_switcher_dock_opts(sw_sess)
+    cur_in_m, cur_sp = pane_copy.get(docked_pane, ("0", ""))
+    eff_copy_pos = (
+        (cur_sp if (cur_sp.isdigit() and int(cur_sp) > 0) else saved_copy_pos)
+        if cur_in_m == "1"
+        else ""
+    )
 
     if docked_loc is not None and slot_loc is not None:
         cmds: list[str] = []
@@ -396,9 +478,13 @@ def undock_switcher_session(sw_sess: str, _locked: bool = False) -> str:
             cmds.extend(["set-option", "-q", "-u", "-t", f"={docked_sess}:", "@ide_docked_in", ";"])
         cmds.extend(clear_sw_opts)
         run_tmux(*cmds)
+        if eff_copy_pos:
+            _restore_copy_scroll_pos(docked_pane, eff_copy_pos)
         if was_zoomed == "1" and zoomed_pane and zoomed_pane in pane_loc:
             if tmux_out("display-message", "-p", "-t", zoomed_pane, "#{window_zoomed_flag}") == "0":
                 run_tmux("resize-pane", "-Z", "-t", zoomed_pane)
+            if zoomed_pane != docked_pane and docked_sess:
+                _restore_zoomed_editor_view(docked_sess, saved_ed_view)
         return docked_sess
 
     if docked_loc is None and slot_loc is not None:
@@ -582,6 +668,8 @@ def dock_session_into_switcher(
                 "#{@ide_sw_mode}",
                 "#{window_id}",
                 "#{window_zoomed_flag}",
+                "#{@ide_sw_copy_pos}",
+                "#{@ide_sw_ed_view}",
             ]),
             ";",
             "list-sessions",
@@ -610,6 +698,8 @@ def dock_session_into_switcher(
                 "#{@ide_role}",
                 "#{@ide_sw_docked_by}",
                 "#{@ide_sw_placeholder}",
+                "#{pane_in_mode}",
+                "#{scroll_position}",
             ]),
         )
         if snap.returncode != 0 or not snap.stdout:
@@ -621,12 +711,13 @@ def dock_session_into_switcher(
         sw_parts: list[str] = []
         sess_meta: dict[str, tuple[str, str, str, str, str, str]] = {}
         panes_by_id: dict[str, tuple[str, str, str, str, str, str, str]] = {}
+        pane_copy_by_id: dict[str, tuple[str, str]] = {}
         sess_panes: dict[str, list[tuple[str, str, str]]] = {}
         win_active_pane: dict[str, str] = {}
 
         for ln in snap.stdout.splitlines():
             if ln.startswith(sw_pfx):
-                sw_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 10)[:10]]
+                sw_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 12)[:12]]
             elif ln.startswith(sess_pfx):
                 sc = (ln.split(TMUX_SEP)[1:] + [""] * 7)[:7]
                 sname = sc[0].strip()
@@ -640,7 +731,7 @@ def dock_session_into_switcher(
                         sc[6].strip(),
                     )
             elif ln.startswith(pane_pfx):
-                pc = (ln.split(TMUX_SEP)[1:] + [""] * 8)[:8]
+                pc = (ln.split(TMUX_SEP)[1:] + [""] * 10)[:10]
                 pid = pc[0].strip()
                 psess = pc[1].strip()
                 pwin = pc[2].strip()
@@ -649,8 +740,11 @@ def dock_session_into_switcher(
                 prole = pc[5].strip()
                 pdocked_by = pc[6].strip()
                 pph = pc[7].strip()
+                pin_mode = pc[8].strip()
+                pscroll = pc[9].strip()
                 if pid:
                     panes_by_id[pid] = (psess, pwin, pact, pzoom, prole, pdocked_by, pph)
+                    pane_copy_by_id[pid] = (pin_mode, pscroll)
                     sess_panes.setdefault(psess, []).append((pid, prole, pph))
                     if pact == "1" and pwin:
                         win_active_pane[pwin] = pid
@@ -668,6 +762,8 @@ def dock_session_into_switcher(
             sw_mode,
             sw_win,
             sw_zoom,
+            prev_copy_pos,
+            prev_ed_view,
         ) = sw_parts
         if is_sw != "1" or sw_mode == "new":
             return False
@@ -679,6 +775,11 @@ def dock_session_into_switcher(
                 return True
 
         inline_undock_cmds: list[str] = []
+        restore_prev_copy_pane = ""
+        restore_prev_copy_pos = ""
+        restore_prev_ed_sess = ""
+        restore_prev_ed_sock = ""
+        restore_prev_ed_view = ""
         if cur_docked_pane:
             cur_loc = panes_by_id.get(cur_docked_pane)
             slot_loc = panes_by_id.get(slot_pane) if slot_pane else None
@@ -688,6 +789,11 @@ def dock_session_into_switcher(
                 and cur_loc[0] == sw_sess
                 and slot_loc[0] != sw_sess
             ):
+                cur_im, cur_sp = pane_copy_by_id.get(cur_docked_pane, ("0", ""))
+                if cur_im == "1":
+                    restore_prev_copy_pos = cur_sp if (cur_sp.isdigit() and int(cur_sp) > 0) else prev_copy_pos
+                    if restore_prev_copy_pos:
+                        restore_prev_copy_pane = cur_docked_pane
                 if sw_zoom == "1" and sw_win:
                     inline_undock_cmds.extend(["resize-pane", "-Z", "-t", sw_win, ";"])
                     sw_zoom = "0"
@@ -705,11 +811,16 @@ def dock_session_into_switcher(
                     and (prev_zoomed_pane == cur_docked_pane or panes_by_id[prev_zoomed_pane][1] == slot_loc[1])
                 ):
                     inline_undock_cmds.extend(["resize-pane", "-Z", "-t", prev_zoomed_pane, ";"])
+                    if prev_zoomed_pane != cur_docked_pane and cur_docked_sess and prev_ed_view:
+                        restore_prev_ed_sess = cur_docked_sess
+                        restore_prev_ed_sock = sess_meta[cur_docked_sess][1] if cur_docked_sess in sess_meta else ""
+                        restore_prev_ed_view = prev_ed_view
             else:
                 undock_switcher_session(sw_sess, _locked=True)
                 slot_pane = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_slot_pane").strip()
                 sw_zoom = tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}").strip()
                 panes_by_id.clear()
+                pane_copy_by_id.clear()
                 sess_panes.clear()
                 win_active_pane.clear()
                 for ln2 in tmux_out(
@@ -725,22 +836,32 @@ def dock_session_into_switcher(
                         "#{@ide_role}",
                         "#{@ide_sw_docked_by}",
                         "#{@ide_sw_placeholder}",
+                        "#{pane_in_mode}",
+                        "#{scroll_position}",
                     ]),
                 ).splitlines():
-                    pc2 = [x.strip() for x in (ln2.split(TMUX_SEP) + [""] * 8)[:8]]
+                    pc2 = [x.strip() for x in (ln2.split(TMUX_SEP) + [""] * 10)[:10]]
                     pid2 = pc2[0]
                     if pid2:
                         panes_by_id[pid2] = (pc2[1], pc2[2], pc2[3], pc2[4], pc2[5], pc2[6], pc2[7])
+                        pane_copy_by_id[pid2] = (pc2[8], pc2[9])
                         sess_panes.setdefault(pc2[1], []).append((pid2, pc2[5], pc2[7]))
                         if pc2[3] == "1" and pc2[2]:
                             win_active_pane[pc2[2]] = pid2
 
+        def _finish_prev_restores() -> None:
+            if restore_prev_copy_pane and restore_prev_copy_pos:
+                _restore_copy_scroll_pos(restore_prev_copy_pane, restore_prev_copy_pos)
+            if restore_prev_ed_sess and restore_prev_ed_view:
+                _restore_zoomed_editor_view(restore_prev_ed_sess, restore_prev_ed_view, sock_hint=restore_prev_ed_sock)
+
         def _abort_after_undock(fallback_label: str = "") -> bool:
             if inline_undock_cmds:
-                cmds_ab = [*inline_undock_cmds, *build_clear_switcher_dock_opts(sw_sess)]
+                cmds_ab = [*inline_undock_cmds, *build_clear_switcher_dock_opts(sw_sess, clear_label=True)]
                 if fallback_label:
                     cmds_ab[-1] = fallback_label
                 run_tmux(*cmds_ab)
+                _finish_prev_restores()
             else:
                 run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_label", fallback_label)
             return False
@@ -765,6 +886,13 @@ def dock_session_into_switcher(
 
         was_zoomed = p_zoom == "1"
         zoomed_pane = win_active_pane.get(p_win, target_pane) if was_zoomed else ""
+        t_in_m, t_sp = pane_copy_by_id.get(target_pane, ("0", ""))
+        new_copy_pos = t_sp if (t_in_m == "1" and t_sp.isdigit() and int(t_sp) > 0) else ""
+        new_ed_view = (
+            _save_zoomed_editor_view(t_meta[1])
+            if (was_zoomed and zoomed_pane and zoomed_pane != target_pane)
+            else ""
+        )
 
         if not slot_pane or slot_pane not in panes_by_id:
             if inline_undock_cmds:
@@ -794,9 +922,16 @@ def dock_session_into_switcher(
                 was_zoomed=was_zoomed,
                 zoomed_pane=zoomed_pane,
                 healed_ai=healed_ai,
+                copy_pos=new_copy_pos,
+                ed_view=new_ed_view,
             )
         )
-        return run_tmux(*cmds).returncode == 0
+        ok = run_tmux(*cmds).returncode == 0
+        if ok:
+            _finish_prev_restores()
+            if new_copy_pos:
+                _restore_copy_scroll_pos(target_pane, new_copy_pos)
+        return ok
 
 
 def switcher_owner_alive(sw_sess: str) -> bool:
@@ -833,9 +968,16 @@ def close_switcher_session(
     res_file = res_file_hint or tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_result_file").strip()
     if action and res_file:
         write_switcher_result(res_file, action, target, pressed)
+    if session_exists(sw_sess):
+        run_tmux(
+            "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_done", "1",
+            ";",
+            "set-hook", "-uw", "-t", f"={sw_sess}:", "pane-focus-in",
+            ";",
+            "set-hook", "-uw", "-t", f"={sw_sess}:", "window-layout-changed",
+        )
     undock_switcher_session(sw_sess)
     if session_exists(sw_sess):
-        run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_done", "1")
         for cl in tmux_out("list-clients", "-t", f"={sw_sess}", "-F", "#{client_name}").splitlines():
             cl_s = cl.strip()
             if cl_s:
@@ -864,6 +1006,8 @@ def cleanup_switcher_session(sw_sess: str) -> None:
                 "#{@ide_sw_zoomed_pane}",
                 "#{window_id}",
                 "#{window_zoomed_flag}",
+                "#{@ide_sw_copy_pos}",
+                "#{@ide_sw_ed_view}",
             ]),
             ";",
             "list-panes",
@@ -876,6 +1020,8 @@ def cleanup_switcher_session(sw_sess: str) -> None:
                 "#{window_id}",
                 "#{window_zoomed_flag}",
                 "#{@ide_owner_sess}",
+                "#{pane_in_mode}",
+                "#{scroll_position}",
             ]),
         )
         if snap.returncode == 0 and snap.stdout:
@@ -883,16 +1029,18 @@ def cleanup_switcher_session(sw_sess: str) -> None:
             pane_pfx = f"PANE{TMUX_SEP}"
             sw_parts: list[str] = []
             pane_map: dict[str, tuple[str, str, str, str]] = {}
+            pane_copy: dict[str, tuple[str, str]] = {}
             all_sess: set[str] = set()
             sw_owned_panes: list[tuple[str, str]] = []
             for ln in snap.stdout.splitlines():
                 if ln.startswith(sw_pfx):
-                    sw_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 8)[:8]]
+                    sw_parts = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 10)[:10]]
                 elif ln.startswith(pane_pfx):
-                    pc = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 5)[:5]]
-                    pid, psess, pwin, pzoom, powner = pc
+                    pc = [p.strip() for p in (ln.split(TMUX_SEP)[1:] + [""] * 7)[:7]]
+                    pid, psess, pwin, pzoom, powner, pin_m, psp = pc
                     if pid:
                         pane_map[pid] = (psess, pwin, pzoom, powner)
+                        pane_copy[pid] = (pin_m, psp)
                         all_sess.add(psess)
                         if psess == sw_sess and powner:
                             sw_owned_panes.append((pid, powner))
@@ -903,10 +1051,23 @@ def cleanup_switcher_session(sw_sess: str) -> None:
                 "set-hook", "-u", "-t", f"={sw_sess}:", "client-detached",
                 ";",
                 "set-hook", "-uw", "-t", f"={sw_sess}:", "pane-focus-in",
+                ";",
+                "set-hook", "-uw", "-t", f"={sw_sess}:", "window-layout-changed",
             ]
             fast_handled = False
             if sw_parts and sw_parts[0] == "1":
-                _, slot_pane, docked_pane, docked_sess, was_zoomed, zoomed_pane, sw_win, sw_zoom = sw_parts
+                (
+                    _,
+                    slot_pane,
+                    docked_pane,
+                    docked_sess,
+                    was_zoomed,
+                    zoomed_pane,
+                    sw_win,
+                    sw_zoom,
+                    saved_copy_pos,
+                    saved_ed_view,
+                ) = sw_parts
                 if not docked_pane and not sw_owned_panes:
                     empty_cmds: list[str] = [*unhook_cmds, ";"]
                     if sw_zoom == "1" and sw_win:
@@ -925,6 +1086,12 @@ def cleanup_switcher_session(sw_sess: str) -> None:
                         and s_loc[0] != sw_sess
                         and not extra_owned
                     ):
+                        c_im, c_sp = pane_copy.get(docked_pane, ("0", ""))
+                        eff_copy = (
+                            (c_sp if (c_sp.isdigit() and int(c_sp) > 0) else saved_copy_pos)
+                            if c_im == "1"
+                            else ""
+                        )
                         cmds: list[str] = [*unhook_cmds, ";"]
                         if sw_zoom == "1" and sw_win:
                             cmds.extend(["resize-pane", "-Z", "-t", sw_win, ";"])
@@ -936,15 +1103,21 @@ def cleanup_switcher_session(sw_sess: str) -> None:
                         ])
                         if docked_sess and docked_sess in all_sess:
                             cmds.extend(["set-option", "-q", "-u", "-t", f"={docked_sess}:", "@ide_docked_in", ";"])
+                        restore_ed = False
                         if (
                             was_zoomed == "1"
                             and zoomed_pane in pane_map
                             and (zoomed_pane == docked_pane or pane_map[zoomed_pane][1] == s_loc[1])
                         ):
                             cmds.extend(["resize-pane", "-Z", "-t", zoomed_pane, ";"])
+                            restore_ed = bool(zoomed_pane != docked_pane and docked_sess and saved_ed_view)
                         cmds.extend(["kill-session", "-t", f"={sw_sess}"])
                         if run_tmux(*cmds).returncode == 0:
                             fast_handled = True
+                            if eff_copy:
+                                _restore_copy_scroll_pos(docked_pane, eff_copy)
+                            if restore_ed:
+                                _restore_zoomed_editor_view(docked_sess, saved_ed_view)
 
             if not fast_handled and session_exists(sw_sess):
                 run_tmux(*unhook_cmds)

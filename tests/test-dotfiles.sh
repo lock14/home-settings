@@ -49,6 +49,7 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'default-terminal "tmux-256color"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -g terminal-features ""' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'RGB:extkeys:usstyle:clipboard:hyperlinks' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -asq terminal-features ",\*:sync"' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -s extended-keys on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'allow-passthrough on' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'copy-command' "$TEMP_HOME/.tmux.conf" && \
@@ -56,6 +57,11 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'bind -T copy-mode-vi MouseDown1Pane select-pane \\; send-keys -X clear-selection' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q 'copy-mode-vi MouseDown1Pane.*cancel' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi MouseUp1Pane.*scroll_position.*cancel' "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq "bind -T copy-mode-vi WheelUpPane send-keys -X -t = -N 3 scroll-up" "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq "bind -T copy-mode-vi WheelDownPane send-keys -X -t = -N 3 scroll-down \; if-shell -F -t = '#{==:#{scroll_position},0}' 'send-keys -X -t = cancel'" "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq "bind -n WheelUpPane if-shell -F -t = '#{pane_in_mode}' 'send-keys -X -t = -N 3 scroll-up' { if-shell -F -t = '#{||:#{alternate_on},#{mouse_any_flag}}' 'send-keys -t = -M' 'copy-mode -e -t = ; send-keys -X -t = -N 3 scroll-up' }" "$TEMP_HOME/.tmux.conf" && \
+   grep -Fq 'bind -n WheelDownPane if-shell -F -t = '\''#{pane_in_mode}'\'' '\''send-keys -X -t = -N 3 scroll-down ; if-shell -F -t = "#{==:#{scroll_position},0}" "send-keys -X -t = cancel"'\''' "$TEMP_HOME/.tmux.conf" && \
+   ! grep -Eq 'Wheel(Up|Down)Pane.*select-pane' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi M-c send-keys -X copy-pipe-and-cancel' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi M-v' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n M-v' "$TEMP_HOME/.tmux.conf" && \
@@ -247,6 +253,7 @@ if command -v tmux >/dev/null 2>&1; then
         up_env_total="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | wc -l | tr -d ' ')"
         up_env_uniq="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
         root_keys_out="$(tmux -L "$TMUX_TEST_SOCK" list-keys -T root)"
+        copy_keys_out="$(tmux -L "$TMUX_TEST_SOCK" list-keys -T copy-mode-vi)"
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         plain_wcur_base="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur")"
         plain_wcur_run="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_run")"
@@ -255,6 +262,7 @@ if command -v tmux >/dev/null 2>&1; then
         plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
            ! grep -Eq 'Wheel(Up|Down)Status' <<< "$root_keys_out" && \
+           grep -Fq "M-h" <<< "$copy_keys_out" && grep -Fq "M-s" <<< "$copy_keys_out" && grep -Fq "M-a" <<< "$copy_keys_out" && \
            [ "$resrc_attn" = "persist-attn" ] && [ "$resrc_cnt" = "4" ] && [ "$resrc_act" = "2" ] && [ "$resrc_loaded" = "1" ] && \
            [ "$up_env_total" -gt 0 ] && [ "$up_env_total" = "$up_env_uniq" ] && \
            grep -Fq "COLORTERM" <<< "$up_env_lines" && \

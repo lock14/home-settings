@@ -72,13 +72,13 @@ Options:
   --toggle-term [SESSION]  Hide or reappear the Interactive Shell pane (Alt+Shift+T)
   --swap <DIR> [SESSION]   Swap the active pane with its neighbor in <DIR> (left|down|up|right, Alt+Shift+H/J/K/L)
   --monitor, --top         Launch interactive system monitor with btop -> htop -> top fallback (Alt+m / Prefix+m)
-  --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / Prefix+?)
+  --keys                   Display the Solarized Dark IDE keybinding cheatsheet (Alt+? / F1 / Prefix+?)
   refresh, -r, --refresh [NAME] Refresh tmux top bar and Editor themes and CWDs across all (or target) IDE sessions (Prefix+r)
   quit, -q, --quit [NAME...] Safely quit IDE session(s) NAME (checks for unsaved Neovim buffers first)
   -f, --force              Force-quit when used with --quit (discards unsaved Neovim buffers)
   --detach                 Create/update workspace session in background without attaching
   kill, --kill [NAME...]   Force-quit IDE session(s) NAME without the unsaved-buffer check
-  --list [--plain]         List active IDE workspace sessions with agent CLI, state, Git branch, and directory
+  --list [--plain]         List active IDE workspace sessions with agent CLI, state, VCS status, and directory
   -h, --help               Show this help message and exit
 
 Without NAME / SESSION, session commands act only on the ide session of the calling pane
@@ -88,6 +88,7 @@ Environment Variables:
   IDE_AI_CLI               AI CLI tool for the AI Agent pane: agy (default), claude, or codex
   IDE_BROWSER              Optional browser executable for opening http(s):// links
   IDE_NOTIFY               Local desktop banner policy: 0 (default), 1 / unfocused, or always
+  IDE_NERD_FONTS           Set to 0 / off to omit Nerd Font PUA icons across ide TUI surfaces (auto-disabled on TERM=dumb)
   IDE_WORKSPACE_DIRS       Optional colon-separated workspace directories surfaced in launcher and completions
   IDE_LINK_RULES           Untracked Ctrl+click link, workspace, session-naming, notification, and VCS hooks (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
                            defining `ide_resolve_link`, `ide_session_name`, `ide_workspace_dirs`, `ide_resolve_workspace`, `ide_notify`, or `ide_vcs_summary`"""
@@ -251,6 +252,18 @@ def trunc_visible(text: str, max_w: int, suffix: str = "…") -> str:
 def is_switcher_session_name(sess: str) -> bool:
     """Return True when `sess` names an ephemeral 2-pane `ide --sessions` switcher session (`ai-sw-*`)."""
     return bool(sess) and sess.startswith(_SWITCHER_SESS_PREFIX)
+
+
+def use_nerd_fonts() -> bool:
+    """Return False when `IDE_NERD_FONTS=0|off|false|no|ascii`, `IDE_ASCII=1`, or `TERM=dumb`."""
+    nf = (os.environ.get("IDE_NERD_FONTS") or "").strip().lower()
+    if nf in ("0", "false", "off", "no", "ascii"):
+        return False
+    if (os.environ.get("IDE_ASCII") or "").strip().lower() in ("1", "true", "on", "yes"):
+        return False
+    if (os.environ.get("TERM") or "").strip().lower() == "dumb":
+        return False
+    return True
 
 
 def write_switcher_result(res_path: str, action: str, target: str = "", pressed: str = "") -> None:

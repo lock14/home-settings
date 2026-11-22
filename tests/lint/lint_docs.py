@@ -262,7 +262,11 @@ def _iter_named_pkg_py_files(root_dir: str, pkg_name: str) -> list[str]:
 
 def _is_strict_markdown_doc(rel_doc: str) -> bool:
     norm = rel_doc.replace("\\", "/")
-    return norm in ("README.md", "CONTRIBUTING.md", "AGENTS.md") or norm.startswith("docs/")
+    return (
+        norm in ("README.md", "CONTRIBUTING.md", "AGENTS.md")
+        or norm.startswith("docs/")
+        or norm.startswith(".agents/")
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -275,6 +279,9 @@ def main(argv: list[str] | None = None) -> int:
         "AGENTS.md",
         "SECURITY.md",
         os.path.join(".github", "PULL_REQUEST_TEMPLATE.md"),
+        os.path.join(".agents", "rules", "monospace-tui.md"),
+        os.path.join(".agents", "skills", "mono-tui-design", "SKILL.md"),
+        os.path.join(".agents", "skills", "mono-tui-audit", "SKILL.md"),
     ]
     docs_dir = os.path.join(root_dir, "docs")
     if os.path.isdir(docs_dir):
@@ -332,6 +339,9 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         lines = text.split("\n")
+        rel_slash = rel_doc.replace("\\", "/")
+        is_agent_doc = rel_slash.startswith(".agents/")
+        in_frontmatter = False
         in_fence = False
         fence_lang = ""
         fence_start_line = 0
@@ -343,6 +353,13 @@ def main(argv: list[str] | None = None) -> int:
         for idx, line in enumerate(lines):
             line_num = idx + 1
             trimmed = line.strip()
+            if is_agent_doc and idx == 0 and trimmed == "---":
+                in_frontmatter = True
+                continue
+            if in_frontmatter:
+                if trimmed == "---":
+                    in_frontmatter = False
+                continue
             if trimmed.startswith("```"):
                 if not in_fence:
                     in_fence = True
@@ -425,18 +442,23 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
             cleaned_line = html_comment_re.sub("", stripped_code)
+            orig_body = trimmed.lstrip("*-").strip()
+            is_verbatim_orig = is_agent_doc and (
+                orig_body.startswith("**Original**: ")
+                or orig_body.startswith("**Original:** ")
+            )
             m = italic_aside_re.search(cleaned_line)
-            if m:
+            if m and not is_verbatim_orig:
                 errors.append(
                     f'{where}: contains italic parenthetical aside "{m.group(0)}"'
                 )
             m = ascii_arrow_re.search(cleaned_line)
-            if m:
+            if m and not is_verbatim_orig:
                 errors.append(
                     f'{where}: contains ASCII arrow "{m.group(0)}" at line {line_num}'
                 )
 
-            if strict_doc:
+            if strict_doc and not is_verbatim_orig:
                 prose_line = url_re.sub(
                     "", markdown_link_target_re.sub("]()", cleaned_line)
                 )
@@ -466,10 +488,18 @@ def main(argv: list[str] | None = None) -> int:
                     )
 
         if strict_doc:
+            in_frontmatter = False
             in_fence = False
             doc_dir = os.path.dirname(doc_path)
-            for line in lines:
+            for idx, line in enumerate(lines):
                 trimmed = line.strip()
+                if is_agent_doc and idx == 0 and trimmed == "---":
+                    in_frontmatter = True
+                    continue
+                if in_frontmatter:
+                    if trimmed == "---":
+                        in_frontmatter = False
+                    continue
                 if trimmed.startswith("```"):
                     in_fence = not in_fence
                     continue
@@ -903,6 +933,67 @@ def main(argv: list[str] | None = None) -> int:
                 errors.append(
                     f'{readme_where}: keybinding "Prefix + b" table row must document "set-option status" top bar toggle'
                 )
+
+    # Verify .agents/rules/monospace-tui.md [OVERRIDE] / [WAIVE] verbatim Original freshness against mono-tui references
+    tui_overrides_path = os.path.join(root_dir, ".agents", "rules", "monospace-tui.md")
+    if os.path.isfile(tui_overrides_path):
+        tui_where = tui_overrides_path.replace("\\", "/")
+        ref_dir = os.path.join(root_dir, ".agents", "skills", "mono-tui-design", "references")
+        ref_parts = []
+        for ref_name in ("standard.md", "rendering.md", "patterns.md"):
+            rp = os.path.join(ref_dir, ref_name)
+            if not os.path.isfile(rp):
+                errors.append(f'{tui_where}: missing required mono-tui reference file "{rp}"')
+            else:
+                with open(rp, encoding="utf-8") as rfh:
+                    ref_parts.append(rfh.read())
+        ref_corpus = "\n".join(ref_parts)
+        with open(tui_overrides_path, encoding="utf-8") as ofh:
+            ovr_lines = ofh.read().split("\n")
+        cur_h = ""
+        cur_h_line = 0
+        cur_has_orig = False
+        ovr_count = 0
+
+        def _check_prev_ovr() -> None:
+            if cur_h.startswith(("[OVERRIDE]", "[WAIVE]")) and not cur_has_orig:
+                errors.append(
+                    f"{tui_where}:{cur_h_line} ({cur_h}): missing **Original**: quote for override or waiver heading"
+                )
+
+        for idx, oline in enumerate(ovr_lines, 1):
+            otrim = oline.strip()
+            if otrim.startswith("### "):
+                _check_prev_ovr()
+                cur_h = otrim[4:].strip()
+                cur_h_line = idx
+                cur_has_orig = False
+                if cur_h.startswith(("[OVERRIDE]", "[WAIVE]")):
+                    ovr_count += 1
+                continue
+            if otrim.startswith("## "):
+                _check_prev_ovr()
+                cur_h = ""
+                cur_h_line = 0
+                cur_has_orig = False
+                continue
+            bbody = otrim.lstrip("*-").strip()
+            quoted = None
+            if bbody.startswith("**Original**: "):
+                quoted = bbody[len("**Original**: ") :].strip()
+            elif bbody.startswith("**Original:** "):
+                quoted = bbody[len("**Original:** ") :].strip()
+            if quoted is not None:
+                cur_has_orig = True
+                if not quoted:
+                    errors.append(f"{tui_where}:{idx} ({cur_h}): empty Original field")
+                elif ref_corpus and quoted not in ref_corpus:
+                    errors.append(
+                        f"{tui_where}:{idx} ({cur_h}): Original text not found verbatim in standard.md, rendering.md, or patterns.md: {quoted}"
+                    )
+        _check_prev_ovr()
+        if ovr_count == 0:
+            errors.append(f"{tui_where}: expected at least one ### [OVERRIDE] or ### [WAIVE] heading")
 
     if errors:
         for err in errors:

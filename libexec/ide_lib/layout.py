@@ -421,7 +421,6 @@ def unpark_role_pane(
         nvim_recover_and_checktime(
             sock,
             get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR") or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT"),
-            "silent! normal! zz",
         )
 
 
@@ -686,6 +685,7 @@ def _handle_switcher_pane_toggle(sw_sess: str, mode: str) -> int:
             "#{@ide_sw_slot_pane}",
             "#{@ide_sw_docked_pane}",
             "#{@ide_sw_docked_sess}",
+            "#{@ide_sw_selected_sess}",
             "#{@ide_sw_client}",
             "#{@ide_sw_result_file}",
             "#{pane_id}",
@@ -702,44 +702,65 @@ def _handle_switcher_pane_toggle(sw_sess: str, mode: str) -> int:
         slot_pane,
         docked_pane,
         docked_sess,
+        selected_sess,
         sw_client,
         res_file,
         act_pane,
         sw_win,
         sw_zoom,
         sw_mode,
-    ) = (p.strip() for p in (raw.split(TMUX_SEP) + [""] * 11)[:11])
+    ) = (p.strip() for p in (raw.split(TMUX_SEP) + [""] * 12)[:12])
     if is_sw != "1" or sw_mode == "new":
         return 0
 
+    active_target_sess = docked_sess or selected_sess
     if mode in ("toggle", "ai", "focus-ai"):
-        right_pane = docked_pane if pane_exists(docked_pane) else slot_pane
-        if mode == "focus-ai":
-            target_p = right_pane
+        want_right = mode == "focus-ai" or act_pane == fzf_pane
+        if want_right:
+            if (not docked_pane or not pane_exists(docked_pane)) and active_target_sess:
+                from ide_lib.dock import dock_session_into_switcher
+
+                if dock_session_into_switcher(sw_sess, active_target_sess):
+                    docked_pane = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_docked_pane").strip()
+                    docked_sess = active_target_sess
+            target_p = docked_pane if pane_exists(docked_pane) else slot_pane
+            if target_p and sw_win and pane_exists(target_p):
+                focus_pane_preserving_zoom(sw_win, target_p, cur_pane_hint=act_pane, was_zoomed_hint=sw_zoom or "0")
+                if docked_pane and target_p == docked_pane and docked_sess:
+                    from ide_lib.fleet import ack_ai_session
+
+                    run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "1")
+                    ack_ai_session([docked_sess], from_hook=True, refresh_always=True, entering_ai=True)
         else:
-            target_p = right_pane if act_pane == fzf_pane else fzf_pane
-        if target_p and sw_win and pane_exists(target_p):
-            if target_p == fzf_pane and sw_zoom == "1":
-                run_tmux("resize-pane", "-Z", "-t", sw_win)
-                sw_zoom = "0"
-            focus_pane_preserving_zoom(sw_win, target_p, cur_pane_hint=act_pane, was_zoomed_hint=sw_zoom or "0")
+            if fzf_pane and sw_win and pane_exists(fzf_pane):
+                if sw_zoom == "1":
+                    run_tmux("resize-pane", "-Z", "-t", sw_win)
+                    sw_zoom = "0"
+                focus_pane_preserving_zoom(sw_win, fzf_pane, cur_pane_hint=act_pane, was_zoomed_hint="0")
+                if docked_pane:
+                    from ide_lib.dock import undock_switcher_session
+                    from ide_lib.preview import sync_switcher_slot_preview
+
+                    undock_switcher_session(sw_sess)
+                    if active_target_sess:
+                        sync_switcher_slot_preview(sw_sess, active_target_sess)
         return 0
 
     if mode in ("editor", "focus-editor", "term", "focus-term"):
-        if docked_sess and session_exists(docked_sess):
+        if active_target_sess and session_exists(active_target_sess):
             from ide_lib.dock import close_switcher_session
 
             pressed_key = "ctrl-e" if "editor" in mode else "ctrl-t"
             close_switcher_session(
                 sw_sess,
                 action="switch",
-                target=docked_sess,
+                target=active_target_sess,
                 pressed=pressed_key,
                 res_file_hint=res_file,
             )
             if not res_file and sw_client:
-                toggle_main_pane("focus-editor" if "editor" in mode else "focus-term", docked_sess)
-                run_tmux("switch-client", "-c", sw_client, "-t", f"={docked_sess}")
+                toggle_main_pane("focus-editor" if "editor" in mode else "focus-term", active_target_sess)
+                run_tmux("switch-client", "-c", sw_client, "-t", f"={active_target_sess}")
         return 0
 
     return 0
@@ -1792,16 +1813,35 @@ def launch_or_attach_workspace(
         except OSError:
             pass
 
-        term_sz = shutil.get_terminal_size(fallback=(160, 48))
-        cols = term_sz.columns if term_sz.columns >= 80 else 160
-        lines = term_sz.lines if term_sz.lines >= 24 else 48
+        cols = 0
+        lines = 0
+        if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+            from ide_lib.tmux import resolve_active_client
 
+            cl_for_sz = resolve_active_client()
+            cl_dims = (
+                tmux_out("display-message", "-p", "-c", cl_for_sz, "#{client_width}\t#{client_height}")
+                if cl_for_sz
+                else tmux_out("display-message", "-p", "#{client_width}\t#{client_height}")
+            )
+            if "\t" in cl_dims:
+                cw_s, ch_s = cl_dims.split("\t", 1)
+                if cw_s.strip().isdigit() and ch_s.strip().isdigit():
+                    cols = int(cw_s.strip())
+                    lines = int(ch_s.strip())
+        if cols < 80 or lines < 24:
+            term_sz = shutil.get_terminal_size(fallback=(160, 48))
+            cols = term_sz.columns if term_sz.columns >= 80 else 160
+            lines = term_sz.lines if term_sz.lines >= 24 else 48
+
+        status_rows = 0 if tmux_out("show-options", "-gqv", "status").strip() == "off" else 1
+        win_lines = max(23, lines - status_rows)
         base_env_args = _session_env_flags(
             session, ide_ai_cli, nvim_socket, target_dir, ide_notify=ide_notify_env
         )
         init_info = tmux_out(
             "new-session", "-d", "-P", "-F", "#{pane_id}\t#{window_id}",
-            "-s", session, "-n", "ide", "-c", target_dir, "-x", str(cols), "-y", str(lines),
+            "-s", session, "-n", "ide", "-c", target_dir, "-x", str(cols), "-y", str(win_lines),
             *base_env_args,
         )
         pane_ai, main_win = (init_info.split("\t", 1) + [""])[:2]

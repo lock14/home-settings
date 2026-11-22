@@ -120,7 +120,7 @@ function M.setup()
     opt.termguicolors = true
     opt.cursorline = true
     opt.signcolumn = "yes"
-    opt.scrolloff = 8
+    opt.scrolloff = 4
     opt.sidescrolloff = 8
     opt.wrap = false
     if vim.fn.exists("+smoothscroll") == 1 then

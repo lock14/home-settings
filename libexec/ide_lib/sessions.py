@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -13,11 +14,11 @@ from ide_lib.constants import (
     resolve_mise_tool_bin,
     shorten_home,
     trunc_visible,
+    use_nerd_fonts,
 )
 from ide_lib.dock import (
     caller_switcher_session,
     close_switcher_session,
-    dock_session_into_switcher,
     switch_or_attach_session,
     undock_switcher_session,
 )
@@ -35,12 +36,15 @@ from ide_lib.preview import (
     compute_fleet_columns,
     format_fleet_sessions_lines,
     render_session_preview,
+    sync_switcher_slot_preview,
 )
 from ide_lib.switcher import (
+    SIDE_BY_SIDE_MIN_COLS,
     _FZF_RESIZE_CAP_CACHE,
     _POPUP_SESS_RE,
     _fzf_supports_resize_bind,
     build_sessions_fzf_args,
+    format_sessions_footer_label,
     fzf_supports_resize_bind,
     handle_switcher_op,
     launch_picked_workspace,
@@ -50,7 +54,7 @@ from ide_lib.switcher import (
     query_outer_switcher_snapshot,
     run_interactive_switcher_session,
 )
-from ide_lib.theme import build_fzf_env, load_active_palette, state_color
+from ide_lib.theme import build_fzf_env, detect_color_tier, load_active_palette, state_color
 from ide_lib.tmux import (
     check_is_ide_session,
     current_ide_session,
@@ -161,7 +165,11 @@ def list_ide_fleet(plain: bool = False) -> int:
         print("No active IDE sessions.")
         return 0
 
-    use_color = sys.stdout.isatty() and not bool(os.environ.get("NO_COLOR"))
+    tier = detect_color_tier()
+    use_color = sys.stdout.isatty() and tier != "nocolor"
+    nf = use_nerd_fonts()
+    cur_glyph = "▸" if nf else "*"
+    attn_glyph = "󰂚" if nf else "!"
     _, esc = load_active_palette()
     state_labels, git_labels, sess_w, cli_w, state_w, git_w = compute_fleet_columns(
         fleet, min_sess_w=7, max_sess_w=28, max_cli_w=12, max_git_w=28
@@ -191,9 +199,9 @@ def list_ide_fleet(plain: bool = False) -> int:
         if use_color:
             attn_c = esc["GREEN"] if state == "DONE" else esc["ORANGE"]
             if is_cur:
-                marker = f"{esc['CYAN']}▸{esc['RESET']}"
+                marker = f"{esc['CYAN']}{cur_glyph}{esc['RESET']}"
             elif needs_attn:
-                marker = f"{attn_c}󰂚{esc['RESET']}"
+                marker = f"{attn_c}{attn_glyph}{esc['RESET']}"
             else:
                 marker = " "
             c_sess = esc["BASE1"] if is_cur else (attn_c if needs_attn else esc["BLUE"])
@@ -348,6 +356,14 @@ def _pick_workspace_directory(
     hex_map, esc = load_active_palette()
     rows = [f"{d}\x1f{esc['BLUE']}{shorten_home(d)}{esc['RESET']}" for d in dirs]
     esc_hint = "Esc: back to sessions" if back_to_sessions else "Esc: cancel"
+    color_label_args = (
+        []
+        if detect_color_tier() in ("nocolor", "mono", "16color")
+        else [
+            f"--color=label:{hex_map['BASE01']}",
+            f"--color=border:{hex_map['BASE01']},separator:{hex_map['BASE01']},gutter:{hex_map['BASE03']}",
+        ]
+    )
     dir_args = [
         fzf_bin,
         "--ansi",
@@ -359,7 +375,7 @@ def _pick_workspace_directory(
         "--border=rounded",
         f"--border-label= Enter: launch workspace · {esc_hint} ",
         "--border-label-pos=bottom",
-        f"--color=label:{hex_map['BASE01']}",
+        *color_label_args,
         "--bind=alt-s:abort",
     ]
     proc = subprocess.run(
@@ -492,26 +508,25 @@ def run_sessions_picker(
                     )
                     if sw_rc is not None:
                         return sw_rc
-                else:
-                    inner_args = [shlex.quote(ide_self), "--sessions"]
-                    if layout_mode == "2pane":
-                        inner_args.append("--2pane")
-                    if ai_cli_from_flag and ai_cli:
-                        inner_args.extend(["--ai", shlex.quote(ai_cli)])
-                    if detach_only:
-                        inner_args.append("--detach")
-                    if cur_sess:
-                        inner_args.append(shlex.quote(cur_sess))
-                    popup_rc = maybe_reenter_in_tmux_popup(
-                        origin_sess,
-                        cur_sess,
-                        fzf_bin,
-                        forward_ai_cli=forward_ai,
-                        inner_args=inner_args,
-                        client_name_hint=client_name,
-                    )
-                    if popup_rc is not None:
-                        return popup_rc
+                inner_args = [shlex.quote(ide_self), "--sessions"]
+                if layout_mode == "2pane":
+                    inner_args.append("--2pane")
+                if ai_cli_from_flag and ai_cli:
+                    inner_args.extend(["--ai", shlex.quote(ai_cli)])
+                if detach_only:
+                    inner_args.append("--detach")
+                if cur_sess:
+                    inner_args.append(shlex.quote(cur_sess))
+                popup_rc = maybe_reenter_in_tmux_popup(
+                    origin_sess,
+                    cur_sess,
+                    fzf_bin,
+                    forward_ai_cli=forward_ai,
+                    inner_args=inner_args,
+                    client_name_hint=client_name,
+                )
+                if popup_rc is not None:
+                    return popup_rc
         elif (
             sys.stdin.isatty()
             and sys.stdout.isatty()
@@ -595,15 +610,22 @@ def run_sessions_picker(
 
     supports_modern_binds = fzf_supports_resize_bind(fzf_bin)
     pane_h = 32
+    pane_w = 160
     if in_switcher:
-        pane_h_s = tmux_out(
+        dims_s = tmux_out(
             "display-message",
             "-p",
             "-t",
             os.environ.get("TMUX_PANE", f"={sw_sess}:"),
-            "#{pane_height}",
+            "#{pane_height}\t#{pane_width}",
         ).strip()
-        pane_h = int(pane_h_s) if pane_h_s.isdigit() and int(pane_h_s) > 0 else 32
+        ph_s, pw_s = (dims_s.split("\t") + ["", ""])[:2]
+        pane_h = int(ph_s) if ph_s.isdigit() and int(ph_s) > 0 else 32
+        pane_w = int(pw_s) if pw_s.isdigit() and int(pw_s) > 0 else 64
+    else:
+        term_sz = shutil.get_terminal_size(fallback=(160, 48))
+        pane_w = term_sz.columns if term_sz.columns >= 40 else 160
+        pane_h = term_sz.lines if term_sz.lines >= 12 else 32
     fzf_args = build_sessions_fzf_args(
         fzf_bin=fzf_bin,
         ide_self=ide_self,
@@ -612,6 +634,7 @@ def run_sessions_picker(
         supports_modern_binds=supports_modern_binds,
         sw_sess=sw_sess if in_switcher else "",
         pane_h=pane_h,
+        pane_w=pane_w,
     )
 
     while True:
@@ -635,7 +658,7 @@ def run_sessions_picker(
             if tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}") == "1":
                 run_tmux("resize-pane", "-Z", "-t", f"={sw_sess}:")
             if rows:
-                dock_session_into_switcher(sw_sess, rows[0].split("\t", 1)[0].strip())
+                sync_switcher_slot_preview(sw_sess, rows[0].split("\t", 1)[0].strip())
 
         proc = subprocess.run(
             fzf_args,

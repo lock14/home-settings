@@ -62,11 +62,13 @@ def build_fzf_color_opts(theme: dict[str, str], include_layout: bool = True) -> 
             f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},hl:{theme['BASE01']} "
             f"--color=fg:{theme['BASE0']},header:{theme['BASE01']},info:{theme['YELLOW']},pointer:{theme['GREEN']} "
             f"--color=marker:{theme['GREEN']},fg+:{theme['BASE1']},prompt:{theme['YELLOW']},hl+:{theme['BLUE']} "
+            f"--color=border:{theme['BASE01']},separator:{theme['BASE01']},label:{theme['BASE01']},gutter:{theme['BASE03']} "
             f"--layout=reverse --border=rounded --info=inline"
         )
     return (
         f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},"
         f"hl:{theme['BASE01']},fg:{theme['BASE0']},header:{theme['BASE01']},"
+        f"border:{theme['BASE01']},separator:{theme['BASE01']},label:{theme['BASE01']},gutter:{theme['BASE03']},"
         f"info:{theme['YELLOW']},pointer:{theme['GREEN']},marker:{theme['GREEN']},"
         f"fg+:{theme['BASE1']},prompt:{theme['YELLOW']},hl+:{theme['BLUE']}"
     )

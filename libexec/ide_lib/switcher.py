@@ -16,9 +16,10 @@ from ide_lib.constants import (
     is_switcher_session_name,
     read_switcher_result,
     sanitize_name_token,
+    use_nerd_fonts,
+    visible_width,
 )
 from ide_lib.dock import (
-    build_dock_swap_cmds,
     cleanup_switcher_session,
     close_switcher_session,
     dock_session_into_switcher,
@@ -43,8 +44,10 @@ from ide_lib.preview import (
     PipeHangupWatcher,
     format_fleet_sessions_lines,
     format_session_preview_header,
+    sync_switcher_slot_preview,
+    write_slot_tty_viewport,
 )
-from ide_lib.theme import build_fzf_env, load_active_palette
+from ide_lib.theme import build_fzf_env, detect_color_tier, load_active_palette
 from ide_lib.tmux import (
     pane_exists,
     resolve_active_client,
@@ -54,6 +57,7 @@ from ide_lib.tmux import (
     tmux_out,
 )
 
+SIDE_BY_SIDE_MIN_COLS = 90
 _POPUP_SESS_RE = re.compile(r"^(ai|agy)-")
 _POPUP_FORWARD_ENV_VARS = (
     "IDE_WORKSPACE_DIRS",
@@ -61,6 +65,12 @@ _POPUP_FORWARD_ENV_VARS = (
     "IDE_FZF_BIN",
     "IDE_ZOXIDE_BIN",
     "IDE_PREVIEW_INTERVAL",
+    "IDE_NERD_FONTS",
+    "IDE_ASCII",
+    "NO_COLOR",
+    "NO_MOTION",
+    "REDUCE_MOTION",
+    "COLORTERM",
     "FZF_DEFAULT_OPTS_FILE",
     "_ZO_DATA_DIR",
     "XDG_CONFIG_HOME",
@@ -250,6 +260,27 @@ def handle_switcher_op(op: str, sw_sess: str) -> int:
                         pass
         if norm_op == "zero":
             undock_switcher_session(sw_sess)
+            slot_tty = tmux_out(
+                "display-message",
+                "-p",
+                "-t",
+                tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_slot_pane").strip() or f"={sw_sess}:",
+                "#{?#{==:#{@ide_sw_placeholder},1},#{pane_tty},}",
+            ).strip()
+            run_tmux(
+                "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_selected_sess", "",
+                ";",
+                "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_label", "",
+            )
+            if slot_tty:
+                try:
+                    sfd = os.open(slot_tty, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
+                    try:
+                        os.write(sfd, b"\x1b[?25l\x1b[H\x1b[2J")
+                    finally:
+                        os.close(sfd)
+                except OSError:
+                    pass
         rem_ide, server_up = list_ide_sessions_with_server_status()
         if server_up and not rem_ide:
             close_switcher_session(sw_sess, action="none", res_file_hint=sw_rf)
@@ -262,14 +293,45 @@ def handle_switcher_op(op: str, sw_sess: str) -> int:
             "-p",
             "-t",
             f"={sw_sess}:",
-            TMUX_SEP.join(["#{@ide_sw_docked_pane}", "#{@ide_sw_slot_pane}", "#{@ide_sw_mode}"]),
+            TMUX_SEP.join([
+                "#{@ide_sw_docked_pane}",
+                "#{@ide_sw_docked_sess}",
+                "#{@ide_sw_selected_sess}",
+                "#{@ide_sw_slot_pane}",
+                "#{@ide_sw_mode}",
+                "#{@ide_sw_done}",
+            ]),
         )
         if raw_ai and TMUX_SEP in raw_ai:
-            dp, sp, sw_m = (p.strip() for p in (raw_ai.split(TMUX_SEP) + ["", "", ""])[:3])
-            if sw_m != "new":
-                target_p = dp if pane_exists(dp) else sp
-                if target_p and pane_exists(target_p):
-                    run_tmux("select-pane", "-t", target_p)
+            dp, ds, sel_s, sp, sw_m, sw_done = (
+                p.strip() for p in (raw_ai.split(TMUX_SEP) + ["", "", "", "", "", ""])[:6]
+            )
+            if sw_m != "new" and sw_done != "1":
+                want_s = ds or sel_s
+                if (not dp or not pane_exists(dp)) and want_s:
+                    if dock_session_into_switcher(sw_sess, want_s):
+                        dp = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_docked_pane").strip()
+                        sp = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_slot_pane").strip()
+                        ds = want_s
+                if tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_done").strip() == "1":
+                    return 0
+                if dp and not pane_exists(dp):
+                    undock_switcher_session(sw_sess)
+                    return 0
+                cand_p = dp if dp else sp
+                target_p = (
+                    cand_p
+                    if cand_p and tmux_out("display-message", "-p", "-t", cand_p, "#{session_name}").strip() == sw_sess
+                    else ""
+                )
+                if target_p:
+                    run_tmux(
+                        "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "1",
+                        ";",
+                        "select-pane", "-t", target_p,
+                    )
+                    if dp and target_p == dp and ds:
+                        ack_ai_session([ds], from_hook=True, refresh_always=True, entering_ai=True)
         return 0
     if norm_op == "focus":
         raw_foc = tmux_out(
@@ -282,22 +344,49 @@ def handle_switcher_op(op: str, sw_sess: str) -> int:
                 "#{@ide_sw_fzf_pane}",
                 "#{@ide_sw_docked_pane}",
                 "#{@ide_sw_docked_sess}",
+                "#{@ide_sw_selected_sess}",
                 "#{@ide_sw_visited_ai}",
                 "#{@ide_sw_mode}",
+                "#{@ide_sw_done}",
             ]),
         )
         if not raw_foc or TMUX_SEP not in raw_foc:
             return 0
-        act_p, fzf_p, docked_p, docked_s, visited_ai, sw_mode = (
-            p.strip() for p in (raw_foc.split(TMUX_SEP) + [""] * 6)[:6]
+        act_p, fzf_p, docked_p, docked_s, sel_s, visited_ai, sw_mode, sw_done = (
+            p.strip() for p in (raw_foc.split(TMUX_SEP) + [""] * 8)[:8]
         )
-        if docked_p and act_p == docked_p and docked_s:
-            run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "1")
-            ack_ai_session([docked_s], from_hook=True, refresh_always=True, entering_ai=True)
-        elif fzf_p and act_p == fzf_p and visited_ai == "1" and sw_mode == "sessions":
-            run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "0")
-            if pane_exists(fzf_p):
-                run_tmux("send-keys", "-t", fzf_p, "C-r")
+        if sw_mode == "new" or sw_done == "1":
+            return 0
+        if docked_p and not pane_exists(docked_p):
+            undocked_s = undock_switcher_session(sw_sess)
+            if undocked_s:
+                preview_s = sel_s or undocked_s or docked_s
+                if preview_s and sw_mode == "sessions":
+                    sync_switcher_slot_preview(sw_sess, preview_s)
+                run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "0")
+                if fzf_p and pane_exists(fzf_p):
+                    run_tmux("send-keys", "-t", fzf_p, "C-r")
+            return 0
+        if fzf_p and act_p != fzf_p:
+            want_s = docked_s or sel_s
+            if (not docked_p or not pane_exists(docked_p)) and want_s:
+                if dock_session_into_switcher(sw_sess, want_s):
+                    docked_p = tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_docked_pane").strip()
+                    docked_s = want_s
+                    if docked_p and pane_exists(docked_p):
+                        run_tmux("select-pane", "-t", docked_p)
+            if docked_p and docked_s:
+                run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "1")
+                ack_ai_session([docked_s], from_hook=True, refresh_always=True, entering_ai=True)
+        elif fzf_p and act_p == fzf_p and sw_mode == "sessions":
+            undocked_s = undock_switcher_session(sw_sess) if docked_p else ""
+            preview_s = sel_s or undocked_s or docked_s
+            if preview_s and undocked_s:
+                sync_switcher_slot_preview(sw_sess, preview_s)
+            if undocked_s or (not docked_p and visited_ai == "1"):
+                run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_visited_ai", "0")
+                if pane_exists(fzf_p):
+                    run_tmux("send-keys", "-t", fzf_p, "C-r")
         return 0
     return 0
 
@@ -314,6 +403,47 @@ def _ensure_switcher_tmux_conf(already_loaded: bool = False) -> None:
         run_tmux("source-file", tmux_theme_conf)
 
 
+def format_sessions_footer_label(pane_w: int = 120, in_two_pane: bool = False) -> str:
+    """Pack complete middle-dot-separated key hints within `pane_w` without mid-word clipping."""
+    if in_two_pane:
+        ordered = [
+            "Enter: switch",
+            "Alt+l: AI",
+            "C-a/e/t: pane",
+            "C-y: ack",
+            "C-o: PR",
+            "M-n: new",
+            "C-x: quit",
+            "C-r/F5: reload",
+            "F1: help",
+            "Alt+s: close",
+        ]
+        priority = [0, 1, 9, 3, 5, 6, 4, 7, 8, 2]
+    else:
+        ordered = [
+            "Enter: switch",
+            "C-a/e/t: pane",
+            "C-y: ack",
+            "C-o: PR",
+            "M-n: new",
+            "C-x: quit",
+            "C-r/F5: reload",
+            "F1: help",
+            "Alt+s: close",
+        ]
+        priority = [0, 8, 2, 4, 5, 1, 3, 6, 7]
+
+    budget = max(24, pane_w - 4)
+    chosen_idxs: set[int] = set()
+    for p_idx in priority:
+        cand_idxs = sorted([*chosen_idxs, p_idx])
+        cand_str = " " + " · ".join(ordered[i] for i in cand_idxs) + " "
+        if visible_width(cand_str) <= budget or not chosen_idxs:
+            chosen_idxs.add(p_idx)
+    final_items = [ordered[i] for i in sorted(chosen_idxs)]
+    return " " + " · ".join(final_items) + " "
+
+
 def build_sessions_fzf_args(
     fzf_bin: str,
     ide_self: str,
@@ -322,6 +452,7 @@ def build_sessions_fzf_args(
     supports_modern_binds: bool,
     sw_sess: str = "",
     pane_h: int = 32,
+    pane_w: int = 120,
     seed_sess: str = "",
     seed_file: str = "",
 ) -> list[str]:
@@ -330,8 +461,11 @@ def build_sessions_fzf_args(
     reload_cmd = f"{self_q} --sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
     quit_bind = f"ctrl-x:execute-silent({self_q} --quit {{+1}})+reload({reload_cmd})"
     ctrl_r_bind = f"ctrl-r:reload({reload_cmd})"
+    f5_bind = f"f5:reload({reload_cmd})"
     ack_bind = f"ctrl-y:execute-silent({self_q} --ack-ai {{+1}})+reload({reload_cmd})"
     open_pr_bind = f"ctrl-o:execute-silent({self_q} --open-pr {{1}})"
+    help_bind = f"f1:execute({self_q} --keys >/dev/tty </dev/tty)"
+    alt_qmark_bind = f"alt-?:execute({self_q} --keys >/dev/tty </dev/tty)"
     if seed_sess and seed_file:
         seed_sess_q = shlex.quote(seed_sess)
         seed_q = shlex.quote(seed_file)
@@ -339,12 +473,12 @@ def build_sessions_fzf_args(
         seed_meta_q = shlex.quote(f"{seed_file}.meta.json")
         preview_cmd = (
             f"if [ {seed_sess_q} = {{1}} ] && mv -f {seed_q} {seed_used_q} 2>/dev/null; then "
-            f"cat {seed_used_q}; IDE_PREVIEW_SEEDED={seed_used_q} exec {self_q} --session-preview --follow -- {{1}}; "
+            f"cat {seed_used_q}; IDE_PREVIEW_SEEDED={seed_used_q} IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} --session-preview --follow -- {{1}}; "
             f"fi; rm -f {seed_q} {seed_used_q} {seed_meta_q} 2>/dev/null || :; "
-            f"exec {self_q} --session-preview --follow -- {{1}}"
+            f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} --session-preview --follow -- {{1}}"
         )
     else:
-        preview_cmd = f"{self_q} --session-preview --follow -- {{1}}"
+        preview_cmd = f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} --session-preview --follow -- {{1}}"
 
     switcher_extra_binds: list[str] = []
     if sw_sess:
@@ -362,10 +496,32 @@ def build_sessions_fzf_args(
             ctrl_r_bind = (
                 f"ctrl-r:execute-silent({self_q} --switcher-op zero-check {sw_q})+reload({reload_cmd})"
             )
+            f5_bind = (
+                f"f5:execute-silent({self_q} --switcher-op zero-check {sw_q})+reload({reload_cmd})"
+            )
         resize_binds: list[str] = []
     else:
-        preview_window_spec = "right:56%:wrap:noinfo"
+        preview_window_spec = (
+            "down:50%:wrap:noinfo"
+            if 0 < pane_w < SIDE_BY_SIDE_MIN_COLS
+            else "right:56%:wrap:noinfo"
+        )
         resize_binds = ["--bind=resize:refresh-preview"] if supports_modern_binds else []
+
+    footer_label = format_sessions_footer_label(pane_w=pane_w, in_two_pane=bool(sw_sess))
+    no_motion = bool(os.environ.get("NO_MOTION") or os.environ.get("REDUCE_MOTION"))
+    spinner_hex = hex_map["BASE03"] if no_motion else hex_map["CYAN"]
+    color_label_args = (
+        []
+        if detect_color_tier() in ("nocolor", "mono", "16color")
+        else [
+            f"--color=label:{hex_map['BASE01']}",
+            (
+                f"--color=border:{hex_map['BASE01']},separator:{hex_map['BASE01']},"
+                f"gutter:{hex_map['BASE03']},preview-bg:{hex_map['BASE03']},spinner:{spinner_hex}"
+            ),
+        ]
+    )
 
     return [
         fzf_bin,
@@ -378,14 +534,18 @@ def build_sessions_fzf_args(
         "--no-scrollbar",
         "--prompt=IDE > ",
         "--border=rounded",
-        "--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r: reload · Alt+s: close ",
+        f"--border-label={footer_label}",
         "--border-label-pos=bottom",
-        f"--color=label:{hex_map['BASE01']}",
+        *color_label_args,
         "--expect=ctrl-a,ctrl-e,ctrl-t,alt-n",
         "--bind=alt-s:abort",
+        "--bind=f12:refresh-preview",
         *resize_binds,
         *switcher_extra_binds,
         f"--bind={ctrl_r_bind}",
+        f"--bind={f5_bind}",
+        f"--bind={help_bind}",
+        f"--bind={alt_qmark_bind}",
         f"--bind={ack_bind}",
         f"--bind={open_pr_bind}",
         f"--bind={quit_bind}",
@@ -496,6 +656,7 @@ def query_outer_switcher_snapshot(target_arg: str) -> OuterSwitcherSnapshot:
             "#{@ide_sw_client}",
             "#{@ide_sw_done}",
             "#{@ide_sw_docked_sess}",
+            "#{@ide_sw_selected_sess}",
         ]),
         ";",
         "list-panes",
@@ -547,7 +708,7 @@ def query_outer_switcher_snapshot(target_arg: str) -> OuterSwitcherSnapshot:
                 if csess:
                     snap.focused_sessions.add(csess)
         elif line.startswith(sess_pfx):
-            sc = (line.split(TMUX_SEP)[1:] + [""] * 27)[:27]
+            sc = (line.split(TMUX_SEP)[1:] + [""] * 28)[:28]
             sname = sc[0].strip()
             if not sname:
                 continue
@@ -564,7 +725,7 @@ def query_outer_switcher_snapshot(target_arg: str) -> OuterSwitcherSnapshot:
             is_sw = sc[23].strip()
             sw_cl = sc[24].strip()
             sw_done = sc[25].strip()
-            sw_docked = sc[26].strip()
+            sw_docked = sc[26].strip() or sc[27].strip()
             if is_switcher_session_name(sname):
                 sw_rows.append((sname, is_sw, sw_cl, sw_done))
                 if sw_docked:
@@ -739,8 +900,11 @@ def run_interactive_switcher_session(
             sw_rows = max(20, int(48 * 0.85) - 2)
     else:
         term_sz = shutil.get_terminal_size(fallback=(160, 48))
-        sw_cols = max(80, term_sz.columns)
-        sw_rows = max(20, term_sz.lines)
+        sw_cols = max(40, term_sz.columns)
+        sw_rows = max(16, term_sz.lines)
+
+    if sw_cols < SIDE_BY_SIDE_MIN_COLS:
+        return None
 
     rt_raw = (os.environ.get("XDG_RUNTIME_DIR") or "").strip()
     rt_dir = rt_raw if (rt_raw and os.path.isdir(rt_raw)) else "/tmp"
@@ -760,30 +924,28 @@ def run_interactive_switcher_session(
     init_meta = next((s for s in snap.raw_ide_sessions if s["sess"] == initial_top), None)
     target_pane = ""
     healed_ai = False
-    was_zoomed = False
-    zoomed_pane = ""
     init_label = ""
+    busy_init_label = ""
     if init_meta is not None:
+        rec_ai0 = init_meta["ai_pane"]
+        if (
+            rec_ai0
+            and rec_ai0 in snap.pane_dock_map
+            and is_switcher_session_name(snap.pane_dock_map[rec_ai0][0])
+            and snap.pane_dock_map[rec_ai0][0] != sw_sess
+        ):
+            busy_init_label = f"{initial_top} · (in other switcher)"
         target_pane, healed_ai = select_dockable_ai_pane(
             initial_top,
-            init_meta["ai_pane"],
+            rec_ai0,
             snap.pane_dock_map,
             snap.sess_panes,
         )
-        if target_pane and target_pane in snap.pane_dock_map:
-            p_sess, p_win, _, p_zoom, _, docked_by, _ = snap.pane_dock_map[target_pane]
-            if p_sess != initial_top or (
-                docked_by and docked_by != sw_sess and docked_by in snap.all_sessions
-            ):
-                target_pane = ""
-                healed_ai = False
-            else:
-                was_zoomed = p_zoom == "1"
-                zoomed_pane = snap.win_active_pane.get(p_win, target_pane) if was_zoomed else ""
-                init_ai_cli = init_meta["ai_cli"] or "AI"
-                init_label = f"{initial_top} · {init_ai_cli}"
+        init_ai_cli = init_meta["ai_cli"] or "AI"
+        init_label = busy_init_label or f"{initial_top} · {init_ai_cli}"
 
-    seeded_sess = initial_top if (target_pane and not initial_entry.get("quit_err")) else ""
+    seeded_sess = initial_top if (initial_top and not initial_entry.get("quit_err")) else ""
+    left_pane_w = max(36, sw_cols - int(sw_cols * 0.56) - 1)
 
     fzf_args = build_sessions_fzf_args(
         fzf_bin=fzf_bin,
@@ -793,6 +955,7 @@ def run_interactive_switcher_session(
         supports_modern_binds=supports_modern_binds,
         sw_sess=sw_sess,
         pane_h=max(1, sw_rows - 1),
+        pane_w=left_pane_w,
         seed_sess=seeded_sess,
         seed_file=seed_file if seeded_sess else "",
     )
@@ -836,14 +999,18 @@ def run_interactive_switcher_session(
         f"{shlex.quote(seed_file)} {shlex.quote(seed_file + '.1')} {shlex.quote(seed_meta_file)}"
     )
 
+    nf = use_nerd_fonts()
+    sw_ico = " " if nf else ""
+    ai_ico = "󰚩 " if nf else ""
+    ptr = ">" if (os.environ.get("TERM") or "").lower() == "dumb" else "▸"
     border_fmt = (
         f"#{{?#{{==:#{{@ide_sw_role}},list}},"
         f"#{{?#{{==:#{{@ide_sw_mode}},new}},"
-        f"#[fg={hex_map['BLUE']}#,nobold]▸  #[fg={hex_map['BASE1']}#,nobold]New Workspace #[fg={hex_map['BASE01']}#,nobold](Enter: launch · Esc: back) ,"
-        f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]▸  #[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold](Alt+l: interact) ,"
-        f"#[fg={hex_map['BASE01']}#,nobold]   Sessions (Alt+h: list) }}}},"
-        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]▸ 󰚩 #[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['BASE01']}#,nobold](live · Alt+h: list · Alt+s: close) ,"
-        f"#[fg={hex_map['BASE0']}#,nobold]  󰚩 #{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold](Alt+l / click: interact) }}}}"
+        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]New Workspace #[fg={hex_map['BASE01']}#,nobold](Enter: launch · Esc: back) ,"
+        f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold](Alt+l: interact) ,"
+        f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions (Alt+h: list) }}}},"
+        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold](Alt+h: list · Alt+s: close) ,"
+        f"#[fg={hex_map['BASE0']}#,nobold]  {ai_ico}#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold][PREVIEW] (Alt+l / click: interact) }}}}"
     )
 
     cancel_ev = threading.Event()
@@ -865,6 +1032,7 @@ def run_interactive_switcher_session(
             [str(p) for p in (initial_entry.get("worktree_peers") or [])],
         )
         meta_payload = json.dumps({
+            "state": str(initial_entry["state"]),
             "workdir": str(initial_entry.get("workdir") or ""),
             "git_branch": str(initial_entry["git_branch"]),
             "git_dirty": bool(initial_entry["git_dirty"]),
@@ -990,17 +1158,27 @@ def run_interactive_switcher_session(
         finally:
             os.close(sh_fd)
 
-        focus_cond = "#{||:#{==:#{pane_id},#{@ide_sw_docked_pane}},#{==:#{@ide_sw_visited_ai},1}}"
+        focus_cond = (
+            "#{&&:#{!=:#{@ide_sw_done},1},#{&&:#{!=:#{@ide_sw_mode},new},"
+            "#{||:#{!=:#{pane_id},#{@ide_sw_fzf_pane}},#{==:#{@ide_sw_visited_ai},1},#{!=:#{@ide_sw_docked_pane},}}}}"
+        )
+        dead_dock_cond = (
+            "#{&&:#{!=:#{@ide_sw_done},1},#{&&:#{!=:#{@ide_sw_mode},new},"
+            "#{&&:#{!=:#{@ide_sw_docked_pane},},#{==:#{window_panes},1}}}}"
+        )
         focus_sh = f"{self_q} --switcher-op focus {sw_q} || true".replace("#", "##")
         focus_run = f"run-shell -b {_tmux_dquote(focus_sh)}"
         focus_hook = f"if-shell -F {_tmux_dquote(focus_cond)} {_tmux_dquote(focus_run)}"
+        dead_dock_hook = f"if-shell -F {_tmux_dquote(dead_dock_cond)} {_tmux_dquote(focus_run)}"
         cleanup_sh = (
             f"sleep 0.15; tmux has-session -t {shlex.quote('=' + sw_sess)} 2>/dev/null "
             f"&& exec {self_q} --switcher-op cleanup {sw_q} || true"
         ).replace("#", "##")
         cleanup_hook = f"run-shell -b {_tmux_dquote(cleanup_sh)}"
 
-        fallback_dock_needed = False
+        slot_tty = ""
+        slot_w = 0
+        slot_h = 0
         try:
             with with_switcher_lock(sw_sess, sock_hint=sock_path):
                 init_out = tmux_out(
@@ -1020,18 +1198,6 @@ def run_interactive_switcher_session(
                     *env_flags,
                     f"/bin/sh {shlex.quote(run_sh)}",
                     ";",
-                    "split-window",
-                    "-d",
-                    "-h",
-                    "-P",
-                    "-F",
-                    "#{pane_id}",
-                    "-t",
-                    f"={sw_sess}:sessions",
-                    "-l",
-                    "56%",
-                    switcher_placeholder_cmd(),
-                    ";",
                     "set-option", "-q", "-t", f"={sw_sess}:", "status", "off",
                     ";",
                     "set-option", "-w", "-t", f"={sw_sess}:sessions", "automatic-rename", "off",
@@ -1045,6 +1211,18 @@ def run_interactive_switcher_session(
                     "set-option", "-w", "-t", f"={sw_sess}:sessions", "pane-active-border-style", f"fg={hex_map['BASE01']},bg={hex_map['BASE03']}",
                     ";",
                     "set-option", "-w", "-t", f"={sw_sess}:sessions", "pane-border-format", border_fmt,
+                    ";",
+                    "split-window",
+                    "-d",
+                    "-h",
+                    "-P",
+                    "-F",
+                    "#{pane_id}::#{pane_tty}::#{pane_width}::#{pane_height}",
+                    "-t",
+                    f"={sw_sess}:sessions",
+                    "-l",
+                    "56%",
+                    switcher_placeholder_cmd(),
                     ";",
                     "set-option", "-q", "-t", f"={sw_sess}:", "@ide_switcher", "1",
                     ";",
@@ -1071,58 +1249,14 @@ def run_interactive_switcher_session(
                 fzf_pane, sw_win = (init_lines[0].split("::", 1) + [""])[:2]
                 fzf_pane = fzf_pane.strip()
                 sw_win = sw_win.strip()
-                slot_pane = init_lines[1].strip()
+                slot_parts = (init_lines[1].split("::") + ["", "", "", ""])[:4]
+                slot_pane = slot_parts[0].strip()
+                slot_tty = slot_parts[1].strip()
+                slot_w = int(slot_parts[2].strip()) if slot_parts[2].strip().isdigit() else 0
+                slot_h = int(slot_parts[3].strip()) if slot_parts[3].strip().isdigit() else 0
                 if not fzf_pane or not sw_win or not slot_pane:
                     seed_allowed = False
                     return None
-
-                busy_init_label = ""
-                if target_pane:
-                    tp_info = tmux_out(
-                        "display-message",
-                        "-p",
-                        "-t",
-                        target_pane,
-                        TMUX_SEP.join([
-                            "#{pane_id}",
-                            "#{session_name}",
-                            "#{window_id}",
-                            "#{window_zoomed_flag}",
-                            "#{@ide_role}",
-                            "#{@ide_sw_docked_by}",
-                            "#{@ide_sw_placeholder}",
-                        ]),
-                    )
-                    tp_parts = (
-                        [x.strip() for x in (tp_info.split(TMUX_SEP) + [""] * 7)[:7]]
-                        if (tp_info and TMUX_SEP in tp_info)
-                        else []
-                    )
-                    if (
-                        not tp_parts
-                        or tp_parts[0] != target_pane
-                        or tp_parts[1] != initial_top
-                        or tp_parts[4] in ("editor", "term")
-                        or tp_parts[6] == "1"
-                        or (tp_parts[5] and tp_parts[5] != sw_sess and session_exists(tp_parts[5]))
-                    ):
-                        if tp_parts and (
-                            is_switcher_session_name(tp_parts[1])
-                            or (tp_parts[5] and tp_parts[5] != sw_sess)
-                        ):
-                            busy_init_label = f"{initial_top} · (in other switcher)"
-                        target_pane = ""
-                        healed_ai = False
-                        was_zoomed = False
-                        zoomed_pane = ""
-                        seed_allowed = False
-                    else:
-                        was_zoomed = tp_parts[3] == "1"
-                        if was_zoomed:
-                            act_wp = tmux_out("display-message", "-p", "-t", tp_parts[2], "#{pane_id}").strip()
-                            zoomed_pane = act_wp or target_pane
-                        else:
-                            zoomed_pane = ""
 
                 wire_cmds: list[str] = [
                     "set-option", "-p", "-q", "-t", fzf_pane, "@ide_sw_role", "list",
@@ -1133,31 +1267,32 @@ def run_interactive_switcher_session(
                     ";",
                     "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_slot_pane", slot_pane,
                     ";",
+                    "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_selected_sess", initial_top,
+                    ";",
+                    "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_label", init_label,
+                    ";",
                     "set-hook", "-w", "-t", sw_win, "pane-focus-in", focus_hook,
+                    ";",
+                    "set-hook", "-w", "-t", sw_win, "window-layout-changed", dead_dock_hook,
                 ]
-                if target_pane:
-                    wire_cmds.append(";")
-                    wire_cmds.extend(
-                        build_dock_swap_cmds(
-                            sw_sess=sw_sess,
-                            slot_pane=slot_pane,
-                            target_sess=initial_top,
-                            target_pane=target_pane,
-                            label=init_label,
-                            was_zoomed=was_zoomed,
-                            zoomed_pane=zoomed_pane,
-                            healed_ai=healed_ai,
-                        )
-                    )
-                elif busy_init_label:
-                    wire_cmds.extend([";", "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_label", busy_init_label])
-                wire_res = run_tmux(*wire_cmds)
-                if wire_res.returncode != 0 and initial_top:
-                    fallback_dock_needed = True
+                if healed_ai and target_pane and initial_top:
+                    wire_cmds.extend([
+                        ";",
+                        "set-option", "-q", "-t", f"={initial_top}:", "@ide_ai_pane", target_pane,
+                        ";",
+                        "set-environment", "-t", f"={initial_top}", "IDE_AI_PANE", target_pane,
+                    ])
+                run_tmux(*wire_cmds)
 
-            if fallback_dock_needed:
-                if not dock_session_into_switcher(sw_sess, initial_top):
-                    seed_allowed = False
+            init_preview_pane = target_pane or str(initial_entry.get("preview_pane") or "")
+            if slot_tty and slot_w > 0 and slot_h > 0:
+                write_slot_tty_viewport(
+                    slot_tty=slot_tty,
+                    slot_w=slot_w,
+                    slot_h=slot_h,
+                    preview_pane=init_preview_pane,
+                    esc=esc,
+                )
         finally:
             dock_decided_ev.set()
 

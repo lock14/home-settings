@@ -2181,9 +2181,14 @@ vim.api.nvim_win_set_cursor(0, { 1, 0 })
 local md_so = vim.wo.scrolloff
 vim.cmd("edit " .. vim.fn.getcwd() .. "/tests/fixtures/sample-code/sample.go")
 local go_so = vim.wo.scrolloff
+local go_j_map = vim.fn.maparg("j", "n")
 vim.cmd("edit " .. vim.fn.getcwd() .. "/tests/fixtures/sample-code/sample.md")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and md_so == 0 and go_so == 8 and vim.wo.scrolloff == 0 and vim.o.smoothscroll == true and vim.wo.smoothscroll == true)
+local md_j_info = vim.fn.maparg("j", "n", false, true)
+local md_k_info = vim.fn.maparg("k", "n", false, true)
+local md_xj_info = vim.fn.maparg("j", "x", false, true)
+local md_jk_ok = (go_j_map == "" and md_j_info.buffer == 1 and md_j_info.expr == 1 and type(md_j_info.callback) == "function" and md_j_info.callback() == "gj" and md_k_info.buffer == 1 and md_k_info.expr == 1 and type(md_k_info.callback) == "function" and md_k_info.callback() == "gk" and md_xj_info.buffer == 1 and md_xj_info.expr == 1)
+local md_wrap = (vim.wo.wrap == true and vim.wo.linebreak == true and vim.wo.breakindent == true and md_so == 0 and go_so == 4 and vim.wo.scrolloff == 0 and vim.o.smoothscroll == true and vim.wo.smoothscroll == true and md_jk_ok)
 local hex = function(n) return n and string.format("%06x", n) or "none" end
 local hl = function(g) return vim.api.nvim_get_hl(0, { name = g, link = false }) end
 local h1, h2, h3, h4, h5, h6 = hl("RenderMarkdownH1"), hl("RenderMarkdownH2"), hl("RenderMarkdownH3"), hl("RenderMarkdownH4"), hl("RenderMarkdownH5"), hl("RenderMarkdownH6")
@@ -2692,7 +2697,7 @@ local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|--next-attention|fl
 
 jobs = {}
 vim.fn.maparg("<leader>?", "n", false, true).callback()
-local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|90|-h|30|" .. vim.fn.shellescape(ide_bin) .. " --keys")
+local keys_popup_ok = (#jobs == 1 and jobs[1] == "tmux|display-popup|-t|%42|-E|-w|80|-h|24|" .. vim.fn.shellescape(ide_bin) .. " --keys")
 
 -- 7. Cross-session :IdeSend[!] [session] command (named buffer, range, bang --switch, default session, unnamed --stdin, and tab completion)
 local chan_sent = {}

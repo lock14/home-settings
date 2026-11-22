@@ -144,7 +144,7 @@ def check_is_ide_session(sess: str) -> bool:
 
 
 def resolve_switcher_context(sw_sess: str) -> tuple[str, str, str]:
-    """Return `(docked_sess, outer_client, result_file)` for switcher session `sw_sess`."""
+    """Return `(active_sess, outer_client, result_file)` for switcher session `sw_sess`."""
     if not is_switcher_session_name(sw_sess):
         return ("", "", "")
     raw = tmux_out(
@@ -152,12 +152,12 @@ def resolve_switcher_context(sw_sess: str) -> tuple[str, str, str]:
         "-p",
         "-t",
         f"={sw_sess}:",
-        TMUX_SEP.join(["#{@ide_sw_docked_sess}", "#{@ide_sw_client}", "#{@ide_sw_result_file}"]),
+        TMUX_SEP.join(["#{@ide_sw_docked_sess}", "#{@ide_sw_selected_sess}", "#{@ide_sw_client}", "#{@ide_sw_result_file}"]),
     )
     if not raw or TMUX_SEP not in raw:
         return ("", "", "")
-    ds, cl, rf = (raw.split(TMUX_SEP) + ["", "", ""])[:3]
-    return (ds.strip(), cl.strip(), rf.strip())
+    ds, sel_s, cl, rf = (raw.split(TMUX_SEP) + ["", "", "", ""])[:4]
+    return (ds.strip() or sel_s.strip(), cl.strip(), rf.strip())
 
 
 def current_ide_session() -> str:
@@ -187,18 +187,19 @@ def current_ide_session() -> str:
             "#{@ide_main_win}",
             "#{@ide_owner_sess}",
             "#{@ide_sw_docked_sess}",
+            "#{@ide_sw_selected_sess}",
         ]),
     )
     if not found or TMUX_SEP not in found:
         return ""
-    fparts = (found.split(TMUX_SEP) + [""] * 7)[:7]
-    pid, sess_name, ide_sess, ide_sock, ide_win, owner_sess, sw_docked_sess = fparts
+    fparts = (found.split(TMUX_SEP) + [""] * 8)[:8]
+    pid, sess_name, ide_sess, ide_sock, ide_win, owner_sess, sw_docked_sess, sw_sel_sess = fparts
     if pid != server_pid:
         return ""
     if is_ide_session_meta(sess_name, ide_sess, ide_sock, ide_win):
         return sess_name
     if is_switcher_session_name(sess_name):
-        for cand_s in (owner_sess.strip(), sw_docked_sess.strip()):
+        for cand_s in (owner_sess.strip(), sw_docked_sess.strip(), sw_sel_sess.strip()):
             if cand_s and check_is_ide_session(cand_s):
                 return cand_s
     return ""
