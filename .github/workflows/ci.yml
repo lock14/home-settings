@@ -118,14 +118,14 @@ jobs:
           [ -L "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd missing"; exit 1; }
           [ -f "$HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ] || { echo "FAIL: MesloLGS Nerd Font Mono fonts missing"; exit 1; }
 
-          ./setup.sh --uninstall-dotfiles
+          ./setup.sh --uninstall dotfiles
           [ ! -e "$HOME/.aliases" ] || { echo "FAIL: ~/.aliases still exists"; exit 1; }
           [ ! -e "$HOME/.environment-variables" ] || { echo "FAIL: ~/.environment-variables still exists"; exit 1; }
 
-          ./setup.sh --uninstall-bin
+          ./setup.sh --uninstall bin
           [ ! -e "$HOME/.local/bin/gen-passwd" ] || { echo "FAIL: ~/.local/bin/gen-passwd still exists"; exit 1; }
 
-          ./setup.sh --uninstall-fonts
+          ./setup.sh --uninstall=fonts
           [ ! -e "$HOME/.local/share/fonts/MesloLGSNerdFontMono-Regular.ttf" ] || { echo "FAIL: MesloLGS Nerd Font Mono fonts still exist"; exit 1; }
 
           echo "PASS: setup.sh modular uninstallation succeeded"
@@ -182,13 +182,14 @@ jobs:
         run: |
           chmod +x setup.sh
           ./setup.sh --help
-          ./setup.sh --ide invalid && { echo "FAIL: invalid IDE should fail"; exit 1; } || echo "PASS"
+          ./setup.sh --ide invalid && { echo "FAIL: invalid flag should fail"; exit 1; } || echo "PASS"
+          ./setup.sh --db invalid && { echo "FAIL: invalid db engine should fail"; exit 1; } || echo "PASS"
 
       - name: Run Dry-Run
         run: |
           ./setup.sh --dry-run
           ./setup.sh --user --dry-run
-          ./setup.sh --dotfiles-only --dry-run
+          ./setup.sh --db postgres,mariadb --gui=ghostty,code --skip fonts,nvim --dry-run
 
       - name: Run User Dotfiles Installation
         run: |
