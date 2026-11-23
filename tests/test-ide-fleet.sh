@@ -4170,10 +4170,18 @@ try:
             s = _active_sw_sess()
             if not s:
                 return ""
+            if tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_done").strip() == "1":
+                return ""
             att = tmux_out("display-message", "-p", "-t", f"={s}:", "#{session_attached}").strip()
             fp = tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_fzf_pane").strip()
-            if att not in ("", "0") and fp and "IDE >" in tmux_out("capture-pane", "-p", "-t", fp):
-                return s
+            if att not in ("", "0") and fp:
+                cap = tmux_out("capture-pane", "-p", "-t", fp)
+                if (
+                    "IDE >" in cap
+                    and "0/0" not in cap
+                    and any(st in cap for st in ("IDLE", "WORKING", "DONE", "APPROVAL", "QUOTA", "SHELL"))
+                ):
+                    return s
             return ""
 
         sw_proc = None

@@ -255,14 +255,18 @@ def handle_switcher_op(op: str, sw_sess: str) -> int:
         return 0
     if norm_op in ("zero", "zero-check"):
         _, sw_cl, sw_rf = resolve_switcher_context(sw_sess)
-        if sw_rf:
-            sw_dir = os.path.dirname(sw_rf)
-            if sw_dir:
-                for seed_fn in ("seed.ans", "seed.ans.1", "seed.ans.meta.json"):
-                    try:
-                        os.unlink(os.path.join(sw_dir, seed_fn))
-                    except OSError:
-                        pass
+        sw_dir = os.path.dirname(sw_rf) if sw_rf else ""
+        if norm_op == "zero" and sw_dir:
+            if not os.path.exists(os.path.join(sw_dir, "rows.loaded")):
+                return 0
+            if not os.path.exists(os.path.join(sw_dir, "zero.pending")):
+                return 0
+        if sw_dir:
+            for seed_fn in ("seed.ans", "seed.ans.1", "seed.ans.meta.json"):
+                try:
+                    os.unlink(os.path.join(sw_dir, seed_fn))
+                except OSError:
+                    pass
         if norm_op == "zero":
             undock_switcher_session(sw_sess)
             slot_tty = tmux_out(
@@ -466,6 +470,7 @@ def build_sessions_fzf_args(
     pane_w: int = 120,
     seed_sess: str = "",
     seed_file: str = "",
+    sw_tmp_dir: str = "",
 ) -> list[str]:
     """Construct `fzf` argument vector for single-pane or 2-pane `ai-sw-*` session switching."""
     self_q = shlex.quote(ide_self)
@@ -477,19 +482,24 @@ def build_sessions_fzf_args(
     open_pr_bind = f"ctrl-o:execute-silent({self_q} pr {{1}})"
     help_bind = f"f1:execute({self_q} keys >/dev/tty </dev/tty)"
     alt_qmark_bind = f"alt-?:execute({self_q} keys >/dev/tty </dev/tty)"
+    zero_clear_pfx = ""
+    if sw_sess and sw_tmp_dir:
+        zero_flag_q = shlex.quote(os.path.join(sw_tmp_dir, "zero.pending"))
+        zero_clear_pfx = f"rm -f {zero_flag_q} 2>/dev/null || :; "
     if seed_sess and seed_file:
         seed_sess_q = shlex.quote(seed_sess)
         seed_q = shlex.quote(seed_file)
         seed_used_q = shlex.quote(f"{seed_file}.1")
         seed_meta_q = shlex.quote(f"{seed_file}.meta.json")
         preview_cmd = (
+            f"{zero_clear_pfx}"
             f"if [ {seed_sess_q} = {{1}} ] && mv -f {seed_q} {seed_used_q} 2>/dev/null; then "
             f"cat {seed_used_q}; IDE_PREVIEW_SEEDED={seed_used_q} IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}; "
             f"fi; rm -f {seed_q} {seed_used_q} {seed_meta_q} 2>/dev/null || :; "
             f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}"
         )
     else:
-        preview_cmd = f"IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}"
+        preview_cmd = f"{zero_clear_pfx}IDE_PREVIEW_WHILE_WORKING=1 exec {self_q} _internal session-preview --follow -- {{1}}"
 
     switcher_extra_binds: list[str] = []
     if sw_sess:
@@ -498,7 +508,14 @@ def build_sessions_fzf_args(
         preview_window_spec = f"down:{meta_rows}:wrap:noinfo"
         switcher_extra_binds.append(f"--bind=alt-l:execute-silent({self_q} _internal switcher-op focus-ai {sw_q})")
         if supports_modern_binds:
-            switcher_extra_binds.append(f"--bind=zero:execute-silent({self_q} _internal switcher-op zero {sw_q})")
+            if sw_tmp_dir:
+                loaded_q = shlex.quote(os.path.join(sw_tmp_dir, "rows.loaded"))
+                zero_flag_q = shlex.quote(os.path.join(sw_tmp_dir, "zero.pending"))
+                switcher_extra_binds.append(
+                    f"--bind=zero:execute-silent(if [ -f {loaded_q} ]; then : > {zero_flag_q}; exec {self_q} _internal switcher-op zero {sw_q}; fi)"
+                )
+            else:
+                switcher_extra_binds.append(f"--bind=zero:execute-silent({self_q} _internal switcher-op zero {sw_q})")
         else:
             quit_bind = (
                 f"ctrl-x:execute-silent({self_q} quit {{+1}}; "
@@ -950,6 +967,7 @@ def run_interactive_switcher_session(
     rc_file = os.path.join(sw_tmp_dir, "fzf.rc")
     seed_file = os.path.join(sw_tmp_dir, "seed.ans")
     seed_meta_file = f"{seed_file}.meta.json"
+    loaded_file = os.path.join(sw_tmp_dir, "rows.loaded")
     run_sh = os.path.join(sw_tmp_dir, "run_fzf.sh")
 
     sw_sess = f"ai-sw-{os.getpid()}-{int(time.monotonic() * 1000) % 1000000}"
@@ -995,6 +1013,7 @@ def run_interactive_switcher_session(
         pane_w=left_pane_w,
         seed_sess=seeded_sess,
         seed_file=seed_file if seeded_sess else "",
+        sw_tmp_dir=sw_tmp_dir,
     )
 
     env_flags = [
@@ -1115,6 +1134,7 @@ def run_interactive_switcher_session(
                 return
         if wfd < 0:
             return
+        completed_feed = False
         try:
             while not git_done.wait(timeout=0.02):
                 if cancel_ev.is_set():
@@ -1137,9 +1157,15 @@ def run_interactive_switcher_session(
                     select.select([], [wfd], [], 0.04)
                 except OSError:
                     break
+            completed_feed = sent == total and not cancel_ev.is_set()
         finally:
             try:
                 os.close(wfd)
+            except OSError:
+                pass
+        if completed_feed:
+            try:
+                open(loaded_file, "wb").close()
             except OSError:
                 pass
 
@@ -1172,6 +1198,10 @@ def run_interactive_switcher_session(
                 return None
             with open(in_file, "w", encoding="utf-8") as inf:
                 inf.write("\n".join(initial_rows) + "\n")
+            try:
+                open(loaded_file, "wb").close()
+            except OSError:
+                pass
 
         sh_fd = os.open(run_sh, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o700)
         try:
