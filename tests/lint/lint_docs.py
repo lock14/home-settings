@@ -819,6 +819,9 @@ def main(argv: list[str] | None = None) -> int:
                     "Alt+a",
                     "Alt+e",
                     "Alt+t",
+                    "Alt+n",
+                    "Alt+o",
+                    "Alt+u",
                     "Alt+Shift+E",
                     "Alt+Shift+T",
                     "Alt+Shift+A",
@@ -933,9 +936,9 @@ def main(argv: list[str] | None = None) -> int:
             alt_shift_a_row = re.search(
                 r"^\|\s*`Alt\+Shift\+A`\s*\|.*$", readme_text, re.MULTILINE
             )
-            if not alt_shift_a_row or "_internal ai-popup" not in alt_shift_a_row.group(0):
+            if not alt_shift_a_row or "_internal park ai" not in alt_shift_a_row.group(0):
                 errors.append(
-                    f'{readme_where}: keybinding "Alt+Shift+A" table row must document "ide _internal ai-popup" floating popup target'
+                    f'{readme_where}: keybinding "Alt+Shift+A" table row must document "ide _internal park ai" AI pane parking target'
                 )
             prefix_b_row = re.search(
                 r"^\|\s*`Prefix \+ b`\s*\|.*$", readme_text, re.MULTILINE

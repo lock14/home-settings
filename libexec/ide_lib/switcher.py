@@ -14,6 +14,7 @@ import time
 from ide_lib.constants import (
     TMUX_SEP,
     is_switcher_session_name,
+    read_switcher_launch_opts,
     read_switcher_result,
     sanitize_name_token,
     use_nerd_fonts,
@@ -61,8 +62,11 @@ from ide_lib.tmux import (
 SIDE_BY_SIDE_MIN_COLS = 90
 _POPUP_SESS_RE = re.compile(r"^(ai|agy)-")
 _POPUP_FORWARD_ENV_VARS = (
+    "IDE_WORKSPACE_PARENT",
     "IDE_WORKSPACE_DIRS",
     "IDE_LINK_RULES",
+    "IDE_CREATE_TIMEOUT",
+    "IDE_ORIGIN_SESSION",
     "IDE_FZF_BIN",
     "IDE_ZOXIDE_BIN",
     "IDE_PREVIEW_INTERVAL",
@@ -416,12 +420,14 @@ def format_sessions_footer_label(pane_w: int = 120, in_two_pane: bool = False) -
             "C-y: ack",
             "C-o: PR",
             "M-n: new",
+            "M-o: open",
+            "M-r: agent",
             "C-x: quit",
             "C-r/F5: reload",
             "F1: help",
             "Alt+s: close",
         ]
-        priority = [0, 1, 9, 3, 5, 6, 4, 7, 8, 2]
+        priority = [0, 1, 11, 3, 5, 6, 8, 7, 4, 9, 10, 2]
     else:
         ordered = [
             "Enter: switch",
@@ -429,12 +435,14 @@ def format_sessions_footer_label(pane_w: int = 120, in_two_pane: bool = False) -
             "C-y: ack",
             "C-o: PR",
             "M-n: new",
+            "M-o: open",
+            "M-r: agent",
             "C-x: quit",
             "C-r/F5: reload",
             "F1: help",
             "Alt+s: close",
         ]
-        priority = [0, 8, 2, 4, 5, 1, 3, 6, 7]
+        priority = [0, 10, 2, 4, 5, 7, 6, 1, 3, 8, 9]
 
     budget = max(24, pane_w - 4)
     chosen_idxs: set[int] = set()
@@ -526,6 +534,11 @@ def build_sessions_fzf_args(
         ]
     )
 
+    expect_spec = (
+        "ctrl-a,ctrl-e,ctrl-t,alt-n,alt-o,alt-r"
+        if sw_sess
+        else "ctrl-a,ctrl-e,ctrl-t,alt-a,alt-e,alt-t,alt-n,alt-o,alt-r"
+    )
     return [
         fzf_bin,
         "--ansi",
@@ -540,7 +553,7 @@ def build_sessions_fzf_args(
         f"--border-label={footer_label}",
         "--border-label-pos=bottom",
         *color_label_args,
-        "--expect=ctrl-a,ctrl-e,ctrl-t,alt-n",
+        f"--expect={expect_spec}",
         "--bind=alt-s:abort",
         "--bind=f12:refresh-preview",
         *resize_binds,
@@ -560,13 +573,32 @@ def build_sessions_fzf_args(
 _build_sessions_fzf_args = build_sessions_fzf_args
 
 
+_SESSION_EXPECT_KEYS = frozenset({
+    "",
+    "enter",
+    "ctrl-a",
+    "ctrl-e",
+    "ctrl-t",
+    "alt-a",
+    "alt-e",
+    "alt-t",
+    "alt-n",
+    "alt-o",
+    "alt-r",
+})
+
+
 def parse_fzf_session_output(returncode: int, raw_out: str) -> tuple[str, str] | None:
     """Parse `(pressed, selected_line)` from `fzf --expect=...` stdout, or `None` on cancel/abort."""
     out_lines = raw_out.splitlines() if raw_out else []
     first_key = out_lines[0].strip() if out_lines else ""
-    if returncode not in (0, 1) or (returncode == 1 and first_key != "alt-n") or not out_lines:
+    if (
+        returncode not in (0, 1)
+        or (returncode == 1 and first_key not in ("alt-n", "alt-o"))
+        or not out_lines
+    ):
         return None
-    if first_key in ("", "enter", "ctrl-a", "ctrl-e", "ctrl-t", "alt-n"):
+    if first_key in _SESSION_EXPECT_KEYS:
         pressed = first_key
         selected_line = out_lines[1] if len(out_lines) > 1 else ""
     else:
@@ -1012,7 +1044,7 @@ def run_interactive_switcher_session(
     border_fmt = (
         f"#{{?#{{==:#{{@ide_sw_role}},list}},"
         f"#{{?#{{==:#{{@ide_sw_mode}},new}},"
-        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]New Workspace #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},48}},(Enter: launch · Esc: back) ,}},"
+        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_new_title}},}},#{{@ide_sw_new_title}},New Workspace}} #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},48}},(Alt+n/o · Esc: back) ,}},"
         f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},44}},(Alt+l: interact) ,}},"
         f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions #{{?#{{e|>=:#{{pane_width}},40}},(Alt+h: list) ,}}}}}},"
         f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},64}},(Alt+h: list · Alt+s: close) ,(Alt+h) }},"
@@ -1149,10 +1181,18 @@ def run_interactive_switcher_session(
                 f"SHELL=/bin/sh {fzf_cmd_str} < {in_q} > {out_q}\n"
                 "rc=$?\n"
                 'first_ln=""\n'
-                f'IFS= read -r first_ln < {out_q} || true\n'
+                'sec_ln=""\n'
+                f'{{ IFS= read -r first_ln || true; IFS= read -r sec_ln || true; }} < {out_q}\n'
                 'if [ "$rc" -le 1 ] && [ "$first_ln" = "alt-n" ]; then\n'
                 f"  rm -f {seed_rm_q} 2>/dev/null || true\n"
                 f"  IDE_SW_START_ALT_N=1 exec {alt_n_cmd}\n"
+                'elif [ "$rc" -le 1 ] && [ "$first_ln" = "alt-o" ]; then\n'
+                f"  rm -f {seed_rm_q} 2>/dev/null || true\n"
+                f"  IDE_SW_START_ALT_O=1 exec {alt_n_cmd}\n"
+                'elif [ "$rc" -eq 0 ] && [ "$first_ln" = "alt-r" ]; then\n'
+                f"  rm -f {seed_rm_q} 2>/dev/null || true\n"
+                '  sel_s="${sec_ln%%	*}"\n'
+                f'  IDE_SW_START_ALT_R="$sel_s" exec {alt_n_cmd}\n'
                 "fi\n"
                 f"printf '%s\\n' \"$rc\" > {rc_q}\n"
                 f'tmux set-option -q -t "={sw_sess}:" @ide_sw_done 1 \\; detach-client -s "={sw_sess}" >/dev/null 2>&1 || true\n'
@@ -1313,6 +1353,7 @@ def run_interactive_switcher_session(
             pop_res = subprocess.run(att_cmd, env={**os.environ, "TMUX": ""}, check=False)
 
         res_tuple = read_switcher_result(res_file)
+        res_agent, res_layout = read_switcher_launch_opts(res_file)
         if res_tuple is None and pop_res.returncode in (0, 130) and os.path.isfile(rc_file):
             try:
                 raw_rc = open(rc_file, "r", encoding="utf-8").read().strip()
@@ -1339,22 +1380,25 @@ def run_interactive_switcher_session(
 
         action, target_val, pressed = res_tuple
         if action == "launch" and target_val:
+            eff_layout = res_layout if res_layout else layout_mode
+            eff_agent = res_agent if res_agent else ai_cli
+            eff_from_flag = bool(res_agent) or ai_cli_from_flag
             return launch_picked_workspace(
                 target_val,
                 ide_self,
                 origin_sess=origin_sess or cur_sess,
-                layout_mode=layout_mode,
-                ai_cli=ai_cli,
-                ai_cli_from_flag=ai_cli_from_flag,
+                layout_mode=eff_layout,
+                ai_cli=eff_agent,
+                ai_cli_from_flag=eff_from_flag,
                 sock_path=sock_path,
             )
         if action == "switch" and target_val and session_exists(target_val):
-            if pressed in ("ctrl-a", "ctrl-e", "ctrl-t"):
+            if pressed in ("ctrl-a", "ctrl-e", "ctrl-t", "alt-a", "alt-e", "alt-t"):
                 from ide_lib.layout import toggle_main_pane
 
-                if pressed == "ctrl-a":
+                if pressed in ("ctrl-a", "alt-a"):
                     toggle_main_pane("focus-ai", target_val)
-                elif pressed == "ctrl-e":
+                elif pressed in ("ctrl-e", "alt-e"):
                     toggle_main_pane("focus-editor", target_val)
                 else:
                     toggle_main_pane("focus-term", target_val)

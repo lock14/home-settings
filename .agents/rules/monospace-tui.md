@@ -38,12 +38,15 @@ archetypes:
     framing non-overlapping Level 1 panes for the AI Agent CLI, `§11.4` Neovim `Editor`, and interactive `Shell` in
     single-window Inverted-T (3-pane default) or side-by-side (`--2pane`) geometry.
 *   **Multi-session workspace switcher** (`ide -s` or `ide switch` in `libexec/ide_lib/switcher.py`, `sessions.py`,
-    `preview.py`, and `dock.py`): `§11.5` fuzzy finder paired with a responsive `Master-Detail` split view
+    `launcher.py`, `preview.py`, and `dock.py`): `§11.5` fuzzy finder paired with a responsive `Master-Detail` split view
     (`§12.4` search-act and `§12.3` monitor-respond workflows). On terminals at or above `90` columns, the left pane
     renders the urgency-ordered `fzf` session list above a live-streaming workspace metadata card while the right pane
     streams a read-only ANSI viewport preview (`[PREVIEW]`) with zero `swap-pane` or `SIGWINCH`, lazily docking the
     live `@ide_ai_pane` (`[LIVE]`) on demand when focused via `Alt+l`, `Alt+a`, or mouse click and undocking on
-    `Alt+h`. Pressing `Alt+n` enters an `Expand-to-Focus` full-pane directory picker (`New IDE >`).
+    `Alt+h`. Pressing `Alt+n` (`ide new`) enters an `Expand-to-Focus` `New IDE >` workspace-creation card (`Tab` agent
+    cycling and `Alt+2` layout toggle), while `Alt+o` (`ide dir`) enters the `fzf` existing-directory picker with
+    `90`-column responsive directory and VCS previews (`ide _internal dir-preview`), and `Alt+r` (`ide agent`) opens the
+    compact AI Agent switch and restart selector.
 *   **Keybinding cheatsheet and fleet status table** (`ide keys` in `bin/ide` and `ide list` in
     `libexec/ide_lib/sessions.py`): Contextual two-column modal overlay (`Alt+?`, `Space ?`, `Prefix + ?`, or `F1`)
     rendering a spacious `108×34` (`<= 104×30` inner) sheet on standard and wide canvases with automatic `80×24`
@@ -174,7 +177,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 
 *   **Original**: Level 4 (modal overlay) MUST dim all background content behind the modal. The scrim MUST apply the dim attribute (SGR 2) to all non-modal cells while preserving their character content.
 *   **Project rule**: Do not rewrite background pane buffers to simulate an `SGR 2` scrim when opening `tmux`
-    `display-popup` overlays (`Alt+s`, `Alt+m`, `Alt+?`, `Alt+Shift+A`) or `Alt+n` `Expand-to-Focus` views.
+    `display-popup` overlays (`Alt+s`, `Alt+n`, `Alt+o`, `Alt+m`, `Alt+?`) or `Expand-to-Focus` views.
 *   **Reason**: Mutating live terminal pane buffers behind a `tmux` popup would corrupt running TUI applications;
     rounded `BASE01` popup borders clearly bound the modal surface.
 

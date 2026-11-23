@@ -60,7 +60,10 @@ Launch Options:
 Workspace & Fleet Commands:
   list [--plain | --json]  List active IDE sessions (status table, raw names, or JSON array)
   switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+s)
-  new, -n [QUERY]          Open interactive workspace directory picker
+  new, -n [NAME]           Create a new workspace via hook or mkdir and launch IDE (Alt+n)
+  dir, -o [QUERY]          Open interactive existing-directory workspace picker (Alt+o)
+  agent [<CLI>|restart] [SESSION]
+                           Switch or restart an IDE session's AI Agent CLI (agy, claude, codex)
   next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+S)
   cd [DIR | --reset]       Set working directory across Editor and Shell panes
   refresh [SESSION]        Refresh Tmux chrome, Editor themes, and CWDs across IDE sessions
@@ -89,9 +92,10 @@ Environment Variables:
   IDE_BROWSER              Optional browser executable for opening http(s):// links
   IDE_NOTIFY               Local desktop banner policy: 0 (default), 1 / unfocused, or always
   IDE_NERD_FONTS           Set to 0 / off to omit Nerd Font PUA icons across ide TUI surfaces (auto-disabled on TERM=dumb)
+  IDE_WORKSPACE_PARENT     Parent directory for newly created bare workspace names (default: $HOME)
   IDE_WORKSPACE_DIRS       Optional colon-separated workspace directories surfaced in launcher and completions
   IDE_LINK_RULES           Untracked Ctrl+click link, workspace, session-naming, notification, and VCS hooks (default: ${XDG_CONFIG_HOME:-~/.config}/ide/links.sh)
-                           defining `ide_resolve_link`, `ide_session_name`, `ide_workspace_dirs`, `ide_resolve_workspace`, `ide_notify`, or `ide_vcs_summary`"""
+                           defining `ide_create_workspace`, `ide_resolve_link`, `ide_session_name`, `ide_workspace_dirs`, `ide_resolve_workspace`, `ide_notify`, or `ide_vcs_summary`"""
 
 SUBCOMMAND_USAGE: dict[str, str] = {
     "list": """Usage: ide list [--plain | --json]
@@ -107,21 +111,38 @@ Options:
     "switch": """Usage: ide switch [OPTIONS] [SESSION]
 Alias: ide -s [SESSION]
 
-Open the interactive two-pane fzf IDE workspace switcher (opens 'ide new' if zero sessions exist).
+Open the interactive two-pane fzf IDE workspace switcher (opens 'ide dir' if zero sessions exist).
 
 Options:
   --2pane          Use 2-pane layout when launching a new workspace
   --agent <CLI>    Select AI CLI (agy, claude, codex) when launching a new workspace
   -d, --detach     Create new workspace in background without attaching""",
-    "new": """Usage: ide new [OPTIONS] [SESSION]
-Alias: ide -n [SESSION]
+    "new": """Usage: ide new [OPTIONS] [NAME]
+Alias: ide -n [NAME]
 
-Open the interactive fzf workspace directory picker across zoxide, workspace roots, and $HOME.
+Create a new workspace directory via `ide_create_workspace` in links.sh (or mkdir under
+${IDE_WORKSPACE_PARENT:-$HOME}) and launch its IDE session. Omit NAME to open the interactive
+New Workspace prompt card (Tab cycles agy/claude/codex; Alt+o flips to existing directories).
+
+Options:
+  --2pane          Launch new workspace in 2-pane layout
+  --agent <CLI>    Select AI CLI (agy, claude, codex)
+  -d, --detach     Create workspace session in background without attaching""",
+    "dir": """Usage: ide dir [OPTIONS] [QUERY]
+Alias: ide -o [QUERY]
+
+Open the interactive fzf existing-directory picker across zoxide, workspace roots,
+$IDE_WORKSPACE_PARENT, and $HOME subdirectories with VCS/file preview (Alt+n flips to New Workspace).
 
 Options:
   --2pane          Launch selected workspace in 2-pane layout
   --agent <CLI>    Select AI CLI (agy, claude, codex)
   -d, --detach     Create workspace in background without attaching""",
+    "agent": """Usage: ide agent [<CLI> | restart] [SESSION]
+
+Switch an IDE session's AI Agent CLI (agy, claude, codex, or custom executable) or restart the
+current agent CLI in place (recovering exited SHELL or QUOTA-blocked panes). Omit <CLI> in an
+interactive terminal to open the AI Agent picker dialog.""",
     "next": """Usage: ide next [SESSION]
 
 Jump to the oldest IDE session waiting for AI attention (ATTN blockers ahead of DONE in FIFO order).""",
@@ -347,14 +368,26 @@ def use_nerd_fonts() -> bool:
     return True
 
 
-def write_switcher_result(res_path: str, action: str, target: str = "", pressed: str = "") -> None:
+def write_switcher_result(
+    res_path: str,
+    action: str,
+    target: str = "",
+    pressed: str = "",
+    agent: str = "",
+    layout: str = "",
+) -> None:
     """Atomically record the user's switcher selection (`switch`, `launch`, or `none`) to `res_path`."""
     if not res_path:
         return
     import json
 
     tmp_p = f"{res_path}.tmp.{os.getpid()}"
-    payload = json.dumps({"action": action, "target": target, "pressed": pressed})
+    data: dict[str, str] = {"action": action, "target": target, "pressed": pressed}
+    if agent:
+        data["agent"] = agent
+    if layout:
+        data["layout"] = layout
+    payload = json.dumps(data)
     try:
         fd = os.open(tmp_p, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
         try:
@@ -387,6 +420,25 @@ def read_switcher_result(res_path: str) -> tuple[str, str, str] | None:
     except (OSError, ValueError):
         pass
     return None
+
+
+def read_switcher_launch_opts(res_path: str) -> tuple[str, str]:
+    """Read optional `(agent, layout)` overrides recorded in `res_path`."""
+    if not res_path or not os.path.isfile(res_path):
+        return ("", "")
+    import json
+
+    try:
+        with open(res_path, "r", encoding="utf-8") as fh:
+            data = json.loads(fh.read())
+        if isinstance(data, dict):
+            return (
+                str(data.get("agent") or ""),
+                str(data.get("layout") or ""),
+            )
+    except (OSError, ValueError):
+        pass
+    return ("", "")
 
 
 _MISE_TOOL_BIN_CACHE: dict[tuple[str, str, str], str | None] = {}

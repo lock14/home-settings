@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+import sys
 
 from ide_lib.constants import sanitize_name_token
+
+_CREATE_FN_DEF_RE = re.compile(
+    r"(?m)^[ \t]*(?:function[ \t]+ide_create_workspace(?:[ \t]*\(\s*\))?[ \t{(]|ide_create_workspace[ \t]*\(\s*\))"
+)
 
 
 def ide_rules_path() -> str:
@@ -158,3 +164,130 @@ def sanitize_session_name(raw: str) -> str:
         return sanitize_name_token(custom)
     base = os.path.basename(raw.rstrip("/")) if raw.rstrip("/") else os.path.basename(raw)
     return sanitize_name_token(base)
+
+
+def default_workspace_parent() -> str:
+    """Return configured `$IDE_WORKSPACE_PARENT` base directory or `$HOME`."""
+    raw = (os.environ.get("IDE_WORKSPACE_PARENT") or "").strip()
+    if raw:
+        return os.path.abspath(os.path.expanduser(raw))
+    return os.path.abspath(os.path.expanduser("~"))
+
+
+def has_create_workspace_hook() -> bool:
+    """Return True when `links.sh` declares an `ide_create_workspace` shell function."""
+    rules = ide_rules_path()
+    try:
+        with open(rules, "r", encoding="utf-8") as fh:
+            return bool(_CREATE_FN_DEF_RE.search(fh.read()))
+    except OSError:
+        return False
+
+
+def _resolve_create_timeout(timeout: float | None) -> float:
+    raw_env = (os.environ.get("IDE_CREATE_TIMEOUT") or "").strip()
+    if raw_env:
+        try:
+            parsed = float(raw_env)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+    if timeout is not None and timeout > 0:
+        return timeout
+    return 120.0
+
+
+def create_workspace_directory(
+    raw_name: str,
+    timeout: float | None = None,
+    interactive_tty: bool | None = None,
+) -> tuple[str, str]:
+    """Create a workspace directory via `ide_create_workspace` hook or `mkdir` under `$IDE_WORKSPACE_PARENT`."""
+    clean = raw_name.strip()
+    if not clean or clean in (".", "..", "/", "~"):
+        return ("", "Invalid workspace name.")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in clean):
+        return ("", "Workspace name cannot contain control characters.")
+    if ".." in [seg for seg in clean.replace("\\", "/").split("/") if seg]:
+        return ("", "Workspace name cannot contain '..' traversal segments.")
+
+    parent_dir = default_workspace_parent()
+    rules = ide_rules_with_fn("ide_create_workspace")
+    if rules:
+        eff_timeout = _resolve_create_timeout(timeout)
+        is_tty = (
+            (sys.stdin.isatty() and sys.stderr.isatty())
+            if interactive_tty is None
+            else bool(interactive_tty)
+        )
+        hook_env = os.environ.copy()
+        hook_env["IDE_WORKSPACE_PARENT"] = parent_dir
+        try:
+            res = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    (
+                        '. "$1" || exit 1; '
+                        'if ! declare -F ide_create_workspace >/dev/null 2>&1; then exit 126; fi; '
+                        'ide_create_workspace "$2"'
+                    ),
+                    "ide",
+                    rules,
+                    clean,
+                ],
+                stdin=None if is_tty else subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=None if is_tty else subprocess.PIPE,
+                text=True,
+                env=hook_env,
+                timeout=eff_timeout,
+                check=False,
+            )
+        except KeyboardInterrupt:
+            return ("", "Workspace creation canceled.")
+        except subprocess.TimeoutExpired:
+            return ("", f"ide_create_workspace timed out after {eff_timeout:g}s.")
+        except OSError as exc:
+            return ("", f"Failed to execute ide_create_workspace: {exc.strerror or exc}")
+
+        if res.returncode != 126:
+            if res.returncode != 0:
+                err_lines = [ln.strip() for ln in (res.stderr or "").splitlines() if ln.strip()]
+                detail = err_lines[-1] if err_lines else f"ide_create_workspace exited with status {res.returncode}."
+                return ("", detail)
+            out_lines = [ln.strip() for ln in (res.stdout or "").splitlines() if ln.strip()]
+            for cand_ln in reversed(out_lines):
+                exp_ln = os.path.abspath(os.path.expanduser(cand_ln))
+                if os.path.isdir(exp_ln):
+                    return (exp_ln, "")
+            resolved_ws = resolve_workspace_target(clean)
+            if resolved_ws and os.path.isdir(resolved_ws):
+                return (os.path.abspath(resolved_ws), "")
+            if not out_lines:
+                cand_def = os.path.abspath(os.path.join(parent_dir, clean))
+                if os.path.isdir(cand_def):
+                    return (cand_def, "")
+                return ("", "ide_create_workspace exited 0 without printing or creating a workspace directory.")
+            return ("", f"ide_create_workspace returned non-existent directory '{out_lines[-1]}'.")
+
+    if clean.startswith(("/", "~/", "./")):
+        exp_path = os.path.expanduser(clean)
+        target_dir = os.path.abspath(exp_path)
+    else:
+        segs = [seg for seg in clean.replace("\\", "/").split("/") if seg]
+        if not segs or "." in segs or ".." in segs:
+            return ("", "Workspace name cannot contain '.' or '..' path segments.")
+        target_dir = os.path.abspath(os.path.join(parent_dir, *segs))
+        try:
+            if target_dir == parent_dir or os.path.commonpath([parent_dir, target_dir]) != parent_dir:
+                return ("", f"Workspace '{clean}' resolves outside '{parent_dir}'.")
+        except ValueError:
+            return ("", f"Workspace '{clean}' resolves outside '{parent_dir}'.")
+
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+    except OSError as exc:
+        return ("", f"Failed to create directory '{target_dir}': {exc.strerror or exc}")
+    return (target_dir, "")

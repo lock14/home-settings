@@ -25,7 +25,22 @@ local function tmux_ide_action(...)
     end
 end
 
-local function send_visual_to_ai()
+local function tmux_ide_launcher(subcmd)
+    return function()
+        if not vim.env.TMUX then
+            return
+        end
+        local cmd = { vim.fn.expand("$HOME/.local/bin/ide"), subcmd }
+        local opts = { detach = true }
+        local sess = vim.env.IDE_SESSION
+        if sess and sess ~= "" then
+            opts.env = { IDE_ORIGIN_SESSION = sess }
+        end
+        vim.fn.jobstart(cmd, opts)
+    end
+end
+
+local function send_visual_to_ai(no_focus)
     local cur_mode = vim.fn.mode()
     local in_visual = (cur_mode == "v" or cur_mode == "V" or cur_mode == "\22")
     local v1, v2
@@ -64,11 +79,51 @@ local function send_visual_to_ai()
     end
     if is_file_buf then
         local buf_path = vim.fn.fnamemodify(buf_name, ":p")
-        M.ide_job("send", "--ref", string.format("%s:%d-%d", buf_path, l1, l2))
+        local rel_lbl = vim.fn.fnamemodify(buf_name, ":.")
+        local range_lbl = (l1 == l2) and string.format("#L%d", l1) or string.format("#L%d-L%d", l1, l2)
+        if no_focus then
+            M.ide_job("send", "--ref", string.format("%s:%d-%d", buf_path, l1, l2), "--no-focus")
+            vim.notify(string.format("Staged @%s%s in AI prompt", rel_lbl, range_lbl), vim.log.levels.INFO)
+        else
+            M.ide_job("send", "--ref", string.format("%s:%d-%d", buf_path, l1, l2))
+        end
     elseif region_lines then
         local text = table.concat(region_lines, "\n")
         if text ~= "" then
-            M.ide_job("send", "--text", text)
+            if no_focus then
+                M.ide_job("send", "--text", text, "--no-focus")
+                vim.notify("Staged selection in AI prompt", vim.log.levels.INFO)
+            else
+                M.ide_job("send", "--text", text)
+            end
+        end
+    end
+end
+
+local function send_file_to_ai(no_focus)
+    if not vim.env.TMUX then
+        return
+    end
+    local buf_name = vim.api.nvim_buf_get_name(0)
+    if vim.bo.buftype == "" and buf_name ~= "" then
+        local buf_path = vim.fn.fnamemodify(buf_name, ":p")
+        local rel_lbl = vim.fn.fnamemodify(buf_name, ":.")
+        if no_focus then
+            M.ide_job("send", "--ref", buf_path, "--no-focus")
+            vim.notify(string.format("Staged @%s in AI prompt", rel_lbl), vim.log.levels.INFO)
+        else
+            M.ide_job("send", "--ref", buf_path)
+        end
+    else
+        local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+        local text = table.concat(lines, "\n")
+        if text ~= "" then
+            if no_focus then
+                M.ide_job("send", "--text", text, "--no-focus")
+                vim.notify("Staged buffer text in AI prompt", vim.log.levels.INFO)
+            else
+                M.ide_job("send", "--text", text)
+            end
         end
     end
 end
@@ -633,13 +688,26 @@ function M.setup()
 
     -- Role focus, visibility parking, directional swaps, fleet switcher, and context dispatch
     map("n", "<leader>a", tmux_ide_action("_internal", "toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })
-    map("x", "<leader>a", send_visual_to_ai, { desc = "Send Visual Selection Reference to AI Agent" })
+    map("n", "<leader>t", tmux_ide_action("_internal", "show", "term"), { desc = "Toggle Focus: Editor <-> Shell" })
+    map("x", "<leader>a", function()
+        send_visual_to_ai(false)
+    end, { desc = "Send Visual Selection Reference to AI Agent" })
+    map("x", "<leader>A", function()
+        send_visual_to_ai(true)
+    end, { desc = "Stage Visual Selection Reference in AI Prompt (Keep Focus)" })
     map("n", "<leader>il", send_line_to_ai, { desc = "Send Current Line Reference to AI Agent" })
+    map("n", "<leader>if", function()
+        send_file_to_ai(false)
+    end, { desc = "Send Current File Reference to AI Agent" })
+    map("n", "<leader>ia", function()
+        send_file_to_ai(true)
+    end, { desc = "Stage Current File Reference in AI Prompt (Keep Focus)" })
     map("n", "<leader>id", send_diagnostics_to_ai, { desc = "Send Buffer Diagnostics to AI Agent" })
 
     map({ "n", "i", "v", "t" }, "<M-a>", tmux_ide_action("_internal", "toggle"), { desc = "Toggle Focus: Editor <-> AI Agent" })
     map({ "n", "i", "v", "t" }, "<M-e>", tmux_ide_action("_internal", "show", "editor"), { desc = "Focus Editor Pane (or bounce back)" })
     map({ "n", "i", "v", "t" }, "<M-t>", tmux_ide_action("_internal", "show", "term"), { desc = "Toggle Focus: Shell <-> Editor Pane" })
+    map({ "n", "i", "v", "t" }, "<M-A>", tmux_ide_action("_internal", "park", "ai"), { desc = "Toggle AI Agent Pane Visibility" })
     map({ "n", "i", "v", "t" }, "<M-E>", tmux_ide_action("_internal", "park", "editor"), { desc = "Toggle Editor Pane Visibility" })
     map({ "n", "i", "v", "t" }, "<M-T>", tmux_ide_action("_internal", "park", "term"), { desc = "Toggle Shell Pane Visibility" })
 
@@ -649,8 +717,14 @@ function M.setup()
     map({ "n", "i", "v", "t" }, "<M-L>", tmux_ide_action("_internal", "swap", "right"), { desc = "Swap Active Pane Right" })
 
     local open_ide_sessions_popup = tmux_ide_action("switch")
+    local open_ide_new_popup = tmux_ide_launcher("new")
+    local open_ide_dir_popup = tmux_ide_launcher("dir")
     map("n", "<leader>s", open_ide_sessions_popup, { desc = "Switch IDE Workspace Session" })
     map({ "n", "i", "v", "t" }, "<M-s>", open_ide_sessions_popup, { desc = "Switch IDE Workspace Session" })
+    map("n", "<leader>n", open_ide_new_popup, { desc = "Create New IDE Workspace" })
+    map({ "n", "i", "v", "t" }, "<M-n>", open_ide_new_popup, { desc = "Create New IDE Workspace" })
+    map("n", "<leader>o", open_ide_dir_popup, { desc = "Open Existing Workspace Directory" })
+    map({ "n", "i", "v", "t" }, "<M-o>", open_ide_dir_popup, { desc = "Open Existing Workspace Directory" })
     map({ "n", "i", "v", "t" }, "<M-S>", tmux_ide_action("next"), { desc = "Jump to Next Attention AI Agent" })
 
     map("n", "<leader>?", open_ide_keys_popup, { desc = "Open IDE Keybinding Cheatsheet" })
