@@ -632,11 +632,13 @@ if [ -f "$NVIM_CONFIG" ] && [ -d "$NVIM_LUA_DIR" ]; then
        grep -q 'layout_strategy = "flex"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'flip_columns = 110' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-a>"' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'map({ "n", "i", "v", "t" }, "<M-A>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-E>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-T>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'map({ "n", "i", "v", "t" }, "<M-H>"' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'tmux_ide_action("_internal", "show", "editor")' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'tmux_ide_action("_internal", "show", "term")' "${NVIM_LUA_FILES[@]}" && \
+       grep -q 'tmux_ide_action("_internal", "park", "ai")' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'tmux_ide_action("_internal", "park", "editor")' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'tmux_ide_action("_internal", "park", "term")' "${NVIM_LUA_FILES[@]}" && \
        grep -q 'tmux_ide_action("_internal", "swap"' "${NVIM_LUA_FILES[@]}" && \
@@ -2648,12 +2650,16 @@ for _, m in ipairs({ "n", "i", "v", "t" }) do
     end
 end
 
--- 2. Normal-mode <leader>a stays 0ms focus toggle
+-- 2. Normal-mode <leader>a and <leader>t stay 0ms focus toggles
 jobs = {}
 feed("<Space>a")
 local norm_a_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|_internal|toggle|fleet-sess")
+jobs = {}
+feed("<Space>t")
+local norm_t_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|_internal|show|term|fleet-sess")
+norm_a_ok = norm_a_ok and norm_t_ok
 
--- 3. Named file buffer: Visual <leader>a (forward 2..4 & reverse 4..2) and Normal <leader>il
+-- 3. Named file buffer: Visual <leader>a / <leader>A, Normal <leader>il, <leader>if, and <leader>ia
 local file_path = vim.fn.fnamemodify(test_dir .. "/sample.py", ":p")
 vim.cmd("edit " .. vim.fn.fnameescape(file_path))
 jobs = {}
@@ -2662,12 +2668,26 @@ local mode_after_vis = vim.fn.mode()
 local vis_fwd_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":2-4|fleet-sess" and mode_after_vis == "n")
 
 jobs = {}
+notes = {}
+feed("2GVj<Space>A")
+local vis_stage_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":2-3|--no-focus|fleet-sess" and vim.fn.mode() == "n" and #notes == 1 and notes[1]:find("Staged @", 1, true) ~= nil)
+vis_fwd_ok = vis_fwd_ok and vis_stage_ok
+
+jobs = {}
 feed("4GVkk<Space>a")
 local vis_rev_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":2-4|fleet-sess" and vim.fn.mode() == "n")
 
 jobs = {}
 feed("3G<Space>il")
 local il_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. ":3|fleet-sess")
+jobs = {}
+feed("<Space>if")
+local if_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. "|fleet-sess")
+jobs = {}
+notes = {}
+feed("<Space>ia")
+local ia_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--ref|" .. file_path .. "|--no-focus|fleet-sess" and #notes == 1 and notes[1]:find("Staged @", 1, true) ~= nil)
+il_ok = il_ok and if_ok and ia_ok
 
 -- 4. <leader>id empty buffer notification vs sorted multi-severity diagnostics dispatch
 jobs = {}
@@ -2702,7 +2722,13 @@ local sess_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|switch|fleet-sess
 jobs = {}
 vim.fn.maparg("<M-s>", "n", false, true).callback()
 local sess_alt_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|switch|fleet-sess")
-local sess_popup_ok = sess_leader_ok and sess_alt_ok
+jobs = {}
+vim.fn.maparg("<leader>n", "n", false, true).callback()
+local new_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|new")
+jobs = {}
+vim.fn.maparg("<leader>o", "n", false, true).callback()
+local dir_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|dir")
+local sess_popup_ok = sess_leader_ok and sess_alt_ok and new_leader_ok and dir_leader_ok
 
 jobs = {}
 vim.fn.maparg("<M-S>", "n", false, true).callback()

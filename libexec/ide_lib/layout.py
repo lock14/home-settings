@@ -1412,16 +1412,89 @@ def status_click(x_str: str, target_arg: str) -> int:
     return 0
 
 
-def run_ai_popup(target_arg: str) -> None:
-    """Launch ad-hoc floating AI CLI overlay inside `ai-<session>` (`Alt+Shift+A`)."""
+def switch_or_restart_session_agent(
+    target_arg: str,
+    requested_cli: str,
+    focus_ai: bool = False,
+) -> int:
+    """Switch or restart the AI Agent CLI inside `target_arg` and synchronize `@ide_ai_cli`."""
+    from ide_lib.dock import undock_session_if_docked
+    from ide_lib.fleet import refresh_fleet_topbar
+
     sess = resolve_target_session(target_arg)
-    run_tmux("set-option", "-t", f"=ai-{sess}:", "status", "off")
-    ai_cli = get_ide_var(sess, "@ide_ai_cli", "IDE_AI_CLI") or os.environ.get("IDE_AI_CLI") or "agy"
-    ai_cmd = resolve_ai_cmd(ai_cli)
-    if ai_cmd:
-        subprocess.run(ai_cmd, shell=True, check=False)
-    shell = os.environ.get("SHELL") or "/bin/zsh"
-    os.execvp(shell, [shell, "-l"])
+    if not sess or not session_exists(sess) or not check_is_ide_session(sess):
+        print(f"Error: {missing_session_msg(sess or target_arg)}", file=sys.stderr)
+        return 1
+
+    undock_session_if_docked(sess)
+    cur_cli = get_ide_var(sess, "@ide_ai_cli", "IDE_AI_CLI") or os.environ.get("IDE_AI_CLI") or "agy"
+    is_restart = not requested_cli or requested_cli == "restart"
+    new_cli = cur_cli if is_restart else requested_cli
+
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    target_dir = (
+        get_ide_var(sess, "@ide_workdir", "IDE_WORKDIR")
+        or get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT")
+        or safe_getcwd()
+    )
+    init_root_val = get_ide_var(sess, "@ide_initial_root", "IDE_INITIAL_ROOT") or target_dir
+    nvim_socket = (
+        get_ide_var(sess, "@ide_socket", "NVIM_IDE_SOCKET")
+        or f"{runtime_dir}/nvim-ide-{sess}.sock"
+    )
+    ed_pane_id = resolve_role_pane(sess, "editor", "@ide_editor_pane", "NVIM_IDE_PANE")
+    ide_notify_env = os.environ.get("IDE_NOTIFY", "")
+
+    set_ide_vars(
+        sess,
+        [
+            ("@ide_ai_cli", "IDE_AI_CLI", new_cli),
+            ("@ide_ai_state", "IDE_AI_STATE", ""),
+            ("@ide_ai_attn", "IDE_AI_ATTN", "0"),
+            ("@ide_ai_attn_ts", "IDE_AI_ATTN_TS", ""),
+            ("@ide_ai_state_ts", "IDE_AI_STATE_TS", str(int(time.time()))),
+            ("@ide_ai_msg", "IDE_AI_MSG", ""),
+        ],
+    )
+
+    ai_pane_id = resolve_role_pane(sess, "ai", "@ide_ai_pane", "IDE_AI_PANE")
+    if not pane_exists(ai_pane_id):
+        toggle_main_pane("focus-ai", sess)
+        refresh_fleet_topbar()
+        return 0
+
+    respawn_env_args = _session_env_flags(
+        sess,
+        new_cli,
+        nvim_socket,
+        init_root_val,
+        editor_pane=ed_pane_id,
+        ide_notify=ide_notify_env,
+    )
+    res = run_tmux(
+        "respawn-pane", "-k", "-t", ai_pane_id, "-c", target_dir,
+        *respawn_env_args,
+    )
+    if res.returncode != 0:
+        shell = os.environ.get("SHELL") or "/bin/zsh"
+        notify_kv = f"IDE_NOTIFY={shlex.quote(ide_notify_env)} " if ide_notify_env else ""
+        run_tmux(
+            "respawn-pane", "-k", "-t", ai_pane_id, "-c", target_dir,
+            f"env IDE_SESSION={shlex.quote(sess)} IDE_AI_CLI={shlex.quote(new_cli)} "
+            f"NVIM_IDE_SOCKET={shlex.quote(nvim_socket)} NVIM_IDE_PANE={shlex.quote(ed_pane_id)} "
+            f"IDE_INITIAL_ROOT={shlex.quote(init_root_val)} {notify_kv}FORCE_HYPERLINK=1 {shlex.quote(shell)} -l",
+        )
+    ai_run_cmd = resolve_ai_cmd(new_cli)
+    if ai_run_cmd:
+        run_tmux("send-keys", "-t", ai_pane_id, f" {ai_run_cmd}", "C-m")
+
+    if focus_ai:
+        toggle_main_pane("focus-ai", sess)
+    refresh_fleet_topbar()
+    action_lbl = f"Restarted '{sess}' AI agent ({new_cli})" if (is_restart or new_cli == cur_cli) else f"Switched '{sess}' AI agent -> {new_cli}"
+    if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+        run_tmux("display-message", "-d", "2500", "-t", f"={sess}:", action_lbl)
+    return 0
 
 
 def _close_and_unlink_nvim_sockets(

@@ -966,13 +966,15 @@ def close_switcher_session(
     target: str = "",
     pressed: str = "",
     res_file_hint: str = "",
+    agent: str = "",
+    layout: str = "",
 ) -> None:
     """Undock `sw_sess`, record optional exit result, and detach popup clients cleanly."""
     if not is_switcher_session_name(sw_sess):
         return
     res_file = res_file_hint or tmux_out("show-options", "-qv", "-t", f"={sw_sess}:", "@ide_sw_result_file").strip()
     if action and res_file:
-        write_switcher_result(res_file, action, target, pressed)
+        write_switcher_result(res_file, action, target, pressed, agent=agent, layout=layout)
     if session_exists(sw_sess):
         run_tmux(
             "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_done", "1",

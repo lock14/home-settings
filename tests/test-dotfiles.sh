@@ -127,6 +127,11 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -Fq '#{e|>=:#{client_width},120}' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_ed_parked' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_term_parked' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-A.*_internal park ai' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-n if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-o if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-u if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'a send to AI' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q 'alert-bell' "$TEMP_HOME/.tmux.conf" && \
    ! grep -q -- '--on-bell' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_ai_attn' "$TEMP_HOME/.tmux.conf" && \
@@ -284,7 +289,7 @@ if command -v tmux >/dev/null 2>&1; then
            [ "$plain_wcur_base" = "$plain_wcur_run" ] && [ "$plain_wcur_base" = "$plain_wcur_quota" ] && [ "$plain_wcur_base" = "$plain_wcur_attn" ] && [ "$plain_wcur_base" = "$plain_wcur_done" ] && \
            grep -Fq "fg=#2AA198,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_run" && \
            grep -Fq "fg=#B58900,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_quota" && \
-           grep -Fq "fg=#B58900,bg=#073642,nobold]󰚩 agy [Alt+a]" <<< "$eval_wcur_quota_parked" && \
+           grep -Fq "fg=#B58900,bg=#073642,nobold]󰚩 agy [Alt+A]" <<< "$eval_wcur_quota_parked" && \
            grep -Fq "fg=#CB4B16,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_attn" && \
            grep -Fq "fg=#859900,bg=#073642,nobold]󰚩 agy (Alt+a)" <<< "$eval_wcur_done" && \
            grep -Fq "cfg_test" <<< "$eval_sleft" && \

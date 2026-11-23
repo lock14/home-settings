@@ -104,14 +104,15 @@ _ide_offer_unused_sessions() {
 }
 
 _ide() {
-    local -a root_opts switch_opts list_opts quit_opts open_opts send_opts state_opts cd_opts help_opts subcmds agents agent_states sessions reply
+    local -a root_opts switch_opts list_opts quit_opts open_opts send_opts state_opts cd_opts help_opts subcmds agents agent_cmds agent_states sessions reply
     root_opts=(
         '--2pane:Launch 2-pane side-by-side layout (AI and Editor)'
         '--agent:Select AI CLI agent (agy, claude, or codex)'
         '-d:Create or update workspace session in background without attaching'
         '--detach:Create or update workspace session in background without attaching'
         '-s:Open interactive multi-session IDE workspace switcher'
-        '-n:Open interactive new-workspace directory picker'
+        '-n:Create a new workspace via hook or mkdir and launch IDE'
+        '-o:Open interactive existing-directory workspace picker'
         '-h:Show help message'
         '--help:Show help message'
     )
@@ -168,7 +169,9 @@ _ide() {
     subcmds=(
         'list:List active IDE workspace sessions'
         'switch:Open interactive multi-session IDE workspace switcher'
-        'new:Open interactive workspace directory picker'
+        'new:Create a new workspace via hook or mkdir and launch IDE'
+        'dir:Open interactive existing-directory workspace picker'
+        'agent:Switch or restart session AI Agent CLI'
         'next:Jump to oldest IDE session waiting for AI attention'
         'cd:Set working directory across Editor and Shell panes'
         'refresh:Refresh Tmux chrome, Editor themes, and CWDs'
@@ -185,6 +188,12 @@ _ide() {
         'agy:Default AI CLI agent'
         'claude:Anthropic Claude Code CLI'
         'codex:OpenAI Codex CLI'
+    )
+    agent_cmds=(
+        'restart:Restart current AI Agent CLI in place'
+        'agy:Switch to default AI CLI agent'
+        'claude:Switch to Anthropic Claude Code CLI'
+        'codex:Switch to OpenAI Codex CLI'
     )
     agent_states=(
         'running:AI agent is actively executing a turn'
@@ -274,7 +283,14 @@ _ide() {
                     break
                 fi
                 ;;
-            list|next|cd|refresh|quit|open|send|state|ack|pr|keys|monitor)
+            -o|dir|open-dir)
+                if (( ! has_launch_pos )); then
+                    subcmd="dir"
+                    sub_idx=$(( idx + 1 ))
+                    break
+                fi
+                ;;
+            list|agent|next|cd|refresh|quit|open|send|state|ack|pr|keys|monitor)
                 if (( ! has_launch_pos )) && [[ "$cmd_name" == "ide" ]]; then
                     subcmd="$w"
                     sub_idx=$(( idx + 1 ))
@@ -309,7 +325,7 @@ _ide() {
                 list:--plain|list:--json)
                     has_list_fmt=1
                     ;;
-                switch:--agent|new:--agent)
+                switch:--agent|new:--agent|dir:--agent)
                     s_i=$(( s_i + 1 ))
                     ;;
                 send:--stdin|send:--ref=*|send:--text=*)
@@ -352,9 +368,22 @@ _ide() {
                 fi
                 return 0
                 ;;
-            new)
+            new|dir)
                 if [[ "$cur" == -* ]]; then
-                    _describe -t options 'ide new option' switch_opts
+                    _describe -t options "ide $subcmd option" switch_opts
+                fi
+                return 0
+                ;;
+            agent)
+                if [[ "$cur" == -* ]]; then
+                    _describe -t options 'ide agent option' help_opts
+                elif (( ${#pos_args} == 0 )); then
+                    _describe -t agents 'AI agent action' agent_cmds
+                elif (( ${#pos_args} == 1 )); then
+                    _ide_load_sessions; sessions=("${reply[@]}")
+                    if (( ${#sessions} )); then
+                        _describe -t sessions 'IDE session' sessions
+                    fi
                 fi
                 return 0
                 ;;

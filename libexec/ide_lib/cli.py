@@ -17,6 +17,9 @@ _PUBLIC_SUBCOMMANDS = frozenset({
     "list",
     "switch",
     "new",
+    "dir",
+    "open-dir",
+    "agent",
     "next",
     "cd",
     "refresh",
@@ -237,8 +240,31 @@ def _dispatch_internal(rem: list[str]) -> int:
         link_href, link_word, link_cwd, target_arg = _parse_open_link_args(rest)
         return open_ide_link(link_href, link_word, link_cwd, target_arg)
 
+    if op == "dir-preview":
+        from ide_lib.launcher import render_directory_preview
+
+        cur_sess = ""
+        j = 0
+        while j < len(rest):
+            if rest[j] == "--":
+                j += 1
+                break
+            if rest[j] == "--session" and j + 1 < len(rest):
+                cur_sess = rest[j + 1]
+                j += 2
+                continue
+            if rest[j].startswith("--session="):
+                cur_sess = rest[j].split("=", 1)[1]
+                j += 1
+                continue
+            if rest[j].startswith("-"):
+                print(f"Error: Unknown option '{rest[j]}' for 'ide _internal dir-preview'.", file=sys.stderr)
+                return 1
+            break
+        raw_dir = rest[j] if j < len(rest) else ""
+        return render_directory_preview(raw_dir, cur_sess=cur_sess)
+
     from ide_lib.layout import (
-        run_ai_popup,
         status_click,
         swap_ide_pane,
         toggle_main_pane,
@@ -272,10 +298,6 @@ def _dispatch_internal(rem: list[str]) -> int:
             return 1
         sess = rest[1] if len(rest) >= 2 else ""
         return swap_ide_pane(rest[0], sess)
-
-    if op == "ai-popup":
-        run_ai_popup(rest[0] if rest else "")
-        return 0
 
     print(f"Error: Unknown internal operation '{op}'.", file=sys.stderr)
     return 1
@@ -356,6 +378,10 @@ def main(argv: list[str] | None = None) -> int:
             action = "new"
             i += 1
             break
+        elif arg in ("-o", "dir", "open-dir") and not launch_targets:
+            action = "dir"
+            i += 1
+            break
         elif arg in _PUBLIC_SUBCOMMANDS and not launch_targets:
             action = arg
             i += 1
@@ -434,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: 'tmux' is not installed. Run './setup.sh' to install core packages.", file=sys.stderr)
         return 1
 
-    if action in ("switch", "new"):
+    if action in ("switch", "new", "dir"):
         target_arg = ""
         j = 0
         sub_end = False
@@ -472,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
                 target_arg = s_arg
                 j += 1
 
-        from ide_lib.sessions import run_new_workspace_picker, run_sessions_picker
+        from ide_lib.sessions import run_new_workspace_command, run_open_dir_picker, run_sessions_picker
 
         if action == "switch":
             return run_sessions_picker(
@@ -484,7 +510,17 @@ def main(argv: list[str] | None = None) -> int:
                 ai_cli_from_flag=ai_cli_from_flag,
                 detach_only=detach_mode,
             )
-        return run_new_workspace_picker(
+        if action == "new":
+            return run_new_workspace_command(
+                target_arg,
+                ide_self,
+                layout_mode=layout_mode,
+                ai_cli=ai_cli,
+                ai_cli_from_flag=ai_cli_from_flag,
+                had_env_ai_cli=had_env_ai_cli,
+                detach_only=detach_mode,
+            )
+        return run_open_dir_picker(
             target_arg,
             ide_self,
             layout_mode=layout_mode,
@@ -493,6 +529,32 @@ def main(argv: list[str] | None = None) -> int:
             had_env_ai_cli=had_env_ai_cli,
             detach_only=detach_mode,
         )
+
+    if action == "agent":
+        agent_pos: list[str] = []
+        sub_end = False
+        for s_arg in sub_args:
+            if sub_end:
+                agent_pos.append(s_arg)
+            elif s_arg == "--":
+                sub_end = True
+            elif s_arg.startswith("-"):
+                print(f"Error: Unknown 'ide agent' option '{s_arg}'.", file=sys.stderr)
+                return 1
+            else:
+                agent_pos.append(s_arg)
+        if len(agent_pos) > 2:
+            print(f"Error: Unexpected extra argument '{agent_pos[2]}'.", file=sys.stderr)
+            return 1
+        req_cli = agent_pos[0] if len(agent_pos) >= 1 else ""
+        req_sess = agent_pos[1] if len(agent_pos) >= 2 else ""
+        if req_cli and req_cli != "restart":
+            if not _normalize_ai_cli(req_cli, True):
+                return 1
+            req_cli = os.environ["IDE_AI_CLI"]
+        from ide_lib.sessions import run_agent_command
+
+        return run_agent_command(req_cli, req_sess, ide_self)
 
     if action == "next":
         if len(sub_args) > 1 or (sub_args and sub_args[0].startswith("-")):

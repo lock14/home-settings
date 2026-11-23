@@ -161,6 +161,8 @@ if grep -q -- '--2pane' <<< "$IDE_HELP" && \
    grep -Fq -- 'quit [-f | --force]' <<< "$IDE_HELP" && \
    grep -q -- 'switch' <<< "$IDE_HELP" && \
    grep -q -- 'new' <<< "$IDE_HELP" && \
+   grep -q -- 'dir' <<< "$IDE_HELP" && \
+   grep -q -- 'agent' <<< "$IDE_HELP" && \
    grep -q -- 'send' <<< "$IDE_HELP" && \
    grep -q -- '--plain' <<< "$IDE_HELP" && \
    grep -q -- '--json' <<< "$IDE_HELP" && \
@@ -175,7 +177,9 @@ if grep -q -- '--2pane' <<< "$IDE_HELP" && \
    grep -q -- '--stdin' <<< "$IDE_SEND_HELP" && \
    grep -q -- '--json' <<< "$IDE_LIST_HELP" && \
    grep -q -- 'IDE_NOTIFY' <<< "$IDE_HELP" && \
+   grep -q -- 'IDE_WORKSPACE_PARENT' <<< "$IDE_HELP" && \
    grep -q -- 'IDE_WORKSPACE_DIRS' <<< "$IDE_HELP" && \
+   grep -q -- 'ide_create_workspace' <<< "$IDE_HELP" && \
    grep -q -- 'ide_workspace_dirs' <<< "$IDE_HELP" && \
    grep -q -- 'ide_resolve_workspace' <<< "$IDE_HELP" && \
    grep -q -- 'ide_notify' <<< "$IDE_HELP" && \
@@ -183,9 +187,9 @@ if grep -q -- '--2pane' <<< "$IDE_HELP" && \
    ! grep -q -- '_internal' <<< "$IDE_HELP" && \
    ! grep -q -- '--3pane' <<< "$IDE_HELP" && \
    ! grep -q -- '--on-bell' <<< "$IDE_HELP"; then
-    pass "bin/ide --help and <cmd> --help display launch flags, 14 subcommands, list --plain/--json, send --switch, IDE_NOTIFY, IDE_WORKSPACE_DIRS, and links.sh hooks while hiding _internal"
+    pass "bin/ide --help and <cmd> --help display launch flags, 16 subcommands, list --plain/--json, send --switch, IDE_NOTIFY, IDE_WORKSPACE_PARENT, IDE_WORKSPACE_DIRS, and links.sh hooks while hiding _internal"
 else
-    fail "bin/ide --help" "Expected launch flags, 14 subcommands, subcommand --help, IDE_NOTIFY, IDE_WORKSPACE_DIRS, and links.sh hooks (without _internal, --3pane, or --on-bell) in bin/ide --help output"
+    fail "bin/ide --help" "Expected launch flags, 16 subcommands, subcommand --help, IDE_NOTIFY, IDE_WORKSPACE_PARENT, IDE_WORKSPACE_DIRS, and links.sh hooks (without _internal, --3pane, or --on-bell) in bin/ide --help output"
 fi
 
 IDE_KEYS_OUT="$("$SCRIPT_DIR/bin/ide" keys)"
@@ -209,8 +213,8 @@ def wait_noncanon(fd, deadline):
     return False
 
 for winsz, expect_marker in (
-    (struct.pack("HHHH", 34, 108, 0, 0), b"Acknowledge AI attention"),
-    (struct.pack("HHHH", 24, 80, 0, 0), b"C-y/o/M-n (Alt+s)"),
+    (struct.pack("HHHH", 34, 108, 0, 0), b"Ack attention or open PR"),
+    (struct.pack("HHHH", 24, 80, 0, 0), b"C-y/o/M-r (Alt+s)"),
 ):
     mfd, sfd = pty.openpty()
     fcntl.ioctl(sfd, termios.TIOCSWINSZ, winsz)
@@ -279,23 +283,24 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    ! "$SCRIPT_DIR/bin/ide" --agent invalid-agent keys >/dev/null 2>&1 && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+s / Prefix+s" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+y    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+o    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+n     (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+n / Alt+o" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Ctrl+y / o (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+r     (Alt+s)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Ctrl+x    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+u / Prefix+v" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Prefix + | / -" <<< "$IDE_KEYS_OUT" && \
    grep -Fq ":IdeSend [session]" <<< "$IDE_KEYS_OUT" && \
    grep -Fq ":IdeSend! [sess]" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+y    (Alt+s)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
+   grep -Fq "Ctrl+y / o (Alt+s)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
    grep -Fq ":IdeSend [session]" <<< "${IDE_KEYS_OUT#*SEND TO AI PROMPT}" && \
    grep -Fq "Alt+Shift+S" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+m / Prefix+m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Click top bar" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+Shift+E" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+Shift+T" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Space a  (Visual)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Space il (Normal)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Space id (Normal)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+A/E/T" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space gs / t" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space a / A (Vis)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space il / if" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space ia / id" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "a   (copy-mode)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
@@ -303,7 +308,7 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+? / F1 / Pfx+?" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+l / h (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "C-y/o/M-n (Alt+s)" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "C-y/o/M-r (Alt+s)" <<< "$IDE_KEYS_COMPACT_OUT" && \
    ! grep -Fq $'\033[' <<< "$(NO_COLOR=1 "$SCRIPT_DIR/bin/ide" keys)" && \
    ! grep -Fq "" <<< "$(IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" keys)" && \
    grep -Fq $'\033[1m' <<< "$(TERM=dumb "$SCRIPT_DIR/bin/ide" keys)" && \

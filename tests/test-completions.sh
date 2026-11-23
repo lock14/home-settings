@@ -314,8 +314,23 @@ out_new_pos="$(run_case ide -n "")"
 out_new_sub_pos="$(run_case ide new "")"
 [[ "$out_new_sub_pos" == "" ]] || { print -u2 "bad new pos: $out_new_sub_pos"; exit 1; }
 
+out_dir_pos="$(run_case ide -o "")"
+[[ "$out_dir_pos" == "" ]] || { print -u2 "bad -o pos: $out_dir_pos"; exit 1; }
+
+out_dir_sub_pos="$(run_case ide dir "")"
+[[ "$out_dir_sub_pos" == "" ]] || { print -u2 "bad dir pos: $out_dir_sub_pos"; exit 1; }
+
 out_new_flags="$(run_case ide -n --)"
 [[ ",$out_new_flags," == *",--2pane,"* && ",$out_new_flags," == *",--agent,"* ]] || { print -u2 "bad -n flags: $out_new_flags"; exit 1; }
+
+out_dir_flags="$(run_case ide -o --)"
+[[ ",$out_dir_flags," == *",--2pane,"* && ",$out_dir_flags," == *",--agent,"* ]] || { print -u2 "bad -o flags: $out_dir_flags"; exit 1; }
+
+out_agent_sub="$(run_case ide agent "")"
+[[ ",$out_agent_sub," == *",restart,"* && ",$out_agent_sub," == *",agy,"* && ",$out_agent_sub," == *",claude,"* && ",$out_agent_sub," == *",codex,"* ]] || { print -u2 "bad agent sub: $out_agent_sub"; exit 1; }
+
+out_agent_sess="$(run_case ide agent restart "")"
+[[ "$out_agent_sess" == "alpha-ws,beta-ws" ]] || { print -u2 "bad agent sess: $out_agent_sess"; exit 1; }
 
 out_ai="$(run_case ide --agent "")"
 [[ "$out_ai" == "agy,claude,codex" ]] || { print -u2 "bad --agent: $out_ai"; exit 1; }

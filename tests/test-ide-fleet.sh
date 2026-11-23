@@ -44,6 +44,7 @@ expected_modules = {
     "theme.py",
     "nvim_rpc.py",
     "fleet.py",
+    "launcher.py",
     "layout.py",
     "links.py",
     "preview.py",
@@ -1574,11 +1575,11 @@ try:
     assert strip_tags(wpark_neutral) == strip_tags(wpark_running) == strip_tags(wpark_quota) == strip_tags(wpark_done) == strip_tags(wpark_approval), (
         f"parked @ide_tab_ai shifted character width! neutral={strip_tags(wpark_neutral)!r} running={strip_tags(wpark_running)!r} quota={strip_tags(wpark_quota)!r} done={strip_tags(wpark_done)!r} approval={strip_tags(wpark_approval)!r}"
     )
-    assert "fg=#586E75,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_neutral, f"expected Base01 parked neutral: {wpark_neutral!r}"
-    assert "fg=#2AA198,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_running, f"expected Cyan parked running: {wpark_running!r}"
-    assert "fg=#B58900,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_quota, f"expected Yellow parked quota: {wpark_quota!r}"
-    assert "fg=#859900,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_done, f"expected Green parked done: {wpark_done!r}"
-    assert "fg=#CB4B16,bg=#073642,nobold]󰚩 codex [Alt+a]" in wpark_approval, f"expected Orange parked approval: {wpark_approval!r}"
+    assert "fg=#586E75,bg=#073642,nobold]󰚩 codex [Alt+A]" in wpark_neutral, f"expected Base01 parked neutral: {wpark_neutral!r}"
+    assert "fg=#2AA198,bg=#073642,nobold]󰚩 codex [Alt+A]" in wpark_running, f"expected Cyan parked running: {wpark_running!r}"
+    assert "fg=#B58900,bg=#073642,nobold]󰚩 codex [Alt+A]" in wpark_quota, f"expected Yellow parked quota: {wpark_quota!r}"
+    assert "fg=#859900,bg=#073642,nobold]󰚩 codex [Alt+A]" in wpark_done, f"expected Green parked done: {wpark_done!r}"
+    assert "fg=#CB4B16,bg=#073642,nobold]󰚩 codex [Alt+A]" in wpark_approval, f"expected Orange parked approval: {wpark_approval!r}"
     run_cmd([ide_bin, "_internal", "park", "ai", "beta-ws"], env=sess_env("beta-ws", ws_beta["ed"]), check=True)
     tmux("select-pane", "-t", ws_beta["ed"], check=True)
     run_cmd([ide_bin, "state", "approval", "beta-ws"], env=sess_env("beta-ws", ws_beta["ai"]), check=True)
@@ -2483,18 +2484,18 @@ try:
             "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
             "args = ' '.join(sys.argv[1:])\n"
             "if step == 0:\n"
-            "    assert 'ctrl-y:execute-silent' in args and 'ctrl-o:execute-silent' in args and 'alt-n' in args and '--bind=f1:execute(' in args and '--bind=f5:' in args, f'missing triage/launcher/CUA binds: {args}'\n"
-            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r/F5: reload · F1: help · Alt+s: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
-            "    print('alt-n')\n"
+            "    assert 'ctrl-y:execute-silent' in args and 'ctrl-o:execute-silent' in args and 'alt-n' in args and 'alt-o' in args and 'alt-r' in args and '--bind=f1:execute(' in args and '--bind=f5:' in args, f'missing triage/launcher/CUA binds: {args}'\n"
+            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · M-o: open · M-r: agent · C-x: quit · C-r/F5: reload · F1: help · Alt+s: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
+            "    print('alt-o')\n"
             "    print(lines[0])\n"
             "elif step == 1:\n"
-            "    assert '--prompt=New IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args and '--color=label:#586E75' in args and 'border:#586E75' in args and '--header=' not in args, f'expected New IDE prompt and bottom border-label on step 1: {args}'\n"
+            "    assert '--prompt=New IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch · Alt+n: new · Esc: back to sessions ' in args and '--color=label:#586E75' in args and 'border:#586E75' in args and '--header=' not in args, f'expected New IDE prompt and bottom border-label on step 1: {args}'\n"
             "    sys.exit(130)\n"
             "elif step == 2:\n"
-            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · C-x: quit · C-r/F5: reload · F1: help · Alt+s: close ' in args, f'Esc from Alt+n did not return to session list: {args}'\n"
-            "    print('alt-n')\n"
+            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · M-o: open · M-r: agent · C-x: quit · C-r/F5: reload · F1: help · Alt+s: close ' in args, f'Esc from Alt+o did not return to session list: {args}'\n"
+            "    print('alt-o')\n"
             "elif step == 3:\n"
-            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch workspace · Esc: back to sessions ' in args, f'expected bottom border-label on step 3: {args}'\n"
+            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch · Alt+n: new · Esc: back to sessions ' in args, f'expected bottom border-label on step 3: {args}'\n"
             "    picked = next(l for l in lines if 'spawned-ws' in l)\n"
             "    print(picked)\n"
         )
@@ -2535,7 +2536,7 @@ try:
             "open(st_path, 'w').write(str(step + 1))\n"
             "lines = [l.rstrip('\\n') for l in sys.stdin if l.strip()]\n"
             "if step == 0:\n"
-            "    print('alt-n')\n"
+            "    print('alt-o')\n"
             "else:\n"
             "    picked = next(l for l in lines if 'fallback-ws' in l)\n"
             "    print(picked)\n"
@@ -3016,13 +3017,15 @@ try:
         os.environ.update(saved_env_snap)
     assert collected_fb and collected_fb[0] == home_low, f"zoxide --all fallback failed: {collected_fb}"
 
-    # Verify `ide new` error paths (missing fzf / non-interactive terminal)
-    r_new_nofzf = run_cmd([ide_bin, "new"], env={**base_env, "IDE_STRICT_PATH": "1", "PATH": no_fzf_dir, "TMUX": "", "TMUX_PANE": ""}, check=False)
-    assert r_new_nofzf.returncode != 0 and "fzf" in r_new_nofzf.stderr, f"expected missing-fzf error on ide new: {r_new_nofzf}"
+    # Verify `ide dir` / `ide new` error paths (missing fzf / non-interactive terminal)
+    r_dir_nofzf = run_cmd([ide_bin, "dir"], env={**base_env, "IDE_STRICT_PATH": "1", "PATH": no_fzf_dir, "TMUX": "", "TMUX_PANE": ""}, check=False)
+    assert r_dir_nofzf.returncode != 0 and "fzf" in r_dir_nofzf.stderr, f"expected missing-fzf error on ide dir: {r_dir_nofzf}"
+    r_dir_nontty = run_cmd([ide_bin, "dir"], env={**base_env, "TMUX": "", "TMUX_PANE": ""}, check=False)
+    assert r_dir_nontty.returncode != 0 and "interactive terminal" in r_dir_nontty.stderr, f"expected non-TTY error on ide dir: {r_dir_nontty}"
     r_new_nontty = run_cmd([ide_bin, "new"], env={**base_env, "TMUX": "", "TMUX_PANE": ""}, check=False)
-    assert r_new_nontty.returncode != 0 and "interactive terminal" in r_new_nontty.stderr, f"expected non-TTY error on ide new: {r_new_nontty}"
+    assert r_new_nontty.returncode != 0 and "interactive terminal" in r_new_nontty.stderr, f"expected non-TTY error on ide new without NAME: {r_new_nontty}"
 
-    # Verify `ide -n --2pane` inside tmux launches via real display-popup, resolves ws_unvis -> ws_unvis/src_tree via ide_resolve_workspace,
+    # Verify `ide -o --2pane <query>` inside tmux launches via real display-popup, forwards --query, resolves ws_unvis -> ws_unvis/src_tree via ide_resolve_workspace,
     # names session `ws-unvisited` via ide_session_name, and switches client_name!
     stub_agy2 = os.path.join(bin_dir, "agy")
     with open(stub_agy2, "w", encoding="utf-8") as sa2:
@@ -3050,7 +3053,7 @@ try:
     tmux("switch-client", "-c", client_name, "-t", "=gamma-ws", check=True)
     _read_pty_chunk(0.1)
     run_cmd(
-        [ide_bin, "-n", "--2pane", "gamma-ws"],
+        [ide_bin, "-o", "--2pane", "ws-un"],
         env={
             **sess_env("gamma-ws", ws_gamma["ed"]),
             "IDE_AI_CLI": "claude",
@@ -3063,9 +3066,9 @@ try:
         check=True,
     )
     _read_pty_chunk(0.2)
-    assert os.path.isfile(new_pop_args_log), "ide -n inside tmux did not open display-popup running IDE_FZF_BIN"
+    assert os.path.isfile(new_pop_args_log), "ide -o inside tmux did not open display-popup running IDE_FZF_BIN"
     pop_fzf_args = open(new_pop_args_log, encoding="utf-8").read()
-    assert "--prompt=New IDE > " in pop_fzf_args and "Esc: cancel" in pop_fzf_args, f"bad ide -n popup fzf args: {pop_fzf_args}"
+    assert "--prompt=New IDE > " in pop_fzf_args and "Esc: cancel" in pop_fzf_args and "--query=ws-un" in pop_fzf_args, f"bad ide -o popup fzf args: {pop_fzf_args}"
     assert tmux("has-session", "-t", "=ws-unvisited", check=False).returncode == 0, "ide -n did not create ws-unvisited session"
     assert tmux_out("show-options", "-qv", "-t", "=ws-unvisited:", "@ide_workdir") == os.path.realpath(os.path.join(ws_unvis, "src_tree")), (
         "ide -n did not apply ide_resolve_workspace to chosen workspace root"
@@ -3101,7 +3104,7 @@ try:
         srf.write("ide_workspace_dirs() { sleep 5; }\n")
     t0_hook = time.monotonic()
     r_slow = run_cmd(
-        [ide_bin, "-n", "--detach"],
+        [ide_bin, "-o", "--detach"],
         env={**base_env, "TMUX": "", "TMUX_PANE": "", "IDE_FZF_BIN": zero_esc_fzf, "IDE_ZOXIDE_BIN": empty_zoxide, "IDE_LINK_RULES": slow_rules},
         check=True,
     )
@@ -4167,10 +4170,18 @@ try:
             s = _active_sw_sess()
             if not s:
                 return ""
+            if tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_done").strip() == "1":
+                return ""
             att = tmux_out("display-message", "-p", "-t", f"={s}:", "#{session_attached}").strip()
             fp = tmux_out("show-options", "-qv", "-t", f"={s}:", "@ide_sw_fzf_pane").strip()
-            if att not in ("", "0") and fp and "IDE >" in tmux_out("capture-pane", "-p", "-t", fp):
-                return s
+            if att not in ("", "0") and fp:
+                cap = tmux_out("capture-pane", "-p", "-t", fp)
+                if (
+                    "IDE >" in cap
+                    and "0/0" not in cap
+                    and any(st in cap for st in ("IDLE", "WORKING", "DONE", "APPROVAL", "QUOTA", "SHELL"))
+                ):
+                    return s
             return ""
 
         sw_proc = None
@@ -5538,7 +5549,7 @@ try:
             os.write(client_mfd, b"\x1bOP")
             assert wait_until(
                 lambda: tmux_out("display-message", "-p", "-t", f"={sw_sess_mt}:", "#{window_zoomed_flag}").strip() == "1"
-                and "Acknowledge AI attention" in tmux_out("capture-pane", "-p", "-t", mt_fzf_p),
+                and "Ack attention or open PR" in tmux_out("capture-pane", "-p", "-t", mt_fzf_p),
                 timeout=3.0,
             ), f"F1 inside ai-sw-* did not zoom fzf pane and render spacious cheatsheet: {tmux_out('capture-pane', '-p', '-t', mt_fzf_p)!r}"
             os.write(client_mfd, b"q")
@@ -5817,8 +5828,8 @@ try:
     assert msg_err == "Rate limit reached", f"unexpected agy error parse: {(nt_err, msg_err)}"
     assert format_switcher_pane_label("ws-a", "agy", "WORKING") == "ws-a · agy · WORKING"
     assert format_switcher_pane_label("ws-a", "agy", "-") == "ws-a · agy"
-    assert _format_new_picker_footer(120, True) == " Enter: launch workspace · Esc: back to sessions "
-    assert _format_new_picker_footer(44, True) == " Enter: launch · Esc: back "
+    assert _format_new_picker_footer(120, True) == " Enter: launch · Alt+n: new · Esc: back to sessions "
+    assert _format_new_picker_footer(48, True) == " Enter: launch · Alt+n: new · Esc: back "
     assert _vw_chk(_format_new_picker_footer(28, False)) <= 24
 
     resp_ws = os.path.join(root, "deeply-nested-workspace-parent", "another-long-segment", "resp-svc")
@@ -5933,6 +5944,155 @@ try:
                 r_proc.kill()
     finally:
         run_cmd([ide_bin, "quit", "--force", "resp-svc"], env={**base_env, "TMUX": ""}, check=False)
+
+    # (22) Workspace creation (`ide new <name>`, `ide_create_workspace`, `$IDE_WORKSPACE_PARENT`, interactive New Workspace PTY card,
+    #      `ide _internal dir-preview`, `ide agent [<cli>|restart]`, `Alt+Shift+A` AI parking, and `COPY` bar `a send to AI`)
+    stub_agy_22 = os.path.join(bin_dir, "agy")
+    stub_claude_22 = os.path.join(bin_dir, "claude")
+    stub_codex_22 = os.path.join(bin_dir, "codex")
+    for _sb in (stub_agy_22, stub_claude_22, stub_codex_22):
+        with open(_sb, "w", encoding="utf-8") as _sbf:
+            _sbf.write("#!/bin/sh\nexec sleep 300\n")
+        os.chmod(_sb, 0o755)
+
+    # 22a. Default `mkdir` under $HOME and under $IDE_WORKSPACE_PARENT + `..` traversal rejection
+    r_trav = run_cmd([ide_bin, "new", "-d", "../escape-attempt"], env={**base_env, "TMUX": ""}, check=False)
+    assert r_trav.returncode != 0 and (".." in r_trav.stderr or "outside" in r_trav.stderr), f"expected .. traversal rejection: {r_trav}"
+
+    def_created_ws = os.path.join(thome, "mkdir-home-ws")
+    assert not os.path.exists(def_created_ws)
+    run_cmd([ide_bin, "new", "-d", "mkdir-home-ws"], env={**base_env, "TMUX": "", "IDE_LINK_RULES": os.path.join(root, "no_rules.sh")}, check=True)
+    assert os.path.isdir(def_created_ws) and tmux("has-session", "-t", "=mkdir-home-ws", check=False).returncode == 0
+
+    custom_parent = os.path.join(root, "custom-ws-parent")
+    os.makedirs(custom_parent, exist_ok=True)
+    parent_created_ws = os.path.join(custom_parent, "parent-child-ws")
+    run_cmd(
+        [ide_bin, "-n", "-d", "--2pane", "--agent", "claude", "parent-child-ws"],
+        env={**base_env, "TMUX": "", "IDE_WORKSPACE_PARENT": custom_parent, "IDE_LINK_RULES": os.path.join(root, "no_rules.sh")},
+        check=True,
+    )
+    assert os.path.isdir(parent_created_ws) and tmux("has-session", "-t", "=parent-child-ws", check=False).returncode == 0
+    assert tmux_out("show-options", "-qv", "-t", "=parent-child-ws:", "@ide_layout_mode") == "2pane"
+    assert tmux_out("show-options", "-qv", "-t", "=parent-child-ws:", "@ide_ai_cli") == "claude"
+
+    # Comment-only `ide_create_workspace` in links.sh falls back to `mkdir` rather than failing
+    comment_rules = os.path.join(root, "comment_create_rules.sh")
+    with open(comment_rules, "w", encoding="utf-8") as crf:
+        crf.write("# Optional hook: ide_create_workspace NAME\n")
+    comment_ws = os.path.join(custom_parent, "comment-fb-ws")
+    run_cmd(
+        [ide_bin, "new", "-d", "comment-fb-ws"],
+        env={**base_env, "TMUX": "", "IDE_WORKSPACE_PARENT": custom_parent, "IDE_LINK_RULES": comment_rules},
+        check=True,
+    )
+    assert os.path.isdir(comment_ws) and tmux("has-session", "-t", "=comment-fb-ws", check=False).returncode == 0
+
+    # 22b. Real `ide_create_workspace NAME` hook (multi-line stdout progress + failure handling)
+    hook_root = os.path.join(root, "hook-provisioned")
+    os.makedirs(hook_root, exist_ok=True)
+    hook_rules = os.path.join(root, "create_hook_rules.sh")
+    hook_arg_log = os.path.join(root, "create_hook_arg.log")
+    with open(hook_rules, "w", encoding="utf-8") as hrf:
+        hrf.write(
+            "ide_create_workspace() {\n"
+            f"  printf '%s\\n' \"$1\" >> {shlex.quote(hook_arg_log)}\n"
+            "  if [ \"$1\" = \"fail-ws\" ]; then\n"
+            "    echo 'Simulated VCS provisioning error' >&2\n"
+            "    return 1\n"
+            "  fi\n"
+            "  echo 'Provisioning workspace checkout...'\n"
+            f"  d={shlex.quote(hook_root)}/\"$1\"\n"
+            "  mkdir -p \"$d/src\"\n"
+            "  printf '%s\\n' \"$d\"\n"
+            "}\n"
+        )
+    r_hook_fail = run_cmd([ide_bin, "new", "-d", "fail-ws"], env={**base_env, "TMUX": "", "IDE_LINK_RULES": hook_rules}, check=False)
+    assert r_hook_fail.returncode != 0 and "Simulated VCS provisioning error" in r_hook_fail.stderr, f"expected hook error: {r_hook_fail}"
+    assert not os.path.exists(os.path.join(thome, "fail-ws")) and tmux("has-session", "-t", "=fail-ws", check=False).returncode != 0
+
+    run_cmd([ide_bin, "new", "-d", "hooked-ws"], env={**base_env, "TMUX": "", "IDE_LINK_RULES": hook_rules}, check=True)
+    assert os.path.isdir(os.path.join(hook_root, "hooked-ws", "src"))
+    assert tmux("has-session", "-t", "=hooked-ws", check=False).returncode == 0
+    assert tmux_out("show-options", "-qv", "-t", "=hooked-ws:", "@ide_workdir") == os.path.realpath(os.path.join(hook_root, "hooked-ws"))
+    assert open(hook_arg_log, encoding="utf-8").read().splitlines() == ["fail-ws", "hooked-ws"]
+
+    # 22c. Interactive PTY test of `ide new` (`New IDE Workspace` card: Tab cycles agent agy->claude, Alt+2 toggles 2pane, Backspace edits name)
+    pty_new_m, pty_new_s = pty.openpty()
+    fcntl.ioctl(pty_new_s, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    p_new_pty = subprocess.Popen(
+        [ide_bin, "new", "-d"],
+        stdin=pty_new_s,
+        stdout=pty_new_s,
+        stderr=pty_new_s,
+        env={**base_env, "TMUX": "", "TMUX_PANE": "", "IDE_WORKSPACE_PARENT": custom_parent, "IDE_LINK_RULES": os.path.join(root, "no_rules.sh")},
+        close_fds=True,
+        preexec_fn=lambda sfd=pty_new_s: set_ctty(sfd),
+    )
+    os.close(pty_new_s)
+    pty_new_buf = bytearray()
+    try:
+        dl_new = time.monotonic() + 3.0
+        while time.monotonic() < dl_new and b"New IDE >" not in pty_new_buf:
+            if select.select([pty_new_m], [], [], 0.05)[0]:
+                pty_new_buf.extend(os.read(pty_new_m, 4096))
+        assert b"New IDE >" in pty_new_buf, f"expected New IDE > card in PTY: {pty_new_buf!r}"
+        # Type "pty-x\x7fws" -> "pty-ws", Tab (agy -> claude), Alt+2 (3pane -> 2pane), Enter
+        os.write(pty_new_m, b"pty-x\x7fws\t\x1b2\r")
+        dl_fin = time.monotonic() + 5.0
+        while time.monotonic() < dl_fin and p_new_pty.poll() is None:
+            if select.select([pty_new_m], [], [], 0.05)[0]:
+                try:
+                    pty_new_buf.extend(os.read(pty_new_m, 4096))
+                except OSError:
+                    break
+        assert p_new_pty.wait(timeout=3.0) == 0, f"interactive ide new PTY failed: {pty_new_buf!r}"
+    finally:
+        try:
+            os.close(pty_new_m)
+        except OSError:
+            pass
+    assert os.path.isdir(os.path.join(custom_parent, "pty-ws"))
+    assert tmux("has-session", "-t", "=pty-ws", check=False).returncode == 0
+    assert tmux_out("show-options", "-qv", "-t", "=pty-ws:", "@ide_ai_cli") == "claude"
+    assert tmux_out("show-options", "-qv", "-t", "=pty-ws:", "@ide_layout_mode") == "2pane"
+
+    # 22d. `ide _internal dir-preview` active badge, contents, 80x24 width clamping, IDE_NERD_FONTS=0, and NO_COLOR
+    open(os.path.join(parent_created_ws, "README.md"), "w", encoding="utf-8").write("# Demo\n")
+    dp_out = run_cmd(
+        [ide_bin, "_internal", "dir-preview", "--", parent_created_ws],
+        env={**base_env, "TMUX": "", "FZF_PREVIEW_COLUMNS": "44", "FZF_PREVIEW_LINES": "14", "IDE_NERD_FONTS": "0", "NO_COLOR": "1"},
+        check=True,
+    ).stdout
+    assert "parent-child-ws" in dp_out and "active: claude" in dp_out and "README.md" in dp_out and "\x1b[" not in dp_out, f"bad dir-preview: {dp_out!r}"
+    for dp_ln in dp_out.splitlines():
+        assert _vw_chk(dp_ln) <= 44, f"dir-preview overflowed 44 cols: {dp_ln!r}"
+
+    # 22e. `ide agent [<cli>|restart] <sess>`, `Alt+Shift+A` AI parking, and `COPY` mode `a send to AI` top-bar hint
+    run_cmd([ide_bin, "state", "quota", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_state") == "quota"
+    run_cmd([ide_bin, "agent", "codex", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_cli") == "codex"
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_state") == ""
+    run_cmd([ide_bin, "agent", "restart", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_cli") == "codex"
+
+    # Park & unpark AI pane via `ide _internal park ai` (`Alt+Shift+A`) + verify COPY mode `status-right` hint
+    run_cmd([ide_bin, "_internal", "park", "ai", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_parked") == "1"
+    run_cmd([ide_bin, "_internal", "park", "ai", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_parked") == "0"
+    ed_p_mk = tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_editor_pane").strip()
+    tmux("copy-mode", "-t", ed_p_mk, check=True)
+    sright_copy = strip_tags(tmux_out("display-message", "-p", "-t", ed_p_mk, "#{E:status-right}"))
+    assert "a send to AI" in sright_copy, f"COPY mode status-right missing 'a send to AI': {sright_copy!r}"
+    tmux("send-keys", "-t", ed_p_mk, "-X", "cancel", check=True)
+
+    run_cmd(
+        [ide_bin, "quit", "--force", "mkdir-home-ws", "parent-child-ws", "comment-fb-ws", "hooked-ws", "pty-ws"],
+        env={**base_env, "TMUX": ""},
+        check=False,
+    )
 
     print("ALL_FLEET_OK")
 finally:
