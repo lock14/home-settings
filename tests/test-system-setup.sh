@@ -1017,6 +1017,10 @@ keybind = alt+left=text:\\x1b[1;3D
 keybind = alt+right=text:\\x1b[1;3C
 keybind = alt+up=text:\\x1b[1;3A
 keybind = alt+down=text:\\x1b[1;3B
+keybind = alt+shift+left=text:\\x1b[1;4D
+keybind = alt+shift+right=text:\\x1b[1;4C
+keybind = alt+shift+up=text:\\x1b[1;4A
+keybind = alt+shift+down=text:\\x1b[1;4B
 """
 EOF
 cp "$SCRIPT_DIR/dotfiles/.config/ghostty/config" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty/config"
@@ -1025,14 +1029,14 @@ printf '%s\n' 'vim.keymap.set("n", "<leader>qm", "<cmd>echo 1<CR>")' > "$TEMP_MO
 cat > "$TEMP_MOD_LINT_OK/README.md" <<'EOF'
 # Modular test
 
-Keys: `Ctrl+Shift+D`, `Ctrl+Shift+W`, `Ctrl+Shift+Enter`, `Ctrl+Shift+H/J/K/L`, `Ctrl+Shift+T`, `Alt+Left/Right/Up/Down`, `Space w`, `Space h`, `Space e`, `Space E`, `Space m`, `Space ff`, `Space fg`, `Space fb`, `Space gs`, `Space rn`, `Space ca`, `Space d`, `Space a`, `Space q`, `Space ?`, `Space cd`, `gd`, `gr`, `K`, `gx`, `Home`, `H`, `L`.
+Keys: `Ctrl+Shift+D`, `Ctrl+Shift+W`, `Ctrl+Shift+Enter`, `Ctrl+Shift+H/J/K/L`, `Ctrl+Shift+T`, `Alt+Left/Right/Up/Down`, `Alt+Shift+Left/Right/Up/Down`, `Space w`, `Space h`, `Space e`, `Space E`, `Space m`, `Space ff`, `Space fg`, `Space fb`, `Space gs`, `Space rn`, `Space ca`, `Space d`, `Space a`, `Space q`, `Space ?`, `Space cd`, `gd`, `gr`, `K`, `gx`, `Home`, `H`, `L`.
 
 ## Standalone utilities
 
 | Script | Flags |
 | :--- | :--- |
 | `theme` | `--list` |
-| `Ctrl+Shift+D` | `Ctrl+Shift+W` `Ctrl+Shift+Enter` `Ctrl+Shift+H/J/K/L` `Ctrl+Shift+T` `Alt+Left/Right/Up/Down` |
+| `Ctrl+Shift+D` | `Ctrl+Shift+W` `Ctrl+Shift+Enter` `Ctrl+Shift+H/J/K/L` `Ctrl+Shift+T` `Alt+Left/Right/Up/Down` `Alt+Shift+Left/Right/Up/Down` |
 | `Space w` | `Space h` `Space e` `Space E` `Space m` `Space ff` `Space fg` `Space fb` `Space gs` `Space rn` `Space ca` `Space d` `Space a` `Space q` `Space ?` `Space cd` `gd` `gr` `K` `gx` `Home` `H` `L` |
 EOF
 
@@ -1305,12 +1309,29 @@ fi
 # Test 7: Managed AI CLI lifecycle hooks (setup/modules/75-ai-hooks.sh & --skip hooks)
 HOOKS_HOME="$(make_sandbox_home)"
 skip_hooks_out="$(HOME="$HOOKS_HOME" "$SCRIPT_DIR/setup.sh" --os ubuntu --user --skip dotfiles,bin,fonts,tools,nvim,terminal,hooks --dry-run 2>&1)"
-mkdir -p "$HOOKS_HOME/.gemini/config" "$HOOKS_HOME/.claude" "$HOOKS_HOME/.codex"
+mkdir -p "$HOOKS_HOME/.gemini/config" "$HOOKS_HOME/.gemini/antigravity-cli" "$HOOKS_HOME/.claude" "$HOOKS_HOME/.codex"
 cat > "$HOOKS_HOME/.gemini/config/hooks.json" <<'EOF'
 {
   "custom-lint": {
     "enabled": true
   }
+}
+EOF
+cat > "$HOOKS_HOME/.gemini/antigravity-cli/keybindings.json" <<'EOF'
+{
+  "voice.toggle": ["alt+k"]
+}
+EOF
+cat > "$HOOKS_HOME/.claude/keybindings.json" <<'EOF'
+{
+  "bindings": [
+    {
+      "context": "Chat",
+      "bindings": {
+        "ctrl+u": "chat:customUserAction"
+      }
+    }
+  ]
 }
 EOF
 cat > "$HOOKS_HOME/.claude/settings.json" <<'EOF'
@@ -1342,7 +1363,9 @@ hooks_dry_out="$(HOME="$HOOKS_HOME" DRY_RUN=true bash "$SCRIPT_DIR/setup/modules
 dry_untouched=false
 if grep -Fq -- "--agent-state" "$HOOKS_HOME/.claude/settings.json" && \
    grep -Fq -- "--agent-state" "$HOOKS_HOME/.codex/config.toml" && \
-   ! grep -Fq "ide-state" "$HOOKS_HOME/.gemini/config/hooks.json"; then
+   ! grep -Fq "ide-state" "$HOOKS_HOME/.gemini/config/hooks.json" && \
+   ! grep -Fq "subagent.jump_to_waiting" "$HOOKS_HOME/.gemini/antigravity-cli/keybindings.json" && \
+   ! grep -Fq "chat:thinkingToggle" "$HOOKS_HOME/.claude/keybindings.json"; then
     dry_untouched=true
 fi
 HOME="$HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" >/dev/null
@@ -1355,12 +1378,27 @@ agy = json.load(open(os.path.join(h, ".gemini/config/hooks.json"), encoding="utf
 assert "custom-lint" in agy and "ide-state" in agy, agy
 for ev in ("SessionStart", "PreInvocation", "PreToolUse", "PostToolUse", "Stop"):
     assert ev in agy["ide-state"], f"missing {ev} in agy hooks"
+agy_kb = json.load(open(os.path.join(h, ".gemini/antigravity-cli/keybindings.json"), encoding="utf-8"))
+assert agy_kb == {"voice.toggle": ["alt+k"], "subagent.jump_to_waiting": ["alt+g"]}, agy_kb
 cl = json.load(open(os.path.join(h, ".claude/settings.json"), encoding="utf-8"))
 assert cl["model"] == "opus" and cl["permissions"]["allow"] == ["Bash(ls)"], cl
 cl_raw = json.dumps(cl)
 assert "--agent-state" not in cl_raw and "echo custom-stop" in cl_raw and "ide state done" in cl_raw, cl_raw
 for ev in ("SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "Stop"):
     assert ev in cl["hooks"], f"missing {ev} in claude hooks"
+cl_kb = json.load(open(os.path.join(h, ".claude/keybindings.json"), encoding="utf-8"))
+assert cl_kb == {
+    "bindings": [
+        {
+            "context": "Chat",
+            "bindings": {
+                "ctrl+u": "chat:customUserAction",
+                "meta+t": None,
+                "alt+g": "chat:thinkingToggle",
+            },
+        }
+    ]
+}, cl_kb
 cx = open(os.path.join(h, ".codex/config.toml"), encoding="utf-8").read()
 assert '--agent-state' not in cx and 'notify = ["ide", "state", "done"]' in cx, cx
 assert cx.index('notify = ["ide", "state", "done"]') < cx.index('[projects."/tmp/sandbox-repo"]'), cx
@@ -1375,25 +1413,43 @@ import json, os, sys
 h = sys.argv[1]
 agy = json.load(open(os.path.join(h, ".gemini/config/hooks.json"), encoding="utf-8"))
 assert "custom-lint" in agy and "ide-state" not in agy, agy
+agy_kb = json.load(open(os.path.join(h, ".gemini/antigravity-cli/keybindings.json"), encoding="utf-8"))
+assert agy_kb == {"voice.toggle": ["alt+k"]}, agy_kb
 cl = json.load(open(os.path.join(h, ".claude/settings.json"), encoding="utf-8"))
 assert cl["model"] == "opus" and "echo custom-stop" in json.dumps(cl) and "ide state" not in json.dumps(cl), cl
+cl_kb = json.load(open(os.path.join(h, ".claude/keybindings.json"), encoding="utf-8"))
+assert cl_kb == {"bindings": [{"context": "Chat", "bindings": {"ctrl+u": "chat:customUserAction"}}]}, cl_kb
 cx = open(os.path.join(h, ".codex/config.toml"), encoding="utf-8").read()
 assert "ide" not in cx and 'model = "o3"' in cx and '[projects."/tmp/sandbox-repo"]' in cx, cx
 PY
     hooks_uninstalled_ok=true
+fi
+OVR_HOOKS_HOME="$(make_sandbox_home)"
+mkdir -p "$OVR_HOOKS_HOME/.gemini/antigravity-cli" "$OVR_HOOKS_HOME/.claude"
+printf '%s\n' '{"subagent.jump_to_waiting": ["alt+x"]}' > "$OVR_HOOKS_HOME/.gemini/antigravity-cli/keybindings.json"
+printf '%s\n' '{"bindings": [{"context": "Chat", "bindings": {"alt+p": "chat:thinkingToggle"}}]}' > "$OVR_HOOKS_HOME/.claude/keybindings.json"
+HOME="$OVR_HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" >/dev/null
+HOME="$OVR_HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" --uninstall >/dev/null
+ovr_preserved_ok=false
+if grep -Fq '"alt+x"' "$OVR_HOOKS_HOME/.gemini/antigravity-cli/keybindings.json" && \
+   grep -Fq '"alt+p"' "$OVR_HOOKS_HOME/.claude/keybindings.json" && \
+   ! grep -Fq '"alt+g"' "$OVR_HOOKS_HOME/.claude/keybindings.json"; then
+    ovr_preserved_ok=true
 fi
 CLEAN_HOOKS_HOME="$(make_sandbox_home)"
 HOME="$CLEAN_HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" >/dev/null
 HOME="$CLEAN_HOOKS_HOME" DRY_RUN=false bash "$SCRIPT_DIR/setup/modules/75-ai-hooks.sh" --uninstall >/dev/null
 if [[ "$skip_hooks_out" != *"Configuring AI CLI lifecycle hooks"* ]] && \
    [[ "$hooks_dry_out" == *"[DryRun]"* ]] && [ "$dry_untouched" = true ] && \
-   [ "$hooks_merged_ok" = true ] && [ "$hooks_uninstalled_ok" = true ] && \
+   [ "$hooks_merged_ok" = true ] && [ "$hooks_uninstalled_ok" = true ] && [ "$ovr_preserved_ok" = true ] && \
    [ ! -e "$CLEAN_HOOKS_HOME/.gemini/config/hooks.json" ] && \
+   [ ! -e "$CLEAN_HOOKS_HOME/.gemini/antigravity-cli/keybindings.json" ] && \
    [ ! -e "$CLEAN_HOOKS_HOME/.claude/settings.json" ] && \
+   [ ! -e "$CLEAN_HOOKS_HOME/.claude/keybindings.json" ] && \
    [ ! -e "$CLEAN_HOOKS_HOME/.codex/config.toml" ]; then
-    pass "setup/modules/75-ai-hooks.sh (--skip hooks) idempotently merges, migrates legacy --agent-state, and cleanly uninstalls agy, claude, and codex lifecycle hooks while preserving user settings"
+    pass "setup/modules/75-ai-hooks.sh (--skip hooks) idempotently merges, migrates legacy --agent-state, reconciles agy/claude alt+g keybindings, and cleanly uninstalls while preserving user overrides"
 else
-    fail "setup/modules/75-ai-hooks.sh lifecycle hooks" "skip='$skip_hooks_out' dry=$dry_untouched merged=$hooks_merged_ok uninst=$hooks_uninstalled_ok"
+    fail "setup/modules/75-ai-hooks.sh lifecycle hooks" "skip='$skip_hooks_out' dry=$dry_untouched merged=$hooks_merged_ok uninst=$hooks_uninstalled_ok ovr=$ovr_preserved_ok"
 fi
 
 test_summary

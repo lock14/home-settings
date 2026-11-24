@@ -568,7 +568,7 @@ def _pick_workspace_directory(
         f"--border-label={footer_lbl}",
         "--border-label-pos=bottom",
         *color_label_args,
-        "--bind=alt-s:abort",
+        "--bind=alt-w:abort",
         *extra_args,
     ]
     proc = subprocess.run(

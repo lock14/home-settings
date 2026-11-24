@@ -135,11 +135,11 @@ function M.setup(opts)
         end
     end, { silent = true, desc = "Follow Markdown/file/web link under cursor" })
 
-    -- Visual indent and line movement
-    map("v", "<", "<gv", { desc = "Indent left" })
-    map("v", ">", ">gv", { desc = "Indent right" })
-    map("v", "J", ":m '>+1<CR>gv=gv", { desc = "Move text down" })
-    map("v", "K", ":m '<-2<CR>gv=gv", { desc = "Move text up" })
+    -- Visual indent and line movement (Visual-only 'x' so Select mode 's' snippet placeholders type normally)
+    map("x", "<", "<gv", { desc = "Indent left" })
+    map("x", ">", ">gv", { desc = "Indent right" })
+    map("x", "J", ":m '>+1<CR>gv=gv", { desc = "Move text down" })
+    map("x", "K", ":m '<-2<CR>gv=gv", { desc = "Move text up" })
 
     -- Project file explorer toggle: mini.files (Space+e at buffer dir / Space+E at cwd, falling back to Lexplore)
     local function toggle_file_explorer(use_cwd)

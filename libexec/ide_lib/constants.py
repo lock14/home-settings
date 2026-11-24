@@ -59,12 +59,12 @@ Launch Options:
 
 Workspace & Fleet Commands:
   list [--plain | --json]  List active IDE sessions (status table, raw names, or JSON array)
-  switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+s)
+  switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+w)
   new, -n [NAME]           Create a new workspace via hook or mkdir and launch IDE (Alt+n)
   dir, -o [QUERY]          Open interactive existing-directory workspace picker (Alt+o)
   agent [<CLI>|restart] [SESSION]
                            Switch or restart an IDE session's AI Agent CLI (agy, claude, codex)
-  next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+S)
+  next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+W)
   cd [DIR | --reset]       Set working directory across Editor and Shell panes
   refresh [SESSION]        Refresh Tmux chrome, Editor themes, and CWDs across IDE sessions
   quit [-f | --force] [SESSION...]
@@ -82,7 +82,7 @@ Agent & Editor RPC Commands:
 
 Utilities:
   keys                     Display interactive IDE keybinding cheatsheet (Alt+? / F1)
-  monitor                  Launch system monitor with btop, htop, or top fallback (Alt+m)
+  monitor                  Launch system monitor with btop, htop, or top fallback (Alt+Shift+M)
 
 Without SESSION, session commands act only on the ide session of the calling pane
 (outside tmux: the current directory's session), never on any other tmux session.

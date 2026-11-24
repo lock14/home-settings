@@ -13,7 +13,7 @@ Layered package architecture (strictly acyclic bottom-to-top):
 - `layout`: Workspace geometry, `_ide_park_<role>` parking, directional swap, focus toggles, dive, refresh, and quit.
 - `links`: Bounded workspace file search, `file://`/`#anchor`/OSC 8 link router, and AI prompt context dispatch.
 - `preview`: Tab/CJK/emoji-aware `fzf` preview line-wrap model, SGR carry-over, and `--follow` streamer.
-- `switcher`: Single-round-trip `Alt+s` topology snapshot, FIFO Git feeder, and 2-pane `ai-sw-*` popup runner.
+- `switcher`: Single-round-trip `Alt+w` topology snapshot, FIFO Git feeder, and 2-pane `ai-sw-*` popup runner.
 - `sessions`: Tabular and JSON fleet views, FIFO attention jump, workspace directory picker, and `switch` entrypoint.
 - `cli`: Command-line flag parser and lazy subcommand dispatcher.
 """

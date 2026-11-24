@@ -23,12 +23,12 @@ Launch Options:
 
 Workspace & Fleet Commands:
   list [--plain | --json]  List active IDE sessions (status table, raw names, or JSON array)
-  switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+s)
+  switch, -s [SESSION]     Open interactive multi-session IDE workspace switcher (Alt+w)
   new, -n [NAME]           Create a new workspace via hook or mkdir and launch IDE (Alt+n)
   dir, -o [QUERY]          Open interactive existing-directory workspace picker (Alt+o)
   agent [<CLI>|restart] [SESSION]
                            Switch or restart an IDE session's AI Agent CLI (agy, claude, codex)
-  next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+S)
+  next [SESSION]           Jump to oldest IDE session waiting for AI attention (Alt+Shift+W)
   cd [DIR | --reset]       Set working directory across Editor and Shell panes
   refresh [SESSION]        Refresh Tmux chrome, Editor themes, and CWDs across IDE sessions
   quit [-f | --force] [SESSION...]
@@ -46,7 +46,7 @@ Agent & Editor RPC Commands:
 
 Utilities:
   keys                     Display interactive IDE keybinding cheatsheet (Alt+? / F1)
-  monitor                  Launch system monitor with btop, htop, or top fallback (Alt+m)
+  monitor                  Launch system monitor with btop, htop, or top fallback (Alt+Shift+M)
 
 Without SESSION, session commands act only on the ide session of the calling pane
 (outside tmux: the current directory's session), never on any other tmux session.
@@ -139,11 +139,11 @@ show_keys_cheatsheet() {
         printf ' %s%sIDE Workspace & Editor Keybindings%s%s[q / Esc / F1 to close]%s\n' "$c_orange" "$title_pfx" "$c_base01" "$hdr_pad" "$c_reset"
         printf ' %s── %sPANES & LAYOUT %s────────────────────  ── %sSESSIONS & SWITCHER %s───────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
         printf ' %s%-17s%s %-17s  %s%-17s%s %s%s\n' \
-            "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Ed/Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Switch IDE session" "$c_reset" \
+            "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI/Ed/Shell" "$c_cyan" "Alt+w / Prefix+w" "$c_base0" "Switch IDE session" "$c_reset" \
             "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move pane focus" "$c_cyan" "Alt+n / Alt+o" "$c_base0" "New WS / open dir" "$c_reset" \
-            "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "C-y/o/M-r (Alt+s)" "$c_base0" "Ack, PR, or agent" "$c_reset" \
-            "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI" "$c_reset" \
-            "$c_cyan" "Alt+Shift+A/E/T" "$c_base0" "Park AI/Ed/Shell" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open sys monitor" "$c_reset" \
+            "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "C-y/o/M-r (Alt+w)" "$c_base0" "Ack, PR, or agent" "$c_reset" \
+            "$c_cyan" "Alt+S-Arrow/Drag" "$c_base0" "Resize pane" "$c_cyan" "Alt+Shift+W" "$c_base0" "Jump to waiting AI" "$c_reset" \
+            "$c_cyan" "Alt+Shift+A/E/T" "$c_base0" "Park AI/Ed/Shell" "$c_cyan" "Alt+Shift+M" "$c_base0" "Open sys monitor" "$c_reset" \
             "$c_cyan" "Alt+u / Pfx+v" "$c_base0" "Enter copy-mode" "$c_cyan" "Click top bar" "$c_base0" "Focus, Help, menu" "$c_reset" \
             "$c_cyan" "Alt+z | Pfx+|/-" "$c_base0" "Zoom | split pane" "$c_cyan" "v <f> / icd [dir]" "$c_base0" "Edit / workspace cd" "$c_reset" \
             "$c_cyan" "Prefix + b / r" "$c_base0" "Top bar / refresh" "$c_cyan" ":Q / Alt+q / M-Q" "$c_base0" "Quit / force-quit" "$c_reset"
@@ -165,14 +165,14 @@ show_keys_cheatsheet() {
         printf '\n  %s%sIDE Workspace & Editor Keybindings%s%s[q / Esc / F1 to close]%s\n\n' "$c_orange" "$title_pfx" "$c_base01" "$hdr_pad_wide" "$c_reset"
         printf '  %s── %sPANES & LAYOUT %s───────────────────────────────    ── %sSESSIONS & SWITCHER %s──────────────────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"
         printf '  %s%-19s%s  %-28s    %s%-19s%s  %s%s\n' \
-            "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI, Editor, or Shell" "$c_cyan" "Alt+s / Prefix+s" "$c_base0" "Open session switcher" "$c_reset" \
+            "$c_cyan" "Alt+a / e / t" "$c_base0" "Focus AI, Editor, or Shell" "$c_cyan" "Alt+w / Prefix+w" "$c_base0" "Open session switcher" "$c_reset" \
             "$c_cyan" "Alt+h / j / k / l" "$c_base0" "Move focus between panes" "$c_cyan" "Alt+n / Alt+o" "$c_base0" "New workspace or open dir" "$c_reset" \
-            "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "Alt+Shift+S" "$c_base0" "Jump to waiting AI session" "$c_reset" \
-            "$c_cyan" "Alt+Arrow / Drag" "$c_base0" "Resize pane or drag border" "$c_cyan" "Alt+l / h (Alt+s)" "$c_base0" "Dock or undock live AI" "$c_reset" \
-            "$c_cyan" "Alt+Shift+A/E/T" "$c_base0" "Hide or show AI/Ed/Shell" "$c_cyan" "Ctrl+y / o (Alt+s)" "$c_base0" "Ack attention or open PR" "$c_reset" \
-            "$c_cyan" "Alt+u / Prefix+v" "$c_base0" "Enter scrollback copy-mode" "$c_cyan" "Alt+r     (Alt+s)" "$c_base0" "Switch or restart AI agent" "$c_reset" \
-            "$c_cyan" "Alt+z" "$c_base0" "Zoom active pane full-screen" "$c_cyan" "Ctrl+x    (Alt+s)" "$c_base0" "Close selected workspace" "$c_reset" \
-            "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane right or below" "$c_cyan" "Alt+m / Prefix+m" "$c_base0" "Open system monitor popup" "$c_reset" \
+            "$c_cyan" "Alt+Shift+H/J/K/L" "$c_base0" "Swap active pane" "$c_cyan" "Alt+Shift+W" "$c_base0" "Jump to waiting AI session" "$c_reset" \
+            "$c_cyan" "Alt+S-Arrow / Drag" "$c_base0" "Resize pane or drag border" "$c_cyan" "Alt+l / h (Alt+w)" "$c_base0" "Dock or undock live AI" "$c_reset" \
+            "$c_cyan" "Alt+Shift+A/E/T" "$c_base0" "Hide or show AI/Ed/Shell" "$c_cyan" "Ctrl+y / o (Alt+w)" "$c_base0" "Ack attention or open PR" "$c_reset" \
+            "$c_cyan" "Alt+u / Prefix+v" "$c_base0" "Enter scrollback copy-mode" "$c_cyan" "Alt+r     (Alt+w)" "$c_base0" "Switch or restart AI agent" "$c_reset" \
+            "$c_cyan" "Alt+z" "$c_base0" "Zoom active pane full-screen" "$c_cyan" "Ctrl+x    (Alt+w)" "$c_base0" "Close selected workspace" "$c_reset" \
+            "$c_cyan" "Prefix + | / -" "$c_base0" "Split pane right or below" "$c_cyan" "Alt+Shift+M / Pfx+m" "$c_base0" "Open system monitor popup" "$c_reset" \
             "$c_cyan" "Prefix + b" "$c_base0" "Toggle top status bar" "$c_cyan" "v <file> / icd" "$c_base0" "Edit file or workspace cd" "$c_reset" \
             "$c_cyan" "Prefix + r" "$c_base0" "Refresh sessions and themes" "$c_cyan" ":Q / Alt+q / M-Q" "$c_base0" "Quit or force-quit session" "$c_reset"
         printf '\n  %s── %sEDITOR (Space = Leader) %s──────────────────────    ── %sCLIPBOARD, LINKS & HELP %s──────────────────────%s\n' "$c_base01" "$c_blue" "$c_base01" "$c_blue" "$c_base01" "$c_reset"

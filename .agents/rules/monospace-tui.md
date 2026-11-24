@@ -89,7 +89,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 *   **Project rule**: Interactive `tmux` `display-popup` modals (`popup-border-lines rounded` in `dotfiles/.tmux.conf`)
     and `fzf` pickers (`--border=rounded` in `libexec/ide_lib/switcher.py`, `sessions.py`, and `theme.py`) use rounded
     `╭╮╰╯` corners as the workstation's unified overlay frame geometry.
-*   **Reason**: Visually separates transient overlay modals (`Alt+s`, `Alt+n`, `Alt+m`, `Alt+?`) from the rectilinear
+*   **Reason**: Visually separates transient overlay modals (`Alt+w`, `Alt+n`, `Alt+Shift+M`, `Alt+?`) from the rectilinear
     `─│` pane splits of the underlying `ide` workspace.
 
 ### [OVERRIDE] §1.6 90-column side-by-side split breakpoint for the workspace switcher
@@ -123,9 +123,9 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 
 *   **Original**: All single-letter key bindings MUST be case-insensitive — `r` and `R` trigger the same action, `d` and `D` trigger the same action, etc. Applications MUST bind both cases but MUST display only the lowercase form in the footer key strip.
 *   **Project rule**: Inside `ide` workspaces, unmodified printable keys and `Ctrl+h/j/k/l` belong strictly to the
-    active foreground application (`Layer 1`), while `Alt`-modified chords (`Alt+h/j/k/l`, `Alt+a/e/t`, `Alt+s`,
-    `Alt+m`, `Alt+q`, `Alt+?`) and `Shift`-distinct counterparts (`Alt+Shift+H/J/K/L` swap, `Alt+Shift+E/T` park,
-    `Alt+Shift+S` next attention, `Alt+Shift+Q` force-quit) govern workspace actions (`Layer 2`) across both normal
+    active foreground application (`Layer 1`), while `Alt`-modified chords (`Alt+h/j/k/l`, `Alt+a/e/t`, `Alt+w`,
+    `Alt+q`, `Alt+?`) and `Shift`-distinct counterparts (`Alt+Shift+H/J/K/L` swap, `Alt+Shift+A/E/T` park,
+    `Alt+Shift+W` next attention, `Alt+Shift+M` monitor, `Alt+Shift+Arrow` resize, `Alt+Shift+Q` force-quit) govern workspace actions (`Layer 2`) across both normal
     panes and `tmux` `copy-mode-vi` (preserving active `scroll_position`). Inside `ide -s`
     (`§11.5` fuzzy layer), all printable characters feed the `fzf` filter, `Tab` toggles multi-session selection
     (`--multi`) for batch `Ctrl+y` acknowledgment and `Ctrl+x` quit while `Alt+l` and `Alt+h` switch focus between the
@@ -177,7 +177,7 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
 
 *   **Original**: Level 4 (modal overlay) MUST dim all background content behind the modal. The scrim MUST apply the dim attribute (SGR 2) to all non-modal cells while preserving their character content.
 *   **Project rule**: Do not rewrite background pane buffers to simulate an `SGR 2` scrim when opening `tmux`
-    `display-popup` overlays (`Alt+s`, `Alt+n`, `Alt+o`, `Alt+m`, `Alt+?`) or `Expand-to-Focus` views.
+    `display-popup` overlays (`Alt+w`, `Alt+n`, `Alt+o`, `Alt+Shift+M`, `Alt+?`) or `Expand-to-Focus` views.
 *   **Reason**: Mutating live terminal pane buffers behind a `tmux` popup would corrupt running TUI applications;
     rounded `BASE01` popup borders clearly bound the modal surface.
 

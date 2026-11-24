@@ -22,10 +22,11 @@
     fi
 }
 
-# Oh-My-Zsh non-interactive auto update and clean history
+# Oh-My-Zsh non-interactive auto update, clean history, and XON/XOFF flow-control disable (frees Ctrl+s)
 DISABLE_UPDATE_PROMPT="true"
 zstyle ':omz:update' mode auto
 setopt HIST_IGNORE_SPACE
+setopt NO_FLOW_CONTROL
 
 # Source modular dotfile entrypoints
 [ -f "$HOME/.environment-variables" ] && source "$HOME/.environment-variables"
@@ -64,6 +65,17 @@ if (( $+functions[_hs_recover_stale_cwd] )); then
     typeset -ga precmd_functions preexec_functions
     precmd_functions=(_hs_recover_stale_cwd ${precmd_functions:#_hs_recover_stale_cwd})
     preexec_functions=(_hs_recover_stale_cwd ${preexec_functions:#_hs_recover_stale_cwd})
+fi
+
+# Word navigation on Alt+Left/Right and macOS Option+Left/Right (CSI 1;3 and ESC-CSI sequences)
+if [[ -o interactive ]]; then
+    for _hs_km in emacs viins; do
+        bindkey -M "$_hs_km" '^[[1;3D' backward-word
+        bindkey -M "$_hs_km" '^[[1;3C' forward-word
+        bindkey -M "$_hs_km" '^[^[[D' backward-word
+        bindkey -M "$_hs_km" '^[^[[C' forward-word
+    done
+    unset _hs_km
 fi
 
 # FZF fuzzy finder integration (Ctrl+R history, Ctrl+T files, Alt+C cd)

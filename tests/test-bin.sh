@@ -214,7 +214,7 @@ def wait_noncanon(fd, deadline):
 
 for winsz, expect_marker in (
     (struct.pack("HHHH", 34, 108, 0, 0), b"Ack attention or open PR"),
-    (struct.pack("HHHH", 24, 80, 0, 0), b"C-y/o/M-r (Alt+s)"),
+    (struct.pack("HHHH", 24, 80, 0, 0), b"C-y/o/M-r (Alt+w)"),
 ):
     mfd, sfd = pty.openpty()
     fcntl.ioctl(sfd, termios.TIOCSWINSZ, winsz)
@@ -282,19 +282,20 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    ! "$SCRIPT_DIR/bin/ide" keys --unknown-flag >/dev/null 2>&1 && \
    ! "$SCRIPT_DIR/bin/ide" --agent invalid-agent keys >/dev/null 2>&1 && \
    grep -Fq "Alt+h / j / k / l" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+s / Prefix+s" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+w / Prefix+w" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+n / Alt+o" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+y / o (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+r     (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+x    (Alt+s)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Ctrl+y / o (Alt+w)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+r     (Alt+w)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Ctrl+x    (Alt+w)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+u / Prefix+v" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Prefix + | / -" <<< "$IDE_KEYS_OUT" && \
    grep -Fq ":IdeSend [session]" <<< "$IDE_KEYS_OUT" && \
    grep -Fq ":IdeSend! [sess]" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+y / o (Alt+s)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
+   grep -Fq "Ctrl+y / o (Alt+w)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
    grep -Fq ":IdeSend [session]" <<< "${IDE_KEYS_OUT#*SEND TO AI PROMPT}" && \
-   grep -Fq "Alt+Shift+S" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+m / Prefix+m" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+W" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+S-Arrow / Drag" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+M / Pfx+m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Click top bar" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+A/E/T" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space gs / t" <<< "$IDE_KEYS_OUT" && \
@@ -307,8 +308,10 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space m" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+? / F1 / Pfx+?" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+l / h (Alt+s)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "C-y/o/M-r (Alt+s)" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "Alt+l / h (Alt+w)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "C-y/o/M-r (Alt+w)" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "Alt+S-Arrow/Drag" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "Alt+Shift+M" <<< "$IDE_KEYS_COMPACT_OUT" && \
    ! grep -Fq $'\033[' <<< "$(NO_COLOR=1 "$SCRIPT_DIR/bin/ide" keys)" && \
    ! grep -Fq "" <<< "$(IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" keys)" && \
    grep -Fq $'\033[1m' <<< "$(TERM=dumb "$SCRIPT_DIR/bin/ide" keys)" && \
@@ -1389,8 +1392,38 @@ SH
             tmux set-buffer "stale-ssh-buf"
             env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" _internal paste "$term_pane"
             paste_reattach_local_got="$(tmux show-buffer 2>/dev/null || true)"
+            # Verify Wayland wl-paste MIME filtering: image/png-only clipboard never dumps binary bytes into tmux paste-buffer, while text/plain;charset=utf-8 pastes cleanly
+            cat > "$COPY_MOCK_DIR/wl-paste" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "--primary" ]; then
+    exit 1
+fi
+if [ "${1:-}" = "--list-types" ]; then
+    if [ "${MOCK_WL_MODE:-}" = "image" ]; then
+        printf 'image/png\n'
+    else
+        printf 'image/png\ntext/plain;charset=utf-8\ntext/plain\n'
+    fi
+    exit 0
+fi
+if [ "${1:-}" = "--type" ]; then
+    if [ "${MOCK_WL_MODE:-}" != "image" ] && [[ "${2:-}" == text/* ]]; then
+        printf 'from-wayland-text-mime'
+        exit 0
+    fi
+    exit 1
+fi
+printf '\x89PNG\r\n\x1a\nbinary-garbage'
+exit 0
+SH
+            chmod +x "$COPY_MOCK_DIR/wl-paste"
             tmux set-environment -t "=ws_3pane_test" -r DISPLAY 2>/dev/null || true
             tmux set-environment -gu DISPLAY 2>/dev/null || true
+            tmux set-buffer "wayland-fallback-safe"
+            MOCK_WL_MODE="image" WAYLAND_DISPLAY="wayland-99" env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" _internal paste "$term_pane"
+            paste_wl_img_got="$(tmux show-buffer 2>/dev/null || true)"
+            MOCK_WL_MODE="text" WAYLAND_DISPLAY="wayland-99" env -u DISPLAY -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT PATH="$COPY_MOCK_DIR:$PATH" "$SCRIPT_DIR/bin/ide" _internal paste "$term_pane"
+            paste_wl_txt_got="$(tmux show-buffer 2>/dev/null || true)"
             rm -rf "$COPY_MOCK_DIR"
             if [ "$copy_tmux_got" = "solarized-clipboard-payload" ] && [ "$copy_xsel_got" = "solarized-clipboard-payload" ] && \
                [ "$copy_ssh_tmux_got" = "ssh-copy-payload" ] && [ -z "$copy_ssh_xsel_got" ] && \
@@ -1400,10 +1433,12 @@ SH
                [ "$ssh_url_buf_got" = "https://example.com/ssh-osc52" ] && [ -z "$ssh_browser_got" ] && \
                [[ "$wayland_after_reattach" != *"wayland-stale"* ]] && \
                [ "$copy_reattach_local_xsel_got" = "local-reattach-copy" ] && \
-               [ "$paste_reattach_local_got" = "from-xsel-clipboard" ]; then
-                echo "PASS:bin/ide _internal copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11 (skipping X11 over SSH), _internal paste prioritizes CLIPBOARD over PRIMARY on local desktop and tmux buffer over SSH, _internal open-link copies URLs via OSC 52 without launching local browsers over SSH, and local <-> SSH re-attachment synchronizes session & global env"
+               [ "$paste_reattach_local_got" = "from-xsel-clipboard" ] && \
+               [ "$paste_wl_img_got" = "wayland-fallback-safe" ] && \
+               [ "$paste_wl_txt_got" = "from-wayland-text-mime" ]; then
+                echo "PASS:bin/ide _internal copy discovers DISPLAY from tmux and broadcasts to OSC 52 + X11 (skipping X11 over SSH), _internal paste prioritizes CLIPBOARD over PRIMARY on local desktop, filters Wayland wl-paste to text MIME types, and uses tmux buffer over SSH, _internal open-link copies URLs via OSC 52 without launching local browsers over SSH, and local <-> SSH re-attachment synchronizes session & global env"
             else
-                echo "FAIL:bin/ide _internal copy / paste:Expected copy='solarized-clipboard-payload', ssh_copy='ssh-copy-payload' (xsel=''), paste_local='from-xsel-clipboard', paste_ssh='from-tmux-ssh-buf', copy_ssh_sess='ssh-reattach-copy' (xsel=''), paste_ssh_sess='from-tmux-ssh-sess-env', ssh_url='https://example.com/ssh-osc52' (browser=''), wayland!='WAYLAND_DISPLAY=wayland-stale', copy_reattach_local='local-reattach-copy', reattach_local='from-xsel-clipboard', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' ssh_tmux='$copy_ssh_tmux_got' ssh_xsel='$copy_ssh_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess_copy='$copy_ssh_sess_tmux_got/$copy_ssh_sess_xsel_got' ssh_sess='$paste_ssh_sess_got' ssh_url='$ssh_url_buf_got' browser='$ssh_browser_got' wayland='$wayland_after_reattach' copy_reattach='$copy_reattach_local_xsel_got' reattach_local='$paste_reattach_local_got'"
+                echo "FAIL:bin/ide _internal copy / paste:Expected copy='solarized-clipboard-payload', ssh_copy='ssh-copy-payload' (xsel=''), paste_local='from-xsel-clipboard', paste_ssh='from-tmux-ssh-buf', copy_ssh_sess='ssh-reattach-copy' (xsel=''), paste_ssh_sess='from-tmux-ssh-sess-env', ssh_url='https://example.com/ssh-osc52' (browser=''), wayland!='WAYLAND_DISPLAY=wayland-stale', copy_reattach_local='local-reattach-copy', reattach_local='from-xsel-clipboard', wl_img='wayland-fallback-safe', wl_txt='from-wayland-text-mime', got tmux='$copy_tmux_got' xsel='$copy_xsel_got' ssh_tmux='$copy_ssh_tmux_got' ssh_xsel='$copy_ssh_xsel_got' local='$paste_local_got' ssh='$paste_ssh_got' ssh_sess_copy='$copy_ssh_sess_tmux_got/$copy_ssh_sess_xsel_got' ssh_sess='$paste_ssh_sess_got' ssh_url='$ssh_url_buf_got' browser='$ssh_browser_got' wayland='$wayland_after_reattach' copy_reattach='$copy_reattach_local_xsel_got' reattach_local='$paste_reattach_local_got' wl_img='$paste_wl_img_got' wl_txt='$paste_wl_txt_got'"
             fi
 
             # Verify untagged pane recovery and self-healing Editor
