@@ -19,6 +19,10 @@
 #   keybind = alt+right=text:\x1b[1;3C
 #   keybind = alt+up=text:\x1b[1;3A
 #   keybind = alt+down=text:\x1b[1;3B
+#   keybind = alt+shift+left=text:\x1b[1;4D
+#   keybind = alt+shift+right=text:\x1b[1;4C
+#   keybind = alt+shift+up=text:\x1b[1;4A
+#   keybind = alt+shift+down=text:\x1b[1;4B
 # ==============================================================================
 
 set -euo pipefail

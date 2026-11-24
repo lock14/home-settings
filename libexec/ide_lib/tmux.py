@@ -819,7 +819,45 @@ def paste_from_system_clipboard(target_pane: str) -> None:
                     if data:
                         break
         if not data and os.environ.get("WAYLAND_DISPLAY") and which_executable("wl-paste"):
-            data = try_cmd(["wl-paste", "--no-newline"]) or try_cmd(["wl-paste", "--primary", "--no-newline"])
+            def _wl_paste_text(primary: bool) -> bytes:
+                p_flag = ["--primary"] if primary else []
+                raw_types = try_cmd(["wl-paste", *p_flag, "--list-types"])
+                if raw_types:
+                    lines = [
+                        ln.strip()
+                        for ln in raw_types.decode("utf-8", errors="ignore").splitlines()
+                        if ln.strip()
+                    ]
+                    looks_like_mimes = bool(lines) and all(
+                        "/" in ln or ln in ("TEXT", "STRING", "UTF8_STRING", "COMPOUND_TEXT")
+                        for ln in lines
+                    )
+                    if looks_like_mimes:
+                        preferred = (
+                            "text/plain;charset=utf-8",
+                            "text/plain",
+                            "UTF8_STRING",
+                            "TEXT",
+                            "STRING",
+                        )
+                        chosen_mime = next((m for m in preferred if m in lines), "")
+                        if not chosen_mime:
+                            chosen_mime = next((ln for ln in lines if ln.lower().startswith("text/")), "")
+                        if not chosen_mime:
+                            return b""
+                        return try_cmd(["wl-paste", *p_flag, "--type", chosen_mime, "--no-newline"])
+                for mime in ("text/plain;charset=utf-8", "text/plain", "UTF8_STRING"):
+                    cand = try_cmd(["wl-paste", *p_flag, "--type", mime, "--no-newline"])
+                    if cand:
+                        return cand
+                cand_fb = try_cmd(["wl-paste", *p_flag, "--no-newline"])
+                if cand_fb.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a")):
+                    return b""
+                if len(cand_fb) >= 12 and cand_fb[:4] == b"RIFF" and cand_fb[8:12] == b"WEBP":
+                    return b""
+                return cand_fb
+
+            data = _wl_paste_text(False) or _wl_paste_text(True)
         if not data and which_executable("pbpaste"):
             data = try_cmd(["pbpaste"])
     if not data and which_executable("tmux"):

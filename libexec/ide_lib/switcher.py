@@ -429,7 +429,7 @@ def format_sessions_footer_label(pane_w: int = 120, in_two_pane: bool = False) -
             "C-x: quit",
             "C-r/F5: reload",
             "F1: help",
-            "Alt+s: close",
+            "Alt+w: close",
         ]
         priority = [0, 1, 11, 3, 5, 6, 8, 7, 4, 9, 10, 2]
     else:
@@ -444,7 +444,7 @@ def format_sessions_footer_label(pane_w: int = 120, in_two_pane: bool = False) -
             "C-x: quit",
             "C-r/F5: reload",
             "F1: help",
-            "Alt+s: close",
+            "Alt+w: close",
         ]
         priority = [0, 10, 2, 4, 5, 7, 6, 1, 3, 8, 9]
 
@@ -571,7 +571,7 @@ def build_sessions_fzf_args(
         "--border-label-pos=bottom",
         *color_label_args,
         f"--expect={expect_spec}",
-        "--bind=alt-s:abort",
+        "--bind=alt-w:abort",
         "--bind=f12:refresh-preview",
         *resize_binds,
         *switcher_extra_binds,
@@ -628,7 +628,7 @@ _parse_fzf_session_output = parse_fzf_session_output
 
 
 class OuterSwitcherSnapshot:
-    """Single-round-trip tmux client, session, and pane topology snapshot for `Alt+s`."""
+    """Single-round-trip tmux client, session, and pane topology snapshot for `Alt+w`."""
 
     __slots__ = (
         "server_up",
@@ -678,7 +678,7 @@ def _tmux_dquote(s: str) -> str:
 
 
 def query_outer_switcher_snapshot(target_arg: str) -> OuterSwitcherSnapshot:
-    """Collect client, session, and pane topology for `Alt+s` in a single tmux IPC round-trip."""
+    """Collect client, session, and pane topology for `Alt+w` in a single tmux IPC round-trip."""
     snap = OuterSwitcherSnapshot()
     res = run_tmux(
         "list-clients",
@@ -1066,7 +1066,7 @@ def run_interactive_switcher_session(
         f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_new_title}},}},#{{@ide_sw_new_title}},New Workspace}} #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},48}},(Alt+n/o · Esc: back) ,}},"
         f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},44}},(Alt+l: interact) ,}},"
         f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions #{{?#{{e|>=:#{{pane_width}},40}},(Alt+h: list) ,}}}}}},"
-        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},64}},(Alt+h: list · Alt+s: close) ,(Alt+h) }},"
+        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},64}},(Alt+h: list · Alt+w: close) ,(Alt+h) }},"
         f"#[fg={hex_map['BASE0']}#,nobold]  {ai_ico}#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold][PREVIEW] #{{?#{{e|>=:#{{pane_width}},64}},(Alt+l / click: interact) ,(Alt+l) }}}}}}"
     )
 

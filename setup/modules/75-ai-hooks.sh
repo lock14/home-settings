@@ -49,8 +49,15 @@ mode = sys.argv[2]
 dry_run = sys.argv[3].lower() == "true"
 
 AGY_HOOKS_PATH = os.path.join(home_dir, ".gemini", "config", "hooks.json")
+AGY_KEYBINDINGS_PATH = os.path.join(home_dir, ".gemini", "antigravity-cli", "keybindings.json")
 CLAUDE_SETTINGS_PATH = os.path.join(home_dir, ".claude", "settings.json")
+CLAUDE_KEYBINDINGS_PATH = os.path.join(home_dir, ".claude", "keybindings.json")
 CODEX_CONFIG_PATH = os.path.join(home_dir, ".codex", "config.toml")
+
+AGY_JUMP_ACTION = "subagent.jump_to_waiting"
+AGY_MANAGED_JUMP_KEYS = ["alt+g"]
+CLAUDE_THINKING_ACTION = "chat:thinkingToggle"
+CLAUDE_MANAGED_KEY = "alt+g"
 
 AGY_IDE_BLOCK = {
     "SessionStart": [
@@ -339,4 +346,119 @@ def reconcile_codex() -> None:
 reconcile_agy()
 reconcile_claude()
 reconcile_codex()
+
+
+def reconcile_agy_keybindings() -> None:
+    data = load_json_dict(AGY_KEYBINDINGS_PATH)
+    if data is None:
+        print(f"  Skipping {AGY_KEYBINDINGS_PATH} (existing file is not a JSON object).")
+        return
+    if mode == "uninstall":
+        if not os.path.isfile(AGY_KEYBINDINGS_PATH):
+            return
+        if data.get(AGY_JUMP_ACTION) != AGY_MANAGED_JUMP_KEYS:
+            return
+        updated = {k: v for k, v in data.items() if k != AGY_JUMP_ACTION}
+        if not updated:
+            remove_file_and_prune_empty(AGY_KEYBINDINGS_PATH, home_dir)
+        else:
+            atomic_write_text(AGY_KEYBINDINGS_PATH, json.dumps(updated, indent=2) + "\n")
+        return
+
+    if AGY_JUMP_ACTION in data:
+        return
+    updated = dict(data)
+    updated[AGY_JUMP_ACTION] = list(AGY_MANAGED_JUMP_KEYS)
+    atomic_write_text(AGY_KEYBINDINGS_PATH, json.dumps(updated, indent=2) + "\n")
+
+
+def reconcile_claude_keybindings() -> None:
+    data = load_json_dict(CLAUDE_KEYBINDINGS_PATH)
+    if data is None:
+        print(f"  Skipping {CLAUDE_KEYBINDINGS_PATH} (existing file is not a JSON object).")
+        return
+    raw_blocks = data.get("bindings")
+    if raw_blocks is not None and not isinstance(raw_blocks, list):
+        print(f"  Skipping {CLAUDE_KEYBINDINGS_PATH} ('bindings' is not a list).")
+        return
+
+    if mode == "uninstall":
+        if not os.path.isfile(CLAUDE_KEYBINDINGS_PATH) or not isinstance(raw_blocks, list):
+            return
+        changed = False
+        kept_blocks: list[object] = []
+        for blk in raw_blocks:
+            if not isinstance(blk, dict) or blk.get("context") != "Chat" or not isinstance(blk.get("bindings"), dict):
+                kept_blocks.append(blk)
+                continue
+            bmap = dict(blk["bindings"])
+            had_managed_g = bmap.get(CLAUDE_MANAGED_KEY) == CLAUDE_THINKING_ACTION
+            if had_managed_g:
+                bmap.pop(CLAUDE_MANAGED_KEY, None)
+                changed = True
+            if "meta+t" in bmap and bmap["meta+t"] is None and had_managed_g:
+                bmap.pop("meta+t", None)
+                changed = True
+            if bmap or set(blk.keys()) - {"context", "bindings"}:
+                new_blk = dict(blk)
+                new_blk["bindings"] = bmap
+                kept_blocks.append(new_blk)
+            else:
+                changed = True
+        if not changed:
+            return
+        updated = dict(data)
+        if kept_blocks:
+            updated["bindings"] = kept_blocks
+        else:
+            updated.pop("bindings", None)
+        if not updated or set(updated.keys()) <= {"$schema", "$docs"}:
+            remove_file_and_prune_empty(CLAUDE_KEYBINDINGS_PATH, home_dir)
+        else:
+            atomic_write_text(CLAUDE_KEYBINDINGS_PATH, json.dumps(updated, indent=2) + "\n")
+        return
+
+    blocks: list[object] = list(raw_blocks) if isinstance(raw_blocks, list) else []
+    chat_idx: int | None = None
+    for idx, blk in enumerate(blocks):
+        if not isinstance(blk, dict) or blk.get("context") != "Chat":
+            continue
+        bmap = blk.get("bindings")
+        if not isinstance(bmap, dict):
+            return
+        if chat_idx is None:
+            chat_idx = idx
+        if ("meta+t" in bmap and bmap["meta+t"] is not None) or "alt+t" in bmap:
+            return
+        if CLAUDE_MANAGED_KEY in bmap and bmap[CLAUDE_MANAGED_KEY] != CLAUDE_THINKING_ACTION:
+            return
+        for k_chord, v_act in bmap.items():
+            if v_act == CLAUDE_THINKING_ACTION and k_chord != CLAUDE_MANAGED_KEY:
+                return
+
+    if chat_idx is None:
+        blocks.append({"context": "Chat", "bindings": {"meta+t": None, CLAUDE_MANAGED_KEY: CLAUDE_THINKING_ACTION}})
+    else:
+        target_blk = dict(blocks[chat_idx])  # type: ignore[arg-type]
+        target_bmap = dict(target_blk["bindings"])  # type: ignore[arg-type]
+        target_bmap["meta+t"] = None
+        target_bmap[CLAUDE_MANAGED_KEY] = CLAUDE_THINKING_ACTION
+        target_blk["bindings"] = target_bmap
+        blocks[chat_idx] = target_blk
+
+    updated = dict(data)
+    updated["bindings"] = blocks
+    rendered = json.dumps(updated, indent=2) + "\n"
+    if os.path.isfile(CLAUDE_KEYBINDINGS_PATH):
+        try:
+            with open(CLAUDE_KEYBINDINGS_PATH, "r", encoding="utf-8") as fh:
+                if fh.read() == rendered:
+                    return
+        except OSError:
+            pass
+    atomic_write_text(CLAUDE_KEYBINDINGS_PATH, rendered)
+
+
+reconcile_agy_keybindings()
+reconcile_claude_keybindings()
 PY

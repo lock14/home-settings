@@ -816,12 +816,16 @@ def main(argv: list[str] | None = None) -> int:
                     "Prefix + r",
                     "Alt+h/j/k/l",
                     "Alt+Shift+H/J/K/L",
+                    "Alt+Shift+Left/Down/Up/Right",
                     "Alt+a",
                     "Alt+e",
                     "Alt+t",
+                    "Alt+w",
+                    "Alt+Shift+W",
                     "Alt+n",
                     "Alt+o",
                     "Alt+u",
+                    "Alt+Shift+M",
                     "Alt+Shift+E",
                     "Alt+Shift+T",
                     "Alt+Shift+A",
@@ -841,6 +845,7 @@ def main(argv: list[str] | None = None) -> int:
                     "Ctrl+Shift+H/J/K/L",
                     "Ctrl+Shift+T",
                     "Alt+Left/Right/Up/Down",
+                    "Alt+Shift+Left/Right/Up/Down",
                 ],
             ),
         ]
@@ -860,6 +865,12 @@ def main(argv: list[str] | None = None) -> int:
                 r"keybind = alt+right=text:\x1b[1;3C",
                 r"keybind = alt+up=text:\x1b[1;3A",
                 r"keybind = alt+down=text:\x1b[1;3B",
+            ],
+            "Alt+Shift+Left/Right/Up/Down": [
+                r"keybind = alt+shift+left=text:\x1b[1;4D",
+                r"keybind = alt+shift+right=text:\x1b[1;4C",
+                r"keybind = alt+shift+up=text:\x1b[1;4A",
+                r"keybind = alt+shift+down=text:\x1b[1;4B",
             ],
         }
         readme_table_lines = "\n".join(

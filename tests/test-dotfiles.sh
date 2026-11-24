@@ -117,7 +117,11 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'set -g @ide_is_editor' "$TEMP_HOME/.tmux.conf" && \
    [ "$(grep -c '#{E:@ide_is_editor}' "$TEMP_HOME/.tmux.conf")" -ge 6 ] && \
    [ "$(grep -c 'm/ri:\^g?(view' "$TEMP_HOME/.tmux.conf")" -eq 1 ] && \
-   grep -q 'bind -n M-Left resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-S-Left resize-pane -L 5' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '^unbind -n M-Left$' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '^unbind -n M-s$' "$TEMP_HOME/.tmux.conf" && \
+   grep -q '^unbind -n M-m$' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'set -g @ide_is_local_agy' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -n MouseDrag1Border resize-pane -M' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_tab_ai' "$TEMP_HOME/.tmux.conf" && \
    grep -q '@ide_tab_ed' "$TEMP_HOME/.tmux.conf" && \
@@ -144,12 +148,14 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'range=user|help' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind -T copy-mode-vi a.*ide send --stdin' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'set -g status-right-length 160' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-s if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-w if-shell' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind w if-shell' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind s if-shell' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-S.* next ' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-W.* next ' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind W.* next ' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind S.* next ' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'IDE_CLIENT=#{q:client_name}.* switch #{q:session_name}' "$TEMP_HOME/.tmux.conf" && \
-   grep -q 'bind -n M-m.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
+   grep -q 'bind -n M-M.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'bind m.*ide monitor' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'command-alias\[101\] display-keys-ide=' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'display-popup -E -w 108 -h 34 "\$HOME/.local/bin/ide keys"' "$TEMP_HOME/.tmux.conf" && \
@@ -187,9 +193,9 @@ if [ -f "$TEMP_HOME/.tmux.conf" ] && \
    grep -q 'SSH_CONNECTION' "$TEMP_HOME/.tmux.conf" && \
    grep -q 'SSH_TTY' "$TEMP_HOME/.tmux.conf" && \
    ! grep -Eq '#\([^)]+\)' "$TEMP_HOME/.tmux.conf"; then
-    pass ".tmux.conf configures event-driven Solarized Dark top header bar (fixed status-left, zero-shift @ide_tab_* state tinting, clickable attn/fleet pills, Alt+s/Alt+Shift+S navigation, copy-mode a dispatch, Alt+? cheatsheet), zero-fork if-shell -F lifecycle hooks, TrueColor undercurls, and 4-layer Alt navigation"
+    pass ".tmux.conf configures event-driven Solarized Dark top header bar (fixed status-left, zero-shift @ide_tab_* state tinting, clickable attn/fleet pills, Alt+w/Alt+Shift+W navigation, copy-mode a dispatch, Alt+? cheatsheet), zero-fork if-shell -F lifecycle hooks, TrueColor undercurls, and 4-layer Alt navigation"
 else
-    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_tab_* state tinting, attn/fleet pills, Alt+s/Alt+Shift+S bindings, zero-fork lifecycle hooks, or 4-layer navigation settings in .tmux.conf"
+    fail ".tmux.conf verification" "Missing expected Solarized Dark top bar, @ide_tab_* state tinting, attn/fleet pills, Alt+w/Alt+Shift+W bindings, zero-fork lifecycle hooks, or 4-layer navigation settings in .tmux.conf"
 fi
 
 if command -v tmux >/dev/null 2>&1; then
@@ -242,13 +248,24 @@ if command -v tmux >/dev/null 2>&1; then
         eval_sright_sub="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role ai
         eval_ai_non_editor="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
+        eval_sleep_non_agy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_local_agy}')"
+        ln -sf "$(command -v sleep)" "$TEMP_HOME/agy"
+        agy_pane="$(tmux -L "$TMUX_TEST_SOCK" new-window -d -P -F '#{pane_id}' -t "=cfg_test:" -n _ide_park_agy_chk "exec '$TEMP_HOME/agy' 30")"
+        for _ in $(seq 1 25); do
+            [ "$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$agy_pane" '#{pane_current_command}')" = "agy" ] && break
+            sleep 0.02
+        done
+        eval_local_agy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$agy_pane" '#{E:@ide_is_local_agy}')"
         tmux -L "$TMUX_TEST_SOCK" setw -t "=cfg_test:" synchronize-panes on
         eval_sright_sync="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" setw -t "=cfg_test:" synchronize-panes off
         tmux -L "$TMUX_TEST_SOCK" set-environment -t "=cfg_test" SSH_CONNECTION "10.0.0.1 12345 10.0.0.2 22"
+        eval_ssh_agy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$agy_pane" '#{E:@ide_is_local_agy}')"
         eval_sright_ssh="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         eval_title_ssh="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:set-titles-string}')"
         tmux -L "$TMUX_TEST_SOCK" set-environment -u -t "=cfg_test" SSH_CONNECTION
+        tmux -L "$TMUX_TEST_SOCK" kill-window -t "$agy_pane" >/dev/null 2>&1 || true
+        rm -f "$TEMP_HOME/agy"
         tmux -L "$TMUX_TEST_SOCK" if-shell -t "$cfg_pane" -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; send-keys -X copy-pipe-no-clear'
         eval_sright_copy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:status-right}')"
         tmux -L "$TMUX_TEST_SOCK" send-keys -t "$cfg_pane" -X cancel
@@ -273,8 +290,11 @@ if command -v tmux >/dev/null 2>&1; then
         plain_wcur_attn="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_attn")"
         plain_wcur_done="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_done")"
         if [ "$eval_editor_non_shell" = "1" ] && [ "$eval_ai_non_editor" = "0" ] && \
+           [ "$eval_sleep_non_agy" = "0" ] && [ "$eval_local_agy" = "1" ] && [ "$eval_ssh_agy" = "0" ] && \
            ! grep -Eq 'Wheel(Up|Down)Status' <<< "$root_keys_out" && \
-           grep -Fq "M-h" <<< "$copy_keys_out" && grep -Fq "M-s" <<< "$copy_keys_out" && grep -Fq "M-a" <<< "$copy_keys_out" && \
+           ! grep -Eq 'root[[:space:]]+M-(s|S|m|Left|Right|Up|Down)[[:space:]]' <<< "$root_keys_out" && \
+           grep -Fq "M-S-Left" <<< "$root_keys_out" && grep -Fq "M-w" <<< "$root_keys_out" && grep -Fq "M-W" <<< "$root_keys_out" && grep -Fq "M-M" <<< "$root_keys_out" && \
+           grep -Fq "M-h" <<< "$copy_keys_out" && grep -Fq "M-w" <<< "$copy_keys_out" && grep -Fq "M-a" <<< "$copy_keys_out" && \
            [ "$resrc_attn" = "persist-attn" ] && [ "$resrc_cnt" = "4" ] && [ "$resrc_act" = "2" ] && [ "$resrc_loaded" = "1" ] && \
            [ "$up_env_total" -gt 0 ] && [ "$up_env_total" = "$up_env_uniq" ] && \
            grep -Fq "COLORTERM" <<< "$up_env_lines" && \
@@ -298,11 +318,11 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "Editor (Alt+e)" <<< "$eval_wcur" && \
            grep -Fq "Shell [Alt+T]" <<< "$eval_wcur" && \
            grep -Fq "range=user|help]#[fg=#839496,bg=#073642,nobold]󰋖 Help (Alt+?) " <<< "$eval_sright_root" && \
-           ! grep -Fq "(Alt+s)" <<< "$eval_sright_root" && \
-           grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 1 · 0 active (Alt+s)" <<< "$eval_sright_idle_fleet" && \
+           ! grep -Fq "(Alt+w)" <<< "$eval_sright_root" && \
+           grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 1 · 0 active (Alt+w)" <<< "$eval_sright_idle_fleet" && \
            ! grep -Fq "range=user|attn" <<< "$eval_sright_self_attn" && \
            grep -Fq "range=user|attn]#[fg=#CB4B16,bg=#073642,nobold]󰂚 alpha-ws +1 " <<< "$eval_sright_fleet" && \
-           grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]2 active#[fg=#839496,bg=#073642,nobold] (Alt+s)" <<< "$eval_sright_fleet" && \
+           grep -Fq "range=user|fleet]#[fg=#839496,bg=#073642,nobold] 3 · #[fg=#2AA198,bg=#073642,nobold]2 active#[fg=#839496,bg=#073642,nobold] (Alt+w)" <<< "$eval_sright_fleet" && \
            ! grep -Fq "subdir" <<< "$eval_sright_root" && \
            ! grep -Fq "SYNC" <<< "$eval_sright_root" && \
            ! grep -Fq "󰣀" <<< "$eval_sright_root" && \
@@ -367,10 +387,14 @@ if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
    grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$TEMP_HOME/.config/ghostty/config" && \
    grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$TEMP_HOME/.config/ghostty/config" && \
    grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, steady block cursor and SSH env fallback (no-cursor,ssh-env), clipboard-read/write = allow, macos-option-as-alt = true, Ctrl+Shift+T, and Alt+Arrow ESC keybinds"
+   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+left=text:\x1b[1;4D' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+right=text:\x1b[1;4C' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+up=text:\x1b[1;4A' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+down=text:\x1b[1;4B' "$TEMP_HOME/.config/ghostty/config"; then
+    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, steady block cursor and SSH env fallback (no-cursor,ssh-env), clipboard-read/write = allow, macos-option-as-alt = true, Ctrl+Shift+T, and Alt+Arrow / Alt+Shift+Arrow ESC keybinds"
 else
-    fail "Ghostty config verification" "Ghostty config missing expected theme, font, block cursor / no-cursor,ssh-env, clipboard-read/write, macos-option-as-alt, or Ctrl+Shift+T / Alt+Arrow keybinds"
+    fail "Ghostty config verification" "Ghostty config missing expected theme, font, block cursor / no-cursor,ssh-env, clipboard-read/write, macos-option-as-alt, or Ctrl+Shift+T / Alt+Arrow / Alt+Shift+Arrow keybinds"
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then

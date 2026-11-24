@@ -59,7 +59,7 @@ def map_raw_ai_state_badge(raw_state: str, raw_attn: str) -> str:
 
 
 def format_switcher_pane_label(sess: str, ai_cli: str, state: str = "") -> str:
-    """Format the right-pane `Alt+s` header `<sess> · <ai_cli>[ · <STATE>]`."""
+    """Format the right-pane `Alt+w` header `<sess> · <ai_cli>[ · <STATE>]`."""
     cli_lbl = ai_cli or "AI"
     st_lbl = state.strip()
     if st_lbl and st_lbl != "-":

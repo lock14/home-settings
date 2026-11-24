@@ -636,10 +636,14 @@ if grep -Fq 'cursor-style = block' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$THEME_TEST_Cfg/ghostty/config" && \
    grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$THEME_TEST_Cfg/ghostty/config" && \
-   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$THEME_TEST_Cfg/ghostty/config"; then
-    pass "bin/theme generates Ghostty config with steady block cursor, ssh-env fallback (no-cursor,ssh-env), and Ctrl+Shift+T / Alt+Arrow ESC keybindings"
+   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+left=text:\x1b[1;4D' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+right=text:\x1b[1;4C' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+up=text:\x1b[1;4A' "$THEME_TEST_Cfg/ghostty/config" && \
+   grep -Fq 'keybind = alt+shift+down=text:\x1b[1;4B' "$THEME_TEST_Cfg/ghostty/config"; then
+    pass "bin/theme generates Ghostty config with steady block cursor, ssh-env fallback (no-cursor,ssh-env), and Ctrl+Shift+T / Alt+Arrow / Alt+Shift+Arrow ESC keybindings"
 else
-    fail "bin/theme Ghostty cursor & keybindings" "Missing steady block cursor (no-cursor,ssh-env) or Ctrl+Shift+T / Alt+Arrow keybindings in generated Ghostty config"
+    fail "bin/theme Ghostty cursor & keybindings" "Missing steady block cursor (no-cursor,ssh-env) or Ctrl+Shift+T / Alt+Arrow / Alt+Shift+Arrow keybindings in generated Ghostty config"
 fi
 
 if command -v tmux >/dev/null 2>&1; then

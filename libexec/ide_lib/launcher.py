@@ -108,6 +108,10 @@ def _read_tty_key(fd: int) -> tuple[str, str]:
                 return ("left", "")
             if s == "C":
                 return ("right", "")
+            if s in ("1;3D", "1;5D"):
+                return ("word-left", "")
+            if s in ("1;3C", "1;5C"):
+                return ("word-right", "")
             if s == "A":
                 return ("up", "")
             if s == "B":
@@ -166,8 +170,8 @@ def _read_tty_key(fd: int) -> tuple[str, str]:
             return ("alt-o", "")
         if b1 == b"n":
             return ("alt-n", "")
-        if b1 == b"s":
-            return ("alt-s", "")
+        if b1 == b"w":
+            return ("alt-w", "")
         if b1 == b"2":
             return ("alt-2", "")
         if b1 in (b"\x7f", b"\x08"):
@@ -398,7 +402,7 @@ def run_create_workspace_dialog(
         while True:
             _render_card()
             kind, txt = _read_tty_key(fd)
-            if kind in ("esc", "alt-s", "ctrl-c", "eof"):
+            if kind in ("esc", "alt-w", "ctrl-c", "eof"):
                 return None
             if kind == "ctrl-d":
                 if not chars:
@@ -581,7 +585,7 @@ def run_agent_picker_dialog(
         while True:
             _render_agent_card()
             kind, txt = _read_tty_key(fd)
-            if kind in ("esc", "alt-s", "ctrl-c", "ctrl-d", "eof"):
+            if kind in ("esc", "alt-w", "ctrl-c", "ctrl-d", "eof"):
                 return None
             if kind == "text" and txt in ("q", "Q"):
                 return None

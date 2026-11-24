@@ -2639,13 +2639,21 @@ local function feed(keys)
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "mx", false)
 end
 
--- 1. Mode coverage for <M-s> and <M-S>
+-- 1. Mode coverage for <M-w> and <M-W> (and Select-mode isolation for <, >, J, K)
 local modes_ok = true
 for _, m in ipairs({ "n", "i", "v", "t" }) do
-    if type(vim.fn.maparg("<M-s>", m, false, true).callback) ~= "function" then
+    if type(vim.fn.maparg("<M-w>", m, false, true).callback) ~= "function" then
         modes_ok = false
     end
-    if type(vim.fn.maparg("<M-S>", m, false, true).callback) ~= "function" then
+    if type(vim.fn.maparg("<M-W>", m, false, true).callback) ~= "function" then
+        modes_ok = false
+    end
+    if vim.fn.maparg("<M-s>", m) ~= "" or vim.fn.maparg("<M-S>", m) ~= "" then
+        modes_ok = false
+    end
+end
+for _, k in ipairs({ "<", ">", "J", "K" }) do
+    if vim.fn.maparg(k, "x") == "" or vim.fn.maparg(k, "s") ~= "" then
         modes_ok = false
     end
 end
@@ -2714,13 +2722,13 @@ jobs = {}
 feed("ggVj<Space>a")
 local vis_scratch_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|send|--text|first scratch\nsecond scratch|fleet-sess" and vim.fn.mode() == "n")
 
--- 6. <leader>s, <M-s>, <M-S>, and <leader>? popup commands
+-- 6. <leader>s, <M-w>, <M-W>, and <leader>? popup commands
 jobs = {}
 vim.fn.maparg("<leader>s", "n", false, true).callback()
 local sess_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|switch|fleet-sess")
 
 jobs = {}
-vim.fn.maparg("<M-s>", "n", false, true).callback()
+vim.fn.maparg("<M-w>", "n", false, true).callback()
 local sess_alt_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|switch|fleet-sess")
 jobs = {}
 vim.fn.maparg("<leader>n", "n", false, true).callback()
@@ -2731,7 +2739,7 @@ local dir_leader_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|dir")
 local sess_popup_ok = sess_leader_ok and sess_alt_ok and new_leader_ok and dir_leader_ok
 
 jobs = {}
-vim.fn.maparg("<M-S>", "n", false, true).callback()
+vim.fn.maparg("<M-W>", "n", false, true).callback()
 local next_attn_ok = (#jobs == 1 and jobs[1] == ide_bin .. "|next|fleet-sess")
 
 jobs = {}
@@ -2818,7 +2826,7 @@ EOF
         rm -rf "$NVIM_FLEET_DIR" 2>/dev/null || { sleep 0.2; rm -rf "$NVIM_FLEET_DIR" || true; }
         EXPECTED_NVIM_FLEET="MODES=true|NORMA=true|VISF=true|VISR=true|IL=true|ID0=true|ID1=true|SCR=true|POP=true|ATTN=true|KEYS=true|ISEND=true"
         if [ "$NVIM_FLEET_OUT" = "$EXPECTED_NVIM_FLEET" ]; then
-            pass "Neovim init.lua preserves Normal <leader>a 0ms toggle, dispatches Visual <leader>a, <leader>il, and <leader>id context to AI, and wires <leader>s/<M-s> session switcher and <M-S> next-attention across n/i/v/t modes"
+            pass "Neovim init.lua preserves Normal <leader>a 0ms toggle, dispatches Visual <leader>a, <leader>il, and <leader>id context to AI, isolates Select mode from Visual <, >, J, K maps, and wires <leader>s/<M-w> session switcher and <M-W> next-attention across n/i/v/t modes"
         else
             fail "Neovim IDE session switcher & context dispatch keymaps" "Expected '$EXPECTED_NVIM_FLEET', got '$NVIM_FLEET_OUT'"
         fi

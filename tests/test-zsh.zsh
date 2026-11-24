@@ -451,6 +451,20 @@ test_addendum() {
         echo "FAIL:ZLE_RPROMPT_INDENT:Expected '0', got '${ZLE_RPROMPT_INDENT:-unset}'"
     fi
 
+    if [[ ! -o flowcontrol ]]; then
+        echo "PASS:NO_FLOW_CONTROL enabled (Ctrl+s unlocked for interactive shell and child TUIs)"
+    else
+        echo "FAIL:NO_FLOW_CONTROL:Expected flowcontrol option to be disabled"
+    fi
+
+    local zsh_word_binds
+    zsh_word_binds="$(HOME="$HOME" _ZO_DATA_DIR="$_ZO_DATA_DIR" zsh -f -i -c "source '$SCRIPT_DIR/dotfiles/.zshrc-addendum' >/dev/null 2>&1; bindkey -M emacs '^[[1;3D'; bindkey -M emacs '^[[1;3C'; bindkey -M viins '^[[1;3D'; bindkey -M viins '^[[1;3C'" </dev/null 2>/dev/null || true)"
+    if [[ "$zsh_word_binds" == *"backward-word"* ]] && [[ "$zsh_word_binds" == *"forward-word"* ]]; then
+        echo "PASS:Interactive Zsh binds Alt+Left/Right (^[[1;3D / ^[[1;3C) to backward-word and forward-word across emacs and viins keymaps"
+    else
+        echo "FAIL:Zsh Alt+Arrow word navigation:Expected backward-word and forward-word bindings, got '$zsh_word_binds'"
+    fi
+
     if [ "${POWERLEVEL9K_DIR_HYPERLINK:-}" = "false" ]; then
         echo "PASS:p10k directory OSC 8 hyperlinks disabled for clean text selection"
     else
