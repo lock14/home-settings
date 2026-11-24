@@ -200,7 +200,7 @@ fi
 
 if command -v tmux >/dev/null 2>&1; then
     TMUX_TEST_SOCK="test-tmux-cfg-$$"
-    if HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" TMUX="" TMUX_PANE="" env -u SSH_CONNECTION -u SSH_TTY tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test -n ide "exec sleep 30" >/dev/null 2>&1; then
+    if HOME="$TEMP_HOME" XDG_CONFIG_HOME="$TEMP_HOME/.config" TMUX="" TMUX_PANE="" env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT tmux -L "$TMUX_TEST_SOCK" -f "$TEMP_HOME/.tmux.conf" new-session -d -s cfg_test -n ide "exec sleep 30" >/dev/null 2>&1; then
         cfg_pane="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "=cfg_test:" '#{pane_id}')"
         for _ in $(seq 1 20); do
             [ "$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{pane_current_command}')" = "sleep" ] && break
@@ -249,8 +249,8 @@ if command -v tmux >/dev/null 2>&1; then
         tmux -L "$TMUX_TEST_SOCK" set-option -p -t "$cfg_pane" @ide_role ai
         eval_ai_non_editor="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_editor}')"
         eval_sleep_non_agy="$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$cfg_pane" '#{E:@ide_is_local_agy}')"
-        ln -sf "$(command -v sleep)" "$TEMP_HOME/agy"
-        agy_pane="$(tmux -L "$TMUX_TEST_SOCK" new-window -d -P -F '#{pane_id}' -t "=cfg_test:" -n _ide_park_agy_chk "exec '$TEMP_HOME/agy' 30")"
+        ln -sf "$(command -v bash)" "$TEMP_HOME/agy"
+        agy_pane="$(tmux -L "$TMUX_TEST_SOCK" new-window -d -P -F '#{pane_id}' -t "=cfg_test:" -n _ide_park_agy_chk "exec '$TEMP_HOME/agy' -c 'read -r _'")"
         for _ in $(seq 1 25); do
             [ "$(tmux -L "$TMUX_TEST_SOCK" display-message -p -t "$agy_pane" '#{pane_current_command}')" = "agy" ] && break
             sleep 0.02
@@ -332,7 +332,7 @@ if command -v tmux >/dev/null 2>&1; then
            grep -Fq "󰆏 COPY [" <<< "$eval_sright_copy"; then
             pass ".tmux.conf loads cleanly into live headless tmux server with duplicate-free update-environment across repeated source-file reloads and evaluates #{E:@ide_is_editor}, fixed status-left, zero-shift @ide_tab_* state tinting, clickable attn/fleet right-shelf pills, DoubleClick1Pane copy-mode chain, and conditional status-right"
         else
-            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor up_env=$up_env_total/$up_env_uniq wcur='$eval_wcur' run='$eval_wcur_run' attn='$eval_wcur_attn' done='$eval_wcur_done' fleet='$eval_sright_fleet' sright_root='$eval_sright_root'"
+            fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor sleep_agy=$eval_sleep_non_agy local_agy=$eval_local_agy ssh_agy=$eval_ssh_agy up_env=$up_env_total/$up_env_uniq wcur='$eval_wcur' run='$eval_wcur_run' attn='$eval_wcur_attn' done='$eval_wcur_done' fleet='$eval_sright_fleet' sright_root='$eval_sright_root'"
         fi
     else
         tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
