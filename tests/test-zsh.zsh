@@ -181,7 +181,7 @@ test_functions() {
             bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
             wait "$bg_nvim_pid" 2>/dev/null || true
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$multisess_dir/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
             if [ "$bg_remote_state" = "$SCRIPT_DIR/setup/modules/10-dotfiles.sh|3" ] && [ "$bg_checktime_line" = "after_edit" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/setup/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/setup/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
                 echo "PASS:v() and icd() target caller TMUX_PANE or \$0 session ID, trigger checktime on external edits, and verify server PID in multi-session tmux"
@@ -1399,7 +1399,7 @@ EOF
             if [ -S "$v_ed_sock" ] && command -v nvim >/dev/null 2>&1; then
                 NVIM_LOG_FILE=/dev/null sh -c 'if command -v timeout >/dev/null 2>&1; then exec timeout 2 "$@"; else exec "$@"; fi' _ nvim --headless --server "$v_ed_sock" --remote-send '<C-\><C-n><Cmd>qall!<CR>' </dev/null >/dev/null 2>&1 || true
             fi
-            TMUX_TMPDIR="$v_tmux_dir" XDG_RUNTIME_DIR="$v_tmux_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$v_tmux_dir/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             rm -rf "$v_tmux_dir"
         fi
 

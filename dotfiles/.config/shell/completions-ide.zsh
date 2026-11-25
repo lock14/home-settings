@@ -379,6 +379,10 @@ _ide() {
                     _describe -t options 'ide agent option' help_opts
                 elif (( ${#pos_args} == 0 )); then
                     _describe -t agents 'AI agent action' agent_cmds
+                    _ide_load_sessions; sessions=("${reply[@]}")
+                    if (( ${#sessions} )); then
+                        _describe -t sessions 'IDE session' sessions
+                    fi
                 elif (( ${#pos_args} == 1 )); then
                     _ide_load_sessions; sessions=("${reply[@]}")
                     if (( ${#sessions} )); then

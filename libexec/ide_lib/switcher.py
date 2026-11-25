@@ -42,6 +42,21 @@ from ide_lib.fleet import (
     populate_fleet_git,
 )
 from ide_lib.hooks import resolve_workspace_target, sanitize_session_name
+from ide_lib.keymap import (
+    AGENT_MODAL_KEY,
+    ALL_SESSION_EXPECT_KEYS,
+    CREATE_WS_FLIP_OPEN_KEY,
+    DIR_PICKER_FLIP_NEW_KEY,
+    NO_MATCH_LAUNCHER_EXPECT_KEYS,
+    SESSIONS_PROMPT,
+    build_action_fzf_binds,
+    format_sessions_footer_label,
+    is_ascii_ui,
+    pane_jump_mode_for_key,
+    sessions_expect_spec,
+    switcher_pane_border_hints,
+    ui_hint_sep,
+)
 from ide_lib.preview import (
     PipeHangupWatcher,
     format_fleet_sessions_lines,
@@ -51,6 +66,7 @@ from ide_lib.preview import (
 )
 from ide_lib.theme import build_fzf_env, detect_color_tier, load_active_palette
 from ide_lib.tmux import (
+    ensure_server_tmux_conf,
     pane_exists,
     resolve_active_client,
     resolve_switcher_context,
@@ -402,61 +418,8 @@ def handle_switcher_op(op: str, sw_sess: str) -> int:
     return 0
 
 
-def _ensure_switcher_tmux_conf(already_loaded: bool = False) -> None:
-    if already_loaded or tmux_out("show-options", "-gqv", "@ide_tmux_conf_loaded") == "1":
-        return
-    tmux_conf = os.path.expanduser("~/.tmux.conf")
-    if os.path.isfile(tmux_conf):
-        run_tmux("source-file", tmux_conf)
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    tmux_theme_conf = os.path.join(xdg_cfg, "home-settings", "tmux-theme.conf")
-    if os.path.isfile(tmux_theme_conf):
-        run_tmux("source-file", tmux_theme_conf)
-
-
-def format_sessions_footer_label(pane_w: int = 120, in_two_pane: bool = False) -> str:
-    """Pack complete middle-dot-separated key hints within `pane_w` without mid-word clipping."""
-    if in_two_pane:
-        ordered = [
-            "Enter: switch",
-            "Alt+l: AI",
-            "C-a/e/t: pane",
-            "C-y: ack",
-            "C-o: PR",
-            "M-n: new",
-            "M-o: open",
-            "M-r: agent",
-            "C-x: quit",
-            "C-r/F5: reload",
-            "F1: help",
-            "Alt+w: close",
-        ]
-        priority = [0, 1, 11, 3, 5, 6, 8, 7, 4, 9, 10, 2]
-    else:
-        ordered = [
-            "Enter: switch",
-            "C-a/e/t: pane",
-            "C-y: ack",
-            "C-o: PR",
-            "M-n: new",
-            "M-o: open",
-            "M-r: agent",
-            "C-x: quit",
-            "C-r/F5: reload",
-            "F1: help",
-            "Alt+w: close",
-        ]
-        priority = [0, 10, 2, 4, 5, 7, 6, 1, 3, 8, 9]
-
-    budget = max(24, pane_w - 4)
-    chosen_idxs: set[int] = set()
-    for p_idx in priority:
-        cand_idxs = sorted([*chosen_idxs, p_idx])
-        cand_str = " " + " · ".join(ordered[i] for i in cand_idxs) + " "
-        if visible_width(cand_str) <= budget or not chosen_idxs:
-            chosen_idxs.add(p_idx)
-    final_items = [ordered[i] for i in sorted(chosen_idxs)]
-    return " " + " · ".join(final_items) + " "
+def _ensure_switcher_tmux_conf(already_loaded: bool = False, loaded_ver: str = "") -> None:
+    ensure_server_tmux_conf(already_loaded=already_loaded, loaded_ver=loaded_ver)
 
 
 def build_sessions_fzf_args(
@@ -475,13 +438,11 @@ def build_sessions_fzf_args(
     """Construct `fzf` argument vector for single-pane or 2-pane `ai-sw-*` session switching."""
     self_q = shlex.quote(ide_self)
     reload_cmd = f"{self_q} _internal sessions-lines" + (f" {shlex.quote(cur_sess)}" if cur_sess else "")
-    quit_bind = f"ctrl-x:execute-silent({self_q} quit {{+1}})+reload({reload_cmd})"
-    ctrl_r_bind = f"ctrl-r:reload({reload_cmd})"
-    f5_bind = f"f5:reload({reload_cmd})"
-    ack_bind = f"ctrl-y:execute-silent({self_q} ack {{+1}})+reload({reload_cmd})"
-    open_pr_bind = f"ctrl-o:execute-silent({self_q} pr {{1}})"
-    help_bind = f"f1:execute({self_q} keys >/dev/tty </dev/tty)"
-    alt_qmark_bind = f"alt-?:execute({self_q} keys >/dev/tty </dev/tty)"
+    quit_rhs = f"execute-silent({self_q} quit {{+1}})+reload({reload_cmd})"
+    reload_rhs = f"reload({reload_cmd})"
+    ack_rhs = f"execute-silent({self_q} ack {{+1}})+reload({reload_cmd})"
+    open_pr_rhs = f"execute-silent({self_q} pr {{1}})"
+    help_rhs = f"execute({self_q} keys >/dev/tty </dev/tty)"
     zero_clear_pfx = ""
     if sw_sess and sw_tmp_dir:
         zero_flag_q = shlex.quote(os.path.join(sw_tmp_dir, "zero.pending"))
@@ -506,7 +467,9 @@ def build_sessions_fzf_args(
         sw_q = shlex.quote(sw_sess)
         meta_rows = min(7, max(4, pane_h // 4))
         preview_window_spec = f"down:{meta_rows}:wrap:noinfo"
-        switcher_extra_binds.append(f"--bind=alt-l:execute-silent({self_q} _internal switcher-op focus-ai {sw_q})")
+        switcher_extra_binds.extend(
+            build_action_fzf_binds("focus_ai", f"execute-silent({self_q} _internal switcher-op focus-ai {sw_q})")
+        )
         if supports_modern_binds:
             if sw_tmp_dir:
                 loaded_q = shlex.quote(os.path.join(sw_tmp_dir, "rows.loaded"))
@@ -517,15 +480,12 @@ def build_sessions_fzf_args(
             else:
                 switcher_extra_binds.append(f"--bind=zero:execute-silent({self_q} _internal switcher-op zero {sw_q})")
         else:
-            quit_bind = (
-                f"ctrl-x:execute-silent({self_q} quit {{+1}}; "
+            quit_rhs = (
+                f"execute-silent({self_q} quit {{+1}}; "
                 f"{self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
             )
-            ctrl_r_bind = (
-                f"ctrl-r:execute-silent({self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
-            )
-            f5_bind = (
-                f"f5:execute-silent({self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
+            reload_rhs = (
+                f"execute-silent({self_q} _internal switcher-op zero-check {sw_q})+reload({reload_cmd})"
             )
         resize_binds: list[str] = []
     else:
@@ -536,7 +496,11 @@ def build_sessions_fzf_args(
         )
         resize_binds = ["--bind=resize:refresh-preview"] if supports_modern_binds else []
 
-    footer_label = format_sessions_footer_label(pane_w=pane_w, in_two_pane=bool(sw_sess))
+    footer_label = format_sessions_footer_label(
+        pane_w=pane_w,
+        in_two_pane=bool(sw_sess),
+        sep=ui_hint_sep(),
+    )
     no_motion = bool(os.environ.get("NO_MOTION") or os.environ.get("REDUCE_MOTION"))
     spinner_hex = hex_map["BASE03"] if no_motion else hex_map["CYAN"]
     color_label_args = (
@@ -551,11 +515,7 @@ def build_sessions_fzf_args(
         ]
     )
 
-    expect_spec = (
-        "ctrl-a,ctrl-e,ctrl-t,alt-n,alt-o,alt-r"
-        if sw_sess
-        else "ctrl-a,ctrl-e,ctrl-t,alt-a,alt-e,alt-t,alt-n,alt-o,alt-r"
-    )
+    expect_spec = sessions_expect_spec(in_two_pane=bool(sw_sess))
     return [
         fzf_bin,
         "--ansi",
@@ -565,23 +525,21 @@ def build_sessions_fzf_args(
         "--layout=reverse",
         "--info=inline-right",
         "--no-scrollbar",
-        "--prompt=IDE > ",
+        f"--prompt={SESSIONS_PROMPT}",
         "--border=rounded",
         f"--border-label={footer_label}",
         "--border-label-pos=bottom",
         *color_label_args,
         f"--expect={expect_spec}",
-        "--bind=alt-w:abort",
+        *build_action_fzf_binds("close", "abort"),
         "--bind=f12:refresh-preview",
         *resize_binds,
         *switcher_extra_binds,
-        f"--bind={ctrl_r_bind}",
-        f"--bind={f5_bind}",
-        f"--bind={help_bind}",
-        f"--bind={alt_qmark_bind}",
-        f"--bind={ack_bind}",
-        f"--bind={open_pr_bind}",
-        f"--bind={quit_bind}",
+        *build_action_fzf_binds("reload", reload_rhs),
+        *build_action_fzf_binds("help", help_rhs),
+        *build_action_fzf_binds("ack", ack_rhs),
+        *build_action_fzf_binds("pr", open_pr_rhs),
+        *build_action_fzf_binds("quit", quit_rhs),
         f"--preview={preview_cmd}",
         f"--preview-window={preview_window_spec}",
     ]
@@ -589,20 +547,7 @@ def build_sessions_fzf_args(
 
 _build_sessions_fzf_args = build_sessions_fzf_args
 
-
-_SESSION_EXPECT_KEYS = frozenset({
-    "",
-    "enter",
-    "ctrl-a",
-    "ctrl-e",
-    "ctrl-t",
-    "alt-a",
-    "alt-e",
-    "alt-t",
-    "alt-n",
-    "alt-o",
-    "alt-r",
-})
+_SESSION_EXPECT_KEYS = ALL_SESSION_EXPECT_KEYS
 
 
 def parse_fzf_session_output(returncode: int, raw_out: str) -> tuple[str, str] | None:
@@ -611,7 +556,11 @@ def parse_fzf_session_output(returncode: int, raw_out: str) -> tuple[str, str] |
     first_key = out_lines[0].strip() if out_lines else ""
     if (
         returncode not in (0, 1)
-        or (returncode == 1 and first_key not in ("alt-n", "alt-o"))
+        or (
+            returncode == 1
+            and first_key not in NO_MATCH_LAUNCHER_EXPECT_KEYS
+            and first_key != AGENT_MODAL_KEY
+        )
         or not out_lines
     ):
         return None
@@ -635,6 +584,7 @@ class OuterSwitcherSnapshot:
         "server_pid",
         "sock_path",
         "tmux_conf_loaded",
+        "tmux_conf_ver",
         "origin_sess",
         "cur_sess",
         "client_name",
@@ -656,6 +606,7 @@ class OuterSwitcherSnapshot:
         self.server_pid = ""
         self.sock_path = ""
         self.tmux_conf_loaded = False
+        self.tmux_conf_ver = ""
         self.origin_sess = ""
         self.cur_sess = ""
         self.client_name = ""
@@ -709,6 +660,7 @@ def query_outer_switcher_snapshot(target_arg: str) -> OuterSwitcherSnapshot:
             "#{@ide_sw_done}",
             "#{@ide_sw_docked_sess}",
             "#{@ide_sw_selected_sess}",
+            "#{@ide_tmux_conf_ver}",
         ]),
         ";",
         "list-panes",
@@ -760,29 +712,33 @@ def query_outer_switcher_snapshot(target_arg: str) -> OuterSwitcherSnapshot:
                 if csess:
                     snap.focused_sessions.add(csess)
         elif line.startswith(sess_pfx):
-            sc = (line.split(TMUX_SEP)[1:] + [""] * 28)[:28]
+            n_base = len(_SESSION_FMT_FIELDS)
+            n_total = n_base + 10
+            sc = (line.split(TMUX_SEP)[1:] + [""] * n_total)[:n_total]
             sname = sc[0].strip()
             if not sname:
                 continue
             snap.all_sessions.add(sname)
-            sid = sc[19].strip()
+            sid = sc[n_base].strip()
             if sid:
                 sess_by_id[sid] = sname
-            if not snap.server_pid and sc[20].strip():
-                snap.server_pid = sc[20].strip()
-            if not snap.sock_path and sc[21].strip():
-                snap.sock_path = sc[21].strip()
-            if sc[22].strip() == "1":
+            if not snap.server_pid and sc[n_base + 1].strip():
+                snap.server_pid = sc[n_base + 1].strip()
+            if not snap.sock_path and sc[n_base + 2].strip():
+                snap.sock_path = sc[n_base + 2].strip()
+            if sc[n_base + 3].strip() == "1":
                 snap.tmux_conf_loaded = True
-            is_sw = sc[23].strip()
-            sw_cl = sc[24].strip()
-            sw_done = sc[25].strip()
-            sw_docked = sc[26].strip() or sc[27].strip()
+            if sc[n_base + 9].strip() and not snap.tmux_conf_ver:
+                snap.tmux_conf_ver = sc[n_base + 9].strip()
+            is_sw = sc[n_base + 4].strip()
+            sw_cl = sc[n_base + 5].strip()
+            sw_done = sc[n_base + 6].strip()
+            sw_docked = sc[n_base + 7].strip() or sc[n_base + 8].strip()
             if is_switcher_session_name(sname):
                 sw_rows.append((sname, is_sw, sw_cl, sw_done))
                 if sw_docked:
                     sw_docked_map[sname] = sw_docked
-            parsed_ide = parse_ide_session_cols(sc[:19])
+            parsed_ide = parse_ide_session_cols(sc[:n_base])
             if parsed_ide is not None:
                 snap.raw_ide_sessions.append(parsed_ide)
                 ide_sess_set.add(sname)
@@ -921,7 +877,10 @@ def run_interactive_switcher_session(
     import tempfile
     import threading
 
-    _ensure_switcher_tmux_conf(already_loaded=snap.tmux_conf_loaded)
+    _ensure_switcher_tmux_conf(
+        already_loaded=snap.tmux_conf_loaded,
+        loaded_ver=snap.tmux_conf_ver,
+    )
     hex_map, esc = load_active_palette()
     fzf_env = build_fzf_env(hex_map)
     supports_modern_binds = fzf_supports_resize_bind(fzf_bin)
@@ -1059,15 +1018,18 @@ def run_interactive_switcher_session(
     nf = use_nerd_fonts()
     sw_ico = " " if nf else ""
     ai_ico = "󰚩 " if nf else ""
-    ptr = ">" if (os.environ.get("TERM") or "").lower() == "dumb" else "▸"
+    ptr = ">" if is_ascii_ui() else "▸"
+    bdr_sep = ui_hint_sep()
+    s_act_h, s_inact_h, live_full_h, live_short_h, prev_full_h = switcher_pane_border_hints(bdr_sep)
+    ai_short_h = f"({s_act_h.split(':', 1)[0].lstrip('(')})"
     border_fmt = (
         f"#{{?#{{==:#{{@ide_sw_role}},list}},"
         f"#{{?#{{==:#{{@ide_sw_mode}},new}},"
-        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_new_title}},}},#{{@ide_sw_new_title}},New Workspace}} #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},48}},(Alt+n/o · Esc: back) ,}},"
-        f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},44}},(Alt+l: interact) ,}},"
-        f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions #{{?#{{e|>=:#{{pane_width}},40}},(Alt+h: list) ,}}}}}},"
-        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},64}},(Alt+h: list · Alt+w: close) ,(Alt+h) }},"
-        f"#[fg={hex_map['BASE0']}#,nobold]  {ai_ico}#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold][PREVIEW] #{{?#{{e|>=:#{{pane_width}},64}},(Alt+l / click: interact) ,(Alt+l) }}}}}}"
+        f"#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_new_title}},}},#{{@ide_sw_new_title}},New Workspace}}#{{?#{{&&:#{{e|>=:#{{pane_width}},48}},#{{!=:#{{@ide_sw_hint}},}}}}, #[fg={hex_map['BASE01']}#,nobold]#{{@ide_sw_hint}} , }},"
+        f"#{{?pane_active,#[fg={hex_map['BLUE']}#,nobold]{ptr} {sw_ico}#[fg={hex_map['BASE1']}#,nobold]Sessions #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},44}},{s_act_h} ,}},"
+        f"#[fg={hex_map['BASE01']}#,nobold]  {sw_ico}Sessions #{{?#{{e|>=:#{{pane_width}},40}},{s_inact_h} ,}}}}}},"
+        f"#{{?pane_active,#[fg={hex_map['CYAN']}#,nobold]{ptr} {ai_ico}#[fg={hex_map['BASE1']}#,nobold]#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},AI}} #[fg={hex_map['GREEN']}#,nobold][LIVE] #[fg={hex_map['BASE01']}#,nobold]#{{?#{{e|>=:#{{pane_width}},64}},{live_full_h} ,{live_short_h} }},"
+        f"#[fg={hex_map['BASE0']}#,nobold]  {ai_ico}#{{?#{{!=:#{{@ide_sw_label}},}},#{{@ide_sw_label}},(no session)}} #[fg={hex_map['BASE01']}#,nobold][PREVIEW] #{{?#{{e|>=:#{{pane_width}},64}},{prev_full_h} ,{ai_short_h} }}}}}}"
     )
 
     cancel_ev = threading.Event()
@@ -1213,16 +1175,19 @@ def run_interactive_switcher_session(
                 'first_ln=""\n'
                 'sec_ln=""\n'
                 f'{{ IFS= read -r first_ln || true; IFS= read -r sec_ln || true; }} < {out_q}\n'
-                'if [ "$rc" -le 1 ] && [ "$first_ln" = "alt-n" ]; then\n'
+                f'if [ "$rc" -le 1 ] && [ "$first_ln" = "{DIR_PICKER_FLIP_NEW_KEY}" ]; then\n'
                 f"  rm -f {seed_rm_q} 2>/dev/null || true\n"
                 f"  IDE_SW_START_ALT_N=1 exec {alt_n_cmd}\n"
-                'elif [ "$rc" -le 1 ] && [ "$first_ln" = "alt-o" ]; then\n'
+                f'elif [ "$rc" -le 1 ] && [ "$first_ln" = "{CREATE_WS_FLIP_OPEN_KEY}" ]; then\n'
                 f"  rm -f {seed_rm_q} 2>/dev/null || true\n"
                 f"  IDE_SW_START_ALT_O=1 exec {alt_n_cmd}\n"
-                'elif [ "$rc" -eq 0 ] && [ "$first_ln" = "alt-r" ]; then\n'
+                f'elif [ "$rc" -le 1 ] && [ "$first_ln" = "{AGENT_MODAL_KEY}" ]; then\n'
                 f"  rm -f {seed_rm_q} 2>/dev/null || true\n"
                 '  sel_s="${sec_ln%%	*}"\n'
-                f'  IDE_SW_START_ALT_R="$sel_s" exec {alt_n_cmd}\n'
+                '  if [ -n "$sel_s" ]; then\n'
+                f'    IDE_SW_START_ALT_R="$sel_s" exec {alt_n_cmd}\n'
+                "  fi\n"
+                f"  exec {alt_n_cmd}\n"
                 "fi\n"
                 f"printf '%s\\n' \"$rc\" > {rc_q}\n"
                 f'tmux set-option -q -t "={sw_sess}:" @ide_sw_done 1 \\; detach-client -s "={sw_sess}" >/dev/null 2>&1 || true\n'
@@ -1423,15 +1388,11 @@ def run_interactive_switcher_session(
                 sock_path=sock_path,
             )
         if action == "switch" and target_val and session_exists(target_val):
-            if pressed in ("ctrl-a", "ctrl-e", "ctrl-t", "alt-a", "alt-e", "alt-t"):
+            jump_mode = pane_jump_mode_for_key(pressed)
+            if jump_mode:
                 from ide_lib.layout import toggle_main_pane
 
-                if pressed in ("ctrl-a", "alt-a"):
-                    toggle_main_pane("focus-ai", target_val)
-                elif pressed in ("ctrl-e", "alt-e"):
-                    toggle_main_pane("focus-editor", target_val)
-                else:
-                    toggle_main_pane("focus-term", target_val)
+                toggle_main_pane(jump_mode, target_val)
             if not os.environ.get("TMUX") and not os.environ.get("IDE_CLIENT"):
                 t_info = tmux_out(
                     "display-message",

@@ -16,7 +16,7 @@ from theme_lib.palette import get_holiday_meta, hex_to_rgb, ordered_theme_slugs
 from theme_lib.reload import apply_theme
 
 ANSI_SGR_RE = re.compile(r"\033\[[0-9;]*m")
-_FZF_POS_CAP_CACHE: dict[str, bool] = {}
+_FZF_VER_CACHE: dict[str, tuple[int, int] | None] = {}
 
 SWATCH_STRIP_KEYS: tuple[str, ...] = (
     "BASE03",
@@ -59,16 +59,15 @@ def _detect_preview_color_tier() -> str:
     return "truecolor"
 
 
-def _fzf_supports_load_pos(fzf_bin: str) -> bool:
-    """Return True when fzf supports `--bind=load:pos(N)` (>= 0.36) without probing tiny test mocks."""
-    override = (os.environ.get("THEME_FZF_POS") or "").strip().lower()
-    if override in ("1", "true", "yes", "on"):
-        return True
-    if override in ("0", "false", "no", "off"):
-        return False
-    if fzf_bin in _FZF_POS_CAP_CACHE:
-        return _FZF_POS_CAP_CACHE[fzf_bin]
-    supported = False
+def _probe_fzf_version(fzf_bin: str) -> tuple[int, int] | None:
+    """Return `(major, minor)` for `fzf_bin` without invoking tiny test mock scripts."""
+    ver_ovr = (os.environ.get("THEME_FZF_VERSION") or "").strip()
+    if ver_ovr:
+        m_ovr = re.match(r"^\s*v?(\d+)\.(\d+)", ver_ovr)
+        return (int(m_ovr.group(1)), int(m_ovr.group(2))) if m_ovr else None
+    if fzf_bin in _FZF_VER_CACHE:
+        return _FZF_VER_CACHE[fzf_bin]
+    ver: tuple[int, int] | None = None
     try:
         if os.path.getsize(fzf_bin) > 65536:
             res = subprocess.run(
@@ -80,14 +79,47 @@ def _fzf_supports_load_pos(fzf_bin: str) -> bool:
                 timeout=1.5,
                 check=False,
             )
-            m = re.match(r"^\s*(\d+)\.(\d+)", res.stdout or "")
+            m = re.match(r"^\s*v?(\d+)\.(\d+)", res.stdout or "")
             if m:
-                major, minor = int(m.group(1)), int(m.group(2))
-                supported = (major > 0) or (minor >= 36)
+                ver = (int(m.group(1)), int(m.group(2)))
     except (OSError, subprocess.SubprocessError):
-        supported = False
-    _FZF_POS_CAP_CACHE[fzf_bin] = supported
-    return supported
+        ver = None
+    _FZF_VER_CACHE[fzf_bin] = ver
+    return ver
+
+
+def _fzf_supports_border_label(fzf_bin: str) -> bool:
+    """Return True unless a probed real `fzf` binary predates `--border-label` (< 0.35)."""
+    ver = _probe_fzf_version(fzf_bin)
+    return ver is None or ver[0] > 0 or ver[1] >= 35
+
+
+def _fzf_supports_no_scrollbar(fzf_bin: str) -> bool:
+    """Return True unless a probed real `fzf` binary predates `--no-scrollbar` (< 0.36)."""
+    ver = _probe_fzf_version(fzf_bin)
+    return ver is None or ver[0] > 0 or ver[1] >= 36
+
+
+def _fzf_supports_load_pos(fzf_bin: str) -> bool:
+    """Return True when fzf supports `--bind=load:pos(N)` (>= 0.36) without probing tiny test mocks."""
+    override = (os.environ.get("THEME_FZF_POS") or "").strip().lower()
+    if override in ("1", "true", "yes", "on"):
+        return True
+    if override in ("0", "false", "no", "off"):
+        return False
+    ver = _probe_fzf_version(fzf_bin)
+    return bool(ver and (ver[0] > 0 or ver[1] >= 36))
+
+
+def _fzf_supports_resize_bind(fzf_bin: str) -> bool:
+    """Return True when fzf supports `--bind=resize:refresh-preview` (>= 0.46)."""
+    override = (os.environ.get("THEME_FZF_RESIZE") or "").strip().lower()
+    if override in ("1", "true", "yes", "on"):
+        return True
+    if override in ("0", "false", "no", "off"):
+        return False
+    ver = _probe_fzf_version(fzf_bin)
+    return bool(ver and (ver[0] > 0 or ver[1] >= 46))
 
 
 def fg_esc(hex_str: str) -> str:
@@ -230,9 +262,14 @@ def render_preview(theme: dict[str, str]) -> int:
     ed_ic = " " if nf_ok else ""
     sh_ic = " " if nf_ok else ""
     git_ic = " " if nf_ok else "git:"
-    chk_ic = "✔" if tier != "mono" else "ok"
-    prm_ic = "❯" if tier != "mono" else ">"
-    rule_ch = "─" if tier != "mono" else "-"
+    is_ascii = (
+        tier == "mono"
+        or (os.environ.get("IDE_ASCII") or "").strip().lower() in ("1", "true", "on", "yes")
+        or (os.environ.get("TERM") or "").strip().lower() == "linux"
+    )
+    chk_ic = "ok" if is_ascii else "✔"
+    prm_ic = ">" if is_ascii else "❯"
+    rule_ch = "-" if is_ascii else "─"
     sw_glyph = "██" if use_tc else "##"
 
     def _pad(content: str, bg_code: str, left_pad: int = 2) -> str:
@@ -306,8 +343,8 @@ def render_preview(theme: dict[str, str]) -> int:
 
     lines.append(_pad(f"{c_b01}{rule_ch * rule_width}", b03))
     lines.append(_pad(f"{c_blu}Converged Semantic Code Preview:", b03))
-    ptr = "▸" if tier != "mono" else ">"
-    mid_dot = "·" if tier != "mono" else "|"
+    ptr = ">" if is_ascii else "▸"
+    mid_dot = "|" if is_ascii else "·"
     h_badge = f"  {c_b00}{sep_l} {c_ylw}{hmeta['badge']}" if (hmeta and nf_ok) else ""
     if width < 88:
         status_preview_line = (
@@ -452,13 +489,19 @@ def run_fzf_picker(
         height_arg = "--height=80%"
         preview_win = "--preview-window=right:60%:nowrap:noinfo"
 
-    sep = "|" if tier == "mono" else "·"
-    header_arg = (
-        f"--header=Enter: apply {sep} Esc: cancel"
-        if term_cols < 68
-        else f"--header=Select a color theme (Enter: apply {sep} Esc: cancel)"
+    is_ascii = (
+        (os.environ.get("IDE_ASCII") or "").strip().lower() in ("1", "true", "on", "yes")
+        or (os.environ.get("TERM") or "").strip().lower() == "linux"
+    )
+    sep = "|" if (tier == "mono" or is_ascii) else "·"
+    footer_lbl = (
+        f" Enter {sep} Esc "
+        if term_cols < 34
+        else f" Enter: apply {sep} Esc: cancel "
     )
 
+    has_bdr_lbl = _fzf_supports_border_label(fzf_bin)
+    has_no_sb = _fzf_supports_no_scrollbar(fzf_bin)
     if tier == "nocolor":
         fzf_color_arg = "--no-color"
     elif tier == "mono":
@@ -466,29 +509,54 @@ def run_fzf_picker(
     elif tier == "16color":
         fzf_color_arg = "--color=16"
     else:
-        fzf_color_arg = build_fzf_color_opts(themes[current_slug], include_layout=False)
+        fzf_color_arg = build_fzf_color_opts(
+            themes[current_slug],
+            include_layout=False,
+            include_label_colors=has_bdr_lbl,
+        )
 
     self_bin = str(repo_dir / "bin" / "theme")
     preview_cmd = f"{shlex.quote(self_bin)} --preview {{1}}"
+    sb_args = ["--no-scrollbar"] if has_no_sb else []
+    label_args = (
+        [f"--border-label={footer_lbl}", "--border-label-pos=bottom"]
+        if has_bdr_lbl
+        else []
+    )
     cmd = [
         fzf_bin,
         "--ansi",
         "--no-multi",
         "--reverse",
-        "--no-scrollbar",
+        *sb_args,
         height_arg,
         "--border=rounded",
+        *label_args,
         "--prompt=Theme > ",
-        header_arg,
         f"--preview={preview_cmd}",
         preview_win,
         fzf_color_arg,
     ]
+    if _fzf_supports_resize_bind(fzf_bin):
+        cmd.append("--bind=resize:refresh-preview")
     if active_pos > 1 and _fzf_supports_load_pos(fzf_bin):
         cmd.append(f"--bind=load:pos({active_pos})")
-    proc = subprocess.run(cmd, input="\n".join(lines) + "\n", text=True, capture_output=True, check=False)
-    if proc.returncode != 0:
+    fzf_env: dict[str, str] | None = None
+    if not has_no_sb or not has_bdr_lbl:
+        fzf_env = os.environ.copy()
+        fzf_env["FZF_DEFAULT_OPTS"] = ""
+    proc = subprocess.run(
+        cmd,
+        input="\n".join(lines) + "\n",
+        stdout=subprocess.PIPE,
+        text=True,
+        env=fzf_env,
+        check=False,
+    )
+    if proc.returncode in (1, 130):
         return 130 if in_wrapper else 0
+    if proc.returncode != 0:
+        return proc.returncode
     selected = proc.stdout.strip()
     if not selected:
         return 130 if in_wrapper else 0

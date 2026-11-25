@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import os
+import re
 import select
 import shutil
 import sys
 
 from ide_lib.constants import (
+    _SGR_RE,
+    char_cell_width,
     pad_visible,
+    sanitize_agent_msg,
     sanitize_name_token,
     shorten_home,
     trunc_visible,
@@ -24,9 +28,23 @@ from ide_lib.hooks import (
     resolve_workspace_target,
     sanitize_session_name,
 )
+from ide_lib.keymap import (
+    AGENT_PICKER_CANCEL_TEXT,
+    CREATE_WS_FLIP_OPEN_KEY,
+    CREATE_WS_LAYOUT_KEY,
+    DIALOG_CANCEL_KINDS,
+    NEW_WORKSPACE_PROMPT,
+    agent_picker_footer_hints,
+    create_workspace_footer_hints,
+    format_card_footer,
+    is_ascii_ui,
+    ui_hint_sep,
+)
 from ide_lib.theme import detect_color_tier, load_active_palette, state_color
 
 AGENT_CYCLE_ORDER = ("agy", "claude", "codex")
+_CSI_U_RE = re.compile(r"^(\d+)(?::\d+)*(?:;(\d+)(?::\d+)*)?u$")
+_MOD_OTHER_RE = re.compile(r"^27;(\d+);(\d+)~$")
 
 
 def _build_agent_choices(initial_agent: str) -> list[str]:
@@ -37,18 +55,76 @@ def _build_agent_choices(initial_agent: str) -> list[str]:
     return choices
 
 
-def _format_card_footer(hints: list[str], inner_w: int) -> str:
-    budget = max(10, inner_w - 4)
-    chosen: list[str] = []
-    for item in hints:
-        cand_list = [*chosen, item]
-        cand = " " + " · ".join(cand_list) + " "
-        if visible_width(cand) <= budget or not chosen:
-            chosen.append(item)
-    out = " " + " · ".join(chosen) + " "
-    if visible_width(out) > budget:
-        return " " + trunc_visible(" · ".join(chosen), max(1, budget - 2)) + " "
-    return out
+_format_card_footer = format_card_footer
+
+
+def _fit_ansi_card_cell(content: str, max_w: int, c_rst: str = "", ellipsis: str = "…") -> str:
+    """Fit `content` (preserving SGR escapes) to exact `max_w` terminal cells without border overflow."""
+    if max_w <= 0:
+        return ""
+    if visible_width(content) <= max_w:
+        return pad_visible(content, max_w)
+    ell_w = visible_width(ellipsis)
+    budget = max(0, max_w - ell_w)
+    out: list[str] = []
+    used = 0
+    pos = 0
+    n = len(content)
+    while pos < n:
+        if content[pos] == "\x1b":
+            m = _SGR_RE.match(content, pos)
+            if m:
+                out.append(m.group(0))
+                pos = m.end()
+                continue
+        ch = content[pos]
+        cw = char_cell_width(ch)
+        if used + cw > budget:
+            break
+        out.append(ch)
+        used += cw
+        pos += 1
+    return pad_visible("".join(out) + ellipsis + c_rst, max_w)
+
+
+def _build_card_chrome(
+    *,
+    max_box_w: int,
+    title_plain: str,
+    min_title_w: int,
+    footer_hints: list[str],
+    c_b01: str,
+    c_blue: str,
+    c_rst: str,
+) -> tuple[int, str, str, str, str, str]:
+    """Compute `(inner_w, left_margin, top_line, bot_line, sep, vbar)` for `mono-tui` dialog cards."""
+    sz = shutil.get_terminal_size((80, 24))
+    cols = max(36, sz.columns)
+    box_w = min(max_box_w, max(34, cols - 2))
+    inner_w = box_w - 2
+    left_margin = " " if cols >= box_w + 2 else ""
+    ascii_ui = is_ascii_ui()
+    sep = " | " if ascii_ui else " · "
+    tl, tr, bl, br, hbar, vbar = (
+        ("+", "+", "+", "+", "-", "|")
+        if ascii_ui
+        else ("╭", "╮", "╰", "╯", "─", "│")
+    )
+
+    in_sw_modal = bool((os.environ.get("IDE_SWITCHER_SESSION") or "").strip())
+    if in_sw_modal:
+        top_line = f"{left_margin}{c_b01}{tl}{hbar * inner_w}{tr}{c_rst}"
+    else:
+        ell = "." if ascii_ui else "…"
+        title_cap = max(1, min(inner_w - 1, max(min_title_w, inner_w - 2)))
+        title_trunc = trunc_visible(title_plain, title_cap, suffix=ell)
+        top_fill = max(0, inner_w - 1 - visible_width(title_trunc))
+        top_line = f"{left_margin}{c_b01}{tl}{hbar}{c_blue}{title_trunc}{c_b01}{hbar * top_fill}{tr}{c_rst}"
+
+    ftr_txt = _format_card_footer(footer_hints, inner_w, sep=sep)
+    bot_fill = max(0, inner_w - 1 - visible_width(ftr_txt))
+    bot_line = f"{left_margin}{c_b01}{bl}{hbar}{ftr_txt}{hbar * bot_fill}{br}{c_rst}"
+    return (inner_w, left_margin, top_line, bot_line, sep, vbar)
 
 
 def _preview_create_target(raw_name: str, use_hook: bool, parent_dir: str) -> tuple[str, bool]:
@@ -67,6 +143,51 @@ def _preview_create_target(raw_name: str, use_hook: bool, parent_dir: str) -> tu
     exists = os.path.isdir(cand)
     sfx = "(exists)" if exists else "(mkdir)"
     return (f"{shorten_home(cand)} {sfx}", exists)
+
+
+def _decode_csi_u_or_mod_other(s: str) -> tuple[str, str] | None:
+    """Decode Kitty CSI-u (`<cp>;<mod>u`) and xterm `modifyOtherKeys` (`27;<mod>;<cp>~`) key events."""
+    m_u = _CSI_U_RE.match(s)
+    if m_u:
+        cp = int(m_u.group(1))
+        mod = int(m_u.group(2) or "1")
+    else:
+        m_mo = _MOD_OTHER_RE.match(s)
+        if not m_mo:
+            return None
+        mod = int(m_mo.group(1))
+        cp = int(m_mo.group(2))
+
+    if mod == 1:
+        if cp == 27:
+            return ("esc", "")
+        if cp in (13, 10):
+            return ("enter", "")
+        if cp == 9:
+            return ("tab", "")
+        if cp in (127, 8):
+            return ("backspace", "")
+        if 32 <= cp < 127:
+            return ("text", chr(cp))
+        return ("noop", "")
+    if mod == 2:
+        if cp == 9:
+            return ("shift-tab", "")
+        if cp in (13, 10):
+            return ("enter", "")
+        if 32 <= cp < 127:
+            return ("text", chr(cp))
+        return ("noop", "")
+    if mod == 3:
+        if cp in (127, 8):
+            return ("kill-word", "")
+        if cp in (ord("b"), ord("B")):
+            return ("word-left", "")
+        if cp in (ord("f"), ord("F")):
+            return ("word-right", "")
+        if 33 <= cp < 127:
+            return (f"alt-{chr(cp).lower()}", "")
+    return ("noop", "")
 
 
 def _read_tty_key(fd: int) -> tuple[str, str]:
@@ -144,6 +265,9 @@ def _read_tty_key(fd: int) -> tuple[str, str]:
                 txt = pasted.decode("utf-8", errors="ignore")
                 clean_p = "".join(c for c in txt if ord(c) >= 32 and ord(c) != 127)
                 return ("text", clean_p)
+            ext_ev = _decode_csi_u_or_mod_other(s)
+            if ext_ev is not None:
+                return ext_ev
             return ("noop", "")
         if b1 == b"O":
             r3, _, _ = select.select([fd], [], [], 0.015)
@@ -166,20 +290,15 @@ def _read_tty_key(fd: int) -> tuple[str, str]:
                     return ("left", "")
                 return ("noop", "")
             return ("noop", "")
-        if b1 == b"o":
-            return ("alt-o", "")
-        if b1 == b"n":
-            return ("alt-n", "")
-        if b1 == b"w":
-            return ("alt-w", "")
-        if b1 == b"2":
-            return ("alt-2", "")
         if b1 in (b"\x7f", b"\x08"):
             return ("kill-word", "")
         if b1 == b"b":
             return ("word-left", "")
         if b1 == b"f":
             return ("word-right", "")
+        ch1 = chr(b1[0])
+        if ch1.isalnum() or ch1 == "?":
+            return (f"alt-{ch1.lower()}", "")
         return ("noop", "")
 
     code = b0[0]
@@ -296,45 +415,33 @@ def run_create_workspace_dialog(
     c_green = esc["GREEN"] if use_color else ""
     c_yellow = esc["YELLOW"] if use_color else ""
     c_orange = esc["ORANGE"] if use_color else ""
-    ptr = ">" if (os.environ.get("TERM") or "").strip().lower() == "dumb" else "▸"
+    ptr = ">" if is_ascii_ui() else "▸"
     hdr_ico = " " if nf else ""
     use_hook = has_create_workspace_hook()
     parent_dir = default_workspace_parent()
 
     def _render_card() -> None:
-        sz = shutil.get_terminal_size((80, 24))
-        cols = max(36, sz.columns)
-        box_w = min(74, max(34, cols - 2))
-        inner_w = box_w - 2
-        left_margin = " " if cols >= box_w + 2 else ""
-
-        title_plain = f" {hdr_ico}New IDE Workspace "
-        title_trunc = trunc_visible(title_plain, max(6, inner_w - 2))
-        top_fill = max(0, inner_w - 1 - visible_width(title_trunc))
-        top_line = (
-            f"{left_margin}{c_b01}╭─{c_blue}{title_trunc}{c_b01}{'─' * top_fill}╮{c_rst}"
+        footer_hints = create_workspace_footer_hints(
+            allow_flip_open=allow_flip_open,
+            back_label=back_label,
         )
-
-        footer_hints = ["Enter: create", "Tab: agent"]
-        if allow_flip_open:
-            footer_hints.append("Alt+o: open dir")
-        footer_hints.append("Alt+2: layout")
-        footer_hints.append(f"Esc: {back_label}")
-        ftr_txt = _format_card_footer(footer_hints, inner_w)
-        bot_fill = max(0, inner_w - 1 - visible_width(ftr_txt))
-        bot_line = f"{left_margin}{c_b01}╰─{ftr_txt}{'─' * bot_fill}╯{c_rst}"
+        inner_w, left_margin, top_line, bot_line, sep, vbar = _build_card_chrome(
+            max_box_w=78,
+            title_plain=f" {hdr_ico}New IDE Workspace ",
+            min_title_w=6,
+            footer_hints=footer_hints,
+            c_b01=c_b01,
+            c_blue=c_blue,
+            c_rst=c_rst,
+        )
+        ell = "." if sep == " | " else "…"
 
         def _box_row(content: str) -> str:
-            vis = visible_width(content)
-            if vis > inner_w - 2:
-                # Content with SGR: fall back to safe plain truncation if needed
-                padded = pad_visible(content, inner_w - 2)
-            else:
-                padded = pad_visible(content, inner_w - 2)
-            return f"{left_margin}{c_b01}│{c_rst} {padded} {c_b01}│{c_rst}"
+            fitted = _fit_ansi_card_cell(content, inner_w - 2, c_rst=c_rst, ellipsis=ell)
+            return f"{left_margin}{c_b01}{vbar}{c_rst} {fitted} {c_b01}{vbar}{c_rst}"
 
         name_str = "".join(chars)
-        prompt_pfx = "New IDE > "
+        prompt_pfx = NEW_WORKSPACE_PROMPT
         avail_input_w = max(8, inner_w - 2 - len(prompt_pfx) - 1)
         # Keep cursor window visible inside avail_input_w
         start_idx = 0
@@ -364,15 +471,15 @@ def run_create_workspace_dialog(
             agent_lbl = f"{c_b01}Agent  :{c_rst} {c_cyan}{ptr} {c_b1}{agents[agent_idx]}{c_rst}"
 
         lay_desc = "2-pane side-by-side" if cur_layout == "2pane" else "3-pane inverted-T"
-        lay_lbl = f"{c_b01}Layout :{c_rst} {c_b0}{trunc_visible(lay_desc, max(8, inner_w - 11))}{c_rst}"
+        lay_lbl = f"{c_b01}Layout :{c_rst} {c_b0}{trunc_visible(lay_desc, max(8, inner_w - 11), suffix=ell)}{c_rst}"
 
         tgt_str, tgt_exists = _preview_create_target(name_str, use_hook, parent_dir)
-        tgt_val = trunc_visible(tgt_str, max(8, inner_w - 11))
+        tgt_val = trunc_visible(tgt_str, max(8, inner_w - 11), suffix=ell)
         tgt_c = c_yellow if tgt_exists else (c_cyan if use_hook else c_green)
         tgt_lbl = f"{c_b01}Target :{c_rst} {tgt_c}{tgt_val}{c_rst}"
 
         sess_preview = sanitize_name_token(os.path.basename(name_str.rstrip("/")) or name_str) if name_str.strip() else "-"
-        sess_lbl = f"{c_b01}Session:{c_rst} {c_blue if name_str.strip() else c_b01}{trunc_visible(sess_preview, max(8, inner_w - 11))}{c_rst}"
+        sess_lbl = f"{c_b01}Session:{c_rst} {c_blue if name_str.strip() else c_b01}{trunc_visible(sess_preview, max(8, inner_w - 11), suffix=ell)}{c_rst}"
 
         rows_out = [
             top_line,
@@ -385,7 +492,7 @@ def run_create_workspace_dialog(
             _box_row(tgt_lbl),
         ]
         if err_msg:
-            clean_err = trunc_visible(err_msg, max(10, inner_w - 2))
+            clean_err = trunc_visible(sanitize_agent_msg(err_msg, max_chars=240), max(10, inner_w - 2), suffix=ell)
             rows_out.append(_box_row(f"{c_orange}{clean_err}{c_rst}"))
         else:
             rows_out.append(_box_row(""))
@@ -402,7 +509,7 @@ def run_create_workspace_dialog(
         while True:
             _render_card()
             kind, txt = _read_tty_key(fd)
-            if kind in ("esc", "alt-w", "ctrl-c", "eof"):
+            if kind in DIALOG_CANCEL_KINDS:
                 return None
             if kind == "ctrl-d":
                 if not chars:
@@ -411,7 +518,7 @@ def run_create_workspace_dialog(
                     chars.pop(cursor)
                     err_msg = ""
                 continue
-            if kind == "alt-o" and allow_flip_open:
+            if kind == CREATE_WS_FLIP_OPEN_KEY and allow_flip_open:
                 return ("flip-open", "", agents[agent_idx], cur_layout)
             if kind == "tab":
                 agent_idx = (agent_idx + 1) % len(agents)
@@ -419,7 +526,7 @@ def run_create_workspace_dialog(
             if kind == "shift-tab":
                 agent_idx = (agent_idx - 1) % len(agents)
                 continue
-            if kind == "alt-2":
+            if kind == CREATE_WS_LAYOUT_KEY:
                 cur_layout = "2pane" if cur_layout == "3pane" else "3pane"
                 continue
             if kind == "left":
@@ -539,27 +646,25 @@ def run_agent_picker_dialog(
     c_blue = esc["BLUE"] if use_color else ""
     c_cyan = esc["CYAN"] if use_color else ""
     c_state = state_color(cur_state or "IDLE", esc) if use_color else ""
-    ptr = ">" if (os.environ.get("TERM") or "").strip().lower() == "dumb" else "▸"
+    ptr = ">" if is_ascii_ui() else "▸"
     ai_ico = "󰚩 " if nf else ""
 
     def _render_agent_card() -> None:
-        sz = shutil.get_terminal_size((80, 24))
-        cols = max(36, sz.columns)
-        box_w = min(64, max(34, cols - 2))
-        inner_w = box_w - 2
-        left_margin = " " if cols >= box_w + 2 else ""
-
-        title_plain = f" {ai_ico}AI Agent · {sess} "
-        title_trunc = trunc_visible(title_plain, max(8, inner_w - 2))
-        top_fill = max(0, inner_w - 1 - visible_width(title_trunc))
-        top_line = f"{left_margin}{c_b01}╭─{c_blue}{title_trunc}{c_b01}{'─' * top_fill}╮{c_rst}"
-
-        ftr = _format_card_footer(["Enter: apply", "j/k: select", f"Esc: {back_label}"], inner_w)
-        bot_fill = max(0, inner_w - 1 - visible_width(ftr))
-        bot_line = f"{left_margin}{c_b01}╰─{ftr}{'─' * bot_fill}╯{c_rst}"
+        title_sep = ui_hint_sep()
+        inner_w, left_margin, top_line, bot_line, sep, vbar = _build_card_chrome(
+            max_box_w=64,
+            title_plain=f" {ai_ico}AI Agent{title_sep}{sess} ",
+            min_title_w=8,
+            footer_hints=agent_picker_footer_hints(back_label=back_label, num_options=len(options)),
+            c_b01=c_b01,
+            c_blue=c_blue,
+            c_rst=c_rst,
+        )
+        ell = "." if sep == " | " else "…"
 
         def _row(txt_line: str) -> str:
-            return f"{left_margin}{c_b01}│{c_rst} {pad_visible(txt_line, inner_w - 2)} {c_b01}│{c_rst}"
+            fitted = _fit_ansi_card_cell(txt_line, inner_w - 2, c_rst=c_rst, ellipsis=ell)
+            return f"{left_margin}{c_b01}{vbar}{c_rst} {fitted} {c_b01}{vbar}{c_rst}"
 
         st_disp = cur_state or "IDLE"
         rows_out = [
@@ -569,7 +674,7 @@ def run_agent_picker_dialog(
         ]
         for idx, (_, label) in enumerate(options):
             num_hint = f"{idx + 1}."
-            clean_lbl = trunc_visible(label, max(8, inner_w - 9))
+            clean_lbl = trunc_visible(label, max(8, inner_w - 9), suffix=ell)
             if idx == sel_idx:
                 rows_out.append(_row(f"{c_cyan}{ptr} {num_hint} {c_b1}{clean_lbl}{c_rst}"))
             else:
@@ -585,9 +690,9 @@ def run_agent_picker_dialog(
         while True:
             _render_agent_card()
             kind, txt = _read_tty_key(fd)
-            if kind in ("esc", "alt-w", "ctrl-c", "ctrl-d", "eof"):
+            if kind in DIALOG_CANCEL_KINDS or kind == "ctrl-d":
                 return None
-            if kind == "text" and txt in ("q", "Q"):
+            if kind == "text" and txt in AGENT_PICKER_CANCEL_TEXT:
                 return None
             if kind == "text" and txt in ("j",):
                 sel_idx = (sel_idx + 1) % len(options)
@@ -664,14 +769,18 @@ def render_directory_preview(raw_dir: str, cur_sess: str = "") -> int:
             active_entry = entry
             break
 
+    ascii_ui = is_ascii_ui()
+    ell = "." if ascii_ui else "…"
+    mid_tok = "|" if ascii_ui else "·"
+    rule_ch = "-" if ascii_ui else "─"
     hdr_ico = " " if nf else ""
-    hdr_name = trunc_visible(f"{hdr_ico}{sess_name}", max(8, max_cols - 22))
+    hdr_name = trunc_visible(f"{hdr_ico}{sess_name}", max(8, max_cols - 22), suffix=ell)
     if active_entry is not None:
         ag = str(active_entry["ai_cli"])
         st = str(active_entry["state"])
         st_lbl = str(active_entry.get("state_label") or st)
         c_st = state_color(st, esc) if use_color else ""
-        status_sfx = f"{c_b01}(active:{c_rst} {c_cyan}{ag}{c_rst} {c_b01}·{c_rst} {c_st}{st_lbl}{c_b01}){c_rst}"
+        status_sfx = f"{c_b01}(active:{c_rst} {c_cyan}{ag}{c_rst} {c_b01}{mid_tok}{c_rst} {c_st}{st_lbl}{c_b01}){c_rst}"
     else:
         status_sfx = f"{c_b01}(not running){c_rst}"
 
@@ -680,14 +789,14 @@ def render_directory_preview(raw_dir: str, cur_sess: str = "") -> int:
 
     out: list[str] = [
         f"{c_blue}{hdr_name}{c_rst}  {status_sfx}",
-        f"{c_b01}Path     :{c_rst} {c_b0}{trunc_visible(shorten_home(cand_abs), val_budget)}{c_rst}",
+        f"{c_b01}Path     :{c_rst} {c_b0}{trunc_visible(shorten_home(cand_abs), val_budget, suffix=ell)}{c_rst}",
     ]
     if os.path.abspath(resolved_dir) != cand_abs:
         out.append(
-            f"{c_b01}Target   :{c_rst} {c_b0}{trunc_visible(shorten_home(resolved_dir), val_budget)}{c_rst}"
+            f"{c_b01}Target   :{c_rst} {c_b0}{trunc_visible(shorten_home(resolved_dir), val_budget, suffix=ell)}{c_rst}"
         )
     out.append(
-        f"{c_b01}VCS      :{c_rst} {c_git}{trunc_visible(git_detail, val_budget)}{c_rst}"
+        f"{c_b01}VCS      :{c_rst} {c_git}{trunc_visible(git_detail, val_budget, suffix=ell)}{c_rst}"
     )
 
     dirs_list: list[str] = []
@@ -716,7 +825,7 @@ def render_directory_preview(raw_dir: str, cur_sess: str = "") -> int:
     rem_rows = max(0, max_lines - len(out) - 2)
     if rem_rows >= 2 and (dirs_list or files_list):
         rule_w = max(4, min(36, max_cols - 14))
-        out.append(f"{c_b01}── Contents {'─' * rule_w}{c_rst}")
+        out.append(f"{c_b01}{rule_ch * 2} Contents {rule_ch * rule_w}{c_rst}")
         combined: list[tuple[bool, str]] = [
             *((True, d) for d in dirs_list),
             *((False, f) for f in files_list),
@@ -727,14 +836,14 @@ def render_directory_preview(raw_dir: str, cur_sess: str = "") -> int:
         for is_d, name in combined[:limit]:
             clean_nm = name.replace("\n", " ").replace("\r", " ")
             if is_d:
-                item_txt = trunc_visible(f"  {dir_ico}{clean_nm}/", max(6, max_cols - 1))
+                item_txt = trunc_visible(f"  {dir_ico}{clean_nm}/", max(6, max_cols - 1), suffix=ell)
                 out.append(f"{c_blue}{item_txt}{c_rst}")
             else:
-                item_txt = trunc_visible(f"  {file_ico}{clean_nm}", max(6, max_cols - 1))
+                item_txt = trunc_visible(f"  {file_ico}{clean_nm}", max(6, max_cols - 1), suffix=ell)
                 out.append(f"{c_b0}{item_txt}{c_rst}")
         if len(combined) > limit:
             more_n = len(combined) - limit
-            out.append(f"{c_b01}  … +{more_n} more{c_rst}")
+            out.append(f"{c_b01}  {ell} +{more_n} more{c_rst}")
 
     print("\n".join(out[: max(1, max_lines)]))
     return 0

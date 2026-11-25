@@ -2,6 +2,7 @@
 
 Layered package architecture (strictly acyclic bottom-to-top):
 - `constants`: Shared delimiters, CLI usage specification, path/CWD helpers, and Unicode cell metrics.
+- `keymap`: Canonical TUI shortcut registry, width-fitted `fzf`/card footers, and top-bar hitbox specs.
 - `hooks`: Untracked user hook execution (`links.sh`) and external workspace root discovery.
 - `git_info`: Zero-fork `.git` layout inspection, `.git/config` parser, PR/MR badge resolver, and Git summary.
 - `proc`: Process-tree inspection (`/proc` and `ps`) and Editor pane Neovim socket discovery.
@@ -10,6 +11,7 @@ Layered package architecture (strictly acyclic bottom-to-top):
 - `theme`: Active palette loader, TrueColor foreground SGR escapes, and `fzf` option synthesis.
 - `nvim_rpc`: Mise-aware Neovim binary lookup, headless RPC helpers, CWD self-healing, and Editor/AI launchers.
 - `fleet`: Deterministic AI lifecycle state machine, notifications, urgency fleet classifier, and PR opener.
+- `launcher`: Interactive `mono-tui` New Workspace card, AI Agent switcher dialog, and directory preview.
 - `layout`: Workspace geometry, `_ide_park_<role>` parking, directional swap, focus toggles, dive, refresh, and quit.
 - `links`: Bounded workspace file search, `file://`/`#anchor`/OSC 8 link router, and AI prompt context dispatch.
 - `preview`: Tab/CJK/emoji-aware `fzf` preview line-wrap model, SGR carry-over, and `--follow` streamer.

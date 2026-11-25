@@ -714,17 +714,21 @@ EOF
         if { [ -t 0 ] && [ -t 1 ]; } || [ "${THEME_FORCE_FZF:-0}" = "1" ]; then
             if command -v fzf >/dev/null 2>&1; then
                 _hs_bash_collect_all_slugs
-                local fzf_lines="" s act_tag src_kind disp_label strip use_tc=1
+                local fzf_lines="" s act_tag src_kind disp_label strip use_tc=1 row_idx=0 active_pos=1
                 if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "linux" ] || [ "${TERM:-}" = "dumb" ]; then
                     use_tc=0
                 fi
                 for s in "${_HS_ALL_SLUGS[@]}"; do
                     _hs_bash_resolve_slug_to_raw "$s" || continue
+                    row_idx=$((row_idx + 1))
                     src_kind="builtin"
                     [ -n "${_HS_RESOLVED_UFILE:-}" ] && src_kind="user"
                     _hs_bash_finalize_palette "$s"
                     act_tag="        "
-                    [ "$s" = "$current_slug" ] && act_tag="(active)"
+                    if [ "$s" = "$current_slug" ]; then
+                        act_tag="(active)"
+                        active_pos="$row_idx"
+                    fi
                     disp_label="$_HS_C_LABEL"
                     if [ "${TERM:-}" != "dumb" ] && [ "${IDE_NERD_FONTS:-1}" != "0" ] && _hs_bash_holiday_icon "$s"; then
                         disp_label="$REPLY $disp_label"
@@ -743,6 +747,23 @@ EOF
                     _hs_bash_builtin_spec "solarized-dark" && _hs_bash_unpack_spec_to_raw "solarized-dark" "$REPLY"
                 fi
                 _hs_bash_finalize_palette "$current_slug"
+                local fzf_exe="" fzf_ver_raw="" fzf_probed=0 fzf_maj=0 fzf_min=0
+                fzf_exe="$(type -P fzf 2>/dev/null || true)"
+                if [ -n "${THEME_FZF_VERSION:-}" ]; then
+                    fzf_ver_raw="$THEME_FZF_VERSION"
+                elif [ -n "$fzf_exe" ] && [ -f "$fzf_exe" ] && [ "$(wc -c < "$fzf_exe" 2>/dev/null || echo 0)" -gt 65536 ]; then
+                    fzf_ver_raw="$("$fzf_exe" --version 2>/dev/null || true)"
+                fi
+                if [ -n "$fzf_ver_raw" ] && [[ "$fzf_ver_raw" =~ ^[[:space:]]*v?([0-9]+)\.([0-9]+) ]]; then
+                    fzf_probed=1
+                    fzf_maj="${BASH_REMATCH[1]}"
+                    fzf_min="${BASH_REMATCH[2]}"
+                fi
+                local has_bdr_lbl=1 has_no_sb=1
+                if [ "$fzf_probed" -eq 1 ] && [ "$fzf_maj" -eq 0 ]; then
+                    [ "$fzf_min" -lt 35 ] && has_bdr_lbl=0
+                    [ "$fzf_min" -lt 36 ] && has_no_sb=0
+                fi
                 local fzf_colors="--no-color"
                 if [ -n "${NO_COLOR:-}" ]; then
                     fzf_colors="--no-color"
@@ -750,13 +771,22 @@ EOF
                     fzf_colors="--color=bw"
                 elif [ "${TERM:-}" = "linux" ]; then
                     fzf_colors="--color=16"
-                else
+                elif [ "$has_bdr_lbl" -eq 1 ]; then
                     fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01},fg:${_HS_C_B0},header:${_HS_C_B01},border:${_HS_C_B01},separator:${_HS_C_B01},label:${_HS_C_B01},gutter:${_HS_C_B03},info:${_HS_C_YEL},pointer:${_HS_C_GRN},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU}"
+                else
+                    fzf_colors="--color=bg+:${_HS_C_B02},bg:${_HS_C_B03},spinner:${_HS_C_GRN},hl:${_HS_C_B01},fg:${_HS_C_B0},header:${_HS_C_B01},border:${_HS_C_B01},info:${_HS_C_YEL},pointer:${_HS_C_GRN},marker:${_HS_C_GRN},fg+:${_HS_C_B1},prompt:${_HS_C_YEL},hl+:${_HS_C_BLU}"
+                fi
+                local term_cols=120
+                if [[ "${COLUMNS:-}" =~ ^[0-9]+$ ]] && [ "${COLUMNS:-0}" -gt 0 ]; then
+                    term_cols="$COLUMNS"
                 fi
                 local fzf_prev_win="--preview-window=right:60%:nowrap:noinfo" fzf_height="--height=80%"
-                if [[ "${COLUMNS:-}" =~ ^[0-9]+$ ]] && [ "${COLUMNS:-120}" -gt 0 ] && [ "${COLUMNS:-120}" -lt 90 ]; then
+                if [ "$term_cols" -lt 90 ]; then
                     fzf_prev_win="--preview-window=down:58%:nowrap:noinfo"
                     fzf_height="--height=95%"
+                elif [ "$term_cols" -lt 110 ]; then
+                    fzf_prev_win="--preview-window=right:56%:nowrap:noinfo"
+                    fzf_height="--height=90%"
                 fi
                 local -a preview_args=()
                 if [ -n "${_HS_BASHRC_SELF_PATH:-}" ] && [ -r "$_HS_BASHRC_SELF_PATH" ]; then
@@ -766,14 +796,51 @@ EOF
                         "--preview=${sq_bash} -c '. \"\$1\" >/dev/null 2>&1 && _hs_bash_render_preview \"\$2\"' _ ${sq_self} {1}"
                         "$fzf_prev_win"
                     )
+                    if [ "${THEME_FZF_RESIZE:-}" = "1" ]; then
+                        preview_args+=("--bind=resize:refresh-preview")
+                    elif [ "${THEME_FZF_RESIZE:-}" != "0" ] && [ "$fzf_probed" -eq 1 ] && { [ "$fzf_maj" -gt 0 ] || [ "$fzf_min" -ge 46 ]; }; then
+                        preview_args+=("--bind=resize:refresh-preview")
+                    fi
+                fi
+                if [ "$active_pos" -gt 1 ]; then
+                    if [ "${THEME_FZF_POS:-}" = "1" ]; then
+                        preview_args+=("--bind=load:pos(${active_pos})")
+                    elif [ "${THEME_FZF_POS:-}" != "0" ] && [ "$fzf_probed" -eq 1 ] && { [ "$fzf_maj" -gt 0 ] || [ "$fzf_min" -ge 36 ]; }; then
+                        preview_args+=("--bind=load:pos(${active_pos})")
+                    fi
+                fi
+                local fzf_sep="·"
+                case "${TERM:-}" in
+                    dumb|linux) fzf_sep="|" ;;
+                esac
+                case "${IDE_ASCII:-}" in
+                    1|[Tt][Rr][Uu][Ee]|[Oo][Nn]|[Yy][Ee][Ss]) fzf_sep="|" ;;
+                esac
+                local fzf_ftr_lbl=" Enter: apply ${fzf_sep} Esc: cancel "
+                if [ "$term_cols" -lt 34 ]; then
+                    fzf_ftr_lbl=" Enter ${fzf_sep} Esc "
+                fi
+                local -a sb_args=() label_args=()
+                if [ "$has_no_sb" -eq 1 ]; then
+                    sb_args=("--no-scrollbar")
+                fi
+                if [ "$has_bdr_lbl" -eq 1 ]; then
+                    label_args=("--border-label=$fzf_ftr_lbl" "--border-label-pos=bottom")
                 fi
                 local picked="" fzf_rc=0
-                picked="$(printf '%s' "$fzf_lines" | fzf --ansi --no-multi --reverse --no-scrollbar "$fzf_height" --border=rounded --prompt="Theme > " --header="Select a color theme (Enter: apply · Esc: cancel)" ${preview_args[@]+"${preview_args[@]}"} "$fzf_colors")" || fzf_rc=$?
-                if [ "$fzf_rc" -eq 130 ] || [ -z "$picked" ]; then
+                if [ "$has_no_sb" -eq 1 ] && [ "$has_bdr_lbl" -eq 1 ]; then
+                    picked="$(printf '%s' "$fzf_lines" | fzf --ansi --no-multi --reverse ${sb_args[@]+"${sb_args[@]}"} "$fzf_height" --border=rounded ${label_args[@]+"${label_args[@]}"} --prompt="Theme > " ${preview_args[@]+"${preview_args[@]}"} "$fzf_colors")" || fzf_rc=$?
+                else
+                    picked="$(printf '%s' "$fzf_lines" | FZF_DEFAULT_OPTS="" fzf --ansi --no-multi --reverse ${sb_args[@]+"${sb_args[@]}"} "$fzf_height" --border=rounded ${label_args[@]+"${label_args[@]}"} --prompt="Theme > " ${preview_args[@]+"${preview_args[@]}"} "$fzf_colors")" || fzf_rc=$?
+                fi
+                if [ "$fzf_rc" -eq 1 ] || [ "$fzf_rc" -eq 130 ]; then
                     return 0
                 fi
                 if [ "$fzf_rc" -ne 0 ]; then
                     return "$fzf_rc"
+                fi
+                if [ -z "$picked" ]; then
+                    return 0
                 fi
                 picked="${picked#"${picked%%[![:space:]]*}"}"
                 if [[ "$picked" == "* "* ]]; then

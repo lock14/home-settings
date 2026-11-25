@@ -26,7 +26,9 @@ unset TMUX TMUX_PANE NVIM_IDE_SOCKET NVIM_IDE_PANE NVIM NVIM_LISTEN_ADDRESS \
 
 _HS_TEST_RUNTIME_DIR="$(mktemp -d /tmp/hs-rt.XXXXXX)"
 chmod 700 "$_HS_TEST_RUNTIME_DIR" 2>/dev/null || true
+mkdir -p "$_HS_TEST_RUNTIME_DIR/tmp"
 export XDG_RUNTIME_DIR="$_HS_TEST_RUNTIME_DIR"
+export THEME_TMP_DIR="$_HS_TEST_RUNTIME_DIR/tmp"
 
 # Register an isolated tmux TMPDIR so its server socket and directory are torn down on exit.
 register_tmux_tmpdir() {
@@ -82,7 +84,7 @@ _hs_cleanup_test_runtime_dir() {
             uid_num="$(id -u)"
             while IFS= read -r reg_entry; do
                 [ -n "$reg_entry" ] || continue
-                tmux -S "$reg_entry/tmux-${uid_num}/default" kill-server >/dev/null 2>&1 || true
+                TMUX="" TMUX_PANE="" tmux -S "$reg_entry/tmux-${uid_num}/default" kill-server >/dev/null 2>&1 || true
                 rm -rf "$reg_entry" 2>/dev/null || { chmod -R u+w "$reg_entry" 2>/dev/null || true; rm -rf "$reg_entry" 2>/dev/null || true; }
             done < "$_HS_TEST_RUNTIME_DIR/.tmux_sockets"
         fi

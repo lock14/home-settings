@@ -94,12 +94,16 @@ def discover_nvim_sockets() -> list[Path]:
                         sockets.append(p)
         return sockets
 
+    tmp_override = os.environ.get("THEME_TMP_DIR", "").strip()
+    default_tmp = Path(tmp_override) if tmp_override else Path("/tmp")
+
     env_sock = os.environ.get("NVIM_IDE_SOCKET", "").strip()
     if env_sock:
         sockets.append(Path(env_sock))
-    for p in Path("/tmp").glob("nvim-ide-*.sock"):
-        if p not in sockets:
-            sockets.append(p)
+    if default_tmp.is_dir():
+        for p in default_tmp.glob("nvim-ide-*.sock"):
+            if p not in sockets:
+                sockets.append(p)
     xdg_rt = os.environ.get("XDG_RUNTIME_DIR", "").strip()
     if xdg_rt and Path(xdg_rt).is_dir():
         for pat in ("nvim-ide-*.sock", "nvim.*.0", "*/nvim.*.0"):
@@ -111,12 +115,13 @@ def discover_nvim_sockets() -> list[Path]:
     except Exception:
         nvim_user = ""
     if nvim_user:
-        tmp_candidates = [Path("/tmp")]
-        env_tmp = os.environ.get("TMPDIR", "").strip()
-        if env_tmp:
-            env_tmp_path = Path(env_tmp)
-            if env_tmp_path not in tmp_candidates:
-                tmp_candidates.insert(0, env_tmp_path)
+        tmp_candidates = [default_tmp]
+        if not tmp_override:
+            env_tmp = os.environ.get("TMPDIR", "").strip()
+            if env_tmp:
+                env_tmp_path = Path(env_tmp)
+                if env_tmp_path not in tmp_candidates:
+                    tmp_candidates.insert(0, env_tmp_path)
         for base_tmp in tmp_candidates:
             user_nvim_dir = base_tmp / f"nvim.{nvim_user}"
             if user_nvim_dir.is_dir():
@@ -157,25 +162,39 @@ def broadcast_live_reloads(theme: dict[str, str], state_dir: Path, repo_dir: Pat
     tmux_conf = state_dir / "tmux-theme.conf"
     if shutil.which("tmux") and tmux_conf.is_file():
         if os.environ.get("TMUX") or os.environ.get("TMUX_TMPDIR") or os.environ.get("THEME_LIVE_TMUX") == "1":
-            subprocess.run(
-                ["tmux", "source-file", str(tmux_conf)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
+            home_tmux_conf = Path(os.environ.get("HOME", str(Path.home()))) / ".tmux.conf"
+            if home_tmux_conf.is_file():
+                probe = subprocess.run(
+                    ["tmux", "display-message", "-p", "#{@ide_tmux_conf_loaded}\t#{status-left}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    loaded_flag, _, cur_sleft = probe.stdout.strip("\r\n").partition("\t")
+                    if loaded_flag == "1" and "@hs_c_" not in cur_sleft:
+                        subprocess.run(
+                            ["tmux", "source-file", str(home_tmux_conf)],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            check=False,
+                        )
             fzf_str = build_fzf_color_opts(theme, include_layout=True)
+            tmux_batch: list[str] = ["tmux", "source-file", str(tmux_conf)]
             for k, v in (
                 ("HOME_SETTINGS_THEME", theme["THEME_ID"]),
                 ("HOME_SETTINGS_THEME_MODE", theme["THEME_MODE"]),
                 ("BAT_THEME", theme["BAT_THEME_NAME"]),
                 ("FZF_DEFAULT_OPTS", fzf_str),
             ):
-                subprocess.run(
-                    ["tmux", "set-environment", "-g", k, v],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                )
+                tmux_batch.extend([";", "set-environment", "-g", k, v])
+            subprocess.run(
+                tmux_batch,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
 
     # 2. Live Neovim RPC reload across active IDE and standalone server sockets
     if shutil.which("nvim") and os.environ.get("THEME_LIVE_NVIM", "1") != "0":
@@ -252,6 +271,7 @@ def _materialize_themed_app_dir(
     config_content: str,
     theme_filename: str | None = None,
     theme_content: str | None = None,
+    extra_symlink_files: tuple[str, ...] = (),
 ) -> None:
     """Materialize an active XDG app config directory without dirtying tracked repo dotfiles."""
     active_app_dir.mkdir(parents=True, exist_ok=True)
@@ -268,6 +288,11 @@ def _materialize_themed_app_dir(
             if custom_theme_path.is_symlink():
                 custom_theme_path.unlink()
             custom_theme_path.write_text(theme_content, encoding="utf-8")
+
+    for extra_name in extra_symlink_files:
+        src_extra = repo_app_dir / extra_name
+        if src_extra.is_file():
+            sync_symlink(src_extra, active_app_dir / extra_name)
 
     (active_app_dir / config_filename).write_text(config_content, encoding="utf-8")
     if theme["THEME_ID"] == "solarized-dark" and repo_app_dir.is_dir():
@@ -392,12 +417,15 @@ def apply_theme(
         config_content=generate_ghostty_config_text(theme),
         theme_filename=theme["GHOSTTY_THEME_NAME"],
         theme_content=generate_ghostty_theme_text(theme),
+        extra_symlink_files=("keybinds.conf",),
     )
     if sys.platform == "darwin" or os.environ.get("OS") == "macos":
         home_dir = Path(os.environ.get("HOME", str(Path.home())))
         macos_gt_dir = home_dir / "Library" / "Application Support" / "com.mitchellh.ghostty"
         macos_gt_dir.mkdir(parents=True, exist_ok=True)
         sync_symlink(cfg_dir / "ghostty" / "config", macos_gt_dir / "config")
+        if (cfg_dir / "ghostty" / "keybinds.conf").exists():
+            sync_symlink(cfg_dir / "ghostty" / "keybinds.conf", macos_gt_dir / "keybinds.conf")
         sync_symlink(cfg_dir / "ghostty" / "themes", macos_gt_dir / "themes")
 
     # 2. btop

@@ -599,7 +599,7 @@ PY
             bad_pid_target="$(TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="${tmux_env%%,*},999999,0" TMUX_PANE="$bg_pane" _ide_tmux_target || echo "rejected")"
             kill "$bg_nvim_pid" 2>/dev/null || true
             wait "$bg_nvim_pid" 2>/dev/null || true
-            TMUX_TMPDIR="$multisess_dir" XDG_RUNTIME_DIR="$multisess_dir" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$multisess_dir/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             rm -rf "$multisess_dir"
             if [ "$bg_remote_state" = "$SCRIPT_DIR/setup/modules/10-dotfiles.sh|3" ] && [ "$bg_checktime_line" = "after_edit" ] && [ "$icd_reset_pwd" = "$SCRIPT_DIR/setup/modules" ] && [ "$sid_reset_pwd" = "$SCRIPT_DIR/setup/modules" ] && [ "$bad_pid_target" = "rejected" ]; then
                 echo "PASS:Standalone .bashrc-addendum v() and icd() target caller TMUX_PANE or \$0 session ID, trigger checktime on external edits, and verify server PID in multi-session tmux"
@@ -1223,6 +1223,20 @@ EOF
     mkdir -p "$SA_TH_HOME/.config/themes" "$TWOFILE_DIR/mock-fzf-bin"
     cat > "$TWOFILE_DIR/mock-fzf-bin/fzf" <<'MOCKFZF'
 #!/bin/sh
+if [ -n "${MOCK_FZF_EXIT_CODE:-}" ]; then
+    cat >/dev/null
+    exit "$MOCK_FZF_EXIT_CODE"
+fi
+if [ "${MOCK_FZF_LEGACY_STRICT:-0}" = "1" ]; then
+    for arg in "$@" ${FZF_DEFAULT_OPTS:-}; do
+        case "$arg" in
+            --border-label*|--no-scrollbar|*label:*|*separator:*)
+                printf 'unknown option: %s\n' "$arg" >&2
+                exit 2
+                ;;
+        esac
+    done
+fi
 prev_cmd=""
 for arg in "$@"; do
     case "$arg" in
@@ -1303,6 +1317,11 @@ EOF
         rm -f \"\$created_file\"
         THEME_FORCE_FZF=1 PATH='$TWOFILE_DIR/mock-fzf-bin':\"\$PATH\" theme --no-live >/dev/null
         fzf_picked=\"\${HOME_SETTINGS_THEME:-}\"
+        theme --set nord --no-live >/dev/null
+        FZF_DEFAULT_OPTS='--color=label:#112233,separator:#445566 --no-scrollbar' MOCK_FZF_LEGACY_STRICT=1 THEME_FZF_VERSION=0.29.0 THEME_FORCE_FZF=1 PATH='$TWOFILE_DIR/mock-fzf-bin':\"\$PATH\" theme --no-live >/dev/null
+        legacy_fzf_picked=\"\${HOME_SETTINGS_THEME:-}\"
+        fzf_err_rc=0
+        MOCK_FZF_EXIT_CODE=2 THEME_FORCE_FZF=1 PATH='$TWOFILE_DIR/mock-fzf-bin':\"\$PATH\" theme --no-live >/dev/null 2>&1 || fzf_err_rc=\$?
         THEME_HOLIDAY_DATE=2024-02-29 theme --holiday --no-live >/dev/null
         leap_state=\"\${HOME_SETTINGS_THEME:-}\"
         THEME_HOLIDAY_DATE=2026-11-20 theme --holiday --no-live >/dev/null
@@ -1364,7 +1383,7 @@ INNER2
         reset_th=\"\${HOME_SETTINGS_THEME:-<unset>}\"
         nontty_has_star=0
         [[ \"\$nontty_list\" == *'* nord'* ]] && nontty_has_star=1
-        printf 'CNT=%s/%s|FG=%s|CUR=%s/%s/%s|NONTTY=%s|BAD=%s/%s|TFO=%s/%s|BB=%s|VIMSYNC=%s|STALESYNC=%s|CREATE=%s|FZF=%s|LEAP=%s|TG=%s|NY=%s|BADCAL=%s/%s|RO=%s/%s/%s/%s|PARTIAL=%s|LS1=%s|LS2=%s|PS1=%s|COMP=%s|RESET=%s/%s\n' \"\$list_cnt\" \"\$empty_list_cnt\" \"\$fg_preserved\" \"\$cur1\" \"\$cur_after_ro\" \"\$cur_after_bad\" \"\$nontty_has_star\" \"\$bad_rc\" \"\$extra_rc\" \"\$tfile_before\" \"\$tfile_override\" \"\$bb_pr_url\" \"\$vim_sync\" \"\$stale_sync\" \"\$created_state\" \"\$fzf_picked\" \"\$leap_state\" \"\$tg_state\" \"\$ny_state\" \"\$bad_feb_rc\" \"\$bad_apr_rc\" \"\$ro_set_rc\" \"\$ro_create_rc\" \"\$ro_applied_leak\" \"\$ro_preserved\" \"\$partial_bat\" \"\$ab_ls1\" \"\$ab_ls2\" \"\$ab_ps1\" \"\$ab_comp\" \"\$reset_th\" \"\$reset_ls\"
+        printf 'CNT=%s/%s|FG=%s|CUR=%s/%s/%s|NONTTY=%s|BAD=%s/%s|TFO=%s/%s|BB=%s|VIMSYNC=%s|STALESYNC=%s|CREATE=%s|FZF=%s/%s/%s|LEAP=%s|TG=%s|NY=%s|BADCAL=%s/%s|RO=%s/%s/%s/%s|PARTIAL=%s|LS1=%s|LS2=%s|PS1=%s|COMP=%s|RESET=%s/%s\n' \"\$list_cnt\" \"\$empty_list_cnt\" \"\$fg_preserved\" \"\$cur1\" \"\$cur_after_ro\" \"\$cur_after_bad\" \"\$nontty_has_star\" \"\$bad_rc\" \"\$extra_rc\" \"\$tfile_before\" \"\$tfile_override\" \"\$bb_pr_url\" \"\$vim_sync\" \"\$stale_sync\" \"\$created_state\" \"\$fzf_picked\" \"\$legacy_fzf_picked\" \"\$fzf_err_rc\" \"\$leap_state\" \"\$tg_state\" \"\$ny_state\" \"\$bad_feb_rc\" \"\$bad_apr_rc\" \"\$ro_set_rc\" \"\$ro_create_rc\" \"\$ro_applied_leak\" \"\$ro_preserved\" \"\$partial_bat\" \"\$ab_ls1\" \"\$ab_ls2\" \"\$ab_ps1\" \"\$ab_comp\" \"\$reset_th\" \"\$reset_ls\"
     ")"
     fzf_prev_content=""
     [ -r "$TWOFILE_DIR/fzf-prev.txt" ] && IFS= read -r -d '' fzf_prev_content < "$TWOFILE_DIR/fzf-prev.txt" || true
@@ -1373,7 +1392,7 @@ INNER2
         bash4_hits=1
     fi
     if [ "$bash4_hits" -eq 0 ] && \
-       [[ "$sa_theme_out" == *"CNT=${builtin_plus_custom_cnt}/${builtin_theme_cnt}|FG=1|CUR=nord/nord/nord|NONTTY=1|BAD=1/1|TFO=aurora-borealis/nord:<unset>|BB=https://stash.example.com/projects/CORE_PLAT/repos/gateway/pull-requests/42|VIMSYNC=gruvbox-dark:Gruvbox-Dark-TrueColor|STALESYNC=catppuccin-mocha:Catppuccin-Mocha-TrueColor|CREATE=remote-berry:Remote-Berry-TrueColor:1|FZF=kanagawa-wave|LEAP=st-patricks|TG=thanksgiving:🦃|NY=new-years:🥂|BADCAL=1/1|RO=1/1/0/new-years|"* ]] && \
+       [[ "$sa_theme_out" == *"CNT=${builtin_plus_custom_cnt}/${builtin_theme_cnt}|FG=1|CUR=nord/nord/nord|NONTTY=1|BAD=1/1|TFO=aurora-borealis/nord:<unset>|BB=https://stash.example.com/projects/CORE_PLAT/repos/gateway/pull-requests/42|VIMSYNC=gruvbox-dark:Gruvbox-Dark-TrueColor|STALESYNC=catppuccin-mocha:Catppuccin-Mocha-TrueColor|CREATE=remote-berry:Remote-Berry-TrueColor:1|FZF=kanagawa-wave/kanagawa-wave/2|LEAP=st-patricks|TG=thanksgiving:🦃|NY=new-years:🥂|BADCAL=1/1|RO=1/1/0/new-years|"* ]] && \
        [[ "$fzf_prev_content" == *"Nord (nord)"* ]] && \
        [[ "$sa_theme_out" != *"PARTIAL=PARTIAL_CORRUPT"* ]] && \
        [[ "$sa_theme_out" == *"LS1="*"di=38;2;91;192;190:"* ]] && \
@@ -1794,7 +1813,13 @@ try:
         os.write(m_lnx, b"\x12")
         lnx_draw = read_until(m_lnx, "+---")
         lnx_draw += drain(m_lnx, 0.05)
-        assert "+ History" in lnx_draw and "+---" in lnx_draw and "\x1b[38;" not in lnx_draw and "\x1b[48;" not in lnx_draw, f"TERM=linux NO_COLOR leaked Unicode/SGR: {lnx_draw!r}"
+        assert (
+            "+ History" in lnx_draw
+            and "+--- Enter/Tab: place | Esc: cancel" in lnx_draw
+            and "place, Esc" not in lnx_draw
+            and "\x1b[38;" not in lnx_draw
+            and "\x1b[48;" not in lnx_draw
+        ), f"TERM=linux NO_COLOR leaked Unicode/SGR or missed bottom command bar: {lnx_draw!r}"
         os.write(m_lnx, b"\x1b")
         drain(m_lnx)
     finally:
@@ -2039,7 +2064,7 @@ EOF
             if [ -S "$V_ED_SOCK" ] && command -v nvim >/dev/null 2>&1; then
                 NVIM_LOG_FILE=/dev/null bash -c 'if command -v timeout >/dev/null 2>&1; then exec timeout 2 "$@"; else exec "$@"; fi' _ nvim --headless --server "$V_ED_SOCK" --remote-send '<C-\><C-n><Cmd>qall!<CR>' </dev/null >/dev/null 2>&1 || true
             fi
-            TMUX_TMPDIR="$V_TMUX_DIR" XDG_RUNTIME_DIR="$V_TMUX_DIR" TMUX="" TMUX_PANE="" tmux kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$V_TMUX_DIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             rm -rf "$V_TMUX_DIR"
         fi
 

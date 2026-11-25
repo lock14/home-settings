@@ -17,6 +17,7 @@ from ide_lib.constants import (
     visible_width,
     which_executable,
 )
+from ide_lib.keymap import topbar_tab_suffix_widths
 from ide_lib.nvim_rpc import (
     ensure_editor_nvim_running,
     ensure_session_editor_socket,
@@ -31,6 +32,7 @@ from ide_lib.nvim_rpc import (
 from ide_lib.tmux import (
     check_is_ide_session,
     current_ide_session,
+    ensure_server_tmux_conf,
     get_ide_var,
     is_ssh_session,
     missing_session_msg,
@@ -1348,7 +1350,7 @@ def status_click(x_str: str, target_arg: str) -> int:
             "#{@ide_role}",
             "#{@ide_ai_cli}",
             "#{window_zoomed_flag}",
-            "#{status-left}",
+            "#{T:status-left}",
             "#{window_name}",
             "#{client_width}",
             "#{@ide_ai_parked}",
@@ -1379,16 +1381,13 @@ def status_click(x_str: str, target_arg: str) -> int:
         return 0
 
     compact_tabs = cw_raw.isdigit() and 0 < int(cw_raw) < 95
-    if compact_tabs:
-        ai_sfx = 4 if (role != "ai" and ai_parked) else 0
-        ed_sfx = 4 if (role != "editor" and ed_parked) else 0
-        term_sfx = 5 if (role != "term" and term_parked) else 1
-        zoom_w = 7
-    else:
-        ai_sfx = 8
-        ed_sfx = 8
-        term_sfx = 9
-        zoom_w = 15
+    ai_sfx, ed_sfx, term_sfx, zoom_w = topbar_tab_suffix_widths(
+        compact_tabs=compact_tabs,
+        role=role,
+        ai_parked=ai_parked,
+        ed_parked=ed_parked,
+        term_parked=term_parked,
+    )
 
     ai_w = 1 + (2 if role == "ai" else 0) + 2 + visible_width(ai_cli) + ai_sfx
     ed_w = (2 if role == "editor" else 0) + 8 + ed_sfx
@@ -1744,50 +1743,23 @@ def refresh_ide_sessions(target_arg: str, ide_self: str) -> int:
             return 1
         target_items = [item for item in raw_sessions if item["sess"] == sess]
     else:
-        if not server_up or not raw_sessions:
+        if not server_up:
             print("No active IDE sessions.")
             return 0
         target_items = raw_sessions
 
-    tmux_conf = os.path.expanduser("~/.tmux.conf")
-    if os.path.isfile(tmux_conf):
-        run_tmux("source-file", tmux_conf)
+    ensure_server_tmux_conf(
+        force_reload=True,
+        force_theme=True,
+        regen_theme=True,
+        ide_self=ide_self,
+    )
 
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    active_theme_file = os.path.join(xdg_cfg, "home-settings", "active-theme.theme")
-    tmux_theme_conf = os.path.join(xdg_cfg, "home-settings", "tmux-theme.conf")
-    if os.path.isfile(active_theme_file):
-        theme_id = ""
-        try:
-            with open(active_theme_file, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    s = line.strip()
-                    if s.startswith("THEME_ID="):
-                        theme_id = s.split("=", 1)[1].strip().strip('"').strip("'")
-                        break
-        except OSError:
-            pass
-        if theme_id:
-            sib_theme = os.path.join(os.path.dirname(os.path.abspath(ide_self)), "theme") if ide_self else ""
-            theme_bin = (
-                sib_theme
-                if (sib_theme and os.path.isfile(sib_theme) and os.access(sib_theme, os.X_OK))
-                else (which_executable("theme") or "")
-            )
-            if theme_bin:
-                try:
-                    subprocess.run(
-                        [theme_bin, "--set", theme_id, "--no-live"],
-                        stdin=subprocess.DEVNULL,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        timeout=5,
-                        check=False,
-                    )
-                except (OSError, subprocess.SubprocessError):
-                    pass
-    if os.path.isfile(tmux_theme_conf):
-        run_tmux("source-file", tmux_theme_conf)
+    if not target_items:
+        if os.environ.get("TMUX") or os.environ.get("IDE_CLIENT"):
+            run_tmux("display-message", "-d", "2500", "Reloaded ~/.tmux.conf")
+        print("No active IDE sessions.")
+        return 0
 
     has_nvim = bool(resolve_nvim_bin())
     home_dir = os.path.expanduser("~")
@@ -2084,15 +2056,7 @@ def launch_or_attach_workspace(
             env_cmds.extend([";", "set-environment", "-t", f"={session}", "-u", display_var])
     run_tmux(*env_cmds)
 
-    if not session_existed or tmux_out("show-options", "-gqv", "@ide_tmux_conf_loaded") != "1":
-        if tmux_out("show-options", "-gqv", "@ide_tmux_conf_loaded") != "1":
-            tmux_conf = os.path.expanduser("~/.tmux.conf")
-            if os.path.isfile(tmux_conf):
-                run_tmux("source-file", tmux_conf)
-        xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-        tmux_theme_conf = os.path.join(xdg_cfg, "home-settings", "tmux-theme.conf")
-        if os.path.isfile(tmux_theme_conf):
-            run_tmux("source-file", tmux_theme_conf)
+    ensure_server_tmux_conf(force_theme=not session_existed)
     run_tmux("set-option", "-q", "-t", f"={session}:", "status-position", "top")
     refresh_fleet_topbar()
 

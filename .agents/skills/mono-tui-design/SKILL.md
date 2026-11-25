@@ -29,8 +29,8 @@ Always resolve rules in this order (higher overrides lower):
 1. **Identify the screen and workflow archetype**:
    * Map changes to `ide`'s `§11.1` operational cockpit top shelf (`dotfiles/.tmux.conf`), `§11.5` fuzzy finder and
      `Master-Detail` workspace switcher (`ide -s` in `libexec/ide_lib/switcher.py`, `sessions.py`, `preview.py`, and
-     `dock.py`), `Expand-to-Focus` directory launcher (`Alt+n` `New IDE >`), or responsive `108×34` / `80×24` modal
-     overlays (`ide keys` in `bin/ide`).
+     `dock.py`), `Expand-to-Focus` directory launchers (`Alt+n` `New IDE >` and `Alt+o` `Open IDE >`), or responsive
+     `108×34` and `80×24` modal overlays (`ide keys` in `bin/ide`).
 2. **Apply project overrides, focus clarity, and glyph hygiene**:
    * Keep both main workspace and `ai-sw-*` switcher `pane-border-style`, `pane-active-border-style`, and
      `WinSeparator` calm in `BASE01` (`[OVERRIDE] §6.1`, avoiding two-tone `tmux` border seams), distinguishing active

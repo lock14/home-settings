@@ -29,16 +29,19 @@ from ide_lib.proc import (
 )
 
 __all__ = [
+    "TMUX_THEME_V2_HEADER",
     "check_is_ide_session",
     "copy_to_system_clipboard",
     "current_ide_session",
     "discover_display_env",
     "discover_pane_nvim_sockets",
+    "ensure_server_tmux_conf",
     "get_ide_var",
     "is_bare_shell_cmd",
     "is_ide_session_meta",
     "is_ssh_session",
     "is_switcher_session_name",
+    "is_v2_tmux_theme_conf",
     "missing_session_msg",
     "most_recent_client",
     "normalize_pane_cwd",
@@ -63,6 +66,7 @@ __all__ = [
     "set_allow_tmux_env_fallback",
     "set_ide_var",
     "set_ide_vars",
+    "tmux_conf_disk_version",
     "tmux_out",
     "window_exists",
     "write_switcher_result",
@@ -641,7 +645,8 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
                     if val:
                         os.environ[var] = val
                         seen_vars.add(var)
-    if not os.environ.get("DISPLAY") and is_socket_path("/tmp/.X11-unix/X0"):
+    has_explicit_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    if not has_explicit_display and is_socket_path("/tmp/.X11-unix/X0"):
         os.environ["DISPLAY"] = ":0"
     try:
         uid = os.getuid()
@@ -652,11 +657,11 @@ def discover_display_env(target_arg: str = "", ignore_tmux_env: bool = False) ->
 
         run_dir = Path(f"/run/user/{uid}")
         if run_dir.is_dir():
-            if not os.environ.get("WAYLAND_DISPLAY") and is_socket_path(run_dir / "wayland-0"):
+            if not has_explicit_display and not os.environ.get("WAYLAND_DISPLAY") and is_socket_path(run_dir / "wayland-0"):
                 os.environ["WAYLAND_DISPLAY"] = "wayland-0"
             if not os.environ.get("DBUS_SESSION_BUS_ADDRESS") and is_socket_path(run_dir / "bus"):
                 os.environ["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={run_dir / 'bus'}"
-            if not os.environ.get("XAUTHORITY"):
+            if os.environ.get("DISPLAY") and not os.environ.get("XAUTHORITY"):
                 for auth_cand in sorted(run_dir.glob(".mutter-Xwaylandauth.*")):
                     if auth_cand.is_file():
                         os.environ["XAUTHORITY"] = str(auth_cand)
@@ -869,3 +874,131 @@ def paste_from_system_clipboard(target_pane: str) -> None:
             if tmux_out("display-message", "-p", "-t", target_pane, "#{pane_in_mode}") == "1":
                 run_tmux("copy-mode", "-q", "-t", target_pane)
             run_tmux("paste-buffer", "-p", "-t", target_pane)
+
+
+TMUX_THEME_V2_HEADER = "# tmux-theme-v2"
+
+
+def tmux_conf_disk_version(path: str = "") -> str:
+    """Return `ino:mtime_ns:size` fingerprint for `~/.tmux.conf` (following symlinks), or `""` if absent."""
+    target = path or os.path.expanduser("~/.tmux.conf")
+    try:
+        st = os.stat(target)
+    except OSError:
+        return ""
+    return f"{st.st_ino}:{st.st_mtime_ns}:{st.st_size}"
+
+
+def is_v2_tmux_theme_conf(path: str) -> bool:
+    """Return True iff `path` is a readable file starting with `# tmux-theme-v2`."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return fh.readline().rstrip("\r\n") == TMUX_THEME_V2_HEADER
+    except OSError:
+        return False
+
+
+def _read_persisted_theme_id(active_theme_file: str) -> str:
+    try:
+        with open(active_theme_file, "r", encoding="utf-8") as fh:
+            for line in fh:
+                s = line.strip()
+                if s.startswith("THEME_ID="):
+                    return s.split("=", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        return ""
+    return ""
+
+
+def _resolve_theme_bin(ide_self: str = "") -> str:
+    cands: list[str] = []
+    if ide_self:
+        cands.append(os.path.join(os.path.dirname(os.path.abspath(ide_self)), "theme"))
+    env_self = os.environ.get("IDE_SELF") or ""
+    if env_self:
+        cands.append(os.path.join(os.path.dirname(os.path.abspath(env_self)), "theme"))
+    cands.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "bin", "theme"))
+    for cand in cands:
+        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return which_executable("theme") or ""
+
+
+def ensure_server_tmux_conf(
+    *,
+    already_loaded: bool | None = None,
+    loaded_ver: str | None = None,
+    force_reload: bool = False,
+    force_theme: bool = False,
+    regen_theme: bool = False,
+    ide_self: str = "",
+) -> None:
+    """Ensure the active Tmux server has sourced the current `~/.tmux.conf` and v2 `tmux-theme.conf`."""
+    tmux_conf = os.path.expanduser("~/.tmux.conf")
+    disk_ver = tmux_conf_disk_version(tmux_conf)
+
+    if not force_reload and (already_loaded is None or (disk_ver and loaded_ver is None)):
+        raw_state = tmux_out(
+            "display-message",
+            "-p",
+            f"#{{@ide_tmux_conf_loaded}}{TMUX_SEP}#{{@ide_tmux_conf_ver}}",
+        )
+        l_flag, l_ver = (raw_state.split(TMUX_SEP) + ["", ""])[:2]
+        if already_loaded is None:
+            already_loaded = l_flag.strip() == "1"
+        if loaded_ver is None:
+            loaded_ver = l_ver.strip()
+
+    need_source_conf = False
+    if force_reload:
+        need_source_conf = os.path.isfile(tmux_conf)
+    elif disk_ver:
+        if not already_loaded or (loaded_ver or "") != disk_ver:
+            need_source_conf = True
+    elif not already_loaded and os.path.isfile(tmux_conf):
+        need_source_conf = True
+
+    if need_source_conf:
+        if disk_ver:
+            run_tmux("source-file", tmux_conf, ";", "set-option", "-gq", "@ide_tmux_conf_ver", disk_ver)
+        else:
+            run_tmux("source-file", tmux_conf)
+
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    hs_dir = os.path.join(xdg_cfg, "home-settings")
+    active_theme_file = os.path.join(hs_dir, "active-theme.theme")
+    tmux_theme_conf = os.path.join(hs_dir, "tmux-theme.conf")
+    migrated_v2 = False
+
+    if os.path.isfile(active_theme_file):
+        theme_id = _read_persisted_theme_id(active_theme_file)
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        repo_gt_kb = os.path.join(repo_root, "dotfiles", ".config", "ghostty", "keybinds.conf")
+        active_gt_kb = os.path.join(hs_dir, "active", "ghostty", "keybinds.conf")
+        needs_v2_upgrade = (
+            not is_v2_tmux_theme_conf(tmux_theme_conf)
+            or (
+                theme_id != "solarized-dark"
+                and os.path.isfile(repo_gt_kb)
+                and not os.path.isfile(active_gt_kb)
+            )
+        )
+        if theme_id and (regen_theme or needs_v2_upgrade):
+            theme_bin = _resolve_theme_bin(ide_self)
+            if theme_bin:
+                try:
+                    up_proc = subprocess.run(
+                        [theme_bin, "--set", theme_id, "--no-live"],
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=5,
+                        check=False,
+                    )
+                    migrated_v2 = needs_v2_upgrade and up_proc.returncode == 0
+                except (OSError, subprocess.SubprocessError):
+                    pass
+
+    if need_source_conf or force_theme or regen_theme or migrated_v2:
+        if is_v2_tmux_theme_conf(tmux_theme_conf):
+            run_tmux("source-file", tmux_theme_conf)
