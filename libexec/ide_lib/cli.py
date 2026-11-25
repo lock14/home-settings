@@ -546,14 +546,19 @@ def main(argv: list[str] | None = None) -> int:
         if len(agent_pos) > 2:
             print(f"Error: Unexpected extra argument '{agent_pos[2]}'.", file=sys.stderr)
             return 1
+        from ide_lib.sessions import run_agent_command
+        from ide_lib.tmux import check_is_ide_session, resolve_target_session, session_exists
+
         req_cli = agent_pos[0] if len(agent_pos) >= 1 else ""
         req_sess = agent_pos[1] if len(agent_pos) >= 2 else ""
+        if len(agent_pos) == 1 and req_cli not in ("restart", "agy", "claude", "codex", "openai"):
+            cand_sess = resolve_target_session(req_cli)
+            if cand_sess and session_exists(cand_sess) and check_is_ide_session(cand_sess):
+                req_cli, req_sess = "", cand_sess
         if req_cli and req_cli != "restart":
             if not _normalize_ai_cli(req_cli, True):
                 return 1
             req_cli = os.environ["IDE_AI_CLI"]
-        from ide_lib.sessions import run_agent_command
-
         return run_agent_command(req_cli, req_sess, ide_self)
 
     if action == "next":

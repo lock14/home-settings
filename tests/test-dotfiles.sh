@@ -283,7 +283,7 @@ if command -v tmux >/dev/null 2>&1; then
         up_env_uniq="$(printf '%s\n' "$up_env_lines" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
         root_keys_out="$(tmux -L "$TMUX_TEST_SOCK" list-keys -T root)"
         copy_keys_out="$(tmux -L "$TMUX_TEST_SOCK" list-keys -T copy-mode-vi)"
-        tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
+        TMUX="" TMUX_PANE="" tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         plain_wcur_base="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur")"
         plain_wcur_run="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_run")"
         plain_wcur_quota="$(sed 's/#\[[^]]*\]//g' <<< "$eval_wcur_quota")"
@@ -335,7 +335,7 @@ if command -v tmux >/dev/null 2>&1; then
             fail ".tmux.conf live evaluation" "Unexpected evaluation: editor=$eval_editor_non_shell ai=$eval_ai_non_editor sleep_agy=$eval_sleep_non_agy local_agy=$eval_local_agy ssh_agy=$eval_ssh_agy up_env=$up_env_total/$up_env_uniq wcur='$eval_wcur' run='$eval_wcur_run' attn='$eval_wcur_attn' done='$eval_wcur_done' fleet='$eval_sright_fleet' sright_root='$eval_sright_root'"
         fi
     else
-        tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
+        TMUX="" TMUX_PANE="" tmux -L "$TMUX_TEST_SOCK" kill-server >/dev/null 2>&1 || true
         fail ".tmux.conf live load" "tmux reported errors loading dotfiles/.tmux.conf"
     fi
 fi
@@ -375,6 +375,7 @@ else
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
+   [ -f "$TEMP_HOME/.config/ghostty/keybinds.conf" ] && \
    grep -q 'theme = "Solarized Dark"' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'font-family = "MesloLGS Nerd Font Mono"' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'cursor-style = block' "$TEMP_HOME/.config/ghostty/config" && \
@@ -383,18 +384,20 @@ if [ -f "$TEMP_HOME/.config/ghostty/config" ] && \
    grep -q 'clipboard-read = allow' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'clipboard-write = allow' "$TEMP_HOME/.config/ghostty/config" && \
    grep -q 'macos-option-as-alt = true' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = ctrl+shift+t=new_tab' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+shift+left=text:\x1b[1;4D' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+shift+right=text:\x1b[1;4C' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+shift+up=text:\x1b[1;4A' "$TEMP_HOME/.config/ghostty/config" && \
-   grep -Fq 'keybind = alt+shift+down=text:\x1b[1;4B' "$TEMP_HOME/.config/ghostty/config"; then
-    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, steady block cursor and SSH env fallback (no-cursor,ssh-env), clipboard-read/write = allow, macos-option-as-alt = true, Ctrl+Shift+T, and Alt+Arrow / Alt+Shift+Arrow ESC keybinds"
+   grep -Fxq 'config-file = keybinds.conf' "$TEMP_HOME/.config/ghostty/config" && \
+   ! grep -Fq 'keybind =' "$TEMP_HOME/.config/ghostty/config" && \
+   grep -Fq 'keybind = ctrl+shift+t=new_tab' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+left=text:\x1b[1;3D' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+right=text:\x1b[1;3C' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+up=text:\x1b[1;3A' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+down=text:\x1b[1;3B' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+shift+left=text:\x1b[1;4D' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+shift+right=text:\x1b[1;4C' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+shift+up=text:\x1b[1;4A' "$TEMP_HOME/.config/ghostty/keybinds.conf" && \
+   grep -Fq 'keybind = alt+shift+down=text:\x1b[1;4B' "$TEMP_HOME/.config/ghostty/keybinds.conf"; then
+    pass "Ghostty config contains Solarized Dark theme, MesloLGS Nerd Font Mono font family, steady block cursor and SSH env fallback (no-cursor,ssh-env), clipboard-read/write = allow, macos-option-as-alt = true, and shared keybinds.conf include"
 else
-    fail "Ghostty config verification" "Ghostty config missing expected theme, font, block cursor / no-cursor,ssh-env, clipboard-read/write, macos-option-as-alt, or Ctrl+Shift+T / Alt+Arrow / Alt+Shift+Arrow keybinds"
+    fail "Ghostty config verification" "Ghostty config missing expected theme, font, block cursor / no-cursor,ssh-env, clipboard-read/write, macos-option-as-alt, or keybinds.conf directives"
 fi
 
 if [ -f "$TEMP_HOME/.config/ghostty/themes/Solarized Dark" ]; then

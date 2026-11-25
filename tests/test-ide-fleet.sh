@@ -44,6 +44,7 @@ expected_modules = {
     "theme.py",
     "nvim_rpc.py",
     "fleet.py",
+    "keymap.py",
     "launcher.py",
     "layout.py",
     "links.py",
@@ -903,7 +904,7 @@ try:
     rc_zero_esc, _ = _run_pty_cmd([ide_bin, "-s"], {**base_env, "IDE_FZF_BIN": zero_esc_fzf, "TMUX": "", "TMUX_PANE": ""})
     esc_invocations = open(zero_esc_log, encoding="utf-8").read().splitlines()
     assert rc_zero_esc == 0 and len(esc_invocations) == 1, f"expected 1 New IDE fzf call and exit 0 on Esc when 0 sessions exist, got rc={rc_zero_esc} calls={esc_invocations}"
-    assert "--prompt=New IDE > " in esc_invocations[0] and "Esc: cancel" in esc_invocations[0] and "back to sessions" not in esc_invocations[0], (
+    assert "--prompt=Open IDE > " in esc_invocations[0] and "Esc: cancel" in esc_invocations[0] and "back to sessions" not in esc_invocations[0], (
         f"unexpected 0-session fzf args: {esc_invocations[0]}"
     )
 
@@ -1424,7 +1425,7 @@ try:
     assert (
         "--border=rounded" in rel_fzf_args
         and "--border-label-pos=bottom" in rel_fzf_args
-        and "--border-label= Enter: switch · Alt+l: AI · C-y: ack · Alt+w: close " in rel_fzf_args
+        and "--border-label= Enter: switch · Alt+l: AI · F1: help · Alt+w: close " in rel_fzf_args
         and "--color=label:#586E75" in rel_fzf_args
         and "border:#586E75,separator:#586E75" in rel_fzf_args
         and "spinner:#2AA198" in rel_fzf_args
@@ -2485,14 +2486,14 @@ try:
             "args = ' '.join(sys.argv[1:])\n"
             "if step == 0:\n"
             "    assert 'ctrl-y:execute-silent' in args and 'ctrl-o:execute-silent' in args and 'alt-n' in args and 'alt-o' in args and 'alt-r' in args and '--bind=f1:execute(' in args and '--bind=f5:' in args, f'missing triage/launcher/CUA binds: {args}'\n"
-            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · M-o: open · M-r: agent · C-x: quit · C-r/F5: reload · F1: help · Alt+w: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
+            "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · Ctrl+a/e/t: pane · Ctrl+y: ack · Ctrl+o: PR · Alt+n: new · Alt+o: open · Alt+r: agent · Ctrl+x: quit · F1: help · Alt+w: close ' in args and '--header=' not in args, f'missing bottom border-label on step 0: {args}'\n"
             "    print('alt-o')\n"
             "    print(lines[0])\n"
             "elif step == 1:\n"
-            "    assert '--prompt=New IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch · Alt+n: new · Esc: back to sessions ' in args and '--color=label:#586E75' in args and 'border:#586E75' in args and '--header=' not in args, f'expected New IDE prompt and bottom border-label on step 1: {args}'\n"
+            "    assert '--prompt=Open IDE > ' in args and '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch · Alt+n: new · Esc: back to sessions ' in args and '--color=label:#586E75' in args and 'border:#586E75' in args and '--header=' not in args, f'expected Open IDE prompt and bottom border-label on step 1: {args}'\n"
             "    sys.exit(130)\n"
             "elif step == 2:\n"
-            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · C-a/e/t: pane · C-y: ack · C-o: PR · M-n: new · M-o: open · M-r: agent · C-x: quit · C-r/F5: reload · F1: help · Alt+w: close ' in args, f'Esc from Alt+o did not return to session list: {args}'\n"
+            "    assert '--prompt=IDE > ' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: switch · Ctrl+a/e/t: pane · Ctrl+y: ack · Ctrl+o: PR · Alt+n: new · Alt+o: open · Alt+r: agent · Ctrl+x: quit · F1: help · Alt+w: close ' in args, f'Esc from Alt+o did not return to session list: {args}'\n"
             "    print('alt-o')\n"
             "elif step == 3:\n"
             "    assert '--border=rounded' in args and '--border-label-pos=bottom' in args and '--border-label= Enter: launch · Alt+n: new · Esc: back to sessions ' in args, f'expected bottom border-label on step 3: {args}'\n"
@@ -3068,7 +3069,7 @@ try:
     _read_pty_chunk(0.2)
     assert os.path.isfile(new_pop_args_log), "ide -o inside tmux did not open display-popup running IDE_FZF_BIN"
     pop_fzf_args = open(new_pop_args_log, encoding="utf-8").read()
-    assert "--prompt=New IDE > " in pop_fzf_args and "Esc: cancel" in pop_fzf_args and "--query=ws-un" in pop_fzf_args, f"bad ide -o popup fzf args: {pop_fzf_args}"
+    assert "--prompt=Open IDE > " in pop_fzf_args and "Esc: cancel" in pop_fzf_args and "--query=ws-un" in pop_fzf_args, f"bad ide -o popup fzf args: {pop_fzf_args}"
     assert tmux("has-session", "-t", "=ws-unvisited", check=False).returncode == 0, "ide -n did not create ws-unvisited session"
     assert tmux_out("show-options", "-qv", "-t", "=ws-unvisited:", "@ide_workdir") == os.path.realpath(os.path.join(ws_unvis, "src_tree")), (
         "ide -n did not apply ide_resolve_workspace to chosen workspace root"
@@ -4638,6 +4639,44 @@ try:
                 and "New IDE >" not in cap_s,
                 timeout=3.0,
             ), "Esc from Alt+n did not restore 2-pane switcher session list"
+
+            # Alt+r on a 0-match filter keeps the 2-pane switcher open; Alt+r on a matched session opens the zoomed AI Agent sub-modal and Esc returns to 2-pane sessions
+            os.write(client_mfd, b"zzz-no-match")
+            assert wait_until(
+                lambda: "zzz-no-match" in tmux_out("capture-pane", "-p", "-t", fzf_adv),
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1br")
+            assert wait_until(
+                lambda: sw_proc.poll() is None
+                and _active_sw_sess() == sw_sess_adv
+                and "IDE >" in (cap_nm := tmux_out("capture-pane", "-p", "-t", fzf_adv))
+                and "zzz-no-match" not in cap_nm,
+                timeout=3.0,
+            ), "Alt+r on 0-match filter aborted switcher popup instead of restarting session list"
+            os.write(client_mfd, b"gamma-ws")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_selected_sess").strip() == "gamma-ws",
+                timeout=3.0,
+            )
+            os.write(client_mfd, b"\x1br")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_mode") == "new"
+                and tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_new_title") == "AI Agent · gamma-ws"
+                and tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_hint") == "(Esc: back)"
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_adv}:", "#{window_zoomed_flag}") == "1"
+                and "1. Restart agy" in tmux_out("capture-pane", "-p", "-t", fzf_adv),
+                timeout=3.0,
+            ), "Alt+r did not open zoomed AI Agent sub-modal with (Esc: back) border hint"
+            os.write(client_mfd, b"\x1b")
+            assert wait_until(
+                lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_mode") == "sessions"
+                and tmux_out("display-message", "-p", "-t", f"={sw_sess_adv}:", "#{window_zoomed_flag}") == "0"
+                and "IDE >" in (cap_ag := tmux_out("capture-pane", "-p", "-t", fzf_adv))
+                and "1. Restart agy" not in cap_ag,
+                timeout=3.0,
+            ), "Esc from Alt+r AI Agent sub-modal did not restore 2-pane switcher session list"
+
             os.write(client_mfd, b"int-alpha")
             assert wait_until(
                 lambda: tmux_out("show-options", "-qv", "-t", f"={sw_sess_adv}:", "@ide_sw_selected_sess").strip() == "int-alpha",
@@ -4780,8 +4819,10 @@ try:
             spaced_dir = os.path.join(root, "dir with 'quote' and space", "bin")
             os.makedirs(spaced_dir, exist_ok=True)
             spaced_ide_bin = os.path.join(spaced_dir, "ide")
-            shutil.copy2(ide_src, spaced_ide_bin)
-            os.chmod(spaced_ide_bin, 0o755)
+            spaced_ide_tmp = f"{spaced_ide_bin}.tmp"
+            shutil.copyfile(ide_src, spaced_ide_tmp)
+            os.chmod(spaced_ide_tmp, 0o755)
+            os.replace(spaced_ide_tmp, spaced_ide_bin)
             shutil.copytree(os.path.join(repo_dir, "libexec", "ide_lib"), os.path.join(os.path.dirname(spaced_dir), "libexec", "ide_lib"), dirs_exist_ok=True)
 
             # Corrupt int-alpha's @ide_ai_pane to point to gamma-ws's Editor pane: switcher must NOT steal gamma-ws's pane!
@@ -5840,6 +5881,8 @@ try:
     assert format_switcher_pane_label("ws-a", "agy", "-") == "ws-a · agy"
     assert _format_new_picker_footer(120, True) == " Enter: launch · Alt+n: new · Esc: back to sessions "
     assert _format_new_picker_footer(48, True) == " Enter: launch · Alt+n: new · Esc: back "
+    assert _format_new_picker_footer(120, True, allow_flip_new=False) == " Enter: launch · Esc: back to sessions "
+    assert _format_new_picker_footer(48, False, allow_flip_new=False) == " Enter: launch · Esc: cancel "
     assert _vw_chk(_format_new_picker_footer(28, False)) <= 24
 
     resp_ws = os.path.join(root, "deeply-nested-workspace-parent", "another-long-segment", "resp-svc")
@@ -6047,8 +6090,8 @@ try:
             if select.select([pty_new_m], [], [], 0.05)[0]:
                 pty_new_buf.extend(os.read(pty_new_m, 4096))
         assert b"New IDE >" in pty_new_buf, f"expected New IDE > card in PTY: {pty_new_buf!r}"
-        # Type "pty-bad", Alt+Left (\x1b[1;3D) word-left, 3x Delete (\x1b[3~), "ws" -> "pty-ws", Tab (agy -> claude), Alt+2 (3pane -> 2pane), Enter
-        os.write(pty_new_m, b"pty-bad\x1b[1;3D\x1b[3~\x1b[3~\x1b[3~ws\t\x1b2\r")
+        # Type "pty-bad", Alt+Left (\x1b[1;3D) word-left, 3x Delete (\x1b[3~), "ws" -> "pty-ws", Tab (agy -> claude), CSI-u Alt+2 (\x1b[50;3u: 3pane -> 2pane), Enter
+        os.write(pty_new_m, b"pty-bad\x1b[1;3D\x1b[3~\x1b[3~\x1b[3~ws\t\x1b[50;3u\r")
         dl_fin = time.monotonic() + 5.0
         while time.monotonic() < dl_fin and p_new_pty.poll() is None:
             if select.select([pty_new_m], [], [], 0.05)[0]:
@@ -6087,6 +6130,53 @@ try:
     run_cmd([ide_bin, "agent", "restart", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
     assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_cli") == "codex"
 
+    # Interactive PTY test of `ide agent mkdir-home-ws` with IDE_ASCII=1 (pure ASCII card chrome + numeric hotkey `3` -> `claude`)
+    pty_ag_m, pty_ag_s = pty.openpty()
+    fcntl.ioctl(pty_ag_s, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    p_ag_pty = subprocess.Popen(
+        [ide_bin, "agent", "mkdir-home-ws"],
+        stdin=pty_ag_s,
+        stdout=pty_ag_s,
+        stderr=pty_ag_s,
+        env={**base_env, "TMUX": "", "TMUX_PANE": "", "IDE_ASCII": "1", "NO_COLOR": "1"},
+        close_fds=True,
+        preexec_fn=lambda sfd=pty_ag_s: set_ctty(sfd),
+    )
+    os.close(pty_ag_s)
+    pty_ag_buf = bytearray()
+    try:
+        dl_ag = time.monotonic() + 3.0
+        while time.monotonic() < dl_ag and b"> 1. Restart codex" not in pty_ag_buf:
+            if select.select([pty_ag_m], [], [], 0.05)[0]:
+                try:
+                    pty_ag_buf.extend(os.read(pty_ag_m, 4096))
+                except OSError:
+                    break
+        ag_txt = pty_ag_buf.decode("utf-8", errors="replace")
+        assert (
+            "+- AI Agent | mkdir-home-ws" in ag_txt
+            and "---+" in ag_txt
+            and "> 1. Restart codex" in ag_txt
+            and "3. Switch to claude" in ag_txt
+            and " | " in ag_txt
+        ), f"expected ASCII agent card: {ag_txt!r}"
+        assert not any(g in ag_txt for g in ("╭", "│", "▸", "·")), f"Unicode glyph leaked in IDE_ASCII=1 agent card: {ag_txt!r}"
+        os.write(pty_ag_m, b"3")
+        dl_ag_fin = time.monotonic() + 5.0
+        while time.monotonic() < dl_ag_fin and p_ag_pty.poll() is None:
+            if select.select([pty_ag_m], [], [], 0.05)[0]:
+                try:
+                    pty_ag_buf.extend(os.read(pty_ag_m, 4096))
+                except OSError:
+                    break
+        assert p_ag_pty.wait(timeout=3.0) == 0, f"interactive ide agent PTY failed: {pty_ag_buf!r}"
+    finally:
+        try:
+            os.close(pty_ag_m)
+        except OSError:
+            pass
+    assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_cli") == "claude"
+
     # Park & unpark AI pane via `ide _internal park ai` (`Alt+Shift+A`) + verify COPY mode `status-right` hint
     run_cmd([ide_bin, "_internal", "park", "ai", "mkdir-home-ws"], env={**base_env, "TMUX": ""}, check=True)
     assert tmux_out("show-options", "-qv", "-t", "=mkdir-home-ws:", "@ide_ai_parked") == "1"
@@ -6103,6 +6193,299 @@ try:
         env={**base_env, "TMUX": ""},
         check=False,
     )
+
+    # 22f. Centralized keymap.py invariants, @ide_tmux_conf_ver auto-reload, 0-session `ide refresh`, legacy v1 theme guard, and lint_keybinds
+    from ide_lib.keymap import (
+        agent_picker_footer_hints,
+        create_workspace_footer_hints,
+        format_card_footer,
+        fzf_key_to_display_chord,
+        pane_jump_mode_for_key,
+        switcher_pane_border_hints,
+        switcher_submodal_hint,
+        topbar_tab_suffix_widths,
+        ui_hint_sep,
+    )
+    from ide_lib.launcher import _fit_ansi_card_cell, _read_tty_key
+
+    lbl_140_2p = format_sessions_footer_label(pane_w=54, in_two_pane=True)
+    lbl_120_2p = format_sessions_footer_label(pane_w=46, in_two_pane=True)
+    assert "F1: help" in lbl_140_2p and "Alt+" not in lbl_140_2p and "M-l: AI" in lbl_140_2p, f"bad 140-col 2p footer: {lbl_140_2p!r}"
+    assert "F1: ?" in lbl_120_2p and "Alt+" not in lbl_120_2p and "M-w: close" in lbl_120_2p, f"bad 120-col 2p footer: {lbl_120_2p!r}"
+    assert ui_hint_sep({"TERM": "dumb"}) == " | " and ui_hint_sep({"TERM": "linux"}) == " | " and ui_hint_sep({"IDE_ASCII": "1"}) == " | "
+    assert ui_hint_sep({"TERM": "xterm-256color"}) == " · "
+    lbl_ascii = format_sessions_footer_label(pane_w=80, in_two_pane=True, sep=" | ")
+    assert " | " in lbl_ascii and " · " not in lbl_ascii, f"ASCII footer leaked middle-dot: {lbl_ascii!r}"
+    assert _vw_chk(format_sessions_footer_label(pane_w=16, in_two_pane=True)) <= 12
+    assert _vw_chk(format_sessions_footer_label(pane_w=4, in_two_pane=True)) == 0
+    assert _vw_chk(format_card_footer(["Enter: create", "Esc: cancel"], 10)) <= 8
+    assert _vw_chk(format_card_footer(["Enter: create", "Esc: cancel"], 4)) <= 3
+    assert fzf_key_to_display_chord("alt-o") == "Alt+o" and fzf_key_to_display_chord("ctrl-a") == "Ctrl+a"
+    assert switcher_pane_border_hints(" | ")[2] == "(Alt+h: list | Alt+w: close)"
+    assert switcher_pane_border_hints(" · ")[2] == "(Alt+h: list · Alt+w: close)"
+    for raw_kseq, exp_kres in (
+        (b"\x1b2", ("alt-2", "")),
+        (b"\x1b[50;3u", ("alt-2", "")),
+        (b"\x1b[27;3;50~", ("alt-2", "")),
+        (b"\x1b[111;3u", ("alt-o", "")),
+        (b"\x1b[27u", ("esc", "")),
+        (b"\x1b[9;2u", ("shift-tab", "")),
+        (b"\x1b[13;2u", ("enter", "")),
+    ):
+        kr_fd, kw_fd = os.pipe()
+        try:
+            os.write(kw_fd, raw_kseq)
+            assert _read_tty_key(kr_fd) == exp_kres, f"_read_tty_key({raw_kseq!r}) != {exp_kres!r}"
+        finally:
+            os.close(kr_fd)
+            os.close(kw_fd)
+    assert pane_jump_mode_for_key("ctrl-a") == "focus-ai" and pane_jump_mode_for_key("alt-e") == "focus-editor" and pane_jump_mode_for_key("enter") is None
+    clamped_cell = _fit_ansi_card_cell("\x1b[36mCurrent:\x1b[0m antigravity-custom-cli-日本語-agent", 20, c_rst="\x1b[0m")
+    assert _vw_chk(clamped_cell) == 20 and clamped_cell.rstrip(" ").endswith("\x1b[0m"), f"bad clamped_cell: {clamped_cell!r}"
+    assert switcher_submodal_hint("new", allow_flip=True, back_to_sessions=True) == "(Alt+o: open · Esc: back)"
+    assert switcher_submodal_hint("dir", allow_flip=True, back_to_sessions=True) == "(Alt+n: new · Esc: back)"
+    assert switcher_submodal_hint("agent", allow_flip=False, back_to_sessions=True) == "(Esc: back)"
+    ag_ftr = format_card_footer(agent_picker_footer_hints(back_label="back to sessions"), 62)
+    assert "Enter/1-3: apply" in ag_ftr and "j/k/Tab: select" in ag_ftr and "Esc: back" in ag_ftr, f"bad agent footer: {ag_ftr!r}"
+    ag_ftr4 = format_card_footer(agent_picker_footer_hints(back_label="cancel", num_options=4), 62)
+    assert "Enter/1-4: apply" in ag_ftr4, f"bad 4-option agent footer: {ag_ftr4!r}"
+    cw_ftr_80 = format_card_footer(create_workspace_footer_hints(allow_flip_open=True, back_label="cancel"), 76)
+    assert "Enter: create" in cw_ftr_80 and "Alt+o: open" in cw_ftr_80 and "Esc: cancel" in cw_ftr_80, f"Esc dropped on 80x24 create card: {cw_ftr_80!r}"
+    assert topbar_tab_suffix_widths(compact_tabs=True, role="editor", ai_parked=True, ed_parked=True, term_parked=True) == (4, 0, 5, 7)
+    assert topbar_tab_suffix_widths(compact_tabs=False, role="ai", ai_parked=False, ed_parked=False, term_parked=False) == (8, 8, 9, 15)
+
+    # Verify @ide_tmux_conf_ver auto-reloads ~/.tmux.conf when modified on disk AND `ide refresh` reloads with 0 IDE sessions
+    reload_home = os.path.join(root, "reload-home")
+    os.makedirs(os.path.join(reload_home, ".config", "home-settings"), exist_ok=True)
+    home_tmux_conf = os.path.join(reload_home, ".tmux.conf")
+    shutil.copyfile(os.path.join(repo_dir, "dotfiles", ".tmux.conf"), home_tmux_conf)
+    # Write a legacy v1 tmux-theme.conf without `# tmux-theme-v2` and verify it is ignored
+    legacy_v1_theme = os.path.join(reload_home, ".config", "home-settings", "tmux-theme.conf")
+    with open(legacy_v1_theme, "w", encoding="utf-8") as lvf:
+        lvf.write('# Generated by bin/theme — legacy v1\nset -g status-right "POISON_V1_ALT_S"\n')
+
+    # Ensure zero IDE sessions remain, leaving only non-IDE `plain-non-ide`
+    for rem_s in list(tmux_out("list-sessions", "-F", "#{session_name}").splitlines()):
+        if rem_s.strip() and rem_s.strip() != "plain-non-ide":
+            tmux("kill-session", "-t", f"={rem_s.strip()}", check=False)
+    if tmux("has-session", "-t", "=plain-non-ide", check=False).returncode != 0:
+        tmux("new-session", "-d", "-s", "plain-non-ide", "sleep 300", check=True)
+
+    with open(home_tmux_conf, "a", encoding="utf-8") as htf:
+        htf.write('\nset -gq @test_zero_sess_refresh "reloaded_zero_ok"\n')
+    ref0 = run_cmd(
+        [ide_bin, "refresh"],
+        env={**base_env, "HOME": reload_home, "XDG_CONFIG_HOME": os.path.join(reload_home, ".config"), "TMUX": ""},
+        check=True,
+    )
+    assert "No active IDE sessions." in ref0.stdout, f"expected No active IDE sessions on 0-session refresh: {ref0.stdout!r}"
+    assert tmux_out("show-options", "-gqv", "@test_zero_sess_refresh") == "reloaded_zero_ok", "0-session ide refresh did not source ~/.tmux.conf"
+    assert "POISON_V1_ALT_S" not in tmux_out("show-options", "-gqv", "status-right"), "legacy v1 tmux-theme.conf clobbered status-right!"
+
+    # Mutate ~/.tmux.conf again and verify launching a session auto-detects @ide_tmux_conf_ver change and reloads ~/.tmux.conf
+    ver_ws = os.path.join(reload_home, "ver-reload-ws")
+    os.makedirs(ver_ws, exist_ok=True)
+    with open(home_tmux_conf, "a", encoding="utf-8") as htf:
+        htf.write('\nset -gq @test_mtime_auto_reload "auto_reloaded_v2"\n')
+    run_cmd(
+        [ide_bin, "--detach", ver_ws],
+        env={**base_env, "HOME": reload_home, "XDG_CONFIG_HOME": os.path.join(reload_home, ".config"), "TMUX": ""},
+        check=True,
+    )
+    assert tmux_out("show-options", "-gqv", "@test_mtime_auto_reload") == "auto_reloaded_v2", "@ide_tmux_conf_ver change did not auto-reload ~/.tmux.conf"
+    # Verify status-click accurately expands 2-cell holiday @hs_session_icon via #{T:status-left}
+    tmux("set-option", "-gq", "@hs_session_icon", "🎃", check=True)
+    # " 🎃 ver-reload-ws  " -> 1 + 2 + 1 + 13 + 1 + 1 + 1 = 20 cols; AI pill when focused (" ▸ 󰚩 agy (Alt+a)") = 16 cols; " · " = 3 cols; Editor starts at x = 20 + 16 + 3 = 39
+    run_cmd(
+        [ide_bin, "_internal", "status-click", "42", "ver-reload-ws"],
+        env={**base_env, "HOME": reload_home, "TMUX": ""},
+        check=True,
+    )
+    assert tmux_out("display-message", "-p", "-t", "=ver-reload-ws:", "#{@ide_role}") == "editor", (
+        "status-click failed to focus editor under 2-cell holiday @hs_session_icon"
+    )
+    tmux("set-option", "-gq", "@hs_session_icon", "", check=True)
+    run_cmd(
+        [ide_bin, "quit", "--force", "ver-reload-ws"],
+        env={**base_env, "HOME": reload_home, "TMUX": ""},
+        check=False,
+    )
+
+    # Verify ensure_server_tmux_conf auto-migrates pre-existing non-default theme (nord) from v1 tmux-theme.conf + missing active/ghostty/keybinds.conf to v2
+    theme_bin_path = os.path.join(repo_dir, "bin", "theme")
+    run_cmd(
+        [theme_bin_path, "--set", "nord", "--no-live"],
+        env={**base_env, "HOME": reload_home, "XDG_CONFIG_HOME": os.path.join(reload_home, ".config"), "TMUX": ""},
+        check=True,
+    )
+    with open(legacy_v1_theme, "w", encoding="utf-8") as lvf:
+        lvf.write('# Generated by bin/theme — legacy v1 nord\nset -g status-right "POISON_V1_ALT_S"\n')
+    active_gt_kb = os.path.join(reload_home, ".config", "home-settings", "active", "ghostty", "keybinds.conf")
+    if os.path.lexists(active_gt_kb):
+        os.unlink(active_gt_kb)
+    run_cmd(
+        [ide_bin, "--detach", ver_ws],
+        env={**base_env, "HOME": reload_home, "XDG_CONFIG_HOME": os.path.join(reload_home, ".config"), "TMUX": ""},
+        check=True,
+    )
+    assert open(legacy_v1_theme, encoding="utf-8").readline().strip() == "# tmux-theme-v2", "v1 tmux-theme.conf was not auto-upgraded to v2"
+    assert os.path.islink(active_gt_kb), "missing active/ghostty/keybinds.conf symlink was not restored during v2 migration"
+    assert "#3B4252" in tmux_out("show-options", "-gqv", "status-style"), "Nord status-style lost after v1->v2 migration"
+    assert "POISON_V1_ALT_S" not in tmux_out("show-options", "-gqv", "status-right"), "v1 status-right leaked during migration"
+    run_cmd(
+        [theme_bin_path, "--set", "solarized-dark", "--no-live"],
+        env={**base_env, "HOME": reload_home, "XDG_CONFIG_HOME": os.path.join(reload_home, ".config"), "TMUX": ""},
+        check=True,
+    )
+    tmux("source-file", os.path.join(repo_dir, "dotfiles", ".tmux.conf"), check=True)
+    run_cmd(
+        [ide_bin, "quit", "--force", "ver-reload-ws"],
+        env={**base_env, "HOME": reload_home, "TMUX": ""},
+        check=False,
+    )
+
+    # Verify lint_keybinds passes on repo and catches synthetic drift (including arbitrary stale '(Alt+s)' in .tmux.conf)
+    sys.path.insert(0, os.path.join(repo_dir, "tests", "lint"))
+    from lint_keybinds import lint_keybinds as _run_lint_kb
+    assert _run_lint_kb(repo_dir) == [], f"lint_keybinds failed on repo: {_run_lint_kb(repo_dir)}"
+
+    bad_kb_root = os.path.join(root, "bad-kb-repo")
+    os.makedirs(os.path.join(bad_kb_root, "bin"), exist_ok=True)
+    os.makedirs(os.path.join(bad_kb_root, "dotfiles", ".config", "ghostty"), exist_ok=True)
+    os.makedirs(os.path.join(bad_kb_root, "libexec"), exist_ok=True)
+    shutil.copytree(os.path.join(repo_dir, "libexec", "ide_lib"), os.path.join(bad_kb_root, "libexec", "ide_lib"))
+    os.symlink(os.path.join(repo_dir, "libexec", "theme_lib"), os.path.join(bad_kb_root, "libexec", "theme_lib"))
+    bad_keymap_py = os.path.join(bad_kb_root, "libexec", "ide_lib", "keymap.py")
+    with open(bad_keymap_py, encoding="utf-8") as f_km:
+        drifted_km = (
+            f_km.read()
+            .replace('OPEN_DIR_PROMPT = "Open IDE > "', 'OPEN_DIR_PROMPT = "New IDE > "', 1)
+            .replace('"Ctrl+x: quit"', '"Ctrl+d: quit"', 1)
+        )
+    with open(bad_keymap_py, "w", encoding="utf-8") as f_km_out:
+        f_km_out.write(drifted_km)
+    with open(os.path.join(repo_dir, "dotfiles", ".tmux.conf"), encoding="utf-8") as f_tconf:
+        drifted_tmux = (
+            f_tconf.read()
+            .replace("(Alt+w)", "(Alt+s)", 1)
+            .replace("bind -T copy-mode-vi M-z", "# dropped copy M-z", 1)
+            + "\nbind -n -r C-h select-pane -L\nbind -T copy-mode-vi -r M-s send-keys -X cancel\n"
+        )
+    with open(os.path.join(bad_kb_root, "dotfiles", ".tmux.conf"), "w", encoding="utf-8") as f_tdst:
+        f_tdst.write(drifted_tmux)
+    with open(os.path.join(repo_dir, "bin", "ide"), encoding="utf-8") as f_ide_src:
+        drifted_ide = f_ide_src.read().replace("--2pane", "--drifted-flag", 1).replace("Prefix+b", "Pfx+b", 1)
+    bad_ide_bin = os.path.join(bad_kb_root, "bin", "ide")
+    with open(bad_ide_bin, "w", encoding="utf-8") as f_ide_dst:
+        f_ide_dst.write(drifted_ide)
+    os.chmod(bad_ide_bin, 0o755)
+    with open(os.path.join(bad_kb_root, "dotfiles", ".config", "ghostty", "config"), "w", encoding="utf-8") as f_gbad:
+        f_gbad.write("keybind = ctrl+shift+t=new_tab\n")
+    path_before_lint = list(sys.path)
+    bad_kb_errs = "\n".join(_run_lint_kb(bad_kb_root))
+    assert sys.path == path_before_lint, f"lint_keybinds mutated caller sys.path: {sys.path!r}"
+    assert (
+        "show_usage() heredoc drifted" in bad_kb_errs
+        and "inline 'keybind =' found" in bad_kb_errs
+        and "missing Ghostty keybinds.conf" in bad_kb_errs
+        and "non-uniform modifier 'Pfx+'" in bad_kb_errs
+        and "advertised chord 'Alt+s' has no active root binding 'M-s'" in bad_kb_errs
+        and "root binding 'M-z' missing matching 'bind -T copy-mode-vi M-z' parity" in bad_kb_errs
+        and "forbidden root binding 'bind -n C-h'" in bad_kb_errs
+        and "forbidden copy-mode-vi binding 'M-s'" in bad_kb_errs
+        and "expected OPEN_DIR_PROMPT == 'Open IDE > '" in bad_kb_errs
+        and "quit.full_label ('Ctrl+d: quit') advertises 'ctrl-d'" in bad_kb_errs
+    ), f"lint_keybinds missed expected synthetic violations: {bad_kb_errs!r}"
+    # Fresh interpreter check: lint_keybinds(bad_kb_root) must not leak ide_lib/theme_lib into sys.modules when initially absent
+    subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); from lint_keybinds import lint_keybinds; "
+            "assert lint_keybinds(sys.argv[2]); "
+            "leaked = [k for k in sys.modules if k in ('ide_lib', 'theme_lib') or k.startswith(('ide_lib.', 'theme_lib.'))]; "
+            "assert not leaked, f'leaked modules: {leaked!r}'",
+            os.path.join(repo_dir, "tests", "lint"),
+            bad_kb_root,
+        ],
+        env=base_env,
+        check=True,
+    )
+
+    # Verify standalone dialog card includes `New IDE Workspace` title while `IDE_SWITCHER_SESSION` omits duplicate inner card title
+    assert b"New IDE Workspace" in pty_new_buf, f"standalone ide new card missing title: {pty_new_buf!r}"
+    sw_new_m, sw_new_s = pty.openpty()
+    fcntl.ioctl(sw_new_s, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    p_sw_new = subprocess.Popen(
+        [ide_bin, "new", "-d"],
+        stdin=sw_new_s,
+        stdout=sw_new_s,
+        stderr=sw_new_s,
+        env={**base_env, "TMUX": "", "TMUX_PANE": "", "IDE_SWITCHER_SESSION": "ai-sw-dedup-1", "IDE_WORKSPACE_PARENT": custom_parent},
+        close_fds=True,
+        preexec_fn=lambda sfd=sw_new_s: set_ctty(sfd),
+    )
+    os.close(sw_new_s)
+    sw_new_buf = bytearray()
+    try:
+        dl_sw_new = time.monotonic() + 3.0
+        while time.monotonic() < dl_sw_new and b"New IDE >" not in sw_new_buf:
+            if select.select([sw_new_m], [], [], 0.05)[0]:
+                sw_new_buf.extend(os.read(sw_new_m, 4096))
+        assert b"New IDE >" in sw_new_buf and b"New IDE Workspace" not in sw_new_buf, (
+            f"IDE_SWITCHER_SESSION card duplicated inner title: {sw_new_buf!r}"
+        )
+        os.write(sw_new_m, b"\x1b")
+        assert p_sw_new.wait(timeout=3.0) == 0
+    finally:
+        try:
+            os.close(sw_new_m)
+        except OSError:
+            pass
+
+    # Verify returning via Esc from IDE_SW_START_ALT_O=1 inside a 2-pane ai-sw-* session unzooms BEFORE measuring pane_w
+    unzoom_ws = os.path.join(root, "unzoom-ws")
+    os.makedirs(unzoom_ws, exist_ok=True)
+    run_cmd([ide_bin, "--detach", unzoom_ws], env={**base_env, "TMUX": ""}, check=True)
+    unzoom_fzf_log = os.path.join(root, "unzoom-fzf.log")
+    unzoom_fzf_bin = os.path.join(root, "unzoom-fzf")
+    _sw_sock_path = os.path.join(tmux_tmp, f"tmux-{os.getuid()}", "default")
+    with open(unzoom_fzf_bin, "w", encoding="utf-8") as uzf:
+        uzf.write(
+            "#!/usr/bin/env python3\n"
+            "import os, subprocess, sys\n"
+            f"pw = subprocess.run(['tmux', '-S', {_sw_sock_path!r}, 'display-message', '-p', '-t', '=ai-sw-uz-1:', '#{{window_zoomed_flag}}:#{{pane_width}}'], env={{**os.environ, 'TMUX': '', 'TMUX_PANE': ''}}, capture_output=True, text=True).stdout.strip()\n"
+            "env_pw = os.environ.get('IDE_SESSIONS_PANE_W', '')\n"
+            f"with open({unzoom_fzf_log!r}, 'a', encoding='utf-8') as lf:\n"
+            "    lf.write(pw + ':' + env_pw + ' || ' + ' '.join(sys.argv[1:]) + '\\n')\n"
+            "sys.exit(130)\n"
+        )
+    os.chmod(unzoom_fzf_bin, 0o755)
+    uz_left = tmux_out("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "ai-sw-uz-1", "-n", "sessions", "-x", "110", "-y", "34", "sleep 60").strip()
+    tmux("split-window", "-h", "-d", "-t", uz_left, "-l", "63", "sleep 60", check=True)
+    run_cmd(
+        [ide_bin, "switch"],
+        env={
+            **base_env,
+            "IDE_FZF_BIN": unzoom_fzf_bin,
+            "TMUX": f"{_sw_sock_path},12345,0",
+            "TMUX_PANE": uz_left,
+            "IDE_SWITCHER_SESSION": "ai-sw-uz-1",
+            "IDE_SW_START_ALT_O": "1",
+        },
+        check=False,
+    )
+    uz_calls = [ln for ln in open(unzoom_fzf_log, encoding="utf-8").read().splitlines() if "--border-label=" in ln]
+    assert len(uz_calls) == 2, f"expected Open IDE > call then Sessions call after Esc, got {uz_calls!r}"
+    uz_info, _, uz_rest = uz_calls[1].partition(" || ")
+    uz_m = re.search(r"--border-label=( .*? ) --border-label-pos=bottom", uz_rest)
+    assert uz_m is not None, f"missing --border-label on post-unzoom sessions call: {uz_rest!r}"
+    uz_lbl = uz_m.group(1)
+    assert uz_info == "0:46:46" and _vw_chk(uz_lbl) <= 42 and "Alt+" not in uz_lbl and "Ctrl+" not in uz_lbl, (
+        f"post-unzoom 2-pane sessions --border-label or IDE_SESSIONS_PANE_W used zoomed width instead of 46-col split: info={uz_info!r} lbl={uz_lbl!r}"
+    )
+    run_cmd([ide_bin, "quit", "--force", "unzoom-ws"], env={**base_env, "TMUX": ""}, check=False)
 
     print("ALL_FLEET_OK")
 finally:

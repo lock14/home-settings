@@ -97,6 +97,9 @@ if [ "$OS" = "macos" ] && [ -d "$DOTFILES_DIR/.config/ghostty" ]; then
     GHOSTTY_MAC_DIR="$HOME/Library/Application Support/com.mitchellh.ghostty"
     [ "$DRY_RUN" = true ] || mkdir -p "$GHOSTTY_MAC_DIR"
     link_file "$XDG_CONFIG/ghostty/config" "$GHOSTTY_MAC_DIR/config"
+    if [ -f "$DOTFILES_DIR/.config/ghostty/keybinds.conf" ]; then
+        link_file "$XDG_CONFIG/ghostty/keybinds.conf" "$GHOSTTY_MAC_DIR/keybinds.conf"
+    fi
     if [ -d "$XDG_CONFIG/ghostty/themes" ] || [ -d "$DOTFILES_DIR/.config/ghostty/themes" ]; then
         link_dir "$XDG_CONFIG/ghostty/themes" "$GHOSTTY_MAC_DIR/themes"
     fi

@@ -39,7 +39,7 @@ cleanup_test_bin() {
     local dir
     for dir in "$TMUX_TEST_TMPDIR" "$QUIT_TMPDIR" "$MOUSE_TMPDIR"; do
         if [ -n "$dir" ]; then
-            tmux -S "$dir/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$dir/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             rm -rf "$dir"
         fi
     done
@@ -214,7 +214,7 @@ def wait_noncanon(fd, deadline):
 
 for winsz, expect_marker in (
     (struct.pack("HHHH", 34, 108, 0, 0), b"Ack attention or open PR"),
-    (struct.pack("HHHH", 24, 80, 0, 0), b"C-y/o/M-r (Alt+w)"),
+    (struct.pack("HHHH", 24, 80, 0, 0), b"Ctrl+y/o / Alt+r"),
 ):
     mfd, sfd = pty.openpty()
     fcntl.ioctl(sfd, termios.TIOCSWINSZ, winsz)
@@ -238,7 +238,7 @@ for winsz, expect_marker in (
         print(f"FAIL:missing_{expect_marker.decode()}")
         sys.exit(0)
 
-for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x1bOP", b"\x1b[11~", b"\x03", b"\x04"):
+for close_seq in (b"q", b"Q", b"?", b" ", b"\r", b"\x1b", b"\x1b?", b"\x1b[27u", b"\x1b[63;3u", b"\x1bOP", b"\x1b[11~", b"\x03", b"\x04"):
     mfd, sfd = pty.openpty()
     proc = subprocess.Popen(
         [ide_bin, "keys"],
@@ -286,19 +286,19 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+n / Alt+o" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Ctrl+y / o (Alt+w)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+r     (Alt+w)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Ctrl+x    (Alt+w)" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Tab/Ctrl+x (Alt+w)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+u / Prefix+v" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Prefix + | / -" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Prefix+| / -" <<< "$IDE_KEYS_OUT" && \
    grep -Fq ":IdeSend [session]" <<< "$IDE_KEYS_OUT" && \
    grep -Fq ":IdeSend! [sess]" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Ctrl+y / o (Alt+w)" <<< "${IDE_KEYS_OUT%%FILE TREE*}" && \
    grep -Fq ":IdeSend [session]" <<< "${IDE_KEYS_OUT#*SEND TO AI PROMPT}" && \
    grep -Fq "Alt+Shift+W" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+S-Arrow / Drag" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+Shift+M / Pfx+m" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+Shift+Arr/Drag" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "System monitor (Prefix+m)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Click top bar" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+Shift+A/E/T" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Space gs / t" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Space gs / a / t" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space a / A (Vis)" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space il / if" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space ia / id" <<< "$IDE_KEYS_OUT" && \
@@ -306,14 +306,16 @@ if grep -Fq "IDE Workspace & Editor Keybindings" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "mini.files" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "h/l or Left/Right" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Space m" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Mouse4/5 or C-o/i" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "Alt+? / F1 / Pfx+?" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Mouse4/5 / Ctrl+o/i" <<< "$IDE_KEYS_OUT" && \
+   grep -Fq "Alt+? / Prefix+?" <<< "$IDE_KEYS_OUT" && \
    grep -Fq "Alt+l / h (Alt+w)" <<< "$IDE_KEYS_OUT" && \
-   grep -Fq "C-y/o/M-r (Alt+w)" <<< "$IDE_KEYS_COMPACT_OUT" && \
-   grep -Fq "Alt+S-Arrow/Drag" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "Switch (Tab=multi)" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "Ctrl+y/o / Alt+r" <<< "$IDE_KEYS_COMPACT_OUT" && \
+   grep -Fq "Alt+Shift+Arrows" <<< "$IDE_KEYS_COMPACT_OUT" && \
    grep -Fq "Alt+Shift+M" <<< "$IDE_KEYS_COMPACT_OUT" && \
    ! grep -Fq $'\033[' <<< "$(NO_COLOR=1 "$SCRIPT_DIR/bin/ide" keys)" && \
-   ! grep -Fq "" <<< "$(IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" keys)" && \
+   ! grep -Fq "" <<< "$(TERM=xterm-256color IDE_NERD_FONTS=0 "$SCRIPT_DIR/bin/ide" keys)" && \
+   grep -Fq "" <<< "$(TERM=xterm-256color IDE_NERD_FONTS=1 IDE_ASCII=0 "$SCRIPT_DIR/bin/ide" keys)" && \
    grep -Fq $'\033[1m' <<< "$(TERM=dumb "$SCRIPT_DIR/bin/ide" keys)" && \
    grep -Fq $'\033[38;5;' <<< "$(TERM=screen-256color COLORTERM=256color "$SCRIPT_DIR/bin/ide" keys)" && \
    [ "$(printf '%s\n' "$IDE_KEYS_OUT" | wc -l | tr -d ' ')" -le 30 ] && \
@@ -426,7 +428,7 @@ if command -v tmux >/dev/null 2>&1; then
             printf "%s|%s|%s\n" "$XDG_RUNTIME_DIR" "${NVIM_IDE_SOCKET:-}" "${IDE_SESSION:-}"
             "$1/bin/ide" --2pane --detach "$2" >/dev/null 2>&1
             "$1/bin/ide" quit --force ws_rt_guard >/dev/null 2>&1
-            tmux kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$TMUX_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             if command -v zsh >/dev/null 2>&1; then
                 PATH="$3:$PATH" zsh -c '\''source "$1/dotfiles/.zsh-functions"; v -R /dev/null'\'' _ "$1" >/dev/null 2>&1 || true
             fi
@@ -434,7 +436,7 @@ if command -v tmux >/dev/null 2>&1; then
     )" || true
     SUB_RT_DIR="${SUB_HELPER_RT%%|*}"
     SUB_RT_REST="${SUB_HELPER_RT#*|}"
-    tmux -S "$RT_GUARD_TMP/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+    TMUX="" TMUX_PANE="" tmux -S "$RT_GUARD_TMP/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
     if [ -d "$HELPER_RT_INIT" ] && [ "$HELPER_RT_INIT" = "$_HS_TEST_RUNTIME_DIR" ] && \
        [ "$HELPER_RT_INIT" != "/tmp" ] && [ "$HELPER_RT_INIT" != "/run/user/$(id -u)" ] && \
        [ -n "$SUB_RT_DIR" ] && [ "$SUB_RT_DIR" != "$FAKE_CALLER_RT" ] && [ ! -e "$SUB_RT_DIR" ] && \
@@ -1706,7 +1708,7 @@ LUA
         else
             echo "FAIL:bin/ide multi-session quit:Expected multi-a/multi-b/multi-c/multi-self terminated cleanly (quit_ok=$multi_quit_ok), got out='$multi_kill_out' sessions='$(tmux list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')'"
         fi
-        tmux kill-server >/dev/null 2>&1 || true
+        TMUX="" TMUX_PANE="" tmux -S "$QUIT_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
     ) > "$QUIT_WS_OUT" &
     PID_QUIT_WS=$!
 
@@ -1848,7 +1850,7 @@ outer_osc8 = "passed" if b"\x1b]8;" in outer_bytes else "missing"
 print(f"drag={'ok' if drag_ok else before + dragged} kept={'ok' if kept == dragged else kept} outer_osc8={outer_osc8} status_wheel={'ok' if status_wheel_ok else sorted(status_wheel_wins)}")
 PY
             )" || true
-            tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+            TMUX="" TMUX_PANE="" tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
             mouse_click_logged="$(cat "$MOUSE_CLICK_LOG" 2>/dev/null || true)"
             if grep -q '^binding=.*MouseDrag1Border resize-pane -M' <<< "$mouse_out" && \
                grep -q '^md1=.*MouseDown1Pane select-pane -t = \\; send-keys -M' <<< "$mouse_out" && \
@@ -1883,9 +1885,9 @@ PY
     if [ -n "$OLD_TMUX_SHELL" ]; then
         export SHELL="$OLD_TMUX_SHELL"
     fi
-    tmux -S "$TMUX_TEST_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
-    tmux -S "$QUIT_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
-    tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+    TMUX="" TMUX_PANE="" tmux -S "$TMUX_TEST_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+    TMUX="" TMUX_PANE="" tmux -S "$QUIT_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
+    TMUX="" TMUX_PANE="" tmux -S "$MOUSE_TMPDIR/tmux-$(id -u)/default" kill-server >/dev/null 2>&1 || true
     rm -rf "$TMUX_TEST_TMPDIR" "$QUIT_TMPDIR" "$MOUSE_TMPDIR" "$IDE_AI_STUB_DIR"
     TMUX_TEST_TMPDIR=""
     QUIT_TMPDIR=""

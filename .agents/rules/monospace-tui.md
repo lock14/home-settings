@@ -44,9 +44,9 @@ archetypes:
     streams a read-only ANSI viewport preview (`[PREVIEW]`) with zero `swap-pane` or `SIGWINCH`, lazily docking the
     live `@ide_ai_pane` (`[LIVE]`) on demand when focused via `Alt+l`, `Alt+a`, or mouse click and undocking on
     `Alt+h`. Pressing `Alt+n` (`ide new`) enters an `Expand-to-Focus` `New IDE >` workspace-creation card (`Tab` agent
-    cycling and `Alt+2` layout toggle), while `Alt+o` (`ide dir`) enters the `fzf` existing-directory picker with
-    `90`-column responsive directory and VCS previews (`ide _internal dir-preview`), and `Alt+r` (`ide agent`) opens the
-    compact AI Agent switch and restart selector.
+    cycling and `Alt+2` layout toggle), while `Alt+o` (`ide dir`) enters the `Open IDE >` `fzf` existing-directory
+    picker with `90`-column responsive directory and VCS previews (`ide _internal dir-preview`), and `Alt+r`
+    (`ide agent`) opens the compact AI Agent switch and restart selector.
 *   **Keybinding cheatsheet and fleet status table** (`ide keys` in `bin/ide` and `ide list` in
     `libexec/ide_lib/sessions.py`): Contextual two-column modal overlay (`Alt+?`, `Space ?`, `Prefix + ?`, or `F1`)
     rendering a spacious `108×34` (`<= 104×30` inner) sheet on standard and wide canvases with automatic `80×24`
@@ -112,10 +112,11 @@ specification alongside `home-settings` project conventions (`[P1]` through `[P4
     (Powerlevel10k shell prompt and Neovim statusline), so workspace-level `PREFIX`, `COPY`, fleet, and `Help (Alt+?)`
     discoverability lives in the 1-row top `tmux` status shelf (`dotfiles/.tmux.conf` and `libexec/theme_lib/generators.py`,
     `AGENTS.md` Pillar VIII), scaling across `client_width >= 120` (full key hints), `105` (secondary SSH and subdir
-    badges), and `95` (`80×24` compact role tabs and `[a]`, `[E]`, `[T]` parked markers). Inside `fzf` pickers
-    (`libexec/ide_lib/switcher.py` and `sessions.py`), `format_sessions_footer_label` and `_format_new_picker_footer`
-    render bottom `--border-label` hints joined with middle-dot separators (`" · "`, `U+00B7`) fitted to the exact pane
-    width so narrow splits never clip an action mid-word.
+    badges), and `95` (`80×24` compact role tabs and `[A]`, `[E]`, `[T]` parked markers). Inside `fzf` pickers and inline
+    shell drawers (`libexec/ide_lib/keymap.py`, `switcher.py`, `sessions.py`, `libexec/theme_lib/preview.py`,
+    `dotfiles/.config/shell/bash-theme-cli.sh`, and `dotfiles/.config/shell/bash-history-drawer.sh`), bottom border
+    labels render action hints joined with middle-dot separators (`" · "`, `U+00B7`, degrading to `" | "` on monochrome
+    or ASCII terminals) fitted to the active pane width so narrow splits never clip an action mid-word.
 *   **Reason**: Preserves zero-clutter bottom statuslines for shells and Neovim while keeping top-bar chrome and `fzf`
     command bars self-teaching and truncation-safe across all terminal widths.
 

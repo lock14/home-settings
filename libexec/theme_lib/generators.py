@@ -39,40 +39,31 @@ DIRCOLORS_KEYWORD_MAP: dict[str, str] = {
     "EXEC": "ex",
 }
 
-GHOSTTY_KEYBIND_DIRECTIVES: tuple[str, ...] = (
-    "keybind = ctrl+shift+d=new_split:auto",
-    "keybind = ctrl+shift+w=close_surface",
-    "keybind = ctrl+shift+enter=toggle_split_zoom",
-    "keybind = ctrl+shift+h=goto_split:left",
-    "keybind = ctrl+shift+j=goto_split:bottom",
-    "keybind = ctrl+shift+k=goto_split:top",
-    "keybind = ctrl+shift+l=goto_split:right",
-    "keybind = ctrl+shift+t=new_tab",
-    r"keybind = alt+left=text:\x1b[1;3D",
-    r"keybind = alt+right=text:\x1b[1;3C",
-    r"keybind = alt+up=text:\x1b[1;3A",
-    r"keybind = alt+down=text:\x1b[1;3B",
-    r"keybind = alt+shift+left=text:\x1b[1;4D",
-    r"keybind = alt+shift+right=text:\x1b[1;4C",
-    r"keybind = alt+shift+up=text:\x1b[1;4A",
-    r"keybind = alt+shift+down=text:\x1b[1;4B",
-)
 
-
-def build_fzf_color_opts(theme: dict[str, str], include_layout: bool = True) -> str:
+def build_fzf_color_opts(
+    theme: dict[str, str],
+    include_layout: bool = True,
+    *,
+    include_label_colors: bool = True,
+) -> str:
     """Build TrueColor fzf --color flags (with optional layout flags) for a theme."""
+    bdr_slots = (
+        f"border:{theme['BASE01']},separator:{theme['BASE01']},label:{theme['BASE01']},gutter:{theme['BASE03']}"
+        if include_label_colors
+        else f"border:{theme['BASE01']},gutter:{theme['BASE03']}"
+    )
     if include_layout:
         return (
             f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},hl:{theme['BASE01']} "
             f"--color=fg:{theme['BASE0']},header:{theme['BASE01']},info:{theme['YELLOW']},pointer:{theme['GREEN']} "
             f"--color=marker:{theme['GREEN']},fg+:{theme['BASE1']},prompt:{theme['YELLOW']},hl+:{theme['BLUE']} "
-            f"--color=border:{theme['BASE01']},separator:{theme['BASE01']},label:{theme['BASE01']},gutter:{theme['BASE03']} "
+            f"--color={bdr_slots} "
             f"--layout=reverse --border=rounded --info=inline"
         )
     return (
         f"--color=bg+:{theme['BASE02']},bg:{theme['BASE03']},spinner:{theme['GREEN']},"
         f"hl:{theme['BASE01']},fg:{theme['BASE0']},header:{theme['BASE01']},"
-        f"border:{theme['BASE01']},separator:{theme['BASE01']},label:{theme['BASE01']},gutter:{theme['BASE03']},"
+        f"{bdr_slots},"
         f"info:{theme['YELLOW']},pointer:{theme['GREEN']},marker:{theme['GREEN']},"
         f"fg+:{theme['BASE1']},prompt:{theme['YELLOW']},hl+:{theme['BLUE']}"
     )
@@ -205,12 +196,11 @@ selection-foreground = {c['BASE1']}
 
 
 def generate_ghostty_config_text(theme: dict[str, str]) -> str:
-    """Generate the Ghostty configuration file with calibrated palette and keybindings."""
+    """Generate the Ghostty configuration file referencing shared `keybinds.conf`."""
     palette_lines = "\n".join(
         f"palette = {idx}={col}"
         for idx, col in enumerate(ansi_palette_hex_list(theme, lowercase=False))
     )
-    keybind_lines = "\n".join(GHOSTTY_KEYBIND_DIRECTIVES)
     return f"""# Ghostty Terminal Configuration ({theme['THEME_LABEL']})
 theme = "{theme['GHOSTTY_THEME_NAME']}"
 background = {theme['BASE03']}
@@ -237,7 +227,7 @@ shell-integration = detect
 shell-integration-features = no-cursor,ssh-env
 mouse-hide-while-typing = true
 macos-option-as-alt = true
-{keybind_lines}
+config-file = keybinds.conf
 """
 
 
@@ -754,8 +744,13 @@ def generate_p10k_theme_text(theme: dict[str, str]) -> str:
 """
 
 
+def _tmux_quote_value(val: str) -> str:
+    """Wrap `val` in double quotes escaped for Tmux option assignment."""
+    return '"' + val.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$") + '"'
+
+
 def generate_tmux_theme_text(theme: dict[str, str]) -> str:
-    """Generate native zero-fork Tmux status bar, 3-state IDE role pills, and border styles."""
+    """Generate `# tmux-theme-v2` palette and border styles without duplicating status-bar key hints."""
     b03 = theme["BASE03"]
     b02 = theme["BASE02"]
     b01 = theme["BASE01"]
@@ -771,20 +766,11 @@ def generate_tmux_theme_text(theme: dict[str, str]) -> str:
     cyan = theme["CYAN"]
     green = theme["GREEN"]
     hmeta = get_holiday_meta(theme)
-    session_icon = hmeta["icon"] if hmeta else ""
-    holiday_right_segment = (
-        f"#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},105}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={yellow}#,bg={b02}#,nobold]{hmeta['badge']} ,}}"
-        if hmeta
-        else ""
-    )
-    attn_right_segment = (
-        f"#{{?#{{&&:#{{!=:#{{@ide_attn_summary}},}},#{{!=:#{{@ide_attn_summary}},#{{session_name}}}}}},#[fg={b00}#,bg={b02}#,nobold] #[range=user|attn]#[fg={orange}#,bg={b02}#,nobold]󰂚 #{{@ide_attn_summary}} #[range=right],}}"
-    )
-    fleet_right_segment = (
-        f"#{{?#{{||:#{{>=:#{{@ide_fleet_count}},1}},#{{!=:#{{@ide_session}},}}}},#[fg={b00}#,bg={b02}#,nobold] #[range=user|fleet]#[fg={b0}#,bg={b02}#,nobold]{session_icon} #{{?#{{>=:#{{@ide_fleet_count}},1}},#{{@ide_fleet_count}},1}} · #{{?#{{>=:#{{@ide_fleet_active}},1}},#[fg={cyan}#,bg={b02}#,nobold]#{{@ide_fleet_active}} active#[fg={b0}#,bg={b02}#,nobold],0 active}}#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},120}}}}, (Alt+w) , }}#[range=right],}}"
-    )
+    session_icon_q = _tmux_quote_value(hmeta["icon"] if hmeta else "")
+    holiday_badge_q = _tmux_quote_value(hmeta["badge"] if hmeta else "")
 
-    return f"""# Generated by bin/theme — Tmux Status Bar & Borders ({theme['THEME_ID']})
+    return f"""# tmux-theme-v2
+# Generated by bin/theme — Tmux Palette & Border Styles ({theme['THEME_ID']})
 set -g pane-border-style "fg={b01},bg={b03}"
 set -g pane-active-border-style "fg={b01},bg={b03}"
 set -g popup-border-style "fg={b01},bg={b03}"
@@ -793,17 +779,20 @@ set -g mode-style "fg={b1},bg={b02}"
 set -g message-style "fg={b1},bg={b02}"
 set -g message-command-style "fg={b1},bg={b02}"
 set -g status-style "fg={b0},bg={b02}"
-set -g status-right-length 160
-
-set -g status-left "#[fg={blue},bg={b02},nobold] {session_icon} #S #[fg={b00},bg={b02},nobold] "
-
-set -g @ide_tab_ai '#{{?#{{==:#{{@ide_role}},ai}}, #[fg={cyan}#,bg={b02}#,nobold]▸ 󰚩 #[fg={b1}#,bg={b02}#,nobold]#{{?#{{!=:#{{@ide_ai_cli}},}},#{{@ide_ai_cli}},AI}}#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+a),}}, #{{?#{{||:#{{==:#{{@ide_ai_state}},approval}},#{{&&:#{{==:#{{@ide_ai_attn}},1}},#{{!=:#{{@ide_ai_state}},done}}}}}},#[fg={orange}#,bg={b02}#,nobold],#{{?#{{&&:#{{==:#{{@ide_ai_state}},done}},#{{==:#{{@ide_ai_attn}},1}}}},#[fg={green}#,bg={b02}#,nobold],#{{?#{{==:#{{@ide_ai_state}},quota}},#[fg={yellow}#,bg={b02}#,nobold],#{{?#{{==:#{{@ide_ai_state}},running}},#[fg={cyan}#,bg={b02}#,nobold],#[fg=#{{?#{{==:#{{@ide_ai_parked}},1}},{b01},{b0}}}#,bg={b02}#,nobold]}}}}}}}}󰚩 #{{?#{{!=:#{{@ide_ai_cli}},}},#{{@ide_ai_cli}},AI}}#{{?#{{==:#{{@ide_ai_parked}},1}},#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, [Alt+A], [A]}},#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+a),}}}}}}'
-set -g @ide_tab_ed '#{{?#{{==:#{{@ide_role}},editor}},#[fg={blue}#,bg={b02}#,nobold]▸  #[fg={b1}#,bg={b02}#,nobold]Editor#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+e),}},#{{?#{{==:#{{@ide_ed_parked}},1}},#[fg={b01}#,bg={b02}#,nobold] Editor #{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}},[Alt+E],[E]}},#[fg={b0}#,bg={b02}#,nobold] Editor#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+e),}}}}}}'
-set -g @ide_tab_term '#{{?#{{==:#{{@ide_role}},term}},#[fg={green}#,bg={b02}#,nobold]▸  #[fg={b1}#,bg={b02}#,nobold]Shell#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+t) , }},#{{?#{{==:#{{@ide_term_parked}},1}},#[fg={b01}#,bg={b02}#,nobold] Shell #{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}},[Alt+T] ,[T] }},#[fg={b0}#,bg={b02}#,nobold] Shell#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+t) , }}}}}}'
-
-setw -g window-status-format "#{{?#{{m/r:^_ide_park_,#W}},,#[fg={b01}#,bg={b02}#,nobold] #I:#W }}"
-setw -g window-status-current-format "#{{?#{{==:#W,ide}},#[range=user|tab_ai]#{{E:@ide_tab_ai}}#[norange]#[fg={b01}#,bg={b02}#,nobold] · #[range=user|tab_editor]#{{E:@ide_tab_ed}}#[norange]#[fg={b01}#,bg={b02}#,nobold] · #[range=user|tab_term]#{{E:@ide_tab_term}}#[norange]#{{?window_zoomed_flag,#[fg={b00}#,bg={b02}#,nobold] #[range=user|tab_zoom]#[fg={orange}#,bg={b02}#,nobold]󰁌 ZOOM#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},95}}}}, (Alt+z) , }}#[norange],}},#[fg={b1}#,bg={b02}#,nobold] #I:#W#{{?window_zoomed_flag, #[fg={orange}]󰁌 ZOOM,}} }}"
-setw -g window-status-separator ""
-
-set -g status-right "#{{?client_prefix,#[fg={b00}#,bg={b02}#,nobold] #[fg={orange}#,bg={b02}#,nobold]󰘳 PREFIX #[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},120}}}},HJKL resize · |/- split · b bar · ? keys ,? keys }},#{{?pane_in_mode,#[fg={b00}#,bg={b02}#,nobold] #[fg={magenta}#,bg={b02}#,nobold]󰆏 COPY#{{?#{{!=:#{{scroll_position}},}}, [#{{scroll_position}}/#{{history_size}}],}} #[fg={b00}#,bg={b02}#,nobold] #[fg={b0}#,bg={b02}#,nobold]#{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},120}}}},a send to AI · Alt+c copy · Esc clear ,a->AI · Esc }},#{{?pane_synchronized,#[fg={b00}#,bg={b02}#,nobold] #[fg={red}#,bg={b02}#,nobold]󰓦 SYNC ,}}#{{?#{{&&:#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},105}}}},#{{||:#{{!=:#{{SSH_CONNECTION}},}},#{{!=:#{{SSH_TTY}},}}}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={violet}#,bg={b02}#,nobold]󰣀 #h ,}}#{{?#{{&&:#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},105}}}},#{{&&:#{{!=:#{{@ide_workdir}},}},#{{!=:#{{@ide_workdir}},#{{@ide_initial_root}}}}}}}},#[fg={b00}#,bg={b02}#,nobold] #[fg={blue}#,bg={b02}#,nobold]󰉋 #{{b:@ide_workdir}} ,}}{attn_right_segment}{fleet_right_segment}{holiday_right_segment}#[fg={b00}#,bg={b02}#,nobold] #[range=user|help]#[fg={b0}#,bg={b02}#,nobold]󰋖 #{{?#{{||:#{{e|<=:#{{client_width}},0}},#{{e|>=:#{{client_width}},120}}}},Help (Alt+?) ,? }}#[range=right]}}}}"
+set -gq @hs_c_b03 "{b03}"
+set -gq @hs_c_b02 "{b02}"
+set -gq @hs_c_b01 "{b01}"
+set -gq @hs_c_b00 "{b00}"
+set -gq @hs_c_b0 "{b0}"
+set -gq @hs_c_b1 "{b1}"
+set -gq @hs_c_yellow "{yellow}"
+set -gq @hs_c_orange "{orange}"
+set -gq @hs_c_red "{red}"
+set -gq @hs_c_magenta "{magenta}"
+set -gq @hs_c_violet "{violet}"
+set -gq @hs_c_blue "{blue}"
+set -gq @hs_c_cyan "{cyan}"
+set -gq @hs_c_green "{green}"
+set -gq @hs_session_icon {session_icon_q}
+set -gq @hs_holiday_badge {holiday_badge_q}
 """

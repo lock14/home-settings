@@ -431,9 +431,9 @@ _hs_bash_history_drawer() (
                     else buf = buf "\r"
                 }
 
-                # Line 1: Top border with title/hints and match count
+                # Line 1: Top border with title and match count
                 cnt_lbl = " " match_cnt "/" total_cnt " "
-                title_lbl = (cols >= 56) ? " History (Enter/Tab: place, Esc: cancel) " : " History "
+                title_lbl = " History "
                 inner_top = cols - 2
                 rem_top = inner_top - length(title_lbl) - length(cnt_lbl)
                 if (rem_top < 0) {
@@ -478,8 +478,20 @@ _hs_bash_history_drawer() (
                     }
                 }
 
-                # Line h: Clear from col 1 to end of screen (wiping leftover rows after shrink without scrolling), then draw bottom border
-                buf = buf esc "[J" s_bdr bl rep_str(hbar, cols - 2) br s_rst
+                # Line h: Clear from col 1 to end of screen (wiping leftover rows after shrink without scrolling), then draw bottom command-bar border
+                sep_bot = (ascii_mode + 0 == 1) ? " | " : " \302\267 "
+                ftr_lbl = " Enter/Tab: place" sep_bot "Esc: cancel "
+                inner_bot = cols - 2
+                if (vis_width(ftr_lbl) > inner_bot - 2) {
+                    ftr_lbl = " Enter/Tab" sep_bot "Esc "
+                }
+                if (vis_width(ftr_lbl) > inner_bot - 2) {
+                    ftr_lbl = ""
+                }
+                fw_bot = vis_width(ftr_lbl)
+                lead_bot = (fw_bot > 0) ? ((inner_bot - fw_bot >= 3) ? 3 : 1) : 0
+                rem_bot = inner_bot - lead_bot - fw_bot
+                buf = buf esc "[J" s_bdr bl rep_str(hbar, lead_bot) ftr_lbl rep_str(hbar, rem_bot) br s_rst
 
                 # Park visible cursor right after query on Line 2 (h - 2 lines above Line h)
                 up_q = h - 2

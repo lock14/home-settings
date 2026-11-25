@@ -903,9 +903,24 @@ def main(argv: list[str] | None = None) -> int:
                                         all_keys.append(label)
                 elif rel_src == os.path.join("dotfiles", ".config", "ghostty", "config"):
                     abs_where = abs_src.replace("\\", "/")
+                    ghostty_dir = os.path.dirname(abs_src)
                     with open(abs_src, encoding="utf-8") as gfh:
                         gtext = gfh.read()
                     g_lines = {ln.strip() for ln in gtext.splitlines() if ln.strip().startswith("keybind")}
+                    included_files: list[str] = []
+                    for raw_ln in gtext.splitlines():
+                        s_ln = raw_ln.strip()
+                        if s_ln.startswith("config-file"):
+                            _, _, rhs = s_ln.partition("=")
+                            inc_rel = rhs.strip().strip('"').strip("'").lstrip("?")
+                            if inc_rel and not os.path.isabs(inc_rel):
+                                included_files.append(inc_rel)
+                                inc_abs = os.path.join(ghostty_dir, inc_rel)
+                                if os.path.isfile(inc_abs):
+                                    with open(inc_abs, encoding="utf-8") as ifh:
+                                        for iln in ifh:
+                                            if iln.strip().startswith("keybind"):
+                                                g_lines.add(iln.strip())
                     for key, req_directives in ghostty_expected_directives.items():
                         for req_dir in req_directives:
                             if req_dir not in g_lines:
@@ -922,13 +937,20 @@ def main(argv: list[str] | None = None) -> int:
                             with open(py_mod, encoding="utf-8") as pfh:
                                 theme_parts.append(pfh.read())
                         ttext = "\n".join(theme_parts)
-                        for key, req_directives in ghostty_expected_directives.items():
-                            for req_dir in req_directives:
-                                escaped_dir = req_dir.replace("\\", "\\\\")
-                                if req_dir not in ttext and escaped_dir not in ttext:
-                                    errors.append(
-                                        f'{theme_where}: Ghostty keybinding "{key}" missing generator directive "{req_dir}"'
-                                    )
+                        delegated_include_ok = bool(included_files) and all(
+                            f"config-file = {inc}" in ttext
+                            and (f'"{inc}"' in ttext or f"'{inc}'" in ttext)
+                            and os.path.isfile(os.path.join(ghostty_dir, inc))
+                            for inc in included_files
+                        )
+                        if not delegated_include_ok:
+                            for key, req_directives in ghostty_expected_directives.items():
+                                for req_dir in req_directives:
+                                    escaped_dir = req_dir.replace("\\", "\\\\")
+                                    if req_dir not in ttext and escaped_dir not in ttext:
+                                        errors.append(
+                                            f'{theme_where}: Ghostty keybinding "{key}" missing generator directive "{req_dir}"'
+                                        )
                 for key in all_keys:
                     escaped_key = key.replace("|", r"\|")
                     if key not in readme_prose_lines:

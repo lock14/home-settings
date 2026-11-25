@@ -71,19 +71,4 @@ macos-option-as-alt = true
 # ------------------------------------------------------------------------------
 # 6. Keybindings & Navigation (Split Panes & Tabs)
 # ------------------------------------------------------------------------------
-keybind = ctrl+shift+d=new_split:auto
-keybind = ctrl+shift+w=close_surface
-keybind = ctrl+shift+enter=toggle_split_zoom
-keybind = ctrl+shift+h=goto_split:left
-keybind = ctrl+shift+j=goto_split:bottom
-keybind = ctrl+shift+k=goto_split:top
-keybind = ctrl+shift+l=goto_split:right
-keybind = ctrl+shift+t=new_tab
-keybind = alt+left=text:\x1b[1;3D
-keybind = alt+right=text:\x1b[1;3C
-keybind = alt+up=text:\x1b[1;3A
-keybind = alt+down=text:\x1b[1;3B
-keybind = alt+shift+left=text:\x1b[1;4D
-keybind = alt+shift+right=text:\x1b[1;4C
-keybind = alt+shift+up=text:\x1b[1;4A
-keybind = alt+shift+down=text:\x1b[1;4B
+config-file = keybinds.conf

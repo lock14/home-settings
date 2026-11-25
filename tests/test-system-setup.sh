@@ -1024,6 +1024,7 @@ keybind = alt+shift+down=text:\\x1b[1;4B
 """
 EOF
 cp "$SCRIPT_DIR/dotfiles/.config/ghostty/config" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty/config"
+cp "$SCRIPT_DIR/dotfiles/.config/ghostty/keybinds.conf" "$TEMP_MOD_LINT_OK/dotfiles/.config/ghostty/keybinds.conf"
 printf '%s\n' 'require("solarized.keymaps")' > "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/init.lua"
 printf '%s\n' 'vim.keymap.set("n", "<leader>qm", "<cmd>echo 1<CR>")' > "$TEMP_MOD_LINT_OK/dotfiles/.config/nvim/lua/solarized/keymaps.lua"
 cat > "$TEMP_MOD_LINT_OK/README.md" <<'EOF'

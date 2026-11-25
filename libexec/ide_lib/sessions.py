@@ -30,6 +30,19 @@ from ide_lib.hooks import (
     default_workspace_parent,
     scandir_child_dirs,
 )
+from ide_lib.keymap import (
+    AGENT_MODAL_KEY,
+    CREATE_WS_FLIP_OPEN_KEY,
+    DIR_PICKER_FLIP_NEW_KEY,
+    NO_MATCH_LAUNCHER_EXPECT_KEYS,
+    OPEN_DIR_PROMPT,
+    build_action_fzf_binds,
+    format_dir_picker_footer,
+    is_ascii_ui,
+    pane_jump_mode_for_key,
+    switcher_submodal_hint,
+    ui_hint_sep,
+)
 from ide_lib.preview import (
     _ansi_visible_width,
     _carry_sgr_prefix,
@@ -49,6 +62,7 @@ from ide_lib.switcher import (
     _FZF_RESIZE_CAP_CACHE,
     _POPUP_SESS_RE,
     _fzf_supports_resize_bind,
+    build_popup_env,
     build_sessions_fzf_args,
     format_sessions_footer_label,
     fzf_supports_resize_bind,
@@ -440,22 +454,19 @@ collect_launcher_dirs = _collect_launcher_dirs
 _FLIP_NEW_SENTINEL = "__IDE_FLIP_NEW__"
 
 
-def _format_new_picker_footer(cols: int, back_to_sessions: bool) -> str:
-    """Pack bottom `--border-label` hints for `New IDE >` within `cols` without mid-word clipping."""
-    full_esc = "Esc: back to sessions" if back_to_sessions else "Esc: cancel"
-    short_esc = "Esc: back" if back_to_sessions else "Esc: cancel"
-    candidates = (
-        f" Enter: launch · Alt+n: new · {full_esc} ",
-        f" Enter: launch · Alt+n: new · {short_esc} ",
-        f" Enter: launch · {short_esc} ",
-        " Enter · Alt+n · Esc ",
-        " Enter · Esc ",
+def _format_new_picker_footer(
+    cols: int,
+    back_to_sessions: bool,
+    allow_flip_new: bool = True,
+    sep: str = " · ",
+) -> str:
+    """Pack bottom `--border-label` hints for `Open IDE >` within `cols`, honoring `allow_flip_new`."""
+    return format_dir_picker_footer(
+        cols,
+        back_to_sessions=back_to_sessions,
+        allow_flip_new=allow_flip_new,
+        sep=sep,
     )
-    budget = max(8, cols - 4) if cols > 0 else 120
-    for cand in candidates:
-        if visible_width(cand) <= budget:
-            return cand
-    return f" {trunc_visible('Enter · Esc', max(1, budget - 2))} "
 
 
 def _pick_workspace_directory(
@@ -493,6 +504,7 @@ def _pick_workspace_directory(
                     pass
 
     rows: list[str] = []
+    badge_sep = ui_hint_sep(env)
     for d in dirs:
         short_d = shorten_home(d)
         act_e = active_by_dir.get(d)
@@ -517,11 +529,11 @@ def _pick_workspace_directory(
                     m_pfx = "  " if active_by_dir else ""
                 c_path = esc["BASE1"] if is_cur else esc["BLUE"]
                 c_st = state_color(st, esc)
-                badge = f"  {esc['BASE01']}[{esc['BASE0']}{ag}{esc['BASE01']} · {c_st}{st_lbl}{esc['BASE01']}]{esc['RESET']}"
+                badge = f"  {esc['BASE01']}[{esc['BASE0']}{ag}{esc['BASE01']}{badge_sep}{c_st}{st_lbl}{esc['BASE01']}]{esc['RESET']}"
                 rows.append(f"{d}\x1f{m_pfx}{c_path}{short_d}{esc['RESET']}{badge}")
             else:
                 m_pfx = "* " if is_cur else ("! " if needs_attn else ("  " if active_by_dir else ""))
-                rows.append(f"{d}\x1f{m_pfx}{short_d}  [{ag} · {st_lbl}]")
+                rows.append(f"{d}\x1f{m_pfx}{short_d}  [{ag}{badge_sep}{st_lbl}]")
         else:
             pad_pfx = "  " if active_by_dir else ""
             if use_color:
@@ -531,7 +543,12 @@ def _pick_workspace_directory(
 
     raw_w = (env.get("FZF_COLUMNS") or env.get("COLUMNS") or os.environ.get("COLUMNS") or "").strip()
     picker_cols = int(raw_w) if raw_w.isdigit() and int(raw_w) > 0 else shutil.get_terminal_size((120, 40)).columns
-    footer_lbl = _format_new_picker_footer(picker_cols, back_to_sessions=back_to_sessions)
+    footer_lbl = _format_new_picker_footer(
+        picker_cols,
+        back_to_sessions=back_to_sessions,
+        allow_flip_new=allow_flip_new,
+        sep=badge_sep,
+    )
     color_label_args = (
         []
         if tier in ("nocolor", "mono", "16color")
@@ -542,7 +559,7 @@ def _pick_workspace_directory(
     )
     extra_args: list[str] = []
     if allow_flip_new:
-        extra_args.append("--expect=alt-n")
+        extra_args.append(f"--expect={DIR_PICKER_FLIP_NEW_KEY}")
     if initial_query:
         extra_args.append(f"--query={initial_query}")
     if ide_self and os.path.isfile(ide_self):
@@ -563,12 +580,12 @@ def _pick_workspace_directory(
         "--with-nth=2..",
         "--layout=reverse",
         "--info=inline-right",
-        "--prompt=New IDE > ",
+        f"--prompt={OPEN_DIR_PROMPT}",
         "--border=rounded",
         f"--border-label={footer_lbl}",
         "--border-label-pos=bottom",
         *color_label_args,
-        "--bind=alt-w:abort",
+        *build_action_fzf_binds("close", "abort"),
         *extra_args,
     ]
     proc = subprocess.run(
@@ -582,7 +599,7 @@ def _pick_workspace_directory(
     out_lines = (proc.stdout or "").splitlines()
     if allow_flip_new:
         first_k = out_lines[0].strip() if out_lines else ""
-        if proc.returncode in (0, 1) and first_k == "alt-n":
+        if proc.returncode in (0, 1) and first_k == DIR_PICKER_FLIP_NEW_KEY:
             return _FLIP_NEW_SENTINEL
         if proc.returncode != 0 or not out_lines:
             return ""
@@ -598,13 +615,19 @@ def _pick_workspace_directory(
 pick_workspace_directory = _pick_workspace_directory
 
 
-def _enter_switcher_new_mode(sw_sess: str, title: str = "New Workspace") -> None:
-    """Undock `sw_sess` and zoom its left pane into full-width modal mode."""
+def _enter_switcher_new_mode(
+    sw_sess: str,
+    title: str = "New Workspace",
+    hint: str = "(Alt+o: open · Esc: back)",
+) -> None:
+    """Undock `sw_sess` and zoom its left pane into full-width modal mode with contextual hint."""
     undock_switcher_session(sw_sess)
     run_tmux(
         "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_mode", "new",
         ";",
         "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_new_title", title,
+        ";",
+        "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_hint", hint,
     )
     if tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}") == "0":
         run_tmux("resize-pane", "-Z", "-t", f"={sw_sess}:")
@@ -641,9 +664,19 @@ def _run_launcher_modal_flow(
     back_lbl = "back to sessions" if back_to_sessions else "cancel"
 
     while True:
+        hint_sep = ui_hint_sep(env)
         if mode == "new":
             if sw_sess:
-                _enter_switcher_new_mode(sw_sess, title="New Workspace")
+                _enter_switcher_new_mode(
+                    sw_sess,
+                    title="New Workspace",
+                    hint=switcher_submodal_hint(
+                        "new",
+                        allow_flip=bool(fzf_bin),
+                        back_to_sessions=back_to_sessions,
+                        sep=hint_sep,
+                    ),
+                )
             res = run_create_workspace_dialog(
                 initial_agent=cur_agent,
                 layout_mode=cur_layout,
@@ -656,12 +689,21 @@ def _run_launcher_modal_flow(
             if r_mode == "flip-open" and fzf_bin:
                 mode = "dir"
                 continue
-            return (r_dir, cur_agent, cur_layout, "alt-n")
+            return (r_dir, cur_agent, cur_layout, DIR_PICKER_FLIP_NEW_KEY)
 
         if not fzf_bin:
             return None
         if sw_sess:
-            _enter_switcher_new_mode(sw_sess, title="Open Directory")
+            _enter_switcher_new_mode(
+                sw_sess,
+                title="Open Directory",
+                hint=switcher_submodal_hint(
+                    "dir",
+                    allow_flip=True,
+                    back_to_sessions=back_to_sessions,
+                    sep=hint_sep,
+                ),
+            )
         chosen_dir = _pick_workspace_directory(
             fzf_bin,
             env,
@@ -677,7 +719,7 @@ def _run_launcher_modal_flow(
             continue
         if not chosen_dir:
             return None
-        return (chosen_dir, cur_agent, cur_layout, "alt-o")
+        return (chosen_dir, cur_agent, cur_layout, CREATE_WS_FLIP_OPEN_KEY)
 
 
 def run_new_workspace_command(
@@ -869,9 +911,10 @@ def run_agent_command(cli_arg: str, sess_arg: str, ide_self: str) -> int:
             cw_s, ch_s = (dims.split("\t") + ["80", "24"])[:2]
             cw = int(cw_s) if cw_s.isdigit() and int(cw_s) > 0 else 80
             ch = int(ch_s) if ch_s.isdigit() and int(ch_s) > 0 else 24
-            pop_w = str(min(64, max(38, cw - 4)))
-            pop_h = str(min(13, max(11, ch - 2)))
-            inner_cmd = f"IDE_IN_POPUP=1 IDE_ORIGIN_SESSION={shlex.quote(sess)} {shlex.quote(ide_self)} agent"
+            pop_w = str(min(cw, min(64, max(38, cw - 4))))
+            pop_h = str(min(ch, min(13, max(11, ch - 2))))
+            pop_env_str = " ".join([*build_popup_env(cl_name), f"IDE_ORIGIN_SESSION={shlex.quote(sess)}"])
+            inner_cmd = f"{pop_env_str} {shlex.quote(ide_self)} agent"
             pop_res = run_tmux("display-popup", "-c", cl_name, "-E", "-w", pop_w, "-h", pop_h, inner_cmd)
             return 0 if pop_res.returncode in (0, 130) else pop_res.returncode
 
@@ -1008,7 +1051,13 @@ def run_sessions_picker(
         if not target_s or not session_exists(target_s):
             return
         if in_switcher:
-            _enter_switcher_new_mode(sw_sess, title=f"AI Agent · {target_s}")
+            sep_m = ui_hint_sep(env)
+            short_t = trunc_visible(target_s, 32, suffix="." if is_ascii_ui(env) else "…")
+            _enter_switcher_new_mode(
+                sw_sess,
+                title=f"AI Agent{sep_m}{short_t}",
+                hint=switcher_submodal_hint("agent", allow_flip=False, back_to_sessions=True, sep=sep_m),
+            )
         cur_c = get_ide_var(target_s, "@ide_ai_cli", "IDE_AI_CLI") or "agy"
         fl = classify_ide_fleet(include_git=False, cur_sess=cur_sess)
         ent = next((e for e in fl if str(e["sess"]) == target_s), None)
@@ -1095,38 +1144,36 @@ def run_sessions_picker(
         first_iter = True
 
     supports_modern_binds = fzf_supports_resize_bind(fzf_bin)
-    pane_h = 32
-    pane_w = 160
-    if in_switcher:
-        dims_s = tmux_out(
-            "display-message",
-            "-p",
-            "-t",
-            os.environ.get("TMUX_PANE", f"={sw_sess}:"),
-            "#{pane_height}\t#{pane_width}",
-        ).strip()
-        ph_s, pw_s = (dims_s.split("\t") + ["", ""])[:2]
-        pane_h = int(ph_s) if ph_s.isdigit() and int(ph_s) > 0 else 32
-        pane_w = int(pw_s) if pw_s.isdigit() and int(pw_s) > 0 else 64
-    else:
-        term_sz = shutil.get_terminal_size(fallback=(160, 48))
-        pane_w = term_sz.columns if term_sz.columns >= 40 else 160
-        pane_h = term_sz.lines if term_sz.lines >= 12 else 32
-    fzf_args = build_sessions_fzf_args(
-        fzf_bin=fzf_bin,
-        ide_self=ide_self,
-        cur_sess=cur_sess,
-        hex_map=hex_map,
-        supports_modern_binds=supports_modern_binds,
-        sw_sess=sw_sess if in_switcher else "",
-        pane_h=pane_h,
-        pane_w=pane_w,
-    )
 
     while True:
         was_first = first_iter
-        rows = initial_rows if first_iter else build_sessions_lines(cur_sess)
         first_iter = False
+
+        if in_switcher and not was_first:
+            if tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}") == "1":
+                run_tmux("resize-pane", "-Z", "-t", f"={sw_sess}:")
+
+        pane_h = 32
+        pane_w = 160
+        if in_switcher:
+            dims_s = tmux_out(
+                "display-message",
+                "-p",
+                "-t",
+                os.environ.get("TMUX_PANE", f"={sw_sess}:"),
+                "#{pane_height}\t#{pane_width}",
+            ).strip()
+            ph_s, pw_s = (dims_s.split("\t") + ["", ""])[:2]
+            pane_h = int(ph_s) if ph_s.isdigit() and int(ph_s) > 0 else 32
+            pane_w = int(pw_s) if pw_s.isdigit() and int(pw_s) > 0 else 64
+            os.environ["IDE_SESSIONS_PANE_W"] = str(pane_w)
+            env["IDE_SESSIONS_PANE_W"] = str(pane_w)
+        else:
+            term_sz = shutil.get_terminal_size(fallback=(160, 48))
+            pane_w = term_sz.columns if term_sz.columns >= 40 else 160
+            pane_h = term_sz.lines if term_sz.lines >= 12 else 32
+
+        rows = initial_rows if was_first else build_sessions_lines(cur_sess)
         if not rows:
             sw_cl = ""
             if in_switcher:
@@ -1140,11 +1187,23 @@ def run_sessions_picker(
             return 0
 
         if in_switcher and not was_first:
-            run_tmux("set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_mode", "sessions")
-            if tmux_out("display-message", "-p", "-t", f"={sw_sess}:", "#{window_zoomed_flag}") == "1":
-                run_tmux("resize-pane", "-Z", "-t", f"={sw_sess}:")
-            if rows:
-                sync_switcher_slot_preview(sw_sess, rows[0].split("\t", 1)[0].strip())
+            run_tmux(
+                "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_mode", "sessions",
+                ";",
+                "set-option", "-q", "-t", f"={sw_sess}:", "@ide_sw_hint", "",
+            )
+            sync_switcher_slot_preview(sw_sess, rows[0].split("\t", 1)[0].strip())
+
+        fzf_args = build_sessions_fzf_args(
+            fzf_bin=fzf_bin,
+            ide_self=ide_self,
+            cur_sess=cur_sess,
+            hex_map=hex_map,
+            supports_modern_binds=supports_modern_binds,
+            sw_sess=sw_sess if in_switcher else "",
+            pane_h=pane_h,
+            pane_w=pane_w,
+        )
 
         proc = subprocess.run(
             fzf_args,
@@ -1161,9 +1220,9 @@ def run_sessions_picker(
             return 0
         pressed, selected_line = parsed
 
-        if pressed in ("alt-n", "alt-o"):
+        if pressed in NO_MATCH_LAUNCHER_EXPECT_KEYS:
             flow_res = _run_launcher_modal_flow(
-                start_mode="new" if pressed == "alt-n" else "dir",
+                start_mode="new" if pressed == DIR_PICKER_FLIP_NEW_KEY else "dir",
                 fzf_bin=fzf_bin,
                 env=env,
                 ide_self=ide_self,
@@ -1197,7 +1256,7 @@ def run_sessions_picker(
                 detach_only=detach_only,
             )
 
-        if pressed == "alt-r":
+        if pressed == AGENT_MODAL_KEY:
             cand_r = selected_line.split("\t", 1)[0].strip()
             if cand_r and session_exists(cand_r):
                 _run_switcher_agent_modal(cand_r)
@@ -1215,15 +1274,11 @@ def run_sessions_picker(
             )
             return 0
 
-        if pressed in ("ctrl-a", "ctrl-e", "ctrl-t", "alt-a", "alt-e", "alt-t"):
+        jump_mode = pane_jump_mode_for_key(pressed)
+        if jump_mode:
             from ide_lib.layout import toggle_main_pane
 
-            if pressed in ("ctrl-a", "alt-a"):
-                toggle_main_pane("focus-ai", chosen_sess)
-            elif pressed in ("ctrl-e", "alt-e"):
-                toggle_main_pane("focus-editor", chosen_sess)
-            else:
-                toggle_main_pane("focus-term", chosen_sess)
+            toggle_main_pane(jump_mode, chosen_sess)
 
         rc = switch_or_attach_session(chosen_sess, origin_sess or cur_sess)
         ack_ai_session([chosen_sess], from_hook=True, refresh_always=False)

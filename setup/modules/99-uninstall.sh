@@ -70,6 +70,7 @@ uninstall_dotfiles() {
 
     if [ "$OS" = "macos" ]; then
         unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/config" "$xdg_config/ghostty"
+        unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/keybinds.conf" "$xdg_config/ghostty"
         unlink_path "$HOME/Library/Application Support/com.mitchellh.ghostty/themes" "$xdg_config/ghostty"
     fi
 
